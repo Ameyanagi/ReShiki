@@ -14,8 +14,8 @@ use iced::{Element, Length, Point, Rectangle, Renderer, Task, Theme, mouse};
 use reshiki::document::Document;
 use reshiki::palette::{Color, Palette};
 use reshiki::qcdata::{CalcResult, MappedAtom, TransitionStateMapping, TransitionStateRun};
+use reshiki::reactions::Reaction;
 use reshiki::reactions::ts_plan::{Side, TsPlan, TsPlanError};
-use reshiki::reactions::{Reaction, Role};
 use std::cell::Cell;
 use std::sync::Arc;
 
@@ -393,6 +393,7 @@ impl App {
         search: Option<&TransitionStateRun>,
         drawn: Option<BondChanges>,
     ) -> Option<(BondChanges, bool)> {
+        let drawn = drawn?;
         let request = self
             .tab
             .xtb
@@ -408,29 +409,16 @@ impl App {
                 _ => None,
             });
         let previous = request
-            .map(|request| (&request.bonds.0, Some(&request.context)))
-            .or_else(|| search.map(|search| (&search.mapping, search.context.as_ref())));
-        if let Some((mapping, context)) = previous {
-            let matches = if let Some(drawn) = &drawn {
-                drawn.0.formed == mapping.formed
-                    && drawn.0.broken == mapping.broken
-                    && drawn.0.hydrogen_moves == mapping.hydrogen_moves
-            } else {
-                // Place saved pairs if the reactant map and chemistry are intact,
-                // even when the product map is incomplete.
-                context.is_some_and(|context| {
-                    let doc = &self.tab.doc;
-                    reshiki::reaction_mapping::reaction(doc, arrow).is_ok_and(|reaction| {
-                        context.reactant_chemistry
-                            == super::endpoint_chemistry(doc, reaction, Role::Reactant)
-                    })
-                })
-            };
-            if matches {
-                return Some((BondChanges(mapping.clone()), false));
-            }
+            .map(|request| &request.bonds.0)
+            .or_else(|| search.map(|search| &search.mapping));
+        if let Some(mapping) = previous
+            && drawn.0.formed == mapping.formed
+            && drawn.0.broken == mapping.broken
+            && drawn.0.hydrogen_moves == mapping.hydrogen_moves
+        {
+            return Some((BondChanges(mapping.clone()), false));
         }
-        drawn.map(|bonds| (bonds, true))
+        Some((drawn, true))
     }
 
     /// The reaction card actually shown in the front drawing's Predict tab.
@@ -457,6 +445,9 @@ impl App {
 
     /// Share Properties' naming queue; only the visible card asks for names.
     pub(in crate::app) fn xtb_reaction_name_request(&self) -> Option<(String, Vec<u64>)> {
+        if self.ts_review_visible() {
+            return None;
+        }
         let arrow = self.xtb_reaction_card_arrow()?;
         let reaction = reshiki::reactions::preview(&self.tab.doc, arrow).ok()?;
         reaction

@@ -518,6 +518,90 @@ fn path_job_changes_update_the_file_suffix_and_preserve_the_reaction_title() {
     assert!(output.main.text.contains("Refined reaction"));
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn orca_neb_companions_follow_chosen_names_when_reactant_stems_collide() {
+    let directory = tempfile::tempdir().unwrap();
+    for (name, z) in [("sample_a", 0.2), ("sample-a", 0.6), ("sample a", 1.)] {
+        let mut source = source();
+        source.name = name.into();
+        source.stem = reaction_stem(name, "H2");
+        Arc::make_mut(&mut source.frame).positions_angstrom[1][2] = z;
+        let product = Arc::make_mut(source.product.as_mut().unwrap());
+        product.positions_angstrom[1][2] = z + 0.2;
+        let result = Arc::make_mut(&mut source.result);
+        result.frame = source.frame.hash();
+        result.endpoints.as_mut().unwrap().product = product.hash();
+
+        let (mut app, _) = App::new();
+        let _ = app.open_qc_export_source(source);
+        send(&mut app, ExportAction::Program(Program::Orca));
+        send(&mut app, ExportAction::Job(Job::NebTs));
+        assert_eq!(app.qc_output().unwrap().main.name, "sample-a-neb-orca.inp");
+        let path = directory.path().join(format!("{name}.inp"));
+        app.qc_input().unwrap().write(&path).unwrap();
+        let input = std::fs::read_to_string(&path).unwrap();
+        for (suffix, keyword, expected_z) in [
+            ("product", "NEB_End_XYZFile", z + 0.2),
+            ("ts", "NEB_TS_XYZFile", z),
+        ] {
+            let name = format!("{name}_{suffix}.xyz");
+            assert!(input.contains(&format!("{keyword} \"{name}\"")));
+            let text = std::fs::read_to_string(directory.path().join(name)).unwrap();
+            let frame = qc_input::parse_xyz(&text).unwrap();
+            assert!((frame.positions_angstrom[1][2] - expected_z).abs() < 1e-8);
+        }
+        assert!(!input.contains("sample-a-neb-orca_product.xyz"));
+        assert!(!input.contains("sample-a-neb-orca_ts.xyz"));
+    }
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 9);
+    let first = std::fs::read_to_string(directory.path().join("sample_a_ts.xyz")).unwrap();
+    assert!((qc_input::parse_xyz(&first).unwrap().positions_angstrom[1][2] - 0.2).abs() < 1e-8);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn orca_hessian_companions_follow_chosen_names_and_keep_existing_files() {
+    let directory = tempfile::tempdir().unwrap();
+    for (job, stem, keyword) in [
+        (Job::TransitionState, "refined_ts", "InHessName"),
+        (Job::Irc, "refined_irc", "Hess_Filename"),
+    ] {
+        let (mut app, _) = App::new();
+        let _ = app.open_qc_export_source(source());
+        send(&mut app, ExportAction::Program(Program::Orca));
+        send(&mut app, ExportAction::Job(job));
+        let path = directory.path().join(format!("{stem}.inp"));
+        app.qc_input().unwrap().write(&path).unwrap();
+        let input = std::fs::read_to_string(&path).unwrap();
+        let name = format!("{stem}_xtb.hess");
+        assert!(input.contains(&format!("{keyword} \"{name}\"")));
+        let companion = directory.path().join(&name);
+        assert!(
+            std::fs::read_to_string(&companion)
+                .unwrap()
+                .contains("$hessian")
+        );
+
+        std::fs::write(&companion, "keep existing Hessian").unwrap();
+        std::fs::write(&path, "keep existing input").unwrap();
+        assert_eq!(
+            app.qc_input().unwrap().write(&path),
+            Err(format!(
+                "Input not saved; {name} already exists beside it and was not replaced."
+            ))
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "keep existing input"
+        );
+        assert_eq!(
+            std::fs::read_to_string(companion).unwrap(),
+            "keep existing Hessian"
+        );
+    }
+}
+
 #[test]
 fn reaction_file_stems_keep_formula_digits_and_cannot_contain_path_segments() {
     assert_eq!(reaction_stem("C5H8O", "C5H8O"), "c5h8o");

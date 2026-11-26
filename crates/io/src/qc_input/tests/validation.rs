@@ -106,6 +106,53 @@ fn validation_messages() {
 }
 
 #[test]
+fn orca_companion_names_preserve_safe_stems_and_reject_unsafe_quoted_paths() {
+    let frame = water();
+    let product = shifted_water(-0.05);
+    let result = result(&frame);
+    let geometry = Geometry {
+        frame: &frame,
+        reactant: Some(&frame),
+        product: Some(&product),
+        result: Some(&result),
+    };
+    for job in [Job::NebTs, Job::TransitionState, Job::Irc] {
+        let settings = settings(Program::Orca, job);
+        for stem in ["sample_a", "sample-a", "sample a", "試料 a"] {
+            let output = write(&settings, &geometry, stem, GENERATOR).unwrap();
+            let suffixes: &[&str] = if job == Job::NebTs {
+                &["_product.xyz", "_ts.xyz"]
+            } else {
+                &["_xtb.hess"]
+            };
+            let expected: Vec<_> = suffixes
+                .iter()
+                .map(|suffix| format!("{stem}{suffix}"))
+                .collect();
+            assert_eq!(
+                output
+                    .companions
+                    .iter()
+                    .map(|file| &file.name)
+                    .collect::<Vec<_>>(),
+                expected.iter().collect::<Vec<_>>()
+            );
+            for name in expected {
+                assert!(output.main.text.contains(&format!("\"{name}\"")));
+            }
+        }
+        for stem in ["a\"b", "a/b", "a\\b", "a\nb", "a\rb", "a\0b"] {
+            assert_eq!(
+                write(&settings, &geometry, stem, GENERATOR)
+                    .unwrap_err()
+                    .to_string(),
+                "ORCA companion file names cannot contain quotes, path separators or control characters."
+            );
+        }
+    }
+}
+
+#[test]
 fn endpoint_validation_checks_presence_and_atom_order() {
     let frame = water();
     let product = shifted_water(-0.05);

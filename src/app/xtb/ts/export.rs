@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 /// Immutable geometry source for an open export dialog. Arc references keep a
 /// result and its endpoint frames together even if the document changes later.
+#[derive(Clone)]
 pub(in crate::app) struct Source {
     pub(in crate::app) name: String,
     pub(in crate::app) frame: Arc<Frame>,

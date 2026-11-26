@@ -566,35 +566,85 @@ async fn reopened_legacy_result_is_labelled_not_verified() {
     );
 }
 
-#[test]
-fn reopened_reaction_draws_the_saved_bond_changes_without_a_complete_drawn_map() {
+fn reopened_reaction_card() -> (App, u64) {
     let (mut app, arrow) = start();
     finish_model(&mut app);
     complete(&mut app);
-    let mut doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
-    let product = doc.reactions[0].products[0].atoms[0];
-    doc.atom_mut(product).unwrap().map_num = 0;
-    assert!(review::scheme_plan(&doc, arrow).is_err());
-
+    let doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
     let mut reopened = reaction_app(doc, arrow);
     reopened.inspector_open = true;
     reopened.inspector_tab = crate::app::InspectorTab::Predict;
     reopened.xtb.page = super::super::Page::Xtb;
-    let marks = reopened.xtb_reaction_bond_marks();
-    let numbers: Vec<_> = marks
+    assert_eq!(reopened.xtb_reaction_bond_marks().len(), 2);
+    (reopened, arrow)
+}
+
+#[test]
+fn reopened_reaction_hides_saved_bond_changes_without_a_complete_drawn_map() {
+    let (mut reopened, arrow) = reopened_reaction_card();
+    let product = reopened.tab.doc.reactions[0].products[0].atoms[0];
+    reopened.tab.doc.atom_mut(product).unwrap().map_num = 0;
+    assert!(review::scheme_plan(&reopened.tab.doc, arrow).is_err());
+    assert!(reopened.xtb_reaction_bond_marks().is_empty());
+}
+
+#[test]
+fn reopened_reaction_hides_saved_bond_changes_after_claisen_map_renumbering() {
+    let (mut reopened, arrow) = reopened_reaction_card();
+    let doc = &mut reopened.tab.doc;
+    let reactants = &doc.reactions[0].reactants[0].atoms;
+    let (c1, c2) = (reactants[0], reactants[1]);
+    doc.atom_mut(c1).unwrap().map_num = 0;
+    doc.atom_mut(c2).unwrap().map_num = 1;
+    let search = saved_search(&doc.science.results[0].result).unwrap();
+    assert_eq!(
+        search.context.as_ref().unwrap().reactant_chemistry,
+        endpoint_chemistry(doc, &doc.reactions[0], Role::Reactant),
+        "the chemistry fingerprint cannot validate saved atom map numbers"
+    );
+    assert!(review::scheme_plan(doc, arrow).is_err());
+    assert!(reopened.xtb_reaction_bond_marks().is_empty());
+}
+
+#[test]
+fn reopened_reaction_hides_saved_bond_changes_when_the_map_has_no_changes() {
+    let (mut reopened, arrow) = reopened_reaction_card();
+    let doc = &mut reopened.tab.doc;
+    let reaction = &doc.reactions[0];
+    let reactants = reaction.reactants[0].atoms.clone();
+    let products = reaction.products[0].atoms.clone();
+    let bonds: Vec<_> = doc
+        .bonds
         .iter()
-        .map(|mark| {
-            mark.atoms
-                .map(|id| reopened.tab.doc.atom(id).unwrap().map_num)
+        .filter_map(|bond| {
+            let a = reactants.iter().position(|&id| id == bond.a)?;
+            let b = reactants.iter().position(|&id| id == bond.b)?;
+            Some((products[a], products[b], bond.order))
         })
         .collect();
-    assert_eq!(numbers, [[1, 6], [3, 4]]);
-
-    let reactants = &reopened.tab.doc.reactions[0].reactants[0].atoms;
-    let (c4, c6) = (reactants[3], reactants[5]);
-    reopened.tab.doc.atom_mut(c4).unwrap().map_num = 6;
-    reopened.tab.doc.atom_mut(c6).unwrap().map_num = 4;
+    doc.bonds
+        .retain(|bond| !products.contains(&bond.a) || !products.contains(&bond.b));
+    for (a, b, order) in bonds {
+        doc.add_bond(a, b, order, "plain");
+    }
+    assert!(matches!(
+        review::scheme_plan(doc, arrow),
+        Err(ts_plan::TsPlanError::NoChange)
+    ));
     assert!(reopened.xtb_reaction_bond_marks().is_empty());
+}
+
+#[test]
+fn reopened_reaction_uses_current_bond_changes_after_valid_map_renumbering() {
+    let (mut reopened, arrow) = reopened_reaction_card();
+    let expected = reopened.xtb_reaction_bond_marks();
+    for atom in &mut reopened.tab.doc.atoms {
+        if atom.map_num == 6 {
+            atom.map_num = 7;
+        }
+    }
+    assert!(review::scheme_plan(&reopened.tab.doc, arrow).is_ok());
+    assert_eq!(reopened.xtb_reaction_bond_marks(), expected);
 }
 
 #[test]

@@ -16,7 +16,7 @@ use reshiki::qc_input::{self, Geometry, Job, Output, Program, Settings, Template
 use reshiki::qcdata::{Frame, FrameHash};
 use std::borrow::Cow;
 use std::cell::{Cell, Ref, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::xtb::ts::export::Source as TsSource;
 
@@ -394,6 +394,76 @@ enum Model {
     Unsupported(String),
 }
 
+/// A snapshot that can render again after the save dialog chooses a file name.
+pub(super) struct Input {
+    settings: Settings,
+    stem: String,
+    geometry: InputGeometry,
+    unit: crate::appearance::EnergyUnit,
+}
+
+enum InputGeometry {
+    Molecule(Frame),
+    TransitionState(TsSource),
+}
+
+impl Input {
+    fn output(&self) -> Result<Output, String> {
+        let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
+        match &self.geometry {
+            InputGeometry::TransitionState(source) => {
+                source.output(&self.settings, &self.stem, &generator, self.unit)
+            }
+            InputGeometry::Molecule(frame) => qc_input::write(
+                &self.settings,
+                &Geometry {
+                    frame,
+                    reactant: None,
+                    product: None,
+                    result: None,
+                },
+                &self.stem,
+                &generator,
+            )
+            .map_err(|error| error.to_string()),
+        }
+    }
+
+    pub(super) fn write(mut self, path: &Path) -> Result<(), String> {
+        if self.settings.program == Program::Orca {
+            self.stem = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .ok_or("The input file name must be valid text.")?
+                .into();
+        }
+        let output = self.output()?;
+        if let Some(directory) = path.parent() {
+            // Never replace a file the save dialog did not ask about, or write
+            // an input that would refer to a previous export's companion.
+            let kept: Vec<_> = output
+                .companions
+                .iter()
+                .filter(|file| directory.join(&file.name).exists())
+                .map(|file| file.name.as_str())
+                .collect();
+            if !kept.is_empty() {
+                return Err(format!(
+                    "Input not saved; {} already exists beside it and was not replaced.",
+                    kept.join(", ")
+                ));
+            }
+        }
+        super::files::write(path, output.main.text.as_bytes())?;
+        if let Some(directory) = path.parent() {
+            for file in output.companions {
+                super::files::write(&directory.join(&file.name), file.text.as_bytes())?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl App {
     fn input_templates(&self) -> Vec<Template> {
         qc_input::builtin_templates()
@@ -619,12 +689,15 @@ impl App {
                 return self.models3d_action(super::models3d::Action::Update);
             }
             Action::Copy | Action::Save => {
-                let (program, id) = (dialog.program, dialog.id);
-                let (message, task) = match self.qc_output() {
-                    Ok(output) if matches!(action, Action::Save) => {
-                        return save(output, program, id);
+                let id = dialog.id;
+                let (message, task) = match self
+                    .qc_input()
+                    .and_then(|input| input.output().map(|output| (input, output)))
+                {
+                    Ok((input, output)) if matches!(action, Action::Save) => {
+                        return save(input, output.main.name, id);
                     }
-                    Ok(output) => (
+                    Ok((_, output)) => (
                         "Copied the file text".into(),
                         iced::clipboard::write(output.main.text),
                     ),
@@ -742,11 +815,16 @@ impl App {
     }
 
     /// The files the dialog would write, or why it cannot.
+    #[cfg(test)]
     pub(super) fn qc_output(&self) -> Result<Output, String> {
+        self.qc_input()?.output()
+    }
+
+    pub(super) fn qc_input(&self) -> Result<Input, String> {
         let dialog = self.qc_export.as_ref().ok_or_else(String::new)?;
         let sources = self.qc_sources(dialog);
         let (_, source) = dialog.selected_source(&sources).ok_or(GEOMETRY_CHANGED)?;
-        Self::qc_output_for(
+        Self::qc_input_for(
             dialog,
             source,
             self.qc_model(dialog, Some(source)),
@@ -760,11 +838,23 @@ impl App {
         model: Model,
         unit: crate::appearance::EnergyUnit,
     ) -> Result<Output, String> {
+        Self::qc_input_for(dialog, source, model, unit)?.output()
+    }
+
+    fn qc_input_for(
+        dialog: &Dialog,
+        source: &Source,
+        model: Model,
+        unit: crate::appearance::EnergyUnit,
+    ) -> Result<Input, String> {
         let settings = dialog.settings(Some(source))?;
-        let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
-        let stem = dialog.file_stem();
         if let Some(ts) = &dialog.ts_source {
-            return ts.output(&settings, &stem, &generator, unit);
+            return Ok(Input {
+                settings,
+                stem: dialog.file_stem(),
+                geometry: InputGeometry::TransitionState(ts.clone()),
+                unit,
+            });
         }
         let mut frame = match model {
             Model::Ready { stale: true, .. } => {
@@ -778,13 +868,12 @@ impl App {
         };
         frame.charge = settings.charge;
         frame.multiplicity = settings.multiplicity;
-        let geometry = Geometry {
-            frame: &frame,
-            reactant: None,
-            product: None,
-            result: None,
-        };
-        qc_input::write(&settings, &geometry, &stem, &generator).map_err(|error| error.to_string())
+        Ok(Input {
+            settings,
+            stem: dialog.file_stem(),
+            geometry: InputGeometry::Molecule(frame),
+            unit,
+        })
     }
 
     pub(super) fn with_qc_export<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
@@ -1274,39 +1363,21 @@ impl App {
 }
 
 /// Save the main file through the file dialog and its companions beside it.
-fn save(output: Output, program: Program, id: u64) -> Task<Message> {
+fn save(input: Input, suggested_name: String, id: u64) -> Task<Message> {
     Task::perform(
         async move {
-            let Output {
-                main, companions, ..
-            } = output;
-            let path = super::files::save_bytes(
+            let program = input.settings.program;
+            let Some(path) = super::files::save_path(
                 &format!("Export {} input", program.label()),
-                &main.name,
+                &suggested_name,
                 program.extension(),
-                main.text.as_bytes(),
-                None,
             )
-            .await?;
-            let mut kept = Vec::new();
-            if let Some(directory) = path.as_ref().and_then(|p| p.parent()) {
-                for file in companions {
-                    let companion = directory.join(&file.name);
-                    // Never replace a file the save dialog did not ask about.
-                    if companion.exists() {
-                        kept.push(file.name);
-                    } else {
-                        super::files::write(&companion, file.text.as_bytes())?;
-                    }
-                }
-            }
-            if !kept.is_empty() {
-                return Err(format!(
-                    "Saved the input; {} already exists beside it and was not replaced.",
-                    kept.join(", ")
-                ));
-            }
-            Ok(path)
+            .await
+            else {
+                return Ok(None);
+            };
+            input.write(&path)?;
+            Ok(Some(path))
         },
         move |result| Message::QcExport(Action::Saved(id, result)),
     )
