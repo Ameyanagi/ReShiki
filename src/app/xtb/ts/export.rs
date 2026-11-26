@@ -25,16 +25,25 @@ impl Source {
         science: &reshiki::science::Science,
         name: String,
         first_reactant: &str,
+        formula: Option<&str>,
     ) -> Option<Self> {
         let endpoints = result.endpoints;
+        let frame = science.frame(&result.frame)?.clone();
+        let reactant = endpoints
+            .and_then(|endpoints| science.frame(&endpoints.reactant))
+            .cloned();
+        let fallback =
+            || crate::app::xtb::state::formula(&reactant.as_ref().unwrap_or(&frame).numbers);
+        let stem = match formula {
+            Some(formula) => reaction_stem(first_reactant, formula),
+            None => reaction_stem(first_reactant, &fallback()),
+        };
         Some(Self {
             name,
-            frame: science.frame(&result.frame)?.clone(),
-            stem: reaction_stem(first_reactant),
+            frame,
+            stem,
             result: result.clone(),
-            reactant: endpoints
-                .and_then(|endpoints| science.frame(&endpoints.reactant))
-                .cloned(),
+            reactant,
             product: endpoints
                 .and_then(|endpoints| science.frame(&endpoints.product))
                 .cloned(),
@@ -110,29 +119,30 @@ impl Source {
     }
 }
 
-/// The name is also a file stem, so punctuation cannot introduce path segments.
-fn reaction_stem(name: &str) -> String {
-    let stem: String = name
-        .split_whitespace()
-        .map(|word| {
-            word.chars()
-                .flat_map(char::to_lowercase)
-                .map(|c| {
-                    if c.is_alphanumeric() || matches!(c, '-' | '_') {
-                        c
-                    } else {
-                        '-'
-                    }
-                })
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("-");
-    let stem = stem.trim_matches('-');
+/// Keep names short and safe in every program's TS, QST, NEB and IRC files.
+fn reaction_stem(name: &str, formula: &str) -> String {
+    let normalize = |name: &str| {
+        let mut stem = String::new();
+        for c in name.chars().flat_map(char::to_lowercase) {
+            if c.is_alphanumeric() {
+                stem.push(c);
+            } else if !stem.is_empty() && !stem.ends_with('-') {
+                stem.push('-');
+            }
+        }
+        stem.truncate(stem.trim_end_matches('-').len());
+        stem
+    };
+    let stem = normalize(name);
+    let stem = if stem.is_empty() || stem.len() > 64 {
+        normalize(formula)
+    } else {
+        stem
+    };
     if stem.is_empty() {
         "reaction".into()
     } else {
-        stem.into()
+        stem
     }
 }
 
@@ -184,11 +194,20 @@ impl App {
         if let Some(context) =
             super::saved_search(result).and_then(|search| search.context.as_ref())
         {
+            let label = arrow
+                .filter(|_| !self.xtb_ts_search_stale(result))
+                .map(|arrow| self.xtb_reaction_label(arrow));
             return Source::from_result(
                 result,
                 &doc.science,
                 context.title.clone(),
-                &context.reactant,
+                label
+                    .as_ref()
+                    .and_then(|label| label.first_reactant())
+                    .unwrap_or(&context.reactant),
+                label
+                    .as_ref()
+                    .and_then(|label| label.first_reactant_formula()),
             );
         }
         let frame = doc.science.frame(&result.frame)?;
@@ -206,23 +225,20 @@ impl App {
                 .map(|name| name.text.clone())
                 .unwrap_or_else(|| crate::app::xtb::state::formula(&frame.numbers))
         };
-        let (title, reactant) = match arrow {
-            Some(arrow) => {
-                let label = self.xtb_reaction_label(arrow);
-                (
-                    label.title(),
-                    label
-                        .first_reactant()
-                        .map(str::to_owned)
-                        .unwrap_or_else(fallback),
-                )
-            }
-            None => {
-                let name = fallback();
-                (name.clone(), name)
-            }
-        };
-        Source::from_result(result, &doc.science, title, &reactant)
+        if let Some(arrow) = arrow {
+            let label = self.xtb_reaction_label(arrow);
+            let reactant = label.first_reactant().map_or_else(fallback, str::to_owned);
+            Source::from_result(
+                result,
+                &doc.science,
+                label.title(),
+                &reactant,
+                label.first_reactant_formula(),
+            )
+        } else {
+            let name = fallback();
+            Source::from_result(result, &doc.science, name.clone(), &name, None)
+        }
     }
 }
 

@@ -4,13 +4,11 @@ use super::super::{
     tone::{Tone, line},
 };
 use super::{Action as TsAction, energy::Species};
-use crate::app::help::{Placement, modal};
 use crate::app::reaction_mapping::{Preview, calculate, with_roles};
-use crate::app::workspace::accessible_command;
 use crate::app::{App, InspectorTab, Message};
+use crate::canvas::{BondChangeKind, BondChangeMark};
 use iced::keyboard::{Key, Modifiers, key::Named};
-use iced::widget::{Space, column, row, scrollable, text};
-use iced::{Alignment, Element, Length, Task};
+use iced::{Element, Task};
 use reshiki::document::Document;
 use reshiki::reaction_mapping::Proposal;
 use reshiki::reactions::{
@@ -24,6 +22,7 @@ use std::sync::{
 use std::{borrow::Cow, collections::BTreeSet};
 
 mod species;
+mod view;
 
 pub(super) const SHAPE_NOTE: &str = "Transition-state search handles 1→1, 1→2 and 2→1 reactions. Reaction energy works for any stoichiometry.";
 static NEXT_SHEET: AtomicU64 = AtomicU64::new(0);
@@ -39,6 +38,8 @@ pub(crate) enum Action {
     Ready(u64, Result<Arc<Proposal>, String>),
     Charge(usize, String),
     Unpaired(usize, String),
+    EditSpecies,
+    Advanced,
     PathPoints(String),
     Accept,
     EditMap,
@@ -63,6 +64,8 @@ impl Mapping {
 
 struct Changes {
     bonds: String,
+    action: String,
+    marks: Vec<BondChangeMark>,
     hydrogens: Vec<String>,
 }
 
@@ -80,15 +83,11 @@ impl Changes {
                 .map_or_else(|| "?".into(), |a| format!("{}{}", a.element, a.map_num))
         };
         let bonds = |pairs: &[(u64, u64)]| {
-            if pairs.is_empty() {
-                "none".into()
-            } else {
-                pairs
-                    .iter()
-                    .map(|&(a, b)| format!("{}–{}", atom_label(a), atom_label(b)))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
+            pairs
+                .iter()
+                .map(|&(a, b)| format!("{}–{}", atom_label(a), atom_label(b)))
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         let mapped_hydrogens: BTreeSet<_> = changes
             .form
@@ -114,12 +113,41 @@ impl Changes {
                     .map(|atom| format!("{atom} (mapped)")),
             )
             .collect();
+        let mut caption = Vec::new();
+        let mut action = Vec::new();
+        let mut marks = Vec::new();
+        for (pairs, kind, verb, present) in [
+            (&changes.form, BondChangeKind::Form, "form", "forms"),
+            (&changes.break_, BondChangeKind::Break, "break", "breaks"),
+        ] {
+            if !pairs.is_empty() {
+                let labels = bonds(pairs);
+                caption.push(format!("{present} {labels}"));
+                action.push(
+                    if let Some(first) = pairs.first().filter(|_| pairs.len() > 2) {
+                        format!(
+                            "{verb} {} and {} more",
+                            bonds(std::slice::from_ref(first)),
+                            pairs.len() - 1
+                        )
+                    } else {
+                        format!("{verb} {labels}")
+                    },
+                );
+                marks.extend(pairs.iter().map(|&(a, b)| BondChangeMark {
+                    kind,
+                    atoms: [a, b],
+                    highlighted: false,
+                }));
+            }
+        }
+        if action.is_empty() && !changes.hydrogen_moves.is_empty() {
+            action.push("transfer hydrogen".into());
+        }
         Self {
-            bonds: format!(
-                "Bonds formed: {} · broken: {}",
-                bonds(&changes.form),
-                bonds(&changes.break_)
-            ),
+            bonds: caption.join(" · "),
+            action: action.join(", "),
+            marks,
             hydrogens,
         }
     }
@@ -161,6 +189,8 @@ pub(in crate::app::xtb) struct Dialog {
     target_stereo_note: Option<&'static str>,
     inputs: Vec<species::Input>,
     path_points: String,
+    edit_species: bool,
+    advanced: bool,
     task: CalcTask,
     free_energy: bool,
     mapping: Mapping,
@@ -170,6 +200,73 @@ pub(in crate::app::xtb) struct Dialog {
 }
 
 impl Dialog {
+    fn subtitle(&self) -> &'static str {
+        if self
+            .mapping
+            .proposal()
+            .is_some_and(|proposal| proposal.multiple_best)
+        {
+            "Several atom maps fit this drawing. Check the proposal, or draw the atom map."
+        } else {
+            "Check the bonds that change."
+        }
+    }
+
+    fn run_label(&self) -> String {
+        match &self.changes {
+            Ok(changes) if !changes.action.is_empty() => format!("Run: {}", changes.action),
+            _ if self.mode == Mode::Energy => "Run reaction energy".into(),
+            _ => "Run transition-state search".into(),
+        }
+    }
+
+    fn state_summary(&self) -> String {
+        let mut charged = 0;
+        let mut open_shell = 0;
+        for input in &self.inputs {
+            let Ok(charge) = input.charge.trim().replace('−', "-").parse::<i32>() else {
+                return "Check species charges and unpaired electrons".into();
+            };
+            let Ok(unpaired) = input.unpaired.trim().parse::<u32>() else {
+                return "Check species charges and unpaired electrons".into();
+            };
+            charged += usize::from(charge != 0);
+            open_shell += usize::from(unpaired != 0);
+        }
+        let charge = match charged {
+            0 => "All species neutral".into(),
+            1 => "1 charged species".into(),
+            count => format!("{count} charged species"),
+        };
+        let spin = match open_shell {
+            0 => "no unpaired electrons".into(),
+            1 => "1 species with unpaired electrons".into(),
+            count => format!("{count} species with unpaired electrons"),
+        };
+        format!("{charge}, {spin}")
+    }
+
+    fn picture(&self, source: &Document) -> Preview {
+        let atoms = self
+            .plan
+            .as_ref()
+            .ok()
+            .filter(|_| self.mode == Mode::TransitionState)
+            .map(|plan| plan.start_atoms.clone())
+            .unwrap_or_else(|| {
+                reactions::preview(source, self.arrow)
+                    .map(|reaction| {
+                        reaction
+                            .reactants
+                            .iter()
+                            .flat_map(|participant| participant.atoms.iter().copied())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            });
+        Preview::for_atoms(source, &atoms)
+    }
+
     fn images(&self) -> Result<usize, String> {
         if self.rerun {
             return Ok(20);
@@ -190,7 +287,7 @@ impl Dialog {
             .ok()
             .filter(|_| self.mode == Mode::TransitionState);
         self.changes = Changes::read(&source, self.arrow, plan);
-        self.preview = Some(Preview::for_reaction(source, self.arrow));
+        self.preview = Some(self.picture(&source));
     }
 
     fn can_run(&self, species: &[Species]) -> Result<(), String> {
@@ -476,6 +573,7 @@ impl App {
         } else {
             CalcTask::Optimize
         };
+        let edit_species = species::validate(&inputs).is_err();
         let mut dialog = Dialog {
             id,
             at: self.review_stamp(),
@@ -487,6 +585,8 @@ impl App {
             free_energy,
             inputs,
             path_points: "15".into(),
+            edit_species,
+            advanced: false,
             mapping,
             plan,
             changes,
@@ -504,7 +604,7 @@ impl App {
         if !dialog.needs_review() {
             return self.xtb_review_run(dialog);
         }
-        dialog.preview = Some(Preview::for_reaction(source.as_ref().clone(), arrow));
+        dialog.preview = Some(dialog.picture(&source));
         let map_task = finding.then(|| {
             Task::perform(calculate(source.into_owned(), arrow), move |result| {
                 send(Action::Ready(id, result))
@@ -576,6 +676,8 @@ impl App {
                 }
             }
             Action::PathPoints(value) => dialog.path_points = value,
+            Action::EditSpecies => dialog.edit_species = !dialog.edit_species,
+            Action::Advanced => dialog.advanced = !dialog.advanced,
             Action::EditMap => {
                 if matches!(dialog.mapping, Mapping::Finding) {
                     return Task::none();
@@ -663,184 +765,6 @@ impl App {
             }
             Mode::Energy => self.xtb_reaction_energy_begin(arrow, species, dialog.task),
         }
-    }
-
-    pub(in crate::app) fn with_ts_review<'a>(
-        &'a self,
-        base: Element<'a, Message>,
-    ) -> Element<'a, Message> {
-        let Some(dialog) = &self.tab.xtb.ts_review else {
-            return base;
-        };
-        if !dialog.visible() {
-            return base;
-        }
-        let current = dialog.at == self.review_stamp();
-        let title = match dialog.mode {
-            Mode::TransitionState => "Review transition-state search (GFN2-xTB)",
-            Mode::Energy => "Review reaction energy (GFN2-xTB)",
-        };
-        let mut content = column![text(title).size(21)].spacing(12);
-        if let Some(thumbnail) = dialog
-            .preview
-            .as_ref()
-            .and_then(|preview| preview.thumbnail(160))
-        {
-            content = content.push(thumbnail);
-        }
-        if dialog.inferred {
-            content = content.push(line(
-                "Reactants and products detected from the drawing",
-                Tone::Muted,
-            ));
-        }
-        if let Some(ignored) = &dialog.ignored {
-            content = content.push(line(ignored, Tone::Muted));
-        }
-        if let Some(note) = dialog.target_stereo_note {
-            content = content.push(line(note, Tone::Muted));
-        }
-        if dialog.unmapped_isotope_hydrogen {
-            content = content.push(line(
-                "Isotope-labelled hydrogens need an explicit atom map.",
-                Tone::Muted,
-            ));
-        }
-        if let Mapping::Proposed(proposal) = &dialog.mapping {
-            let detail = if !proposal.complete {
-                " · Search budget reached"
-            } else if proposal.multiple_best {
-                " · Several mappings tie"
-            } else {
-                ""
-            };
-            content = content.push(line(
-                format!("Proposed atom map · {} pairs · {} reactant / {} product atoms unmatched{detail}",
-                    proposal.pairs.len(), proposal.unmatched_reactants, proposal.unmatched_products),
-                Tone::Muted,
-            ));
-        }
-        if let Ok(changes) = &dialog.changes {
-            content = content.push(line(&changes.bonds, Tone::Muted));
-            if changes.hydrogens.is_empty() {
-                content = content.push(line("Hydrogens that move: none", Tone::Muted));
-            } else {
-                content = content.push(line("Hydrogens that move", Tone::Muted));
-                for entry in &changes.hydrogens {
-                    content = content.push(line(entry, Tone::Muted));
-                }
-            }
-        }
-        for (index, input) in dialog.inputs.iter().enumerate() {
-            let field =
-                |label: &'static str, value: &'a str, action: fn(usize, String) -> Action| {
-                    column![
-                        text(label).size(11),
-                        reshiki::accessibility::text_input(
-                            format!("ts.review.{index}.{label}"),
-                            format!("{} · {label}", input.label),
-                            "",
-                            value,
-                        )
-                        .style(crate::appearance::input_style)
-                        .size(13)
-                        .padding(5)
-                        .width(94)
-                        .on_input(move |value| send(action(index, value)))
-                    ]
-                    .spacing(3)
-                };
-            content = content.push(
-                row![
-                    text(&input.label).size(13).width(Length::Fill),
-                    field("Charge", &input.charge, Action::Charge),
-                    field("Unpaired electrons", &input.unpaired, Action::Unpaired),
-                ]
-                .spacing(10)
-                .align_y(Alignment::Center),
-            );
-        }
-        if dialog.mode == Mode::TransitionState && !dialog.rerun {
-            content = content.push(
-                row![
-                    text("Path points (10–20)").size(12),
-                    reshiki::accessibility::text_input(
-                        "ts.review.path-points",
-                        "Path points",
-                        "15",
-                        &dialog.path_points,
-                    )
-                    .style(crate::appearance::input_style)
-                    .size(13)
-                    .padding(5)
-                    .width(94)
-                    .on_input(|value| send(Action::PathPoints(value))),
-                ]
-                .spacing(10)
-                .align_y(Alignment::Center),
-            );
-        }
-        if dialog.free_energy {
-            content = content.push(line(
-                if dialog.mode == Mode::TransitionState {
-                    "Report ΔG and ΔG‡ at 298.15 K"
-                } else {
-                    "Report ΔG at 298.15 K"
-                },
-                Tone::Muted,
-            ));
-        }
-        if dialog.mode == Mode::Energy {
-            if let Mapping::Failed(reason) = &dialog.mapping {
-                content = content.push(line(reason, Tone::Muted));
-            } else if let Err(reason) = &dialog.changes
-                && !matches!(dialog.mapping, Mapping::Finding)
-            {
-                content = content.push(line(reason.to_string(), Tone::Muted));
-            }
-        }
-        let valid = if current {
-            let checked = species::validate(&dialog.inputs);
-            if checked.is_ok() {
-                content = content.push(line("Atoms and charge balance", Tone::Good));
-            }
-            checked.and_then(|species| dialog.can_run(&species))
-        } else {
-            Err("The reaction drawing changed. Close this review and try again.".into())
-        };
-        if let Err(error) = &valid {
-            content = content.push(line(
-                error,
-                if matches!(dialog.mapping, Mapping::Finding) {
-                    Tone::Muted
-                } else {
-                    Tone::Error
-                },
-            ));
-        }
-        content = content.push(
-            row![
-                accessible_command("ts.review.edit", "Edit map", "Edit map").on_press_maybe(
-                    (current && !matches!(dialog.mapping, Mapping::Finding))
-                        .then(|| send(Action::EditMap))
-                ),
-                Space::new().width(Length::Fill),
-                accessible_command("ts.review.cancel", "Cancel", "Cancel")
-                    .on_press(send(Action::Cancel)),
-                accessible_command("ts.review.accept", "Accept", "Accept")
-                    .style(crate::appearance::primary)
-                    .on_press_maybe(valid.is_ok().then(|| send(Action::Accept))),
-            ]
-            .spacing(8),
-        );
-        modal(
-            base,
-            scrollable(content).into(),
-            640.,
-            700.,
-            Placement::Fit,
-            send(Action::Cancel),
-        )
     }
 }
 

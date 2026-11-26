@@ -567,6 +567,37 @@ async fn reopened_legacy_result_is_labelled_not_verified() {
 }
 
 #[test]
+fn reopened_reaction_draws_the_saved_bond_changes_without_a_complete_drawn_map() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    let mut doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
+    let product = doc.reactions[0].products[0].atoms[0];
+    doc.atom_mut(product).unwrap().map_num = 0;
+    assert!(review::scheme_plan(&doc, arrow).is_err());
+
+    let mut reopened = reaction_app(doc, arrow);
+    reopened.inspector_open = true;
+    reopened.inspector_tab = crate::app::InspectorTab::Predict;
+    reopened.xtb.page = super::super::Page::Xtb;
+    let marks = reopened.xtb_reaction_bond_marks();
+    let numbers: Vec<_> = marks
+        .iter()
+        .map(|mark| {
+            mark.atoms
+                .map(|id| reopened.tab.doc.atom(id).unwrap().map_num)
+        })
+        .collect();
+    assert_eq!(numbers, [[1, 6], [3, 4]]);
+
+    let reactants = &reopened.tab.doc.reactions[0].reactants[0].atoms;
+    let (c4, c6) = (reactants[3], reactants[5]);
+    reopened.tab.doc.atom_mut(c4).unwrap().map_num = 6;
+    reopened.tab.doc.atom_mut(c6).unwrap().map_num = 4;
+    assert!(reopened.xtb_reaction_bond_marks().is_empty());
+}
+
+#[test]
 fn stale_result_keeps_its_saved_title_and_export_name() {
     let (mut doc, arrow) = card::tests::claisen();
     name_reactant(&mut doc, arrow, "allyl vinyl ether");

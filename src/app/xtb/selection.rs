@@ -59,6 +59,7 @@ impl App {
     /// Retire the hint once the drawing identifies a molecule.
     pub(in crate::app) fn xtb_clear_selection_hint(&mut self) {
         self.xtb_refresh_reaction_status();
+        self.xtb_keep_bond_hover(self.xtb_reaction_card_arrow());
         let Some(hint) = &self.tab.xtb.selection_hint else {
             return;
         };

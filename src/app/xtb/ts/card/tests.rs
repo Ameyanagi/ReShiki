@@ -206,6 +206,137 @@ fn reaction_label_uses_names_then_formulas() {
     let label = app.xtb_reaction_label(arrow);
     assert_eq!(label.title(), "allyl vinyl ether → C5H8O");
     assert_eq!(label.first_reactant(), Some("allyl vinyl ether"));
+    assert_eq!(label.formula(), "C5H8O → C5H8O");
+}
+
+#[test]
+fn reaction_label_prefers_drawn_compound_labels_and_custom_names() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    let atoms = app.tab.doc.reactions[0].reactants[0].atoms.clone();
+    let smiles = reshiki::naming::selected_identity(&app.tab.doc, &atoms)
+        .unwrap()
+        .smiles;
+    app.tab
+        .naming
+        .caption_names
+        .insert(smiles, "allyl vinyl ether".into());
+    assert_eq!(
+        app.xtb_reaction_label(arrow).title(),
+        "allyl vinyl ether → C5H8O"
+    );
+    reshiki::linked_properties::rename(
+        &mut app.tab.doc,
+        &atoms,
+        "Starting ether",
+        Default::default(),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        app.xtb_reaction_label(arrow).title(),
+        "Starting ether → C5H8O"
+    );
+    reshiki::compound_numbers::number(&mut app.tab.doc, &atoms, Default::default()).unwrap();
+    let annotation = reshiki::compound_numbers::label(&app.tab.doc, &atoms)
+        .unwrap()
+        .annotation;
+    app.tab
+        .doc
+        .annotations
+        .iter_mut()
+        .find(|label| label.id == annotation)
+        .unwrap()
+        .text = "1a".into();
+    app.tab.doc.reactions[0].reactants[0].coefficient = 2;
+    let label = app.xtb_reaction_label(arrow);
+    assert_eq!(label.title(), "2 1a → C5H8O");
+    assert_eq!(
+        label.formula(),
+        "2 C5H8O → C5H8O",
+        "the name line's tooltip keeps formulas and coefficients"
+    );
+}
+
+fn show_reaction_card(app: &mut App) {
+    app.inspector_open = true;
+    app.inspector_tab = crate::app::InspectorTab::Predict;
+    app.xtb.page = xtb::Page::Xtb;
+}
+
+#[test]
+fn visible_reaction_names_arrive_from_the_caption_queue_without_editing_the_drawing() {
+    use crate::app::naming::{Outcome, test_support::record};
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    app.inspector_open = false;
+    assert_eq!(app.start_caption_names().units(), 0);
+    show_reaction_card(&mut app);
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    assert_eq!(app.xtb_reaction_label(arrow).title(), "C5H8O → C5H8O");
+    assert!(app.start_caption_names().units() > 0);
+    let smiles = app.tab.naming.caption_pending.clone().unwrap();
+    assert_eq!(
+        app.start_caption_names().units(),
+        0,
+        "the pending request is shared"
+    );
+    let mut named = record(&smiles);
+    named.systematic_name = Some("allyl vinyl ether".into());
+    app.caption_named(&smiles, Ok(Outcome::Structure(named)));
+    assert_eq!(
+        app.xtb_reaction_label(arrow).title(),
+        "allyl vinyl ether → C5H8O"
+    );
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert!(
+        app.start_caption_names().units() > 0,
+        "the product follows in the same queue"
+    );
+    let product = app.tab.naming.caption_pending.clone().unwrap();
+    assert_ne!(product, smiles);
+    app.inspector_open = false;
+    app.caption_named(
+        &product,
+        Err(reshiki::naming::Error::Rejected("not supported".into())),
+    );
+    show_reaction_card(&mut app);
+    assert_eq!(
+        app.start_caption_names().units(),
+        0,
+        "a failed identity is not requested again"
+    );
+    assert!(app.tab.naming.caption_failed.contains_key(&product));
+    assert!(
+        !app.error,
+        "a card's unavailable name leaves its formula visible"
+    );
+    let tab = app.tab.id;
+    app.add_tab();
+    assert_eq!(
+        app.in_tab(tab, |app| app.xtb_reaction_card_arrow()),
+        Some(None)
+    );
+}
+
+#[test]
+fn identical_reaction_species_reuse_one_caption_name() {
+    use crate::app::naming::{Outcome, test_support::record};
+    let mut doc = Document::default();
+    let left = molecule(&mut doc, &[("C", 1), ("C", 2)], &[(1, 2, 2)]);
+    let right = molecule(&mut doc, &[("C", 1), ("C", 2)], &[(1, 2, 2)]);
+    let arrow = assign(&mut doc, &[&left], &[&right]);
+    let mut app = app(doc, arrow);
+    show_reaction_card(&mut app);
+    assert!(app.start_caption_names().units() > 0);
+    let smiles = app.tab.naming.caption_pending.clone().unwrap();
+    let mut named = record(&smiles);
+    named.systematic_name = Some("ethene".into());
+    app.caption_named(&smiles, Ok(Outcome::Structure(named)));
+    assert_eq!(app.xtb_reaction_label(arrow).title(), "ethene → ethene");
+    assert_eq!(app.start_caption_names().units(), 0);
 }
 
 #[test]
@@ -222,6 +353,82 @@ fn the_run_captures_the_drawn_map_numbers() {
         ["C1–C6"],
         "edits must not change the run's map"
     );
+}
+
+#[test]
+fn bond_marks_follow_the_visible_reaction_and_highlight_one_pair() {
+    let (doc, arrow) = claisen();
+    let [c1, _, o3, c4, _, c6] = doc.reactions[0].reactants[0].atoms[..] else {
+        panic!("expected six mapped reactant atoms");
+    };
+    let mut app = app(doc, arrow);
+    show_reaction_card(&mut app);
+    let formed = BondChangeMark {
+        kind: BondChangeKind::Form,
+        atoms: [c1, c6],
+        highlighted: false,
+    };
+    let broken = BondChangeMark {
+        kind: BondChangeKind::Break,
+        atoms: [o3, c4],
+        highlighted: false,
+    };
+    assert_eq!(app.xtb_reaction_bond_marks(), [formed, broken]);
+
+    app.view_open = true;
+    let _ = app.update(Message::ReactionBondHover(
+        arrow,
+        BondChangeKind::Form,
+        [1, 6],
+        true,
+    ));
+    let _ = app.update(Message::ReactionBondHover(
+        arrow,
+        BondChangeKind::Break,
+        [3, 4],
+        true,
+    ));
+    let _ = app.update(Message::ReactionBondHover(
+        arrow,
+        BondChangeKind::Form,
+        [1, 6],
+        false,
+    ));
+    assert!(app.view_open, "hovering leaves open controls alone");
+    app.view_open = false;
+    assert_eq!(
+        app.xtb_reaction_bond_marks(),
+        [
+            formed,
+            BondChangeMark {
+                highlighted: true,
+                ..broken
+            }
+        ]
+    );
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![c1])));
+    assert!(app.xtb_reaction_bond_marks().is_empty());
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![arrow])));
+    assert_eq!(app.xtb_reaction_bond_marks(), [formed, broken]);
+    let _ = app.update(Message::ToggleInspector);
+    assert!(app.xtb_reaction_bond_marks().is_empty());
+}
+
+#[test]
+fn drawing_bond_marks_are_absent_from_the_saved_document() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    let before = app.tab.doc.file_json().unwrap();
+    show_reaction_card(&mut app);
+    let _ = app.update(Message::ReactionBondHover(
+        arrow,
+        BondChangeKind::Form,
+        [1, 6],
+        true,
+    ));
+    assert!(app.xtb_reaction_bond_marks()[0].highlighted);
+    assert_eq!(app.tab.doc.file_json().unwrap(), before);
 }
 
 #[test]
@@ -276,8 +483,7 @@ fn bond_change_colors_use_the_reaction_atoms_and_canvas_ink() {
     );
 }
 
-#[test]
-fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
+pub(in crate::app::xtb::ts) fn diels_alder() -> (Document, u64) {
     let mut doc = Document::default();
     let diene = molecule(
         &mut doc,
@@ -298,6 +504,12 @@ fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
         ],
     );
     let arrow = assign(&mut doc, &[&diene, &ethylene], &[&ring]);
+    (doc, arrow)
+}
+
+#[test]
+fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
+    let (doc, arrow) = diels_alder();
     let plan = ts_plan::plan(&doc, arrow).unwrap();
     assert_eq!(plan.start, Side::Product);
     let bonds = BondChanges::from_plan(&doc, &plan);

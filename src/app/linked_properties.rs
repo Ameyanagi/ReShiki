@@ -141,9 +141,8 @@ impl App {
         }
     }
 
-    /// Generate the automatic name of the first caption waiting for one. One
-    /// request runs at a time; a structure the generator refused is not asked
-    /// again, and one it named before (Undo, Redo) is named at once.
+    /// Generate the first waiting caption or visible reaction species' name.
+    /// One request runs at a time; refused and completed identities are reused.
     pub(super) fn start_caption_names(&mut self) -> Task<Message> {
         if !self.naming_can_edit() {
             return Task::none();
@@ -169,17 +168,17 @@ impl App {
         if state.caption_pending.is_some() {
             return Task::none();
         }
-        let Some(link) = self
+        let request = self
             .tab
             .doc
             .property_captions
             .iter()
             .find(|link| link.needs_name() && !state.caption_failed.contains_key(&link.smiles))
-        else {
+            .map(|link| (link.smiles.clone(), link.atoms.clone()))
+            .or_else(|| self.xtb_reaction_name_request());
+        let Some((smiles, atoms)) = request else {
             return Task::none();
         };
-        let smiles = link.smiles.clone();
-        let atoms = link.atoms.clone();
         self.tab.naming.caption_pending = Some(smiles.clone());
         Task::perform(
             generate_for_atoms(
@@ -204,6 +203,7 @@ impl App {
         let name = match result {
             Ok(Outcome::Structure(record)) => record
                 .systematic_name
+                .filter(|name| !name.trim().is_empty())
                 .ok_or_else(|| "The local generator returned no supported systematic name".into()),
             Ok(_) => return,
             Err(naming::Error::Cancelled(_)) => return,
@@ -222,6 +222,10 @@ impl App {
                 }
             }
             Err(error) => {
+                self.tab
+                    .naming
+                    .caption_failed
+                    .insert(smiles.into(), error.clone());
                 let waiting = self
                     .tab
                     .doc
@@ -231,7 +235,6 @@ impl App {
                 if waiting {
                     self.status = format!("No automatic name: {error}");
                     self.error = true;
-                    self.tab.naming.caption_failed.insert(smiles.into(), error);
                 }
             }
         }
