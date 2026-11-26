@@ -1656,6 +1656,15 @@ fn analysis(app: &App) -> Vec<Command> {
             .need(Need::XtbReaction),
         );
     }
+    list.push(send(
+        "Place MO diagram",
+        Analyze,
+        "Place the calculated energy levels and frontier orbital pictures",
+        "mo diagram energy levels orbital levels homo lumo gap",
+        Message::Xtb(xtb::Action::Orbitals(xtb::orbitals::Action::PlaceDiagram {
+            for_selection: true,
+        })),
+    ));
     // Builds that cannot calculate hide it, as they hide Run.
     if xtb::available() {
         list.push(Command::new(

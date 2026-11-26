@@ -18,7 +18,7 @@ pub use effects::{
 };
 pub use heads::PathHeads;
 pub use ir_figure::{BandShape, Columns, Frame, IrFigure, Journal, YAxis};
-pub use mo_diagram::MoDiagram;
+pub use mo_diagram::{MoDiagram, MoPicture};
 pub use panel::{Divider, Panel, TitlePlace};
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};

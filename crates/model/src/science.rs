@@ -1252,7 +1252,7 @@ pub(crate) fn for_figures_from(
                 .entry(&mo.result)
                 .or_default()
                 .push(model.linked_atoms.iter().copied().collect());
-            for orbital in mo.pictures.iter().map(|p| &p.orbital) {
+            for orbital in mo.pictures.iter().map(|p| &p.figure.orbital) {
                 if orbital.result != mo.result {
                     molecules
                         .entry(&orbital.result)
