@@ -28,6 +28,7 @@ impl App {
             // Autosaved: handled before editor/modal guards.
             Message::Accessibility(_)
             | Message::ModifiersChanged(_)
+            | Message::WindowSize(_)
             | Message::CopyFrame(_)
             | Message::Assistant(_)
             | Message::Updates(_)
