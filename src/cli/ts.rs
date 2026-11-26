@@ -222,10 +222,21 @@ fn review_hydrogens(moved: &[geometry::MovingHydrogen], numbers: &[u8], err: &mu
 }
 
 #[cfg(feature = "xtb")]
-#[derive(Default)]
 struct Progress {
     iterations: usize,
     steps: usize,
+    trace: bool,
+}
+
+#[cfg(feature = "xtb")]
+impl Default for Progress {
+    fn default() -> Self {
+        Self {
+            iterations: 0,
+            steps: 0,
+            trace: std::env::var_os("RESHIKI_TS_TRACE").is_some(),
+        }
+    }
 }
 
 #[cfg(feature = "xtb")]
@@ -247,8 +258,15 @@ impl Progress {
                 iteration,
                 max_force,
                 climbing,
-                ..
+                energies,
             } => {
+                if self.trace {
+                    let peak = energies.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    let _ = writeln!(
+                        err,
+                        "NEB trace: iteration={iteration} peak_energy={peak:.12}"
+                    );
+                }
                 if iteration > 0 && iteration.is_multiple_of(10) {
                     let climbing =
                         climbing.map_or_else(|| "pending".into(), |image| (image + 1).to_string());
@@ -260,12 +278,48 @@ impl Progress {
                 self.iterations = iteration;
             }
             Event::Saddle {
-                step, max_gradient, ..
+                step,
+                energy,
+                max_gradient,
+                rms_gradient,
+                eigenvalue,
+                overlap,
+                radius,
+                mode_displacement,
+                exact,
             } => {
+                if self.trace {
+                    let displacement = mode_displacement
+                        .map_or_else(|| "unchecked".into(), |value| format!("{value:.8e}"));
+                    let _ = writeln!(
+                        err,
+                        "Saddle metrics: step={step} energy={energy:.12} max_gradient={max_gradient:.8e} rms_gradient={rms_gradient:.8e} eigenvalue={eigenvalue:.8e} overlap={overlap:.6} radius={radius:.8} mode_displacement={displacement} exact={exact}"
+                    );
+                }
                 if step > self.steps && step.is_multiple_of(10) {
                     let _ = writeln!(err, "Saddle {step}: max gradient {max_gradient:.4} Eh/bohr");
                 }
                 self.steps = step;
+            }
+            Event::SaddleTrial {
+                energy,
+                max_gradient,
+                rms_gradient,
+                length,
+                ratio,
+                decision,
+            } => {
+                if self.trace {
+                    let _ = writeln!(
+                        err,
+                        "Saddle trial: energy={energy:.12} max_gradient={max_gradient:.8e} rms_gradient={rms_gradient:.8e} length={length:.8} ratio={ratio:.6} decision={decision}"
+                    );
+                }
+            }
+            Event::SaddleStatus(status) => {
+                if self.trace {
+                    let _ = writeln!(err, "Saddle status: {status}");
+                }
             }
             Event::Endpoint { .. } | Event::Irc { .. } => {}
         }
