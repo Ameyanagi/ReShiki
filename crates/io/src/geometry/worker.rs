@@ -18,7 +18,8 @@ fn operation() -> Result<reshiki_geometry::Response, String> {
 fn solve(request: wire::Request) -> Result<reshiki_geometry::Response, String> {
     let capacity = resolved_capacity(request.heap_bytes, request.capacity)?;
     request.operation.validate_capacity(capacity)?;
-    let response = reshiki_geometry::solve(&request.operation)?;
+    let response =
+        reshiki_geometry::solve_with_heap_budget(&request.operation, request.heap_bytes)?;
     if response.coordinates.len() > capacity.coordinates {
         return Err("Geometry result exceeds its machine-budget coordinate capacity".into());
     }

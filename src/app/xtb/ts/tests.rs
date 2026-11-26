@@ -194,6 +194,7 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         seconds: 2.,
         scf_iterations: vec![9, 4],
         finished: Some("2026-11-25T12:00:00Z".into()),
+        search: None,
         transition_state: None,
     });
     let extras = Extras {

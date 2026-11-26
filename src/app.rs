@@ -1226,6 +1226,7 @@ impl App {
             .map(|stored| (stored.attachment, Arc::downgrade(&stored.result)));
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
+        self.xtb_sync_conformer_inversion();
         self.xtb_clear_selection_hint();
         let document_changed = document != (self.tab.id, self.tab.file_epoch);
         if !xtb_page_was_shown || document_changed {

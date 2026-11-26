@@ -25,6 +25,8 @@ pub(crate) struct EnergyPlot {
     pub notes: Vec<String>,
     /// The message that selects an item; `None` while selecting is off.
     pub select: Option<fn(usize) -> Message>,
+    /// Source trajectory steps, when the plot omits frames.
+    pub steps: Vec<usize>,
 }
 
 const LEFT: f32 = 44.;
@@ -116,7 +118,12 @@ impl canvas::Program<Message> for EnergyPlot {
             .iter()
             .enumerate()
             .min_by(|(a, i), (b, j)| distance(*a, **i).total_cmp(&distance(*b, **j)))?;
-        Some(canvas::Action::publish(select(item)).and_capture())
+        let step = if self.steps.is_empty() {
+            item
+        } else {
+            *self.steps.get(item)?
+        };
+        Some(canvas::Action::publish(select(step)).and_capture())
     }
 
     fn mouse_interaction(
@@ -258,6 +265,7 @@ mod tests {
             selected: None,
             notes: vec![],
             select: None,
+            steps: vec![],
         }
     }
 

@@ -134,14 +134,10 @@ impl App {
                     }
                 })
             });
-        // Results opened from other programs are not xTB's.
-        let title = match shown.as_ref().map(|s| &s.stored.result.settings) {
-            Some(reshiki::qcdata::Settings::Imported { .. }) => "Calculation results".into(),
-            _ => reaction.map_or_else(
-                || "xTB results".into(),
-                |title| format!("xTB results · {title}"),
-            ),
-        };
+        let title = results::title(
+            shown.as_ref().map(|shown| shown.stored.result.as_ref()),
+            reaction.as_deref(),
+        );
         if let Some(failed) = failed.filter(|failed| failed.ts().is_none() || shown.is_none()) {
             let header = self.xtb_palette_header(title, vec![], View::Summary, inspector);
             return Some(if collapsed {
@@ -197,9 +193,12 @@ impl App {
                 Tone::Muted,
             ));
         }
-        let mut content = column![].spacing(4);
-        content = content.push(text(results::headline(&shown.stored.result, shown.frame)).size(12));
-        content = content.extend(key_tiles(&shown, inspector, false));
+        let mut content =
+            column![text(results::headline(&shown.stored.result, shown.frame)).size(12)].spacing(4);
+        // The Conformers table lists every energy; its rows need the room.
+        if view != View::Conformers {
+            content = content.extend(key_tiles(&shown, inspector, false));
+        }
         // The semi-empirical caveat is about xTB, not imported results.
         if matches!(
             shown.stored.result.settings,
@@ -243,7 +242,7 @@ impl App {
         )
     }
 
-    /// The title, the tabs `views` with `view` chosen, and the dock commands.
+    /// The result title, tabs with `view` chosen, and dock commands.
     fn xtb_palette_header(
         &self,
         title: String,
@@ -698,7 +697,10 @@ impl App {
                 actions = actions.push(self.xtb_orbitals_note(shown, text::Wrapping::default()))
             }
             View::Conformers => {
-                actions = actions.push(super::super::conformers::footer(text::Wrapping::default()));
+                actions = actions.push(super::super::conformers::footer(
+                    &shown.stored.result,
+                    text::Wrapping::default(),
+                ));
             }
             View::Path => {}
             View::Log => {

@@ -492,6 +492,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .map(|e| e.scf_iterations as u32)
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+        search: None,
         transition_state: None,
     });
     result

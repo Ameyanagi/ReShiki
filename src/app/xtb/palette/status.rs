@@ -11,6 +11,7 @@ impl App {
     pub(super) fn xtb_palette_exported(
         &mut self,
         result: Result<Option<PathBuf>, String>,
+        details: &[String],
         ir: bool,
     ) {
         if !self.tab.xtb.palette.open || self.tabs.temporary_depth != 0 {
@@ -23,6 +24,9 @@ impl App {
                 };
                 // The file name leads; the IR figure's folder is in the details.
                 let mut text = format!("Exported {}", name.to_string_lossy());
+                for detail in details {
+                    text.push_str(&format!(" · {detail}"));
+                }
                 if ir {
                     text = format!("{text}\n{}", path.display());
                 }

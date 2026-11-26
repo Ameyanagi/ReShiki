@@ -283,6 +283,7 @@ fn light_optimization_run_metadata_costs_at_most_two_kilobytes() {
         seconds: 42.5,
         scf_iterations: (0..60).map(|i| 4 + i % 9).collect(),
         finished: Some("2026-11-26T05:03:00Z".into()),
+        search: None,
         transition_state: None,
     });
     let saved = result.for_file(0, &[]);
@@ -329,6 +330,7 @@ fn light_transition_state_run_metadata_costs_at_most_four_kilobytes() {
         seconds: 142.5,
         scf_iterations: (0..60).map(|i| 4 + i % 9).collect(),
         finished: Some("2026-11-26T05:03:00Z".into()),
+        search: None,
         transition_state: Some(Box::new(TransitionStateRun {
             arrow: Some(42),
             context: Some(TransitionStateContext {

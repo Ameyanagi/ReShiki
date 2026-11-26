@@ -6,6 +6,19 @@ use reshiki_qcdata::{
     TransitionStateMapping, TransitionStateRun, Vibrations, XtbConventions, XtbMethod, XtbSettings,
 };
 
+#[test]
+fn run_summary_without_search_keeps_its_legacy_json() {
+    for json in [
+        r#"{"seconds":12.5}"#,
+        r#"{"seconds":12.5,"scf_iterations":[7,5,4],"finished":"2026-11-26T05:03:00Z"}"#,
+    ] {
+        let run: RunSummary = serde_json::from_str(json).unwrap();
+        assert_eq!(run.search, None);
+        assert_eq!(run.transition_state, None);
+        assert_eq!(serde_json::to_string(&run).unwrap(), json);
+    }
+}
+
 fn assert_compact(expected: &[f64], decoded: &mut [f64], quantized: bool) {
     assert_eq!(decoded.len(), expected.len());
     for (&x, &actual) in expected.iter().zip(decoded.iter()) {
@@ -294,6 +307,7 @@ fn calculated_result_round_trips_with_solvent_settings() {
         seconds: 12.5,
         scf_iterations: vec![7, 5, 4],
         finished: Some("2026-11-26T05:03:00Z".into()),
+        search: None,
         transition_state: None,
     });
     calculated.validate(&frame).unwrap();
@@ -437,6 +451,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
             seconds,
             scf_iterations: vec![],
             finished: None,
+            search: None,
             transition_state: None,
         });
         assert!(result.validate(&frame).is_err());
@@ -445,6 +460,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
         seconds: 0.0,
         scf_iterations: vec![0; MAX_RUN_EVALUATIONS + 1],
         finished: None,
+        search: None,
         transition_state: None,
     });
     assert!(matches!(
@@ -575,6 +591,7 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
         seconds: 42.5,
         scf_iterations: vec![6, 8],
         finished: Some("2026-11-26T05:03:00Z".into()),
+        search: None,
         transition_state: Some(Box::new(TransitionStateRun {
             arrow: Some(123),
             context: None,
