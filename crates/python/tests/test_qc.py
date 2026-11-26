@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import warnings
 from dataclasses import FrozenInstanceError
 from pathlib import Path
@@ -14,6 +15,14 @@ def water() -> qc.Geometry:
     return qc.Geometry.from_symbols(
         ["O", "H", "H"], [[0, 0, 0], [0, 0, 0.96], [0.92, 0, -0.24]], title="water"
     )
+
+
+def test_geometry_needs_numpy(monkeypatch: pytest.MonkeyPatch) -> None:
+    numbers = np.array([1], dtype=np.int64)
+    positions = np.zeros((1, 3))
+    monkeypatch.setitem(sys.modules, "numpy", None)
+    with pytest.raises(ImportError, match="pip install numpy"):
+        qc.Geometry(numbers, positions)
 
 
 @pytest.mark.parametrize(

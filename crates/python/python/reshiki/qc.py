@@ -35,6 +35,16 @@ _NEAR_DEGENERATE_WARNING = (
 )
 
 
+def _import_numpy():
+    try:
+        import numpy as np
+    except ImportError as error:
+        raise ImportError(
+            "reshiki.qc needs NumPy: pip install numpy (it is included in reshiki[xtb])."
+        ) from error
+    return np
+
+
 def _invalid(message: str) -> ReShikiError:
     return ReShikiError(message, "invalid_arguments")
 
@@ -66,7 +76,7 @@ class Geometry:
     isotopes: NDArray[np.int64] | None = None
 
     def __post_init__(self) -> None:
-        import numpy as np
+        np = _import_numpy()
 
         numbers = np.asarray(self.numbers)
         if numbers.ndim != 1 or numbers.size == 0:
@@ -142,7 +152,7 @@ class Geometry:
         Symbols are case-insensitive: ``Geometry.from_symbols(["He"], [[0, 0, 0]])``.
         Positions use ångströms and follow the same atom order as ``symbols``.
         """
-        import numpy as np
+        np = _import_numpy()
 
         numbers = []
         for symbol in symbols:
@@ -326,7 +336,7 @@ def _geometry_data(geometry: Geometry) -> dict[str, Any]:
 
 
 def _geometry_from_data(data: dict[str, Any]) -> Geometry:
-    import numpy as np
+    np = _import_numpy()
 
     return Geometry(
         np.asarray(data["numbers"], dtype=np.int64),
@@ -341,7 +351,7 @@ def _geometry_from_data(data: dict[str, Any]) -> Geometry:
 def _array(data: Any, shape: tuple[int, ...] = (-1,)) -> NDArray[np.float64] | None:
     if data is None:
         return None
-    import numpy as np
+    np = _import_numpy()
 
     array = np.array(data, dtype=np.float64).reshape(shape)
     array.setflags(write=False)
