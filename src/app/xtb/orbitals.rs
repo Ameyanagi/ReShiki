@@ -595,14 +595,19 @@ impl App {
             && let Some(target) = self.xtb_orbital_target()
             && target.problem.is_none()
             && self.xtb_orbital_frontier(&target).is_none()
+            && let choice = self.xtb_orbital_choice(&target)
+            && let Some(column) = target.columns.get(choice.column)
+            && let (Some(homo), Some(lumo)) = (column.homo(), column.lumo())
             && let Some((_, stored)) = self.xtb_orbital_stored()
             && matches!(stored.result.settings, Settings::Xtb(_))
             && super::available()
             && !state.errors.iter().any(|(k, _)| *k == target.key)
             && let Some(frame) = self.tab.doc.science.frame(&stored.result.frame)
         {
-            // Rows around the frontier come with every recomputation.
-            recompute = Some((stored.result.clone(), frame.clone(), vec![]));
+            // The chosen column's pair (β's can lie outside the rows around
+            // α's frontier) and the shown level, so neither evicts the other.
+            let rows = [homo, lumo, choice.index].map(|i| i as u32).to_vec();
+            recompute = Some((stored.result.clone(), frame.clone(), rows));
         }
         let tab = self.tab.id;
         self.tab.xtb.orbitals.failed.extend(failed);
