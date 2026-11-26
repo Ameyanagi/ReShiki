@@ -495,6 +495,46 @@ fn history_frames_count_arrow_node_buffers() {
     );
 }
 #[test]
+fn history_counts_owned_ir_parameters_and_budgets_their_frames() {
+    use crate::graphics::{Graphic, GraphicStyle, IrFigure, Journal};
+    use std::mem::{size_of, size_of_val};
+    let mut doc = Document::default();
+    doc.graphics.push(Graphic::pen_curve(
+        1,
+        Point::default(),
+        Point::new(100., 50.),
+        GraphicStyle::default(),
+    ));
+    let without = frame_bytes(&doc);
+    let mut figure = IrFigure::with_defaults(
+        "酢酸".into(),
+        "GFN2-xTB".into(),
+        vec![[1700., 120.]; 1000],
+        Journal::Acs,
+    );
+    figure.hidden_labels = vec![1; 64];
+    let owned = size_of::<IrFigure>()
+        + figure.name.len()
+        + figure.method.len()
+        + size_of_val(&figure.bands[..])
+        + size_of_val(&figure.hidden_labels[..]);
+    doc.graphics[0].ir = Some(Box::new(figure));
+    assert_eq!(frame_bytes(&doc) - without, owned);
+    let frame = frame_bytes(&doc);
+    let kept = History::MIN_STEPS + 2;
+    let mut history = History {
+        max_bytes: frame * kept,
+        ..History::default()
+    };
+    for _ in 0..30 {
+        let before = doc.clone();
+        doc.graphics[0].origin.x += 1.;
+        assert!(history.commit(before, &doc));
+    }
+    assert_eq!(history.undo_frames().len(), kept);
+    assert_eq!(history.bytes(), frame * kept);
+}
+#[test]
 fn native_files_open_at_version_15_or_later_without_computed_labels() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::default());
