@@ -581,22 +581,29 @@ tool. The command also supports XYZ output and transition-state jobs.
 | `--memory-gb G`     | export-input | Memory in GB (16)                                                                                    |
 | `--title T`         | export-input | Title                                                                                                |
 | `--extra TEXT`      | export-input | More keywords                                                                                        |
-| `--reactant R.xyz`  | export-input | First reactant XYZ frame. Required for qst2, qst3 and neb-ts.                                        |
-| `--product P.xyz`   | export-input | First product XYZ frame. Required for qst2, qst3 and neb-ts.                                         |
+| `--reactant R.xyz`  | export-input | First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                           |
+| `--product P.xyz`   | export-input | First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                            |
 | `--hessian H.hess`  | export-input | ORCA Cartesian Hessian for ORCA ts or irc.                                                           |
 | `--out PATH`        | export-input | Replaces the main file and writes new companions beside it. Required for ORCA neb-ts or `--hessian`. |
 
-Gaussian supports `qst2` and `qst3`. ORCA supports `neb-ts`. Endpoint flags
-are accepted only for transition-state jobs. All XYZ files are read in
-ångströms and must list the same elements in the same order. Gaussian QST2
-writes the endpoints. QST3 adds `INPUT.xyz` as the TS guess. ORCA NEB-TS
-puts the reactant inline and writes product and TS guess XYZ companions.
+Endpoint flags are only for Gaussian `qst2` and `qst3` and ORCA `neb-ts`.
+All XYZ files are read in ångströms and must list the same elements in the
+same order. Corresponding atoms must have the same index in every structure.
+Gaussian QST2 writes the endpoints. QST3 adds `INPUT.xyz` as the TS guess.
+ORCA NEB-TS puts the reactant inline and writes product and TS guess XYZ
+companions.
 
-For ORCA `ts` or `irc`, `--hessian` reads the `$hessian` block and writes a
-Hessian companion for `INPUT.xyz`. The matrix must have dimension three
-times the number of input atoms, and all entries must be finite. Use the
-same geometry and atom order that produced the Hessian. For example, use
-`ts.xyz` and `ts.hess` from `reshiki --cli ts --out-dir DIR`.
+For ORCA `ts` or `irc`, `--hessian` reads the `$hessian` and `$atoms` blocks
+and writes a Hessian companion for `INPUT.xyz`. The matrix dimension must be
+three times the number of input atoms. All entries must be finite, and
+mirrored entries `a` and `b` may differ by at most
+`1e-6 + 1e-6 × max(|a|, |b|)`. The atom count and element order must match
+`INPUT.xyz`, and each coordinate must agree within `1e-3` Å in the original
+coordinate frame. For example, use `ts.xyz` and `ts.hess` from
+`reshiki --cli ts --out-dir DIR`.
+
+ORCA companion filenames replace characters outside ASCII letters, digits,
+`.`, `_` and `-` in the output stem with underscores.
 
 ```sh
 reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz

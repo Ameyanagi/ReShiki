@@ -423,13 +423,13 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--reactant",
             value: Some("R.xyz"),
-            help: "First reactant XYZ frame. Required for qst2, qst3 and neb-ts.",
+            help: "First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--product",
             value: Some("P.xyz"),
-            help: "First product XYZ frame. Required for qst2, qst3 and neb-ts.",
+            help: "First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.",
             ..QC_OPTION
         },
         OptionSpec {
@@ -1334,9 +1334,9 @@ Writes input for another program from the first frame of INPUT.xyz (Å).\n\
 Without --out, the input goes to stdout. With --out, the main file is\n\
 replaced and new companions go beside it. An existing companion file\n\
 stops the export. Warnings go to stderr.\n\n\
-Gaussian supports qst2 and qst3. ORCA supports neb-ts. Endpoint files\n\
-are accepted only for transition-state jobs and must list the same\n\
-elements as INPUT.xyz in the same order.\n\nOptions:\n",
+Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts. They must\n\
+list the same elements as INPUT.xyz in the same order. Corresponding atoms\n\
+must have the same index in every structure.\n\nOptions:\n",
         EXPORT_INPUT.usage,
     );
     for option in EXPORT_INPUT.options {

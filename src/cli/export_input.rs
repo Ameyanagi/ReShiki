@@ -80,7 +80,7 @@ fn read_hessian(path: &Path, frame: &Frame, limit: usize) -> Result<CalcResult, 
     let bytes = io::read_input(Some(path), limit)?;
     let text = String::from_utf8(bytes)
         .map_err(|_| format!("{}: the ORCA Hessian must be UTF-8", path.display()))?;
-    let hessian = qc_input::read_orca_hess(&text, frame.numbers.len())
+    let hessian = qc_input::read_orca_hess(&text, frame)
         .map_err(|error| format!("{}: {error}", path.display()))?;
     let file_name = path
         .file_name()
