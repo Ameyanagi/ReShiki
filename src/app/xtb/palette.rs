@@ -457,7 +457,15 @@ impl App {
         {
             return false;
         }
-        if let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) {
+        if !selection_changed
+            && let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow)
+            && self
+                .xtb_ts_linked_pair(result)
+                .is_some_and(|pair| pair.into_iter().any(|saved| palette.follows(saved)))
+        {
+            return false;
+        }
+        if let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_display_result(arrow) {
             if palette.follows(result) {
                 return false;
             }

@@ -52,7 +52,7 @@ mod skill;
 mod ts;
 
 pub use mcp_usage::{MCP_USAGE, heap};
-pub use reference::agent_reference;
+pub use reference::{agent_reference, canonical_agent_reference};
 
 use args::Command;
 use host::{CliError, Session, labelled};

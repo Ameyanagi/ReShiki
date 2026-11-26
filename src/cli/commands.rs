@@ -743,11 +743,35 @@ const fn ts_option(
 
 const TS: CommandSpec = CommandSpec {
     name: "ts",
-    summary: "Search for a transition state with GFN2-xTB",
+    summary: "Search for or refine a transition state with xTB",
     usage: "reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--method gfn2|gxtb] [--refine gxtb (--ts TS.xyz | --from DIR)]
     [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
     [--out-dir DIR] [--json FILE]",
     options: &[
+        OptionSpec {
+            default: Some(|| json!("gfn2")),
+            ..ts_option(
+                "--method",
+                Some("METHOD"),
+                "Use GFN2-xTB (default) or g-xTB for the entire search and verification.",
+            )
+        },
+        ts_option(
+            "--refine",
+            Some("gxtb"),
+            "Refine a TS with a g-xTB Hessian, saddle search, relaxed endpoints and IRC.",
+        ),
+        ts_option(
+            "--ts",
+            Some("TS.xyz"),
+            "Start --refine from this TS and the usual endpoint or bond-change inputs.",
+        ),
+        ts_option(
+            "--from",
+            Some("DIR"),
+            "Read a verified GFN2-xTB --out-dir; without report.json, use XYZ geometry seeds only.",
+        ),
         ts_option(
             "--reactant",
             Some("R.xyz"),
@@ -796,7 +820,7 @@ const TS: CommandSpec = CommandSpec {
         ts_option(
             "--out-dir",
             Some("DIR"),
-            "Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.",
+            "Write endpoint, TS, path and IRC XYZ files, an ORCA Hessian and report.json.",
         ),
         ts_option("--json", Some("FILE"), "Write a JSON report."),
     ],
@@ -940,8 +964,9 @@ const HELP: CommandSpec = CommandSpec {
     body: overview,
 };
 
-/// Commands in overview-help order; option order is the parsing grammar.
-pub(crate) const COMMANDS: &[CommandSpec] = &[
+/// All documented commands, including optional xTB commands, in help order.
+/// Option order is the parsing grammar.
+pub(crate) const DOCUMENTED_COMMANDS: &[CommandSpec] = &[
     CONVERT,
     RENDER,
     COMPOSE,
@@ -961,9 +986,33 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     HELP,
 ];
 
+#[cfg(feature = "xtb")]
+pub(crate) const COMMANDS: &[CommandSpec] = DOCUMENTED_COMMANDS;
+#[cfg(not(feature = "xtb"))]
+pub(crate) const COMMANDS: &[CommandSpec] = &[
+    CONVERT,
+    RENDER,
+    COMPOSE,
+    ANALYZE,
+    PREDICT_NMR,
+    READ_OUTPUT,
+    EXPORT_INPUT,
+    NAME,
+    PIECES,
+    INFO,
+    TOOLS,
+    SCHEMA,
+    SKILL,
+    HELP,
+];
+
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
-const OPTIONS_RULE: &str =
+const XTB_OPTIONS_RULE: &str =
     "Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.";
+#[cfg(feature = "xtb")]
+const OPTIONS_RULE: &str = XTB_OPTIONS_RULE;
+#[cfg(not(feature = "xtb"))]
+const OPTIONS_RULE: &str = "-- ends the options.";
 const STDOUT_CONTRACT: &str = "\
 stdout carries only the result: a file, a text report, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.";
@@ -1043,23 +1092,34 @@ fn one_line(text: &str) -> String {
 
 /// The command called `name`; the `--help` and `-h` aliases are not entries.
 pub(crate) fn find(name: &str) -> Option<&'static CommandSpec> {
-    COMMANDS.iter().find(|spec| spec.name == name)
+    // Explicit calls still explain that xTB is unavailable, while discovery
+    // and generated agent references only list compiled commands.
+    DOCUMENTED_COMMANDS.iter().find(|spec| spec.name == name)
 }
 
 /// The overview help, `help`'s body: the command list comes from [`COMMANDS`].
 pub(crate) fn overview() -> String {
-    let width = COMMANDS
+    overview_for(COMMANDS)
+}
+
+pub(in crate::cli) fn overview_for(commands: &[CommandSpec]) -> String {
+    let width = commands
         .iter()
         .map(|spec| spec.name.len())
         .max()
         .unwrap_or_default();
     let mut text = format!("Usage: {OVERVIEW_USAGE}\n\nCommands:\n");
-    for spec in COMMANDS {
+    for spec in commands {
         text.push_str(&format!("  {:width$}  {}\n", spec.name, spec.summary));
     }
+    let options_rule = if commands.iter().any(|spec| spec.name == "calc") {
+        XTB_OPTIONS_RULE
+    } else {
+        "-- ends the options."
+    };
     let end = format!(
         "\n\
-{OPTIONS_RULE}
+{options_rule}
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -1263,18 +1323,24 @@ fn calc_help() -> String {
 fn ts_help() -> String {
     format!(
         "Usage: {}\n\n\
-Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.\n\
+Search using gas-phase GFN2-xTB (default) or g-xTB with axtb conventions.\n\
+g-xTB is closer to DFT energies; slower for large molecules. Requires the xtb feature.\n\
 Supply two atom-mapped XYZ files or one XYZ file with the bond changes.\n\
 Each structure must have 2 to {} atoms. With two files, atom order\n\
 defines the map. --remap-hydrogens requires two files and keeps heavy atoms\n\
-mapped by order.\n\n\
+mapped by order.\n\
+For --refine gxtb, supply --ts with endpoint inputs, or --from a verified\n\
+GFN2-xTB output directory. All refinement checks and endpoints use g-xTB.\n\
+Unverified g-xTB candidates never report a barrier. Output files must be new.\n\n\
 {}\n\
 Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both\n\
 checks, and IRC branches whose relaxed ends match both endpoints. Progress\n\
 and the hydrogen mapping review go to stderr.\n\n\
 Examples:\n  \
 reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results\n  \
-reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json\n",
+reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json\n  \
+reshiki --cli ts --method gxtb --reactant hcn.xyz --product hnc.xyz\n  \
+reshiki --cli ts --refine gxtb --from results --out-dir refined\n",
         TS.usage,
         reshiki_optimize::ts::MAX_ATOMS,
         option_help(&TS, 28),

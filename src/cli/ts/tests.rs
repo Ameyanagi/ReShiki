@@ -5,7 +5,7 @@ use crate::cli::args::Ts;
 use reshiki_optimize::ts::{IrcBranch, Minimum, Reached, TsReport};
 use reshiki_xtb_worker::{
     client::Error,
-    protocol::{Engine, Units},
+    protocol::{Engine, Method, Units},
 };
 
 #[test]
@@ -139,11 +139,16 @@ fn report() -> TsReport {
 
 fn command(directory: &std::path::Path) -> Ts {
     Ts {
+        method: Method::Gfn2,
+        refine: None,
+        ts: None,
+        from: None,
         reactant: Some("r.xyz".into()),
         product: Some("p.xyz".into()),
         form: Vec::new(),
         break_: Vec::new(),
         charge: 0,
+        charge_explicit: false,
         uhf: None,
         images: 5,
         workers: 1,
@@ -178,6 +183,7 @@ fn summary<'a>(command: &'a Ts) -> Summary<'a> {
         seconds: 0.,
         moving_hydrogens: Vec::new(),
         reactive_start: None,
+        source_report: None,
     }
 }
 
@@ -216,6 +222,260 @@ fn reactive_start_json_preserves_units_and_one_based_pairs() {
             "energy_change_kcal": 2.1,
         })
     );
+}
+
+#[test]
+fn gxtb_report_labels_every_calculation_and_exports_a_verified_saddle() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut command = command(directory.path());
+    command.method = Method::Gxtb;
+    let summary = summary(&command);
+    let (success, table, _, json) = finish_report(&summary);
+    assert!(success);
+    assert!(table.starts_with("Transition state · g-xTB"), "{table}");
+    assert_eq!(json["verified"], true);
+    assert_eq!(json["settings"]["method"], "gxtb");
+    assert_eq!(json["energies"]["method"], "gxtb");
+    assert_eq!(json["barriers"]["method"], "gxtb");
+    assert!(json["barriers"]["forward"].is_number());
+    for method in json["methods"].as_object().unwrap().values() {
+        assert_eq!(method, "gxtb");
+    }
+    for branch in ["plus", "minus"] {
+        assert_eq!(json["irc"][branch]["method"], "gxtb");
+    }
+    let dir = command.out_dir.as_ref().unwrap();
+    let stored: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("report.json")).unwrap()).unwrap();
+    assert_eq!(stored, json);
+    for file in [
+        "reactant.xyz",
+        "product.xyz",
+        "ts.xyz",
+        "path.xyz",
+        "irc.xyz",
+    ] {
+        let text = std::fs::read_to_string(dir.join(file)).unwrap();
+        assert!(
+            text.lines()
+                .skip(1)
+                .step_by(4)
+                .all(|line| line.contains("method=gxtb verification=verified")),
+            "{file}: {text}"
+        );
+        assert!(!text.contains("Barrier"));
+    }
+}
+
+#[test]
+fn automatic_output_report_can_also_be_the_json_destination() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut command = command(directory.path());
+    command.json = Some(command.out_dir.as_ref().unwrap().join("report.json"));
+    super::output::check_destinations(&command).unwrap();
+    assert!(finish_report(&summary(&command)).0);
+    let files: Vec<_> = std::fs::read_dir(command.out_dir.as_ref().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(files.len(), 7);
+}
+
+#[test]
+fn unverified_gxtb_candidates_never_report_or_export_a_barrier() {
+    for failure in ["saddle", "imaginary", "worker", "irc"] {
+        let directory = tempfile::tempdir().unwrap();
+        let mut command = command(directory.path());
+        command.refine = Some(Method::Gxtb);
+        command.ts = Some("ts.xyz".into());
+        let mut summary = summary(&command);
+        match failure {
+            "saddle" => summary.report.saddle_converged = false,
+            "imaginary" => summary.report.imaginary = 2,
+            "worker" => summary.worker_check = Err("SCF failed".into()),
+            "irc" => summary.report.connects = false,
+            _ => unreachable!(),
+        }
+        let (success, table, _, json) = finish_report(&summary);
+        assert!(!success, "{failure}");
+        let barrier = table
+            .lines()
+            .find(|line| line.starts_with("Barrier"))
+            .unwrap();
+        assert_eq!(
+            barrier,
+            "Barrier       unavailable · g-xTB candidate is unverified"
+        );
+        assert_eq!(json["barriers"]["method"], "gxtb");
+        assert_eq!(json["barriers"]["verified"], false);
+        assert!(json["barriers"]["forward"].is_null());
+        assert!(json["barriers"]["reverse"].is_null());
+        assert_eq!(json["operation"], "refine");
+        assert_eq!(json["neb"]["performed"], false);
+        for file in [
+            "reactant.xyz",
+            "product.xyz",
+            "ts.xyz",
+            "path.xyz",
+            "irc.xyz",
+        ] {
+            let text =
+                std::fs::read_to_string(command.out_dir.as_ref().unwrap().join(file)).unwrap();
+            assert!(
+                text.contains("method=gxtb verification=unverified-candidate"),
+                "{failure}/{file}"
+            );
+            assert!(!text.contains("Barrier"));
+        }
+    }
+}
+
+fn from_command(dir: &std::path::Path) -> Ts {
+    let mut command = command(dir);
+    command.reactant = None;
+    command.product = None;
+    command.refine = Some(Method::Gxtb);
+    command.from = Some(dir.join("structures"));
+    command.out_dir = Some(dir.join("refined"));
+    command.json = None;
+    command
+}
+
+#[test]
+fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = command(directory.path());
+    let mut original_summary = summary(&original);
+    // A short trace can still connect after relaxation: completed is diagnostic.
+    original_summary.report.irc.as_mut().unwrap()[0].completed = false;
+    let (_, _, _, original_json) = finish_report(&original_summary);
+    let dir = original.out_dir.as_ref().unwrap();
+    let source_ts = std::fs::read(dir.join("ts.xyz")).unwrap();
+    let mut refine = from_command(directory.path());
+    let source = super::source::load(&mut refine).unwrap().unwrap();
+    assert_eq!(source, original_json);
+    assert_eq!(refine.charge, original.charge);
+    assert_eq!(refine.uhf, Some(1));
+    assert_eq!(refine.ts, Some(dir.join("ts.xyz")));
+    super::output::check_destinations(&refine).unwrap();
+
+    let mut refined = summary(&refine);
+    refined.source_report = Some(&source);
+    refined.report.saddle_converged = false;
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    assert!(!finish(&refined, &mut out, &mut err).unwrap());
+    let table = String::from_utf8(out).unwrap();
+    assert!(table.starts_with("Retained GFN2-xTB · forward"), "{table}");
+    assert!(table.contains("Barrier       unavailable"), "{table}");
+    assert_eq!(std::fs::read(dir.join("ts.xyz")).unwrap(), source_ts);
+    let retained: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(refine.out_dir.as_ref().unwrap().join("report.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(retained["source_result"], original_json);
+
+    let mut clobber = from_command(directory.path());
+    clobber.out_dir = Some(dir.clone());
+    assert!(
+        super::output::check_destinations(&clobber)
+            .unwrap_err()
+            .contains("already exists")
+    );
+}
+
+#[test]
+fn from_rejects_legacy_unverified_mixed_method_and_modified_geometry_sources() {
+    for failure in [
+        "legacy",
+        "gxtb",
+        "worker",
+        "irc",
+        "mixed-method",
+        "energy-method",
+        "barrier-method",
+        "structure-method",
+        "branch-method",
+        "barrier-energy",
+        "missing-null-proof",
+        "scalar-report",
+        "geometry",
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let (_, _, _, mut json) = finish_report(&summary(&command));
+        let dir = command.out_dir.as_ref().unwrap();
+        match failure {
+            "legacy" => {
+                json.as_object_mut().unwrap().remove("schema_version");
+            }
+            "gxtb" => json["settings"]["method"] = "gxtb".into(),
+            "worker" => json["worker_imaginary_count"] = 0.into(),
+            "irc" => json["irc"]["minus"]["reached"] = "Reactant".into(),
+            "mixed-method" => json["methods"]["irc"] = "gxtb".into(),
+            "energy-method" => json["energies"]["method"] = "gxtb".into(),
+            "barrier-method" => json["barriers"]["method"] = "gxtb".into(),
+            "structure-method" => json["structures"]["method"] = "gxtb".into(),
+            "branch-method" => json["irc"]["plus"]["method"] = "gxtb".into(),
+            "barrier-energy" => json["barriers"]["forward"] = 1234.into(),
+            "missing-null-proof" => {
+                json.as_object_mut().unwrap().remove("failure_reason");
+            }
+            "scalar-report" => json = "not a report".into(),
+            "geometry" => {
+                std::fs::write(dir.join("ts.xyz"), "2\nmodified\nC 0 0 0\nH 0 0 9\n").unwrap()
+            }
+            _ => unreachable!(),
+        }
+        std::fs::write(dir.join("report.json"), json.to_string()).unwrap();
+        let error = super::source::load(&mut from_command(directory.path())).unwrap_err();
+        assert!(error.contains("--ts TS.xyz"), "{failure}: {error}");
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let error = super::source::load(&mut from_command(directory.path())).unwrap_err();
+    assert!(error.contains("reactant.xyz"), "{error}");
+}
+
+#[test]
+fn legacy_directory_without_a_report_is_only_a_geometry_seed() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = command(directory.path());
+    finish_report(&summary(&original));
+    let dir = original.out_dir.as_ref().unwrap();
+    std::fs::remove_file(dir.join("report.json")).unwrap();
+    let mut refine = from_command(directory.path());
+    refine.charge = -1;
+    refine.charge_explicit = true;
+    refine.uhf = Some(2);
+    assert!(super::source::load(&mut refine).unwrap().is_none());
+    assert_eq!(refine.charge, -1);
+    assert_eq!(refine.uhf, Some(2));
+    assert_eq!(refine.ts, Some(dir.join("ts.xyz")));
+    let mut refined = summary(&refine);
+    refined.report.saddle_converged = false;
+    refined.write_files().unwrap();
+    let json: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(refine.out_dir.as_ref().unwrap().join("report.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(json["source_result"].is_null());
+    assert_eq!(json["source_seed"]["geometry_only"], true);
+    assert!(json["source_seed"]["method"].is_null());
+    assert!(json["barriers"]["forward"].is_null());
+}
+
+#[test]
+fn verified_source_charge_and_spin_cannot_be_changed() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = command(directory.path());
+    finish_report(&summary(&original));
+    for (charge, uhf) in [(1, None), (0, Some(2))] {
+        let mut refine = from_command(directory.path());
+        refine.charge = charge;
+        refine.charge_explicit = true;
+        refine.uhf = uhf;
+        let error = super::source::load(&mut refine).unwrap_err();
+        assert!(error.contains("disagrees"), "{error}");
+    }
 }
 
 pub(in crate::cli) fn worker_failure_keeps_characterized_candidate_and_files() {
@@ -351,7 +611,10 @@ pub(in crate::cli) fn irc_failure_preserves_candidate_and_explains_missing_branc
     assert!(json["irc"].is_null());
     let irc = std::fs::read_to_string(command.out_dir.as_ref().unwrap().join("irc.xyz")).unwrap();
     assert_eq!(irc.lines().count(), 4);
-    assert_eq!(irc.lines().nth(1), Some("TS E=-1.00000000 Eh"));
+    assert_eq!(
+        irc.lines().nth(1),
+        Some("TS E=-1.00000000 Eh method=gfn2 verification=unverified-candidate")
+    );
 }
 
 pub(in crate::cli) fn worker_hessian_uses_engine_masses_and_explicit_symmetry() {

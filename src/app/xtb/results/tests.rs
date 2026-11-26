@@ -183,6 +183,23 @@ fn the_headline_names_the_outcome_medium_and_electronic_state() {
 }
 
 #[test]
+fn unverified_gxtb_candidates_are_not_named_found_transition_states() {
+    let mut result = optimized(false);
+    result.task = Task::TransitionState;
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.method = qcdata::XtbMethod::GXtb;
+    result.provenance.method = Some("GFN2-xTB".into());
+    assert!(
+        headline(&result, &frame(&END))
+            .starts_with("Transition-state search · no reliable saddle · g-xTB")
+    );
+    assert!(method_line(&result, &frame(&END)).starts_with("g-xTB ·"));
+    assert!(previous_result(&result).ends_with("g-xTB transition-state candidate"));
+}
+
+#[test]
 fn imported_scan_headline_uses_a_generic_energy_label() {
     let file = reshiki_io::qcread::read(
         "so2_scan.log",

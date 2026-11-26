@@ -2,6 +2,8 @@
 
 mod geometry;
 mod output;
+#[cfg(feature = "xtb")]
+mod source;
 #[cfg(all(test, feature = "xtb"))]
 pub(super) mod tests;
 #[cfg(feature = "xtb")]
@@ -17,7 +19,7 @@ use reshiki_optimize::{
 #[cfg(feature = "xtb")]
 use reshiki_xtb_worker::{
     client::{Cancel, Limits},
-    protocol::{Conventions, Method, Open, Units},
+    protocol::{Conventions, Open, Units},
 };
 #[cfg(feature = "xtb")]
 use std::{io::Write, ops::ControlFlow, time::Instant};
@@ -25,13 +27,33 @@ use std::{io::Write, ops::ControlFlow, time::Instant};
 use worker::Worker;
 
 #[cfg(feature = "xtb")]
-pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Result<bool, CliError> {
+pub(super) fn run(
+    mut command: Ts,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<bool, CliError> {
     output::check_destinations(&command).map_err(CliError::Failed)?;
+    let source_report = source::load(&mut command).map_err(CliError::Failed)?;
+    if command.from.is_some() && source_report.is_none() {
+        let _ = writeln!(
+            err,
+            "The source directory has no report.json; using its XYZ files as geometry seeds only. No prior method, verification or barrier is assumed. Charge and unpaired electrons use --charge/--uhf or their defaults."
+        );
+    }
     let (reactant, product) = geometry::load(&command).map_err(CliError::Failed)?;
     let start = reactant
         .as_ref()
         .or(product.as_ref())
         .ok_or_else(|| CliError::Failed("no XYZ endpoint".into()))?;
+    let ts_guess = command
+        .ts
+        .as_deref()
+        .map(geometry::endpoint)
+        .transpose()
+        .map_err(CliError::Failed)?;
+    if let Some(guess) = &ts_guess {
+        geometry::check_sequence(&start.numbers, &guess.numbers).map_err(CliError::Failed)?;
+    }
     let masses: Vec<_> = start
         .numbers
         .iter()
@@ -52,7 +74,7 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         units: Units::Angstrom,
         charge: command.charge,
         uhf: command.uhf,
-        method: Method::Gfn2,
+        method: command.target_method(),
         conventions: Conventions::Axtb,
         solvent: None,
         scf: Default::default(),
@@ -61,12 +83,16 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         heap_bytes: limits.heap_bytes,
     };
     let started = Instant::now();
-    let mut summary = (|| {
+    let result = (|| {
         let (first, engine, uhf) =
             Worker::start(executable.clone(), open.clone(), limits, Cancel::default())
                 .map_err(failed)?;
         let mut workers = vec![first];
-        for _ in 1..command.workers {
+        for _ in 1..if command.refine.is_some() {
+            1
+        } else {
+            command.workers
+        } {
             let (worker, _, _) =
                 Worker::start(executable.clone(), open.clone(), limits, Cancel::default())
                     .map_err(failed)?;
@@ -100,6 +126,8 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         let options = TsOptions {
             images: command.images,
             optimize_endpoints: !command.keep_endpoints,
+            preserve_endpoint_identity: command.target_method()
+                == reshiki_xtb_worker::protocol::Method::Gxtb,
             ..TsOptions::default()
         };
         let search = Search {
@@ -110,14 +138,43 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
             options: &options,
         };
         let mut progress = Progress::default();
-        let report =
-            ts::search(&mut workers, &search, |event| progress.show(event, err)).map_err(failed)?;
-        let _ = writeln!(err, "Checking TS frequencies with the xTB worker");
-        let worker_check = workers
-            .first_mut()
-            .ok_or_else(|| CliError::Failed("no xTB worker".into()))?
-            .check_hessian(&report.ts.positions, &masses)
-            .map_err(|error| ts::TsError::from(error).to_string());
+        // Check the same-method worker spectrum before IRC, so a failed
+        // independent check cannot launch a connectivity claim.
+        let verify = |worker: &mut Worker, positions: &[f64], engine_count| {
+            let analysis = worker
+                .check_hessian(positions, &masses)
+                .map_err(|error| ts::TsError::from(error).to_string());
+            let agrees = analysis.as_ref().is_ok_and(|analysis| {
+                engine_count == 1
+                    && analysis
+                        .frequencies_cm1
+                        .iter()
+                        .filter(|&&frequency| frequency < -ts::IMAGINARY_CM1)
+                        .count()
+                        == 1
+            });
+            Ok((agrees, analysis))
+        };
+        let result = if let Some(guess) = &ts_guess {
+            ts::refine_with_verification(
+                workers
+                    .first_mut()
+                    .ok_or_else(|| CliError::Failed("no xTB worker".into()))?,
+                &search,
+                &bohr(guess),
+                |event| progress.show(event, err),
+                verify,
+            )
+        } else {
+            ts::search_with_verification(
+                &mut workers,
+                &search,
+                |event| progress.show(event, err),
+                || ControlFlow::Continue(()),
+                verify,
+            )
+        };
+        let (report, worker_check) = result.map_err(failed)?;
         Ok::<_, CliError>(output::Summary {
             command: &command,
             numbers: &open.numbers,
@@ -132,8 +189,22 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
             seconds: 0.,
             moving_hydrogens,
             reactive_start,
+            source_report: source_report.as_ref(),
         })
-    })()?;
+    })();
+    let mut summary = match result {
+        Ok(summary) => summary,
+        Err(error) => {
+            if let Some(source) = &source_report {
+                output::write_retained(source, out)?;
+                let _ = writeln!(
+                    err,
+                    "g-xTB refinement failed; the verified GFN2-xTB result is retained in the source directory"
+                );
+            }
+            return Err(error);
+        }
+    };
     summary.seconds = started.elapsed().as_secs_f64();
     finish(&summary, out, err)
 }

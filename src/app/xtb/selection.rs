@@ -83,8 +83,19 @@ impl App {
             None
         } else {
             match kind {
-                Status::TransitionState => match self.xtb_ts_card_result(arrow) {
+                Status::TransitionState => match self.xtb_ts_card_display_result(arrow) {
                     ArrowResult::Found(result) => {
+                        let result = self
+                            .xtb_shown()
+                            .filter(|shown| shown.arrow == Some(arrow))
+                            .map(|shown| &shown.stored.result)
+                            .filter(|shown| {
+                                self.xtb_ts_linked_pair(result).is_some_and(|pair| {
+                                    pair.into_iter()
+                                        .any(|saved| std::sync::Arc::ptr_eq(saved, shown))
+                                })
+                            })
+                            .unwrap_or(result);
                         let session = self.tab.xtb.ts_sessions.get(result).map(AsRef::as_ref);
                         Some(
                             view::presentation(result, session)

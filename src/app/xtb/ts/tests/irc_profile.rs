@@ -10,7 +10,17 @@ pub(in crate::app::xtb::ts) fn finished() -> (App, u64) {
     finish_model(&mut app);
     let run = app.tab.xtb.run.as_ref().unwrap();
     let serial = run.serial;
-    let mut report = Arc::unwrap_or_clone(example_report(run.launch.as_ref().unwrap()));
+    let report = connected_report(run.launch.as_ref().unwrap());
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
+    );
+    assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
+    (app, arrow)
+}
+
+pub(super) fn connected_report(launch: &Launch) -> job::Report {
+    let mut report = Arc::unwrap_or_clone(example_report(launch));
     for frame in &mut report.frames {
         frame.masses_amu = frame
             .numbers
@@ -60,12 +70,7 @@ pub(in crate::app::xtb::ts) fn finished() -> (App, u64) {
     .unwrap();
     path.neb_arc_lengths_sqrt_amu_bohr = path.arc_lengths_sqrt_amu_bohr.clone();
     report.extras.irc = Some(path);
-    send(
-        &mut app,
-        XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
-    );
-    assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
-    (app, arrow)
+    report
 }
 
 #[test]
@@ -180,7 +185,7 @@ fn reopened_irc_exports_ordered_xyz_in_the_selected_unit_only_from_a_full_save()
                 assert_eq!(
                     lines[1],
                     format!(
-                        "E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {}",
+                        "GFN2-xTB · E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {}",
                         unit.label()
                     )
                 );

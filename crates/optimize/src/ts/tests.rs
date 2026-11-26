@@ -332,6 +332,325 @@ fn saved_triangle_band() -> Vec<Minimum> {
         .collect()
 }
 
+/// A distinct target surface with uniformly longer bonds, half the source
+/// barrier, and an arbitrary energy zero. Source geometries are not stationary.
+struct TargetTriangle {
+    inner: Triangle,
+    first_hessian: Option<Vec<f64>>,
+}
+
+impl TargetTriangle {
+    const LENGTH: f64 = 1.08;
+    const ENERGY: f64 = 0.5;
+    const OFFSET: f64 = 7.0;
+
+    fn new() -> Self {
+        Self {
+            inner: Triangle {
+                analytic: true,
+                ..Default::default()
+            },
+            first_hessian: None,
+        }
+    }
+}
+
+impl Potential for TargetTriangle {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], a: Accuracy) -> Result<f64, EvalError> {
+        let scaled: Vec<_> = x.iter().map(|v| v / Self::LENGTH).collect();
+        let energy = self.inner.evaluate(&scaled, g, a)?;
+        g.iter_mut().for_each(|v| *v *= Self::ENERGY / Self::LENGTH);
+        Ok(Self::OFFSET + Self::ENERGY * energy)
+    }
+
+    fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+        if self.first_hessian.is_none() {
+            self.first_hessian = Some(x.to_vec());
+        }
+        let scaled: Vec<_> = x.iter().map(|v| v / Self::LENGTH).collect();
+        self.inner.hessian(&scaled, h).map(|result| {
+            result.map(|()| {
+                h.iter_mut()
+                    .for_each(|v| *v *= Self::ENERGY / Self::LENGTH.powi(2));
+            })
+        })
+    }
+}
+
+#[test]
+fn geometry_refinement_reoptimizes_on_target_and_verifies_its_own_barrier() {
+    let reactant = triangle(1.1);
+    let product = triangle(2.3);
+    let seed = triangle(1.7);
+    let options = TsOptions {
+        // Cross-method refinement must ignore this same-method shortcut.
+        optimize_endpoints: false,
+        ..Default::default()
+    };
+    let input = Search {
+        numbers: &[1; 3],
+        masses_amu: &[1., 2., 4.],
+        reactant: &reactant,
+        product: &product,
+        options: &options,
+    };
+    let mut potential = TargetTriangle::new();
+    let source_geometry_energy = evaluate(&mut potential, &seed).unwrap().0;
+    potential.inner.evaluations = 0;
+    let mut stages = Vec::new();
+    let (report, checked_geometry) = refine_with_verification(
+        &mut potential,
+        &input,
+        &seed,
+        |event| {
+            if let Event::Stage(stage) = event {
+                stages.push(stage);
+            }
+            ControlFlow::Continue(())
+        },
+        |_, x, imaginary| {
+            assert_eq!(imaginary, 1);
+            Ok((true, x.to_vec()))
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        stages,
+        [
+            Stage::Endpoints,
+            Stage::Saddle,
+            Stage::Frequencies,
+            Stage::Irc
+        ]
+    );
+    assert!(report.saddle_converged && report.connects, "{report:?}");
+    assert_eq!(report.imaginary, 1);
+    assert_eq!(potential.first_hessian.as_deref(), Some(seed.as_slice()));
+    assert_eq!(checked_geometry, report.ts.positions);
+    // The production operation uses Normal stationarity tolerances; it does
+    // not promise the analytic saddle to four decimal places in bohr.
+    for (point, expected) in [
+        (&report.ts, 1.7),
+        (&report.reactant, 1.1),
+        (&report.product, 2.3),
+    ] {
+        assert!(
+            (endpoint::distance(&point.positions, 0, 1) - expected * TargetTriangle::LENGTH).abs()
+                < 0.005,
+            "{point:?}"
+        );
+    }
+    let target_barrier = TargetTriangle::ENERGY * 0.6_f64.powi(4) / 4.;
+    assert!((report.ts.energy - TargetTriangle::OFFSET - target_barrier).abs() < 1e-5);
+    assert!((report.reactant.energy - TargetTriangle::OFFSET).abs() < 1e-5);
+    assert!((report.forward_barrier_kcal() - target_barrier * KCAL_PER_HARTREE).abs() < 0.01);
+    assert!((report.ts.energy - source_geometry_energy).abs() > 1e-3);
+    assert_eq!(
+        report.path,
+        [
+            report.reactant.clone(),
+            report.ts.clone(),
+            report.product.clone()
+        ]
+    );
+    assert_eq!(report.climbing_image, 1);
+    assert!(!report.neb_converged);
+    assert_eq!(report.evaluations, potential.inner.evaluations);
+    assert_eq!(report.hessians, potential.inner.hessians);
+    let mut independent = TargetTriangle::new();
+    for point in &report.path {
+        let (energy, gradient) = evaluate(&mut independent, &point.positions).unwrap();
+        assert!((point.energy - energy).abs() < 1e-12);
+        let normal = crate::Level::Normal.criteria();
+        assert!(gradient.iter().all(|g| g.abs() <= normal.max_gradient));
+        assert!(norm(&gradient) / (gradient.len() as f64).sqrt() <= normal.rms_gradient);
+    }
+    for branch in report.irc.unwrap() {
+        assert_ne!(branch.reached, Reached::Other);
+        for point in branch.path.iter().chain(std::iter::once(&branch.end)) {
+            assert!(point.energy >= TargetTriangle::OFFSET - 1e-10);
+        }
+    }
+}
+
+#[test]
+fn geometry_refinement_failure_keeps_target_candidate_unverified() {
+    let reactant = triangle(1.1);
+    let product = triangle(2.3);
+    let seed = triangle(1.7);
+    for (steps, agrees) in [(0, true), (100, false)] {
+        let options = TsOptions {
+            saddle_max_steps: steps,
+            ..Default::default()
+        };
+        let mut potential = TargetTriangle::new();
+        let (report, checked) = refine_with_verification(
+            &mut potential,
+            &Search {
+                numbers: &[1; 3],
+                masses_amu: &[1., 2., 4.],
+                reactant: &reactant,
+                product: &product,
+                options: &options,
+            },
+            &seed,
+            |event| {
+                assert!(!matches!(event, Event::Stage(Stage::Irc)));
+                ControlFlow::Continue(())
+            },
+            |_, positions, _| Ok((agrees, positions.to_vec())),
+        )
+        .unwrap();
+        assert_eq!(report.saddle_converged, steps > 0);
+        assert!(report.irc.is_none() && !report.connects);
+        assert_eq!(checked, report.ts.positions);
+        assert!(report.ts.energy > TargetTriangle::OFFSET);
+        assert!((report.reactant.energy - TargetTriangle::OFFSET).abs() < 1e-7);
+        assert_eq!(report.path[1], report.ts);
+    }
+}
+
+struct TargetSingleWell(f64);
+
+impl Potential for TargetSingleWell {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+        let r = endpoint::distance(x, 0, 1);
+        let delta = r - self.0;
+        for k in 0..3 {
+            g[k] = delta * (x[k] - x[3 + k]) / r;
+            g[3 + k] = -g[k];
+        }
+        Ok(9.0 + 0.5 * delta * delta)
+    }
+
+    fn hessian(&mut self, _: &[f64], _: &mut [f64]) -> Option<Result<(), EvalError>> {
+        panic!("an altered reaction must fail before TS refinement");
+    }
+}
+
+#[test]
+fn geometry_refinement_rejects_target_endpoint_collapse_before_saddle_work() {
+    let options = TsOptions::default();
+    let result = refine(
+        &mut TargetSingleWell(1.2),
+        &Search {
+            numbers: &[1; 2],
+            masses_amu: &[1.; 2],
+            reactant: &[0., 0., 0., 1.1, 0., 0.],
+            product: &[0., 0., 0., 2.3, 0., 0.],
+            options: &options,
+        },
+        &[0., 0., 0., 1.7, 0., 0.],
+        proceed,
+    );
+    assert!(
+        matches!(result, Err(TsError::Failed(message)) if message.contains("source reaction endpoint"))
+    );
+}
+
+#[test]
+fn selected_search_preserves_endpoint_identity_before_interpolation_or_neb() {
+    fn prepared(
+        potential: &mut (impl Potential + Send),
+        distances: [f64; 2],
+        preserve: bool,
+    ) -> (Result<TsReport, TsError>, Vec<Stage>) {
+        let options = TsOptions {
+            images: 5,
+            preserve_endpoint_identity: preserve,
+            ..Default::default()
+        };
+        let reactant = [0., 0., 0., distances[0], 0., 0.];
+        let product = [0., 0., 0., distances[1], 0., 0.];
+        let mut stages = Vec::new();
+        let report = search(
+            std::slice::from_mut(potential),
+            &Search {
+                numbers: &[1; 2],
+                masses_amu: &[1.; 2],
+                reactant: &reactant,
+                product: &product,
+                options: &options,
+            },
+            |event| {
+                if let Event::Stage(stage) = event {
+                    stages.push(stage);
+                    if stage == Stage::Interpolation {
+                        return ControlFlow::Break(());
+                    }
+                }
+                ControlFlow::Continue(())
+            },
+        );
+        (report, stages)
+    }
+
+    // Both input and target graphs are unbonded. The geometry guard must catch
+    // their collapse without depending on a changed graph or an IRC result.
+    let (collapsed, stages) = prepared(&mut TargetSingleWell(5.5), [5.0, 6.0], true);
+    assert_eq!(stages, [Stage::Endpoints]);
+    assert!(matches!(collapsed, Err(TsError::Failed(message)) if message.contains("collapsed")));
+
+    // These unbonded seeds relax into distinct 1- and 3-bohr wells, changing
+    // the mapped reactant bond graph while retaining two distinct minima.
+    let (changed, stages) = prepared(&mut CarbonStretch(0.02), [1.8, 3.1], true);
+    assert_eq!(stages, [Stage::Endpoints]);
+    assert!(
+        matches!(changed, Err(TsError::Failed(message)) if message.contains("reactant relaxation"))
+    );
+
+    // Existing callers preserve their behavior until they opt into the guard.
+    assert!(!TsOptions::default().preserve_endpoint_identity);
+    let (unguarded, stages) = prepared(&mut TargetSingleWell(5.5), [5.0, 6.0], false);
+    assert_eq!(stages, [Stage::Endpoints, Stage::Interpolation]);
+    assert_eq!(unguarded, Err(TsError::Cancelled));
+}
+
+#[test]
+fn geometry_refinement_propagates_endpoint_failure_and_cancellation() {
+    struct EndpointFailure;
+    impl Potential for EndpointFailure {
+        fn evaluate(&mut self, _: &[f64], _: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            Err(EvalError::Scf("target endpoint failed".into()))
+        }
+    }
+    struct NoMinimum;
+    impl Potential for NoMinimum {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            let r = endpoint::distance(x, 0, 1);
+            for k in 0..3 {
+                g[k] = 0.01 * (x[3 + k] - x[k]) / r;
+                g[3 + k] = -g[k];
+            }
+            Ok(-0.01 * r)
+        }
+    }
+    let options = TsOptions::default();
+    let input = Search {
+        numbers: &[1; 2],
+        masses_amu: &[1.; 2],
+        reactant: &[0., 0., 0., 1.1, 0., 0.],
+        product: &[0., 0., 0., 2.3, 0., 0.],
+        options: &options,
+    };
+    let seed = [0., 0., 0., 1.7, 0., 0.];
+    assert_eq!(
+        refine(&mut EndpointFailure, &input, &seed, proceed),
+        Err(TsError::Scf("target endpoint failed".into()))
+    );
+    assert_eq!(
+        refine(&mut EndpointFailure, &input, &seed, |_| ControlFlow::Break(
+            ()
+        )),
+        Err(TsError::Cancelled)
+    );
+    let unconverged = refine(&mut NoMinimum, &input, &seed, |event| {
+        assert!(!matches!(event, Event::Stage(Stage::Saddle)));
+        ControlFlow::Continue(())
+    });
+    assert!(matches!(unconverged, Err(TsError::Failed(_))));
+}
+
 #[test]
 fn saved_band_refines_directly_and_verifies_both_irc_destinations() {
     let path = saved_triangle_band();

@@ -967,12 +967,18 @@ to stderr and exits 1.
 
 ```text
 reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--method gfn2|gxtb] [--refine gxtb (--ts TS.xyz | --from DIR)]
     [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
     [--out-dir DIR] [--json FILE]
 ```
 
-Searches for a gas-phase transition state with GFN2-xTB and axtb conventions.
-The command requires the `xtb` feature. [xTB worker reference](xtb-worker.md)
+Searches for a gas-phase transition state with GFN2-xTB (default) or g-xTB,
+using axtb conventions. The selected method computes the entire path, endpoint
+relaxation, saddle, Hessian, frequencies and IRC. g-xTB is closer to DFT energies;
+slower for large molecules. The command requires the `xtb` feature.
+The `calc`, `calculate` and `ts` commands are absent from discovery help and
+generated agent references in builds without xTB. Explicit invocations still
+explain that xTB is unavailable. [xTB worker reference](xtb-worker.md)
 
 Each endpoint uses the first plain XYZ frame with 2 to 120 atoms and
 coordinates in ångströms. Two files must have the same element sequence.
@@ -988,20 +994,45 @@ An accepted fold appears on stderr and in the JSON `reactive_start` object, with
 1-based `pairs`, parallel `before_angstrom` and `after_angstrom` arrays, and the
 physical energy change `energy_change_kcal` in kcal/mol. Otherwise the field is `null`.
 
-| Option              | Command | Meaning                                                                                                                |
-| ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `--reactant R.xyz`  | ts      | Read the reactant XYZ.                                                                                                 |
-| `--product P.xyz`   | ts      | Read the product XYZ.                                                                                                  |
-| `--form I-J`        | ts      | Form a bond using 1-based atom numbers. Repeatable.                                                                    |
-| `--break I-J`       | ts      | Break a bond using 1-based atom numbers. Repeatable.                                                                   |
-| `--charge N`        | ts      | Molecular charge. Defaults to 0.                                                                                       |
-| `--uhf N`           | ts      | Unpaired electron count. The worker infers it from the valence electron count when omitted.                            |
-| `--images N`        | ts      | Use 5 to 24 NEB images, including the endpoints. Defaults to 15.                                                       |
-| `--workers N`       | ts      | Use 1 to 8 single-threaded xTB sessions. Defaults to the smallest of 4, available CPUs and interior images.            |
-| `--remap-hydrogens` | ts      | Map heavy atoms by order and assign hydrogens by least motion. Print changed nearest heavy atoms on stderr.            |
-| `--keep-endpoints`  | ts      | Skip endpoint relaxation before the search. A missing endpoint is still constructed with restrained minimization.      |
-| `--out-dir DIR`     | ts      | Create the directory if needed and write `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz` and `ts.hess`. |
-| `--json FILE`       | ts      | Write the machine-readable report to a new file.                                                                       |
+| Option              | Command | Meaning                                                                                                              |
+| ------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `--method METHOD`   | ts      | `gfn2` (default) or `gxtb` for the full search and verification.                                                     |
+| `--refine gxtb`     | ts      | Start P-RFO from a supplied TS with a g-xTB Hessian; relax endpoints and rerun frequencies and IRC with g-xTB.       |
+| `--ts TS.xyz`       | ts      | TS geometry for `--refine gxtb`, with the usual endpoint files or one endpoint and bond changes.                     |
+| `--from DIR`        | ts      | Read `reactant.xyz`, `product.xyz`, `ts.xyz` and a verified GFN2-xTB `report.json` from a previous output directory. |
+| `--reactant R.xyz`  | ts      | Read the reactant XYZ.                                                                                               |
+| `--product P.xyz`   | ts      | Read the product XYZ.                                                                                                |
+| `--form I-J`        | ts      | Form a bond using 1-based atom numbers. Repeatable.                                                                  |
+| `--break I-J`       | ts      | Break a bond using 1-based atom numbers. Repeatable.                                                                 |
+| `--charge N`        | ts      | Molecular charge. Defaults to 0.                                                                                     |
+| `--uhf N`           | ts      | Unpaired electron count. The worker infers it from the valence electron count when omitted.                          |
+| `--images N`        | ts      | Use 5 to 24 NEB images, including the endpoints. Defaults to 15.                                                     |
+| `--workers N`       | ts      | Use 1 to 8 single-threaded xTB sessions. Defaults to the smallest of 4, available CPUs and interior images.          |
+| `--remap-hydrogens` | ts      | Map heavy atoms by order and assign hydrogens by least motion. Print changed nearest heavy atoms on stderr.          |
+| `--keep-endpoints`  | ts      | Skip GFN2 endpoint relaxation. A missing endpoint is still constructed. Incompatible with g-xTB and refinement.      |
+| `--out-dir DIR`     | ts      | Write `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz`, `ts.hess` and `report.json` to new files.      |
+| `--json FILE`       | ts      | Write the machine-readable report to a new file.                                                                     |
+
+For refinement, choose exactly one of `--ts` and `--from`, and omit `--method`,
+`--keep-endpoints` and `--remap-hydrogens`. With `--from`, omit endpoint and bond
+options. A verified source report supplies charge and unpaired electrons;
+explicit `--charge` or `--uhf` must agree with it. Source atom order and the
+exported coordinates must match the report. A present report with missing,
+failed or mixed-method verification is rejected; use explicit `--ts` and
+endpoint inputs to treat its geometry as a new seed.
+
+Older output directories have no `report.json`. For those directories only,
+`--from` accepts their three XYZ files as geometry seeds, says so on stderr,
+and uses explicit `--charge`/`--uhf` or their defaults. It assumes no previous
+method, checks or barrier. The JSON `source_seed` records this distinction.
+Source files are never replaced. Use a new output directory for the refinement.
+
+Refinement always relaxes both endpoints with g-xTB and requires their
+connectivity to preserve the supplied endpoint identities. Full g-xTB searches
+make the same check before running NEB. Refinement uses a new g-xTB Hessian and
+P-RFO saddle, then independently checks its spectrum and traces its IRC with
+g-xTB. `path.xyz` contains a g-xTB R/TS/P profile for refinement; no NEB is run.
+Single-point g-xTB energies at a GFN2 saddle never count as a g-xTB barrier.
 
 The table on stdout gives energies in hartree, barriers in kcal/mol and
 frequencies in cm⁻¹. The worker independently checks the frequencies at the
@@ -1016,6 +1047,12 @@ image's energy (`pending` before climbing starts). Each P-RFO trial logs the
 measured-to-predicted energy and squared-force ratios alongside the decision.
 The trace also gives projected gradients, followed curvatures, mode overlaps,
 trust radii and stopping reasons.
+
+An unverified g-xTB candidate prints `Barrier unavailable`; both numeric
+`barriers` fields are `null` in JSON. Its structures and absolute energies remain
+available with `verification=unverified-candidate` in XYZ comments. A failed refinement
+keeps the verified GFN2 result, its checks and barrier in `source_result` and
+shows the retained result on stdout. Each result keeps its own method labels.
 
 Refinement allows 10 kcal/mol of headroom by default. Library callers can set
 `TsOptions::saddle_headroom_kcal`. The reference is the higher of the climbing
@@ -1034,17 +1071,26 @@ is unconverged or the engine imaginary count differs from one, IRC is skipped.
 If IRC is skipped or fails, `irc.xyz` contains the TS frame. `ts.hess` can be
 read with ORCA's `InHess Read`. It uses the worker's Cartesian Hessian when
 available and the engine's Cartesian Hessian if the worker computation fails.
-The JSON report includes spectra, IRC branch labels and energies, convergence,
+The version 2 JSON report includes spectra, IRC branch labels and energies, convergence,
 work counts and the hydrogen mapping review. `irc_error` and `worker_check_error`
 record verification failures when present. Each branch’s `completed` field
 records whether the downhill trace reached its gradient tolerance before final
 relaxation.
+The `methods` object names the method used for endpoint and TS energies,
+barriers, saddle, spectra, Hessian, IRC, path and work. Energy and barrier
+objects and each IRC branch also carry their method and units. `structures`
+stores atom numbers and the R/TS/P coordinates in bohr for provenance checks;
+`verified` reports the combined saddle, spectrum and connectivity checks.
 Output files must be new. The JSON destination must differ from the output
-directory and its six generated files.
+directory and its six structure/Hessian files. `--json DIR/report.json` may name
+the automatic report itself; it is written once.
 
 ```sh
 reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
 reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+reshiki --cli ts --method gxtb --reactant hcn.xyz --product hnc.xyz --out-dir gxtb
+reshiki --cli ts --refine gxtb --from results --out-dir refined
+reshiki --cli ts --refine gxtb --ts TS.xyz --reactant hcn.xyz --product hnc.xyz --out-dir refined
 ```
 
 ## help

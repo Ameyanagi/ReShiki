@@ -23,7 +23,7 @@ mod tests;
 pub use endpoint::{bonds, build_endpoint};
 pub use mapping::least_motion_map;
 pub use reactive_start::{ReactiveStart, prepare_reactive_start};
-pub use recovery::{SaddleCandidate, refine_from_candidate};
+pub use recovery::{SaddleCandidate, refine, refine_from_candidate, refine_with_verification};
 use std::ops::ControlFlow;
 
 use crate::{Accuracy, EvalError, KCAL_PER_HARTREE, Options, Potential, Status, optimize};
@@ -49,6 +49,10 @@ pub struct TsOptions {
     pub images: usize,
     /// Relax both input geometries at the optimizer's Normal level.
     pub optimize_endpoints: bool,
+    /// Reject prepared endpoints whose mapped bond graphs differ from their
+    /// input seeds, or whose geometries collapse together, before NEB.
+    /// Defaults to false; direct geometry refinement always checks identity.
+    pub preserve_endpoint_identity: bool,
     pub neb_max_iterations: usize,
     pub saddle_max_steps: usize,
     /// Energy headroom in kcal/mol above the climbing image. A successful
@@ -70,6 +74,7 @@ impl Default for TsOptions {
         Self {
             images: 15,
             optimize_endpoints: true,
+            preserve_endpoint_identity: false,
             neb_max_iterations: 300,
             saddle_max_steps: 100,
             saddle_headroom_kcal: 10.0,
@@ -202,9 +207,11 @@ pub struct IrcBranch {
 pub struct TsReport {
     pub reactant: Minimum,
     pub product: Minimum,
-    /// Final band including endpoints, in the reactant frame.
+    /// Final band including endpoints, in the reactant frame. Direct geometry
+    /// refinement instead returns its target-method R / TS / P profile.
     pub path: Vec<Minimum>,
     /// Whether the physical band met the force tolerances before refinement.
+    /// False for direct geometry refinement, which does not run NEB.
     pub neb_converged: bool,
     pub climbing_image: usize,
     pub ts: Minimum,
@@ -463,6 +470,13 @@ pub fn search_with_verification<P: Potential + Send, T>(
     };
     let reactant = endpoint(false, search.reactant)?;
     let mut product = endpoint(true, search.product)?;
+    if options.preserve_endpoint_identity {
+        endpoint::validate_relaxed_identity(
+            search.numbers,
+            [search.reactant, search.product],
+            [&reactant, &product],
+        )?;
+    }
     product.positions = mapping::superpose(&reactant.positions, &product.positions, masses);
 
     emit(&mut on_event, Event::Stage(Stage::Interpolation))?;

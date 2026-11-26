@@ -1,4 +1,4 @@
-//! Extra-mode displacement followed by ordinary index-one refinement.
+//! Geometry-seeded and extra-mode saddle refinement.
 //!
 //! Negative-curvature escape follows Heidrich & Quapp (1986) \[Heidrich1986IndexTwo\];
 //! P-RFO follows Baker (1986) \[Baker1986PRFO\]. Tangent ordering and the
@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     Counted, Event, Minimum, Search, Stage, TsError, TsReport, characterize, emit, endpoint,
-    mapping, modes, neb::Band, saddle, validate_geometry, validate_saved_band,
+    mapping, minimize, modes, neb::Band, saddle, validate_geometry, validate_saved_band,
 };
 
 /// A failed candidate and its geometry-specific Cartesian Hessian (Eh/bohr²,
@@ -30,6 +30,105 @@ pub struct SaddleCandidate {
 // not grow with atom count or depend on the numerical mass convention.
 const DISPLACEMENT_BOHR: f64 = 0.1;
 const MAX_DIAGNOSTICS: usize = 32;
+
+/// Refine a TS geometry on `potential`, relaxing and verifying both endpoints
+/// on that same potential. This supports refinement from a different method.
+///
+/// `search.reactant` and `search.product` retain the source reaction's mapped
+/// bond identities and supply the endpoint seeds. Both are minimized at Normal
+/// accuracy, regardless of `search.options.optimize_endpoints`; a failed or
+/// identity-changing relaxation is an error. A fresh target-potential Hessian
+/// selects the initial uphill mode for P-RFO at `ts_positions`. Frequencies and
+/// IRC then use that potential, and connectivity is checked only against its
+/// relaxed target-potential endpoints.
+///
+/// Only coordinates are accepted from the source calculation. Every reported
+/// energy and Hessian belongs to `potential`. The returned `path` has three
+/// points (relaxed R, refined TS, relaxed P), `climbing_image` is one, and
+/// `neb_converged` is false because this operation does not run a band search.
+/// A characterized but unverified candidate remains a report with its failed
+/// checks; callers must require convergence, one imaginary mode and `connects`
+/// before presenting it as a verified barrier.
+pub fn refine<P: Potential>(
+    potential: &mut P,
+    search: &Search<'_>,
+    ts_positions: &[f64],
+    on_event: impl FnMut(Event) -> ControlFlow<()>,
+) -> Result<TsReport, TsError> {
+    refine_with_verification(potential, search, ts_positions, on_event, |_, _, _| {
+        Ok((true, ()))
+    })
+    .map(|(report, ())| report)
+}
+
+/// Like [`refine`], with the same independent pre-IRC candidate check and
+/// geometry-paired payload as [`super::search_with_verification`]. Callback
+/// evaluations are excluded from the engine's evaluation counts.
+pub fn refine_with_verification<P: Potential, T>(
+    potential: &mut P,
+    search: &Search<'_>,
+    ts_positions: &[f64],
+    mut on_event: impl FnMut(Event) -> ControlFlow<()>,
+    mut verify: impl FnMut(&mut P, &[f64], usize) -> Result<(bool, T), TsError>,
+) -> Result<(TsReport, T), TsError> {
+    search.validate()?;
+    validate_geometry(search.numbers, ts_positions)?;
+    endpoint::validate_nuclei_separation(ts_positions)?;
+    let mut counted = Counted {
+        potential,
+        evaluations: 0,
+        hessians: 0,
+    };
+    emit(&mut on_event, Event::Stage(Stage::Endpoints))?;
+    let mut endpoint = |product, positions: &[f64]| {
+        minimize(&mut counted, search.numbers, positions, |step, energy| {
+            on_event(Event::Endpoint {
+                product,
+                step,
+                energy,
+            })
+        })
+    };
+    let reactant = endpoint(false, search.reactant)?;
+    let mut product = endpoint(true, search.product)?;
+    endpoint::validate_relaxed_identity(
+        search.numbers,
+        [search.reactant, search.product],
+        [&reactant, &product],
+    )?;
+    product.positions =
+        mapping::superpose(&reactant.positions, &product.positions, search.masses_amu);
+
+    emit(&mut on_event, Event::Stage(Stage::Saddle))?;
+    // A zero reference chooses the lowest physical mode of the fresh target
+    // Hessian, without importing a source Hessian, tangent, or energy ceiling.
+    let reference = vec![0.0; ts_positions.len()];
+    let refinement = saddle::refine_displaced(
+        &mut counted,
+        ts_positions,
+        &reference,
+        search.masses_amu,
+        search.options,
+        &mut on_event,
+    )?;
+    let band = Band {
+        path: vec![reactant.clone(), refinement.point.clone(), product.clone()],
+        converged: false,
+        climbing: 1,
+        tangent: reference,
+    };
+    let (mut report, verification) = characterize(
+        &mut counted,
+        search,
+        &band,
+        [reactant, product],
+        refinement,
+        &mut on_event,
+        &mut verify,
+    )?;
+    report.path[1] = report.ts.clone();
+    Ok((report, verification))
+}
 
 /// Recover a first-order saddle from a saved higher-order candidate.
 ///

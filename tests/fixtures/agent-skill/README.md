@@ -4,9 +4,11 @@
 references (verbatim command help, the MCP tool catalog, limits and errors,
 client setup), the Proposal schema and the example Proposal. It is rendered
 with the executable `/opt/reshiki/reshiki` and the application version
-normalized to `<app>`, so it does not depend on the operating system or the
-build. `golden_files_match_the_live_renderers` in src/cli/skill/tests.rs
-renders the same inputs and compares every file byte for byte.
+normalized to `<app>`, so it does not depend on the operating system.
+The baseline uses a build without xTB. `xtb/SKILL.md` and `xtb/references/cli.md`
+pin the two files that include additional commands in an xTB build; the other
+files are shared. `golden_files_match_the_live_renderers` in src/cli/skill/tests.rs
+renders the matching feature set and compares every file byte for byte.
 
 `assets/proposal-schema.json` must stay byte-equal to
 `../agent-contract/proposal-schema.json`. `assets/examples/esterification.json`
@@ -21,4 +23,5 @@ repository root:
 
 ```sh
 cargo test --locked --no-default-features --lib cli::skill::tests::regenerate_the_golden -- --ignored --exact
+cargo test --locked --no-default-features --features xtb --lib cli::skill::tests::regenerate_the_golden -- --ignored --exact
 ```
