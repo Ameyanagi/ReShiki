@@ -125,10 +125,12 @@ pub(crate) struct Orbitals {
     /// The preview's isovalue and look; a placed figure keeps its own.
     iso: f32,
     look: Look,
-    /// A slider is held: its changes to a placed figure share one Undo step.
-    sliding: bool,
-    /// An orbital was just chosen in the tab: ↑ and ↓ go on choosing.
-    keys: bool,
+    /// The drawing state after the last slider change to a placed figure:
+    /// the next change from that state joins its Undo step.
+    sliding: Option<(u64, u64)>,
+    /// The drawing state when an orbital was chosen in the tab: ↑ and ↓ go
+    /// on choosing while it lasts.
+    keys: Option<(u64, u64)>,
     /// A level chosen for a placed figure while its coefficients are being
     /// computed: applied when they arrive.
     pending: Option<Choice>,
@@ -153,8 +155,8 @@ impl Default for Orbitals {
             choice: None,
             iso: ISO,
             look: Look::default(),
-            sliding: false,
-            keys: false,
+            sliding: None,
+            keys: None,
             pending: None,
             computed: vec![],
             computing: None,
@@ -195,8 +197,12 @@ struct Synced {
     look: Look,
     building: Option<u64>,
     computing: bool,
-    counts: [usize; 3],
+    /// Recomputed row sets by result and row count.
+    computed: Vec<(String, usize)>,
+    counts: [usize; 2],
     meshes: u64,
+    /// Which drawing the canvas shows: another preview may take over.
+    display: usize,
 }
 
 /// A recomputation in flight; dropping it (a closed tab, an answer) stops
@@ -261,7 +267,13 @@ impl App {
                     && points
                         .iter()
                         .zip(&shown.frame.positions_angstrom)
-                        .all(|((_, p), q)| (0..3).all(|k| (f64::from(p[k]) - q[k]).abs() < 1e-3))
+                        // The renderer's own test (`figure_ready`).
+                        .all(|((_, p), q)| {
+                            (0..3)
+                                .map(|k| (f64::from(p[k]) - q[k]).powi(2))
+                                .sum::<f64>()
+                                <= 1e-6
+                        })
             })
         });
         let placed = model
@@ -399,20 +411,17 @@ impl App {
             look: state.look,
             building: state.building,
             computing: state.computing.is_some(),
-            counts: [state.computed.len(), state.failed.len(), state.errors.len()],
+            computed: state
+                .computed
+                .iter()
+                .map(|(k, o)| (k.clone(), o.alpha.rows.len()))
+                .collect(),
+            counts: [state.failed.len(), state.errors.len()],
             meshes: surface::draw::generation(),
+            display: std::ptr::from_ref(self.display_document()) as usize,
         };
         if state.synced.as_ref() == Some(&synced) {
             return Task::none();
-        }
-        // ↑ and ↓ go back to the drawing once it changes or is left.
-        if !synced.visible
-            || state
-                .synced
-                .as_ref()
-                .is_some_and(|old| old.revision != synced.revision)
-        {
-            self.tab.xtb.orbitals.keys = false;
         }
         self.tab.xtb.orbitals.synced = Some(synced);
         self.xtb_orbitals_preview_sync();
@@ -530,6 +539,7 @@ impl App {
             && let Some(model) = target.model
             && let Some((_, stored)) =
                 science::figure_result(&self.tab.doc, &self.tab.doc.models[model])
+            && matches!(stored.result.settings, Settings::Xtb(_))
             && !state.errors.iter().any(|(k, _)| *k == pending.result)
         {
             let frame = self.tab.doc.science.frame(&stored.result.frame).cloned();
@@ -623,8 +633,11 @@ impl App {
     }
 
     pub(super) fn xtb_orbitals(&mut self, action: Action) -> Task<Message> {
-        if !matches!(action, Action::Iso(_) | Action::Opacity(_)) {
-            self.tab.xtb.orbitals.sliding = false;
+        if !matches!(
+            action,
+            Action::Iso(_) | Action::Opacity(_) | Action::Computed(..) | Action::Built(..)
+        ) {
+            self.tab.xtb.orbitals.sliding = None;
         }
         match action {
             Action::Computed(key, outcome) => {
@@ -635,17 +648,21 @@ impl App {
                 match outcome {
                     Ok(orbitals) => {
                         state.computed.retain(|(k, _)| *k != key);
-                        state.computed.push((key, orbitals));
+                        state.computed.push((key.clone(), orbitals));
                         if state.computed.len() > COMPUTED {
                             state.computed.remove(0);
                         }
-                        // A level chosen while this ran.
-                        if let Some(pending) = state.pending.take() {
+                        // A level chosen for this result while it ran.
+                        if let Some(pending) = state.pending.take_if(|p| p.result == key)
+                            && self
+                                .xtb_orbital_target()
+                                .is_some_and(|t| t.key == pending.result)
+                        {
                             self.xtb_orbital_choose(pending.column, pending.index);
                         }
                     }
                     Err(error) => {
-                        state.pending = None;
+                        state.pending.take_if(|p| p.result == key);
                         state.errors.retain(|(k, _)| *k != key);
                         state
                             .errors
@@ -773,29 +790,37 @@ impl App {
             spectrum.energies_ev[index]
         );
         self.error = false;
+        // Choosing again retries a recomputation that failed.
+        self.tab
+            .xtb
+            .orbitals
+            .errors
+            .retain(|(k, _)| *k != target.key);
         if target.placed.is_some() {
             let spin = spectrum.spin;
             if !self.xtb_orbital_pin(&target, spin, index, |figure| {
                 figure.orbital.spin = spin;
                 figure.orbital.index = index as u32;
             }) {
-                if self
-                    .tab
-                    .xtb
-                    .orbitals
-                    .errors
-                    .iter()
-                    .all(|(k, _)| *k != target.key)
-                {
+                // Only xTB orbitals can be recomputed; a file's missing row
+                // stays missing.
+                let recomputable = target
+                    .model
+                    .and_then(|m| science::figure_result(&self.tab.doc, &self.tab.doc.models[m]))
+                    .is_some_and(|(_, s)| matches!(s.result.settings, Settings::Xtb(_)));
+                if self.error {
+                } else if recomputable && super::available() {
                     self.status = "Computing the orbital… it is placed when ready".into();
                     self.tab.xtb.orbitals.pending = Some(choice);
+                } else {
+                    self.status = "This orbital's shape is not saved with this result".into();
                 }
                 return;
             }
         }
         self.tab.xtb.orbitals.pending = None;
         self.tab.xtb.orbitals.choice = Some(choice);
-        self.tab.xtb.orbitals.keys = true;
+        self.tab.xtb.orbitals.keys = Some((self.tab.file_epoch, self.tab.revision));
     }
 
     /// A setting: the preview takes it, a placed figure changes as an Undo
@@ -821,9 +846,11 @@ impl App {
         if doc == self.tab.doc {
             return;
         }
-        let continuing = std::mem::replace(&mut self.tab.xtb.orbitals.sliding, true);
+        let continuing =
+            self.tab.xtb.orbitals.sliding == Some((self.tab.file_epoch, self.tab.revision));
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed_continuing(before, continuing);
+        self.tab.xtb.orbitals.sliding = Some((self.tab.file_epoch, self.tab.revision));
     }
 
     /// Change the placed figure (or place one) for orbital `index` of
@@ -904,7 +931,7 @@ impl App {
     /// ↑ and ↓ choose orbitals after one was chosen in the tab, while it is
     /// on screen and nothing is selected.
     pub(in crate::app) fn xtb_orbital_keys(&self) -> bool {
-        self.tab.xtb.orbitals.keys
+        self.tab.xtb.orbitals.keys == Some((self.tab.file_epoch, self.tab.revision))
             && self.tab.selected.is_empty()
             && self.connecting().is_none()
             && self.xtb_orbitals_visible()
