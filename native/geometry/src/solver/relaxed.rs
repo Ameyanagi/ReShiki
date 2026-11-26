@@ -391,10 +391,14 @@ pub(super) fn starting_coordinates(
 ) -> Result<Vec<[f64; 3]>> {
     let mut points = request.coordinates.clone();
     if !has_three_dimensional_extent(&points) {
+        // The lift works in the drawing's own plane, z = constant.
+        let drawn_flat = points.iter().all(|point| point[2] == points[0][2]);
         // Break a planar saddle reproducibly without discarding the drawing's
         // relative ligand placement (cis/trans metal arrangements included).
         perturb_drawing(&mut points, request.seed);
-        lift_octahedral_ligands(original, &mut points);
+        if drawn_flat {
+            lift_octahedral_ligands(original, &mut points);
+        }
     }
     validate_geometry(original, &points)?;
     let positioned = original
@@ -469,15 +473,16 @@ pub(super) fn relax_hydrogens(
 /// barrier of UFF's octahedral angle term and collapsed (see
 /// `reject_collapsed_ligands`). Each ligand moves with its donor; an atom
 /// reached from several donors, such as a chelate backbone, moves by their
-/// mean.
+/// mean. Only a molecule with one such centre is lifted: independent lifts
+/// of two centres could pull a shared bridging donor apart.
 fn lift_octahedral_ligands(mol: &Molecule, points: &mut [[f64; 3]]) {
     let adjacency = &mol.topology().adjacency;
-    for atom in mol.atoms() {
+    let mut centres = mol.atoms().iter().filter(|atom| {
+        atom.hybridization() == Hybridization::Sp3d2
+            && adjacency.neighbors_of(atom.id().index()).len() == 6
+    });
+    if let (Some(atom), None) = (centres.next(), centres.next()) {
         let centre = atom.id().index();
-        if atom.hybridization() != Hybridization::Sp3d2 || adjacency.neighbors_of(centre).len() != 6
-        {
-            continue;
-        }
         let [x, y, z] = points[centre];
         let mut donors: Vec<_> = adjacency
             .neighbors_of(centre)

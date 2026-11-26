@@ -1836,8 +1836,8 @@ fn a_molecule_strict_checks_refuse_gets_an_approximate_model_with_the_reason() {
     assert_eq!(app.tab.doc.models.len(), 1);
     assert_eq!(
         app.status,
-        "Shown as 3D model · Approximate UFF geometry, chemistry not checked: \
-         3D geometry does not support elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I"
+        "Shown as 3D model · Approximate UFF geometry with relaxed checks (strict: \
+         3D geometry does not support elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I)"
     );
 }
 

@@ -745,7 +745,8 @@ fn minimized(
     )?;
     let result = field.positions();
     validate_geometry(mol, &result)?;
-    if request.field == ForceField::UFF {
+    // Only generated geometry: Relax may hold an angle the caller pinned.
+    if request.field == ForceField::UFF && request.operation == Operation::Generate {
         reject_collapsed_ligands(mol, &result)?;
     }
     expected.validate(mol, &result)?;

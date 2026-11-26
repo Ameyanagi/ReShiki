@@ -173,7 +173,7 @@ impl App {
                         }
                         let caution = match &job.strict_error {
                             Some(reason) => Some(format!(
-                                "Approximate {field} geometry, chemistry not checked: {reason}"
+                                "Approximate {field} geometry with relaxed checks (strict: {reason})"
                             )),
                             None if field != job.force_field => Some(format!(
                                 "{field} used: no {} parameters for this molecule",
@@ -928,10 +928,14 @@ impl App {
             .spacing(4),
             text(
                 if let Some(job) = self.tab.model_job.as_ref().filter(|_| pending.is_some()) {
-                    format!(
-                        "Generating the conformer · ETKDG, then {}",
-                        job.force_field.name()
-                    )
+                    if job.strict_error.is_some() {
+                        "Generating an approximate conformer · relaxed checks".into()
+                    } else {
+                        format!(
+                            "Generating the conformer · ETKDG, then {}",
+                            job.force_field.name()
+                        )
+                    }
                 } else {
                     subtitle(pending, model)
                 }
