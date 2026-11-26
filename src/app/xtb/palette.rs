@@ -751,7 +751,9 @@ impl App {
             }
             Action::Step(index) => self.xtb_preview_step(index),
             Action::StepBack => {
-                if self.xtb_end_preview() {
+                // A Path point on a saved TS shows no geometry to leave.
+                let showing_ts = self.tab.xtb.palette.is_showing_ts();
+                if self.xtb_end_preview() && !showing_ts {
                     self.status = "Showing the 3D model".into();
                     self.error = false;
                 }

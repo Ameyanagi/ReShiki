@@ -167,8 +167,8 @@ fn imported_source(result: &CalcResult) -> Option<String> {
 }
 
 pub(in crate::app) fn title(result: Option<&CalcResult>, reaction: Option<&str>) -> String {
-    match result.map(|result| &result.settings) {
-        Some(Settings::Imported { .. }) => "Calculation results".into(),
+    match result.map(|result| &result.provenance.source) {
+        Some(Source::Imported { file_name, .. }) => format!("Results · {file_name}"),
         _ => reaction.map_or_else(
             || "xTB results".into(),
             |name| format!("xTB results · {name}"),
