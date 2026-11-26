@@ -3,6 +3,7 @@
 //! here; the text comes from `reshiki::qc_input`.
 use super::{
     App, Message,
+    document_tab::TabId,
     help::{Placement, modal},
     workspace::{control, muted_text},
     xtb::Source,
@@ -13,6 +14,8 @@ use iced::{Alignment, Border, Color, Element, Font, Length, Task};
 use reshiki::models3d::Display;
 use reshiki::qc_input::{self, Geometry, Job, Output, Program, Settings, Template};
 use reshiki::qcdata::{Frame, FrameHash};
+use std::borrow::Cow;
+use std::cell::{Cell, Ref, RefCell};
 use std::path::PathBuf;
 
 const ACCENT: Color = Color::from_rgb8(47, 122, 95);
@@ -72,12 +75,22 @@ impl std::fmt::Display for Choice {
 
 /// A geometry in the menu, shown by its provenance.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SourceChoice(usize, String, Option<FrameHash>);
+pub struct SourceChoice {
+    index: usize,
+    label: String,
+    frame: Option<FrameHash>,
+}
 
 impl std::fmt::Display for SourceChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.1)
+        f.write_str(&self.label)
     }
+}
+
+#[derive(Default)]
+struct GeometrySources {
+    key: Option<(TabId, u64, u64)>,
+    entries: Vec<(SourceChoice, Source)>,
 }
 
 /// The open dialog. Numbers stay as typed so a half-typed field is not
@@ -96,12 +109,14 @@ pub(super) struct Dialog {
     replaced_basis: Option<(String, &'static str)>,
     charge: String,
     multiplicity: String,
+    electronic_state_edited: bool,
     cores: String,
     memory: String,
     title: String,
     title_edited: bool,
-    source: usize,
+    source: Cell<usize>,
     source_frame: Option<FrameHash>,
+    sources: RefCell<GeometrySources>,
     extra: String,
     irc_points: String,
     /// The new template's name while it is being typed.
@@ -174,14 +189,46 @@ impl Dialog {
         self.memory = template.memory_gb.to_string();
         self.extra = template.extra.clone();
         self.template = template;
+        self.substitute_gamess_basis();
+    }
+
+    fn substitute_gamess_basis(&mut self) {
+        if self.program == Program::Gamess
+            && let Some(substitute) = qc_input::nearest_gamess_basis(&self.basis)
+        {
+            let old = std::mem::replace(&mut self.basis, substitute.into());
+            self.replaced_basis = Some((old, substitute));
+        }
+    }
+
+    fn basis_note(&self) -> Option<String> {
+        let (old, substitute) = self.replaced_basis.as_ref()?;
+        let reason = if old.trim().is_empty() {
+            "No basis was specified for GAMESS".into()
+        } else {
+            format!(
+                "The ReShiki GAMESS exporter does not support {}",
+                old.trim()
+            )
+        };
+        Some(format!("{reason}. Using {substitute}."))
     }
 
     fn field(&mut self, field: Field) -> &mut String {
         match field {
             Field::Method => &mut self.method,
-            Field::Basis => &mut self.basis,
-            Field::Charge => &mut self.charge,
-            Field::Multiplicity => &mut self.multiplicity,
+            Field::Basis => {
+                self.replaced_basis = None;
+                &mut self.basis
+            }
+            Field::Charge => {
+                self.electronic_state_edited = true;
+                &mut self.charge
+            }
+            Field::Multiplicity => {
+                self.electronic_state_edited = true;
+                &mut self.multiplicity
+            }
             Field::Cores => &mut self.cores,
             Field::Memory => &mut self.memory,
             Field::Title => {
@@ -193,20 +240,47 @@ impl Dialog {
         }
     }
 
-    fn selected_source<'a>(&self, sources: &'a [Source]) -> Option<(usize, &'a Source)> {
+    fn selected_source<'a>(
+        &self,
+        sources: &'a [(SourceChoice, Source)],
+    ) -> Option<&'a (SourceChoice, Source)> {
         // A run can finish while the dialog is open and move a geometry in the list.
         let Some(frame) = self.source_frame else {
-            return sources.first().map(|source| (0, source));
+            return sources.first();
         };
-        let matches = |source: &Source| source.frame.as_ref().is_some_and(|f| f.hash() == frame);
-        if let Some(source) = sources.get(self.source).filter(|source| matches(source)) {
-            Some((self.source, source))
+        let matches = |(choice, _): &&(SourceChoice, Source)| choice.frame == Some(frame);
+        let selected = sources
+            .get(self.source.get())
+            .filter(matches)
+            .or_else(|| sources.iter().find(matches));
+        self.source
+            .set(selected.map_or(0, |(choice, _)| choice.index));
+        selected
+    }
+
+    fn electronic_fields(&self, source: Option<&Source>) -> (Cow<'_, str>, Cow<'_, str>) {
+        if !self.electronic_state_edited
+            && let Some((charge, multiplicity)) = source.and_then(Source::electronic_state)
+        {
+            (charge.to_string().into(), multiplicity.to_string().into())
         } else {
-            sources
-                .iter()
-                .enumerate()
-                .find(|(_, source)| matches(source))
+            (
+                self.charge.as_str().into(),
+                self.multiplicity.as_str().into(),
+            )
         }
+    }
+
+    fn electronic_state_warning(&self, source: Option<&Source>) -> Option<String> {
+        let (charge, multiplicity) = source.and_then(Source::electronic_state)?;
+        (self.electronic_state_edited
+            && (self.charge.trim().parse() != Ok(charge)
+                || self.multiplicity.trim().parse() != Ok(multiplicity)))
+        .then(|| {
+            format!(
+                "This geometry was calculated with charge {charge} and multiplicity {multiplicity}."
+            )
+        })
     }
 
     fn title(&self, source: Option<&Source>) -> String {
@@ -219,7 +293,7 @@ impl Dialog {
         }
     }
 
-    fn settings(&self) -> Result<Settings, String> {
+    fn settings(&self, source: Option<&Source>) -> Result<Settings, String> {
         // XYZ disables the number fields and writes none of them.
         let xyz = self.program == Program::Xyz;
         let number = |text: &str, what: &str| -> Result<u32, String> {
@@ -229,7 +303,8 @@ impl Dialog {
                 Err(_) => Err(format!("{what} must be a whole number.")),
             }
         };
-        let charge = match self.charge.trim().parse() {
+        let (charge, multiplicity) = self.electronic_fields(source);
+        let charge = match charge.trim().parse() {
             Ok(charge) => charge,
             Err(_) if xyz => 0,
             Err(_) => return Err("Charge must be a whole number.".into()),
@@ -240,10 +315,10 @@ impl Dialog {
             method: self.method.clone(),
             basis: self.basis.clone(),
             charge,
-            multiplicity: number(&self.multiplicity, "Multiplicity")?,
+            multiplicity: number(&multiplicity, "Multiplicity")?,
             cores: number(&self.cores, "Cores")?,
             memory_gb: number(&self.memory, "Memory")?,
-            title: self.title.clone(),
+            title: self.title(source),
             extra: self.extra.clone(),
             // A hidden field never blocks the file.
             irc_points: if self.job == Job::Irc {
@@ -260,12 +335,7 @@ impl Dialog {
     }
 
     fn file_stem(&self) -> String {
-        let suffix = match self.program {
-            Program::Orca => "-orca",
-            Program::Gamess => "-gamess",
-            Program::Gaussian | Program::Xyz => "",
-        };
-        format!("{}{suffix}", stem(&self.name))
+        qc_input::default_stem(&stem(&self.name), self.program)
     }
 }
 
@@ -342,8 +412,9 @@ impl App {
             atoms,
             title: String::new(),
             title_edited: false,
-            source: 0,
+            source: Cell::new(0),
             source_frame: None,
+            sources: RefCell::default(),
             name,
             program: Program::Gaussian,
             job: Job::OptFreq,
@@ -353,6 +424,7 @@ impl App {
             replaced_basis: None,
             charge: charge.to_string(),
             multiplicity: (unpaired + 1).to_string(),
+            electronic_state_edited: false,
             cores: String::new(),
             memory: String::new(),
             extra: String::new(),
@@ -395,6 +467,20 @@ impl App {
             }
             return Task::none();
         }
+        let state_before_edit = if let Action::Field(Field::Charge | Field::Multiplicity, _) =
+            &action
+            && let Some(dialog) = self
+                .qc_export
+                .as_ref()
+                .filter(|dialog| !dialog.electronic_state_edited)
+        {
+            let sources = self.qc_sources(dialog);
+            dialog
+                .selected_source(&sources)
+                .and_then(|(_, source)| source.electronic_state())
+        } else {
+            None
+        };
         let [default, ..] = qc_input::builtin_templates();
         let Some(dialog) = &mut self.qc_export else {
             return Task::none();
@@ -411,8 +497,7 @@ impl App {
                 }
                 dialog.program = program;
                 if program != Program::Gamess
-                    && let Some((old, substitute)) = dialog.replaced_basis.take()
-                    && dialog.basis == substitute
+                    && let Some((old, _)) = dialog.replaced_basis.take()
                 {
                     dialog.basis = old;
                 }
@@ -433,33 +518,23 @@ impl App {
                     );
                     dialog.job = Job::TransitionState;
                 }
-                if program == Program::Gamess
-                    && let Some(substitute) = qc_input::nearest_gamess_basis(&dialog.basis)
-                {
-                    let old = std::mem::replace(&mut dialog.basis, substitute.into());
-                    if !dialog.message.is_empty() {
-                        dialog.message.push(' ');
-                    }
-                    let reason = if old.trim().is_empty() {
-                        "No basis was specified for GAMESS".into()
-                    } else {
-                        format!("{} is not built into GAMESS", old.trim())
-                    };
-                    dialog
-                        .message
-                        .push_str(&format!("{reason}; using {substitute}."));
-                    dialog.replaced_basis = Some((old, substitute));
-                }
+                dialog.substitute_gamess_basis();
             }
             Action::Job(job) => dialog.job = job,
             Action::Template(choice) => {
                 dialog.apply(choice.0);
             }
-            Action::Source(SourceChoice(index, _, frame)) => {
-                dialog.source = index;
-                dialog.source_frame = frame;
+            Action::Source(choice) => {
+                dialog.source.set(choice.index);
+                dialog.source_frame = choice.frame;
             }
-            Action::Field(field, value) => *dialog.field(field) = value,
+            Action::Field(field, value) => {
+                if let Some((charge, multiplicity)) = state_before_edit {
+                    dialog.charge = charge.to_string();
+                    dialog.multiplicity = multiplicity.to_string();
+                }
+                *dialog.field(field) = value;
+            }
             Action::NameTemplate => {
                 dialog.template_name = Some(String::new());
                 return iced::widget::operation::focus("qc-export-template-name");
@@ -471,7 +546,7 @@ impl App {
                 if name.is_empty() {
                     return Task::none();
                 }
-                let template = match dialog.settings() {
+                let template = match dialog.settings(None) {
                     Ok(settings) => Template {
                         name: name.into(),
                         method: settings.method,
@@ -599,17 +674,56 @@ impl App {
         }
     }
 
+    fn qc_sources<'a>(&self, dialog: &'a Dialog) -> Ref<'a, [(SourceChoice, Source)]> {
+        let key = (self.tab.id, self.tab.file_epoch, self.tab.revision);
+        if dialog.sources.borrow().key != Some(key) {
+            let model_count = self
+                .tab
+                .doc
+                .models
+                .iter()
+                .find(|model| dialog.atoms.iter().any(|&id| model.contains(id)))
+                .map(|model| model.atoms.len() + model.hydrogens.len());
+            let entries = self
+                .xtb_geometry_sources(&dialog.atoms)
+                .into_iter()
+                .enumerate()
+                .map(|(index, source)| {
+                    let count = source
+                        .frame
+                        .as_ref()
+                        .map(|frame| frame.numbers.len())
+                        .or(model_count);
+                    let label = match count {
+                        Some(count) => format!("{} · {count} atoms", source.label),
+                        None => source.label.clone(),
+                    };
+                    let choice = SourceChoice {
+                        index,
+                        label,
+                        frame: source.frame.as_ref().map(Frame::hash),
+                    };
+                    (choice, source)
+                })
+                .collect();
+            *dialog.sources.borrow_mut() = GeometrySources {
+                key: Some(key),
+                entries,
+            };
+        }
+        Ref::map(dialog.sources.borrow(), |cache| cache.entries.as_slice())
+    }
+
     /// The files the dialog would write, or why it cannot.
     fn qc_output(&self) -> Result<Output, String> {
         let dialog = self.qc_export.as_ref().ok_or_else(String::new)?;
-        let sources = self.xtb_geometry_sources(&dialog.atoms);
+        let sources = self.qc_sources(dialog);
         let (_, source) = dialog.selected_source(&sources).ok_or(GEOMETRY_CHANGED)?;
         Self::qc_output_for(dialog, source, self.qc_model(dialog, Some(source)))
     }
 
     fn qc_output_for(dialog: &Dialog, source: &Source, model: Model) -> Result<Output, String> {
-        let mut settings = dialog.settings()?;
-        settings.title = dialog.title(Some(source));
+        let settings = dialog.settings(Some(source))?;
         let mut frame = match model {
             Model::Ready { stale: true, .. } => {
                 return Err(
@@ -793,36 +907,15 @@ impl App {
         };
         let irc = dialog.job == Job::Irc && !xyz;
 
-        let sources = self.xtb_geometry_sources(&dialog.atoms);
+        let sources = self.qc_sources(dialog);
         let selected = dialog.selected_source(&sources);
         let source = selected.map(|(_, source)| source);
         let title = dialog.title(source);
+        let (charge, multiplicity) = dialog.electronic_fields(source);
         let model = self.qc_model(dialog, source);
         let geometry_picker = (sources.len() > 1 || selected.is_none()).then(|| {
-            let model_count = self
-                .tab
-                .doc
-                .models
-                .iter()
-                .find(|model| dialog.atoms.iter().any(|&id| model.contains(id)))
-                .map(|model| model.atoms.len() + model.hydrogens.len());
-            let choices: Vec<_> = sources
-                .iter()
-                .enumerate()
-                .map(|(index, source)| {
-                    let count = source
-                        .frame
-                        .as_ref()
-                        .map(|frame| frame.numbers.len())
-                        .or(model_count);
-                    let label = match count {
-                        Some(count) => format!("{} · {count} atoms", source.label),
-                        None => source.label.clone(),
-                    };
-                    SourceChoice(index, label, source.frame.as_ref().map(Frame::hash))
-                })
-                .collect();
-            let current = selected.and_then(|(index, _)| choices.get(index)).cloned();
+            let choices: Vec<_> = sources.iter().map(|(choice, _)| choice.clone()).collect();
+            let current = selected.map(|(choice, _)| choice.clone());
             reshiki::accessibility::select(
                 "qc-export-geometry",
                 "Geometry",
@@ -920,25 +1013,24 @@ impl App {
             ]
             .spacing(4),
             row![
-                input(
-                    "qc-export-charge",
-                    "Charge",
-                    Field::Charge,
-                    &dialog.charge,
-                    !xyz
-                ),
+                input("qc-export-charge", "Charge", Field::Charge, &charge, !xyz),
                 input(
                     "qc-export-multiplicity",
                     "Multiplicity",
                     Field::Multiplicity,
-                    &dialog.multiplicity,
+                    &multiplicity,
                     !xyz
                 ),
             ]
             .spacing(8),
-            text("Charge and multiplicity from the drawing")
-                .size(11)
-                .style(muted_text),
+            (!dialog.electronic_state_edited).then(|| {
+                let hint = if source.and_then(Source::electronic_state).is_some() {
+                    "Charge and multiplicity from the xTB geometry"
+                } else {
+                    "Charge and multiplicity from the drawing"
+                };
+                text(hint).size(11).style(muted_text)
+            }),
             row![
                 input(
                     "qc-export-cores",
@@ -1031,6 +1123,16 @@ impl App {
             )
         });
         let mut notes = column![].spacing(3);
+        for note in [dialog.basis_note(), dialog.electronic_state_warning(source)]
+            .into_iter()
+            .flatten()
+        {
+            notes = notes.push(
+                text(note)
+                    .size(11)
+                    .style(crate::appearance::text_color(WARNING)),
+            );
+        }
         if let Ok(output) = &output {
             if !output.companions.is_empty() {
                 let also: Vec<_> = output.companions.iter().map(|f| f.name.as_str()).collect();
