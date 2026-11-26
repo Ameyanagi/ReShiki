@@ -202,6 +202,65 @@ async fn gaussian_optimization_opens_at_the_chosen_step() {
     );
 }
 
+#[tokio::test]
+async fn interrupted_gaussian_optimization_selects_and_previews_its_result_step() {
+    let text = include_str!("../../../tests/fixtures/qc/cclib/g16_dvb_gopt.out");
+    // Use the same cut before the fourth geometry's SCF as the Gaussian reader test.
+    let (truncated, _) = text
+        .split_once(" SCF Done:  E(RB3LYP) =  -382.308265702")
+        .unwrap();
+    let (mut app, _) = App::new();
+    let path = PathBuf::from("interrupted.log");
+    let open = |contents: &str| {
+        super::super::files::prepare_contents(path.clone(), Ok(contents.as_bytes().to_vec()))
+    };
+    let preview_xyz = |dialog: &Dialog| dialog.preview.as_ref().unwrap().models[0].atoms[0].xyz;
+
+    let _ = app.update(Message::FilePrepared(open(truncated).await));
+    let dialog = app.frames_import.as_ref().unwrap();
+    let steps = dialog.file.steps();
+    assert_eq!(steps.len(), 4);
+    assert_eq!(dialog.choice, Choice::Frame(2));
+    let result_step = dialog.file.result_step_index();
+    assert_eq!(result_step, Some(2));
+    assert!(step_comment(&steps[2], result_step == Some(2)).starts_with("Results"));
+    assert!(!step_comment(&steps[3], result_step == Some(3)).starts_with("Results"));
+    let bound = steps[2].frame.hash();
+    let evaluated = steps[2].frame.positions_angstrom[0].map(|x| x as f32);
+    let unevaluated = steps[3].frame.positions_angstrom[0].map(|x| x as f32);
+    assert_ne!(evaluated, unevaluated);
+    assert_eq!(preview_xyz(dialog), evaluated);
+    import_calculation(&mut app).await;
+    assert_eq!(model(&app)[0], evaluated);
+    assert_eq!(app.tab.doc.science.results[0].result.frame, bound);
+
+    let _ = app.update(Message::FilePrepared(open(truncated).await));
+    send(&mut app, Action::Choose(Choice::Last));
+    assert_eq!(
+        preview_xyz(app.frames_import.as_ref().unwrap()),
+        unevaluated
+    );
+    import_calculation(&mut app).await;
+    assert_eq!(model(&app)[0], unevaluated);
+    assert!(app.tab.doc.science.results.is_empty());
+    assert!(
+        app.status.contains("Reopen and choose step 3"),
+        "{}",
+        app.status
+    );
+
+    let water = include_str!("../../../tests/fixtures/qc/cclib/g16_water_mp2.log");
+    let linked = format!("{water}\n{truncated}");
+    let _ = app.update(Message::FilePrepared(open(&linked).await));
+    send(&mut app, Action::Choose(Choice::Frame(1)));
+    let dialog = app.frames_import.as_ref().unwrap();
+    assert!(dialog.file.job_rows());
+    assert_eq!(preview_xyz(dialog), evaluated);
+    import_calculation(&mut app).await;
+    assert_eq!(model(&app)[0], evaluated);
+    assert_eq!(app.tab.doc.science.results[0].result.frame, bound);
+}
+
 #[test]
 fn only_several_frames_of_one_molecule_ask() {
     assert!(detect(Path::new("w.xyz"), CREST.as_bytes()).is_some());
@@ -315,6 +374,15 @@ fn an_sd_file_asks_only_for_3d_records_of_one_molecule() {
     let file = detect(Path::new("w.sdf"), conformers.as_bytes()).expect("conformers ask");
     // ReShiki's own SDF export carries the energies back.
     assert_eq!(file.energies(), Some(vec![-5.06, -5.07]));
+    let (mut app, _) = App::new();
+    open(&mut app, "w.sdf", &conformers);
+    let dialog = app.frames_import.as_ref().unwrap();
+    assert_eq!(dialog.file.layout(), Some(Layout::Levels));
+    assert_eq!(dialog.choice, Choice::Lowest);
+    assert!(!dialog.keep);
+    send(&mut app, Action::Keep(true));
+    assert!(app.frames_import.as_ref().unwrap().keep);
+
     let library = water("water", 0.1, -5.06) + &water("deuterated?", -0.1, -5.07);
     assert!(detect(Path::new("w.sdf"), library.as_bytes()).is_none());
     let numbered = water("compound 101", 0.1, -5.06) + &water("compound 102", -0.1, -5.07);
@@ -451,6 +519,8 @@ fn reshikis_own_xyz_export_reopens_with_energies_charge_and_spin() {
     assert_eq!(file.energies(), Some(vec![-5.0, -4.99]));
     let first = &file.steps()[0].frame;
     assert_eq!((first.charge, first.multiplicity), (1, 2));
+    let dialog = Dialog::new("water conformers.xyz".into(), file);
+    assert!(dialog.keep);
 }
 
 #[test]

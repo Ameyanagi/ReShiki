@@ -615,3 +615,27 @@ fn appended_gaussian_invocations_keep_their_versions() {
         );
     }
 }
+
+#[test]
+fn job_limit_counts_invocations_without_geometry() {
+    let text = String::from_utf8(fixture(MP2)).unwrap();
+    let invocation = text.lines().next().unwrap();
+    let termination = text.lines().last().unwrap();
+    let limit = crate::qcread::MAX_JOBS;
+    // Keep the real water result, then append invocations which printed no geometry.
+    // Exercise jobs ending at another invocation, at termination, and at EOF.
+    for ending in ["", termination] {
+        let job = format!("{invocation}\n{ending}\n");
+        let mut combined = format!("{text}\n{}", job.repeat(limit - 1));
+        let file = read("many-gaussian.log", combined.as_bytes()).unwrap();
+        assert_eq!(file.jobs.len(), limit);
+        assert!(file.jobs[0].result.is_some());
+        assert!(file.jobs[1..].iter().all(|job| job.steps.is_empty()));
+
+        combined.push_str(&job);
+        assert_eq!(
+            read("many-gaussian.log", combined.as_bytes()).unwrap_err(),
+            Error::Unsupported(format!("The file holds more than {limit} Gaussian jobs"))
+        );
+    }
+}

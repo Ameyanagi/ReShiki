@@ -562,7 +562,7 @@ pub(super) fn prepare_qc_drawing(
         .ok_or("The file has no such job")?;
     let step = match step_index {
         Some(i) => job.steps.get(i),
-        None => job.result_step().or_else(|| job.steps.last()),
+        None => super::frames_import::job_step(&job),
     }
     .ok_or("The file has no geometry")?;
     let frame = step.frame.clone();
@@ -609,6 +609,10 @@ pub(super) fn prepare_qc_drawing(
     }
     if let Some(result) = job.result {
         if frame.hash() == result.frame {
+            let has_results = result.energy_hartree.is_some()
+                || result.vibrations.is_some()
+                || result.orbitals.is_some()
+                || !result.charges.is_empty();
             let frames = result
                 .input_frame
                 .filter(|hash| *hash != result.frame)
@@ -617,16 +621,16 @@ pub(super) fn prepare_qc_drawing(
                 .into_iter()
                 .collect();
             match reshiki::science::import(&mut drawing, 0, frame, frames, result) {
-                Ok(_) => notice.push_str(" · results in the palette"),
+                Ok(_) if has_results => notice.push_str(" · results in the palette"),
+                Ok(_) if file.format == reshiki::qcread::Format::Molden => {
+                    notice.push_str(" · The file has no calculated results.");
+                }
+                Ok(_) => {}
                 Err(error) => notice.push_str(&format!(
                     " · Results could not be attached ({error}). Check the source geometry and open the file again."
                 )),
             }
-        } else if let Some(bound) = job
-            .steps
-            .iter()
-            .rposition(|s| s.frame.hash() == result.frame)
-        {
+        } else if let Some(bound) = super::frames_import::result_step_index(&job.steps, &result) {
             notice.push_str(&format!(
                 " · Reopen and choose step {} to see the calculation results",
                 bound + 1
