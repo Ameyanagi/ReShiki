@@ -587,7 +587,9 @@ fn progress(event: ts::Event<'_>) -> Option<Event> {
         },
         ts::Event::Saddle { step, .. } => Event::Saddle { step },
         ts::Event::Irc { forward, step, .. } => Event::Irc { forward, step },
-        ts::Event::Endpoint { .. } => return None,
+        ts::Event::Endpoint { .. } | ts::Event::SaddleTrial { .. } | ts::Event::SaddleStatus(_) => {
+            return None;
+        }
     })
 }
 
