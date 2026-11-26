@@ -10,6 +10,7 @@ use reshiki::{
 };
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::sync::{Arc, Weak};
 mod abbreviations;
 mod accessibility;
 mod arcs;
@@ -1196,19 +1197,17 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
-        let vibration_context = |app: &Self| {
-            (app.xtb_vibrations_visible() && app.tab.xtb.run.is_none()).then_some((
-                app.tab.id,
-                app.tab.file_epoch,
-                app.tab.revision,
-            ))
-        };
+        let vibration_context = |app: &Self| (app.tab.id, app.tab.file_epoch, app.tab.revision);
         let vibrations = vibration_context(self);
+        let vibration_result = self.xtb_vibration_result().map(Arc::downgrade);
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
-        if vibrations != vibration_context(self) {
+        let shown = self.xtb_vibration_result().map(Arc::as_ptr);
+        if vibration_result.as_ref().map(Weak::as_ptr) != shown
+            || (shown.is_some() && vibrations != vibration_context(self))
+        {
             task = Task::batch([task, tagged(self.xtb_vibrations_resume(), self.tab.id)]);
         }
         // The canvas forgets the pointer when a context menu closes

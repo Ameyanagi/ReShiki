@@ -98,7 +98,7 @@ impl App {
                 header
             } else {
                 column![header, self.xtb_failure_card(failed)]
-                    .extend(self.xtb_previous_result(inspector))
+                    .extend(self.xtb_previous_result(failed, inspector))
                     .spacing(8)
                     .into()
             });
@@ -288,15 +288,16 @@ impl App {
     }
 
     /// A failed run leaves the previous result available as a read-only summary.
-    fn xtb_previous_result(&self, inspector: bool) -> Option<Element<'_, Message>> {
-        let shown = self
-            .xtb_newest()
-            .and_then(|entry| self.xtb_result(entry))
-            .or_else(|| self.xtb_shown())?;
+    fn xtb_previous_result(
+        &self,
+        failed: &Failed,
+        inspector: bool,
+    ) -> Option<Element<'_, Message>> {
+        let shown = self.xtb_last_successful(failed)?;
         let expanded = self.tab.xtb.palette.previous;
         let mut label = "Last successful run".to_owned();
         if let Some(finished) = results::finished_local(&shown.stored.result) {
-            label.push_str(&format!(" · {}", finished.format("%H:%M")));
+            label.push_str(&format!(" · {}", finished.format("%-d %b %Y %H:%M")));
         }
         let arrow = if expanded { '▾' } else { '▸' };
         let mut previous = column![
@@ -322,6 +323,24 @@ impl App {
             };
         }
         Some(previous.into())
+    }
+
+    /// The newest converged result for the molecule whose run failed.
+    fn xtb_last_successful(&self, failed: &Failed) -> Option<Shown<'_>> {
+        let target = failed.atoms.iter().copied().collect();
+        let entry = self
+            .tab
+            .doc
+            .science
+            .results
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, stored)| {
+                matches!(stored.result.status, reshiki::qcdata::Status::Converged)
+                    && self.xtb_result_belongs(stored, &target)
+            })?;
+        self.xtb_result(entry)
     }
 
     fn xtb_stale_banner(&self, shown: &Shown<'_>) -> Element<'_, Message> {
@@ -589,6 +608,10 @@ impl App {
         footer.into()
     }
 }
+
+#[cfg(test)]
+#[path = "failure_tests.rs"]
+mod failure_tests;
 
 /// An inline card with a round "!" icon: red for an error, amber for a
 /// warning. The status bar repeats an error's sentence.
