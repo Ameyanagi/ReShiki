@@ -1,169 +1,27 @@
-//! The orbital levels of a result: one column per spin, names around the
-//! gap, degenerate groups, and the level diagram drawn from them.
+//! The Orbitals tab's visible range and level diagram.
 // Level indices come from windows and groups bounded by the spectrum.
 #![allow(clippy::indexing_slicing)]
 use super::{Action, send};
 use crate::app::Message;
 use iced::widget::canvas;
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
-use reshiki::qcdata::{Beta, Orbitals, Spin};
+pub(super) use reshiki::orbital_levels::{Column, columns};
 
-const EV_PER_HARTREE: f64 = super::super::results::EV_PER_HARTREE;
-/// Levels closer than this (eV) are one degenerate group.
-const DEGENERATE_EV: f64 = 0.005;
 /// Levels shown on each side of the frontier.
 const AROUND: usize = 4;
 
-/// One spin's spectrum as the tab shows it.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Column {
-    /// The spin whose coefficient rows hold these orbitals: alpha unless
-    /// the result has its own beta orbitals.
-    pub spin: Spin,
-    /// "" for a closed shell, else "α" or "β".
-    pub label: &'static str,
-    pub energies_ev: Vec<f64>,
-    /// Electrons in each level (0 to 2 for a closed shell, else 0 to 1);
-    /// empty when the source gave none.
-    pub occupations: Vec<f64>,
-    /// Occupied levels; the HOMO is the one below.
-    pub occupied: Option<usize>,
-}
-
-impl Column {
-    /// "HOMO", "HOMO−1", "LUMO+2", or "MO 7" without occupations.
-    pub(crate) fn name(&self, index: usize) -> String {
-        let name = match self.occupied {
-            None => format!("MO {}", index + 1),
-            Some(n) => match index.checked_sub(n) {
-                None if index + 1 == n => "HOMO".into(),
-                None => format!("HOMO−{}", n - 1 - index),
-                Some(0) => "LUMO".into(),
-                Some(above) => format!("LUMO+{above}"),
-            },
-        };
-        if self.label.is_empty() {
-            name
-        } else {
-            format!("{} {name}", self.label)
-        }
+/// The levels the list and diagram show: HOMO−4 … LUMO+4, widened to
+/// hold `selected`.
+pub(super) fn window(column: &Column, selected: Option<usize>) -> std::ops::RangeInclusive<usize> {
+    let last = column.energies_ev.len().saturating_sub(1);
+    let frontier = column.occupied.unwrap_or(0);
+    let mut lo = frontier.saturating_sub(AROUND + 1);
+    let mut hi = (frontier + AROUND).min(last);
+    if let Some(index) = selected {
+        lo = lo.min(index);
+        hi = hi.max(index.min(last));
     }
-
-    pub(crate) fn homo(&self) -> Option<usize> {
-        self.occupied?.checked_sub(1)
-    }
-
-    pub(crate) fn lumo(&self) -> Option<usize> {
-        self.occupied.filter(|&n| n < self.energies_ev.len())
-    }
-
-    /// The levels the list and diagram show: HOMO−4 … LUMO+4, widened to
-    /// hold `selected`.
-    pub(crate) fn window(&self, selected: Option<usize>) -> std::ops::RangeInclusive<usize> {
-        let last = self.energies_ev.len().saturating_sub(1);
-        let frontier = self.occupied.unwrap_or(0);
-        let mut lo = frontier.saturating_sub(AROUND + 1);
-        let mut hi = (frontier + AROUND).min(last);
-        if let Some(index) = selected {
-            lo = lo.min(index);
-            hi = hi.max(index.min(last));
-        }
-        lo..=hi
-    }
-
-    /// The degenerate group of `index`, `index` included.
-    pub(crate) fn group(&self, index: usize) -> std::ops::RangeInclusive<usize> {
-        let e = &self.energies_ev;
-        let mut lo = index;
-        while lo > 0 && (e[lo] - e[lo - 1]).abs() < DEGENERATE_EV {
-            lo -= 1;
-        }
-        let mut hi = index;
-        while hi + 1 < e.len() && (e[hi + 1] - e[hi]).abs() < DEGENERATE_EV {
-            hi += 1;
-        }
-        lo..=hi
-    }
-}
-
-/// The spin columns of `orbitals`: one for a closed shell, α and β for an
-/// open shell (sharing alpha's orbitals unless beta has its own).
-pub(crate) fn columns(orbitals: &Orbitals) -> Vec<Column> {
-    let alpha = &orbitals.alpha;
-    let ev = |levels: &[f64]| {
-        levels
-            .iter()
-            .map(|e| e * EV_PER_HARTREE)
-            .collect::<Vec<_>>()
-    };
-    // Occupied levels from the electron count, as the Summary counts them:
-    // thermal smearing does not move the frontier.
-    let count = |occupations: &[f64], levels: usize, closed: bool| {
-        (occupations.len() == levels).then(|| {
-            let electrons = occupations.iter().sum::<f64>().round() as usize;
-            if closed {
-                electrons.div_ceil(2)
-            } else {
-                electrons
-            }
-        })
-    };
-    let n = alpha.energies_hartree.len();
-    let column = |spin, label, energies: &[f64], occupations: &[f64], closed| Column {
-        spin,
-        label,
-        energies_ev: ev(energies),
-        occupations: occupations.to_vec(),
-        occupied: count(occupations, energies.len(), closed),
-    };
-    let mut columns = match &orbitals.beta {
-        Beta::Restricted => vec![column(
-            Spin::Alpha,
-            "",
-            &alpha.energies_hartree,
-            &alpha.occupations,
-            true,
-        )],
-        Beta::SameOrbitals { occupations } => vec![
-            column(
-                Spin::Alpha,
-                "α",
-                &alpha.energies_hartree,
-                &alpha.occupations,
-                false,
-            ),
-            Column {
-                occupied: count(occupations, n, false),
-                ..column(
-                    Spin::Alpha,
-                    "β",
-                    &alpha.energies_hartree,
-                    occupations,
-                    false,
-                )
-            },
-        ],
-        Beta::Unrestricted(beta) => vec![
-            column(
-                Spin::Alpha,
-                "α",
-                &alpha.energies_hartree,
-                &alpha.occupations,
-                false,
-            ),
-            column(
-                Spin::Beta,
-                "β",
-                &beta.energies_hartree,
-                &beta.occupations,
-                false,
-            ),
-        ],
-    };
-    // A spectrum without levels (or with energies too large to draw) has
-    // nothing to choose.
-    columns.retain(|c| !c.energies_ev.is_empty() && c.energies_ev.iter().all(|e| e.is_finite()));
-    columns
+    lo..=hi
 }
 
 /// The level diagram: an energy axis, one column per spin, occupied levels
@@ -241,7 +99,7 @@ impl Diagram {
         for (c, column) in self.columns.iter().enumerate() {
             let left = Self::AXIS + 12. + c as f32 * Self::COLUMN;
             let selected = self.selected.filter(|s| s.0 == c).map(|s| s.1);
-            let window = column.window(selected);
+            let window = window(column, selected);
             // The list's levels as far as the axis reaches, lowest first,
             // in degenerate groups.
             let mut groups: Vec<Vec<usize>> = vec![];
@@ -403,7 +261,7 @@ impl canvas::Program<Message> for Diagram {
             if !column.label.is_empty() {
                 label(
                     &mut frame,
-                    column.label.into(),
+                    column.label.clone(),
                     Point::new(
                         Self::AXIS + 12. + c as f32 * Self::COLUMN + Self::LINE / 2. - 3.,
                         6.,
@@ -525,7 +383,7 @@ impl canvas::Program<Message> for Diagram {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reshiki::qcdata::OrbitalSet;
+    use reshiki::qcdata::{Beta, OrbitalSet, Orbitals};
 
     fn set(energies: &[f64], occupations: &[f64]) -> OrbitalSet {
         OrbitalSet {
@@ -547,62 +405,14 @@ mod tests {
     }
 
     #[test]
-    fn a_closed_shell_names_levels_around_the_gap_and_groups_degenerate_ones() {
-        let columns = columns(&closed(
-            &[-0.6, -0.4, -0.4, 0.1, 0.1, 0.3],
-            &[2., 2., 2., 0., 0., 0.],
-        ));
-        assert_eq!(columns.len(), 1);
-        let column = &columns[0];
-        assert_eq!((column.homo(), column.lumo()), (Some(2), Some(3)));
-        assert_eq!(column.name(2), "HOMO");
-        assert_eq!(column.name(1), "HOMO−1");
-        assert_eq!(column.name(4), "LUMO+1");
-        assert_eq!(column.group(2), 1..=2);
-        assert_eq!(column.group(3), 3..=4);
-        assert_eq!(column.group(0), 0..=0);
-    }
-
-    #[test]
-    fn an_open_shell_has_alpha_and_beta_columns() {
-        // A doublet sharing orbitals: alpha fills one more level.
-        let orbitals = Orbitals {
-            beta: Beta::SameOrbitals {
-                occupations: vec![1., 0., 0.],
-            },
-            ..closed(&[-0.5, -0.3, 0.2], &[1., 1., 0.])
-        };
-        let split = columns(&orbitals);
-        assert_eq!(split.len(), 2);
-        assert_eq!(split[0].name(1), "α HOMO");
-        assert_eq!(split[1].name(1), "β LUMO");
-        assert_eq!(split[1].spin, Spin::Alpha, "beta shares alpha's rows");
-        let unrestricted = Orbitals {
-            beta: Beta::Unrestricted(set(&[-0.45, 0.1, 0.25], &[1., 0., 0.])),
-            ..orbitals
-        };
-        let split = columns(&unrestricted);
-        assert_eq!(split[1].spin, Spin::Beta);
-        assert_eq!(split[1].homo(), Some(0));
-        assert_eq!(split[1].energies_ev[0], -0.45 * EV_PER_HARTREE);
-    }
-
-    #[test]
-    fn levels_without_occupations_are_numbered() {
-        let column = &columns(&closed(&[-0.5, 0.2], &[]))[0];
-        assert_eq!(column.name(0), "MO 1");
-        assert_eq!(column.homo(), None);
-    }
-
-    #[test]
     fn the_window_widens_to_the_chosen_level() {
         let energies: Vec<f64> = (0..30).map(|i| -1. + f64::from(i) * 0.05).collect();
         let mut occupations = vec![2.; 15];
         occupations.resize(30, 0.);
         let column = &columns(&closed(&energies, &occupations))[0];
-        assert_eq!(column.window(None), 10..=19);
-        assert_eq!(column.window(Some(2)), 2..=19);
-        assert_eq!(column.window(Some(29)), 10..=29);
+        assert_eq!(window(column, None), 10..=19);
+        assert_eq!(window(column, Some(2)), 2..=19);
+        assert_eq!(window(column, Some(29)), 10..=29);
     }
 
     #[test]

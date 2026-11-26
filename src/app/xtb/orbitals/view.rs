@@ -2,7 +2,7 @@
 //! Place on canvas.
 // Column and level indices come from the choice made for these columns.
 #![allow(clippy::indexing_slicing)]
-use super::levels::Diagram;
+use super::levels::{Diagram, window};
 use super::{Action, ISO_RANGE, LookChoice, PRESETS, send};
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use crate::app::xtb::palette::Shown;
@@ -64,7 +64,7 @@ impl App {
                     reshiki::accessibility::button(
                         format!("xtb-orbital-spin-{index}"),
                         format!("{} spin orbitals", column.label),
-                        text(column.label).size(12),
+                        text(column.label.clone()).size(12),
                     )
                     .padding([4, 10])
                     .checked(on)
@@ -74,7 +74,7 @@ impl App {
             }
         }
         list = list.push(head);
-        for index in spectrum.window(Some(choice.index)).rev() {
+        for index in window(spectrum, Some(choice.index)).rev() {
             let on = index == choice.index;
             let group = spectrum.group(index);
             let fold = group.end() - group.start() + 1;

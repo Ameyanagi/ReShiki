@@ -70,6 +70,87 @@ fn two_lobes() -> Meshes {
 }
 
 #[test]
+fn generic_expansion_keeps_saved_orbital_pictures() {
+    use crate::{atom_text, generic};
+
+    let _guard = lock_registry();
+    let mut doc = tests::ethylene();
+    let site = doc.add_atom("*", Point::new(200., 0.));
+    doc = atom_text::apply(&doc, site, "[Cl,Br]", atom_text::Mode::Auto).unwrap();
+    let atom = doc.atoms[0].id;
+    let launch = science::launch(&doc, atom, 0, 1).unwrap();
+    let result = energy_result(&launch.frame);
+    place(&mut doc.models[0], &result);
+    science::attach(&mut doc, &launch, vec![], result).unwrap();
+    register(key(&doc, &doc.models[0]).unwrap(), two_lobes());
+    let saved = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    assert!(groups(&saved).is_some());
+
+    let expanded = generic::prepare_expansion(&saved, generic::Limits::default())
+        .unwrap()
+        .take()
+        .unwrap();
+    assert_eq!(expanded.models.len(), 2);
+    assert!(!expanded.models[1].contains(atom));
+    assert_eq!(
+        primitives(&expanded)
+            .iter()
+            .filter(|primitive| matches!(primitive, Primitive::Surface { .. }))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn move_and_attach_keeps_a_companions_saved_orbital_panel() {
+    use crate::joining::Prepared;
+    use crate::models3d::Display;
+    use crate::models3d::surface::Panel;
+    use crate::templates::{Anchor, Connection};
+
+    let _guard = lock_registry();
+    let mut doc = tests::ethylene();
+    let companion = doc.all_ids();
+    doc.translate(&companion, 400., 200.);
+    doc.models[0].display = Display::Both;
+    let source = doc.add_atom("C", Point::new(180., 0.));
+    let source_end = doc.add_atom("O", Point::new(222., 0.));
+    doc.add_bond(source, source_end, 1, "plain");
+    let target = doc.add_atom("C", Point::default());
+    let target_end = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(target, target_end, 1, "plain");
+    let launch = science::launch(&doc, companion[0], 0, 1).unwrap();
+    let result = energy_result(&launch.frame);
+    place(&mut doc.models[0], &result);
+    let figure = doc.models[0].surface.take().unwrap();
+    let small = crate::models3d::panel_model(&doc.models[0], &figure);
+    doc.models[0].panels.push(Panel {
+        figure,
+        caption: "HOMO".into(),
+    });
+    science::attach(&mut doc, &launch, vec![], result).unwrap();
+    register(key(&doc, &small).unwrap(), two_lobes());
+    let saved = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    assert!(groups(&saved).is_some());
+
+    let moving = [source, source_end, companion[0], companion[1]];
+    let (joined, _) = Prepared::new(&saved, &moving)
+        .unwrap()
+        .place(
+            Point::default(),
+            None,
+            5.,
+            Anchor::Atom(source),
+            Connection::Connect,
+        )
+        .unwrap();
+    assert_eq!(joined.models[0].linked_ids(&joined), companion);
+    assert!(groups(&joined).is_some(), "the saved panel still draws");
+}
+
+#[test]
 fn placed_orbital_uses_live_meshes_or_a_matching_current_snapshot() {
     let _guard = lock_registry();
     let mut doc = tests::ethylene();

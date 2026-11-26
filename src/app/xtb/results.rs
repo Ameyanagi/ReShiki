@@ -6,6 +6,7 @@ use super::state::{
     symbol,
 };
 use crate::app::files::{nonblank, program_label};
+use reshiki::orbital_levels::EV_PER_HARTREE;
 use reshiki::qcdata;
 use reshiki::qcdata::{
     Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Source, Status, Task,
@@ -26,8 +27,6 @@ pub(super) fn method_without_optimizer(method: &str) -> &str {
 pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequencies approximate, orbitals qualitative (minimal basis).";
 /// The gap under which the electronic structure counts as near-degenerate.
 const NEAR_DEGENERATE_EV: f64 = 0.1;
-/// CODATA 2022, as the worker converts its gap.
-pub(crate) const EV_PER_HARTREE: f64 = 27.211386245981;
 /// Debye per e·bohr.
 const DEBYE_PER_E_BOHR: f64 = 2.541746473;
 const KCAL_PER_MOL_PER_HARTREE: f64 = 627.509474;
