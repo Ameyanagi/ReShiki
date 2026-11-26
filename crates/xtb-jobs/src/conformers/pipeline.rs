@@ -47,6 +47,8 @@ pub struct Search {
     /// Bonds in frame order, for clustering.
     bonds: Vec<[usize; 2]>,
     config: Config,
+    /// A failed model stereo inference leaves sampling on the drawn graph.
+    stereo_note: Option<String>,
     geometry: Client,
     executable: Option<PathBuf>,
     /// Template for every xTB optimization. The pipeline replaces positions,
@@ -66,8 +68,22 @@ impl Search {
         geometry: Client,
         executable: Option<PathBuf>,
     ) -> Result<Self, Failure> {
-        let prepared =
+        let mut prepared =
             Prepared::new(doc, ids).map_err(|error| Failure::Other(error.to_string()))?;
+        let positions = launch
+            .atoms
+            .iter()
+            .zip(&launch.frame.positions_angstrom)
+            .filter_map(|(&id, &[x, y, z])| id.map(|id| (id, geometry::Point3 { x, y, z })))
+            .collect();
+        let stereo_note = prepared
+            .pin_undefined_stereo(&positions, config.invert_undefined_stereo)
+            .err()
+            .map(|error| {
+                format!(
+                    "Could not preserve undefined stereocenters from the 3D model: {error}. Starts used the drawing's stereochemistry."
+                )
+            });
         let parents = science::hydrogen_parents(doc, launch).ok_or_else(|| {
             Failure::Other("The 3D model's hydrogens cannot be matched; update the 3D model".into())
         })?;
@@ -94,6 +110,7 @@ impl Search {
             parents,
             bonds,
             config,
+            stereo_note,
             job,
             geometry,
             executable,
@@ -153,7 +170,7 @@ pub fn search_conformers(
         return Err(frame_mismatch());
     }
     let xtb_minimizer = search.config.minimizer.xtb();
-    let mut notes = Vec::new();
+    let mut notes = search.stereo_note.iter().cloned().collect();
     let mut starts = sample(&search, cancel, &mut on_event, &mut notes)?;
     let minimized = if xtb_minimizer.is_some() {
         let positions = starts
@@ -781,6 +798,98 @@ mod tests {
         assert_eq!(gfn2.topology, None);
         assert_eq!(gfn2.scf.accuracy, Some(0.1));
         assert!(gfn2.solvent.is_some());
+    }
+
+    fn undefined_stereo_search(invert: bool, planar: bool) -> (Document, Search) {
+        let mut doc = Document::default();
+        let centre = doc.add_atom("C", Point::default());
+        let mut placed = vec![models3d::Placed {
+            id: centre,
+            xyz: [0.; 3],
+        }];
+        for (element, [x, y, z]) in [
+            ("F", [1., 1., 1.]),
+            ("Cl", [1., -1., -1.]),
+            ("Br", [-1., 1., -1.]),
+            ("H", [-1., -1., 1.]),
+        ] {
+            let atom = doc.add_atom(element, Point::new(x * 42., y * 42.));
+            doc.add_bond(centre, atom, 1, "plain");
+            placed.push(models3d::Placed {
+                id: atom,
+                xyz: [x, y, if planar { 0. } else { z }],
+            });
+        }
+        // Launch order differs from both drawing and native graph atom order.
+        placed.rotate_left(2);
+        doc.models.push(Model3d::new(
+            &doc,
+            placed,
+            vec![],
+            models3d::ForceField::Uff,
+        ));
+        models3d::require_version(&mut doc);
+        let launch = science::launch(&doc, centre, 0, 1).unwrap();
+        let mut job = water_search(Minimizer::Uff, Client::default()).job;
+        job.numbers.clone_from(&launch.frame.numbers);
+        job.positions.clone_from(&launch.frame.positions_angstrom);
+        let mut config = Config::new(8, Minimizer::Uff, Diversity::Normal, 15., 20, 1).unwrap();
+        assert!(!config.invert_undefined_stereo);
+        config.invert_undefined_stereo = invert;
+        let search = Search::from_launch(
+            &doc,
+            &[centre],
+            &launch,
+            config,
+            job,
+            Client::default(),
+            None,
+        )
+        .unwrap();
+        (doc, search)
+    }
+
+    #[test]
+    fn undefined_stereo_search_pins_launch_configuration_and_inverts_only_when_requested() {
+        for invert in [false, true] {
+            let (doc, search) = undefined_stereo_search(invert, false);
+            let source = Prepared::new(&doc, &[]).unwrap();
+            assert!(
+                source
+                    .molecule()
+                    .state
+                    .metadata
+                    .atoms
+                    .iter()
+                    .all(|atom| atom.chiral_tag == 0)
+            );
+            let request = search
+                .prepared()
+                .ensemble_request(ForceField::Uff, BASE_SEED, 8, Ensemble::Embedded)
+                .unwrap();
+            assert_eq!(request.atoms[0].chiral_tag, if invert { 1 } else { 2 });
+            assert!(request.atoms[1..].iter().all(|atom| atom.chiral_tag == 0));
+            assert!(search.stereo_note.is_none());
+            assert_eq!(search.prepared().source(), &doc);
+        }
+    }
+
+    #[test]
+    fn undefined_stereo_search_falls_back_with_a_note_when_model_configuration_is_degenerate() {
+        let (_, search) = undefined_stereo_search(true, true);
+        assert!(
+            search
+                .prepared()
+                .molecule()
+                .state
+                .metadata
+                .atoms
+                .iter()
+                .all(|atom| atom.chiral_tag == 0)
+        );
+        let note = search.stereo_note.unwrap();
+        assert!(note.starts_with("Could not preserve undefined stereocenters from the 3D model:"));
+        assert!(note.contains("planar or degenerate"));
     }
 
     fn conformer() -> Conformer {

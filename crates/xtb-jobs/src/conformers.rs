@@ -6,6 +6,8 @@ use reshiki_qcdata::{MAX_HESSIAN_ATOMS, XtbMethod};
 mod export;
 pub use export::{RankedConformer, ranked_trajectory, xyz};
 mod rows;
+#[cfg(not(target_arch = "wasm32"))]
+pub use rows::trajectory_alignment;
 pub use rows::{RowStatistics, populations, trajectory_rows};
 #[cfg(not(target_arch = "wasm32"))]
 mod pipeline;
@@ -115,6 +117,9 @@ pub struct Config {
     pub window_kcal: f64,
     pub representatives: usize,
     pub three: bool,
+    /// Sample the opposite configuration at centres the drawing leaves
+    /// undefined; defined drawing stereochemistry is always retained.
+    pub invert_undefined_stereo: bool,
 }
 
 impl Config {
@@ -155,6 +160,7 @@ impl Config {
                 MAX_REPRESENTATIVES
             },
             three: rerank && per_cluster == 3,
+            invert_undefined_stereo: false,
         })
     }
 

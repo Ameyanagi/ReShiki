@@ -299,6 +299,241 @@ fn ensemble_request_encodes_fresh_generation_and_validates_limits() {
     ));
 }
 
+fn undefined_tetrahedron(display: &str, reversed: bool) -> (Document, u64, HashMap<u64, Point3>) {
+    let mut doc = Document::default();
+    let centre = doc.add_atom("C", Point::default());
+    doc.atom_mut(centre).unwrap().id = 41;
+    let centre = 41;
+    let mut positions = HashMap::from([(centre, Point3::default())]);
+    for (index, (element, xyz)) in [
+        ("F", [1., 1., 1.]),
+        ("Cl", [1., -1., -1.]),
+        ("Br", [-1., 1., -1.]),
+        ("H", [-1., -1., 1.]),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let atom = doc.add_atom(element, Point::new(index as f32 * 42., 42.));
+        let id = [3, 89, 17, 66][index];
+        doc.atom_mut(atom).unwrap().id = id;
+        let display = if index == 0 { display } else { "plain" };
+        let (a, b) = if reversed { (id, centre) } else { (centre, id) };
+        doc.add_bond(a, b, 1, display);
+        positions.insert(
+            id,
+            Point3 {
+                x: xyz[0],
+                y: xyz[1],
+                z: xyz[2],
+            },
+        );
+    }
+    // Native neighbour order is bond insertion order, not atom or drawing ID order.
+    doc.bonds.swap(0, 1);
+    (doc, centre, positions)
+}
+
+#[test]
+fn undefined_stereo_pinning_uses_model_ids_and_native_neighbor_order() {
+    for display in ["plain", "wavy"] {
+        for reversed in [false, true] {
+            let (source, centre, positions) = undefined_tetrahedron(display, reversed);
+            let original = source.clone();
+            let prepared = Prepared::new(&source, &[centre]).unwrap();
+            let graph = &prepared.molecule.state.graph;
+            let mut metadata = prepared.molecule.state.metadata.clone();
+            for bond in &mut metadata.bonds {
+                bond.unknown_stereo = false;
+            }
+            let expected = crate::chemistry::stereo::from_3d(
+                graph,
+                &metadata,
+                &vec![crate::chemistry::kekulize::Direction::None; graph.bonds.len()],
+                Some(&crate::chemistry::stereo::wedging::Conformer {
+                    positions: prepared.ids.iter().map(|id| positions[id]).collect(),
+                    is_3d: true,
+                }),
+                &crate::chemistry::stereo::SpatialAnnotations {
+                    non_explicit: vec![None; prepared.ids.len()],
+                    done: None,
+                },
+                crate::chemistry::stereo::SpatialOptions {
+                    replace_existing: true,
+                    allow_nontetrahedral: false,
+                },
+            )
+            .unwrap()
+            .metadata
+            .atoms[prepared.index(centre).unwrap()]
+            .chiral_tag;
+            assert!(matches!(expected, 1 | 2));
+            for invert in [false, true] {
+                let mut pinned = prepared.clone();
+                let materialized = pinned.materialized.clone();
+                assert_eq!(
+                    pinned.pin_undefined_stereo(&positions, invert).unwrap(),
+                    [centre]
+                );
+                let request = pinned
+                    .ensemble_request(ForceField::Uff, DEFAULT_SEED, 4, Ensemble::Embedded)
+                    .unwrap();
+                assert_eq!(
+                    request.atoms[pinned.index(centre).unwrap()].chiral_tag,
+                    u32::from(if invert { expected ^ 3 } else { expected })
+                );
+                assert_eq!(pinned.source, original);
+                assert_eq!(pinned.materialized, materialized);
+            }
+            assert_eq!(source, original);
+        }
+    }
+}
+
+#[test]
+fn undefined_stereo_pinning_preserves_defined_centers_and_is_transactional() {
+    let (mut source, centre, mut positions) = undefined_tetrahedron("plain", false);
+    let mut prepared = Prepared::new(&source, &[]).unwrap();
+    let before = serde_json::to_value(&prepared.molecule.state.metadata).unwrap();
+    let mut missing = positions.clone();
+    missing.remove(&3);
+    assert!(prepared.pin_undefined_stereo(&missing, false).is_err());
+    for position in positions.values_mut() {
+        position.z = 0.;
+    }
+    assert!(prepared.pin_undefined_stereo(&positions, false).is_err());
+    assert_eq!(
+        serde_json::to_value(&prepared.molecule.state.metadata).unwrap(),
+        before
+    );
+
+    source.atom_mut(centre).unwrap().stereo = Some(AtomStereo {
+        winding: "cw".into(),
+        neighbors: vec![3, 89, 17, 66],
+    });
+    let mut defined = Prepared::new(&source, &[]).unwrap();
+    let before = serde_json::to_value(&defined.molecule.state.metadata).unwrap();
+    assert!(
+        defined
+            .pin_undefined_stereo(&positions, true)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        serde_json::to_value(&defined.molecule.state.metadata).unwrap(),
+        before
+    );
+}
+
+#[test]
+fn undefined_stereo_pinning_skips_equivalent_ligands() {
+    let (mut source, centre, positions) = undefined_tetrahedron("plain", false);
+    source.atom_mut(3).unwrap().element = "Cl".into();
+    source.atom_mut(3).unwrap().map_num = 7;
+    source.atom_mut(89).unwrap().map_num = 9;
+    let mut prepared = Prepared::new(&source, &[]).unwrap();
+    assert!(
+        prepared
+            .pin_undefined_stereo(&positions, false)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        prepared.molecule.state.metadata.atoms[prepared.index(centre).unwrap()].chiral_tag,
+        0
+    );
+}
+
+#[tokio::test]
+async fn undefined_stereo_pinning_retains_coupled_ring_metadata() {
+    use crate::engine::{LocalEngine, Request};
+
+    let doc = LocalEngine::in_process()
+        .request(Request::import_smiles("C[C@H]1CC[C@H](C)CC1"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let mut prepared = Prepared::new(&doc, &[]).unwrap();
+    prepared.molecule.state = crate::chemistry::stereo::perception::perceive(
+        &prepared.molecule.state,
+        crate::chemistry::stereo::perception::Options {
+            clean: true,
+            force: true,
+            flag_possible: true,
+        },
+    )
+    .unwrap();
+    assert!(
+        prepared
+            .molecule
+            .state
+            .metadata
+            .atoms
+            .iter()
+            .any(|atom| atom.ring_stereo)
+    );
+    // These ring centres are already defined, so no model coordinates are
+    // needed. Their paired ring-membership annotations must survive inference.
+    assert!(
+        prepared
+            .pin_undefined_stereo(&HashMap::new(), false)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn undefined_stereo_pinning_keeps_every_sample_in_the_model_or_inverted_configuration() {
+    use crate::chemistry::{kekulize::Direction, stereo};
+
+    let (source, centre, positions) = undefined_tetrahedron("wavy", true);
+    for invert in [false, true] {
+        let mut prepared = Prepared::new(&source, &[]).unwrap();
+        prepared.pin_undefined_stereo(&positions, invert).unwrap();
+        let request = prepared
+            .ensemble_request(ForceField::Uff, DEFAULT_SEED, 8, Ensemble::Minimized)
+            .unwrap();
+        let expected =
+            prepared.molecule.state.metadata.atoms[prepared.index(centre).unwrap()].chiral_tag;
+        let sampled = reshiki_geometry::solve(&request).unwrap();
+        assert_eq!(sampled.ensemble.len(), 8, "{:?}", sampled.diagnostics);
+        for member in sampled.ensemble {
+            let state = &prepared.molecule.state;
+            let conformer = stereo::wedging::Conformer {
+                positions: member.coordinates[..prepared.ids.len()]
+                    .iter()
+                    .map(|&[x, y, z]| Point3 { x, y, z })
+                    .collect(),
+                is_3d: true,
+            };
+            let mut metadata = state.metadata.clone();
+            for bond in &mut metadata.bonds {
+                bond.unknown_stereo = false;
+            }
+            let spatial = stereo::from_3d(
+                &state.graph,
+                &metadata,
+                &vec![Direction::None; state.graph.bonds.len()],
+                Some(&conformer),
+                &stereo::SpatialAnnotations {
+                    non_explicit: vec![None; prepared.ids.len()],
+                    done: None,
+                },
+                stereo::SpatialOptions {
+                    replace_existing: true,
+                    allow_nontetrahedral: false,
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                spatial.metadata.atoms[prepared.index(centre).unwrap()].chiral_tag,
+                expected
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn ritonavir_ensemble_embeds_and_converges_all_starts() {
     use crate::engine::{LocalEngine, Request};

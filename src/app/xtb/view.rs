@@ -7,6 +7,7 @@ use crate::app::workspace::{accessible_checkbox, accessible_command, control, ho
 use crate::app::{App, Message};
 use iced::widget::{Space, canvas, column, container, progress_bar, row, text, tooltip};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
+use std::borrow::Cow;
 
 const WIDE: Length = Length::Fill;
 
@@ -17,13 +18,14 @@ fn label<'a>(content: &'a str) -> Element<'a, Message> {
 /// One segment of a segmented control; `None` leaves it disabled with `hint`.
 pub(super) fn segment<'a>(
     id: String,
-    name: &'a str,
+    name: impl Into<Cow<'a, str>>,
     active: bool,
     message: Option<Message>,
     hint: Option<&'a str>,
 ) -> Element<'a, Message> {
-    let label = text(name).size(12).center().width(WIDE);
-    let button = reshiki::accessibility::button(id, name, label)
+    let name = name.into();
+    let label = text(name.clone()).size(12).center().width(WIDE);
+    let button = reshiki::accessibility::button(id, name.into_owned(), label)
         .padding([7, 6])
         .checked(active)
         .style(control(active))
@@ -336,7 +338,8 @@ impl App {
         }
         let search = settings.task == CalcTask::Conformers;
         if search {
-            body = body.push(self.xtb_conformer_fields(idle, numbers.as_deref()));
+            body =
+                body.push(self.xtb_conformer_fields(idle, numbers.as_deref(), target.as_deref()));
         }
         body = body.push(self.xtb_advanced(idle, electronic));
 

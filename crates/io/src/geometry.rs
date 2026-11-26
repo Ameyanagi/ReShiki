@@ -490,6 +490,133 @@ impl Prepared {
     pub fn ids(&self) -> &[u64] {
         &self.ids
     }
+    /// Preserve the model's tetrahedral configuration at centres the drawing
+    /// leaves undefined. Wavy single bonds leave both endpoints undefined.
+    /// The inferred tags use this prepared graph's native neighbour order;
+    /// neither the drawing nor already defined configurations are changed.
+    /// Inversion applies only to these newly pinned centres. Errors leave the
+    /// prepared molecule unchanged.
+    pub fn pin_undefined_stereo(
+        &mut self,
+        positions: &HashMap<u64, Point3>,
+        invert: bool,
+    ) -> Result<Vec<u64>, Error> {
+        use crate::chemistry::{
+            kekulize::Direction,
+            stereo::{self, SpatialAnnotations, SpatialOptions, perception},
+        };
+
+        let mut inference = self.molecule.state.clone();
+        let wavy: HashSet<_> = inference
+            .graph
+            .bonds
+            .iter()
+            .zip(&inference.directions)
+            .zip(&inference.metadata.bonds)
+            .filter(|((bond, direction), meta)| {
+                bond.order == 1 && (**direction == Direction::Unknown || meta.unknown_stereo)
+            })
+            .flat_map(|((bond, _), _)| [bond.a, bond.b])
+            .collect();
+        for meta in &mut inference.metadata.atoms {
+            meta.map_number = 0;
+            meta.map_present = false;
+        }
+        for properties in &mut inference.properties.atoms {
+            properties.cip_code = None;
+            properties.cip_rank = None;
+            properties.possible = None;
+        }
+        // This graph's bond annotations were already prepared. Retain them
+        // while finding potential centres, including authoritative absence.
+        let possible = perception::perceive_preserving_bonds(
+            &inference,
+            perception::Options {
+                clean: false,
+                force: true,
+                flag_possible: true,
+            },
+            &vec![true; inference.graph.bonds.len()],
+        )
+        .map_err(Error::Invalid)?;
+        let (centres, _) = perception::stereogenic_units(&possible).map_err(Error::Invalid)?;
+        let undefined = centres
+            .into_iter()
+            .filter(|&i| {
+                inference
+                    .metadata
+                    .atoms
+                    .get(i)
+                    .is_some_and(|meta| meta.chiral_tag == 0 || wavy.contains(&i))
+            })
+            .collect::<HashSet<_>>();
+        if undefined.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Unknown markers describe the drawing, while this pass explicitly
+        // reads the current model. Clear them only in the detached input.
+        inference.directions.fill(Direction::None);
+        for meta in &mut inference.metadata.bonds {
+            meta.unknown_stereo = false;
+        }
+        let conformer = stereo::wedging::Conformer {
+            positions: self
+                .ids
+                .iter()
+                .map(|id| {
+                    positions
+                        .get(id)
+                        .copied()
+                        .filter(|&point| valid_point(point))
+                        .ok_or(Error::Coordinates("Missing or invalid model atom"))
+                })
+                .collect::<Result<_, _>>()?,
+            is_3d: true,
+        };
+        let spatial = stereo::from_3d(
+            &inference.graph,
+            &inference.metadata,
+            &inference.directions,
+            Some(&conformer),
+            &SpatialAnnotations {
+                non_explicit: vec![None; self.ids.len()],
+                done: None,
+            },
+            SpatialOptions {
+                replace_existing: true,
+                allow_nontetrahedral: false,
+            },
+        )
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+        let mut metadata = self.molecule.state.metadata.clone();
+        let mut pinned = Vec::new();
+        for (i, (meta, spatial)) in metadata
+            .atoms
+            .iter_mut()
+            .zip(&spatial.metadata.atoms)
+            .enumerate()
+        {
+            if !undefined.contains(&i) {
+                continue;
+            }
+            let tag = spatial.chiral_tag;
+            if !matches!(tag, 1 | 2) {
+                return Err(Error::Coordinates(
+                    "Model stereocenter is planar or degenerate",
+                ));
+            }
+            meta.chiral_tag = if invert { tag ^ 3 } else { tag };
+            meta.chiral_permutation = None;
+            pinned.push(
+                *self
+                    .ids
+                    .get(i)
+                    .ok_or(Error::Coordinates("Missing stereocenter atom"))?,
+            );
+        }
+        self.molecule.state.metadata = metadata;
+        Ok(pinned)
+    }
     /// The same molecule without the drawing's retained depth, so ordinary
     /// generation embeds fresh conformers. Relaxed metal coordination can still
     /// use the drawing's planar positions as an approximate seed.
