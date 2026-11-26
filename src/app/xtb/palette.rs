@@ -79,6 +79,7 @@ pub(crate) struct Palette {
 
 struct Step {
     index: usize,
+    attachment: u64,
     result: Weak<CalcResult>,
     /// The document state the preview belongs to; any edit ends it.
     revision: (u64, u64),
@@ -336,7 +337,7 @@ impl App {
             return None;
         }
         let (_, shown) = self.xtb_shown_entry()?;
-        is(&step.result, &shown.result).then_some(step)
+        (step.attachment == shown.attachment && is(&step.result, &shown.result)).then_some(step)
     }
 
     /// Esc ends a step preview first.
@@ -693,6 +694,7 @@ impl App {
             Some(doc)
         });
         let name = super::conformers::step_name(&shown.stored.result, index);
+        let attachment = shown.stored.attachment;
         let result = Arc::downgrade(&shown.stored.result);
         self.status = if let Some(error) = failure {
             format!("{name} cannot be shown: {error}")
@@ -710,6 +712,7 @@ impl App {
         self.tab.xtb.palette.confirm.clear();
         self.tab.xtb.palette.step = Some(Step {
             index,
+            attachment,
             result,
             revision: (self.tab.file_epoch, self.tab.revision),
             preview: preview.map(Box::new),
