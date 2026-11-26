@@ -525,27 +525,33 @@ pub(super) fn is_qc_file(path: &std::path::Path, extension: &str) -> bool {
                 .ends_with(".molden.input")
 }
 
-/// A program output or input opens as the 3D model of its default job's last
-/// geometry, as an unsaved drawing named after the file. Its results are not
-/// shown yet, and the status says so.
+/// Open the default job's final geometry and any result as an unsaved drawing.
 fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, String> {
     use reshiki::qcread::read;
     let name = super::import::name(path);
-    let file = read(&name, contents).map_err(|e| e.to_string())?;
-    let (index, job, step) = file
+    let mut file = read(&name, contents).map_err(|e| e.to_string())?;
+    let jobs = file.jobs.len();
+    let (index, job) = file
         .default_job()
-        .and_then(|i| file.jobs.get(i).map(|job| (i, job)))
-        .and_then(|(i, job)| Some((i, job, job.steps.last()?)))
+        .and_then(|i| file.jobs.get_mut(i).map(|job| (i, job)))
         .ok_or("The file has no geometry")?;
-    let frame = &step.frame;
+    // A job cut off after its last result opens at that result's geometry,
+    // so the result stays with it.
+    let frame = &job
+        .result
+        .as_ref()
+        .and(job.result_step())
+        .or(job.steps.last())
+        .ok_or("The file has no geometry")?
+        .frame;
     let mut xyz = format!("{}\n\n", frame.numbers.len());
     for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
         xyz.push_str(&format!("{number} {x} {y} {z}\n"));
     }
     let (mut drawing, mut warnings) =
         reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())?;
-    let what = if file.jobs.len() > 1 {
-        format!("Final geometry of job {} of {}", index + 1, file.jobs.len())
+    let what = if jobs > 1 {
+        format!("Final geometry of job {} of {jobs}", index + 1)
     } else if job.steps.len() > 1 {
         "Final geometry".into()
     } else {
@@ -555,9 +561,6 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
         Some(completion) => format!("{what}: {}, {}", job.title(), completion.name()),
         None => format!("{what} from the {} file", file.format.name()),
     };
-    if file.format.has_results() {
-        notice.push_str(" · Results can't be shown yet");
-    }
     // Files give the total charge and spin, not which atoms carry them, unless there is one
     // atom. Where a file records neither, the reader's warning says what it assumed.
     let mut omitted = Vec::new();
@@ -568,6 +571,24 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
     }
     if frame.multiplicity != 1 {
         omitted.push(format!("spin multiplicity {}", frame.multiplicity));
+    }
+    if let Some(result_frame) = job.result_step().map(|step| step.frame.clone())
+        && let Some(result) = job.result.take()
+    {
+        let frames = result
+            .input_frame
+            .filter(|hash| *hash != result.frame)
+            .and_then(|hash| job.steps.iter().find(|step| step.frame.hash() == hash))
+            .map(|step| step.frame.clone())
+            .into_iter()
+            .collect();
+        if let Err(error) = reshiki::science::import(&mut drawing, 0, result_frame, frames, result)
+        {
+            warnings.push(format!("Could not attach the calculation results: {error}"));
+        }
+    }
+    if file.format.has_results() && drawing.science.results.is_empty() {
+        notice.push_str(" · Results can't be shown yet");
     }
     if !omitted.is_empty() {
         notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
@@ -947,6 +968,10 @@ impl super::App {
                 };
                 self.open_target(None);
                 self.show_opened(doc, None);
+                if let Some(stored) = self.tab.doc.science.results.last() {
+                    let result = stored.result.clone();
+                    self.xtb_show_result(&result);
+                }
                 self.tab.untitled_name = Some(name);
                 self.tab.mark_saved(reshiki::document::Document::default());
                 // A record that no longer fits in one drawing is left out, and

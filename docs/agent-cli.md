@@ -556,30 +556,59 @@ MCP tool's `path` argument.
 ## export-input
 
 ```text
-reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz [--job JOB] [--template N|--method M --basis B] [--charge C] [--multiplicity M] [--cores N] [--memory-gb G] [--title T] [--extra TEXT] [--out PATH]
+reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+    [--job JOB] [--template N|--method M --basis B]
+    [--charge C] [--multiplicity M] [--cores N] [--memory-gb G] [--title T] [--extra TEXT]
+    [--reactant R.xyz] [--product P.xyz] [--hessian H.hess] [--out PATH]
 ```
 
 `reshiki --cli help export-input` prints the [full help](agent-reference.md#reshiki---cli-export-input).
 
-The command and the MCP `export_input` tool share the XYZ parser and the input
-writer; the command also offers XYZ output and the transition-state jobs, and
-writes the main input and any companions to the requested location. `--title` defaults to the
-input file's stem.
+The command shares its XYZ parser and input writer with the MCP `export_input`
+tool. The command also supports XYZ output and transition-state jobs.
+`--title` defaults to the input file's stem.
 
-| Option              | Commands     | Meaning                                                 |
-| ------------------- | ------------ | ------------------------------------------------------- |
-| `--program PROGRAM` | export-input | gaussian, orca, gamess or xyz                           |
-| `--job JOB`         | export-input | single-point, optimize, opt-freq, transition-state, irc |
-| `--template N`      | export-input | Built-in template 1 to 3                                |
-| `--method M`        | export-input | Method, with `--basis`                                  |
-| `--basis B`         | export-input | Basis; empty for ORCA composites                        |
-| `--charge C`        | export-input | Total charge (0)                                        |
-| `--multiplicity M`  | export-input | 2S + 1 (1)                                              |
-| `--cores N`         | export-input | Cores (8)                                               |
-| `--memory-gb G`     | export-input | Memory in GB (16)                                       |
-| `--title T`         | export-input | Title                                                   |
-| `--extra TEXT`      | export-input | More keywords                                           |
-| `--out PATH`        | export-input | Replaces PATH; companions go beside it                  |
+| Option              | Commands     | Meaning                                                                                              |
+| ------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| `--program PROGRAM` | export-input | gaussian, orca, gamess or xyz                                                                        |
+| `--job JOB`         | export-input | single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts                   |
+| `--template N`      | export-input | Built-in template 1 to 3                                                                             |
+| `--method M`        | export-input | Method, with `--basis`                                                                               |
+| `--basis B`         | export-input | Basis, which can be empty for ORCA composites                                                        |
+| `--charge C`        | export-input | Total charge (0)                                                                                     |
+| `--multiplicity M`  | export-input | 2S + 1 (1)                                                                                           |
+| `--cores N`         | export-input | Cores (8)                                                                                            |
+| `--memory-gb G`     | export-input | Memory in GB (16)                                                                                    |
+| `--title T`         | export-input | Title                                                                                                |
+| `--extra TEXT`      | export-input | More keywords                                                                                        |
+| `--reactant R.xyz`  | export-input | First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                           |
+| `--product P.xyz`   | export-input | First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                            |
+| `--hessian H.hess`  | export-input | ORCA Cartesian Hessian for ORCA ts or irc.                                                           |
+| `--out PATH`        | export-input | Replaces the main file and writes new companions beside it. Required for ORCA neb-ts or `--hessian`. |
+
+Endpoint flags are only for Gaussian `qst2` and `qst3` and ORCA `neb-ts`.
+All XYZ files are read in ångströms and must list the same elements in the
+same order. Corresponding atoms must have the same index in every structure.
+Gaussian QST2 writes the endpoints. QST3 adds `INPUT.xyz` as the TS guess.
+ORCA NEB-TS puts the reactant inline and writes product and TS guess XYZ
+companions.
+
+For ORCA `ts` or `irc`, `--hessian` reads the `$hessian` and `$atoms` blocks
+and writes a Hessian companion for `INPUT.xyz`. The matrix dimension must be
+three times the number of input atoms. All entries must be finite, and
+mirrored entries `a` and `b` may differ by at most
+`1e-6 + 1e-6 × max(|a|, |b|)`. The atom count and element order must match
+`INPUT.xyz`, and each coordinate must agree within `1e-3` Å in the original
+coordinate frame. For example, use `ts.xyz` and `ts.hess` from
+`reshiki --cli ts --out-dir DIR`.
+
+ORCA companion filenames replace characters outside ASCII letters, digits,
+`.`, `_` and `-` in the output stem with underscores.
+
+```sh
+reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz
+reshiki --cli export-input --program orca --job ts --hessian results/ts.hess --out opt-ts.inp results/ts.xyz
+```
 
 ## name
 
