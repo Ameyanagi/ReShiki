@@ -228,7 +228,12 @@ impl App {
         // the stereo check; the selected row's details follow below it.
         let field = super::start_field(&shown.stored.result).filter(|_| !inspector);
         let cell = |content: String, width: f32| text(content).size(12).width(width);
-        let mut header = row![cell("#".into(), 24.), cell("ΔE xTB".into(), 64.)].spacing(8);
+        // Ensembles read from files carry their program's energies.
+        let delta = match &shown.stored.result.settings {
+            reshiki::qcdata::Settings::Xtb(_) => "ΔE xTB",
+            reshiki::qcdata::Settings::Imported { .. } => "ΔE",
+        };
+        let mut header = row![cell("#".into(), 24.), cell(delta.into(), 64.)].spacing(8);
         if let Some(field) = field {
             header = header.push(cell(format!("ΔE {field}"), 84.));
         }
@@ -287,7 +292,21 @@ impl App {
             ),
             Tone::Muted,
         );
-        let table = column![header, list, note].spacing(4);
+        // The same energy diagram as the import sheet: levels with their
+        // Boltzmann shares; a click shows that conformer.
+        let plot = iced::widget::canvas(crate::app::energy_plot::EnergyPlot {
+            delta_kcal: rows.iter().map(|r| r.delta_kcal).collect(),
+            layout: crate::app::energy_plot::Layout::Levels,
+            selected: current,
+            notes: rows.iter().map(|r| format!("{:.0}%", r.percent)).collect(),
+            select: live.then_some(
+                (|i| Message::Xtb(XtbAction::Palette(PaletteAction::Step(i))))
+                    as fn(usize) -> Message,
+            ),
+        })
+        .width(Length::Fill)
+        .height(84);
+        let table = column![plot, header, list, note].spacing(4);
         let side = self.xtb_conformer_side(shown, &rows, current, live);
         if inspector {
             return column![table, side].spacing(10).into();

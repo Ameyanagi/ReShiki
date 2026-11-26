@@ -17,6 +17,7 @@ use state::{Progress, Settings};
 use std::sync::{Arc, Weak};
 
 mod conformers;
+pub(super) use conformers::superposed;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
