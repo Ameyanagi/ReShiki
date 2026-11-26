@@ -222,30 +222,49 @@ fn the_run_captures_the_drawn_map_numbers() {
 fn bond_change_colors_use_the_reaction_atoms_and_canvas_ink() {
     let (mut doc, arrow) = claisen();
     let reaction = reshiki::reactions::preview(&doc, arrow).unwrap();
-    let label = MappedAtom {
-        element: "C".into(),
-        number: 1,
-    };
+    let plan = ts_plan::plan(&doc, arrow).unwrap();
+    let bonds = BondChanges::from_plan(&doc, &plan);
+    let label = &bonds.0.formed[0][0];
     let unrelated = doc.add_atom("C", Point::new(800., 0.));
     let atom = doc.atom_mut(unrelated).unwrap();
-    atom.map_num = 1;
+    atom.map_num = label.number;
     atom.display.mapping.style.color = Color::Custom([180, 50, 55]);
     assert_eq!(
-        mapped_label_color(&doc, &reaction, &label),
+        mapped_label_color(&doc, &reaction, label, Side::Product),
         Color::Ink,
         "an unrelated reaction's same-map color must not replace canvas Ink"
+    );
+
+    let product = reaction.products[0]
+        .atoms
+        .iter()
+        .copied()
+        .find(|&id| {
+            doc.atom(id)
+                .is_some_and(|atom| atom.map_num == label.number)
+        })
+        .unwrap();
+    let product_color = Color::Custom([140, 65, 155]);
+    doc.atom_mut(product).unwrap().display.mapping.style.color = product_color;
+    assert_eq!(
+        mapped_label_color(&doc, &reaction, label, Side::Product),
+        product_color,
+        "a formed bond uses the product's custom color"
     );
 
     let selected = reaction.reactants[0]
         .atoms
         .iter()
         .copied()
-        .find(|&id| doc.atom(id).is_some_and(|atom| atom.map_num == 1))
+        .find(|&id| {
+            doc.atom(id)
+                .is_some_and(|atom| atom.map_num == label.number)
+        })
         .unwrap();
     let custom = Color::Custom([17, 126, 108]);
     doc.atom_mut(selected).unwrap().display.mapping.style.color = custom;
     assert_eq!(
-        mapped_label_color(&doc, &reaction, &label),
+        mapped_label_color(&doc, &reaction, label, Side::Reactant),
         custom,
         "a selected reaction atom's custom color must match its canvas label"
     );
