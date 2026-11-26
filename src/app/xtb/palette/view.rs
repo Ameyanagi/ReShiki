@@ -116,6 +116,21 @@ impl App {
             return None;
         }
         let collapsed = self.tab.xtb.palette.collapsed && !inspector;
+        if let Some(live) = self.xtb_live_ts() {
+            let title = results::title(None, Some(&live.request.context.title));
+            let header = self.xtb_palette_header(title, vec![View::Path], View::Path, inspector);
+            return Some(if collapsed {
+                header
+            } else {
+                let chart = self.xtb_ts_live_path(live);
+                let body = if inspector {
+                    chart
+                } else {
+                    scrollable(chart).height(Length::Fill).into()
+                };
+                column![header, body].spacing(8).into()
+            });
+        }
         let shown = self.xtb_shown();
         let arrow = self.xtb_palette_arrow(shown.as_ref());
         let failed = self.xtb_palette_failure(arrow);

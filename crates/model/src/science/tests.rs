@@ -1300,6 +1300,7 @@ fn transition_state_drawing() -> (Document, u64) {
             free_energy: false,
             endpoint_energies_hartree: None,
             endpoint_thermo: None,
+            reached_positions_angstrom: vec![],
             context: Some(TransitionStateContext {
                 reactant_chemistry: "a".repeat(64),
                 product_chemistry: "b".repeat(64),

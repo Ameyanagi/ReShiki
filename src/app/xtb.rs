@@ -384,7 +384,10 @@ pub(super) fn is_progress(message: &Message) -> bool {
     return matches!(
         message,
         Message::Xtb(
-            Action::Event(..) | Action::Search(..) | Action::Vibrations(vibrations::Action::Tick)
+            Action::Event(..)
+                | Action::Search(..)
+                | Action::Vibrations(vibrations::Action::Tick)
+                | Action::Ts(ts::Action::Tick)
         )
     );
     #[cfg(target_arch = "wasm32")]
@@ -813,6 +816,10 @@ impl App {
             cancel: Default::default(),
             handle: None,
         });
+        if self.xtb_live_ts().is_some() {
+            self.tab.xtb.palette.open = true;
+            self.tab.xtb.palette.collapsed = false;
+        }
         self.xtb_vibrations_sync();
         self.xtb_launch()
     }

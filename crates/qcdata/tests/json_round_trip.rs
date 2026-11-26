@@ -598,6 +598,7 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
             free_energy: false,
             endpoint_energies_hartree: None,
             endpoint_thermo: None,
+            reached_positions_angstrom: vec![],
             saddle_converged: true,
             imaginary: 1,
             imaginary_cm1: Some(-721.3),

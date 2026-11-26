@@ -125,6 +125,10 @@ pub struct TransitionStateRun {
     /// A missing slot means that endpoint's frequency analysis failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub endpoint_thermo: Option<[Option<Thermo>; 2]>,
+    /// A relaxed reaction-path end that led away from the requested reaction.
+    /// Positions are in the same atom order as the transition-state frame.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reached_positions_angstrom: Vec<[f64; 3]>,
     pub saddle_converged: bool,
     pub imaginary: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -223,6 +227,13 @@ impl TransitionStateRun {
                     || context.reactant.len() > 256 * 1024
             })
             || self.imaginary > 3 * atoms
+            || (!self.reached_positions_angstrom.is_empty()
+                && (self.reached_positions_angstrom.len() != atoms
+                    || self
+                        .reached_positions_angstrom
+                        .iter()
+                        .flatten()
+                        .any(|x| !x.is_finite())))
             || self
                 .imaginary_cm1
                 .is_some_and(|value| !value.is_finite() || value >= 0.)

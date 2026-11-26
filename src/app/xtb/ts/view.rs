@@ -13,6 +13,42 @@ const IMAGINARY_CM1: f64 = 50.;
 pub(super) const THERMO_IMAGINARY_CM1: f64 = 20.;
 pub(super) const OPTIMIZED_COMPLEX: &str = "optimized complex";
 const RELOAD_NOTE: &str = "Run the search again to inspect structures along the saved path.";
+pub(super) const IRC_RETURNS_TO_REACTANT: &str = "IRC reaches the reactant on both sides";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Recovery {
+    CheckMap,
+    RefineHighest,
+    ShowWhere,
+    FinerPath,
+}
+
+impl Recovery {
+    pub(super) fn button(
+        self,
+        id: &'static str,
+        arrow: Option<u64>,
+        enabled: bool,
+    ) -> Element<'static, Message> {
+        let label = match self {
+            Self::CheckMap => "Check the atom map",
+            Self::RefineHighest => "Refine from the highest point",
+            Self::ShowWhere => "Show where it leads",
+            Self::FinerPath => "Try again with a finer path",
+        };
+        accessible_command(id, label, label)
+            .style(crate::appearance::primary)
+            .on_press_maybe(arrow.filter(|_| enabled).map(|arrow| {
+                send(match self {
+                    Self::CheckMap => Action::ReviewMap(arrow),
+                    Self::RefineHighest => Action::Retry(arrow, super::Retry::RefineHighest),
+                    Self::ShowWhere => Action::ShowWhere(arrow),
+                    Self::FinerPath => Action::Retry(arrow, super::Retry::FinerPath),
+                })
+            }))
+            .into()
+    }
+}
 
 /// One interpretation of the saved result, shared by the card, Path and status.
 /// A candidate's energy is never exposed as a barrier before these checks pass.
@@ -20,6 +56,7 @@ const RELOAD_NOTE: &str = "Run the search again to inspect structures along the 
 pub(in crate::app::xtb) struct Presentation {
     pub refined_kcal: Option<f64>,
     pub reason: Option<String>,
+    pub(super) recovery: Recovery,
     pub warning: Option<String>,
     pub highest_path_kcal: Option<f64>,
     pub verification: String,
@@ -55,7 +92,9 @@ fn wrong_endpoints(reason: &str) -> bool {
 }
 
 fn readable_reason(reason: &str) -> String {
-    if reason == "saddle refinement did not converge" {
+    if reason == IRC_RETURNS_TO_REACTANT {
+        "The path returned to the reactant on both sides. The bonds that should change may not match this drawing.".into()
+    } else if reason == "saddle refinement did not converge" {
         "The transition-state refinement did not converge.".into()
     } else if reason.contains("on both sides") {
         reason.replacen("IRC reaches", "The reaction path reaches", 1) + "."
@@ -108,14 +147,29 @@ pub(in crate::app::xtb) fn presentation(
     let energies = super::path_energies(result);
     let (deltas, candidate) = relative_energies(energies, result.energy_hartree);
     let refined_kcal = candidate.filter(|value| reliable && value.is_finite());
+    let recovery = match reported {
+        Some(IRC_RETURNS_TO_REACTANT) => Recovery::CheckMap,
+        Some(reason) if wrong_endpoints(reason) => Recovery::ShowWhere,
+        _ if count.is_some_and(|count| count >= 2)
+            || saved_count.is_some_and(|count| count >= 2) =>
+        {
+            Recovery::RefineHighest
+        }
+        _ => Recovery::FinerPath,
+    };
     let reason = if refined_kcal.is_some() {
         None
-    } else if let Some(count) = count.filter(|&count| count != 1) {
-        Some(match count {
-            0 => "The search ended at a point with no significant imaginary frequency.".into(),
-            2 => "The search ended at a point with two imaginary frequencies.".into(),
-            count => format!("The search ended at a point with {count} imaginary frequencies."),
+    } else if matches!(recovery, Recovery::CheckMap | Recovery::ShowWhere) {
+        reported.map(readable_reason)
+    } else if recovery == Recovery::RefineHighest {
+        let count = count.into_iter().chain(saved_count).max().unwrap_or(2);
+        Some(if count == 2 {
+            "The search ended at a point with two imaginary frequencies.".into()
+        } else {
+            format!("The search ended at a point with {count} imaginary frequencies.")
         })
+    } else if count == Some(0) {
+        Some("The search ended at a point with no significant imaginary frequency.".into())
     } else if let Some(reason) = reported {
         Some(readable_reason(reason))
     } else if !saddle_converged {
@@ -155,6 +209,7 @@ pub(in crate::app::xtb) fn presentation(
     Presentation {
         refined_kcal,
         reason,
+        recovery,
         warning,
         highest_path_kcal: deltas
             .into_iter()
@@ -421,6 +476,16 @@ pub(in crate::app::xtb) fn path_rows(
 }
 
 impl App {
+    pub(in crate::app::xtb) fn xtb_ts_live_path(&self, live: &super::Live) -> Element<'_, Message> {
+        if live.energies.is_empty() {
+            return container(line("Finding a path…", Tone::Muted))
+                .center(Length::Fill)
+                .height(190)
+                .into();
+        }
+        PathChart::live(&live.energies, self.appearance.energy_unit).widget()
+    }
+
     fn xtb_ts_path_chart(&self, shown: &Shown<'_>, refined_delta: Option<f64>) -> PathChart {
         let result = &shown.stored.result;
         let energies = super::path_energies(result);
@@ -437,6 +502,7 @@ impl App {
             ),
             interactive: !self.xtb_running(),
             stale: shown.stale,
+            live: false,
             unit: self.appearance.energy_unit,
         }
     }
@@ -462,12 +528,7 @@ impl App {
                     .iter()
                     .all(|image| image.len() == shown.frame.numbers.len())
         });
-        let chart = reshiki::accessibility::image(
-            "xtb-ts-path-profile",
-            chart.accessible_name(),
-            canvas(chart).width(Length::Fill).height(190),
-        );
-        let mut profile = column![chart].spacing(6);
+        let mut profile = column![chart.widget()].spacing(6);
         if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
             profile = profile.push(text(selection_label(delta, unit)).size(12));
         }
@@ -498,7 +559,29 @@ impl App {
         } else {
             profile = profile.push(line("No path energy profile was saved.", Tone::Muted));
         }
-        if selected.is_some() {
+        let reached = self.xtb_reached_endpoint_selected();
+        if super::saved_search(result)
+            .is_some_and(|search| !search.reached_positions_angstrom.is_empty())
+        {
+            profile = profile.push(
+                accessible_command(
+                    "xtb-ts-reached-endpoint",
+                    "Reached endpoint",
+                    "Reached endpoint",
+                )
+                .checked(reached)
+                .style(control(reached))
+                .on_press_maybe(
+                    (interactive && !shown.stale).then(|| send(Action::ReachedEndpoint)),
+                ),
+            );
+        } else if presentation.recovery == Recovery::ShowWhere {
+            profile = profile.push(line(
+                "The reached geometry was not saved with this result.",
+                Tone::Muted,
+            ));
+        }
+        if selected.is_some() || reached {
             profile = profile.push(
                 accessible_command(
                     "xtb-ts-back",
@@ -597,17 +680,12 @@ impl App {
             }
             details = details.push(table);
         }
-        if !presentation.reliable() {
-            details = details.push(
-                reshiki::accessibility::button(
-                    "xtb-ts-rerun-20",
-                    "Try again with a finer path",
-                    text("Try again with a finer path").size(12),
-                )
-                .padding([5, 9])
-                .style(control(false))
-                .on_press_maybe(self.xtb_ts_can_rerun(shown).then(|| send(Action::Rerun))),
-            );
+        if !presentation.reliable() && crate::app::xtb::available() {
+            details = details.push(presentation.recovery.button(
+                "xtb-ts-rerun-20",
+                shown.arrow,
+                self.xtb_ts_can_rerun(shown),
+            ));
         }
         details = details.push(line(
             "Semi-empirical barriers are rough estimates. Refine with DFT before quoting them.",
@@ -749,6 +827,7 @@ struct PathChart {
     climbing: usize,
     interactive: bool,
     stale: bool,
+    live: bool,
     unit: EnergyUnit,
 }
 
@@ -757,6 +836,27 @@ impl PathChart {
     const RIGHT: f32 = 24.;
     const TOP: f32 = 34.;
     const BOTTOM: f32 = 34.;
+
+    fn live(energies: &[f64], unit: EnergyUnit) -> Self {
+        Self {
+            deltas: relative_energies(energies, None).0,
+            refined_delta: None,
+            selected: None,
+            climbing: 0,
+            interactive: false,
+            stale: false,
+            live: true,
+            unit,
+        }
+    }
+
+    fn widget(self) -> Element<'static, Message> {
+        reshiki::accessibility::image(
+            "xtb-ts-path-profile",
+            self.accessible_name(),
+            canvas(self).width(Length::Fill).height(190),
+        )
+    }
 
     fn x(&self, index: usize, bounds: Rectangle) -> f32 {
         let width = (bounds.width - Self::LEFT - Self::RIGHT).max(1.);
@@ -790,6 +890,9 @@ impl PathChart {
     }
 
     fn endpoint_marker(&self, index: usize) -> Option<String> {
+        if self.live {
+            return None;
+        }
         let point = if index == 0 {
             "R"
         } else if index + 1 == self.deltas.len() {
@@ -803,10 +906,12 @@ impl PathChart {
     }
 
     fn accessible_name(&self) -> String {
-        let mut name = format!(
-            "Reaction path energy profile · {} images",
-            self.deltas.len()
-        );
+        let profile = if self.live {
+            "Live reaction path"
+        } else {
+            "Reaction path"
+        };
+        let mut name = format!("{profile} energy profile · {} images", self.deltas.len());
         if let Some((_, marker)) = self.refined_ts_marker() {
             name.push_str(&format!(" · {marker} {}", self.unit.label()));
         }
