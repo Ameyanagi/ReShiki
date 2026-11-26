@@ -43,6 +43,15 @@ def test_windows_availability(monkeypatch):
     assert not xtb.available()
 
 
+def test_unknown_method(monkeypatch, tmp_path):
+    helium = qc.Geometry.from_symbols(["He"], [[0, 0, 0]])
+    monkeypatch.setattr(xtb, "_worker_path", lambda: str(tmp_path / "unused-worker"))
+    with pytest.raises(ReShikiError, match="Unknown xTB method") as caught:
+        xtb.energy(helium, method="unknown")
+    assert caught.value.code == "invalid_arguments"
+    assert not isinstance(caught.value, xtb.XtbError)
+
+
 @pytest.mark.parametrize("conventions", ["axtb", "xtb-6.8"])
 @pytest.mark.parametrize("molecule", ["water", "caffeine", "ferrocene"])
 def test_gfn2_reference(worker, molecule, conventions):

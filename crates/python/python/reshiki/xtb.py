@@ -25,7 +25,14 @@ from typing import TYPE_CHECKING, Any, Literal, Sequence, cast
 
 from . import Molecule, __version__, _native, parse
 from ._errors import ReShikiError
-from .qc import Geometry, Result, _geometry_data, _geometry_from_data, _result_from_data
+from .qc import (
+    Geometry,
+    Result,
+    _geometry_data,
+    _geometry_from_data,
+    _import_numpy,
+    _result_from_data,
+)
 
 if TYPE_CHECKING:
     import numpy as np
@@ -189,6 +196,8 @@ def _calculate(
     try:
         data = json.loads(_native.xtb_calculate(path, json.dumps(options, allow_nan=False)))
     except ValueError as error:
+        if isinstance(error, ReShikiError) and error.code == "invalid_arguments":
+            raise
         raise XtbError(str(error)) from error
     return data
 
@@ -297,7 +306,7 @@ def optimize(
 
 
 def _optimization_fields(data: dict[str, Any]) -> dict[str, Any]:
-    import numpy as np
+    np = _import_numpy()
 
     energies = np.asarray(data["energies"], dtype=np.float64)
     trajectory = np.asarray(data["trajectory"], dtype=np.float64)
