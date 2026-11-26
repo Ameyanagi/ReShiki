@@ -1048,10 +1048,24 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
         qcdata::XtbMethod::GXtb => Method::Gxtb,
         qcdata::XtbMethod::GfnFf => Method::Gfnff,
     };
+    let isotope_labels = if frame.masses_amu.is_empty() {
+        Vec::new()
+    } else {
+        frame
+            .numbers
+            .iter()
+            .enumerate()
+            .map(|(index, &number)| {
+                u32::from(number) * 1000
+                    + u32::from(frame.isotopes.get(index).copied().unwrap_or(0))
+            })
+            .collect()
+    };
     run::Job {
         optimize: config.task.optimizes(),
         frequencies: config.task.frequencies(),
         masses: (!frame.masses_amu.is_empty()).then(|| frame.masses_amu.clone()),
+        isotope_labels,
         numbers: frame.numbers.clone(),
         positions: frame.positions_angstrom.clone(),
         charge: config.charge,
