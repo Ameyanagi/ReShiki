@@ -1,12 +1,11 @@
 //! Partitioned rational-function saddle refinement.
 //!
-//! Written from Banerjee, Adams, Simons & Shepard, J. Phys. Chem. 89, 52
-//! (1985), Baker, J. Comput. Chem. 7, 385 (1986), and Bofill, J. Comput.
-//! Chem. 15, 1 (1994). P-RFO maximizes one Hessian eigenmode and minimizes
-//! the orthogonal physical block. A Fletcher-style model ratio adjusts the trust
-//! radius. Mode following uses maximum absolute overlap across the physical
-//! spectrum, initially with the normalized NEB tangent, then with the prior
-//! mode. Initial overlap below 0.3 falls back to the lowest physical mode.
+//! Written from Banerjee, Adams, Simons & Shepard, J. Phys. Chem. 89, 52 (1985) [Banerjee1985PRFO],
+//! Baker, J. Comput. Chem. 7, 385 (1986) [Baker1986PRFO], and Bofill, J. Comput. Chem. 15, 1 (1994)
+//! [Bofill1994Update]. P-RFO maximizes one Hessian eigenmode and minimizes the orthogonal physical
+//! block. A Fletcher-style model ratio adjusts the trust radius. Mode following uses maximum
+//! absolute overlap across the physical spectrum, initially with the normalized NEB tangent, then
+//! with the prior mode. Initial overlap below 0.3 falls back to the lowest physical mode.
 
 use std::ops::ControlFlow;
 
