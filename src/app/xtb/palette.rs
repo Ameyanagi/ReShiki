@@ -6,10 +6,11 @@ use super::{Request, is, state};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
-use reshiki::qcdata::{CalcResult, Frame};
+use reshiki::qcdata::{CalcResult, Frame, Spin};
 use reshiki::science::{self, Freshness, Stored};
 use std::{
     cell::RefCell,
+    collections::HashMap,
     sync::{Arc, Weak},
 };
 
@@ -81,9 +82,10 @@ struct Step {
 struct Sizes {
     /// The results measured, by identity and "keep full" choice, without
     /// holding them, and the attachments (imported results share a size
-    /// budget per molecule); drawing edits keep the sizes.
+    /// budget per molecule).
     results: Vec<(Weak<CalcResult>, bool)>,
     attachments: Vec<science::Attachment>,
+    pins: HashMap<String, Vec<(Spin, u32)>>,
     index: usize,
     /// Saved bytes per result, in `Science::results` order.
     saved: Vec<usize>,
@@ -92,6 +94,11 @@ struct Sizes {
 }
 
 impl Palette {
+    /// The shown result's identity, to notice another result shown.
+    pub(super) fn shown_id(&self) -> usize {
+        self.result.first().map_or(0, |weak| weak.as_ptr() as usize)
+    }
+
     /// Open on `result`'s Summary.
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) {
         // The same result again keeps its lighter copies' identities.
@@ -135,6 +142,11 @@ impl Shown<'_> {
 }
 
 impl App {
+    /// Open the palette on this result's Summary.
+    pub(in crate::app) fn xtb_show_result(&mut self, result: &Arc<CalcResult>) {
+        self.tab.xtb.palette.show(result);
+    }
+
     /// The result the palette follows, while the document holds it.
     pub(super) fn xtb_shown(&self) -> Option<Shown<'_>> {
         let science = &self.tab.doc.science;
@@ -265,13 +277,15 @@ impl App {
     }
 
     /// "Saved in file" for each result, and the shown result's full extra,
-    /// measured again only when the calculation data or the shown result
-    /// change.
+    /// measured again when the calculation data, shown result or pins change.
     fn xtb_sizes(&self, shown: &Shown<'_>) -> (usize, usize) {
-        let science = &self.tab.doc.science;
+        let doc = &self.tab.doc;
+        let science = &doc.science;
+        let pins = doc.orbital_pins();
         let same = |sizes: &Sizes| {
             sizes.index == shown.index
                 && sizes.attachments == science.attachments
+                && sizes.pins == pins
                 && sizes.results.len() == science.results.len()
                 && sizes
                     .results
@@ -290,7 +304,8 @@ impl App {
                     .collect(),
                 attachments: science.attachments.clone(),
                 index: shown.index,
-                saved: science.saved_sizes(),
+                saved: science.saved_sizes_with_pins(&pins),
+                pins,
                 full: shown.stored.result.heavy_bytes(),
             }),
         };
@@ -339,7 +354,7 @@ impl App {
                 let newest = self.xtb_newest();
                 let shown = self.xtb_shown().map(|shown| shown.stored.result.clone());
                 if let Some(result) = newest.or(shown) {
-                    self.tab.xtb.palette.show(&result);
+                    self.xtb_show_result(&result);
                 }
             }
             Action::Close => {
@@ -630,13 +645,15 @@ impl App {
         if self.tab.xtb.palette.size_asked {
             return false;
         }
-        let bytes = self.tab.doc.science.file_bytes();
+        let pins = self.tab.doc.orbital_pins();
+        let bytes = self.tab.doc.science.file_bytes_with_pins(&pins);
         if bytes <= science::LIGHTER_BYTES {
             return false;
         }
         self.tab.xtb.palette.size_asked = true;
         let mut lighter = Document {
             science: self.tab.doc.science.clone(),
+            models: self.tab.doc.models.clone(),
             ..Document::default()
         };
         let results = science::make_lighter(&mut lighter);
@@ -644,7 +661,7 @@ impl App {
             tab: self.tab.id,
             epoch: self.tab.file_epoch,
             bytes,
-            lighter: (results > 0).then(|| (results, lighter.science.file_bytes())),
+            lighter: (results > 0).then(|| (results, lighter.science.file_bytes_with_pins(&pins))),
             then: Box::new(then),
         });
         true
@@ -693,6 +710,14 @@ impl App {
         if science::make_lighter(&mut doc) == 0 {
             return;
         }
+        self.xtb_follow_results(&doc);
+        let before = std::mem::replace(&mut self.tab.doc, doc);
+        self.changed(before);
+    }
+
+    /// Before `doc` replaces the drawing: results it replaced by lighter or
+    /// pinned copies keep their run details and the palette's place.
+    pub(super) fn xtb_follow_results(&mut self, doc: &Document) {
         for (old, new) in self
             .tab
             .doc
@@ -712,8 +737,6 @@ impl App {
                 shown.push(Arc::downgrade(&new.result));
             }
         }
-        let before = std::mem::replace(&mut self.tab.doc, doc);
-        self.changed(before);
     }
 }
 

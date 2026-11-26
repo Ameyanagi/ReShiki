@@ -7,7 +7,7 @@ use crate::app::xtb::{Action as XtbAction, Pending, results::RunInfo, state};
 use crate::app::{App, Message};
 use iced::Task;
 #[cfg(not(target_arch = "wasm32"))]
-use reshiki::qcdata;
+use reshiki::{document::Document, qcdata, science::Launch};
 use std::sync::Arc;
 
 impl App {
@@ -163,16 +163,13 @@ impl App {
             self.xtb_fail(failure);
             return Task::none();
         }
-        let search = super::Search::from_launch(
+        let search = match search_for(
             &self.tab.doc,
             &run.atoms,
             &launch,
-            live.config.clone(),
-            crate::app::xtb::job(&run.config, &launch.frame, vec![]),
-            reshiki::geometry::Client::default(),
-            None,
-        );
-        let search = match search {
+            &live.config,
+            &run.config,
+        ) {
             Ok(search) => search,
             Err(failure) => {
                 self.xtb_fail(failure);
@@ -243,19 +240,50 @@ impl App {
     }
 }
 
-/// The result to store from a finished search: the lowest conformer is its
-/// frame, every kept conformer its trajectory.
+/// Prepare the pipeline input from the drawing and the launched model frame.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn search_for(
+    doc: &Document,
+    run_atoms: &[u64],
+    launch: &Launch,
+    search: &super::Config,
+    calc: &state::Config,
+) -> Result<super::Search, state::Failure> {
+    super::Search::from_launch(
+        doc,
+        run_atoms,
+        launch,
+        search.clone(),
+        crate::app::xtb::job(calc, &launch.frame, vec![]),
+        reshiki::geometry::Client::default(),
+        None,
+    )
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, state::Failure> {
-    let failed = |error: &dyn std::fmt::Display| state::Failure::Other(error.to_string());
     let launch = run
         .launch
-        .clone()
+        .as_ref()
         .ok_or_else(|| state::Failure::Other("the search finished before it started".into()))?;
     let live = run
         .search
         .as_ref()
         .ok_or_else(|| state::Failure::Other("not a conformer search".into()))?;
+    pending_for(launch, &run.config, &live.config, run.keep_full, found)
+}
+
+/// The result to store from a finished search: the lowest conformer is its
+/// frame, every kept conformer its trajectory.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn pending_for(
+    launch: &Launch,
+    calc: &state::Config,
+    search: &super::Config,
+    keep_full: bool,
+    found: &super::Found,
+) -> Result<Pending, state::Failure> {
+    let failed = |error: &dyn std::fmt::Display| state::Failure::Other(error.to_string());
     let best = found
         .ranked
         .first()
@@ -264,7 +292,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         positions_angstrom: best.positions.clone(),
         ..(*launch.frame).clone()
     };
-    let method = run.config.method;
+    let method = calc.method;
     let gfnff_reference = (method == qcdata::XtbMethod::GfnFf).then_some(launch.frame.hash());
     let computed = &found.best.computed;
     let mut result = computed
@@ -277,7 +305,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         .map_err(|e| failed(&e))?;
     let trajectory = found.trajectory(&frame)?;
     let kept = trajectory.steps();
-    result.provenance.method = Some(live.config.describe(method));
+    result.provenance.method = Some(search.describe(method));
     result.input_frame = Some(launch.frame.hash());
     result.status = if found.stopped {
         qcdata::Status::NotConverged {
@@ -290,12 +318,12 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         qcdata::Status::Converged
     };
     result.trajectory = Some(trajectory);
-    result.keep_full = run.keep_full;
+    result.keep_full = keep_full;
     // The run's settings and summary, as an optimization records them: the
     // whole search's time, and the SCF work of the lowest conformer's run.
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
-        settings.threads = Some(run.config.threads);
-        settings.convergence = Some(if run.config.tight {
+        settings.threads = Some(calc.threads);
+        settings.convergence = Some(if calc.tight {
             qcdata::Convergence::Tight
         } else {
             qcdata::Convergence::Normal
@@ -338,7 +366,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
     Ok(Pending {
         pushed: false,
         accepted: None,
-        launch,
+        launch: launch.clone(),
         frames: vec![frame],
         result,
         line,

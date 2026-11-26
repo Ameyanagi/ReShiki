@@ -116,12 +116,14 @@ impl App {
         }
 
         let method = shown.method();
-        let mut content = column![
-            header,
-            text(method.clone()).size(12),
-            line(results::LIMITATIONS, Tone::Muted),
-        ]
-        .spacing(4);
+        let mut content = column![header, text(method.clone()).size(12)].spacing(4);
+        // The semi-empirical caveat is about xTB, not imported results.
+        if matches!(
+            shown.stored.result.settings,
+            reshiki::qcdata::Settings::Xtb(_)
+        ) {
+            content = content.push(line(results::LIMITATIONS, Tone::Muted));
+        }
         if let Some(card) = failure {
             content = content.push(card);
         }
@@ -135,6 +137,7 @@ impl App {
             View::Summary => summary(&shown, inspector),
             View::Vibrations => self.xtb_vibrations(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
+            View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Log => log(&shown, &method),
         };
@@ -143,7 +146,11 @@ impl App {
         } else {
             scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(BODY_HEIGHT)
+                .height(if view == View::Orbitals {
+                    super::super::orbitals::HEIGHT
+                } else {
+                    BODY_HEIGHT
+                })
                 .into()
         };
         content = content.push(container(body).padding([6, 0]));
@@ -173,7 +180,12 @@ impl App {
         }))
         .spacing(4);
         let collapsed = self.xtb.dock.collapsed && !inspector;
-        let mut header = row![text("xTB results").size(14), tabs]
+        // Results opened from other programs are not xTB's.
+        let title = match self.xtb_shown().map(|s| &s.stored.result.settings) {
+            Some(reshiki::qcdata::Settings::Imported { .. }) => "Calculation results",
+            _ => "xTB results",
+        };
+        let mut header = row![text(title).size(14), tabs]
             .spacing(14)
             .align_y(Alignment::Center);
         if !inspector {
@@ -500,6 +512,7 @@ impl App {
                     Tone::Muted,
                 ));
             }
+            View::Orbitals => footer = footer.push(self.xtb_orbitals_note(shown)),
             View::Conformers => {
                 footer = footer.push(super::super::conformers::footer());
             }

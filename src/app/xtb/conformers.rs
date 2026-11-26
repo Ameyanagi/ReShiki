@@ -9,6 +9,8 @@
 //! ranked conformers (at most 32) its trajectory, saved as compact frames.
 use reshiki::qcdata::{self, CalcResult, XtbMethod};
 
+#[cfg(all(feature = "conformer-bench", not(target_arch = "wasm32")))]
+mod bench;
 #[cfg(not(target_arch = "wasm32"))]
 mod pipeline;
 #[cfg(not(target_arch = "wasm32"))]

@@ -62,7 +62,7 @@ pub(crate) fn norm(x: &[f64]) -> f64 {
 /// unit eigenvector belonging to eigenvalue `i`. The implementation follows the
 /// Householder similarity reduction and implicit Wilkinson-shift QR iteration
 /// described in the symmetric eigenvalue chapter of Golub and Van Loan,
-/// *Matrix Computations*.
+/// *Matrix Computations* \[Golub2013Matrix\].
 /// All arithmetic and storage are implemented here using safe, standard Rust.
 pub(crate) fn symmetric_eigen(
     mut matrix: Vec<f64>,

@@ -14,8 +14,11 @@ use std::{
     sync::Arc,
 };
 
-use reshiki_qcdata::{CalcResult, Frame, FrameHash, MAX_IMPORTED_HEAVY_BYTES, Settings};
+use reshiki_qcdata::{
+    BasisSet, Beta, CalcResult, Frame, FrameHash, MAX_IMPORTED_HEAVY_BYTES, Settings, Spin,
+};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::document::Document;
 
@@ -306,6 +309,12 @@ impl Science {
     /// molecule's imported data stays within [`MAX_IMPORTED_HEAVY_BYTES`],
     /// in arrival order.
     pub fn saved(&self) -> Self {
+        self.saved_with_pins(&HashMap::new())
+    }
+
+    /// The saved form, retaining the orbital rows needed by placed figures.
+    /// Pins are grouped by [`result_key`].
+    pub fn saved_with_pins(&self, pins: &HashMap<String, Vec<(Spin, u32)>>) -> Self {
         let mut budgets = HashMap::<Vec<u64>, usize>::new();
         let results = self
             .results
@@ -320,7 +329,10 @@ impl Science {
                     }
                     return stored.clone();
                 }
-                let result = match stored.result.for_file(*budget, &[]) {
+                let pinned = pins
+                    .get(&result_key(&stored.result))
+                    .map_or(&[][..], Vec::as_slice);
+                let result = match stored.result.for_file(*budget, pinned) {
                     Cow::Borrowed(_) => {
                         if matches!(stored.result.settings, Settings::Imported { .. }) {
                             *budget = budget.saturating_sub(stored.result.heavy_bytes());
@@ -357,7 +369,12 @@ impl Science {
     /// whole palette; slow for large imported results, so callers cache it
     /// per document revision off the UI thread.
     pub fn saved_sizes(&self) -> Vec<usize> {
-        self.saved()
+        self.saved_sizes_with_pins(&HashMap::new())
+    }
+
+    /// Saved result sizes including the orbital rows needed by placed figures.
+    pub fn saved_sizes_with_pins(&self, pins: &HashMap<String, Vec<(Spin, u32)>>) -> Vec<usize> {
+        self.saved_with_pins(pins)
             .results
             .iter()
             .map(|stored| {
@@ -371,10 +388,15 @@ impl Science {
     /// Pretty-printed JSON bytes the file spends on calculation data; Save
     /// offers [`make_lighter`] above [`LIGHTER_BYTES`].
     pub fn file_bytes(&self) -> usize {
+        self.file_bytes_with_pins(&HashMap::new())
+    }
+
+    /// Saved calculation bytes including orbital rows needed by placed figures.
+    pub fn file_bytes_with_pins(&self, pins: &HashMap<String, Vec<(Spin, u32)>>) -> usize {
         if self.is_empty() {
             return 0;
         }
-        serde_json::to_vec_pretty(&self.saved())
+        serde_json::to_vec_pretty(&self.saved_with_pins(pins))
             .map(|json| json.len())
             .unwrap_or(0)
     }
@@ -620,14 +642,7 @@ fn baseline(doc: &Document, ids: &[u64]) -> String {
 /// with the chemistry of `expected`.
 fn freshness(doc: &Document, atoms: &[Option<u64>], expected: &str) -> Freshness {
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let whole = ids.first().is_some_and(|first| {
-        let set: HashSet<u64> = ids.iter().copied().collect();
-        let component: HashSet<u64> = crate::molecule_names::component(doc, *first)
-            .into_iter()
-            .collect();
-        component == set
-    });
-    if whole && baseline(doc, &ids) == expected {
+    if !ids.is_empty() && closed(doc, &ids) && baseline(doc, &ids) == expected {
         Freshness::Current
     } else {
         Freshness::Stale
@@ -668,6 +683,38 @@ fn atomic_number(symbol: &str) -> Option<u8> {
         .iter()
         .position(|e| *e == symbol)
         .and_then(|i| u8::try_from(i + 1).ok())
+}
+
+/// Whether `ids` are whole molecules: every atom bonded to one of them is
+/// one of them. A calculation is for one molecule, a file's result can be
+/// for a complex of several.
+fn closed(doc: &Document, ids: &[u64]) -> bool {
+    let set: HashSet<u64> = ids.iter().copied().collect();
+    ids.iter().all(|&id| {
+        doc.atom(id).is_some()
+            && crate::molecule_names::component(doc, id)
+                .into_iter()
+                .all(|atom| set.contains(&atom))
+    })
+}
+
+fn model_baseline(
+    doc: &Document,
+    atom: u64,
+    atoms: &[Option<u64>],
+) -> Result<String, ScienceError> {
+    let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
+    let molecule: HashSet<u64> = crate::molecule_names::component(doc, atom)
+        .into_iter()
+        .collect();
+    if ids.iter().copied().collect::<HashSet<_>>() != molecule {
+        return Err(if ids.iter().all(|id| doc.atom(*id).is_some()) {
+            ScienceError::Fragments
+        } else {
+            ScienceError::StaleModel
+        });
+    }
+    Ok(baseline(doc, &ids))
 }
 
 /// The total charge and multiplicity the drawing gives the molecule of
@@ -842,18 +889,7 @@ pub fn launch(
         drawing_atoms: vec![],
     };
     frame.validate()?;
-    let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let molecule: HashSet<u64> = crate::molecule_names::component(doc, atom)
-        .into_iter()
-        .collect();
-    if ids.iter().copied().collect::<HashSet<_>>() != molecule {
-        return Err(if ids.iter().all(|id| doc.atom(*id).is_some()) {
-            ScienceError::Fragments
-        } else {
-            ScienceError::StaleModel
-        });
-    }
-    let baseline = baseline(doc, &ids);
+    let baseline = model_baseline(doc, atom, &atoms)?;
     let shown = |stored: &Frame| {
         stored.numbers == frame.numbers
             && stored.isotopes == frame.isotopes
@@ -961,6 +997,86 @@ pub fn attach(
     })
 }
 
+/// Attach an external result whose exact `frame` matches `model` in atom
+/// order and within 1e-3 Å. Pass any other referenced geometries in `frames`.
+pub fn import(
+    doc: &mut Document,
+    model: usize,
+    frame: Frame,
+    mut frames: Vec<Frame>,
+    result: CalcResult,
+) -> Result<Attached, ScienceError> {
+    let model = doc.models.get(model).ok_or(ScienceError::NoModel)?;
+    if model.cell.is_some() {
+        return Err(ScienceError::Periodic);
+    }
+    if frame.hash() != result.frame {
+        return Err(ScienceError::Unknown);
+    }
+    let mut atoms = model.geometry_sources();
+    atoms.resize(model.atoms.len() + model.hydrogens.len(), None);
+    let matches = frame.numbers.len() == atoms.len()
+        && frame.numbers.iter().enumerate().all(|(i, &number)| {
+            let element = if i < model.atoms.len() {
+                model_element(doc, model, i)
+            } else {
+                Some("H")
+            };
+            element.and_then(atomic_number) == Some(number)
+        })
+        && model
+            .atoms
+            .iter()
+            .map(|a| a.xyz)
+            .chain(model.hydrogens.iter().map(|h| h.xyz))
+            .zip(&frame.positions_angstrom)
+            .all(|(shown, exact)| {
+                shown
+                    .into_iter()
+                    .zip(exact)
+                    .map(|(a, b)| (f64::from(a) - b).powi(2))
+                    .sum::<f64>()
+                    <= 1e-6
+            });
+    if !matches {
+        return Err(ScienceError::ModelMismatch);
+    }
+    let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
+    if ids.is_empty() {
+        return Err(ScienceError::Gone);
+    }
+    // The model may hold a complex of several molecules (a dimer, an ion
+    // pair): its result belongs to all of them.
+    if !closed(doc, &ids) {
+        return Err(ScienceError::Fragments);
+    }
+    let baseline = baseline(doc, &ids);
+    let frame = if let Some(input) = result.input_frame.filter(|hash| *hash != result.frame) {
+        let input_frame = if let Some(index) = frames.iter().position(|frame| frame.hash() == input)
+        {
+            let input = frames.swap_remove(index);
+            input.validate()?;
+            Arc::new(input)
+        } else {
+            doc.science
+                .frame(&input)
+                .cloned()
+                .ok_or(ScienceError::Unknown)?
+        };
+        frames.push(frame);
+        input_frame
+    } else {
+        frame.validate()?;
+        Arc::new(frame)
+    };
+    let launch = Launch {
+        frame,
+        atoms,
+        baseline,
+    };
+    attach(doc, &launch, frames, result)
+}
+
 /// Every result stored for the molecule of `atom` (any of its current atoms
 /// still linked), oldest first.
 pub fn results_for(doc: &Document, atom: u64) -> Vec<ResultView<'_>> {
@@ -994,6 +1110,208 @@ pub fn results_for(doc: &Document, atom: u64) -> Vec<ResultView<'_>> {
             })
         })
         .collect()
+}
+
+/// Stable figure reference: the first 16 lowercase SHA-256 hex digits of
+/// the result's frame, input frame, task, settings and provenance JSON tuple.
+/// Changing calculated values or pinning orbital rows leaves the key intact.
+pub fn result_key(result: &CalcResult) -> String {
+    let identity = (
+        result.frame,
+        result.input_frame,
+        result.task,
+        &result.settings,
+        &result.provenance,
+    );
+    let bytes = serde_json::to_vec(&identity).unwrap_or_default();
+    let digest = Sha256::digest(bytes);
+    format!(
+        "{:016x}",
+        u64::from_be_bytes(digest.first_chunk::<8>().copied().unwrap_or_default())
+    )
+}
+
+/// The newest result matching the figure on this molecule, and its storage index.
+pub fn figure_result<'a>(
+    doc: &'a Document,
+    model: &crate::models3d::Model3d,
+) -> Option<(usize, &'a Stored)> {
+    let figure = model.surface.as_ref()?;
+    let atom = model.linked_atoms.first()?;
+    let mut matches = doc
+        .science
+        .results
+        .iter()
+        .enumerate()
+        .rev()
+        .filter(|(_, stored)| {
+            doc.science
+                .attachment(stored.attachment)
+                .is_some_and(|attachment| {
+                    attachment.atoms.contains(&Some(*atom))
+                        && attachment
+                            .atoms
+                            .iter()
+                            .flatten()
+                            .all(|id| model.contains(*id))
+                        && result_key(&stored.result) == figure.orbital.result
+                })
+        });
+    // A repeated calculation shares the key: the figure stays with the
+    // result that keeps its row, so its signs never change.
+    let newest = matches.next()?;
+    let keeps = |stored: &Stored| {
+        stored.result.orbitals.as_ref().is_some_and(|orbitals| {
+            let set = match (&orbitals.beta, figure.orbital.spin) {
+                (Beta::Unrestricted(beta), Spin::Beta) => beta,
+                _ => &orbitals.alpha,
+            };
+            set.rows.binary_search(&figure.orbital.index).is_ok()
+        })
+    };
+    if keeps(newest.1) {
+        return Some(newest);
+    }
+    Some(matches.find(|(_, stored)| keeps(stored)).unwrap_or(newest))
+}
+
+/// Clipboard calculation data needed by the document's placed orbital figures.
+/// Only their linked molecules' referenced results survive, in light form with
+/// the figures' coefficient rows and basis. Other calculation data stays behind.
+pub fn for_figures(doc: &Document) -> Science {
+    let mut molecules = HashMap::<&str, Vec<HashSet<u64>>>::new();
+    for model in &doc.models {
+        if let Some(figure) = &model.surface {
+            molecules
+                .entry(&figure.orbital.result)
+                .or_default()
+                .push(model.linked_atoms.iter().copied().collect());
+        }
+    }
+    if molecules.is_empty() {
+        return Science::default();
+    }
+    let pins = doc.orbital_pins();
+    let results: Vec<_> = doc
+        .science
+        .results
+        .iter()
+        .filter_map(|stored| {
+            let attachment = doc.science.attachment(stored.attachment)?;
+            let key = result_key(&stored.result);
+            let linked = molecules.get(key.as_str())?;
+            let belongs = linked.iter().any(|atoms| {
+                attachment.atoms.iter().any(Option::is_some)
+                    && attachment
+                        .atoms
+                        .iter()
+                        .flatten()
+                        .all(|id| atoms.contains(id))
+            });
+            belongs.then(|| Stored {
+                attachment: stored.attachment,
+                keep_full: false,
+                result: Arc::new(
+                    stored
+                        .result
+                        .light(pins.get(&key).map_or(&[][..], Vec::as_slice)),
+                ),
+            })
+        })
+        .collect();
+    let attachments: HashSet<u64> = results.iter().map(|stored| stored.attachment).collect();
+    let mut science = Science {
+        frames: doc.science.frames.clone(),
+        attachments: doc
+            .science
+            .attachments
+            .iter()
+            .filter(|attachment| attachments.contains(&attachment.id))
+            .cloned()
+            .collect(),
+        results,
+    };
+    science.collect_garbage();
+    science
+}
+
+/// Keep a recomputed orbital row with its result so a placed figure reopens
+/// with the same phase. Existing rows keep their original coefficients and
+/// shared payload. Nothing changes on error.
+pub fn pin_orbital(
+    doc: &mut Document,
+    stored_index: usize,
+    spin: Spin,
+    orbital_index: u32,
+    basis: &BasisSet,
+    row: &[f64],
+) -> Result<(), ScienceError> {
+    let stored = doc
+        .science
+        .results
+        .get(stored_index)
+        .ok_or(ScienceError::Unknown)?;
+    let invalid =
+        |message: &str| ScienceError::Invalid(reshiki_qcdata::Error::Invalid(message.into()));
+    let orbitals = stored
+        .result
+        .orbitals
+        .as_ref()
+        .ok_or_else(|| invalid("Calculation has no orbital spectrum"))?;
+    if orbitals
+        .basis
+        .as_ref()
+        .is_some_and(|stored| stored != basis)
+    {
+        return Err(invalid(
+            "Pinned orbital basis differs from the stored basis",
+        ));
+    }
+    let set = match (spin, &orbitals.beta) {
+        (Spin::Beta, Beta::Unrestricted(set)) => set,
+        _ => &orbitals.alpha,
+    };
+    let position = match set.rows.binary_search(&orbital_index) {
+        Ok(_) => return Ok(()),
+        Err(position) => position,
+    };
+    let frame = doc
+        .science
+        .frame(&stored.result.frame)
+        .ok_or(ScienceError::Unknown)?;
+    let n_ao: usize = basis.shells.iter().map(|shell| shell.n_functions()).sum();
+    if row.len() != n_ao {
+        return Err(invalid("Pinned orbital row must match its basis"));
+    }
+    let mut result = stored.result.as_ref().clone();
+    let orbitals = result
+        .orbitals
+        .as_mut()
+        .ok_or_else(|| invalid("Calculation has no orbital spectrum"))?;
+    orbitals.basis = Some(basis.clone());
+    let set = match (spin, &mut orbitals.beta) {
+        (Spin::Beta, Beta::Unrestricted(set)) => set,
+        _ => &mut orbitals.alpha,
+    };
+    set.rows.insert(position, orbital_index);
+    set.coefficients
+        .splice(position * n_ao..position * n_ao, row.iter().copied());
+    result.validate(frame)?;
+    if doc
+        .science
+        .heap_bytes()
+        .saturating_sub(stored.result.heap_bytes())
+        .saturating_add(result.heap_bytes())
+        > MAX_SCIENCE_BYTES
+    {
+        return Err(ScienceError::TooLarge);
+    }
+    doc.science
+        .results
+        .get_mut(stored_index)
+        .ok_or(ScienceError::Unknown)?
+        .result = Arc::new(result);
+    Ok(())
 }
 
 /// Move the molecule's 3D model to `frame`, a geometry stored for
@@ -1278,10 +1596,14 @@ pub fn set_keep_full(doc: &mut Document, index: usize, keep: bool) -> bool {
 /// data, in the file and in this document. Imported results, which cannot
 /// be recomputed, are left alone. Returns how many results changed.
 pub fn make_lighter(doc: &mut Document) -> usize {
+    let pins = doc.orbital_pins();
     let mut changed = 0;
     for stored in &mut doc.science.results {
         if stored.keep_full && matches!(stored.result.settings, Settings::Xtb(_)) {
-            stored.result = Arc::new(stored.result.light(&[]));
+            let pinned = pins
+                .get(&result_key(&stored.result))
+                .map_or(&[][..], Vec::as_slice);
+            stored.result = Arc::new(stored.result.light(pinned));
             stored.keep_full = false;
             changed += 1;
         }

@@ -210,10 +210,15 @@ explains how the crates and modules fit together.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
 - `src/app/xtb.rs`: Predict → xTB
 - `src/app/xtb/conformers.rs`: Conformer search
+- `src/app/xtb/conformers/bench.rs`: Developer-only command for timing the desktop app's conformer search.
 - `src/app/xtb/conformers/export.rs`: Conformer ensembles as files
 - `src/app/xtb/conformers/pipeline.rs`: Stream the shared conformer search's progress to the Calculate card.
 - `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
 - `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
+- `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
+- `src/app/xtb/orbitals/compute.rs`: Work off the UI thread
+- `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
+- `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
 - `src/app/xtb/palette.rs`: The xTB results palette
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
@@ -303,6 +308,10 @@ explains how the crates and modules fit together.
 - `src/cli/skill.rs`: The Agent Skill folder `reshiki --cli skill` writes
 - `src/cli/skill/references.rs`: Skill references rendered from live command help, operation contracts and MCP setup options.
 - `src/cli/skill/template.rs`: SKILL.md, the only hand-written part of a generated skill
+- `src/cli/ts.rs`: Gas-phase transition-state searches using the isolated xTB worker.
+- `src/cli/ts/geometry.rs`: XYZ admission and atom mapping before a transition-state search.
+- `src/cli/ts/output.rs`: Transition-state table and optional machine-readable outputs.
+- `src/cli/ts/worker.rs`: A sendable potential backed by a thread-affine xTB session.
 - `src/clipboard.rs`: Explicit native Copy/Paste with editable and image representations.
 - `src/clipboard/browser.rs`: The browser's clipboard.
 - `src/clipboard/copy_as.rs`: Format-specific copy.
@@ -684,7 +693,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/qc_input.rs`: Quantum chemistry input files and Cartesian geometry exports.
 - `crates/io/src/qc_input/gamess.rs`: GAMESS-US input
 - `crates/io/src/qc_input/gaussian.rs`: Gaussian 16 input
-- `crates/io/src/qc_input/hess.rs`: ORCA `.hess` files from a Cartesian Hessian, for `InHess Read`.
+- `crates/io/src/qc_input/hess.rs`: Read and write Cartesian Hessians in ORCA `.hess` files.
 - `crates/io/src/qc_input/orca.rs`: ORCA 6 input
 - `crates/io/src/qc_input/sdf.rs`: SDF records with V3000 3D connection tables.
 - `crates/io/src/qc_input/xyz.rs`: XYZ files, one frame or a trajectory.
@@ -875,11 +884,15 @@ explains how the crates and modules fit together.
 - `crates/model/src/models3d/crystal.rs`: Crystal and periodic structures (#417)
 - `crates/model/src/models3d/ellipsoids.rs`: ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
 - `crates/model/src/models3d/polish.rs`: Persistent generated chemistry, separate from the live source drawing.
-- `crates/model/src/models3d/surface.rs`: Orbital isosurfaces drawn as vector shapes in a 3D model (prototype; see docs/plans/xtb-surfaces.md).
-- `crates/model/src/models3d/surface/draw.rs`: The developer demo surface and its place in a model's picture
+- `crates/model/src/models3d/surface.rs`: Orbital isosurfaces drawn as vector shapes in a 3D model (see docs/plans/xtb-surfaces.md).
+- `crates/model/src/models3d/surface/draw.rs`: Orbital meshes and their projection into a model's picture.
+- `crates/model/src/models3d/surface/draw/figures.rs`
+- `crates/model/src/models3d/surface/figure.rs`: An orbital placed on a 3D model
 - `crates/model/src/models3d/surface/fit.rs`: Smooth cubic outlines for merged surface regions and runs, after Schneider's digitized-curve fitting (Graphics Gems, 1990).
 - `crates/model/src/models3d/surface/look.rs`: How an orbital surface is drawn
 - `crates/model/src/models3d/surface/mesh.rs`: Closed surfaces of a signed scalar field, in model coordinates (Å).
+- `crates/model/src/models3d/surface/orbital.rs`: A molecular orbital in the model frame (Å), evaluated from normalized Gaussian AOs.
+- `crates/model/src/models3d/surface/orbital/timing.rs`: Manual timings
 - `crates/model/src/models3d/surface/snapshot.rs`: Compact snapshots of the merged 2D shapes of an orbital surface.
 - `crates/model/src/models3d/surface/visible.rs`: Screen-affine hidden-surface clipping and merged, nested shading regions.
 - `crates/model/src/models3d/surface/visible/coverage.rs`
@@ -993,6 +1006,15 @@ explains how the crates and modules fit together.
 - `crates/optimize/src/optimizer/rfo/diis.rs`: DIIS interpolation in the current RFO coordinate frame.
 - `crates/optimize/src/optimizer/rfo/positive.rs`: The unique negative RFO root for a positive-definite physical Hessian.
 - `crates/optimize/src/optimizer/trust.rs`: Trust-region acceptance and radius adjustment shared by both RFO coordinate models.
+- `crates/optimize/src/ts.rs`: Transition-state searches on mapped Cartesian geometries in atomic units.
+- `crates/optimize/src/ts/endpoint.rs`: Distance-restrained endpoint construction and covalent connectivity.
+- `crates/optimize/src/ts/idpp.rs`: Image-dependent pair-potential interpolation
+- `crates/optimize/src/ts/irc.rs`: Mass-weighted steepest descent on a local quadratic surface (Page & McIver, J.
+- `crates/optimize/src/ts/mapping.rs`: Proper rigid fits (Horn, J.
+- `crates/optimize/src/ts/modes.rs`: Eckart translation/rotation projection and harmonic normal modes.
+- `crates/optimize/src/ts/neb.rs`: Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J.
+- `crates/optimize/src/ts/saddle.rs`: Partitioned rational-function saddle refinement.
+- `crates/optimize/src/ts/saddle_regressions.rs`: Analytic counterexamples for trust-model recovery and force-only acceptance.
 
 ## reshiki-process-heap
 

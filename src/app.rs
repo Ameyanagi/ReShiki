@@ -1220,7 +1220,7 @@ impl App {
             self.tab.hover = None;
         }
         self.sync_drawing_panel_context();
-        task = Task::batch([task, self.render_png_preview()]);
+        task = Task::batch([task, self.render_png_preview(), self.xtb_orbitals_sync()]);
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
