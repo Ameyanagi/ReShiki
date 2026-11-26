@@ -383,6 +383,33 @@ fn validate_geometry(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
     Ok(())
 }
 
+/// UFF has only octahedral (90°) angle types for the f block and a square
+/// planar one for xenon, so it builds CeF3 or GdCl3 with 90° angles, ThCl4
+/// square planar and XeF2 bent. Generation refuses those drawings, counting
+/// each atom's drawn bonds: f-block centres with three or four, and any
+/// bonded noble gas. Two- and six-coordinate f-block centres (uranyl, UF6,
+/// hexanitratocerate) come out right and are built.
+fn refuse_shapes_uff_gets_wrong(request: &Request) -> Result<()> {
+    let mut bonds = vec![0; request.atoms.len()];
+    for bond in &request.bonds {
+        bonds[bond.a] += 1;
+        bonds[bond.b] += 1;
+    }
+    for (atom, count) in request.atoms.iter().zip(bonds) {
+        let number = atom.atomic_number;
+        let f_block = matches!(number, 57..=71 | 89..=103) && matches!(count, 3 | 4);
+        let noble_gas = matches!(number, 2 | 10 | 18 | 36 | 54 | 86 | 118) && count > 0;
+        if f_block || noble_gas {
+            let symbol = cosmolkit_core::rdkit_element_symbol(number as u8).unwrap_or("?");
+            return Err(format!(
+                "ReShiki can't build a reliable 3D shape for this yet: UFF has no correct geometry for 3- and 4-coordinate lanthanides/actinides or noble-gas compounds such as XeF2 ({symbol} has {count} bond{})",
+                if count == 1 { "" } else { "s" }
+            ));
+        }
+    }
+    Ok(())
+}
+
 // UFF has no 1-3 repulsion, and some of its angle terms also have a minimum
 // at 0°: at an octahedral (sp3d2) centre, (1 - cos 4θ) / 16 has minima at 0°,
 // 90° and 180° with a barrier at 45°. Ligands that cross such a barrier slide
@@ -801,6 +828,9 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         )
     });
     let request = fallback.as_ref().unwrap_or(request);
+    if request.operation == Operation::Generate && request.field == ForceField::UFF {
+        refuse_shapes_uff_gets_wrong(request)?;
+    }
     let cage = Cage::from_molecule(&mol);
     validate_original_order(&mol, request.atoms.len())?;
     let parents = hydrogen_parents(&mol, request.atoms.len())?;

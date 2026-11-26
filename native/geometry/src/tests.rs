@@ -982,6 +982,14 @@ fn relaxed_hypervalent_main_group_and_extra_bond_orders_use_uff() {
             [0., -2., 0.],
         ],
     );
+    // UFF cannot be trusted to shape xenon compounds, so generation refuses
+    // them; evaluating a given geometry still types Xe.
+    assert!(
+        solve(&request)
+            .unwrap_err()
+            .contains("can't build a reliable 3D shape")
+    );
+    request.operation = Operation::Evaluate;
     let result = solve(&request).unwrap();
     assert!(result.hydrogen_parents.is_empty());
     assert!(
@@ -1156,5 +1164,51 @@ fn relaxed_implicit_hydrogens_respect_drawn_ionic_charge() {
         request.atoms[1].charge = charge;
         let result = solve(&request).unwrap();
         assert_eq!(result.hydrogen_parents, expected_parents);
+    }
+}
+
+#[test]
+fn generation_refuses_only_the_shapes_uff_gets_wrong() {
+    // Centre bonded to `count` ligands, drawn flat.
+    let star = |centre: u32, ligand: u32, count: usize, order: u32| {
+        let mut numbers = vec![centre];
+        numbers.extend(vec![ligand; count]);
+        let edges: Vec<_> = (1..=count).map(|i| (0, i, order)).collect();
+        let mut coordinates = vec![[0.; 3]];
+        coordinates.extend(planar_ring(count, 2.1));
+        relaxed_complex(&numbers, &edges, coordinates)
+    };
+    for (name, request) in [
+        ("CeF3", star(58, 9, 3, 1)),
+        ("GdCl3", star(64, 17, 3, 1)),
+        ("ThCl4", star(90, 17, 4, 1)),
+        ("UCl4", star(92, 17, 4, 1)),
+        ("XeF2", star(54, 9, 2, 1)),
+        ("XeO3", star(54, 8, 3, 2)),
+        ("KrF2", star(36, 9, 2, 1)),
+    ] {
+        let message = solve(&request).unwrap_err();
+        assert!(
+            message.starts_with("ReShiki can't build a reliable 3D shape for this yet"),
+            "{name}: {message}"
+        );
+        // MMFF falls back to UFF first, so the same rule answers it.
+        let mut mmff = request.clone();
+        mmff.field = ForceField::MMFF94s;
+        assert_eq!(solve(&mmff).unwrap_err(), message, "{name}");
+    }
+    assert!(
+        solve(&star(58, 9, 3, 1))
+            .unwrap_err()
+            .ends_with("(Ce has 3 bonds)")
+    );
+    let mut uranyl = star(92, 8, 2, 2);
+    uranyl.atoms[0].charge = 2;
+    for (name, request) in [
+        ("UF6", star(92, 9, 6, 1)),
+        ("uranyl", uranyl),
+        ("lone Xe", relaxed_complex(&[54], &[], vec![[0.; 3]])),
+    ] {
+        assert!(solve(&request).is_ok(), "{name}");
     }
 }
