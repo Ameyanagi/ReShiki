@@ -1706,14 +1706,12 @@ pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
         frame(doc, m)
             .is_some_and(|(lo, hi)| (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y))
     };
-    model_at(doc, p, 0.)
-        .or_else(|| {
-            doc.models
-                .iter()
-                .rev()
-                .filter(|m| m.display != Display::TwoD && !m.panels.is_empty())
-                .find(|m| panels(doc, m).iter().any(|(small, _)| inside(small)))
-        })
+    // Topmost first, each model with its panels, as they are painted.
+    doc.models
+        .iter()
+        .rev()
+        .filter(|m| m.display != Display::TwoD)
+        .find(|m| inside(m) || panels(doc, m).iter().any(|(small, _)| inside(small)))
         .map(|m| m.linked_ids(doc))
 }
 
