@@ -41,6 +41,7 @@ struct Batch {
     snapshot: String,
     next: usize,
     reused: usize,
+    inputs: Vec<Input>,
     active: Option<u64>,
     review: bool,
 }
@@ -51,6 +52,24 @@ struct Summary {
     task: CalcTask,
     snapshot: String,
     reused: usize,
+    inputs: Vec<Input>,
+}
+
+/// The exact stored calculation used for one term, retained across later
+/// calculations of the same species. Attachment IDs alone are not unique to
+/// results, and a frame can have several calculations with different values.
+struct Input {
+    attachment: u64,
+    result: Arc<CalcResult>,
+}
+
+impl Input {
+    fn from_view(view: &science::ResultView<'_>) -> Self {
+        Self {
+            attachment: view.stored.attachment,
+            result: Arc::clone(&view.stored.result),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -119,7 +138,20 @@ fn snapshot(doc: &Document, arrow: u64, species: &[Species]) -> Option<String> {
             ])
         })
         .collect();
-    Some(serde_json::json!([reaction.reactants, reaction.products, atoms?, bonds]).to_string())
+    let chemistry: Vec<_> = species
+        .iter()
+        .map(|species| science::baseline(doc, &species.atoms))
+        .collect();
+    Some(
+        serde_json::json!([
+            reaction.reactants,
+            reaction.products,
+            atoms?,
+            bonds,
+            chemistry
+        ])
+        .to_string(),
+    )
 }
 
 fn valid_species(doc: &Document, species: &[Species]) -> bool {
@@ -134,6 +166,76 @@ fn valid_species(doc: &Document, species: &[Species]) -> bool {
                         && molecule.iter().all(|id| s.atoms.contains(id))
                 })
         })
+}
+
+/// axtb's automatic rotational symmetry number for its detected point group.
+fn point_group_symmetry(group: &str) -> Option<u32> {
+    match group.to_ascii_lowercase().as_str() {
+        "c1" | "cs" | "ci" | "cinfv" | "kh" => Some(1),
+        "dinfh" => Some(2),
+        "t" | "td" | "th" => Some(12),
+        "o" | "oh" => Some(24),
+        "i" | "ih" => Some(60),
+        group => {
+            let (family, suffix) = group.split_at_checked(1)?;
+            let order: u32 = suffix
+                .trim_end_matches(|c: char| c.is_ascii_alphabetic())
+                .parse()
+                .ok()?;
+            match family {
+                "c" => Some(order),
+                "d" => order.checked_mul(2),
+                "s" => Some(order / 2),
+                _ => None,
+            }
+        }
+    }
+}
+
+/// Match both Calculate symmetry policies. For natural abundances the engine
+/// reports the point group it detected. Isotope-labelled jobs request a
+/// geometry-based override because the engine's detection ignores isotopes.
+fn matching_thermo(result: &CalcResult, frame: &Frame) -> bool {
+    let (Some(thermo), Some(vibrations)) = (&result.thermo, &result.vibrations) else {
+        return false;
+    };
+    let masses = &vibrations.masses_amu;
+    if masses.len() != frame.numbers.len()
+        || masses.iter().any(|mass| !mass.is_finite() || *mass <= 0.)
+        || !frame.masses_amu.is_empty() && *masses != frame.masses_amu
+    {
+        return false;
+    }
+    let symmetry = if let Some(expected_masses) = xtb::isotope_masses(frame) {
+        if masses != &expected_masses {
+            return false;
+        }
+        let labels: Vec<_> = frame
+            .numbers
+            .iter()
+            .enumerate()
+            .map(|(index, &number)| {
+                u32::from(number) * 1000
+                    + u32::from(frame.isotopes.get(index).copied().unwrap_or(0))
+            })
+            .collect();
+        Some(qcdata::vibrational::rotational_symmetry_number(
+            &labels,
+            &frame.positions_angstrom,
+            masses,
+        ))
+    } else if frame.masses_amu.is_empty() {
+        thermo.point_group.as_deref().and_then(point_group_symmetry)
+    } else {
+        None
+    };
+    (thermo.temperature_k - TEMPERATURE_K).abs() < 1e-6
+        && (thermo.pressure_pa - 101_325.).abs() < 1e-3
+        && (thermo.frequency_scale - 1.).abs() < 1e-12
+        && (thermo.rotor_cutoff_cm1 - 50.).abs() < 1e-12
+        && (thermo.imaginary_cutoff_cm1 - 20.).abs() < 1e-12
+        && symmetry == Some(thermo.symmetry_number)
+        && thermo.gibbs_correction_hartree.is_finite()
 }
 
 /// Keep the entire reaction on the same GFN2 gas-phase Hamiltonian, with
@@ -152,22 +254,14 @@ fn matching(result: &CalcResult, frame: &Frame, species: &Species, task: CalcTas
         && settings.accuracy.is_none()
         && settings.max_iterations.is_none()
         && settings.scf_retries.is_empty()
-        && settings.convergence.is_none_or(|convergence| {
-            convergence
-                == if task == CalcTask::OptFreq {
-                    qcdata::Convergence::Tight
-                } else {
-                    qcdata::Convergence::Normal
-                }
-        })
+        && settings.convergence
+            == Some(if task == CalcTask::OptFreq {
+                qcdata::Convergence::Tight
+            } else {
+                qcdata::Convergence::Normal
+            })
         && settings.fixed_atoms.is_empty();
-    let thermo_match = task != CalcTask::OptFreq
-        || result.vibrations.is_some()
-            && result.thermo.as_ref().is_some_and(|thermo| {
-                (thermo.temperature_k - TEMPERATURE_K).abs() < 1e-6
-                    && (thermo.pressure_pa - 101_325.).abs() < 1e-3
-                    && thermo.gibbs_correction_hartree.is_finite()
-            });
+    let thermo_match = task != CalcTask::OptFreq || matching_thermo(result, frame);
     optimized
         && settings_match
         && thermo_match
@@ -175,21 +269,33 @@ fn matching(result: &CalcResult, frame: &Frame, species: &Species, task: CalcTas
         && frame.multiplicity == species.multiplicity
 }
 
-fn reusable(doc: &Document, species: &Species, task: CalcTask) -> Option<Arc<CalcResult>> {
+fn eligible(view: &science::ResultView<'_>, species: &Species, task: CalcTask) -> bool {
+    view.freshness == Freshness::Current
+        && view.attachment.atoms.iter().flatten().count() == species.atoms.len()
+        && species
+            .atoms
+            .iter()
+            .all(|id| view.attachment.atoms.contains(&Some(*id)))
+        && matching(&view.stored.result, view.frame, species, task)
+}
+
+fn reusable(doc: &Document, species: &Species, task: CalcTask) -> Option<Input> {
     let &atom = species.atoms.first()?;
     science::results_for(doc, atom)
         .into_iter()
         .rev()
-        .find(|view| {
-            view.freshness == Freshness::Current
-                && view.attachment.atoms.iter().flatten().count() == species.atoms.len()
-                && species
-                    .atoms
-                    .iter()
-                    .all(|id| view.attachment.atoms.contains(&Some(*id)))
-                && matching(&view.stored.result, view.frame, species, task)
-        })
-        .map(|view| Arc::clone(&view.stored.result))
+        .find(|view| eligible(view, species, task))
+        .map(|view| Input::from_view(&view))
+}
+
+/// Called immediately after ordinary storage. Only that newly stored result
+/// can finish the active term, even if another eligible result exists.
+fn completed(doc: &Document, species: &Species, task: CalcTask) -> Option<Input> {
+    let index = doc.science.results.len().checked_sub(1)?;
+    science::results_for(doc, *species.atoms.first()?)
+        .into_iter()
+        .find(|view| view.index == index && eligible(view, species, task))
+        .map(|view| Input::from_view(&view))
 }
 
 fn totals<'a>(
@@ -212,12 +318,29 @@ fn totals<'a>(
     (energy.is_finite() && gibbs.is_none_or(f64::is_finite)).then_some(Totals { energy, gibbs })
 }
 
-fn current_totals(doc: &Document, species: &[Species], task: CalcTask) -> Option<Totals> {
-    let results: Option<Vec<_>> = species.iter().map(|s| reusable(doc, s, task)).collect();
+fn input_totals(
+    doc: &Document,
+    species: &[Species],
+    inputs: &[Input],
+    task: CalcTask,
+) -> Option<Totals> {
+    let science = &doc.science;
+    if inputs.len() != species.len()
+        || !inputs.iter().all(|input| {
+            science.results.iter().any(|stored| {
+                stored.attachment == input.attachment && Arc::ptr_eq(&stored.result, &input.result)
+            }) && science.frame(&input.result.frame).is_some()
+                && science
+                    .attachment(input.attachment)
+                    .is_some_and(|attachment| attachment.freshness(doc) == Freshness::Current)
+        })
+    {
+        return None;
+    }
     totals(
         species
             .iter()
-            .zip(results.as_ref()?.iter().map(Arc::as_ref)),
+            .zip(inputs.iter().map(|input| input.result.as_ref())),
         task,
     )
 }
@@ -306,6 +429,7 @@ impl App {
             snapshot,
             next: 0,
             reused: 0,
+            inputs: Vec::new(),
             active: None,
             review: false,
         });
@@ -321,13 +445,16 @@ impl App {
                 != Some(&batch.snapshot)
             {
                 self.status =
-                    "Reaction energy stopped: the reaction changed; review it again".into();
+                    "Reaction energy stopped: the reaction changed; review its species again"
+                        .into();
                 self.tab.xtb.energy_state.stopped = Some((batch.arrow, self.status.clone()));
                 self.error = false;
                 return Task::none();
             }
             let Some(species) = batch.species.get(batch.next).cloned() else {
-                let Some(totals) = current_totals(&self.tab.doc, &batch.species, batch.task) else {
+                let Some(totals) =
+                    input_totals(&self.tab.doc, &batch.species, &batch.inputs, batch.task)
+                else {
                     self.status =
                         "Reaction energy stopped: a species result is no longer current".into();
                     self.tab.xtb.energy_state.stopped = Some((batch.arrow, self.status.clone()));
@@ -347,10 +474,12 @@ impl App {
                     task: batch.task,
                     snapshot: batch.snapshot,
                     reused: batch.reused,
+                    inputs: batch.inputs,
                 });
                 return Task::none();
             };
-            if reusable(&self.tab.doc, &species, batch.task).is_some() {
+            if let Some(input) = reusable(&self.tab.doc, &species, batch.task) {
+                batch.inputs.push(input);
                 batch.next += 1;
                 batch.reused += 1;
                 self.tab.xtb.energy_state.batch = Some(batch);
@@ -400,7 +529,7 @@ impl App {
             return Task::none();
         };
         if snapshot(&self.tab.doc, batch.arrow, &batch.species).as_ref() != Some(&batch.snapshot) {
-            let reason = "Reaction energy stopped: the reaction changed; review it again";
+            let reason = "Reaction energy stopped: the reaction changed; review its species again";
             self.tab.xtb.energy_state.stop(reason);
             self.status = reason.into();
             self.error = false;
@@ -411,18 +540,22 @@ impl App {
             self.status = format!("Reaction energy paused · {}", self.status);
             return Task::none();
         }
-        let stored = matches!(self.tab.xtb.outcome, Some(Outcome::Done { .. }))
-            && batch
-                .species
-                .get(batch.next)
-                .is_some_and(|species| reusable(&self.tab.doc, species, batch.task).is_some());
-        if !stored {
+        let input = matches!(self.tab.xtb.outcome, Some(Outcome::Done { .. }))
+            .then(|| {
+                batch
+                    .species
+                    .get(batch.next)
+                    .and_then(|species| completed(&self.tab.doc, species, batch.task))
+            })
+            .flatten();
+        let Some(input) = input else {
             let reason = "Reaction energy stopped: the species optimization did not converge";
             self.tab.xtb.energy_state.stop(reason);
             self.status = reason.into();
             self.error = false;
             return Task::none();
-        }
+        };
+        batch.inputs.push(input);
         batch.next += 1;
         batch.active = None;
         batch.review = false;
@@ -458,7 +591,14 @@ impl App {
                 let current = snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
                     == Some(&summary.snapshot);
                 if let Some(totals) = current
-                    .then(|| current_totals(&self.tab.doc, &summary.species, summary.task))
+                    .then(|| {
+                        input_totals(
+                            &self.tab.doc,
+                            &summary.species,
+                            &summary.inputs,
+                            summary.task,
+                        )
+                    })
                     .flatten()
                 {
                     body = body.push(line(totals.line(), Tone::Good));
@@ -474,7 +614,7 @@ impl App {
                     }
                 } else {
                     body = body.push(line(
-                        "The reaction changed; calculate again for current energies.",
+                        "The reaction or a species result changed; calculate again for current energies.",
                         Tone::Warning,
                     ));
                 }

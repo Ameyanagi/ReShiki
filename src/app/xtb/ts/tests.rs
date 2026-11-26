@@ -219,6 +219,16 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     assert_eq!(reopened.xtb_step(), Some(1));
     assert!(reopened.xtb_step_preview().is_none());
     send(&mut reopened, XtbAction::Ts(Action::Rerun));
+    assert!(
+        reopened.ts_review_open(),
+        "reruns always require a fresh review"
+    );
+    assert!(!reopened.xtb_running());
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::ReviewSheet(review::Action::Accept)),
+    );
+    assert!(!reopened.ts_review_open());
     assert_eq!(
         reopened
             .tab
@@ -233,6 +243,102 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
             .images,
         20
     );
+}
+
+#[test]
+fn every_rerun_requires_review_even_after_an_earlier_review_was_accepted() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let report = example_report(run.launch.as_ref().unwrap());
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+
+    for _ in 0..2 {
+        send(&mut app, XtbAction::Ts(Action::Rerun));
+        assert!(app.ts_review_open());
+        assert!(!app.xtb_running());
+        send(
+            &mut app,
+            XtbAction::Ts(Action::ReviewSheet(review::Action::Accept)),
+        );
+        assert!(!app.ts_review_open());
+        let request = &app
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .unwrap()
+            .ts
+            .as_ref()
+            .unwrap()
+            .request;
+        assert_eq!(request.arrow, arrow);
+        assert_eq!(request.images, 20);
+        send(&mut app, XtbAction::Cancel);
+    }
+}
+
+#[test]
+fn reopened_rerun_reviews_the_current_endpoint_charge_before_starting() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let report = example_report(run.launch.as_ref().unwrap());
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    let file = app.tab.doc.file_json().unwrap();
+    let mut reopened = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    send(&mut reopened, XtbAction::Palette(palette::Action::Show));
+    assert_eq!(reopened.xtb_shown().unwrap().frame.charge, 0);
+
+    let before = reopened.tab.doc.clone();
+    let product = reopened.tab.doc.reactions[0].products[0]
+        .atoms
+        .iter()
+        .copied()
+        .find(|&id| reopened.tab.doc.atom(id).unwrap().element == "O")
+        .unwrap();
+    let atom = reopened.tab.doc.atom_mut(product).unwrap();
+    atom.charge = 2;
+    atom.no_implicit = true;
+    reopened.changed(before);
+    assert!(ts_plan::plan_for_review(&reopened.tab.doc, arrow).is_ok());
+    assert!(ts_plan::plan(&reopened.tab.doc, arrow).is_err());
+    assert!(!reopened.xtb_shown().unwrap().stale);
+
+    send(&mut reopened, XtbAction::Ts(Action::Rerun));
+    assert!(reopened.ts_review_open());
+    assert!(!reopened.xtb_running());
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::ReviewSheet(review::Action::Accept)),
+    );
+    assert!(
+        reopened.ts_review_open(),
+        "the charge imbalance blocks Accept"
+    );
+    assert!(!reopened.xtb_running());
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::ReviewSheet(review::Action::Charge(0, "2".into()))),
+    );
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::ReviewSheet(review::Action::Accept)),
+    );
+    assert!(!reopened.ts_review_open());
+    let run = reopened.tab.xtb.run.as_ref().unwrap();
+    assert_eq!(run.config.charge, 2, "use the newly reviewed state");
+    let request = &run.ts.as_ref().unwrap().request;
+    assert_eq!(request.arrow, arrow);
+    assert_eq!(request.images, 20);
 }
 
 #[test]
@@ -364,6 +470,121 @@ fn saved_ts_without_modes_uses_the_vibrations_recompute_at_its_saved_input_geome
     assert!(reopened.tab.xtb.vibrations.playing);
     assert!(reopened.tab.xtb.vibrations.recomputing(&result));
     assert_eq!(reopened.tab.doc, before);
+
+    let saddle = reopened
+        .xtb_shown()
+        .unwrap()
+        .frame
+        .positions_angstrom
+        .clone();
+    let mut report = super::super::tests::optfreq(&saddle, &saddle);
+    report.computed.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-387.];
+    report.computed.normal_modes = vec![0.; saddle.len() * 3];
+    report.computed.normal_modes[0] = 1.;
+    let epoch = reopened.tab.file_epoch;
+    // The first request above was canceled by leaving Vibrations. Animate
+    // scheduled the second request, whose completion supplies these modes.
+    send(
+        &mut reopened,
+        XtbAction::Vibrations(super::super::vibrations::Action::Recomputed(
+            epoch,
+            2,
+            Ok(Arc::new(report)),
+        )),
+    );
+    assert!(!reopened.tab.xtb.vibrations.recomputing(&result));
+    assert!(reopened.xtb_modes(&result).is_some());
+    assert!(reopened.xtb_vibration_preview().is_some());
+    let equilibrium = saddle
+        .iter()
+        .map(|p| p.map(|x| x as f32))
+        .collect::<Vec<_>>();
+    assert_eq!(model(reopened.display_document()), equilibrium);
+    for _ in 0..2 {
+        send(
+            &mut reopened,
+            XtbAction::Vibrations(super::super::vibrations::Action::Tick),
+        );
+    }
+    assert_ne!(model(reopened.display_document()), equilibrium);
+    assert_eq!(
+        reopened.tab.doc, before,
+        "recomputed animation keeps the drawing"
+    );
+}
+
+#[test]
+fn reopened_ts_animate_does_not_guess_between_arrows_sharing_the_starting_molecule() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let report = example_report(run.launch.as_ref().unwrap());
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+
+    let other = app.tab.doc.next_id();
+    let mut other_arrow = app.tab.doc.arrows[0].clone();
+    other_arrow.id = other;
+    app.tab.doc.arrows.push(other_arrow);
+    let mut reaction = app.tab.doc.reactions[0].clone();
+    reaction.arrow = other;
+    app.tab.doc.reactions.push(reaction);
+    app.tab.doc.validate().unwrap();
+    let file = app.tab.doc.file_json().unwrap();
+    let shown = app.xtb_shown().unwrap();
+    assert_eq!(matching_plans(&app.tab.doc, shown.atoms).count(), 2);
+    assert!(unique_matching_plan(&app.tab.doc, shown.atoms).is_none());
+
+    // The in-memory session still knows which arrow owns its result.
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Animate)));
+    assert_eq!(app.tab.xtb.palette.view, results::View::Vibrations);
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(results::View::Path)),
+    );
+    app.tab.xtb.palette.open = false;
+    app.tab.selected = vec![other];
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Animate)));
+    assert!(!app.tab.xtb.palette.open);
+    assert_eq!(app.tab.xtb.palette.view, results::View::Path);
+
+    let mut reopened = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    send(&mut reopened, XtbAction::Palette(palette::Action::Show));
+    assert!(reopened.xtb_shown().unwrap().ts.is_none());
+    for candidate in [arrow, other] {
+        reopened.tab.selected = vec![candidate];
+        assert!(reopened.xtb_ts_card(candidate).is_none());
+        reopened.tab.xtb.palette.open = false;
+        send(
+            &mut reopened,
+            XtbAction::Ts(Action::Card(card::Action::Animate)),
+        );
+        assert!(!reopened.tab.xtb.palette.open);
+        assert_eq!(reopened.tab.xtb.palette.view, results::View::Path);
+    }
+
+    let before = reopened.tab.doc.clone();
+    reopened
+        .tab
+        .doc
+        .reactions
+        .retain(|reaction| reaction.arrow != other);
+    reopened.tab.doc.arrows.retain(|arrow| arrow.id != other);
+    reopened.changed(before);
+    reopened.tab.selected = vec![arrow];
+    assert!(reopened.xtb_ts_card(arrow).is_some());
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::Card(card::Action::Animate)),
+    );
+    assert!(
+        reopened.tab.xtb.palette.open,
+        "one matching arrow can show Animate"
+    );
+    assert_eq!(reopened.tab.xtb.palette.view, results::View::Vibrations);
 }
 
 #[test]

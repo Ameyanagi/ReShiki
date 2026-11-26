@@ -323,7 +323,7 @@ pub fn includes_text(doc: &Document, id: u64) -> bool {
 
 /// What holds a molecule together: bonds of nonzero order and the targets of
 /// attachment points.
-fn links(doc: &Document) -> impl Iterator<Item = (u64, u64)> + '_ {
+pub(crate) fn links(doc: &Document) -> impl Iterator<Item = (u64, u64)> + '_ {
     doc.bonds
         .iter()
         .filter(|b| b.order != 0)

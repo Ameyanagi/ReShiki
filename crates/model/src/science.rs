@@ -598,7 +598,7 @@ pub fn prune(doc: &mut Document) {
 /// The chemistry digest 3D models use, plus each linked atom's singlet
 /// choice, which sets the spin a calculation describes, and its enhanced
 /// stereo group, which the digest leaves out.
-fn baseline(doc: &Document, ids: &[u64]) -> String {
+pub fn baseline(doc: &Document, ids: &[u64]) -> String {
     let mut text = crate::models3d::fingerprint(doc, ids);
     text.push('/');
     let mut groups = String::new();

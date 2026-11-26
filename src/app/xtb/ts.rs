@@ -261,6 +261,14 @@ pub(super) fn matching_plans<'a>(
         })
 }
 
+/// The saved starting molecule identifies an arrow only when one current
+/// reaction could own its result. A reopened file has no originating session.
+pub(super) fn unique_matching_plan(doc: &Document, atoms: &[Option<u64>]) -> Option<(u64, TsPlan)> {
+    let mut candidates = matching_plans(doc, atoms);
+    let candidate = candidates.next()?;
+    candidates.next().is_none().then_some(candidate)
+}
+
 /// Copy a path image's coordinates into the canvas preview. The model keeps
 /// its existing bond topology, including the original parents of added H.
 pub(super) fn preview_image(
@@ -335,38 +343,30 @@ impl App {
         Some(ts_plan::plan(&self.tab.doc, arrow).ok()?.start_atoms)
     }
 
-    fn xtb_ts_rerun_plan(&self, shown: &super::palette::Shown<'_>) -> Option<(u64, TsPlan)> {
+    fn xtb_ts_rerun_arrow(&self, shown: &super::palette::Shown<'_>) -> Option<u64> {
         if shown.stale || !is_ts(&shown.stored.result) {
             return None;
         }
         if let Some(session) = shown.ts {
-            return Some((session.arrow, session.plan.clone()));
+            return Some(session.arrow);
         }
         // The file links the result to the starting molecule. Only infer an
         // arrow after reopening when that molecule identifies a single plan.
-        let mut candidates = matching_plans(&self.tab.doc, shown.atoms);
-        let candidate = candidates.next()?;
-        candidates.next().is_none().then_some(candidate)
+        unique_matching_plan(&self.tab.doc, shown.atoms).map(|(arrow, _)| arrow)
     }
 
     fn xtb_ts_can_rerun(&self, shown: &super::palette::Shown<'_>) -> bool {
-        super::available() && !self.xtb_running() && self.xtb_ts_rerun_plan(shown).is_some()
+        super::available() && !self.xtb_running() && self.xtb_ts_rerun_arrow(shown).is_some()
     }
 
     fn xtb_ts_rerun(&mut self) -> Task<Message> {
         let Some(shown) = self.xtb_shown() else {
             return Task::none();
         };
-        let Some((arrow, plan)) = self.xtb_ts_rerun_plan(&shown) else {
+        let Some(arrow) = self.xtb_ts_rerun_arrow(&shown) else {
             return Task::none();
         };
-        self.xtb_ts_begin(
-            arrow,
-            plan,
-            20,
-            shown.frame.charge,
-            shown.frame.multiplicity.saturating_sub(1),
-        )
+        self.xtb_review_rerun(arrow)
     }
 
     fn xtb_ts_begin(

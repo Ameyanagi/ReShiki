@@ -500,12 +500,10 @@ impl App {
         };
         let header = match self.selected_arrows().next().filter(|_| roles) {
             Some(arrow) => {
-                let mut cards = column![
-                    header,
-                    self.xtb_ts_card(arrow.id),
-                    self.xtb_reaction_energy_card(arrow.id)
-                ]
-                .spacing(8);
+                let mut cards = column![header]
+                    .extend(self.xtb_ts_card(arrow.id))
+                    .push(self.xtb_reaction_energy_card(arrow.id))
+                    .spacing(8);
                 if let Some(ignored) = self.xtb_scheme_ignored(arrow.id) {
                     cards = cards.push(ignored);
                 }
