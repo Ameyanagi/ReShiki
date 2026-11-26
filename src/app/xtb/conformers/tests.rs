@@ -4,7 +4,8 @@ use reshiki::qcdata::{
     Frame, Provenance, Settings as QcSettings, Source, Status, Task, Trajectory, XtbSettings,
 };
 
-const A: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];
+// The lowest conformer differs from the water model the search started from.
+const A: [[f64; 3]; 3] = [[0., 0., 0.], [0.95, 0., 0.], [-0.24, 0.92, 0.]];
 const B: [[f64; 3]; 3] = [[0., 0., 0.], [0.97, 0., 0.], [-0.30, 0.90, 0.]];
 const C: [[f64; 3]; 3] = [[0., 0., 0.], [0.95, 0.1, 0.], [-0.20, 0.95, 0.1]];
 
@@ -841,8 +842,10 @@ mod app {
     fn found(stopped: bool) -> Event {
         let mut computed = run::example_computed(-5.070176, 14.01);
         computed.gradient = Some(vec![[0.; 3]; 3]);
-        Event::Done(Ok(Arc::new(Found {
+        Event::Done(Ok(Box::new(Found {
             engine: run::example_engine(),
+            minimizer: crate::app::xtb::conformers::Minimizer::Mmff94s,
+            optimizers: vec![reshiki_optimize::Method::Internal],
             best: Arc::new(Report {
                 engine: run::example_engine(),
                 computed,
@@ -850,6 +853,7 @@ mod app {
                 converged: true,
                 positions: A.to_vec(),
                 steps: 4,
+                optimizers: vec![reshiki_optimize::Method::Internal],
                 energies: vec![-5.06, -5.070176],
                 path: vec![],
                 evaluations: vec![],
@@ -874,11 +878,44 @@ mod app {
                 reranked: if stopped { 3 } else { 20 },
                 kept: 3,
             },
-            minimizer: super::Minimizer::Mmff94s,
             stopped,
             notes: vec![],
             seconds: 12.5,
         })))
+    }
+
+    impl App {
+        pub(in crate::app) fn xtb_searched_water() -> (Self, u64) {
+            let (mut app, oxygen) = water(CalcTask::Conformers);
+            search(&mut app, found(false));
+            (app, oxygen)
+        }
+    }
+
+    #[test]
+    fn searches_save_the_effective_minimizer_and_optimizer_algorithms() {
+        let (mut app, _) = water(CalcTask::Conformers);
+        let Event::Done(Ok(mut found)) = found(false) else {
+            unreachable!()
+        };
+        found.minimizer = crate::app::xtb::conformers::Minimizer::Uff;
+        found.optimizers = vec![
+            reshiki_optimize::Method::Internal,
+            reshiki_optimize::Method::AncRfo,
+            reshiki_optimize::Method::Lbfgs,
+        ];
+        search(&mut app, Event::Done(Ok(found)));
+        let result = &app.tab.doc.science.results[0].result;
+        assert_eq!(
+            result.provenance.method.as_deref(),
+            Some(
+                "UFF ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer TRIC, ANC, L-BFGS"
+            )
+        );
+        assert_eq!(
+            crate::app::xtb::conformers::start_field(result),
+            Some("UFF")
+        );
     }
 
     #[test]
@@ -920,7 +957,7 @@ mod app {
         ));
         assert_eq!(
             stored.result.provenance.method.as_deref(),
-            Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank")
+            Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer TRIC")
         );
         // The lowest conformer is applied to the 3D model as one Undo step.
         assert_eq!(model(&app.tab.doc), f32s(&A));
@@ -1059,7 +1096,7 @@ mod app {
         let Event::Done(Ok(mut found)) = found(false) else {
             unreachable!()
         };
-        let found_mut = Arc::make_mut(&mut found);
+        let found_mut = &mut *found;
         found_mut.ranked.resize(40, ranked(C, -5.065176, 1, 0.5));
         found_mut.search.kept = found_mut.ranked.len();
         search(&mut app, Event::Done(Ok(found)));
@@ -1092,6 +1129,7 @@ mod app {
 
         let (mut app, oxygen) = water(CalcTask::Conformers);
         search(&mut app, found(false));
+        app.xtb_show_result(&app.tab.doc.science.results[0].result.clone());
         app.tab.untitled_name = Some("Unsaved drawing".into());
         let prepare = |app: &App, format| {
             app.xtb_prepare_conformer_export(&app.xtb_shown().unwrap(), format)
@@ -1132,7 +1170,8 @@ mod app {
             )
             .unwrap();
         }
-        app.tab.selected = vec![outside];
+        // Another molecule's caption never names this result's export.
+        app.tab.selected = vec![];
         let sdf = prepare(&app, Format::Sdf);
         assert_eq!(sdf.name, "Water-sample-1-conformers.sdf");
         assert!(sdf.bytes.starts_with(b"Water / sample: 1? conformer 1\n"));
@@ -1172,7 +1211,7 @@ mod app {
         let Event::Done(Ok(mut found)) = found(false) else {
             unreachable!()
         };
-        let result = Arc::make_mut(&mut found);
+        let result = &mut *found;
         result
             .ranked
             .extend((3..9).map(|index| ranked(C, -5.065176 + f64::from(index) * 0.0001, 1, 0.5)));

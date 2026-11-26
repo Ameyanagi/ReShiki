@@ -113,6 +113,358 @@ fn info(gap: f64) -> RunInfo {
     }
 }
 
+fn with_frequencies(mut result: CalcResult) -> CalcResult {
+    result.vibrations = Some(qcdata::Vibrations {
+        frequencies_cm1: vec![1590.13, 3468.58, 3480.11],
+        ir_intensities_km_mol: vec![],
+        modes: vec![],
+        reduced_masses_amu: vec![],
+        masses_amu: vec![],
+    });
+    result.thermo = Some(qcdata::Thermo {
+        temperature_k: 298.15,
+        pressure_pa: 101325.,
+        zero_point_energy_hartree: 0.019453,
+        enthalpy_correction_hartree: 0.023230,
+        entropy_hartree_per_k: 0.00007198,
+        gibbs_correction_hartree: 0.001769,
+        heat_capacity_hartree_per_k: None,
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: 20.,
+        symmetry_number: 2,
+        point_group: None,
+    });
+    result
+}
+
+#[test]
+fn the_headline_names_the_outcome_medium_and_electronic_state() {
+    let mut result = optimized(false);
+    let mut output = frame(&END);
+    assert_eq!(
+        headline(&result, &output),
+        "Converged in 2 steps · GFN2-xTB · in water (ALPB) · neutral singlet"
+    );
+    result.trajectory.as_mut().unwrap().energies_hartree.pop();
+    assert!(headline(&result, &output).starts_with("Converged in 1 step ·"));
+    result.status = Status::NotConverged {
+        reason: "step limit".into(),
+    };
+    assert!(headline(&result, &output).starts_with("Not converged after 1 step ·"));
+    result.status = Status::Converged;
+    result = with_frequencies(result);
+    assert!(headline(&result, &output).starts_with("Converged in 1 step + frequencies ·"));
+    result.task = Task::Hessian;
+    assert!(headline(&result, &output).starts_with("Frequencies ·"));
+    result.task = Task::Conformers;
+    assert!(headline(&result, &output).starts_with("2 conformers kept ·"));
+    result.task = Task::Energy;
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.solvent = None;
+    for (charge, multiplicity, state) in [
+        (1, 2, "cation doublet"),
+        (-1, 3, "anion triplet"),
+        (2, 4, "dication quartet"),
+        (-2, 5, "dianion quintet"),
+        (3, 6, "charge +3 multiplicity 6"),
+        (-3, 1, "charge −3 singlet"),
+    ] {
+        output.charge = charge;
+        output.multiplicity = multiplicity;
+        assert_eq!(
+            headline(&result, &output),
+            format!("Single-point energy · GFN2-xTB · gas phase · {state}")
+        );
+    }
+}
+
+#[test]
+fn imported_optimizations_without_step_energies_omit_the_step_count() {
+    let mut result = optimized(true);
+    let output = frame(&END);
+    result.settings = Settings::Imported { keywords: vec![] };
+    result.trajectory.as_mut().unwrap().energies_hartree.clear();
+    assert!(headline(&result, &output).starts_with("Converged ·"));
+    result.trajectory = None;
+    assert!(headline(&result, &output).starts_with("Converged ·"));
+
+    result.status = Status::NotConverged {
+        reason: "step limit".into(),
+    };
+    assert!(headline(&result, &output).starts_with("Optimization ·"));
+}
+
+#[test]
+fn methods_text_describes_a_gas_phase_optimization() {
+    let mut result = optimized(false);
+    result.provenance.method = Some("GFN2-xTB · optimizer TRIC".into());
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.solvent = None;
+    settings.convergence = Some(Convergence::Normal);
+    assert_eq!(
+        methods_text(&result, &frame(&END)),
+        concat!(
+            "Geometries were optimized with GFN2-xTB [Bannwarth2019GFN2] as implemented in ",
+            "ReShiki [ReShiki] (axtb 0.2.0 [Axtb]) in the gas phase to the normal convergence criteria using the TRIC optimizer ",
+            "[Wang2016TRIC; Baker1996DLC; Lindh1995Hessian; Banerjee1985PRFO] with 1 atom held fixed.",
+        )
+    );
+}
+
+#[test]
+fn methods_text_credits_the_recorded_axtb_version_and_counts_held_atoms() {
+    let mut result = optimized(false);
+    result.provenance.program_version = Some("0.1.3".into());
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.fixed_atoms = vec![0, 2];
+    let text = methods_text(&result, &frame(&END));
+    assert!(
+        text.contains("ReShiki [ReShiki] (axtb 0.1.3 [Axtb])"),
+        "{text}"
+    );
+    assert!(text.ends_with(" with 2 atoms held fixed."), "{text}");
+}
+
+#[test]
+fn methods_text_describes_solvation_and_frequencies() {
+    let mut result = with_frequencies(optimized(false));
+    let text = methods_text(&result, &frame(&END));
+    assert!(
+        text.contains("in water using ALPB [Ehlert2021ALPB] to the tight convergence criteria")
+    );
+    assert!(text.contains("Harmonic frequencies and quasi-RRHO thermochemistry at 298.15 K [Grimme2012QRRHO; FernandezRamos2007Symmetry]"));
+    result.task = Task::Hessian;
+    result.thermo.as_mut().unwrap().temperature_k = 310.;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.starts_with("Harmonic frequencies and quasi-RRHO thermochemistry at 310.00 K"));
+    assert!(text.contains("were calculated with GFN2-xTB"));
+    assert!(!text.contains("Wang2016TRIC"));
+}
+
+#[test]
+fn methods_text_describes_gxtb_conventions_and_electronic_temperature() {
+    let mut result = optimized(false);
+    result.task = Task::Energy;
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.method = qcdata::XtbMethod::GXtb;
+    settings.conventions = XtbConventions::Xtb68;
+    settings.electronic_temperature_k = Some(550.);
+    settings.solvent = None;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.starts_with("Energies were computed with g-xTB [Froitzheim2025gxTB]"));
+    assert!(text.ends_with("using xtb 6.8 compatible conventions [Bannwarth2021Xtb], at an electronic temperature of 550 K."));
+}
+
+#[test]
+fn methods_text_cites_embedding_minimization_and_clustering_for_conformers() {
+    let mut result = optimized(false);
+    result.task = Task::Conformers;
+    result.provenance.method =
+        Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer TRIC".into());
+    let text = methods_text(&result, &frame(&END));
+    for phrase in [
+        "Conformers were generated with ETKDG [Riniker2015ETKDG; Wang2020ETKDGv3]",
+        "MMFF94s [Halgren1999MMFF94s]",
+        "clustered by heavy-atom RMSD [Butina1999Clustering]",
+        "Cluster representatives were re-optimized with GFN2-xTB [Bannwarth2019GFN2]",
+        "to the tight convergence criteria using the TRIC optimizer",
+        "Wang2016TRIC; Baker1996DLC; Lindh1995Hessian; Banerjee1985PRFO",
+    ] {
+        assert!(text.contains(phrase), "{text}");
+    }
+}
+
+#[test]
+fn methods_text_uses_the_effective_uff_minimizer_and_xtb_optimization_stage() {
+    let mut result = optimized(false);
+    result.task = Task::Conformers;
+    result.provenance.method =
+        Some("UFF ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer ANC".into());
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.contains("UFF [Rappe1992UFF]"), "{text}");
+    assert!(!text.contains("Halgren"), "{text}");
+    assert!(text.contains("Cluster representatives were re-optimized with GFN2-xTB"));
+    assert!(text.contains("Grimme2017ANCopt"));
+    assert!(!text.contains("Wang2016TRIC"));
+
+    result.provenance.method =
+        Some("GFN-FF ETKDG 100 starts · Butina 0.75 Å · optimizer TRIC".into());
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.method = qcdata::XtbMethod::GfnFf;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.contains("Conformer starts were optimized with GFN-FF [Spicher2020GFNFF]"));
+    assert!(!text.contains("re-optimized"));
+}
+
+#[test]
+fn methods_text_distinguishes_unreached_criteria_and_cites_optimizer_fallbacks() {
+    for (convergence, label) in [
+        (Convergence::Normal, "normal"),
+        (Convergence::Tight, "tight"),
+    ] {
+        let mut result = optimized(false);
+        result.status = Status::NotConverged {
+            reason: "Stopped after 2 steps".into(),
+        };
+        result.provenance.method = Some("GFN2-xTB · optimizer TRIC, ANC, L-BFGS".into());
+        let Settings::Xtb(settings) = &mut result.settings else {
+            unreachable!()
+        };
+        settings.convergence = Some(convergence);
+        let text = methods_text(&result, &frame(&END));
+        assert!(
+            text.contains(&format!(
+                "for 2 steps without reaching the {label} convergence criteria"
+            )),
+            "{text}"
+        );
+        for citation in [
+            "Wang2016TRIC",
+            "Grimme2017ANCopt",
+            "Liu1989LBFGS",
+            "Armijo1966LineSearch",
+        ] {
+            assert!(text.contains(citation), "{text}");
+        }
+        assert_eq!(text.matches("Lindh1995Hessian").count(), 1);
+        assert!(!text.contains("with tight convergence"));
+    }
+}
+
+#[test]
+fn methods_text_describes_zero_step_input_convergence_without_an_optimizer() {
+    for (convergence, label, method) in [
+        (Convergence::Normal, "normal", "GFN2-xTB"),
+        (Convergence::Tight, "tight", "GFN2-xTB · optimizer TRIC"),
+    ] {
+        let mut result = optimized(false);
+        result.frame = frame(&START).hash();
+        result
+            .trajectory
+            .as_mut()
+            .unwrap()
+            .energies_hartree
+            .truncate(1);
+        result.provenance.method = Some(method.into());
+        let Settings::Xtb(settings) = &mut result.settings else {
+            unreachable!()
+        };
+        settings.convergence = Some(convergence);
+        let text = methods_text(&result, &frame(&START));
+        assert!(
+            text.contains(&format!(
+                "the start geometry already met the {label} convergence criteria"
+            )),
+            "{text}"
+        );
+        for phrase in [
+            "were optimized",
+            "optimizer",
+            "Wang2016TRIC",
+            "Lindh1995Hessian",
+        ] {
+            assert!(!text.contains(phrase), "{text}");
+        }
+    }
+}
+
+#[test]
+fn methods_text_qualifies_missing_legacy_optimizer_and_convergence_provenance() {
+    let mut result = optimized(false);
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.convergence = None;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.contains("convergence criteria were not recorded"));
+    assert!(text.contains("optimizer algorithms were not recorded"));
+    assert!(text.contains("ReShiki’s default optimizer uses TRIC [Wang2016TRIC]"));
+}
+
+#[test]
+fn imported_methods_keep_the_orca6_method_basis_and_program_reference() {
+    let file = reshiki_io::qcread::read(
+        "water.out",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/qc/cclib/orca60_water_mp2.out"
+        )),
+    )
+    .unwrap();
+    let job = &file.jobs[0];
+    let text = methods_text(job.result.as_ref().unwrap(), &job.steps[0].frame);
+    assert!(text.contains("ORCA 6.0.1 [Neese2025ORCA6]"), "{text}");
+    assert!(
+        text.to_ascii_lowercase().contains("using mp2/sto-3g"),
+        "{text}"
+    );
+}
+
+#[test]
+fn imported_methods_describe_an_unknown_molden_writer_as_a_file_source() {
+    let file = reshiki_io::qcread::read(
+        "water.molden",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/qc/cclib/molden5.7_water_mp2.molden"
+        )),
+    )
+    .unwrap();
+    let job = &file.jobs[0];
+    let text = methods_text(job.result.as_ref().unwrap(), &job.steps[0].frame);
+    assert!(
+        text.contains("were read from water.molden (Molden format)"),
+        "{text}"
+    );
+    assert!(text.contains("MoldenFormat; Schaftenaar2000Molden"));
+    assert!(!text.contains("computed with Molden"));
+    let mut result = job.result.as_ref().unwrap().clone();
+    result.energy_hartree = Some(-75.);
+    assert!(
+        methods_text(&result, &job.steps[0].frame)
+            .starts_with("Geometries and energies were read from water.molden")
+    );
+    result.energy_hartree = None;
+    result.trajectory = None;
+    assert!(
+        methods_text(&result, &job.steps[0].frame)
+            .starts_with("Geometries were read from water.molden")
+    );
+}
+
+#[test]
+fn imported_methods_credit_a_named_molden_writer_as_the_exporter() {
+    let input = concat!(
+        "# Generated by Multiwfn\n",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/qc/cclib/molden5.7_water_mp2.molden"
+        ))
+    );
+    let file = reshiki_io::qcread::read("water.molden", input.as_bytes()).unwrap();
+    let job = &file.jobs[0];
+    let result = job.result.as_ref().unwrap();
+    assert_eq!(result.provenance.program, "Multiwfn");
+    let text = methods_text(result, &job.steps[0].frame);
+    assert!(
+        text.contains("read from water.molden (Molden format, written by Multiwfn)"),
+        "{text}"
+    );
+    assert!(text.contains("imported into ReShiki [ReShiki; MoldenFormat; Schaftenaar2000Molden]"));
+    assert!(!text.contains("computed with"));
+}
+
 #[test]
 fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
     let result = optimized(true);
@@ -240,6 +592,24 @@ fn stored_properties_show_without_run_information() {
     let result = with_properties(optimized(false));
     let (input, output) = (frame(&START), frame(&END));
     let rows = summary_rows(&result, &input, &output, None);
+    assert_eq!(
+        key_numbers(&result, None),
+        [
+            ("Energy", "−5.070176 Eh".into()),
+            ("Gap", "14.01 eV".into()),
+            ("Dipole", "2.16 D".into()),
+        ]
+    );
+    assert!(
+        summary_grid_rows(&result, &input, &output)
+            .iter()
+            .all(|(label, _)| {
+                !matches!(
+                    label.as_str(),
+                    "Total energy" | "HOMO–LUMO gap" | "Dipole" | "Run time"
+                )
+            })
+    );
     let row = |name: &str| {
         rows.iter()
             .find(|(label, _)| *label == name)

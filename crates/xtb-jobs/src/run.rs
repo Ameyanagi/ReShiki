@@ -3,7 +3,8 @@
 use crate::Evaluation;
 pub use crate::Failure;
 use reshiki_optimize::{
-    ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
+    ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Method as Optimizer, Options, Potential, Status,
+    optimize,
 };
 use reshiki_qcdata::{XtbMethod, vibrational::rotational_symmetry_number};
 use reshiki_xtb_worker::{
@@ -93,6 +94,8 @@ pub struct Report {
     pub positions: Vec<[f64; 3]>,
     /// Accepted optimizer steps (0 for an energy job).
     pub steps: usize,
+    /// Algorithms selected during optimization, including fallback attempts.
+    pub optimizers: Vec<Optimizer>,
     /// One energy per accepted geometry, including the input.
     pub energies: Vec<f64>,
     /// Step-major Å coordinates, one block per energy. Empty for an energy job.
@@ -235,7 +238,9 @@ pub fn run(
         .as_ref()
         .is_none_or(|out| out.status == Status::Converged);
     let steps = outcome.as_ref().map_or(0, |outcome| outcome.steps);
-    let mut energies = outcome.map_or_else(Vec::new, |outcome| outcome.energies);
+    let (optimizers, mut energies) = outcome
+        .map(|outcome| (outcome.methods, outcome.energies))
+        .unwrap_or_default();
     match energies.last_mut() {
         Some(last) => *last = energy,
         None => energies.push(energy),
@@ -247,10 +252,31 @@ pub fn run(
         converged,
         positions,
         steps,
+        optimizers,
         energies,
         path,
         evaluations,
     })
+}
+
+/// Keep optimizer provenance in the existing saved method text.
+pub fn optimizer_provenance(method: &str, optimizers: &[Optimizer]) -> String {
+    if optimizers.is_empty() {
+        return method.into();
+    }
+    let labels: Vec<_> = optimizers
+        .iter()
+        .map(|method| match method {
+            Optimizer::Internal => "TRIC",
+            Optimizer::AncRfo => "ANC",
+            Optimizer::Lbfgs => "L-BFGS",
+        })
+        .collect();
+    format!(
+        "{method}{}{}",
+        crate::OPTIMIZER_SEPARATOR,
+        labels.join(", ")
+    )
 }
 
 fn options(job: &Job) -> Options {

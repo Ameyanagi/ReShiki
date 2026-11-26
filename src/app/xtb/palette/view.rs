@@ -1,8 +1,8 @@
-//! The results palette's widgets: header, method lines, the stale banner,
+//! The results palette's widgets: headline, key numbers, the stale banner,
 //! the result tabs, and the footer with file sizes.
 use super::super::results::{self, View};
 use super::super::tone::{Tone, line};
-use super::super::{Action as XtbAction, state};
+use super::super::{Action as XtbAction, Failed, state};
 use super::{Action, Shown};
 use crate::app::workspace::{accessible_command, control, muted_text, panel};
 use crate::app::{App, Message};
@@ -13,6 +13,7 @@ use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme,
 
 /// The bottom dock's body height; the inspector shows the body in full.
 const BODY_HEIGHT: f32 = 150.;
+const FOOTER_LINE_HEIGHT: f32 = 32.;
 const LABEL_WIDTH: f32 = 130.;
 
 fn send(action: Action) -> Message {
@@ -25,6 +26,7 @@ fn toggle<'a>(
     label: String,
     checked: bool,
     action: Action,
+    inspector: bool,
 ) -> Element<'a, Message> {
     let message = send(action);
     reshiki::accessibility::button(
@@ -37,7 +39,8 @@ fn toggle<'a>(
                 move |_| message.clone()
             })
             .size(14)
-            .text_size(12),
+            .text_size(12)
+            .text_wrapping(wrapping(inspector)),
     )
     .checked(checked)
     .on_press(message)
@@ -47,6 +50,18 @@ fn toggle<'a>(
         ..Default::default()
     })
     .into()
+}
+
+fn wrapping(inspector: bool) -> text::Wrapping {
+    if inspector {
+        text::Wrapping::default()
+    } else {
+        text::Wrapping::None
+    }
+}
+
+fn footer_note<'a>(note: impl text::IntoFragment<'a>) -> Element<'a, Message> {
+    text(note).size(11).style(muted_text).into()
 }
 
 /// Text in the palette: greyed while the result is stale.
@@ -91,12 +106,26 @@ impl App {
         if !self.tab.xtb.palette.open {
             return None;
         }
-        let failure = self.xtb_failure_card();
+        let collapsed = self.xtb.dock.collapsed && !inspector;
+        if let Some(failed) = self.xtb_failed() {
+            let header = self.xtb_palette_header(vec![], View::Summary, inspector);
+            return Some(if collapsed {
+                header
+            } else {
+                column![header, self.xtb_failure_card(failed)]
+                    .extend(self.xtb_previous_result(failed, inspector))
+                    .spacing(8)
+                    .into()
+            });
+        }
         let Some(shown) = self.xtb_shown() else {
-            return failure.map(|card| {
+            let header = self.xtb_palette_header(vec![], View::Summary, inspector);
+            return Some(if collapsed {
+                header
+            } else {
                 column![
-                    self.xtb_palette_header(vec![], View::Summary, inspector),
-                    card
+                    header,
+                    line("No xTB result for the selected molecule yet.", Tone::Muted),
                 ]
                 .spacing(8)
                 .into()
@@ -109,14 +138,17 @@ impl App {
         } else {
             View::Summary
         };
-        let collapsed = self.xtb.dock.collapsed && !inspector;
         let header = self.xtb_palette_header(views, view, inspector);
         if collapsed {
             return Some(header);
         }
 
-        let method = shown.method();
-        let mut content = column![header, text(method.clone()).size(12)].spacing(4);
+        let mut content = column![
+            header,
+            text(results::headline(&shown.stored.result, shown.frame)).size(12)
+        ]
+        .spacing(4);
+        content = content.extend(key_tiles(&shown, inspector, false));
         // The semi-empirical caveat is about xTB, not imported results.
         if matches!(
             shown.stored.result.settings,
@@ -124,33 +156,26 @@ impl App {
         ) {
             content = content.push(line(results::LIMITATIONS, Tone::Muted));
         }
-        if let Some(card) = failure {
-            content = content.push(card);
-        }
         if shown.stale {
-            content = content.push(self.xtb_stale_banner());
+            content = content.push(self.xtb_stale_banner(&shown));
         }
         if let Some(warning) = results::warning(&shown.stored.result, shown.info) {
             content = content.push(alert(true, warning.into(), String::new(), vec![]));
         }
         let body = match view {
-            View::Summary => summary(&shown, inspector),
+            View::Summary => summary(&shown, inspector, false),
             View::Vibrations => self.xtb_vibrations(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
             View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
-            View::Log => log(&shown, &method),
+            View::Log => log(&shown, &shown.method()),
         };
         let body: Element<'_, Message> = if inspector {
             body
         } else {
             scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(if view == View::Orbitals {
-                    super::super::orbitals::HEIGHT
-                } else {
-                    BODY_HEIGHT
-                })
+                .height(BODY_HEIGHT)
                 .into()
         };
         content = content.push(container(body).padding([6, 0]));
@@ -230,12 +255,10 @@ impl App {
         }
     }
 
-    /// The last run's failure, with its one action (two after a crash).
-    fn xtb_failure_card(&self) -> Option<Element<'_, Message>> {
-        let Some(super::super::Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
-            return None;
-        };
-        let (title, detail) = failed.explain();
+    /// The last run's failure and the actions available for it.
+    fn xtb_failure_card(&self, failed: &Failed) -> Element<'_, Message> {
+        let retry = self.xtb_can_retry(failed);
+        let (title, detail) = failed.explain(retry);
         let button = |id: &'static str, name: &'static str, label: &'static str, action| {
             reshiki::accessibility::button(id, name, text(label).size(12))
                 .padding([6, 12])
@@ -243,21 +266,30 @@ impl App {
                 .on_press(Message::Xtb(action))
                 .into()
         };
-        let retry = self.xtb_can_retry(failed);
         let actions = match failed.failure.reason() {
-            state::Failure::Scf(_)
-                if retry
-                    && failed
-                        .request
-                        .as_ref()
-                        .is_some_and(|r| r.config.hotter().is_some()) =>
-            {
-                vec![button(
-                    "xtb-retry-hot",
-                    "Retry at electronic temperature 1000 K",
-                    "Retry at 1000 K",
-                    XtbAction::Retry,
-                )]
+            state::Failure::Scf(_) if retry => {
+                let mut actions = vec![];
+                if failed.scf_iteration_limit().is_some() {
+                    actions.push(button(
+                        "xtb-reset-retry",
+                        "Reset Max SCF iterations to 250 and retry",
+                        "Reset to 250 and retry",
+                        XtbAction::ResetRetry,
+                    ));
+                }
+                if failed
+                    .request
+                    .as_ref()
+                    .is_some_and(|r| r.config.hotter().is_some())
+                {
+                    actions.push(button(
+                        "xtb-retry-hot",
+                        "Retry at electronic temperature 1000 K",
+                        "Retry at 1000 K",
+                        XtbAction::Retry,
+                    ));
+                }
+                actions
             }
             state::Failure::Crashed { .. } => {
                 let mut actions = vec![];
@@ -279,17 +311,69 @@ impl App {
             }
             _ => vec![],
         };
-        Some(alert(false, title, detail, actions))
+        alert(false, title, detail, actions)
     }
 
-    /// Whether Recalculate can repeat the shown result with the card.
-    fn xtb_repeatable(&self) -> bool {
-        self.xtb_shown().is_some_and(|shown| {
-            results::config(&shown.stored.result, shown.frame, shown.atoms, 1).is_some()
-        })
+    /// A failed run leaves the previous result available as a read-only summary.
+    fn xtb_previous_result(
+        &self,
+        failed: &Failed,
+        inspector: bool,
+    ) -> Option<Element<'_, Message>> {
+        let shown = self.xtb_last_successful(failed)?;
+        let expanded = self.tab.xtb.palette.previous;
+        let mut label = "Last successful run".to_owned();
+        if let Some(finished) = results::finished_local(&shown.stored.result) {
+            label.push_str(&format!(" · {}", finished.format("%-d %b %Y %H:%M")));
+        }
+        let arrow = if expanded { '▾' } else { '▸' };
+        let mut previous = column![
+            accessible_command(
+                "xtb-results-previous",
+                label.clone(),
+                format!("{label} {arrow}")
+            )
+            .expanded(expanded)
+            .on_press(send(Action::Previous))
+        ]
+        .spacing(6);
+        if expanded {
+            let body = column![
+                text(results::headline(&shown.stored.result, shown.frame))
+                    .size(12)
+                    .style(greyed(true))
+            ]
+            .extend(key_tiles(&shown, inspector, true))
+            .push(summary(&shown, inspector, true))
+            .spacing(6);
+            previous = if inspector {
+                previous.push(body)
+            } else {
+                previous.push(container(scrollable(body)).max_height(BODY_HEIGHT))
+            };
+        }
+        Some(previous.into())
     }
 
-    fn xtb_stale_banner(&self) -> Element<'_, Message> {
+    /// The newest converged result for the molecule whose run failed.
+    fn xtb_last_successful(&self, failed: &Failed) -> Option<Shown<'_>> {
+        let target = failed.atoms.iter().copied().collect();
+        let entry = self
+            .tab
+            .doc
+            .science
+            .results
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, stored)| {
+                matches!(stored.result.status, reshiki::qcdata::Status::Converged)
+                    && self.xtb_result_belongs(stored, &target)
+            })?;
+        self.xtb_result(entry)
+    }
+
+    fn xtb_stale_banner(&self, shown: &Shown<'_>) -> Element<'_, Message> {
         let (message, action): (String, Element<'_, Message>) = match &self.tab.xtb.run {
             Some(run) => (
                 format!(
@@ -305,7 +389,7 @@ impl App {
             ),
             // Builds without the engine show stored results only, and the
             // card cannot repeat every stored calculation.
-            None if super::super::unavailable().is_some() || !self.xtb_repeatable() => (
+            None if !super::super::available() || !shown.repeatable() => (
                 "The molecule changed after this calculation. Results are kept, greyed.".into(),
                 Space::new().into(),
             ),
@@ -313,8 +397,8 @@ impl App {
                 "The molecule changed after this calculation. Results are kept, greyed.".into(),
                 reshiki::accessibility::button(
                     "xtb-results-recalculate",
-                    "Recalculate with the same settings",
-                    text("Recalculate").size(12),
+                    "Recalculate xTB, rebuilding the 3D model first",
+                    text("Recalculate (rebuilds the 3D model)").size(12),
                 )
                 .padding([6, 12])
                 .style(crate::appearance::secondary)
@@ -473,20 +557,29 @@ impl App {
         view: View,
         inspector: bool,
     ) -> Element<'a, Message> {
-        let mut footer = row![].spacing(10).align_y(Alignment::Center);
+        let mut actions = row![].spacing(10).align_y(Alignment::Center);
+        let command = |id, name, label| {
+            reshiki::accessibility::button(
+                id,
+                name,
+                text(label).size(12).wrapping(wrapping(inspector)),
+            )
+            .padding([7, 9])
+            .style(control(false))
+        };
         match view {
             View::Summary => {
-                footer = footer
+                actions = actions
                     .push(
-                        accessible_command(
-                            "xtb-copy-table",
-                            "Copy the results table",
-                            "Copy table",
-                        )
-                        .on_press(send(Action::CopyTable)),
+                        command("xtb-copy-methods", "Copy methods text", "Copy methods text")
+                            .on_press(send(Action::CopyMethods)),
                     )
                     .push(
-                        accessible_command(
+                        command("xtb-copy-table", "Copy the results table", "Copy table")
+                            .on_press(send(Action::CopyTable)),
+                    )
+                    .push(
+                        command(
                             "xtb-export-table",
                             "Export the results table as TSV",
                             "Export…",
@@ -495,31 +588,42 @@ impl App {
                     )
                     .push(toggle(
                         "xtb-labels",
-                        "Show as labels".into(),
+                        "Show charges (on screen only)".into(),
                         self.tab.xtb.palette.labels,
                         Action::Labels(!self.tab.xtb.palette.labels),
-                    ));
+                        inspector,
+                    ))
+                    .push(
+                        command(
+                            "xtb-place-charges",
+                            "Place the partial charges in the drawing as atom labels",
+                            "Place charges in drawing",
+                        )
+                        .on_press_maybe(
+                            (!shown.stale && !shown.stored.result.charges.is_empty())
+                                .then(|| send(Action::PlaceCharges)),
+                        ),
+                    );
             }
             View::Vibrations => {
-                footer = footer.push(line(
+                actions = actions.push(footer_note(
                     "Normal modes are recomputed when shown; the file keeps frequencies, intensities and thermochemistry.",
-                    Tone::Muted,
                 ));
             }
             View::Steps => {
-                footer = footer.push(line(
+                actions = actions.push(footer_note(
                     "The file keeps the first and last steps; keep full results to save every step.",
-                    Tone::Muted,
                 ));
             }
-            View::Orbitals => footer = footer.push(self.xtb_orbitals_note(shown)),
+            View::Orbitals => {
+                actions = actions.push(self.xtb_orbitals_note(shown, text::Wrapping::default()))
+            }
             View::Conformers => {
-                footer = footer.push(super::super::conformers::footer(&shown.stored.result));
+                actions = actions.push(super::super::conformers::footer(&shown.stored.result));
             }
             View::Log => {
-                footer = footer.push(
-                    accessible_command("xtb-copy-log", "Copy the log", "Copy")
-                        .on_press(send(Action::CopyLog)),
+                actions = actions.push(
+                    command("xtb-copy-log", "Copy the log", "Copy").on_press(send(Action::CopyLog)),
                 );
             }
         }
@@ -531,30 +635,46 @@ impl App {
                 format!("Keep full results in this file (+{})", results::size(full)),
                 keep,
                 Action::KeepFull(!keep),
+                inspector,
             ),
-            text(format!("Saved in file: {}", results::size(saved))).size(12),
+            text(format!("Saved in file: {}", results::size(saved)))
+                .size(12)
+                .wrapping(wrapping(inspector)),
         ]
         .spacing(14)
         .align_y(Alignment::Center);
         let note = shown.stored.result.omitted_bytes.map(|bytes| {
             // Imported results whose heavy data did not fit; the import lane
             // adds the source file and the reopen action here.
-            line(
-                format!("Not saved in the file ({}).", results::size(bytes)),
-                Tone::Muted,
-            )
+            footer_note(format!("Not saved in the file ({}).", results::size(bytes)))
         });
-        let mut footer: Column<'_, Message> = if inspector {
-            column![footer.wrap(), sizes.wrap()].spacing(6)
-        } else {
-            column![footer.push(Space::new().width(Length::Fill)).push(sizes)]
-        };
-        if let Some(note) = note {
-            footer = footer.push(note);
+        if inspector {
+            return column![actions.wrap(), sizes.wrap()]
+                .spacing(6)
+                .extend(note)
+                .into();
         }
-        footer.into()
+        // Reserve both action lines on every tab so switching tabs cannot move the dock.
+        let main = column![
+            container(actions.wrap().vertical_spacing(4))
+                .width(Length::Fill)
+                .center_y(2. * FOOTER_LINE_HEIGHT + 4.)
+                .clip(true),
+            container(sizes)
+                .width(Length::Fill)
+                .center_y(FOOTER_LINE_HEIGHT)
+                .clip(true),
+        ]
+        .spacing(4);
+        column![main]
+            .extend(note.map(|note| container(note).clip(true).into()))
+            .into()
     }
 }
+
+#[cfg(test)]
+#[path = "failure_tests.rs"]
+mod failure_tests;
 
 /// An inline card with a round "!" icon: red for an error, amber for a
 /// warning. The status bar repeats an error's sentence.
@@ -588,10 +708,13 @@ pub(in crate::app::xtb) fn alert<'a>(
     if !detail.is_empty() {
         words = words.push(line(detail, Tone::Muted));
     }
-    let content = row![icon, words.width(Length::Fill)]
-        .push(row(actions).spacing(8))
+    let heading = row![icon, words.width(Length::Fill)]
         .spacing(10)
         .align_y(Alignment::Center);
+    let mut content = column![heading].spacing(6);
+    if !actions.is_empty() {
+        content = content.push(row(actions).spacing(8).wrap().vertical_spacing(4));
+    }
     let card = container(content)
         .padding([8, 10])
         .width(Length::Fill)
@@ -614,21 +737,54 @@ pub(in crate::app::xtb) fn alert<'a>(
     card.into()
 }
 
+/// Small tiles for the numbers available in this result.
+fn key_tiles<'a>(
+    shown: &Shown<'a>,
+    inspector: bool,
+    previous: bool,
+) -> Option<Element<'a, Message>> {
+    let numbers = results::key_numbers(&shown.stored.result, shown.info);
+    if numbers.is_empty() {
+        return None;
+    }
+    let stale = shown.stale || previous;
+    let tiles = row(numbers.into_iter().map(|(label, value)| {
+        container(
+            text(format!("{label} {value}"))
+                .size(12)
+                .style(greyed(stale)),
+        )
+        .padding([4, 8])
+        .style(panel)
+        .into()
+    }))
+    .spacing(6);
+    Some(if inspector {
+        tiles.wrap().vertical_spacing(4).into()
+    } else {
+        tiles.into()
+    })
+}
+
 /// Label and value rows: two columns at the bottom, one in the inspector.
-fn summary<'a>(shown: &Shown<'a>, inspector: bool) -> Element<'a, Message> {
-    let rows = shown.rows();
+fn summary<'a>(shown: &Shown<'a>, inspector: bool, previous: bool) -> Element<'a, Message> {
+    let rows = results::summary_grid_rows(&shown.stored.result, shown.input, shown.frame);
     let label_width = if inspector { 104. } else { LABEL_WIDTH };
     let column_of = |rows: &[(String, String)]| {
         Column::with_children(rows.iter().map(|(label, content)| {
             row![
                 text(label.clone())
                     .size(12)
-                    .style(muted_text)
+                    .style(move |theme| if previous {
+                        greyed(true)(theme)
+                    } else {
+                        muted_text(theme)
+                    })
                     .width(label_width),
                 text(content.clone())
                     .size(12)
                     .width(Length::Fill)
-                    .style(greyed(shown.stale)),
+                    .style(greyed(shown.stale || previous)),
             ]
             .spacing(8)
             .into()
@@ -636,7 +792,7 @@ fn summary<'a>(shown: &Shown<'a>, inspector: bool) -> Element<'a, Message> {
         .spacing(6)
         .width(Length::Fill)
     };
-    let tables = tables(shown);
+    let tables = (!previous).then(|| tables(shown)).flatten();
     if inspector {
         let mut body = column![column_of(&rows)].spacing(12);
         if let Some(tables) = tables {

@@ -52,6 +52,8 @@ pub(crate) const LATER_TASKS: [(&str, &str); 1] = [("Orbitals", "Coming in the O
 pub(crate) const METHODS: [XtbMethod; 3] = [XtbMethod::Gfn2Xtb, XtbMethod::GXtb, XtbMethod::GfnFf];
 /// The electronic temperature "Retry at 1000 K" uses.
 pub(crate) const RETRY_TEMPERATURE_K: f64 = 1000.;
+/// The default when Max SCF iterations is left blank.
+pub(crate) const DEFAULT_SCF_ITERATIONS: u32 = 250;
 /// ALPB solvents offered first; xtb also accepts these names.
 pub(crate) const SOLVENTS: [&str; 9] = [
     "water",

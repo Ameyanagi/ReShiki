@@ -27,11 +27,12 @@ pub(super) use view::footer;
 #[cfg(test)]
 mod tests;
 
+pub(super) use reshiki_xtb_jobs::conformers::KCAL_PER_HARTREE;
+#[cfg(test)]
+use reshiki_xtb_jobs::conformers::MAX_GFN2_START_ATOMS;
 pub(crate) use reshiki_xtb_jobs::conformers::{
     Config, Diversity, MAX_ATOMS, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer, Phase,
 };
-#[cfg(test)]
-use reshiki_xtb_jobs::conformers::{KCAL_PER_HARTREE, MAX_GFN2_START_ATOMS};
 
 /// The card's Conformers fields as typed.
 #[derive(Clone, Debug, PartialEq)]
