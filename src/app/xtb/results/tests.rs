@@ -430,7 +430,10 @@ fn imported_method_line_omits_blank_provenance_fields() {
         result.provenance.method = Some(method.into());
         result.provenance.basis = Some(basis.into());
         result.provenance.program_version = Some(version.into());
-        assert_eq!(method_line(&result, output), expected);
+        assert_eq!(
+            method_line(&result, output),
+            format!("{expected} · charge 0 · multiplicity 1")
+        );
     }
 }
 

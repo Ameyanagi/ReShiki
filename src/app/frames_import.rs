@@ -83,6 +83,9 @@ pub(crate) struct File {
     sha256: Option<String>,
     /// The SD file's text, to open the chosen record with its own chemistry.
     sdf: Option<String>,
+    /// Each step's energy, found once: a step without its own energy is
+    /// matched to the result by hashing geometries.
+    step_energies: std::sync::OnceLock<Vec<Option<f64>>>,
 }
 
 /// The open "Choose what to import" sheet.
@@ -146,6 +149,7 @@ pub(super) fn detect(path: &std::path::Path, contents: &[u8]) -> Option<File> {
         file,
         sha256: Some(sha256),
         sdf,
+        step_energies: Default::default(),
     })
 }
 
@@ -170,6 +174,7 @@ impl File {
             file,
             sha256: None,
             sdf: None,
+            step_energies: Default::default(),
         }
     }
 
@@ -257,12 +262,18 @@ impl File {
         })
     }
 
+    /// Each step's energy, in step order.
+    fn step_energies(&self) -> &[Option<f64>] {
+        self.step_energies
+            .get_or_init(|| self.steps().iter().map(|s| self.step_energy(s)).collect())
+    }
+
     /// Every frame's energy, when the file gives one for each.
     fn energies(&self) -> Option<Vec<f64>> {
         if self.job_rows() {
             return None;
         }
-        self.steps().iter().map(|s| self.step_energy(s)).collect()
+        self.step_energies().iter().copied().collect()
     }
 
     /// The lowest-energy frame.
@@ -659,7 +670,7 @@ impl App {
             } else {
                 format!("{frame_name} {}", i + 1)
             };
-            let energy = file.step_energy(step);
+            let energy = file.step_energies().get(i).copied().flatten();
             let delta = energy
                 .zip(lowest)
                 .map(|(e, low)| (e - low) * KCAL_PER_HARTREE);

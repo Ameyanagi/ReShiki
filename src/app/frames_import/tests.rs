@@ -132,7 +132,8 @@ async fn gaussian_job_rows_choose_the_molecule_and_its_results() {
     assert!(views.contains(&View::Vibrations) && views.contains(&View::Orbitals));
     assert_eq!(
         method_line(&stored.result, frame),
-        "Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log"
+        // Copy table and Export keep the electronic state.
+        "Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log · charge 0 · multiplicity 1"
     );
     // The headline names the program and file too, never just "imported".
     assert_eq!(
