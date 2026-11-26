@@ -169,9 +169,9 @@ Paths below are relative to `crates/optimize/src`.
   (Algorithm 7.4), trust radius (Algorithm 4.1), BFGS curvature test and damping
   (`optimizer/lbfgs.rs`, `optimizer/trust.rs`, `optimizer/rfo.rs`).
 - **Golub2013Matrix**: Golub & Van Loan, _Matrix Computations_, 4th ed., Johns Hopkins
-  University Press (2013), ISBN 978-1-4214-0794-4, doi:10.56021/9781421407944. Symmetric eigensolver and Krylov shift
-  (`linalg.rs`, `optimizer/rfo/positive.rs`); also the Jacobi principal axes of the symmetry
-  number (`crates/qcdata/src/vibrational/symmetry.rs`).
+  University Press (2013), ISBN 978-1-4214-0794-4, doi:10.56021/9781421407944. Symmetric
+  eigensolver and Krylov shift (`linalg.rs`, `optimizer/rfo/positive.rs`); also the Jacobi
+  principal axes of the symmetry number (`crates/qcdata/src/vibrational/symmetry.rs`).
 - **Horn1987Quaternion**: Horn, J. Opt. Soc. Am. A 4, 629 (1987),
   doi:10.1364/JOSAA.4.000629. Quaternion rotations of TRIC fragments and conformer
   superposition (`optimizer/internal/fragment.rs`, `conformers/alignment.rs`; also the TS
