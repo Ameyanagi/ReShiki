@@ -114,6 +114,73 @@ impl std::fmt::Display for ForceField {
     }
 }
 
+/// Whether a calculation needs a new model or an Update, and the parameters
+/// that preserve the saved model's reproducible generation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModelGeneration {
+    /// The saved model to replace, or `None` for a molecule without one.
+    pub target: Option<usize>,
+    pub force_field: ForceField,
+    pub seed: i32,
+}
+
+impl Default for ModelGeneration {
+    fn default() -> Self {
+        Self {
+            target: None,
+            force_field: ForceField::Mmff94s,
+            seed: DEFAULT_SEED,
+        }
+    }
+}
+
+impl ModelGeneration {
+    /// Use a current saved model as is; otherwise generate a new model or
+    /// Update the model linked to the molecule's first atom.
+    pub fn for_calculation(source: &Document, atoms: &[u64]) -> Option<Self> {
+        let first = atoms.first();
+        match source
+            .models
+            .iter()
+            .position(|model| first.is_some_and(|id| model.linked_atoms.contains(id)))
+        {
+            Some(index) => Self::for_model(source, index, false),
+            None => Some(Self::default()),
+        }
+    }
+
+    /// Update stale generated geometry with its saved settings. A requested
+    /// fresh regeneration also works for a current model and advances its
+    /// seed, while imported geometry keeps its file-derived lifecycle.
+    pub fn for_model(source: &Document, index: usize, fresh: bool) -> Option<Self> {
+        let model = source.models.get(index)?;
+        if model.is_file_derived() || !fresh && !model.is_stale(source) {
+            return None;
+        }
+        let force_field = match model.force_field {
+            crate::models3d::ForceField::Mmff94 => ForceField::Mmff94,
+            crate::models3d::ForceField::Mmff94s => ForceField::Mmff94s,
+            crate::models3d::ForceField::Uff => ForceField::Uff,
+        };
+        let seed = if model.seed == 0 {
+            DEFAULT_SEED
+        } else {
+            model.seed
+        };
+        // ETKDG samples consecutive seeds; a wide stride avoids overlapping batches.
+        let seed = if fresh {
+            ((i64::from(seed) + 1_000_003) % i64::from(GENERATION_SEED_MAX)) as i32
+        } else {
+            seed
+        };
+        Some(Self {
+            target: Some(index),
+            force_field,
+            seed,
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Conformer {
     /// Physical angstrom XYZ. Original drawing atoms precede temporary H atoms.

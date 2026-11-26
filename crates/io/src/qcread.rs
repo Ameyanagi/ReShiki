@@ -662,6 +662,7 @@ fn finish(mut file: QcFile) -> Result<QcFile, Error> {
                     labels: Vec::new(),
                     minimizer_energies_hartree: Vec::new(),
                     cluster_sizes: Vec::new(),
+                    rmsd_to_best_angstrom: Vec::new(),
                 });
             }
         }

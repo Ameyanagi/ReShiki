@@ -65,6 +65,7 @@ fn trajectory_writes_all_steps_and_the_reader_recovers_the_first() {
         labels: vec!["reactant".into(), "product".into()],
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     };
     path.validate().unwrap();
     let text = write_xyz_trajectory(&path, "water").unwrap();

@@ -36,7 +36,7 @@ Solvents use the ALPB model: water, methanol, DMSO, chloroform, toluene and othe
 
 1. Select the molecule. If the drawing holds only one molecule, you can leave the selection empty.
 2. Open **Predict → xTB**, or search the command palette for **Calculate (xTB)…**.
-3. Choose the **Task** and the **Method**. **Energy** and **Optimize** are described here; **Opt + freq** and **Frequencies** on [Frequencies and IR spectra](/guide/calculation-frequencies/), **Conformers** on [Conformer search](/guide/calculation-conformers/). **Orbitals** is still in progress.
+3. Choose the **Task** and the **Method**. **Energy** and **Optimize** are described here; **Opt + freq** and **Frequencies** on [Frequencies and IR spectra](/guide/calculation-frequencies/), **Conformers** on [Conformer search](/guide/calculation-conformers/). Every GFN2-xTB and g-xTB run shows its orbitals in the results' [Orbitals tab](/guide/calculation-orbitals/).
 4. Check **Charge** and **Unpaired electrons**. They start from the charges and radicals you drew, and you can change them. Once the molecule has a 3D model, the line below checks the electron count, for example `40 electrons · multiplicity 1`.
 5. Pick a **Solvent**, or leave **None (gas phase)**.
 6. Click **Run**.
@@ -138,7 +138,7 @@ If you publish xTB results, cite ReShiki, the axtb engine and the method you use
 ## More
 
 - [Frequencies and IR spectra](/guide/calculation-frequencies/) and [conformer search](/guide/calculation-conformers/).
-- In progress: [orbitals](/guide/calculation-orbitals/) and [transition states](/guide/calculation-transition-states/).
+- [Molecular orbitals](/guide/calculation-orbitals/) and [transition states](/guide/calculation-transition-states/) (command line for now).
 - [Gaussian, ORCA and GAMESS files](/guide/calculation-files/): export inputs and open outputs.
-- [xTB from scripts](/guide/calculation-scripts/).
+- [xTB from scripts](/guide/calculation-scripts/) and [from Python](/guide/calculation-python/).
 - [How to cite](/guide/calculation-citing/).

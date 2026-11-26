@@ -187,7 +187,7 @@ async fn bottom_results_palette_stays_within_40_percent_of_the_window() {
                     &["Retry at 1000 K"][..],
                 ),
                 (
-                    Failure::Crashed("Worker exited".into()),
+                    Failure::crashed("Worker exited"),
                     &["Run again", "Copy details"][..],
                 ),
             ] {

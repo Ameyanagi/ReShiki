@@ -102,6 +102,7 @@ impl App {
             Message::Arc(action) => self.update_arc(action),
             Message::Graphics(action) => self.graphic_action(action),
             Message::Tlc(action) => self.tlc_action(action),
+            Message::IrFigure(action) => return Some(self.ir_figure_action(action)),
             Message::Figure(action) => {
                 let wrap = matches!(action, super::figure_panels::Action::Wrap);
                 self.figure_action(action);
@@ -329,6 +330,7 @@ impl App {
             Message::Models3d(action) => return self.models3d_action(action),
             Message::Nmr(action) => return self.nmr_action(action),
             Message::Xtb(action) => return self.xtb_action(action),
+            Message::IrFigure(action) => return self.ir_figure_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::Mapping(action) => return self.mapping_action(action),
             Message::FigureExported(result) => self.figure_exported(result),

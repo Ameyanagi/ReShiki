@@ -123,6 +123,8 @@ explains how the crates and modules fit together.
 - `src/app/inspector/context.rs`: Properties follows the selection; an idle canvas shows drawing settings, while a drawing tool shows the same defaults as its context row.
 - `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
 - `src/app/inspector_pages.rs`: Chemical names and Assistant are pages within the ordinary inspector tabs.
+- `src/app/ir_figure.rs`: Properties for an infrared figure placed as a group of drawing objects.
+- `src/app/ir_figure/view.rs`: Properties for a placed IR figure, with explicit numeric drafts.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
@@ -205,6 +207,7 @@ explains how the crates and modules fit together.
 - `src/app/workspace/layout_snapshots/context_status.rs`: Snapshots of the context row in keyboard drawing, the Check drawing findings and the status bar at the minimum and default window sizes.
 - `src/app/workspace/layout_snapshots/features.rs`: Snapshot scenes for the UI surfaces added after the maintainability refactor (40c8d82a)
 - `src/app/workspace/layout_snapshots/property_continuity.rs`: Matched real renderer fixtures for molecular Properties continuity.
+- `src/app/workspace/layout_snapshots/xtb_palette.rs`: The actual bottom dock, including chrome, at the minimum window size.
 - `src/app/workspace/model_controls_qa.rs`: Opt-in real-renderer captures at the issue's 1600 × 1000 logical pixels.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
@@ -212,7 +215,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/conformers.rs`: Conformer search
 - `src/app/xtb/conformers/bench.rs`: Developer-only command for timing the desktop app's conformer search.
 - `src/app/xtb/conformers/export.rs`: Conformer ensembles as files
-- `src/app/xtb/conformers/pipeline.rs`: Desktop conformer sampling, clustering and xTB ranking.
+- `src/app/xtb/conformers/pipeline.rs`: Stream the shared conformer search's progress to the Calculate card.
 - `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
 - `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
 - `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
@@ -220,13 +223,18 @@ explains how the crates and modules fit together.
 - `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
 - `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
 - `src/app/xtb/palette.rs`: The xTB results palette
+- `src/app/xtb/palette/sizing.rs`: The bottom dock's window budget and short-window collapse behavior.
+- `src/app/xtb/palette/status.rs`
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
-- `src/app/xtb/run.rs`: One xTB job on its own thread
+- `src/app/xtb/run.rs`: Stream the shared xTB job's progress to the Calculate card.
+- `src/app/xtb/selection.rs`: Guidance when the drawing does not identify one molecule to calculate.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
 - `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
+- `src/app/xtb/vibrations/mode_list.rs`
+- `src/app/xtb/vibrations/motion.rs`: Geometric descriptions of normal modes, from internal-coordinate motion.
 - `src/app/xtb/vibrations/view.rs`: The Vibrations tab's widgets
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
@@ -854,6 +862,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
 - `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
 - `crates/model/src/graphics/heads.rs`
+- `crates/model/src/graphics/ir_figure.rs`: Stored parameters for a placed, editable infrared spectrum figure.
 - `crates/model/src/graphics/panel.rs`: Figure panels, rectangles with a tint, rounded corners, titles and dividers.
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`
@@ -1032,6 +1041,7 @@ explains how the crates and modules fit together.
 - `crates/python/src/render.rs`
 - `crates/python/src/styles.rs`
 - `crates/python/src/xtb.rs`: Run the optional external worker without holding the Python GIL.
+- `crates/python/src/xtb/conformers.rs`: Adapt a Python molecule to the shared conformer search.
 
 ## reshiki-qcdata
 
@@ -1052,6 +1062,18 @@ explains how the crates and modules fit together.
 ## reshiki-web-worker
 
 - `crates/web-worker/src/lib.rs`: The browser editor's Web Worker for heavy jobs, as a WebAssembly module of its own that `packages/editor/src/worker.js` runs.
+
+## reshiki-xtb-jobs
+
+- `crates/xtb-jobs/src/conformers.rs`: Conformer search settings and the desktop and Python pipeline.
+- `crates/xtb-jobs/src/conformers/export.rs`: Conformers in energy order, with thermal populations and XYZ labels.
+- `crates/xtb-jobs/src/conformers/pipeline.rs`: Conformer sampling, clustering and xTB ranking.
+- `crates/xtb-jobs/src/conformers/rows.rs`: Statistics of the retained, saved ensemble, in trajectory order.
+- `crates/xtb-jobs/src/failure.rs`
+- `crates/xtb-jobs/src/lib.rs`: Shared xTB calculations and conformer searches for desktop and Python clients.
+- `crates/xtb-jobs/src/method.rs`: Apply a method's capabilities to the options supplied by clients.
+- `crates/xtb-jobs/src/run.rs`: One xTB worker session driven by the optimizer.
+- `crates/xtb-jobs/src/scf.rs`: Bounds for the Calculate card's SCF overrides.
 
 ## reshiki-xtb-worker
 
