@@ -1,4 +1,5 @@
 //! The Vibrations tab on a water Opt + freq result answered by hand.
+use super::super::run::Report;
 use super::super::tests::{
     MOVED, START, duplicate_molecule, event, f32s, model, optfreq, optimized, send, water,
 };
@@ -15,15 +16,24 @@ fn vibrations(app: &mut App, action: Action) {
 
 /// Water after Opt + freq, with the Vibrations tab open.
 fn opened() -> App {
-    let (mut app, _) = water(CalcTask::OptFreq);
-    event(
-        &mut app,
-        run::Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))),
-    );
+    opened_with(|_| {})
+}
+
+fn opened_with(edit: impl FnOnce(&mut Report)) -> App {
+    let mut app = completed_with(edit);
+    app.tab.xtb.vibrations.playing = true;
     send(
         &mut app,
         XtbAction::Palette(palette::Action::View(View::Vibrations)),
     );
+    app
+}
+
+fn completed_with(edit: impl FnOnce(&mut Report)) -> App {
+    let (mut app, _) = water(CalcTask::OptFreq);
+    let mut report = optfreq(&START, &MOVED);
+    edit(&mut report);
+    event(&mut app, run::Event::Done(Ok(Arc::new(report))));
     app
 }
 
@@ -33,7 +43,7 @@ fn shown(app: &App) -> Vec<[f32; 3]> {
 }
 
 #[test]
-fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
+fn opening_is_paused_then_play_animates_without_touching_the_document() {
     let mut app = opened();
     let frames = app
         .tab
@@ -44,7 +54,11 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
         .map(|a| a.frames.len());
     assert_eq!(frames, Some(FRAMES), "{}", app.status);
     // Phase 0 is the equilibrium geometry.
+    assert_eq!(app.status, "Mode 1 · 1590 cm⁻¹ · O–H stretch · paused");
+    assert!(!app.tab.xtb.vibrations.playing);
+    vibrations(&mut app, Action::Tick);
     assert_eq!(shown(&app), f32s(&MOVED));
+    vibrations(&mut app, Action::Play(true));
     vibrations(&mut app, Action::Tick);
     vibrations(&mut app, Action::Tick);
     let moved = shown(&app);
@@ -59,7 +73,7 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
         f32s(&MOVED),
         "the document never moves"
     );
-    assert!(app.status.starts_with("Mode 1 · 1590 cm⁻¹ · animating"));
+    assert_eq!(app.status, "Mode 1 · 1590 cm⁻¹ · O–H stretch · animating");
 
     vibrations(&mut app, Action::Play(false));
     assert!(app.status.contains("paused"));
@@ -71,6 +85,257 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
     );
     assert!(app.tab.xtb.vibrations.animation.is_none());
     assert_eq!(shown(&app), f32s(&MOVED));
+    assert!(app.status.is_empty());
+}
+
+#[test]
+fn opening_picks_imaginary_then_strongest_then_highest_and_pauses() {
+    for (frequencies, intensities, selected) in [
+        ([-212., -40., 1800.], vec![0., 1., 411.], 0),
+        ([40., 1756., 1788.], vec![1., 471., 411.], 1),
+        ([40., 1756., 1788.], vec![1., 411., 411.], 2),
+        ([40., 1756., 1788.], vec![], 2),
+    ] {
+        let app = opened_with(|report| {
+            let data = report.computed.vibrations.as_mut().unwrap();
+            data.frequencies_cm1 = frequencies.to_vec();
+            data.ir_intensities_km_mol = (!intensities.is_empty()).then_some(intensities);
+        });
+        assert_eq!(app.tab.xtb.vibrations.mode, selected, "{frequencies:?}");
+        assert!(!app.tab.xtb.vibrations.playing);
+    }
+}
+
+#[test]
+fn the_list_sorts_only_real_modes_and_uses_frequency_without_intensities() {
+    let mut data = reshiki::qcdata::Vibrations {
+        frequencies_cm1: vec![-212., -40., 20., 40., 1756., 1788.],
+        ir_intensities_km_mol: vec![1., 999., 0., 411., 471., 411.],
+        modes: vec![],
+        reduced_masses_amu: vec![],
+        masses_amu: vec![],
+    };
+    assert_eq!(mode_list::order(&data, Sort::Intensity), [0, 1, 4, 5, 3, 2]);
+    assert_eq!(
+        mode_list::order(&data, Sort::Wavenumber),
+        [0, 1, 5, 4, 3, 2]
+    );
+    data.ir_intensities_km_mol.clear();
+    assert_eq!(mode_list::order(&data, Sort::Intensity), [0, 1, 5, 4, 3, 2]);
+}
+
+#[test]
+fn reopening_keeps_the_mode_play_state_sort_and_cached_names() {
+    let mut app = opened();
+    let names = app.xtb_motion_names(&app.xtb_shown().unwrap()).unwrap();
+    vibrations(&mut app, Action::Sort(Sort::Wavenumber));
+    vibrations(&mut app, Action::Mode(2));
+    vibrations(&mut app, Action::Play(true));
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Summary)),
+    );
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Vibrations)),
+    );
+    assert_eq!(app.tab.xtb.vibrations.mode, 2);
+    assert!(app.tab.xtb.vibrations.playing);
+    assert_eq!(app.tab.xtb.vibrations.sort, Sort::Wavenumber);
+    assert!(Arc::ptr_eq(
+        &names,
+        &app.xtb_motion_names(&app.xtb_shown().unwrap()).unwrap(),
+    ));
+}
+
+#[test]
+fn returning_to_each_result_restores_its_mode_and_play_state() {
+    let mut app = opened();
+    let first = app.xtb_shown().unwrap().stored.result.clone();
+    let mut second_stored = app.xtb_shown().unwrap().stored.clone();
+    let mut second = (*first).clone();
+    second.vibrations.as_mut().unwrap().ir_intensities_km_mol = vec![1., 100., 10.];
+    let second = Arc::new(second);
+    second_stored.result = second.clone();
+    app.tab.doc.science.results.push(second_stored);
+
+    vibrations(&mut app, Action::Mode(2));
+    vibrations(&mut app, Action::Play(true));
+    app.xtb_show_result(&second);
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Vibrations)),
+    );
+    assert_eq!(
+        app.tab.xtb.vibrations.mode, 1,
+        "a new result picks its strongest band"
+    );
+    assert!(
+        !app.tab.xtb.vibrations.playing,
+        "a new result starts paused"
+    );
+    vibrations(&mut app, Action::Mode(0));
+
+    for (result, mode, playing) in [(&first, 2, true), (&second, 0, false), (&first, 2, true)] {
+        app.xtb_show_result(result);
+        send(
+            &mut app,
+            XtbAction::Palette(palette::Action::View(View::Vibrations)),
+        );
+        assert_eq!(app.tab.xtb.vibrations.mode, mode);
+        assert_eq!(app.tab.xtb.vibrations.playing, playing);
+        assert_eq!(app.tab.xtb.vibrations.selections.len(), 1);
+    }
+
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Summary)),
+    );
+    let discarded = Arc::downgrade(&second);
+    app.tab
+        .doc
+        .science
+        .results
+        .retain(|stored| !Arc::ptr_eq(&stored.result, &second));
+    drop(second);
+    assert!(
+        discarded.upgrade().is_none(),
+        "the selection memory only holds weak references"
+    );
+    let mut third = app.xtb_shown().unwrap().stored.clone();
+    third.result = Arc::new((*first).clone());
+    let result = third.result.clone();
+    app.tab.doc.science.results.push(third);
+    app.xtb_show_result(&result);
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Vibrations)),
+    );
+    assert_eq!(
+        app.tab.xtb.vibrations.selections.len(),
+        1,
+        "discarded results are pruned"
+    );
+}
+
+/// Count reveals aimed at a mode row, without building a renderer.
+async fn mode_reveals(task: Task<Message>, mode: usize) -> usize {
+    use iced::advanced::widget::{Id, operation};
+    use iced::futures::StreamExt;
+
+    struct Focus;
+    impl operation::Focusable for Focus {
+        fn is_focused(&self) -> bool {
+            false
+        }
+        fn focus(&mut self) {}
+        fn unfocus(&mut self) {}
+    }
+
+    let id = Id::from(format!("xtb-mode-{}", mode + 1));
+    let mut reveals = 0;
+    if let Some(mut stream) = iced_runtime::task::into_stream(task) {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Widget(mut operation) = action {
+                operation.focusable(Some(&id), iced::Rectangle::default(), &mut Focus);
+                if matches!(operation.finish(), operation::Outcome::Chain(_)) {
+                    reveals += 1;
+                }
+            }
+        }
+    }
+    reveals
+}
+
+#[tokio::test]
+async fn first_visibility_selects_reveals_and_reports_the_mode_once() {
+    for route in ["view", "expand", "inspector"] {
+        let mut app = completed_with(|report| {
+            report
+                .computed
+                .vibrations
+                .as_mut()
+                .unwrap()
+                .ir_intensities_km_mol = Some(vec![1., 10., 100.]);
+        });
+        let collapsed = route != "view";
+        app.tab.xtb.palette.collapsed = collapsed;
+        app.tab.xtb.vibrations.playing = true;
+        let opening = app.update(Message::Xtb(XtbAction::Palette(palette::Action::View(
+            View::Vibrations,
+        ))));
+        if collapsed {
+            assert_eq!(mode_reveals(opening, 2).await, 0, "{route}");
+            assert!(app.tab.xtb.vibrations.opened.is_none(), "{route}");
+            let action = if route == "expand" {
+                palette::Action::Collapse
+            } else {
+                palette::Action::Dock
+            };
+            let task = app.update(Message::Xtb(XtbAction::Palette(action)));
+            assert_eq!(mode_reveals(task, 2).await, 1, "{route}");
+        } else {
+            assert_eq!(mode_reveals(opening, 2).await, 1, "{route}");
+        }
+        assert!(app.xtb_vibrations_visible(), "{route}");
+        assert_eq!(app.tab.xtb.vibrations.mode, 2, "{route}");
+        assert!(!app.tab.xtb.vibrations.playing, "{route}");
+        assert!(
+            app.status.starts_with("Mode 3 · 3480 cm⁻¹"),
+            "{route}: {}",
+            app.status
+        );
+        assert!(app.status.ends_with("paused"), "{route}: {}", app.status);
+
+        app.status = "Saved the drawing".into();
+        let repeated = app.update(Message::Xtb(XtbAction::Palette(palette::Action::View(
+            View::Vibrations,
+        ))));
+        assert_eq!(mode_reveals(repeated, 2).await, 0, "{route}");
+        assert_eq!(app.status, "Saved the drawing", "{route}");
+    }
+}
+
+#[tokio::test]
+async fn editing_a_visible_result_keeps_the_edit_status_and_scroll_position() {
+    let mut app = opened();
+    let revision = app.tab.revision;
+    let task = app.update(Message::Xtb(XtbAction::Vibrations(Action::PlaceSpectrum)));
+    assert_ne!(app.tab.revision, revision);
+    assert_eq!(mode_reveals(task, 0).await, 0);
+    assert_eq!(app.status, "Placed the IR spectrum · ⌘Z undoes");
+}
+
+#[tokio::test]
+async fn a_failed_rerun_shows_recovery_without_revealing_the_previous_mode() {
+    for collapsed in [false, true] {
+        let mut app = opened();
+        if collapsed {
+            send(&mut app, XtbAction::Palette(palette::Action::Collapse));
+        }
+        send(&mut app, XtbAction::Run);
+        let serial = app.tab.xtb.run.as_ref().unwrap().serial;
+        let failure = super::super::Failure::crashed("worker exited");
+        let task = app.update(Message::Xtb(XtbAction::Event(
+            serial,
+            run::Event::Done(Err(failure)),
+        )));
+        assert!(app.xtb_palette_body_visible());
+        assert!(!app.xtb_vibrations_visible());
+        assert!(app.error && app.status.starts_with("xTB calculation failed"));
+        assert_eq!(mode_reveals(task, 0).await, 0);
+    }
+}
+
+#[test]
+fn leaving_vibrations_preserves_other_status_text() {
+    let mut app = opened();
+    app.status = "Saved the drawing".into();
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Summary)),
+    );
+    assert_eq!(app.status, "Saved the drawing");
 }
 
 #[test]
@@ -98,6 +363,7 @@ fn selecting_another_result_clears_a_paused_vibration_and_switching_back_resyncs
         XtbAction::Palette(palette::Action::View(View::Vibrations)),
     );
     vibrations(&mut app, Action::Arrows(true));
+    vibrations(&mut app, Action::Play(true));
     for _ in 0..6 {
         vibrations(&mut app, Action::Tick);
     }
@@ -129,6 +395,8 @@ fn selecting_another_result_clears_a_paused_vibration_and_switching_back_resyncs
 fn selecting_a_duplicate_rebuilds_the_paused_vibration_on_the_copy() {
     let mut app = opened();
     let copied = duplicate_molecule(&mut app);
+    vibrations(&mut app, Action::Mode(2));
+    vibrations(&mut app, Action::Play(true));
     for _ in 0..6 {
         vibrations(&mut app, Action::Tick);
     }
@@ -138,7 +406,7 @@ fn selecting_a_duplicate_rebuilds_the_paused_vibration_on_the_copy() {
     let original = std::mem::replace(&mut app.tab.selected, copied.clone());
     assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
     assert!(app.xtb_vibration_preview().is_none());
-    app.tab.selected = original;
+    app.tab.selected.clone_from(&original);
 
     let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(copied)));
     assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
@@ -146,6 +414,11 @@ fn selecting_a_duplicate_rebuilds_the_paused_vibration_on_the_copy() {
     let animation = app.tab.xtb.vibrations.animation.as_ref().unwrap();
     assert_eq!(animation.model, 1);
     assert_eq!(shown(&app), f32s(&MOVED));
+    assert_eq!(app.tab.xtb.vibrations.mode, 0);
+    assert!(!app.tab.xtb.vibrations.playing);
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(original)));
+    assert_eq!(app.tab.xtb.vibrations.mode, 2);
     assert!(!app.tab.xtb.vibrations.playing);
 }
 
@@ -153,6 +426,7 @@ fn selecting_a_duplicate_rebuilds_the_paused_vibration_on_the_copy() {
 fn another_mode_or_amplitude_rebuilds_the_frames() {
     let mut app = opened();
     vibrations(&mut app, Action::Mode(2));
+    vibrations(&mut app, Action::Play(true));
     for _ in 0..6 {
         vibrations(&mut app, Action::Tick);
     }
@@ -173,6 +447,7 @@ fn another_mode_or_amplitude_rebuilds_the_frames() {
 fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     let mut app = opened();
     models3d::set_display(&mut app.tab.doc, 0, Display::TwoD);
+    vibrations(&mut app, Action::Play(true));
     vibrations(&mut app, Action::Arrows(true));
     assert_eq!(
         app.display_document().graphics.len(),
@@ -1123,6 +1398,13 @@ async fn spectrum_exports_use_publication_for_svg_and_pdf() {
         assert_eq!(standalone.groups.len(), 1);
         assert_eq!(standalone.graphics[0].ir.as_ref().unwrap().name, "water");
         assert!(standalone.annotations.iter().any(|a| a.text == "1590"));
+        let file_name = format!("water-ir.{format}");
+        let path = std::path::Path::new("/saved/calculations").join(&file_name);
+        let _ = app.update(export.completed(Ok(Some(path.clone()))));
+        assert_eq!(
+            app.status,
+            format!("Exported {file_name}\n{}", path.display())
+        );
     }
     assert_eq!(app.tab.doc, before);
 }
@@ -1381,6 +1663,9 @@ fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
     assert!(app.xtb_modes(&light).is_some());
     assert!(app.tab.xtb.vibrations.animation.is_some());
+    assert!(!app.tab.xtb.vibrations.playing);
+    let names = app.xtb_motion_names(&app.xtb_shown().unwrap()).unwrap();
+    assert_eq!(names[0], "O–H stretch");
     assert!(app.status.contains("differ by up to 2.0 cm⁻¹"));
 }
 

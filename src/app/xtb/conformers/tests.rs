@@ -1199,7 +1199,7 @@ mod app {
         let _ = app.update(sdf.completed(Ok(Some(saved))));
         assert_eq!(
             app.status,
-            "Exported Water-sample-1-conformers.sdf · 3 conformers\n/tmp/Water-sample-1-conformers.sdf",
+            "Exported Water-sample-1-conformers.sdf · 3 conformers",
         );
 
         reshiki::molecule_names::show(

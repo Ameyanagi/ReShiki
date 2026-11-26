@@ -65,6 +65,7 @@ fn edit(app: &mut App, o: u64) {
 #[test]
 fn ir_export_completion_has_a_short_summary_and_path_details() {
     let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
     let path = std::path::PathBuf::from(format!("/tmp/{}/spectrum.svg", "journal-".repeat(12)));
     let receipt = crate::app::figure_export::Prepared::new(
         vec![],
@@ -76,7 +77,7 @@ fn ir_export_completion_has_a_short_summary_and_path_details() {
     .completed(Ok(Some(path.clone())));
     let _ = app.update(receipt);
     let (summary, details) = app.status.split_once('\n').unwrap();
-    assert_eq!(summary, "Exported the IR spectrum");
+    assert_eq!(summary, "Exported spectrum.svg");
     assert!(summary.chars().count() <= 60);
     assert_eq!(details, path.to_string_lossy());
     assert!(!app.error);
@@ -87,6 +88,9 @@ fn ir_export_completion_has_a_short_summary_and_path_details() {
     assert_eq!(summary, "Could not export the IR spectrum");
     assert_eq!(details, error);
     assert!(app.error);
+
+    palette(&mut app, Action::Close);
+    assert!(app.status.is_empty() && !app.error);
 }
 
 #[test]
@@ -123,6 +127,7 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     palette(&mut app, Action::Close);
     assert!(!app.xtb_palette_visible());
     assert!(app.xtb_bottom_palette().is_none());
+    assert!(app.status.is_empty());
     palette(&mut app, Action::Show);
     assert!(app.xtb_palette_visible());
 
@@ -469,6 +474,49 @@ async fn bottom_dock_keeps_its_tabs_and_footer_at_the_same_height() {
             }
         }
     }
+}
+
+#[test]
+fn palette_status_clears_on_tab_switch_and_preserves_other_feedback() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    palette(&mut app, Action::CopyLog);
+    assert_eq!(app.status, "Copied the xTB log");
+    app.add_tab();
+    app.select_tab(0);
+    assert!(app.status.is_empty());
+
+    palette(&mut app, Action::CopyTable);
+    app.status = "Saved the drawing".into();
+    palette(&mut app, Action::Close);
+    palette(
+        &mut app,
+        Action::Exported(Ok(Some(crate::app::figure_export::Saved {
+            path: "/folder/table.tsv".into(),
+            details: vec![],
+            recent: None,
+        }))),
+    );
+    assert_eq!(app.status, "Saved the drawing");
+}
+
+#[test]
+fn returning_to_a_document_keeps_its_expanded_palette_in_a_short_window() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    let _ = app.update(Message::WindowSize(iced::Size::new(1040., 712.)));
+    event(&mut app, optimized(&START, &MOVED));
+    assert!(app.tab.xtb.palette.collapsed);
+    palette(&mut app, Action::Collapse);
+    let doc = app.tab.doc.clone();
+    app.add_tab();
+    app.tab.doc = doc;
+    palette(&mut app, Action::Show);
+    assert!(app.tab.xtb.palette.open && app.tab.xtb.palette.collapsed);
+
+    app.select_tab(0);
+    assert!(app.tab.xtb.palette.open && !app.tab.xtb.palette.collapsed);
+    app.select_tab(1);
+    assert!(app.tab.xtb.palette.collapsed);
 }
 
 #[test]
