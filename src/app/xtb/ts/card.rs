@@ -100,11 +100,14 @@ impl ReactionLabel {
 #[derive(Clone)]
 pub(super) struct BondChanges(pub(super) TransitionStateMapping);
 
-fn mapped_label_color(doc: &Document, reaction: &Reaction, atom: &MappedAtom) -> Color {
-    reaction
-        .reactants
+fn mapped_label_color(doc: &Document, reaction: &Reaction, atom: &MappedAtom, side: Side) -> Color {
+    let (preferred, fallback) = match side {
+        Side::Reactant => (&reaction.reactants, &reaction.products),
+        Side::Product => (&reaction.products, &reaction.reactants),
+    };
+    preferred
         .iter()
-        .chain(&reaction.products)
+        .chain(fallback)
         .flat_map(|participant| &participant.atoms)
         .filter_map(|&id| doc.atom(id))
         .find(|drawn| drawn.map_num == atom.number && drawn.element == atom.element)
@@ -147,9 +150,9 @@ impl BondChanges {
     fn view(&self, doc: &Document, arrow: u64, current_only: bool) -> Element<'static, Message> {
         let palette = Palette::of(doc);
         let reaction = reshiki::reactions::preview(doc, arrow).ok();
-        let label = |atom: &MappedAtom| {
+        let label = |atom: &MappedAtom, side| {
             let color = reaction.as_ref().map_or(Color::Ink, |reaction| {
-                mapped_label_color(doc, reaction, atom)
+                mapped_label_color(doc, reaction, atom, side)
             });
             span(format!("{}{}", atom.element, atom.number))
                 .color(crate::appearance::from_rgb(palette.rgb(color)))
@@ -158,10 +161,15 @@ impl BondChanges {
         if current_only {
             spans.push(span("Current map · "));
         }
-        for (heading, separator, bonds) in [
-            ("Bonds formed: ", "–", &self.0.formed),
-            (" · broken: ", "–", &self.0.broken),
-            (" · Hydrogen moves: ", " → ", &self.0.hydrogen_moves),
+        for (heading, separator, bonds, side) in [
+            ("Bonds formed: ", "–", &self.0.formed, Side::Product),
+            (" · broken: ", "–", &self.0.broken, Side::Reactant),
+            (
+                " · Hydrogen moves: ",
+                " → ",
+                &self.0.hydrogen_moves,
+                Side::Reactant,
+            ),
         ] {
             if bonds.is_empty() && separator == " → " {
                 continue;
@@ -174,7 +182,7 @@ impl BondChanges {
                 if index != 0 {
                     spans.push(span(", "));
                 }
-                spans.extend([label(a), span(separator), label(b)]);
+                spans.extend([label(a, side), span(separator), label(b, side)]);
             }
         }
         rich_text::<(), _, _, _>(spans).size(12).into()

@@ -276,7 +276,7 @@ impl App {
         };
         let showing_ts = palette.is_showing_ts();
         let failed = self
-            .xtb_palette_failure()
+            .xtb_palette_failure(Some(arrow))
             .is_some_and(|failed| failed.ts().is_some());
         if !selection_changed && !showing_ts && !failed {
             return false;
@@ -299,13 +299,13 @@ impl App {
         true
     }
 
-    fn xtb_palette_failure(&self) -> Option<&super::Failed> {
+    fn xtb_palette_failure(&self, arrow: Option<u64>) -> Option<&super::Failed> {
         let Some(super::Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
             return None;
         };
         failed
             .ts()
-            .is_none_or(|ts| self.xtb_selected_reaction() == Some(ts.arrow))
+            .is_none_or(|ts| arrow == Some(ts.arrow))
             .then_some(failed)
     }
 
@@ -313,7 +313,11 @@ impl App {
     /// has a newer result than the one on display, or the palette is closed
     /// on results.
     pub(super) fn xtb_can_show(&self) -> bool {
-        if !self.tab.xtb.palette.open && self.xtb_palette_failure().is_some() {
+        if !self.tab.xtb.palette.open
+            && self
+                .xtb_palette_failure(self.xtb_selected_reaction())
+                .is_some()
+        {
             return true;
         }
         let visible = self.xtb_palette_visible();
@@ -494,7 +498,10 @@ impl App {
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
-                if self.xtb_palette_failure().is_some() {
+                if self
+                    .xtb_palette_failure(self.xtb_selected_reaction())
+                    .is_some()
+                {
                     self.tab.xtb.palette.open = true;
                     self.xtb.dock.collapsed = false;
                 }

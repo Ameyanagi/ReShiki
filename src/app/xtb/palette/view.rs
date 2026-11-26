@@ -91,8 +91,13 @@ impl App {
         if !self.tab.xtb.palette.open {
             return None;
         }
-        let failed = self.xtb_palette_failure();
         let shown = self.xtb_shown();
+        // The reaction on display, else the selected one.
+        let arrow = shown
+            .as_ref()
+            .and_then(|shown| shown.arrow)
+            .or_else(|| self.xtb_selected_reaction());
+        let failed = self.xtb_palette_failure(arrow);
         let reaction = failed
             .and_then(|failed| failed.ts())
             .map(|request| request.context.title.clone())

@@ -384,6 +384,39 @@ async fn worker_and_storage_failures_show_before_the_previous_reaction_result() 
 }
 
 #[tokio::test]
+async fn deselecting_keeps_the_failed_rerun_on_the_shown_reaction() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    let serial = app.tab.xtb.run.as_ref().unwrap().serial;
+    send(
+        &mut app,
+        XtbAction::TsEvent(
+            serial,
+            Event::Done(Err(state::Failure::Crashed("worker stopped".into()))),
+        ),
+    );
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![])));
+    assert!(app.tab.selected.is_empty());
+    assert_eq!(app.xtb_shown().unwrap().arrow, Some(arrow));
+
+    let ui = card::tests::ViewHarness::new().await;
+    let palette = ui.inspect(app.xtb_bottom_palette().unwrap()).texts;
+    assert!(
+        palette
+            .iter()
+            .any(|text| text == "The calculation stopped unexpectedly. Your drawing is safe.")
+    );
+    assert!(
+        palette
+            .iter()
+            .any(|text| text.starts_with("Previous result ("))
+    );
+}
+
+#[tokio::test]
 async fn reopened_legacy_result_is_labelled_not_verified() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
