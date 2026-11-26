@@ -1,6 +1,7 @@
 % References for the methods and algorithms used by ReShiki's xTB features.
 % See docs/references/xtb.md for what each entry is used for and where.
-% DOI entries were checked against Crossref on 2026-11-26. UTF-8; use biber or bibtex8.
+% DOI entries were checked against Crossref on 2026-11-26 (RDKit's DOI against DataCite).
+% UTF-8 with @software entries: use BibLaTeX with Biber.
 
 % ---- Calculation methods ----
 
@@ -69,6 +70,28 @@
   doi = {10.1063/1.5090222},
 }
 
+@article{Johnson1988Broyden,
+  author = {Johnson, D. D.},
+  title = {{Modified Broyden’s method for accelerating convergence in self-consistent calculations}},
+  journal = {Physical Review B},
+  volume = {38},
+  number = {18},
+  pages = {12807--12813},
+  year = {1988},
+  doi = {10.1103/PhysRevB.38.12807},
+}
+
+@article{Pulay1980DIIS,
+  author = {Pulay, Péter},
+  title = {{Convergence acceleration of iterative sequences. The case of SCF iteration}},
+  journal = {Chemical Physics Letters},
+  volume = {73},
+  number = {2},
+  pages = {393--398},
+  year = {1980},
+  doi = {10.1016/0009-2614(80)80396-4},
+}
+
 % ---- Solvation ----
 
 @article{Ehlert2021ALPB,
@@ -80,6 +103,17 @@
   pages = {4250--4261},
   year = {2021},
   doi = {10.1021/acs.jctc.1c00471},
+}
+
+@article{Lange2012ALPBKernel,
+  author = {Lange, Adrian W. and Herbert, John M.},
+  title = {{Improving Generalized Born Models by Exploiting Connections to Polarizable Continuum Models. I. An Improved Effective Coulomb Operator}},
+  journal = {Journal of Chemical Theory and Computation},
+  volume = {8},
+  number = {6},
+  pages = {1999--2011},
+  year = {2012},
+  doi = {10.1021/ct300111m},
 }
 
 @article{Sigalov2006ALPB,
@@ -434,13 +468,13 @@
   journal = {Journal of the Optical Society of America A},
   volume = {4},
   number = {4},
-  pages = {629},
+  pages = {629--642},
   year = {1987},
   doi = {10.1364/JOSAA.4.000629},
 }
 
 @phdthesis{SanzGarcia2016Thesis,
-  author = {Sanz Garcia, Juan},
+  author = {Sanz García, Juan},
   title = {{Theoretical Study of New Nitrosyl Ruthenium Complexes: Mechanisms of Photoisomerization and Photorelease of NO}},
   school = {Université de Toulouse},
   year = {2016},
@@ -506,7 +540,7 @@
 }
 
 @article{Rappe1992UFF,
-  author = {Rappé, A. K. and Casewit, C. J. and Colwell, K. S. and Goddard, W. A. and Skiff, W. M.},
+  author = {Rappé, A. K. and Casewit, C. J. and Colwell, K. S. and Goddard, III, W. A. and Skiff, W. M.},
   title = {{UFF, a full periodic table force field for molecular mechanics and molecular dynamics simulations}},
   journal = {Journal of the American Chemical Society},
   volume = {114},
@@ -606,6 +640,39 @@
   doi = {10.1145/258734.258849},
 }
 
+@article{Cyrus1978Clipping,
+  author = {Cyrus, Mike and Beck, Jay},
+  title = {{Generalized two- and three-dimensional clipping}},
+  journal = {Computers \& Graphics},
+  volume = {3},
+  number = {1},
+  pages = {23--28},
+  year = {1978},
+  doi = {10.1016/0097-8493(78)90021-3},
+}
+
+@article{Sutherland1974Clipping,
+  author = {Sutherland, Ivan E. and Hodgman, Gary W.},
+  title = {{Reentrant polygon clipping}},
+  journal = {Communications of the ACM},
+  volume = {17},
+  number = {1},
+  pages = {32--42},
+  year = {1974},
+  doi = {10.1145/360767.360802},
+}
+
+@article{Douglas1973Simplification,
+  author = {Douglas, David H. and Peucker, Thomas K.},
+  title = {{Algorithms for the reduction of the number of points required to represent a digitized line or its caricature}},
+  journal = {Cartographica},
+  volume = {10},
+  number = {2},
+  pages = {112--122},
+  year = {1973},
+  doi = {10.3138/FM57-6770-U75U-7727},
+}
+
 @incollection{Schneider1990CurveFit,
   author = {Schneider, Philip J.},
   title = {{An algorithm for automatically fitting digitized curves}},
@@ -664,7 +731,7 @@
 }
 
 @article{PageMcIver1988IRC,
-  author = {Page, Michael and McIver, James W.},
+  author = {Page, Michael and McIver, Jr., James W.},
   title = {{On evaluating the reaction path Hamiltonian}},
   journal = {The Journal of Chemical Physics},
   volume = {88},
@@ -746,7 +813,7 @@
 
 @article{Sun2020PySCF,
   author = {Sun, Qiming and Zhang, Xing and Banerjee, Samragni and Bao, Peng and Barbry, Marc and Blunt, Nick S. and Bogdanov, Nikolay A. and Booth, George H. and Chen, Jia and Cui, Zhi-Hao and Eriksen, Janus J. and Gao, Yang and Guo, Sheng and Hermann, Jan and Hermes, Matthew R. and Koh, Kevin and Koval, Peter and Lehtola, Susi and Li, Zhendong and Liu, Junzi and Mardirossian, Narbe and McClain, James D. and Motta, Mario and Mussard, Bastien and Pham, Hung Q. and Pulkin, Artem and Purwanto, Wirawan and Robinson, Paul J. and Ronca, Enrico and Sayfutyarova, Elvira R. and Scheurer, Maximilian and Schurkus, Henry F. and Smith, James E. T. and Sun, Chong and Sun, Shi-Ning and Upadhyay, Shiv and Wagner, Lucas K. and Wang, Xiao and White, Alec and Whitfield, James Daniel and Williamson, Mark J. and Wouters, Sebastian and Yang, Jun and Yu, Jason M. and Zhu, Tianyu and Berkelbach, Timothy C. and Sharma, Sandeep and Sokolov, Alexander Yu. and Chan, Garnet Kin-Lic},
-  title = {{Recent developments in the P y SCF program package}},
+  title = {{Recent developments in the PySCF program package}},
   journal = {The Journal of Chemical Physics},
   volume = {153},
   number = {2},
@@ -835,7 +902,7 @@
   title = {{RDKit: Open-source cheminformatics}},
   url = {https://www.rdkit.org},
   doi = {10.5281/zenodo.591637},
-  note = {Zenodo concept DOI (DataCite); ReShiki compares against RDKit 2026.03.6 and COSMolKit follows RDKit 2026.03.1},
+  note = {Zenodo concept DOI (DataCite); COSMolKit's parameter tables come from RDKit 2026.03.1 and ReShiki compares against RDKit 2026.03.6},
 }
 
 @software{COSMolKit,

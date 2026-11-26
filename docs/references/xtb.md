@@ -3,33 +3,38 @@
 The methods and algorithms behind ReShiki's xTB calculations, optimizer, conformer search,
 vibrations, orbital surfaces and transition-state search, with what each is used for and
 where it lives in the code. Code comments name a source by a short author–year mention and
-its key in brackets, for example `(Wang & Song 2016) [Wang2016TRIC]`; the key is the BibTeX
-key in [xtb.bib](xtb.bib).
+its key in brackets, for example `(Wang & Song 2016) [Wang2016TRIC]` (written `\[Key\]` in
+Rust doc comments so rustdoc does not treat it as a link); the key is the BibTeX key in
+[xtb.bib](xtb.bib).
 
 Every entry with a DOI was checked against its Crossref record on 26 November 2026
-(authors, title, journal, volume, first page or article number, year). Books without a
-Crossref record for the cited edition were checked by ISBN on Open Library; software and
-format specifications are cited by URL. [Not verified](#not-verified) lists what could not
+(authors, title, journal, volume, first page or article number, year); RDKit's DOI is
+registered with DataCite and was checked there. Books without a Crossref record for the
+cited edition were checked by ISBN on Open Library, the thesis on HAL; software and format
+specifications are cited by URL. [Verification notes](#verification-notes) lists what could not
 be checked.
 
 ## What to cite
 
-In every case cite ReShiki (`ReShiki`), axtb (`Axtb`) and the method you ran: GFN2-xTB is
-`Bannwarth2019GFN2`, GFN-FF is `Spicher2020GFNFF` and g-xTB is `Froitzheim2025gxTB`.
-`Bannwarth2021Xtb` covers the xtb program whose conventions axtb reproduces. Then add:
+For every calculation ReShiki runs, cite ReShiki (`ReShiki`), axtb (`Axtb`) and the method:
+GFN2-xTB is `Bannwarth2019GFN2`, GFN-FF is `Spicher2020GFNFF` and g-xTB is
+`Froitzheim2025gxTB`. `Bannwarth2021Xtb` covers the xtb program whose conventions axtb
+reproduces. For results opened from another program's files, cite ReShiki and that program
+and method instead of axtb. Then add:
 
-| Feature                                                            | Also cite                                                                                                                                                               |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implicit solvent (ALPB or GBSA)                                    | Ehlert2021ALPB                                                                                                                                                          |
-| Geometry optimization, default (TRIC with rational-function steps) | Wang2016TRIC, Lindh1995Hessian, Banerjee1985PRFO                                                                                                                        |
-| Geometry optimization, ANC                                         | Grimme2017ANCopt, Banerjee1985PRFO                                                                                                                                      |
-| Geometry optimization, L-BFGS                                      | Liu1989LBFGS                                                                                                                                                            |
-| Conformer search                                                   | Riniker2015ETKDG, Wang2020ETKDGv3, Butina1999Clustering, and the force field that minimized the starts (Halgren1999MMFF94s by default, Halgren1996MMFF or Rappe1992UFF) |
-| Frequencies and thermochemistry                                    | Grimme2012QRRHO                                                                                                                                                         |
-| IR spectrum                                                        | nothing beyond the method                                                                                                                                               |
-| Orbitals and orbital surfaces                                      | nothing beyond the method                                                                                                                                               |
-| Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC                                       |
-| Results read from another program's files                          | that program (for ORCA 6, Neese2025ORCA6)                                                                                                                               |
+| Feature                                                            | Also cite                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Implicit solvent (ALPB or GBSA)                                    | Ehlert2021ALPB                                                                                                                                                                              |
+| Geometry optimization, default (TRIC with rational-function steps) | Wang2016TRIC, Baker1996DLC, Lindh1995Hessian, Banerjee1985PRFO                                                                                                                              |
+| Geometry optimization, ANC                                         | Grimme2017ANCopt, Lindh1995Hessian (with the default model Hessian), Banerjee1985PRFO                                                                                                       |
+| Geometry optimization, L-BFGS                                      | Liu1989LBFGS, Armijo1966LineSearch                                                                                                                                                          |
+| Conformer search                                                   | Riniker2015ETKDG, Wang2020ETKDGv3, Butina1999Clustering, and what minimized the starts: Halgren1999MMFF94s (default), Halgren1996MMFF, Rappe1992UFF, or the GFN-FF or GFN2-xTB method paper |
+| Frequencies and thermochemistry                                    | Grimme2012QRRHO                                                                                                                                                                             |
+| IR spectrum                                                        | nothing beyond the method                                                                                                                                                                   |
+| Orbital energies and coefficients                                  | nothing beyond the method                                                                                                                                                                   |
+| Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes, Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                                                                        |
+| Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Bitzek2006FIRE, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC                                           |
+| Results read from another program's files                          | ReShiki and that program (for ORCA 6, Neese2025ORCA6)                                                                                                                                       |
 
 ## Calculation methods
 
@@ -50,8 +55,12 @@ labels and capabilities: `crates/qcdata/src/capabilities.rs`.
   "xtb 6.8 compatible" conventions.
 - **Caldeweyher2017D4**: Caldeweyher, Bannwarth & Grimme, J. Chem. Phys. 147, 034112 (2017),
   doi:10.1063/1.4993215, and **Caldeweyher2019D4**: Caldeweyher et al., J. Chem. Phys. 150,
-  154122 (2019), doi:10.1063/1.5090222. The D4 dispersion model inside GFN2-xTB and GFN-FF,
-  and the EEQ charges (`ChargeScheme::Eeq` in `crates/qcdata/src/result.rs`).
+  154122 (2019), doi:10.1063/1.5090222. The D4 dispersion model inside GFN2-xTB; GFN-FF
+  uses a simplified dispersion with D4 reference polarizabilities (see Spicher2020GFNFF).
+- **Johnson1988Broyden**: Johnson, Phys. Rev. B 38, 12807 (1988),
+  doi:10.1103/PhysRevB.38.12807, and **Pulay1980DIIS**: Pulay, Chem. Phys. Lett. 73, 393
+  (1980), doi:10.1016/0009-2614(80)80396-4. Modified Broyden and DIIS mixing in axtb's
+  GFN2-xTB SCF.
 
 ## Solvation
 
@@ -61,6 +70,8 @@ GFN2-xTB's solvation energy.
 
 - **Ehlert2021ALPB**: Ehlert et al., J. Chem. Theory Comput. 17, 4250 (2021),
   doi:10.1021/acs.jctc.1c00471. ALPB and GBSA as parametrized for the GFN methods.
+- **Lange2012ALPBKernel**: Lange & Herbert, J. Chem. Theory Comput. 8, 1999 (2012),
+  doi:10.1021/ct300111m. The P16 interaction kernel axtb uses for ALPB.
 - **Sigalov2006ALPB**: Sigalov, Fenley & Onufriev, J. Chem. Phys. 124, 124902 (2006),
   doi:10.1063/1.2177251. The analytical linearized Poisson–Boltzmann model ALPB builds on.
 - **Still1990GBSA**: Still et al., J. Am. Chem. Soc. 112, 6127 (1990),
@@ -68,18 +79,20 @@ GFN2-xTB's solvation energy.
 
 ## Charges and bond orders
 
-axtb computes Mulliken charges and Wiberg–Mayer bond orders; the other charge schemes label
-values read from other programs' files (`ChargeScheme` and `BondOrder` in
-`crates/qcdata/src/result.rs`).
+Calculations report Mulliken charges and Wiberg–Mayer bond orders for GFN2-xTB and g-xTB,
+and EEQ charges for GFN-FF (Spicher2020GFNFF; `crates/xtb-worker/src/engine.rs`). The file
+readers import Mulliken charges. Löwdin, Hirshfeld and CM5 are labels the data model
+(`ChargeScheme` and `BondOrder` in `crates/qcdata/src/result.rs`) can carry; ReShiki neither
+computes nor currently imports them.
 
 - **Mulliken1955Population**: Mulliken, J. Chem. Phys. 23, 1833 (1955),
   doi:10.1063/1.1740588. Mulliken populations.
 - **Lowdin1950Orthogonality**: Löwdin, J. Chem. Phys. 18, 365 (1950), doi:10.1063/1.1747632.
-  Löwdin populations (read only).
+  Löwdin populations (data-model label).
 - **Hirshfeld1977Charges**: Hirshfeld, Theor. Chim. Acta 44, 129 (1977),
-  doi:10.1007/BF00549096. Hirshfeld charges (read only).
+  doi:10.1007/BF00549096. Hirshfeld charges (data-model label).
 - **Marenich2012CM5**: Marenich et al., J. Chem. Theory Comput. 8, 527 (2012),
-  doi:10.1021/ct200866d. Charge Model 5 (read only).
+  doi:10.1021/ct200866d. Charge Model 5 (data-model label).
 - **Wiberg1968BondOrder**: Wiberg, Tetrahedron 24, 1083 (1968),
   doi:10.1016/0040-4020(68)88057-3, and **Mayer1983BondOrder**: Mayer, Chem. Phys. Lett. 97,
   270 (1983), doi:10.1016/0009-2614(83)80005-0. Wiberg–Mayer bond orders.
@@ -109,7 +122,7 @@ Paths below are relative to `crates/optimize/src`.
   (1955); Dover reprint (1980), ISBN 978-0-486-63941-3. Out-of-plane coordinate derivatives
   (`optimizer/internal/primitive.rs`); also the TS normal modes.
 - **Lindh1995Hessian**: Lindh et al., Chem. Phys. Lett. 241, 423 (1995),
-  doi:10.1016/0009-2614(95)00646-L. The model Hessian that starts every RFO run
+  doi:10.1016/0009-2614(95)00646-L. The default starting model Hessian of both RFO methods
   (`model_hessian.rs`, `optimizer/internal/topology.rs`).
 - **Packwood2016Contacts**: Packwood et al., J. Chem. Phys. 144, 164109 (2016),
   doi:10.1063/1.4947024. Distance weight of the optional nonbonded contact curvature
@@ -146,7 +159,8 @@ Paths below are relative to `crates/optimize/src`.
   (`Acceleration::Gediis` in `optimizer.rs`).
 - **Liu1989LBFGS**: Liu & Nocedal, Math. Program. 45, 503 (1989), doi:10.1007/BF01589116,
   and **Armijo1966LineSearch**: Armijo, Pacific J. Math. 16, 1 (1966),
-  doi:10.2140/pjm.1966.16.1. Cartesian L-BFGS with backtracking (`optimizer/lbfgs.rs`).
+  doi:10.2140/pjm.1966.16.1. Cartesian L-BFGS direction (`optimizer/lbfgs.rs`) and Armijo
+  backtracking (`search_lbfgs` in `optimizer.rs`).
 - **Nocedal2006Numerical**: Nocedal & Wright, _Numerical Optimization_, 2nd ed., Springer
   (2006), ISBN 978-0-387-30303-1, doi:10.1007/978-0-387-40065-5. L-BFGS two-loop recursion
   (Algorithm 7.4), trust radius (Algorithm 4.1), BFGS curvature test and damping
@@ -161,9 +175,10 @@ Paths below are relative to `crates/optimize/src`.
 
 ## Conformer search
 
-Starts are embedded and pre-minimized by the geometry worker (`native/geometry`, COSMolKit),
-then clustered and re-ranked by `crates/optimize/src/conformers` and
-`src/app/xtb/conformers/pipeline.rs`. Graph automorphisms for symmetry-aware RMSD
+The geometry worker (`native/geometry`, COSMolKit) embeds the starts. With MMFF94s, MMFF94
+or UFF it also minimizes them; with GFN-FF or GFN2-xTB selected, xTB minimizes them instead.
+`crates/optimize/src/conformers` and `src/app/xtb/conformers/pipeline.rs` cluster the
+minimized starts and re-rank the representatives. Graph automorphisms for symmetry-aware RMSD
 (`conformers/topology.rs`) and Boltzmann populations (`conformers/ranking.rs`) follow no
 specific paper.
 
@@ -178,8 +193,8 @@ specific paper.
 - **Rappe1992UFF**: Rappé et al., J. Am. Chem. Soc. 114, 10024 (1992),
   doi:10.1021/ja00051a040. UFF, used when MMFF cannot type the molecule.
 - **Tosco2014MMFF**: Tosco, Stiefl & Landrum, J. Cheminform. 6, 37 (2014),
-  doi:10.1186/s13321-014-0037-3. RDKit's MMFF implementation, which COSMolKit follows and
-  ReShiki compares against.
+  doi:10.1186/s13321-014-0037-3. RDKit's MMFF implementation, the source of COSMolKit's
+  parameter tables and ReShiki's comparison reference (`docs/geometry-backend.md`).
 - **Butina1999Clustering**: Butina, J. Chem. Inf. Comput. Sci. 39, 747 (1999),
   doi:10.1021/ci9803381. Clustering of minimized starts by heavy-atom RMSD
   (`conformers/clustering.rs`).
@@ -214,12 +229,19 @@ Orbital coefficients and the basis come from axtb (`crates/xtb-worker/src/ao.rs`
 `crates/model/src/models3d/surface/`.
 
 - **Lorensen1987MarchingCubes**: Lorensen & Cline, ACM SIGGRAPH Comput. Graph. 21, 163
-  (1987), doi:10.1145/37402.37422. Isosurface extraction; ReShiki cuts each cube into six
-  tetrahedra (`surface/mesh.rs`).
+  (1987), doi:10.1145/37402.37422. Isosurface extraction (`surface/mesh.rs`). ReShiki uses
+  the marching-tetrahedra variant, cutting each cube into six tetrahedra, usually credited
+  to Doi & Koide (1991; see [Verification notes](#verification-notes)).
 - **Taubin1995Smoothing**: Taubin, Proc. SIGGRAPH '95, 351 (1995),
   doi:10.1145/218380.218473. Smoothing without shrinkage (`surface/mesh.rs`).
 - **Garland1997Simplification**: Garland & Heckbert, Proc. SIGGRAPH '97, 209 (1997),
   doi:10.1145/258734.258849. Quadric error simplification (`surface/mesh.rs`).
+- **Cyrus1978Clipping**: Cyrus & Beck, Comput. Graph. 3, 23 (1978),
+  doi:10.1016/0097-8493(78)90021-3; **Sutherland1974Clipping**: Sutherland & Hodgman,
+  Commun. ACM 17, 32 (1974), doi:10.1145/360767.360802; and **Douglas1973Simplification**:
+  Douglas & Peucker, Cartographica 10, 112 (1973), doi:10.3138/FM57-6770-U75U-7727. Segment
+  and polygon clipping and outline thinning for the visible parts of a surface
+  (`surface/visible.rs`).
 - **Schneider1990CurveFit**: Schneider, in _Graphics Gems_, Academic Press, 612 (1990),
   doi:10.1016/B978-0-08-050753-8.50132-7. Cubic outlines of the projected surface
   (`surface/fit.rs`).
@@ -293,19 +315,18 @@ Readers in `crates/io/src/qcread/`.
   <https://github.com/cosmol-studio/COSMolKit>). ETKDGv3, MMFF94/MMFF94s and UFF in the
   geometry worker.
 
-## Not verified
+## Verification notes
 
-- Horn1987Quaternion: Crossref and OpenAlex give only the first page (629); the last page,
-  642, quoted in `optimizer/internal/fragment.rs`, was not confirmed.
-- Powell1978Damping: the Lecture Notes in Mathematics volume number is not in the Crossref
-  record and is left out.
+- Powell1978Damping: the Lecture Notes in Mathematics volume number (630 in older notes) is
+  not in the Crossref or OpenAlex records and is left out.
 - Golub2013Matrix: the code does not name an edition; the 4th edition is assumed.
-- SanzGarcia2016Thesis: checked on HAL (title "Theoretical Study of New Nitrosyl Ruthenium
-  Complexes", doctoral school Sciences de la Matière, Toulouse), not Crossref; the
-  pages 53–54 quoted in `optimizer.rs` were not checked.
-- Marching tetrahedra (usually credited to Doi & Koide, IEICE Transactions, 1991) has no
-  Crossref record, so its details were not checked; the cube split is cited through
-  Lorensen1987MarchingCubes instead.
+- SanzGarcia2016Thesis has no DOI; it was checked on HAL (author, title, year, doctoral
+  school in Toulouse) and in its PDF, where printed page 54 gives the 10⁻³ a.u. RMS force
+  and 2.5·10⁻³ a.u. RMS step switches quoted in `optimizer.rs`.
+- Marching tetrahedra: A. Doi & A. Koide, "An Efficient Method of Triangulating Equi-Valued
+  Surfaces by Using Tetrahedral Cells", IEICE Trans. Inf. Syst. E74-D, 214–224 (1991), as a
+  reviewer reported it. It has no Crossref record and the IEICE page refused our automated
+  fetch, so it is not in xtb.bib; the cube split is cited through Lorensen1987MarchingCubes.
 - Software entries and the Molden and Gaussian format pages have no DOI (except RDKit's
   DataCite DOI); their URLs were checked to respond.
 - Froitzheim2025gxTB is a preprint; Crossref lists no journal version yet.

@@ -161,7 +161,7 @@ pub struct AtomicCharges {
 pub enum ChargeScheme {
     /// Mulliken populations \[Mulliken1955Population\].
     Mulliken,
-    /// Electronegativity equilibration \[Caldeweyher2019D4\].
+    /// Electronegativity equilibration, as in GFN-FF \[Spicher2020GFNFF\].
     Eeq,
     /// Charge Model 5 \[Marenich2012CM5\].
     Cm5,
