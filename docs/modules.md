@@ -218,6 +218,11 @@ explains how the crates and modules fit together.
 - `src/app/xtb/run.rs`: One xTB job on its own thread
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
+- `src/app/xtb/ts.rs`: Transition-state searches from the reaction arrow, with session-only path previews.
+- `src/app/xtb/ts/card.rs`: The selected reaction arrow's transition-state card and its reviewed inputs.
+- `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
+- `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
+- `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
 - `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.
@@ -301,7 +306,7 @@ explains how the crates and modules fit together.
 - `src/cli/ts.rs`: Gas-phase transition-state searches using the isolated xTB worker.
 - `src/cli/ts/geometry.rs`: XYZ admission and atom mapping before a transition-state search.
 - `src/cli/ts/output.rs`: Transition-state table and optional machine-readable outputs.
-- `src/cli/ts/worker.rs`: A sendable potential backed by a thread-affine xTB session.
+- `src/cli/ts/worker.rs`: Shared thread-affine workers used by CLI and desktop TS searches.
 - `src/clipboard.rs`: Explicit native Copy/Paste with editable and image representations.
 - `src/clipboard/browser.rs`: The browser's clipboard.
 - `src/clipboard/copy_as.rs`: Format-specific copy.
@@ -376,6 +381,7 @@ explains how the crates and modules fit together.
 - `src/window_fit.rs`: Windows work-area sizing; UI scale stays under Iced's DPI handling.
 - `src/workers.rs`: Worker modes
 - `src/xtb_agent.rs`: The worker-backed calculation hook for the CLI and MCP hosts.
+- `src/xtb_pool.rs`: A sendable potential backed by a thread-affine xTB session.
 
 ## reshiki-agent
 

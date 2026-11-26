@@ -412,8 +412,7 @@ impl App {
                 self.cancel_engine_job();
                 Task::none()
             } else if self.xtb_running() {
-                self.xtb_cancel();
-                Task::none()
+                self.xtb_cancel()
             } else if self.xtb_end_preview() {
                 self.status = "Showing the xTB result geometry".into();
                 Task::none()

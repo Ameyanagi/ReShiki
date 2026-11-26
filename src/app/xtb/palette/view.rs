@@ -135,6 +135,7 @@ impl App {
             View::Summary => summary(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
+            View::Path => self.xtb_ts_path(&shown, inspector),
             View::Log => log(&shown, &method),
         };
         let body: Element<'_, Message> = if inspector {
@@ -237,7 +238,7 @@ impl App {
                     && failed
                         .request
                         .as_ref()
-                        .is_some_and(|r| r.config.hotter().is_some()) =>
+                        .is_some_and(|r| r.ts.is_none() && r.config.hotter().is_some()) =>
             {
                 vec![button(
                     "xtb-retry-hot",
@@ -496,6 +497,7 @@ impl App {
             View::Conformers => {
                 footer = footer.push(super::super::conformers::footer());
             }
+            View::Path => {}
             View::Log => {
                 footer = footer.push(
                     accessible_command("xtb-copy-log", "Copy the log", "Copy")

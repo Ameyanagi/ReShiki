@@ -16,11 +16,11 @@ use reshiki_optimize::{
 };
 #[cfg(feature = "xtb")]
 use reshiki_xtb_worker::{
-    client::Limits,
+    client::{Cancel, Limits},
     protocol::{Conventions, Method, Open, Units},
 };
 #[cfg(feature = "xtb")]
-use std::{io::Write, ops::ControlFlow, thread, time::Instant};
+use std::{io::Write, ops::ControlFlow, time::Instant};
 #[cfg(feature = "xtb")]
 use worker::Worker;
 
@@ -66,13 +66,15 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         ..TsOptions::default()
     };
     let started = Instant::now();
-    let mut summary = thread::scope(|scope| {
+    let mut summary = (|| {
         let (first, engine, uhf) =
-            Worker::start(scope, &executable, &open, limits).map_err(failed)?;
+            Worker::start(executable.clone(), open.clone(), limits, Cancel::default())
+                .map_err(failed)?;
         let mut workers = vec![first];
         for _ in 1..command.workers {
             let (worker, _, _) =
-                Worker::start(scope, &executable, &open, limits).map_err(failed)?;
+                Worker::start(executable.clone(), open.clone(), limits, Cancel::default())
+                    .map_err(failed)?;
             workers.push(worker);
         }
         let first = workers
@@ -122,7 +124,7 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
             seconds: 0.,
             moving_hydrogens,
         })
-    })?;
+    })()?;
     summary.seconds = started.elapsed().as_secs_f64();
     finish(&summary, out, err)
 }

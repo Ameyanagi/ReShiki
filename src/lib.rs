@@ -72,6 +72,9 @@ pub mod updates;
 pub mod workers;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 pub mod xtb_agent;
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+#[doc(hidden)]
+pub mod xtb_pool;
 
 /// Warning shown by the xTB calculation interfaces for a small electronic gap.
 pub const XTB_NEAR_DEGENERATE: &str = "Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.";

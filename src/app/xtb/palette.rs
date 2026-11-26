@@ -2,7 +2,7 @@
 //! inspector), with Summary, Steps and Log, the stale banner, energy labels,
 //! "Saved in file" and the large-results question on Save.
 use super::results::{self, RunInfo, View};
-use super::{Request, is, state};
+use super::{Request, is, state, ts};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
@@ -92,14 +92,16 @@ struct Sizes {
 }
 
 impl Palette {
-    /// Open on `result`'s Summary.
+    /// Open on the result's main view.
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) {
         // The same result again keeps its lighter copies' identities.
         if !self.result.iter().any(|weak| is(weak, result)) {
             self.result = vec![Arc::downgrade(result)];
         }
         self.open = true;
-        self.view = if super::conformers::is_search(result) {
+        self.view = if ts::is_ts(result) {
+            View::Path
+        } else if super::conformers::is_search(result) {
             View::Conformers
         } else {
             View::Summary
@@ -118,6 +120,7 @@ pub(super) struct Shown<'a> {
     pub atoms: &'a [Option<u64>],
     pub stale: bool,
     pub info: Option<&'a RunInfo>,
+    pub ts: Option<&'a ts::Session>,
 }
 
 impl Shown<'_> {
@@ -130,6 +133,9 @@ impl Shown<'_> {
     }
 
     pub(super) fn step_positions(&self, step: usize) -> Option<Vec<[f64; 3]>> {
+        if ts::is_ts(&self.stored.result) {
+            return self.ts?.image(step);
+        }
         results::step_positions(&self.stored.result, step, self.input, self.frame)
     }
 }
@@ -143,14 +149,24 @@ impl App {
             shown.iter().any(|weak| is(weak, &s.result))
         })?;
         let link = science.attachment(stored.attachment)?;
+        let ts = self
+            .tab
+            .xtb
+            .ts_sessions
+            .get(&stored.result)
+            .map(|ts| ts.as_ref());
         Some(Shown {
             index,
             stored,
             input: science.frame(&link.frame)?,
             frame: science.frame(&stored.result.frame)?,
             atoms: &link.atoms,
-            stale: link.freshness(&self.tab.doc) == Freshness::Stale,
+            stale: link.freshness(&self.tab.doc) == Freshness::Stale
+                || ts.is_some_and(|ts| {
+                    ts.stale(&self.tab.doc, (self.tab.file_epoch, self.tab.revision))
+                }),
             info: self.tab.xtb.info(&stored.result),
+            ts,
         })
     }
 
@@ -178,7 +194,11 @@ impl App {
     /// The newest result stored for the card's molecule; cheap enough for
     /// every frame (no freshness or frame hashing).
     fn xtb_newest(&self) -> Option<Arc<CalcResult>> {
-        let target: std::collections::HashSet<u64> = self.xtb_target()?.into_iter().collect();
+        let target: std::collections::HashSet<u64> = self
+            .xtb_target()
+            .or_else(|| self.xtb_ts_target())?
+            .into_iter()
+            .collect();
         let science = &self.tab.doc.science;
         science
             .results
@@ -345,6 +365,7 @@ impl App {
             Action::Close => {
                 self.tab.xtb.palette.open = false;
                 self.xtb_end_preview();
+                return super::super::focus_drawing();
             }
             Action::Collapse => self.xtb.dock.collapsed = !self.xtb.dock.collapsed,
             Action::Dock => {
@@ -359,7 +380,7 @@ impl App {
             }
             Action::View(view) => {
                 self.tab.xtb.palette.view = view;
-                if !matches!(view, View::Steps | View::Conformers) {
+                if !matches!(view, View::Steps | View::Conformers | View::Path) {
                     self.xtb_end_preview();
                 }
             }
@@ -444,15 +465,24 @@ impl App {
         let Some(shown) = self.xtb_shown() else {
             return;
         };
-        if shown.stale || self.tab.xtb.run.is_some() {
+        let result = &shown.stored.result;
+        let path = ts::is_ts(result);
+        let previewable = !shown.stale && !self.xtb_running();
+        if !previewable && !path {
             return;
         }
-        let count = results::energies(&shown.stored.result).len();
+        let count = if path {
+            ts::path_energies(result)
+        } else {
+            results::energies(result)
+        }
+        .len();
         if index >= count {
             return;
         }
         let mut failure = None;
-        let preview = shown.step_positions(index).and_then(|positions| {
+        let positions = previewable.then(|| shown.step_positions(index)).flatten();
+        let preview = positions.and_then(|positions| {
             let mut doc = self.tab.doc.clone();
             let frame = Frame {
                 positions_angstrom: positions,
@@ -475,16 +505,26 @@ impl App {
             }
             Some(doc)
         });
-        let name = super::conformers::step_name(&shown.stored.result, index);
+        let name = if path {
+            format!("Path image {}", index + 1)
+        } else {
+            super::conformers::step_name(result, index)
+        };
         self.status = if let Some(error) = failure {
             format!("{name} cannot be shown: {error}")
         } else if preview.is_some() {
-            super::conformers::previewing(
-                &shown.stored.result,
-                index,
-                count,
-                self.tab.xtb.palette.ensemble.overlay,
-            )
+            if path {
+                format!("Previewing image {} of {count} · Esc returns", index + 1)
+            } else {
+                super::conformers::previewing(
+                    result,
+                    index,
+                    count,
+                    self.tab.xtb.palette.ensemble.overlay,
+                )
+            }
+        } else if path {
+            format!("{name} of {count}")
         } else {
             format!("{name} is not saved in this file")
         };
@@ -508,7 +548,10 @@ impl App {
             self.error = false;
             return;
         }
-        let Some(shown) = self.xtb_shown().filter(|shown| !shown.stale) else {
+        let Some(shown) = self
+            .xtb_shown()
+            .filter(|shown| !shown.stale && !ts::is_ts(&shown.stored.result))
+        else {
             return;
         };
         let Some(positions) = shown.step_positions(index) else {
@@ -618,6 +661,7 @@ impl App {
             search,
             config,
             keep_full: shown.stored.keep_full,
+            ts: None,
         };
         self.xtb_end_preview();
         self.xtb_begin(request)
@@ -705,6 +749,9 @@ impl App {
             }
             if let Some(info) = self.tab.xtb.info(&old.result).cloned() {
                 self.tab.xtb.remember(&new.result, Arc::new(info));
+            }
+            if let Some(ts) = self.tab.xtb.ts_sessions.get(&old.result).cloned() {
+                self.tab.xtb.ts_sessions.remember(&new.result, ts);
             }
             let shown = &mut self.tab.xtb.palette.result;
             if shown.iter().any(|weak| is(weak, &old.result)) {

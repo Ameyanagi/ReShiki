@@ -739,6 +739,8 @@ fn completion(message: &Message) -> Option<Completion> {
             match action {
                 #[cfg(not(target_arch = "wasm32"))]
                 Action::Event(..) | Action::Search(..) => Some(Completion::Xtb),
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                Action::TsEvent(..) => Some(Completion::Xtb),
                 Action::Page(..)
                 | Action::Task(..)
                 | Action::Charge(..)
@@ -762,7 +764,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::ApplyAnyway
                 | Action::Discard => None,
                 Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
-                Action::Conformers(..) | Action::Palette(..) => None,
+                Action::Conformers(..) | Action::Palette(..) | Action::Ts(..) => None,
             }
         }
         Message::FigureExported(..) => Some(Completion::FigureExport),
