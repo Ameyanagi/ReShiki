@@ -7,6 +7,7 @@ mod capabilities;
 /// Serde codecs for compact floating-point arrays.
 pub mod compact;
 mod frame;
+mod irc;
 mod molden;
 mod result;
 /// Thermochemistry, IR spectra, and normal-mode geometries.
@@ -20,6 +21,7 @@ pub use capabilities::{
     Capabilities, OrbitalRequest, SolventSupport, XtbMethod, check_calculation,
 };
 pub use frame::{Frame, FrameHash, Trajectory};
+pub use irc::{IrcEndpoint, IrcPath};
 pub use molden::{
     CartesianNorm, axial_norm_ratio, mo_from_molden, mo_to_molden, molden_cartesian_order,
     molden_pure_order, shell_from_molden, shell_to_molden,

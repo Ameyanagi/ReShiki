@@ -26,6 +26,19 @@ pub(crate) enum BondChangeKind {
     Break,
 }
 
+impl BondChangeKind {
+    /// Shared document swatches for scheme overlays and reaction-path models.
+    pub(crate) fn color(self) -> palette::Color {
+        palette::Color::Palette(
+            match self {
+                Self::Form => Hue::Green,
+                Self::Break => Hue::Red,
+            },
+            Row::Strong,
+        )
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct BondChangeMark {
     pub kind: BondChangeKind,
@@ -56,7 +69,6 @@ pub(crate) fn draw_bond_changes(
         return;
     }
     let palette = Palette::in_mode(doc, frame.canvas_theme());
-    let color = |hue| rgb(palette.canonical(palette::Color::Palette(hue, Row::Strong)));
     for mark in marks {
         let [a, b] = mark.atoms;
         let (Some(from), Some(to)) = (doc.atom(a), doc.atom(b)) else {
@@ -67,6 +79,7 @@ pub(crate) fn draw_bond_changes(
         let delta = to - from;
         let mid = from + delta * 0.5;
         let mut stroke = Stroke::default()
+            .with_color(rgb(palette.canonical(mark.kind.color())))
             .with_width(if mark.highlighted {
                 HIGHLIGHTED_MARK_WIDTH
             } else {
@@ -103,7 +116,6 @@ pub(crate) fn draw_bond_changes(
                 // A quadratic arc peaks halfway from its chord to the control point.
                 let bend = BondChangeMark::forming_arc_height(distance) * 2.;
                 let control = mid + normal * if flip { -bend } else { bend };
-                stroke = stroke.with_color(color(Hue::Green));
                 stroke.line_dash.segments = &[4., 4.];
                 Path::new(|path| {
                     path.move_to(from);
@@ -111,7 +123,6 @@ pub(crate) fn draw_bond_changes(
                 })
             }
             BondChangeKind::Break => {
-                stroke = stroke.with_color(color(Hue::Red));
                 let down = Vector::new(4.5, 4.5);
                 let up = Vector::new(4.5, -4.5);
                 Path::new(|path| {
