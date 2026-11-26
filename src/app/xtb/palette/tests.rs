@@ -37,6 +37,7 @@ fn path(frames: &[&[[f64; 3]]]) -> Event {
         converged: true,
         positions: last.to_vec(),
         steps: frames.len() - 1,
+        optimizers: vec![reshiki_optimize::Method::Internal],
         evaluations: energies
             .iter()
             .map(|&energy| Evaluation {
@@ -115,6 +116,11 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Done { .. })));
     assert!(app.xtb_bottom_palette().is_some());
 
+    palette(&mut app, Action::CopyMethods);
+    assert_eq!(
+        app.status,
+        "Copied the methods text (BibTeX keys from ReShiki's xtb.bib)"
+    );
     palette(&mut app, Action::CopyTable);
     assert!(app.status.starts_with("Copied 6 rows"), "{}", app.status);
 
@@ -130,6 +136,344 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     assert!(app.xtb_bottom_palette().is_none());
     assert!(app.xtb_inspector_palette().is_some());
     assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
+}
+
+fn charged_halocarbon() -> (App, u64) {
+    use reshiki::qcdata::{AtomicCharges, ChargeScheme};
+
+    let (mut app, carbon, start) = halocarbon();
+    let Event::Done(Ok(mut report)) = optimized(&start, &start) else {
+        unreachable!()
+    };
+    Arc::get_mut(&mut report).unwrap().computed.charges = Some(AtomicCharges {
+        scheme: ChargeScheme::Cm5,
+        values: vec![-0.561, 0.2805, -0.0001, 0.0, 0.2806],
+    });
+    event(&mut app, Event::Done(Ok(report)));
+    (app, carbon)
+}
+
+#[test]
+fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
+    use reshiki::scene::{Primitive, primitives};
+
+    let (mut app, _) = charged_halocarbon();
+    let shown = app.xtb_shown().expect("the new result");
+    let ids: Vec<_> = shown.atoms.iter().flatten().copied().collect();
+    assert_eq!(ids.len(), 4);
+    assert_eq!(shown.atoms.last(), Some(&None));
+    let before = app.tab.doc.clone();
+    palette(&mut app, Action::PlaceCharges);
+    assert_eq!(
+        app.status,
+        "Placed 4 CM5 charges as atom labels · ⌘Z undoes"
+    );
+    let style = shift_label_style(&app.tab.doc);
+    let drawing = primitives(&app.tab.doc);
+    for (id, expected) in ids.into_iter().zip(["−0.56", "+0.28", "+0.00", "+0.00"]) {
+        let label = app
+            .tab
+            .doc
+            .atom(id)
+            .unwrap()
+            .display
+            .number
+            .as_ref()
+            .unwrap();
+        assert_eq!(label.text, expected);
+        assert_eq!(label.offset, None);
+        assert_eq!(label.style, style);
+        assert!(
+            drawing
+                .iter()
+                .any(|item| matches!(item, Primitive::Text { text, .. } if text == expected))
+        );
+    }
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms, before.atoms);
+    assert!(app.xtb_shown().is_some_and(|shown| !shown.stale));
+    edit(&mut app, before.atoms[0].id);
+    palette(&mut app, Action::PlaceCharges);
+    assert!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .all(|atom| atom.display.number.is_none())
+    );
+}
+
+#[test]
+fn placing_charges_preserves_other_labels() {
+    for (text, custom_style, offset) in [
+        ("#3 · 7.21 ppm", false, None),
+        ("#3", false, None),
+        ("7.21", false, None),
+        // A negative NMR shift as write_labels writes it.
+        ("-0.25", false, None),
+        ("+1", false, None),
+        ("−2", false, None),
+        ("custom label", false, None),
+        ("0.00", false, None),
+        ("+0.28", true, None),
+        ("−0.56", false, Some(Point::new(17., -23.))),
+        ("+0.00", false, Some(Point::default())),
+    ] {
+        let (mut app, carbon) = charged_halocarbon();
+        let own = Number {
+            text: text.into(),
+            style: reshiki::typography::TextStyle {
+                bold: custom_style,
+                ..shift_label_style(&app.tab.doc)
+            },
+            offset,
+        };
+        app.tab.doc.atom_mut(carbon).unwrap().display.number = Some(own.clone());
+        palette(&mut app, Action::PlaceCharges);
+        assert_eq!(
+            app.status,
+            "Placed 3 CM5 charges as atom labels · ⌘Z undoes · 1 atom kept its own label"
+        );
+        assert_eq!(app.tab.doc.atom(carbon).unwrap().display.number, Some(own));
+    }
+}
+
+#[test]
+fn placing_charges_refreshes_previous_charges() {
+    let (mut app, _) = charged_halocarbon();
+    let shown = app.xtb_shown().expect("the new result");
+    let ids: Vec<_> = shown.atoms.iter().flatten().copied().collect();
+    let style = shift_label_style(&app.tab.doc);
+    for (id, text) in ids
+        .iter()
+        .copied()
+        .zip(["+0.00", "−0.56", "+0.28", "−0.03"])
+    {
+        app.tab.doc.atom_mut(id).unwrap().display.number = Some(Number {
+            text: text.into(),
+            style: style.clone(),
+            offset: None,
+        });
+    }
+    let before = app.tab.doc.clone();
+    palette(&mut app, Action::PlaceCharges);
+    assert_eq!(
+        app.status,
+        "Placed 4 CM5 charges as atom labels · ⌘Z undoes"
+    );
+    for (id, text) in ids.into_iter().zip(["−0.56", "+0.28", "+0.00", "+0.00"]) {
+        assert_eq!(
+            app.tab.doc.atom(id).unwrap().display.number,
+            Some(Number {
+                text: text.into(),
+                style: style.clone(),
+                offset: None,
+            })
+        );
+    }
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms, before.atoms);
+}
+
+#[test]
+fn hidden_abbreviation_members_wait_for_expansion_to_get_charges() {
+    let (mut app, c) = charged_halocarbon();
+    let hidden = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .find(|a| a.element == "F")
+        .unwrap()
+        .id;
+    let before = app.tab.doc.clone();
+    app.tab.doc.contract(&[c, hidden], "CF", "FC").unwrap();
+    app.changed(before);
+    app.tab.xtb.palette.labels = true;
+    let preview = app.xtb_label().unwrap();
+    assert_eq!(preview.atom_labels.len(), 3);
+    assert!(preview.atom_labels.iter().all(|(id, _)| *id != hidden));
+    palette(&mut app, Action::PlaceCharges);
+    assert_eq!(
+        app.status,
+        "Placed 3 CM5 charges as atom labels · ⌘Z undoes"
+    );
+    assert!(app.tab.doc.atom(hidden).unwrap().display.number.is_none());
+
+    let before = app.tab.doc.clone();
+    assert_eq!(app.tab.doc.expand_abbreviations(&[c]), 1);
+    app.changed(before);
+    assert_eq!(app.xtb_label().unwrap().atom_labels.len(), 4);
+    palette(&mut app, Action::PlaceCharges);
+    assert_eq!(
+        app.status,
+        "Placed 4 CM5 charges as atom labels · ⌘Z undoes"
+    );
+    assert!(app.tab.doc.atom(hidden).unwrap().display.number.is_some());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in layout check. Use --features iced/tiny-skia without a GPU"]
+async fn bottom_dock_keeps_its_tabs_and_footer_at_the_same_height() {
+    use iced::advanced::{
+        renderer::Headless,
+        widget::{Id, Operation, operation},
+    };
+    use iced::{Rectangle, Size};
+
+    #[derive(Default)]
+    struct TextBounds(Vec<(String, Rectangle)>);
+
+    impl Operation for TextBounds {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn text(&mut self, _: Option<&Id>, bounds: Rectangle, text: &str) {
+            self.0.push((text.into(), bounds));
+        }
+    }
+
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let (mut optimization, _) = water(CalcTask::OptFreq);
+    let mut report = optfreq(&START, &MOVED);
+    report.computed.orbitals = Some(
+        serde_json::from_value(serde_json::json!({
+            "core_electrons": [2, 0, 0],
+            "alpha": { "energies_hartree": [-0.7, -0.5, -0.4, -0.3, 0.2],
+                       "occupations": [2., 2., 2., 2., 0.] },
+            "beta": "restricted"
+        }))
+        .unwrap(),
+    );
+    event(
+        &mut optimization,
+        Event::Done(Ok(std::sync::Arc::new(report))),
+    );
+    let (conformers, _) = App::xtb_searched_water();
+    for (mut app, expected) in [
+        (
+            optimization,
+            &[
+                View::Summary,
+                View::Vibrations,
+                View::Steps,
+                View::Orbitals,
+                View::Log,
+            ][..],
+        ),
+        (
+            conformers,
+            &[View::Summary, View::Conformers, View::Log][..],
+        ),
+    ] {
+        assert_eq!(
+            View::available(&app.xtb_shown().unwrap().stored.result),
+            expected
+        );
+        let mut roomy_actions = None;
+        for size in [
+            Size::new(1280., 820.),
+            Size::new(1040., 680.),
+            Size::new(480., 680.),
+        ] {
+            let mut before = None;
+            for &view in expected {
+                palette(&mut app, Action::View(view));
+                let mut ui = iced_runtime::UserInterface::build(
+                    app.view(),
+                    size,
+                    Default::default(),
+                    &mut renderer,
+                );
+                let mut collect = reshiki::accessibility::Collect::new(Rectangle::with_size(size));
+                ui.operate(&renderer, &mut operation::black_box(&mut collect));
+                let node = |id| {
+                    collect
+                        .snapshot()
+                        .nodes
+                        .iter()
+                        .find(|node| node.id == id)
+                        .unwrap()
+                };
+                let keep = node("xtb-keep-full").bounds;
+                let found = (node("xtb-results-summary").bounds.y, keep);
+                if let Some(before) = before {
+                    assert_eq!(found, before, "{size:?}, {view:?}");
+                }
+                before = Some(found);
+                let note_prefix = match view {
+                    View::Vibrations => Some("Normal modes are recomputed"),
+                    View::Steps => Some("The file keeps the first and last steps"),
+                    View::Orbitals => Some("Orbitals are recomputed"),
+                    View::Conformers => Some("Kept conformers are saved"),
+                    _ => None,
+                };
+                if let Some(prefix) = note_prefix {
+                    let mut texts = TextBounds::default();
+                    ui.operate(&renderer, &mut texts);
+                    let (_, note) = texts
+                        .0
+                        .iter()
+                        .find(|(text, _)| text.starts_with(prefix))
+                        .expect("the footer explains how the result is saved");
+                    assert!(
+                        note.width > 0.
+                            && note.height > 0.
+                            && note.x >= 16.
+                            && note.x + note.width <= size.width - 16. + 0.01
+                            && note.y + note.height <= keep.y,
+                        "{size:?}, {view:?} footer note is clipped: {note:?}, keep: {keep:?}"
+                    );
+                    if size.width == 480. && view == View::Vibrations {
+                        assert!(
+                            note.height > 20.,
+                            "the full Vibrations note should wrap at {size:?}: {note:?}"
+                        );
+                    }
+                }
+                if view == View::Summary {
+                    let actions = [
+                        "xtb-copy-methods",
+                        "xtb-copy-table",
+                        "xtb-export-table",
+                        "xtb-labels",
+                        "xtb-place-charges",
+                    ]
+                    .map(|id| {
+                        let action = node(id);
+                        let bounds = action.bounds;
+                        let visible = action.visible_bounds.unwrap();
+                        assert!(
+                            (visible.width - bounds.width).abs() < 0.01
+                                && (visible.height - bounds.height).abs() < 0.01,
+                            "{size:?}, {id} is clipped: {visible:?} of {bounds:?}"
+                        );
+                        assert!(bounds.width > 0. && bounds.y + bounds.height <= keep.y);
+                        bounds.size()
+                    });
+                    if let Some(roomy) = roomy_actions {
+                        assert_eq!(actions, roomy, "action text shrank at {size:?}");
+                    } else {
+                        roomy_actions = Some(actions);
+                    }
+                    let copy = node("xtb-copy-methods").bounds;
+                    let place = node("xtb-place-charges").bounds;
+                    if size.width == 480. {
+                        assert!(place.y >= copy.y + copy.height, "charges should wrap");
+                    } else {
+                        assert_eq!(place.y, copy.y);
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[test]

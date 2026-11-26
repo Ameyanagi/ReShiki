@@ -23,8 +23,6 @@ mod compute;
 mod levels;
 mod view;
 
-pub(crate) use view::HEIGHT;
-
 #[cfg(test)]
 mod tests;
 
