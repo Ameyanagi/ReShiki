@@ -402,24 +402,27 @@ impl App {
             body = body.push(line(funnel, Tone::Muted));
         }
         body = body.push(line(FOOTNOTE, Tone::Muted));
+        // Which stereoisomer the rows are leads the side column, in view
+        // without scrolling the table.
+        let mut notes = column![].spacing(4);
         if let Some(stereo_note) = &table.stereo_note {
-            body = body.push(line(stereo_note.clone(), Tone::Muted));
+            notes = notes.push(line(stereo_note.clone(), Tone::Warning));
         }
         let pairs = rows.iter().filter(|r| r.mirror_step.is_some()).count();
         if pairs > 0 {
             let noun = if pairs == 1 { "pair" } else { "pairs" };
-            body = body.push(line(
+            notes = notes.push(line(
                 format!("{pairs} mirror {noun} merged · populations recomputed"),
                 Tone::Muted,
             ));
         }
         let side = self.xtb_conformer_side(shown, rows, current, live);
         if inspector {
-            return column![body, plot, side].spacing(10).into();
+            return column![notes, body, plot, side].spacing(10).into();
         }
         row![
             container(body).width(640),
-            container(side).width(320),
+            container(column![notes, side].spacing(8)).width(320),
             container(plot).width(240),
         ]
         .spacing(20)
