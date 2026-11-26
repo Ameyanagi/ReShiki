@@ -303,9 +303,11 @@ fn levels_follow_the_spin_columns_of_an_open_shell() {
     assert_eq!(columns[1].homo(), Some(2));
 }
 
+// Waiting needs a build that can recompute xTB orbitals. Builds without the
+// engine (Windows) leave it out rather than ignore it: the real-renderer job
+// runs ignored tests.
+#[cfg(all(feature = "xtb", not(windows)))]
 #[test]
-// Waiting needs a build that can recompute xTB orbitals.
-#[cfg_attr(any(not(feature = "xtb"), windows), ignore = "needs the xTB engine")]
 fn a_reopened_placed_orbital_waits_for_its_new_level() {
     let mut app = tab();
     answer(&mut app);
