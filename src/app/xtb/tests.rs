@@ -73,6 +73,20 @@ pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
     Event::Done(Ok(Arc::new(optimization(start, end))))
 }
 
+impl App {
+    pub(in crate::app) fn xtb_test_finish_optimization(
+        &mut self,
+        start: &[[f64; 3]],
+        end: &[[f64; 3]],
+    ) {
+        let config = &self.tab.xtb.run.as_ref().unwrap().config;
+        let mut report = optimization(start, end);
+        report.computed.settings.charge = config.charge;
+        report.computed.settings.uhf = config.unpaired;
+        event(self, Event::Done(Ok(Arc::new(report))));
+    }
+}
+
 fn optimization(start: &[[f64; 3]], end: &[[f64; 3]]) -> Report {
     // An optimization's last compute carries the gradient.
     let mut computed = run::example_computed(-5.070176, 14.01);
