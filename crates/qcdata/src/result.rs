@@ -87,7 +87,7 @@ pub struct CalcResult {
     pub run: Option<RunSummary>,
 }
 
-/// Wall time and SCF effort of one calculation run.
+/// Wall time, SCF effort, and optional conformer search counts for one run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunSummary {
     /// Wall-clock seconds from the start of the run to the result.
@@ -98,6 +98,27 @@ pub struct RunSummary {
     /// When the run finished: RFC 3339, UTC, whole seconds (e.g. "2026-11-26T05:03:00Z").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search: Option<SearchSummary>,
+}
+
+/// Counts at each stage of a conformer search.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchSummary {
+    pub requested: usize,
+    pub made: usize,
+    /// Starts passed to clustering after minimization.
+    pub minimized: usize,
+    /// If no force-field start converged, clustering used the unconverged starts.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub used_unconverged_starts: bool,
+    pub distinct: usize,
+    pub clusters: usize,
+    /// Representatives planned for xTB re-ranking. Zero when xTB minimizes every start.
+    pub rerank_planned: usize,
+    /// Representatives that converged in xTB re-ranking.
+    pub reranked: usize,
+    pub kept: usize,
 }
 
 /// Calculation task.

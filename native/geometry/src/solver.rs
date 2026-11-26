@@ -581,6 +581,9 @@ fn embed(
         // One seeded attempt diagnoses the known planarity incompatibility.
         // With clear_confs and one candidate, RMS pruning cannot reject it.
         let mut trial = parameters.clone();
+        // Diagnose the eigenvector-start planarity failure even when the
+        // production ensemble uses random starting coordinates.
+        trial.use_random_coords = false;
         trial.max_iterations = 1;
         trial.num_threads = 1;
         trial.prune_rms_thresh = -1.;
@@ -764,18 +767,39 @@ fn minimized(
     })
 }
 
-pub(super) fn solve(request: &Request) -> Result<Response> {
+fn ensemble_threads(threads: usize, atoms: usize, heap_bytes: usize) -> usize {
+    // Allow two dense (4n)^2 f64 matrices for each concurrent embedding or
+    // minimization, using at most half the configured worker heap.
+    // Saturation keeps even oversized arithmetic conservative; one worker is
+    // still necessary when a single minimization exceeds this allowance.
+    let dimension = atoms.max(1).saturating_mul(4);
+    let bytes_per_thread = dimension
+        .saturating_mul(dimension)
+        .saturating_mul(2 * std::mem::size_of::<f64>());
+    threads.min((heap_bytes / 2) / bytes_per_thread).max(1)
+}
+
+pub(super) fn solve(request: &Request, heap_bytes: usize) -> Result<Response> {
     let threads = if request.ensemble.is_some() {
         std::thread::available_parallelism().map_or(1, |count| count.get().min(8))
     } else {
         1
     };
-    solve_with_threads(request, threads)
+    solve_with_threads(request, threads, heap_bytes)
 }
 
-pub(super) fn solve_with_threads(request: &Request, threads: usize) -> Result<Response> {
+pub(super) fn solve_with_threads(
+    request: &Request,
+    threads: usize,
+    heap_bytes: usize,
+) -> Result<Response> {
     let original = molecule(request)?;
     let mol = with_hydrogens(&original, request.atoms.len(), false)?;
+    let threads = if request.ensemble.is_some() {
+        ensemble_threads(threads, mol.num_atoms(), heap_bytes)
+    } else {
+        1
+    };
     let expected = StereoExpectation::new(&mol)?;
     if request.relaxed {
         relaxed::check_field(&mol, request.field)?;

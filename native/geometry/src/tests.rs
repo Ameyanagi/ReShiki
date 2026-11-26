@@ -428,11 +428,12 @@ fn ensemble_responses_are_byte_identical_across_thread_counts() {
     for mode in [Ensemble::Embedded, Ensemble::Minimized] {
         request.ensemble = Some(mode);
         request.validate().unwrap();
-        let serial = solver::solve_with_threads(&request, 1).unwrap();
+        let serial = solver::solve_with_threads(&request, 1, REFERENCE_HEAP_BYTES).unwrap();
         assert_eq!(serial.ensemble.len(), request.conformers as usize);
         let serial = serde_json::to_vec(&serial).unwrap();
         for threads in [2, 3, 8] {
-            let parallel = solver::solve_with_threads(&request, threads).unwrap();
+            let parallel =
+                solver::solve_with_threads(&request, threads, REFERENCE_HEAP_BYTES).unwrap();
             assert_eq!(
                 serde_json::to_vec(&parallel).unwrap(),
                 serial,

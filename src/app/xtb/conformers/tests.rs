@@ -8,6 +8,80 @@ const A: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];
 const B: [[f64; 3]; 3] = [[0., 0., 0.], [0.97, 0., 0.], [-0.30, 0.90, 0.]];
 const C: [[f64; 3]; 3] = [[0., 0., 0.], [0.95, 0.1, 0.], [-0.20, 0.95, 0.1]];
 
+#[test]
+fn conformer_headers_show_units_and_fit_the_inspector_subset() {
+    let mut result = searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+    let labels = |r: &CalcResult, inspector| {
+        view::headers(r, inspector)
+            .into_iter()
+            .map(|(label, _)| label)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        labels(&result, false),
+        [
+            "#",
+            "ΔE xTB (kcal/mol)",
+            "ΔE MMFF94s (kcal/mol)",
+            "Pop. 298 K",
+            "RMSD to #1 (Å)",
+            "Starts",
+            "Stereo",
+        ]
+    );
+    assert_eq!(labels(&result, true), ["#", "ΔE", "Pop.", "Stereo"]);
+    result.settings = QcSettings::Imported { keywords: vec![] };
+    result.provenance.method = None;
+    assert_eq!(
+        labels(&result, false),
+        [
+            "#",
+            "ΔE (kcal/mol)",
+            "Pop. 298 K",
+            "RMSD to #1 (Å)",
+            "Starts",
+            "Stereo"
+        ]
+    );
+}
+
+#[test]
+fn funnel_describes_the_stored_minimizer_and_skips_absent_data() {
+    let mut result = searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+    assert_eq!(view::search_funnel(&result), None);
+    result.run = Some(qcdata::RunSummary {
+        seconds: 12.5,
+        scf_iterations: vec![],
+        finished: None,
+        search: Some(qcdata::SearchSummary {
+            requested: 100,
+            made: 100,
+            minimized: 98,
+            used_unconverged_starts: false,
+            distinct: 33,
+            clusters: 4,
+            rerank_planned: 4,
+            reranked: 4,
+            kept: 4,
+        }),
+    });
+    assert_eq!(
+        view::search_funnel(&result).unwrap(),
+        "100 starts · 98 minimized with MMFF94s · 33 distinct · 4 clusters · GFN2-xTB re-ranked 4 · 4 kept",
+    );
+    result.provenance.method = Some("GFN2-xTB ETKDG 100 starts · Butina 0.75 Å".into());
+    let counts = result.run.as_mut().unwrap().search.as_mut().unwrap();
+    counts.made = 99;
+    counts.reranked = 0;
+    counts.rerank_planned = 0;
+    assert_eq!(
+        view::search_funnel(&result).unwrap(),
+        "99 of 100 starts made · 98 minimized with GFN2-xTB · 33 distinct · 4 clusters · 4 kept",
+    );
+    result.settings = QcSettings::Imported { keywords: vec![] };
+    assert_eq!(view::search_funnel(&result), None);
+}
+
 /// A water "search" with three kept conformers, the lowest first.
 pub(in crate::app::xtb) fn searched(method: &str) -> CalcResult {
     let frame = Frame {
@@ -509,8 +583,31 @@ mod app {
         assert_eq!(labels, ["As in the 3D model", "Mirror image"]);
         let (doc, ids, _, _) = chiral_ensemble(true);
         app.tab.doc = doc;
+        app.tab.revision += 1;
         let (_, labels) = app.xtb_conformer_stereo(&ids, true).unwrap();
         assert_eq!(labels, ["As in the 3D model", "Inverted at C4"]);
+    }
+
+    #[test]
+    fn card_stereo_reuses_labels_until_the_revision_file_or_target_changes() {
+        let (doc, ids, _, _) = chiral_ensemble(true);
+        let mut app = App::new().0;
+        app.tab.doc = doc;
+        let wedged = app.xtb_conformer_stereo(&ids, false);
+        assert_eq!(wedged.as_ref().unwrap().1[1], "Inverted at C4");
+
+        // Simulate repeated views before the tab records the edit.
+        app.tab.doc.bonds.last_mut().unwrap().display = "plain".into();
+        assert_eq!(app.xtb_conformer_stereo(&ids, false), wedged);
+        app.tab.revision += 1;
+        let unwedged = app.xtb_conformer_stereo(&ids, false);
+        assert_eq!(unwedged.as_ref().unwrap().1[1], "Mirror image");
+
+        app.tab.doc.bonds.last_mut().unwrap().display = "wedge".into();
+        app.tab.file_epoch += 1;
+        assert_eq!(app.xtb_conformer_stereo(&ids, false), wedged);
+        let other = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        assert_eq!(app.xtb_conformer_stereo(&[other], false), None);
     }
 
     #[tokio::test]
@@ -588,7 +685,7 @@ mod app {
     fn found(stopped: bool) -> Event {
         let mut computed = run::example_computed(-5.070176, 14.01);
         computed.gradient = Some(vec![[0.; 3]; 3]);
-        Event::Done(Ok(Found {
+        Event::Done(Ok(Arc::new(Found {
             engine: run::example_engine(),
             best: Arc::new(Report {
                 engine: run::example_engine(),
@@ -606,14 +703,26 @@ mod app {
                 ranked(B, -5.069176, 5, 0.35),
                 ranked(C, -5.065176, 1, 0.50),
             ],
-            starts: 100,
+            starts: 98,
             clusters: 14,
             reranked: if stopped { 3 } else { 20 },
             planned: 20,
+            search: qcdata::SearchSummary {
+                requested: 100,
+                made: 100,
+                minimized: 98,
+                used_unconverged_starts: false,
+                distinct: 33,
+                clusters: 14,
+                rerank_planned: 20,
+                reranked: if stopped { 3 } else { 20 },
+                kept: 3,
+            },
+            minimizer: super::Minimizer::Mmff94s,
             stopped,
             notes: vec![],
             seconds: 12.5,
-        }))
+        })))
     }
 
     #[test]
@@ -662,7 +771,7 @@ mod app {
         assert!(
             matches!(
                 &app.tab.xtb.outcome,
-                Some(Outcome::Done { line, .. }) if line.starts_with("3 conformers kept · 100 starts · 14 clusters · lowest E −5.070176 Eh")
+                Some(Outcome::Done { line, .. }) if line == "3 conformers kept · 98 starts · 14 clusters · lowest E −5.070176 Eh"
             ),
             "{:?}",
             app.status
@@ -776,11 +885,122 @@ mod app {
         let file = app.tab.doc.file_json().unwrap();
         let restored = reshiki::document::Document::from_native_file(&file).unwrap();
         let result = &restored.science.results[0].result;
+        assert_eq!(result.run, app.tab.doc.science.results[0].result.run,);
+        assert_eq!(
+            super::view::search_funnel(result).unwrap(),
+            "100 starts · 98 minimized with MMFF94s · 33 distinct · 14 clusters · GFN2-xTB re-ranked 20 · 3 kept",
+        );
         let path = result.trajectory.as_ref().unwrap();
         assert_eq!(path.rmsd_to_best_angstrom, [0., 0.35, 0.50]);
         let xyz =
             super::super::export::xyz(&app.tab.doc.science.results[0].result, "water").unwrap();
         assert_eq!(xyz.lines().filter(|l| l.trim() == "3").count(), 3);
+    }
+
+    #[test]
+    fn export_uses_the_results_caption_then_saved_stem_then_hill_formula() {
+        use super::Format;
+        use std::path::PathBuf;
+
+        let (mut app, oxygen) = water(CalcTask::Conformers);
+        search(&mut app, found(false));
+        app.tab.untitled_name = Some("Unsaved drawing".into());
+        let prepare = |app: &App, format| {
+            app.xtb_prepare_conformer_export(&app.xtb_shown().unwrap(), format)
+                .unwrap()
+        };
+        let xyz = prepare(&app, Format::Xyz);
+        assert_eq!(xyz.name, "H2O-conformers.xyz");
+        assert!(
+            String::from_utf8(xyz.bytes)
+                .unwrap()
+                .lines()
+                .nth(1)
+                .unwrap()
+                .starts_with("H2O conformer 1")
+        );
+        app.tab.path = Some("Untitled.rshk".into());
+        assert_eq!(prepare(&app, Format::Sdf).name, "H2O-conformers.sdf");
+
+        app.tab.path = Some("/tmp/Saved Water.rshk".into());
+        let sdf = prepare(&app, Format::Sdf);
+        assert_eq!(sdf.name, "Saved-Water-conformers.sdf");
+        assert!(sdf.bytes.starts_with(b"Saved Water conformer 1\n"));
+
+        let outside = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        for (atom, name) in [
+            (outside, "Another molecule"),
+            (oxygen, "Water / sample: 1?"),
+        ] {
+            reshiki::molecule_names::show(
+                &mut app.tab.doc,
+                &[atom],
+                name.into(),
+                "O".into(),
+                Default::default(),
+                false,
+            )
+            .unwrap();
+        }
+        app.tab.selected = vec![outside];
+        let sdf = prepare(&app, Format::Sdf);
+        assert_eq!(sdf.name, "Water-sample-1-conformers.sdf");
+        assert!(sdf.bytes.starts_with(b"Water / sample: 1? conformer 1\n"));
+        let saved = PathBuf::from("/tmp/Water-sample-1-conformers.sdf");
+        let _ = app.update(sdf.completed(Ok(Some(saved))));
+        assert_eq!(
+            app.status,
+            "Exported Water-sample-1-conformers.sdf · 3 conformers\n/tmp/Water-sample-1-conformers.sdf",
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in bottom dock layout check with a headless renderer"]
+    async fn bottom_dock_shows_five_full_rows_and_counts_the_saved_frames() {
+        use iced::advanced::{renderer::Headless, widget::operation::black_box};
+        use iced_runtime::{UserInterface, user_interface::Cache};
+
+        let (mut app, _) = water(CalcTask::Conformers);
+        let Event::Done(Ok(mut found)) = found(false) else {
+            unreachable!()
+        };
+        let result = Arc::make_mut(&mut found);
+        result
+            .ranked
+            .extend((3..9).map(|index| ranked(C, -5.065176 + f64::from(index) * 0.0001, 1, 0.5)));
+        result.search.kept = result.ranked.len();
+        search(&mut app, Event::Done(Ok(found)));
+        let size = iced::Size::new(1440., 900.);
+        let mut renderer = <iced::Renderer as Headless>::new(
+            iced::Font::with_name(reshiki::style::ui_font_family()),
+            iced::Pixels(16.),
+            None,
+        )
+        .await
+        .unwrap();
+        let mut ui = UserInterface::build(app.view(), size, Cache::new(), &mut renderer);
+        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(&renderer, &mut black_box(&mut collect));
+        let nodes = &collect.snapshot().nodes;
+        let fully_visible = nodes
+            .iter()
+            .filter(|node| {
+                node.id
+                    .strip_prefix("xtb-conformer-")
+                    .is_some_and(|id| id.parse::<usize>().is_ok())
+                    && node
+                        .visible_bounds
+                        .is_some_and(|visible| visible.height >= node.bounds.height - 0.1)
+            })
+            .count();
+        assert!((5..9).contains(&fully_visible), "{fully_visible} full rows");
+        for (id, label) in [
+            ("xtb-export-conformers-sdf", "Export all 9 as SDF…"),
+            ("xtb-export-conformers-xyz", "Export all 9 as XYZ…"),
+        ] {
+            assert!(nodes.iter().any(|node| node.id == id && node.name == label));
+        }
+        eprintln!("{fully_visible} full conformer rows at 1440×900");
     }
 }
 

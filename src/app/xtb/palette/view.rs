@@ -514,7 +514,7 @@ impl App {
             }
             View::Orbitals => footer = footer.push(self.xtb_orbitals_note(shown)),
             View::Conformers => {
-                footer = footer.push(super::super::conformers::footer());
+                footer = footer.push(super::super::conformers::footer(&shown.stored.result));
             }
             View::Log => {
                 footer = footer.push(

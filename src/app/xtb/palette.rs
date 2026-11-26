@@ -33,7 +33,7 @@ pub(crate) enum Action {
     KeepModel,
     CopyTable,
     Export,
-    Exported(Result<Option<std::path::PathBuf>, String>),
+    Exported(Result<Option<crate::app::figure_export::Saved>, String>),
     IrExported(Result<Option<std::path::PathBuf>, String>),
     CopyLog,
     Labels(bool),
@@ -423,8 +423,20 @@ impl App {
                 );
             }
             Action::Exported(result) => match result {
-                Ok(Some(path)) => {
-                    self.status = format!("Exported xTB results to {}", path.display());
+                Ok(Some(saved)) => {
+                    self.status = if saved.details.is_empty() {
+                        format!("Exported xTB results to {}", saved.path.display())
+                    } else {
+                        let mut status = crate::app::files::export_status(
+                            &saved.path,
+                            &saved.details,
+                            cfg!(target_arch = "wasm32"),
+                        );
+                        if !cfg!(target_arch = "wasm32") {
+                            status.push_str(&format!("\n{}", saved.path.display()));
+                        }
+                        status
+                    };
                     self.error = false;
                 }
                 Ok(None) => {}

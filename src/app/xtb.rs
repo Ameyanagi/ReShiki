@@ -122,6 +122,7 @@ pub(crate) struct State {
     pub(super) outcome: Option<Outcome>,
     serial: u64,
     pub(super) palette: palette::Palette,
+    conformer_stereo: std::cell::RefCell<conformers::CardStereo>,
     pub(super) orbitals: orbitals::Orbitals,
     pub(super) vibrations: vibrations::State,
     /// What this session knows about stored results' runs, by result.
@@ -1177,6 +1178,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
             .map(|evaluation| evaluation.scf_iterations as u32)
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+        search: None,
     });
     let status = if report.converged {
         qcdata::Status::Converged
