@@ -78,6 +78,7 @@ class PythonWheelWorkflowTests(unittest.TestCase):
         engine = workflow_jobs("python-wheels.yml")["xtb_wheel"]
         self.assertIn("needs: [scope, wheel]", engine)
         self.assertIn("pattern: python-wheel-${{ matrix.artifact }}", engine)
+        self.assertIn("path: base-dist", engine)
         self.assertIn("uv venv --clear .venv-xtb-pair", engine)
         self.assertIn(
             'uv pip install --python .venv-xtb-pair/bin/python "numpy>=1.24" "pytest>=8,<10"',
@@ -99,6 +100,8 @@ class PythonWheelWorkflowTests(unittest.TestCase):
                 "--no-index",
                 "--find-links",
                 "dist",
+                "--find-links",
+                "base-dist",
                 "reshiki[xtb]==$EXPECTED_VERSION",
             ],
         )
