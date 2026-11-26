@@ -1596,6 +1596,7 @@ fn frame_bytes(doc: &Document) -> usize {
                         + bytes(&g.bonds[..])
                         + bytes(&g.sources[..])
                 })
+                + m.panels.iter().map(|p| p.caption.len()).sum::<usize>()
                 + m.figures()
                     .map(|figure| {
                         figure.orbital.result.len()

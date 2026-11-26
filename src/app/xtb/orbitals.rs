@@ -291,12 +291,9 @@ impl App {
         let placed = model
             .and_then(|m| doc.models[m].surface.clone())
             .filter(|figure| figure.orbital.result == key);
-        let frontier = model.is_some_and(|m| {
-            doc.models[m]
-                .panels
-                .iter()
-                .any(|panel| panel.figure.orbital.result == key)
-        });
+        let frontier = atom
+            .and_then(|atom| doc.models.iter().find(|m| m.linked_atoms.contains(&atom)))
+            .is_some_and(|m| m.panels.iter().any(|p| p.figure.orbital.result == key));
         let problem = if shown.stale {
             Some(
                 "The molecule changed after this calculation. Recalculate to show orbitals.".into(),
@@ -376,10 +373,12 @@ impl App {
                         .position(|c| c.spin == figure.orbital.spin)
                 })
                 .unwrap_or(0);
+            // A saved index outside the spectrum falls back to its last level.
+            let last = target.columns[column].energies_ev.len() - 1;
             return Choice {
                 result: target.key.clone(),
                 column,
-                index: figure.orbital.index as usize,
+                index: (figure.orbital.index as usize).min(last),
             };
         }
         chosen.cloned().unwrap_or_else(|| Choice {
@@ -576,6 +575,23 @@ impl App {
         {
             let frame = self.tab.doc.science.frame(&stored.result.frame).cloned();
             recompute = frame.map(|f| (stored.result.clone(), f, vec![pending.index as u32]));
+        }
+        // The tab's frontier figure needs HOMO and LUMO even when a placed
+        // figure already has its own row (a reopened drawing).
+        if recompute.is_none()
+            && state.computing.is_none()
+            && self.xtb_orbitals_visible()
+            && let Some(target) = self.xtb_orbital_target()
+            && target.problem.is_none()
+            && self.xtb_orbital_frontier(&target).is_none()
+            && let Some((_, stored)) = self.xtb_orbital_stored()
+            && matches!(stored.result.settings, Settings::Xtb(_))
+            && super::available()
+            && !state.errors.iter().any(|(k, _)| *k == target.key)
+            && let Some(frame) = self.tab.doc.science.frame(&stored.result.frame)
+        {
+            // Rows around the frontier come with every recomputation.
+            recompute = Some((stored.result.clone(), frame.clone(), vec![]));
         }
         let tab = self.tab.id;
         self.tab.xtb.orbitals.failed.extend(failed);
@@ -783,7 +799,17 @@ impl App {
             Action::Place => self.xtb_orbital_place(),
             Action::PlaceFrontier => self.xtb_orbital_place_frontier(),
             Action::RemoveFrontier => {
-                let Some(model) = self.xtb_orbital_target().and_then(|t| t.model) else {
+                // Whatever geometry the model shows now.
+                let atom = self
+                    .xtb_shown()
+                    .and_then(|shown| shown.atoms.iter().flatten().next().copied());
+                let Some(model) = atom.and_then(|atom| {
+                    self.tab
+                        .doc
+                        .models
+                        .iter()
+                        .position(|m| m.linked_atoms.contains(&atom))
+                }) else {
                     return Task::none();
                 };
                 let mut doc = self.tab.doc.clone();
@@ -1007,13 +1033,20 @@ impl App {
             .map(|_| "No surface at this isovalue: lower it.".into())
     }
 
-    /// HOMO and LUMO of the first spin column, each with its row at hand.
+    /// The shown result, by its place in the document.
+    fn xtb_orbital_stored(&self) -> Option<(usize, &Stored)> {
+        let shown = self.xtb_shown()?;
+        let index = shown.index;
+        Some((index, self.tab.doc.science.results.get(index)?))
+    }
+
+    /// HOMO and LUMO of the chosen spin column, with captions, while both
+    /// rows are at hand.
     fn xtb_orbital_frontier(&self, target: &Target) -> Option<[(usize, String); 2]> {
-        let column = target.columns.first()?;
-        let [homo, lumo] = [column.homo()?, column.lumo()?];
-        let doc = self.display_document();
-        let (_, stored) = science::figure_result(doc, doc.models.get(target.model?)?)?;
-        [homo, lumo]
+        let choice = self.xtb_orbital_choice(target);
+        let column = target.columns.get(choice.column)?;
+        let (_, stored) = self.xtb_orbital_stored()?;
+        [column.homo()?, column.lumo()?]
             .map(|index| {
                 self.xtb_orbital_row(stored, column.spin, index).map(|_| {
                     let energy = super::state::signed(column.energies_ev[index], 2);
@@ -1036,15 +1069,18 @@ impl App {
         let Some(target) = self.xtb_orbital_target() else {
             return;
         };
-        let (Some(model), Some(levels)) = (target.model, self.xtb_orbital_frontier(&target)) else {
+        if target.problem.is_some() {
+            return;
+        }
+        let (Some(model), Some(levels), Some((stored_index, stored))) = (
+            target.model,
+            self.xtb_orbital_frontier(&target),
+            self.xtb_orbital_stored(),
+        ) else {
             return;
         };
-        let spin = target.columns[0].spin;
-        let display = self.display_document();
-        let Some((stored_index, stored)) = science::figure_result(display, &display.models[model])
-        else {
-            return;
-        };
+        let choice = self.xtb_orbital_choice(&target);
+        let spin = target.columns[choice.column].spin;
         let rows: Vec<_> = levels
             .iter()
             .filter_map(|(index, _)| {
@@ -1052,14 +1088,7 @@ impl App {
                 Some((*index, basis.clone(), row.to_vec()))
             })
             .collect();
-        let template = self.xtb_orbital_figure(
-            &target,
-            &Choice {
-                result: target.key.clone(),
-                column: 0,
-                index: 0,
-            },
-        );
+        let template = self.xtb_orbital_figure(&target, &choice);
         let mut doc = self.tab.doc.clone();
         for (index, basis, row) in rows {
             if let Err(error) =
