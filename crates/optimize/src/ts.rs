@@ -47,8 +47,9 @@ pub struct TsOptions {
     pub optimize_endpoints: bool,
     pub neb_max_iterations: usize,
     pub saddle_max_steps: usize,
-    /// Rebuild interval in accepted saddle steps. Zero uses Bofill updates
-    /// between the initial build and the final stationarity check.
+    /// Periodic Hessian rebuild interval in accepted saddle steps. Zero disables
+    /// scheduled builds. Mode tracking, failed secant steps and the final
+    /// stationarity check can also request a fresh Hessian.
     pub hessian_every: usize,
     /// Maximum number of downhill IRC steps in each direction, before relaxation.
     pub irc_max_steps: usize,
@@ -98,8 +99,24 @@ pub enum Event<'a> {
         step: usize,
         energy: f64,
         max_gradient: f64,
+        rms_gradient: f64,
         eigenvalue: f64,
+        overlap: f64,
+        radius: f64,
+        /// Newton displacement along the IRC launch mode, when checked.
+        mode_displacement: Option<f64>,
+        /// Whether the current Hessian was evaluated at this geometry.
+        exact: bool,
     },
+    SaddleTrial {
+        energy: f64,
+        max_gradient: f64,
+        rms_gradient: f64,
+        length: f64,
+        ratio: f64,
+        decision: &'static str,
+    },
+    SaddleStatus(&'static str),
     /// Steps after the downhill path also cover the branch's final minimization.
     Irc {
         forward: bool,
@@ -391,14 +408,7 @@ pub fn search_with_cancel<P: Potential + Send>(
         point: mut ts,
         converged: saddle_converged,
         hessian,
-    } = saddle::refine(
-        &mut pool[0],
-        &band.path[band.climbing],
-        &band.tangent,
-        masses,
-        options,
-        &mut on_event,
-    )?;
+    } = saddle::refine_band(&mut pool[0], &band, masses, options, &mut on_event)?;
     // The exact Hessian that certified the Newton displacement also supplies the
     // spectrum. Rotate it with the fitted geometry so the reported mode and IRC
     // launch share that frame. An exhausted Bofill model needs a fresh build.
