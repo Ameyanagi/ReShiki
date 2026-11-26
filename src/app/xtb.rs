@@ -26,6 +26,7 @@ pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
+mod selection;
 mod source;
 pub(super) use source::Source;
 mod state;
@@ -93,8 +94,10 @@ pub(crate) enum Action {
 pub(crate) enum Entry {
     /// A task from the right-click Calculate (xTB) menu.
     Task(CalcTask),
-    /// The context row's "Optimize with GFN2-xTB".
+    /// Optimize the geometry with GFN2-xTB.
     OptimizeGfn2,
+    /// Calculate energy with a method that gives molecular orbitals.
+    Orbitals,
     /// ⌘R: the last calculation again, on the selected molecule.
     Rerun,
 }
@@ -102,6 +105,14 @@ pub(crate) enum Entry {
 /// ⌘R, as menus and tooltips show it.
 pub(super) fn rerun_keys() -> String {
     super::shortcuts::label(&Message::Xtb(Action::Entry(Entry::Rerun))).unwrap_or_default()
+}
+
+/// Choose xTB before showing Predict so opening its settings does not start NMR.
+pub(super) fn settings_messages() -> [Message; 2] {
+    [
+        Message::Xtb(Action::Page(Page::Xtb)),
+        Message::Inspector(super::InspectorTab::Predict),
+    ]
 }
 
 /// Whether this build can calculate; the entry points hide otherwise.
@@ -127,6 +138,7 @@ pub(crate) struct Window {
 pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
+    selection_hint: Option<String>,
     serial: u64,
     pub(super) palette: palette::Palette,
     conformer_stereo: std::cell::RefCell<conformers::CardStereo>,
@@ -612,8 +624,7 @@ impl App {
             return Task::none();
         }
         if self.xtb_target().is_none() {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         }
         match entry {
@@ -621,6 +632,12 @@ impl App {
             Entry::OptimizeGfn2 => {
                 self.xtb.settings.task = CalcTask::Optimize;
                 self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+            }
+            Entry::Orbitals => {
+                self.xtb.settings.task = CalcTask::Energy;
+                if !self.xtb.settings.method.capabilities().orbitals {
+                    self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+                }
             }
             Entry::Rerun => {}
         }
@@ -638,8 +655,7 @@ impl App {
             .xtb_target()
             .and_then(|atoms| Some((atoms.clone(), *atoms.first()?)))
         else {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         };
         let settings = &conformers::effective(&self.xtb.settings, &self.xtb.conformers);

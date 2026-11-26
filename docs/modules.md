@@ -227,6 +227,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
 - `src/app/xtb/results/methods.rs`: The methods paragraph Copy methods text writes for a stored result, citing the BibTeX keys of docs/references/xtb.bib for what actually ran.
 - `src/app/xtb/run.rs`: Stream the shared xTB job's progress to the Calculate card.
+- `src/app/xtb/selection.rs`: Guidance when the drawing does not identify one molecule to calculate.
 - `src/app/xtb/source.rs`: Where a molecule's 3D coordinates came from (an xTB conformer, an optimized geometry or step, the file or the force field) and the other geometries its current xTB results hold, for the input-file dialog and the Undo status.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
