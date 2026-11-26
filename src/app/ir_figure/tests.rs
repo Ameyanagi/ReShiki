@@ -71,7 +71,17 @@ fn card_syncs_numeric_drafts_and_shows_hidden_peaks_in_order() {
     let mut app = placed(&figure);
     assert!(app.ir_figure_card().is_some());
     assert_eq!(app.tab.ir_figure.fields, ["3900", "600", "30.5", "0.960"]);
-    assert_eq!(app.tab.ir_figure.peaks, [3310, 1900, 1731, 1193, 1000, 631]);
+    assert_eq!(
+        app.tab.ir_figure.peaks,
+        [
+            (3448, 3310),
+            (1900, 1824),
+            (1803, 1731),
+            (1243, 1193),
+            (1000, 960),
+            (657, 631),
+        ]
+    );
     let cached_peaks = app.tab.ir_figure.peaks.as_ptr();
     app.set_selection(vec![target(&app).graphic]);
     app.sync_ir_figure();
@@ -175,7 +185,7 @@ fn numeric_apply_validates_each_field_and_commits_the_drafts_together() {
 }
 
 #[test]
-fn hiding_a_peak_removes_only_its_label_and_keeps_its_switch() {
+fn hiding_a_peak_removes_only_its_label_even_after_a_scale_change() {
     let figure = IrFigure {
         labels: 3,
         ..sample()
@@ -193,22 +203,40 @@ fn hiding_a_peak_removes_only_its_label_and_keeps_its_switch() {
     let mut previous = texts(&before);
     previous.retain(|text| text != "1803");
     assert_eq!(texts(&app.tab.doc), previous);
-    assert!(app.tab.ir_figure.peaks.contains(&1803));
+    assert!(app.tab.ir_figure.peaks.contains(&(1803, 1803)));
     let hidden = app.tab.doc.clone();
     verify_rebuild(
         &mut app,
         &before,
         &IrFigure {
             hidden_labels: vec![1803],
-            ..figure
+            ..figure.clone()
         },
     );
 
     let _ = app.update(Message::Redo);
     app.set_selection(hidden.groups[0].members.clone());
+    draft(&mut app, Field::Scale, "0.960");
+    let key = target(&app);
+    send(&mut app, Action::Apply(key));
+    let actual = app.selected_ir_figure().unwrap().0;
+    assert_eq!(actual.scale, 0.96);
+    assert_eq!(actual.hidden_labels, [1803]);
+    assert!(app.tab.ir_figure.peaks.contains(&(1803, 1731)));
+
+    let scaled = IrFigure {
+        scale: 0.96,
+        ..figure
+    };
+    let restored = texts(&placed(&scaled).tab.doc);
+    assert!(restored.iter().any(|text| text == "1731"));
+    let mut still_hidden = restored.clone();
+    still_hidden.retain(|text| text != "1731");
+    assert_eq!(texts(&app.tab.doc), still_hidden);
+
     let key = target(&app);
     send(&mut app, Action::Edit(key, Edit::Peak(1803, true)));
-    assert_eq!(texts(&app.tab.doc), texts(&before));
+    assert_eq!(texts(&app.tab.doc), restored);
     assert!(app.selected_ir_figure().unwrap().0.hidden_labels.is_empty());
 }
 

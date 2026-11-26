@@ -448,13 +448,13 @@ fn weak_stretch_labels_need_a_visible_dip_at_the_printed_size() {
         ..IrFigure::default()
     };
     let labels = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default()).labelled_peaks;
-    assert_eq!(labels(&ir), [3060, 1050]);
+    assert_eq!(labels(&ir), [(3060, 3060), (1050, 1050)]);
 
     // The closer stretches have shallower dips even though their tips are higher.
     ir.bands[1] = [3037., 1.35];
-    assert_eq!(labels(&ir), [1050]);
+    assert_eq!(labels(&ir), [(1050, 1050)]);
     ir.columns = Columns::Two;
-    assert_eq!(labels(&ir), [3059, 1050]);
+    assert_eq!(labels(&ir), [(3059, 3059), (1050, 1050)]);
 }
 
 #[test]
@@ -468,7 +468,7 @@ fn hiding_the_strongest_label_preserves_baseline_absorbance_scaling() {
     };
     let build = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default());
     let visible = build(&ir);
-    assert_eq!(visible.labelled_peaks, [1050]);
+    assert_eq!(visible.labelled_peaks, [(1050, 1050)]);
 
     ir.hidden_labels.push(1050);
     let hidden = build(&ir);
@@ -486,12 +486,15 @@ fn doublet_partners_can_fall_below_an_anchor_cutoff_or_cross_a_region_boundary()
         ..IrFigure::default()
     };
     let labels = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default()).labelled_peaks;
-    assert_eq!(labels(&ir), [1756, 1788, 1050]);
+    assert_eq!(labels(&ir), [(1756, 1756), (1788, 1788), (1050, 1050)]);
 
     for (anchor, partner) in [(1516, 1484), (1984, 2016)] {
         ir.bands[0][0] = f64::from(partner);
         ir.bands[1][0] = f64::from(anchor);
-        assert_eq!(labels(&ir), [anchor, partner, 1050]);
+        assert_eq!(
+            labels(&ir),
+            [(anchor, anchor), (partner, partner), (1050, 1050)]
+        );
     }
 }
 
@@ -512,11 +515,17 @@ fn separated_doublets_take_consecutive_slots_in_reserved_and_fill_labels() {
         ..IrFigure::default()
     };
     let labels = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default()).labelled_peaks;
-    assert_eq!(labels(&ir), [1756, 1788, 1300, 1100, 900, 650]);
+    assert_eq!(
+        labels(&ir),
+        [1756, 1788, 1300, 1100, 900, 650].map(|peak| (peak, peak))
+    );
 
     ir.bands[0][0] = 1488.;
     ir.bands[1][0] = 1456.;
-    assert_eq!(labels(&ir), [1456, 1488, 1300, 1100, 900, 650]);
+    assert_eq!(
+        labels(&ir),
+        [1456, 1488, 1300, 1100, 900, 650].map(|peak| (peak, peak))
+    );
 }
 
 #[test]
@@ -699,7 +708,12 @@ fn check_peak_label_layouts(mut ir: IrFigure, check_peaks: impl Fn(&str, &[u32])
         let case = format!("{columns:?} {y:?} vertical={vertical}");
         let chart = figure::spectrum(&doc, &ir, at);
         assert_eq!(chart, figure::spectrum(&doc, &ir, at));
-        check_peaks(&case, &chart.labelled_peaks);
+        let printed: Vec<_> = chart
+            .labelled_peaks
+            .iter()
+            .map(|&(_, printed)| printed)
+            .collect();
+        check_peaks(&case, &printed);
         let labels = &chart.annotations[chart.annotations.len() - chart.labelled_peaks.len()..];
         let leaders = &chart.graphics[chart.graphics.len() - labels.len()..];
         if columns == Columns::One {
@@ -832,7 +846,7 @@ fn hidden_peaks_are_not_replaced_and_method_text_fits_one_line() {
     ir.bands = vec![[3000., 1.]];
     ir.hidden_labels.clear();
     ir.y = YAxis::Absorbance;
-    assert_eq!(build(&ir).labelled_peaks, [3000]);
+    assert_eq!(build(&ir).labelled_peaks, [(3000, 3000)]);
 }
 
 #[tokio::test]

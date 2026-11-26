@@ -7,7 +7,7 @@ use reshiki::{
     grouping::Group,
     scene::selection_bounds,
 };
-use std::collections::HashSet;
+use std::{cmp::Reverse, collections::HashSet};
 
 #[cfg(test)]
 mod tests;
@@ -66,14 +66,24 @@ pub(super) struct State {
     member_count: usize,
     fields: [String; 4],
     errors: [Option<&'static str>; 4],
-    peaks: Vec<u32>,
+    peaks: Vec<(u32, u32)>,
 }
 
 impl State {
-    fn new(target: Target, figure: &IrFigure, member_count: usize, mut peaks: Vec<u32>) -> Self {
-        peaks.extend(&figure.hidden_labels);
-        peaks.sort_unstable_by(|a, b| b.cmp(a));
-        peaks.dedup();
+    fn new(
+        target: Target,
+        figure: &IrFigure,
+        member_count: usize,
+        mut peaks: Vec<(u32, u32)>,
+    ) -> Self {
+        peaks.extend(
+            figure
+                .hidden_labels
+                .iter()
+                .map(|&key| (key, (f64::from(key) * figure.scale).round() as u32)),
+        );
+        peaks.sort_by_key(|&(key, _)| Reverse(key));
+        peaks.dedup_by_key(|(key, _)| *key);
         Self {
             target: Some(target),
             parameters: Some(figure.clone()),
@@ -300,17 +310,23 @@ impl App {
                 Edit::Shape(shape) => figure.shape = shape,
                 Edit::Labels(count) => figure.labels = count.min(IrFigure::MAX_LABELS),
                 Edit::VerticalLabels(on) => figure.vertical_labels = on,
-                Edit::Peak(peak, visible) => {
-                    if self.tab.ir_figure.peaks.contains(&peak) {
+                Edit::Peak(key, visible) => {
+                    if self
+                        .tab
+                        .ir_figure
+                        .peaks
+                        .iter()
+                        .any(|&(peak, _)| peak == key)
+                    {
                         if visible {
-                            figure.hidden_labels.retain(|&hidden| hidden != peak);
-                        } else if !figure.hidden_labels.contains(&peak) {
+                            figure.hidden_labels.retain(|&hidden| hidden != key);
+                        } else if !figure.hidden_labels.contains(&key) {
                             if figure.hidden_labels.len() >= IrFigure::MAX_HIDDEN_LABELS {
                                 self.status = "An IR figure can have up to 64 hidden labels".into();
                                 self.error = true;
                                 return Task::none();
                             }
-                            figure.hidden_labels.push(peak);
+                            figure.hidden_labels.push(key);
                         }
                     }
                 }
