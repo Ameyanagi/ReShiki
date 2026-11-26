@@ -76,7 +76,7 @@ fn ir_export_completion_has_a_short_summary_and_path_details() {
     .completed(Ok(Some(path.clone())));
     let _ = app.update(receipt);
     let (summary, details) = app.status.split_once('\n').unwrap();
-    assert_eq!(summary, "Exported the IR spectrum");
+    assert_eq!(summary, "Exported spectrum.svg");
     assert!(summary.chars().count() <= 60);
     assert_eq!(details, path.to_string_lossy());
     assert!(!app.error);
