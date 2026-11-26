@@ -615,6 +615,11 @@ impl App {
                 .on_press(Message::Xtb(xtb::Action::Cancel)),
             );
         } else {
+            // A failed rerun comes first; an older summary is then the previous result.
+            let stopped = state.stopped.as_ref().filter(|(at, _)| *at == arrow);
+            if let Some((_, reason)) = stopped {
+                body = body.push(line(reason.clone(), Tone::Warning));
+            }
             let summary = state.summaries.iter().find(|s| s.arrow == arrow);
             if let Some(summary) = summary {
                 let current = snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
@@ -630,7 +635,10 @@ impl App {
                     })
                     .flatten()
                 {
-                    body = body.push(line(totals.line(), Tone::Good));
+                    body = body.push(match stopped {
+                        Some(_) => line(format!("Previous result: {}", totals.line()), Tone::Muted),
+                        None => line(totals.line(), Tone::Good),
+                    });
                     if summary.reused > 0 {
                         body = body.push(line(
                             format!(
@@ -647,9 +655,6 @@ impl App {
                         Tone::Warning,
                     ));
                 }
-            } else if let Some((_, reason)) = state.stopped.as_ref().filter(|(at, _)| *at == arrow)
-            {
-                body = body.push(line(reason.clone(), Tone::Warning));
             }
             let idle = xtb::available()
                 && self.tab.xtb.run.is_none()
