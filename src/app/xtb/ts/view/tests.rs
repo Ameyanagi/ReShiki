@@ -110,18 +110,26 @@ fn changed_bonds_use_saved_endpoints_and_lengths_use_ts_coordinates() {
 mod presentation_tests {
     use super::*;
     use crate::app::xtb::run;
-    use reshiki::qcdata::{Task, Trajectory, Vibrations};
+    use crate::app::xtb::ts::card::tests::{ViewHarness, ViewSnapshot};
+    use reshiki::document::Document;
+    use reshiki::qcdata::{Endpoints, Task, Trajectory, Vibrations};
+    use reshiki::science::{self, Launch};
+    use std::sync::Arc;
 
-    fn result() -> CalcResult {
-        let frame = Frame {
-            numbers: vec![3, 17],
-            positions_angstrom: vec![[0., 0., 0.], [0., 0., 2.]],
+    fn frame() -> Frame {
+        Frame {
+            numbers: vec![3, 17, 2],
+            positions_angstrom: vec![[0., 0., 0.], [0., 0., 2.], [4., 0., 0.]],
             isotopes: vec![],
             masses_amu: vec![],
             charge: 0,
             multiplicity: 1,
             drawing_atoms: vec![],
-        };
+        }
+    }
+
+    fn result() -> CalcResult {
+        let frame = frame();
         let energy = |delta| -5. + delta / KCAL_PER_HARTREE;
         let mut result = run::example_computed(energy(26.5), 1.)
             .to_calc_result(&frame, Task::Energy, &run::example_engine(), None)
@@ -150,6 +158,147 @@ mod presentation_tests {
         result
     }
 
+    fn path_app(mut result: CalcResult) -> App {
+        let mut doc = Document::default();
+        let atoms: Vec<_> = ["Li", "Cl", "He"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, element)| {
+                doc.add_atom(
+                    element,
+                    reshiki::document::Point::new(index as f32 * 28., 0.),
+                )
+            })
+            .collect();
+        let frame = Arc::new(frame());
+        let launch = Launch {
+            frame: Arc::clone(&frame),
+            atoms: atoms.iter().copied().map(Some).collect(),
+            baseline: science::baseline(&doc, &atoms),
+        };
+        result.endpoints = Some(Endpoints {
+            reactant: frame.hash(),
+            product: frame.hash(),
+        });
+        science::attach(&mut doc, &launch, vec![], result).expect("valid saved TS fixture");
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = doc;
+        let result = Arc::clone(&app.tab.doc.science.results[0].result);
+        app.tab.xtb.palette.show(&result);
+        app
+    }
+
+    fn profile(snapshot: &ViewSnapshot) -> &reshiki::accessibility::Node {
+        snapshot
+            .semantics
+            .nodes
+            .iter()
+            .find(|node| node.id == "xtb-ts-path-profile")
+            .expect("the production Path view must expose its chart")
+    }
+
+    #[tokio::test]
+    async fn production_path_view_uses_the_refined_marker_and_activates_saved_images() {
+        let ui = ViewHarness::new().await;
+        let mut app = path_app(result());
+        let snapshot = ui.inspect(app.xtb_bottom_palette().expect("open Path palette"));
+        assert!(snapshot.semantics.duplicate_ids.is_empty());
+        assert!(profile(&snapshot).name.contains("TS‡ 26.5 kcal/mol"));
+        assert!(!profile(&snapshot).name.contains("TS‡ 30.2"));
+        assert!(
+            snapshot
+                .semantics
+                .nodes
+                .iter()
+                .any(|node| { node.id == "xtb-results-path" && node.checked == Some(true) })
+        );
+        let image = snapshot
+            .semantics
+            .nodes
+            .iter()
+            .find(|node| node.id == "xtb-ts-image-1")
+            .expect("the saved image's keyboard control");
+        assert_eq!(image.name, "ΔE 30.2 kcal/mol");
+        let action = ui
+            .activate(
+                app.xtb_bottom_palette().expect("open Path palette"),
+                "xtb-ts-image-1",
+            )
+            .expect("the actual image button must dispatch");
+        assert!(matches!(
+            action,
+            Message::Xtb(XtbAction::Ts(Action::Image(1)))
+        ));
+        let _ = app.update(action);
+        let snapshot = ui.inspect(app.xtb_bottom_palette().expect("selected Path image"));
+        assert!(snapshot.texts.iter().any(|text| text == "ΔE 30.2 kcal/mol"));
+        assert!(
+            profile(&snapshot)
+                .name
+                .contains("Selected ΔE 30.2 kcal/mol")
+        );
+        assert!(
+            snapshot
+                .semantics
+                .nodes
+                .iter()
+                .any(|node| { node.id == "xtb-ts-image-1" && node.checked == Some(true) })
+        );
+
+        app.xtb.dock.inspector = true;
+        let snapshot = ui.inspect(app.xtb_inspector_palette().expect("inspector Path palette"));
+        assert!(profile(&snapshot).name.contains("TS‡ 26.5 kcal/mol"));
+        assert!(
+            snapshot
+                .semantics
+                .nodes
+                .iter()
+                .any(|node| node.id == "xtb-ts-back")
+        );
+    }
+
+    #[tokio::test]
+    async fn production_path_view_omits_the_marker_for_failed_verification() {
+        let ui = ViewHarness::new().await;
+        let mut failures = Vec::new();
+        for frequencies in [vec![], vec![-49.9], vec![-50.], vec![-120., -60.]] {
+            let mut result = result();
+            result.vibrations.as_mut().unwrap().frequencies_cm1 = frequencies;
+            failures.push(result);
+        }
+        for reason in [
+            "saddle refinement did not converge",
+            "IRC reaches the reactant on both sides",
+            "worker check failed: timed out",
+        ] {
+            let mut result = result();
+            result.status = Status::NotConverged {
+                reason: reason.into(),
+            };
+            failures.push(result);
+        }
+        for result in failures {
+            let app = path_app(result);
+            let snapshot = ui.inspect(app.xtb_bottom_palette().expect("failed Path palette"));
+            assert!(!profile(&snapshot).name.contains("TS‡"));
+            assert!(
+                snapshot
+                    .texts
+                    .iter()
+                    .any(|text| text == "No reliable transition state found.")
+            );
+            assert!(snapshot.texts.iter().all(|text| !text.contains("ΔE‡")));
+            assert!(
+                snapshot
+                    .semantics
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "xtb-ts-rerun-20")
+            );
+        }
+    }
+
     #[test]
     fn saved_result_uses_one_refined_barrier_and_the_same_status_value() {
         let presentation = presentation(&result(), None);
@@ -168,7 +317,7 @@ mod presentation_tests {
     }
 
     #[test]
-    fn nonconverged_or_wrong_mode_count_has_no_barrier_or_ts_marker() {
+    fn nonconverged_or_wrong_mode_count_has_no_barrier() {
         for frequencies in [vec![], vec![-49.9], vec![-50.], vec![-120., -60.]] {
             let mut result = result();
             result.vibrations.as_mut().unwrap().frequencies_cm1 = frequencies;
@@ -176,15 +325,6 @@ mod presentation_tests {
             assert!(!presentation.reliable());
             assert_eq!(presentation.refined_kcal, None);
             assert!(!presentation.status_line().contains("kcal/mol"));
-            let chart = PathChart {
-                deltas: vec![0., 30.2, -8.2],
-                refined_delta: presentation.refined_kcal,
-                selected: None,
-                climbing: 1,
-                interactive: true,
-                stale: false,
-            };
-            assert_eq!(chart.refined_ts_marker(), None);
         }
         let mut result = result();
         result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-120., -60.];

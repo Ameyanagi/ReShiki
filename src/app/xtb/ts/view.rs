@@ -306,16 +306,19 @@ impl App {
                     .all(|image| image.len() == shown.frame.numbers.len())
         });
         let interactive = !self.xtb_running();
-        let chart = canvas(PathChart {
+        let chart = PathChart {
             deltas: deltas.clone(),
             refined_delta,
             selected,
             climbing,
             interactive,
             stale: shown.stale,
-        })
-        .width(Length::Fill)
-        .height(190);
+        };
+        let chart = reshiki::accessibility::image(
+            "xtb-ts-path-profile",
+            chart.accessible_name(),
+            canvas(chart).width(Length::Fill).height(190),
+        );
         let mut profile = column![chart].spacing(6);
         if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
             profile = profile.push(text(selection_label(delta)).size(12));
@@ -584,6 +587,20 @@ impl PathChart {
     fn refined_ts_marker(&self) -> Option<(f64, String)> {
         self.refined_delta
             .map(|delta| (delta, format!("TS‡ {}", state::signed(delta, 1))))
+    }
+
+    fn accessible_name(&self) -> String {
+        let mut name = format!(
+            "Reaction path energy profile · {} images",
+            self.deltas.len()
+        );
+        if let Some((_, marker)) = self.refined_ts_marker() {
+            name.push_str(&format!(" · {marker} kcal/mol"));
+        }
+        if let Some(delta) = self.selected.and_then(|index| self.deltas.get(index)) {
+            name.push_str(&format!(" · Selected {}", selection_label(*delta)));
+        }
+        name
     }
 }
 

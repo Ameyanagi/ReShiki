@@ -1204,11 +1204,19 @@ impl App {
             ))
         };
         let vibrations = vibration_context(self);
+        let reaction = (document, self.xtb_selected_reaction());
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
-        if vibrations != vibration_context(self) {
+        let reaction_result_changed = self.xtb_sync_reaction_palette(
+            reaction
+                != (
+                    (self.tab.id, self.tab.file_epoch),
+                    self.xtb_selected_reaction(),
+                ),
+        );
+        if reaction_result_changed || vibrations != vibration_context(self) {
             task = Task::batch([task, tagged(self.xtb_vibrations_resume(), self.tab.id)]);
         }
         // The canvas forgets the pointer when a context menu closes

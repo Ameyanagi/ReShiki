@@ -106,20 +106,31 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     }
     parts.push(format!("charge {}", signed(f64::from(frame.charge), 0)));
     parts.push(format!("multiplicity {}", frame.multiplicity));
-    if let Some(finished) = result
+    if let Some(finished) = finished(result, "%-d %b %Y %H:%M") {
+        parts.push(finished);
+    }
+    parts.join(" · ")
+}
+
+fn finished(result: &CalcResult, format: &str) -> Option<String> {
+    result
         .run
         .as_ref()
         .and_then(|run| run.finished.as_deref())
         .and_then(|finished| chrono::DateTime::parse_from_rfc3339(finished).ok())
-    {
-        parts.push(
+        .map(|finished| {
             finished
                 .with_timezone(&chrono::Local)
-                .format("%-d %b %Y %H:%M")
-                .to_string(),
-        );
-    }
-    parts.join(" · ")
+                .format(format)
+                .to_string()
+        })
+}
+
+pub(super) fn previous_result(result: &CalcResult) -> String {
+    finished(result, "%-d %b %Y").map_or_else(
+        || "Previous result".into(),
+        |date| format!("Previous result ({date})"),
+    )
 }
 
 fn solvent(result: &CalcResult) -> String {

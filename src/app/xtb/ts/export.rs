@@ -143,14 +143,7 @@ impl App {
         else {
             return Task::none();
         };
-        let arrow = shown
-            .ts
-            .map(|session| session.arrow)
-            .or_else(|| super::saved_search(&shown.stored.result).map(|search| search.arrow))
-            .or_else(|| {
-                super::unique_matching_plan(&self.tab.doc, shown.atoms).map(|(arrow, _)| arrow)
-            });
-        let Some(source) = self.xtb_ts_export_source(&shown.stored.result, arrow) else {
+        let Some(source) = self.xtb_ts_export_source(&shown.stored.result, shown.arrow) else {
             return Task::none();
         };
         self.open_qc_export_source(source)
@@ -169,6 +162,16 @@ impl App {
 
     fn xtb_ts_export_source(&self, result: &Arc<CalcResult>, arrow: Option<u64>) -> Option<Source> {
         let doc = &self.tab.doc;
+        if let Some(context) =
+            super::saved_search(result).and_then(|search| search.context.as_ref())
+        {
+            return Source::from_result(
+                result,
+                &doc.science,
+                context.title.clone(),
+                &context.reactant,
+            );
+        }
         let frame = doc.science.frame(&result.frame)?;
         let fallback = || {
             let atoms: Vec<_> = doc

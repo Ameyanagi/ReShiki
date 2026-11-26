@@ -233,6 +233,10 @@ pub(crate) struct Failed {
 }
 
 impl Failed {
+    fn ts(&self) -> Option<&ts::Request> {
+        self.request.as_ref()?.ts.as_ref()
+    }
+
     fn method(&self) -> qcdata::XtbMethod {
         self.request
             .as_ref()
@@ -307,6 +311,13 @@ struct Pending {
     line: String,
     notes: Vec<String>,
     info: RunInfo,
+    attempt: Option<Attempt>,
+}
+
+struct Attempt {
+    request: Box<Request>,
+    seconds: f64,
+    revision: (u64, u64),
 }
 
 /// A run's progress, which never closes menus or moves focus.
@@ -865,33 +876,38 @@ impl App {
             .and_then(|run| run.launch.as_ref())
             .map(|launch| launch.frame.numbers.clone())
             .unwrap_or_default();
-        let seconds = run.as_ref().map_or(0., Run::seconds);
-        // The state the run calculated: an edit during the run retires Retry.
-        let revision = run
-            .as_ref()
-            .map_or((self.tab.file_epoch, self.tab.revision), |run| run.revision);
-        let request = run.map(|mut run| {
-            Box::new(Request {
-                atoms: std::mem::take(&mut run.atoms),
-                config: run.config.clone(),
-                keep_full: run.keep_full,
-                start: run.start.take(),
-                search: run.search.as_ref().map(|live| live.config.clone()),
-                ts: run.ts.as_ref().map(|live| live.request.clone()),
-            })
-        });
-        let failed = Failed {
+        let attempt = run.as_ref().map(Run::attempt);
+        self.xtb_record_failure(failure, attempt, numbers);
+    }
+
+    fn xtb_record_failure(
+        &mut self,
+        failure: state::Failure,
+        attempt: Option<Attempt>,
+        numbers: Vec<u8>,
+    ) {
+        let mut failed = Failed {
             failure,
-            request,
+            request: None,
             numbers,
-            seconds,
-            revision,
+            seconds: 0.,
+            revision: (self.tab.file_epoch, self.tab.revision),
         };
+        if let Some(attempt) = attempt {
+            failed.request = Some(attempt.request);
+            failed.seconds = attempt.seconds;
+            // An edit during the run retires Retry.
+            failed.revision = attempt.revision;
+        }
         self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;
-        self.tab.xtb.palette.open = true;
-        // The card's actions must show, so a collapsed dock opens.
-        self.xtb.dock.collapsed = false;
+        if failed
+            .ts()
+            .is_none_or(|ts| self.xtb_selected_reaction() == Some(ts.arrow))
+        {
+            self.tab.xtb.palette.open = true;
+            self.xtb.dock.collapsed = false;
+        }
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
@@ -957,7 +973,7 @@ impl App {
         ) {
             Ok(attached) => attached,
             Err(error) => {
-                self.xtb_fail(state::Failure::Other(error.to_string()));
+                self.xtb_store_failed(pending, error.to_string());
                 return;
             }
         };
@@ -1032,7 +1048,7 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if self.error {
-            self.xtb_fail(state::Failure::Other(self.status.clone()));
+            self.xtb_store_failed(pending, self.status.clone());
             return;
         }
         if let Some(result) = self
@@ -1054,7 +1070,7 @@ impl App {
                     }
                 }
             }
-            self.tab.xtb.palette.show(&result);
+            self.xtb_show_result(&result);
             self.tab.xtb.vibrations.mode = 0;
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
@@ -1074,6 +1090,15 @@ impl App {
         self.xtb_vibrations_sync();
     }
 
+    fn xtb_store_failed(&mut self, mut pending: Pending, reason: String) {
+        let failure = state::Failure::Other(reason);
+        if let Some(attempt) = pending.attempt.take() {
+            self.xtb_record_failure(failure, Some(attempt), pending.launch.frame.numbers.clone());
+        } else {
+            self.xtb_fail(failure);
+        }
+    }
+
     /// "C3" for the third frame atom, and the drawing's CIP code there.
     fn xtb_atom_name(&self, atoms: &[Option<u64>], id: u64) -> (String, Option<String>) {
         let index = atoms.iter().position(|a| *a == Some(id));
@@ -1085,6 +1110,21 @@ impl App {
 }
 
 impl Run {
+    fn attempt(&self) -> Attempt {
+        Attempt {
+            request: Box::new(Request {
+                atoms: self.atoms.clone(),
+                config: self.config.clone(),
+                keep_full: self.keep_full,
+                start: self.start.clone(),
+                search: self.search.as_ref().map(|live| live.config.clone()),
+                ts: self.ts.as_ref().map(|live| live.request.clone()),
+            }),
+            seconds: self.seconds(),
+            revision: self.revision,
+        }
+    }
+
     fn seconds(&self) -> f64 {
         self.started.elapsed().as_secs_f64()
     }
@@ -1350,6 +1390,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         result,
         line,
         notes,
+        attempt: None,
     })
 }
 

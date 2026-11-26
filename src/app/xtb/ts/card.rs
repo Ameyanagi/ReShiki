@@ -11,6 +11,7 @@ use iced::{Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::palette::{Color, Palette};
 use reshiki::qcdata::{CalcResult, MappedAtom, TransitionStateMapping};
+use reshiki::reactions::Reaction;
 use reshiki::reactions::ts_plan::{self, Side, TsPlan, TsPlanError};
 use std::sync::Arc;
 
@@ -61,13 +62,13 @@ fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Ts(TsAction::Card(action)))
 }
 
-pub(super) struct ReactionLabel {
+pub(in crate::app::xtb) struct ReactionLabel {
     reactants: Vec<(u16, String)>,
     products: Vec<(u16, String)>,
 }
 
 impl ReactionLabel {
-    pub(super) fn title(&self) -> String {
+    pub(in crate::app::xtb) fn title(&self) -> String {
         let side = |species: &[(u16, String)], empty: &str| {
             if species.is_empty() {
                 return empty.to_owned();
@@ -98,6 +99,17 @@ impl ReactionLabel {
 
 #[derive(Clone)]
 pub(super) struct BondChanges(pub(super) TransitionStateMapping);
+
+fn mapped_label_color(doc: &Document, reaction: &Reaction, atom: &MappedAtom) -> Color {
+    reaction
+        .reactants
+        .iter()
+        .chain(&reaction.products)
+        .flat_map(|participant| &participant.atoms)
+        .filter_map(|&id| doc.atom(id))
+        .find(|drawn| drawn.map_num == atom.number && drawn.element == atom.element)
+        .map_or(Color::Ink, |drawn| drawn.display.mapping.style.color)
+}
 
 impl BondChanges {
     pub(super) fn from_plan(doc: &Document, plan: &TsPlan) -> Self {
@@ -132,16 +144,13 @@ impl BondChanges {
         })
     }
 
-    fn view(&self, doc: &Document, current_only: bool) -> Element<'static, Message> {
+    fn view(&self, doc: &Document, arrow: u64, current_only: bool) -> Element<'static, Message> {
         let palette = Palette::of(doc);
+        let reaction = reshiki::reactions::preview(doc, arrow).ok();
         let label = |atom: &MappedAtom| {
-            let color = doc
-                .atoms
-                .iter()
-                .filter(|drawn| drawn.map_num == atom.number && drawn.element == atom.element)
-                .map(|drawn| drawn.display.mapping.style.color)
-                .find(|&color| color != Color::Ink)
-                .unwrap_or_else(|| crate::app::reaction_mapping::map_label_color(atom.number));
+            let color = reaction.as_ref().map_or(Color::Ink, |reaction| {
+                mapped_label_color(doc, reaction, atom)
+            });
             span(format!("{}{}", atom.element, atom.number))
                 .color(crate::appearance::from_rgb(palette.rgb(color)))
         };
@@ -179,14 +188,14 @@ pub(in crate::app::xtb) enum ArrowResult<'a> {
 }
 
 impl App {
-    pub(in crate::app::xtb) fn xtb_selected_reaction(&self) -> Option<u64> {
+    pub(in crate::app) fn xtb_selected_reaction(&self) -> Option<u64> {
         let &[arrow] = self.tab.selected.as_slice() else {
             return None;
         };
         review::reaction_arrow(&self.tab.doc, arrow).then_some(arrow)
     }
 
-    pub(super) fn xtb_reaction_label(&self, arrow: u64) -> ReactionLabel {
+    pub(in crate::app::xtb) fn xtb_reaction_label(&self, arrow: u64) -> ReactionLabel {
         let doc = &self.tab.doc;
         let names = |participants: &[reshiki::reactions::Participant]| {
             participants
@@ -236,21 +245,23 @@ impl App {
             if !super::is_ts(result) {
                 continue;
             }
-            if let Some(session) = self.tab.xtb.ts_sessions.get(result) {
-                if session.arrow == arrow {
-                    return ArrowResult::Found(result);
-                }
-                continue;
-            }
-            if let Some(search) = super::saved_search(result) {
-                if search.arrow == arrow {
-                    return ArrowResult::Found(result);
-                }
-                continue;
-            }
             let Some(link) = doc.science.attachment(stored.attachment) else {
                 continue;
             };
+            if let Some(search) = super::saved_search(result) {
+                if search.arrow == Some(arrow)
+                    && super::bound_arrow(doc, arrow, &link.atoms).is_some()
+                {
+                    return ArrowResult::Found(result);
+                }
+                continue;
+            }
+            if let Some(session) = self.tab.xtb.ts_sessions.get(result) {
+                if session.arrow == arrow && super::bound_arrow(doc, arrow, &link.atoms).is_some() {
+                    return ArrowResult::Found(result);
+                }
+                continue;
+            }
             let mut candidates = super::matching_plans(doc, &link.atoms).map(|(arrow, _)| arrow);
             let first = candidates.next();
             let second = candidates.next();
@@ -275,7 +286,8 @@ impl App {
         let Some((mode, _)) = imaginary_mode(&result) else {
             return Task::none();
         };
-        self.tab.xtb.palette.show(&result);
+        self.xtb_show_result(&result);
+        self.xtb_end_preview();
         self.tab.xtb.palette.view = crate::app::xtb::results::View::Vibrations;
         self.tab.xtb.vibrations.mode = mode;
         self.tab.xtb.vibrations.playing = true;
@@ -306,8 +318,8 @@ impl App {
                 if matches!(action, Action::Animate) {
                     return self.xtb_ts_animate(result);
                 }
-                self.xtb_end_preview();
-                self.tab.xtb.palette.show(&result);
+                self.xtb_show_result(&result);
+                self.tab.xtb.palette.view = xtb::results::View::Path;
                 self.xtb.dock.collapsed = false;
                 self.xtb_vibrations_sync();
                 Task::none()
@@ -329,7 +341,7 @@ impl App {
             ArrowResult::Found(result) => (
                 true,
                 auto || super::saved_search(result).is_some_and(|search| {
-                    search.mapping.automatic && !super::saved_search_stale(doc, search)
+                    search.mapping.automatic && !self.xtb_ts_search_stale(result)
                 }),
             ),
             _ => (false, auto),
@@ -418,7 +430,7 @@ impl App {
             .filter(|live| live.request.arrow == arrow)
         {
             return body
-                .push(live.request.bonds.view(doc, false))
+                .push(live.request.bonds.view(doc, arrow, false))
                 .push(line(live.line(), Tone::Muted))
                 .push(progress_bar(0.0..=1.0, live.fraction().unwrap_or(0.)).girth(3))
                 .push(
@@ -448,27 +460,28 @@ impl App {
         }
 
         let can_start = idle && xtb::available();
-        if let Some(Outcome::Failed(failed)) = &self.tab.xtb.outcome
-            && let Some(request) = failed
-                .request
-                .as_ref()
-                .and_then(|request| request.ts.as_ref())
-            && request.arrow == arrow
+        let failed = if let Some(Outcome::Failed(failed)) = &self.tab.xtb.outcome
+            && let Some(request) = failed.ts().filter(|request| request.arrow == arrow)
         {
             let (reason, detail) = failed.explain();
-            return body
-                .push(request.bonds.view(doc, false))
+            body = body
+                .push(request.bonds.view(doc, arrow, false))
                 .push(line("No reliable transition state found.", Tone::Warning))
                 .push(line(
                     if detail.is_empty() { reason } else { detail },
                     Tone::Muted,
                 ))
-                .push(finer_path(can_start))
-                .into();
-        }
+                .push(finer_path(can_start));
+            true
+        } else {
+            false
+        };
 
         match self.xtb_ts_card_result(arrow) {
             ArrowResult::Found(result) => {
+                if failed {
+                    body = body.push(line(xtb::results::previous_result(result), Tone::Muted));
+                }
                 let session = self
                     .tab
                     .xtb
@@ -477,9 +490,12 @@ impl App {
                     .map(|session| session.as_ref());
                 let search = super::saved_search(result);
                 if let Some(search) = search {
-                    body = body.push(BondChanges(search.mapping.clone()).view(doc, false));
+                    if !failed {
+                        body =
+                            body.push(BondChanges(search.mapping.clone()).view(doc, arrow, false));
+                    }
                 } else if let Ok(plan) = ts_plan::plan_for_review(doc, arrow) {
-                    body = body.push(BondChanges::from_plan(doc, &plan).view(doc, true));
+                    body = body.push(BondChanges::from_plan(doc, &plan).view(doc, arrow, true));
                 }
                 let stale = doc
                     .science
@@ -488,20 +504,29 @@ impl App {
                     .find(|stored| Arc::ptr_eq(result, &stored.result))
                     .and_then(|stored| doc.science.attachment(stored.attachment))
                     .is_some_and(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
-                    || session.is_some_and(|session| {
-                        session.stale(doc, (self.tab.file_epoch, self.tab.revision))
-                    })
-                    || search.is_some_and(|search| super::saved_search_stale(doc, search));
+                    || self.xtb_ts_search_stale(result);
                 if stale {
+                    let title = self.xtb_saved_reaction_title(result, Some(arrow));
                     body = body.push(line(
-                        "The reaction changed after this search.",
+                        if super::not_verified(result) {
+                            format!("Reaction freshness not verified · {title}")
+                        } else {
+                            format!("The reaction changed after this search · {title}")
+                        },
                         Tone::Warning,
                     ));
                 }
                 let result_view = view::presentation(result, session);
                 if let Some(energy) = result_view.barrier_line() {
                     body = body
-                        .push(line(energy, Tone::Good))
+                        .push(line(
+                            energy,
+                            if stale || failed {
+                                Tone::Muted
+                            } else {
+                                Tone::Good
+                            },
+                        ))
                         .push(line(result_view.verification, Tone::Muted));
                     if let Some(warning) = result_view.warning {
                         body = body.push(line(warning, Tone::Warning));
@@ -525,22 +550,25 @@ impl App {
                         .wrap(),
                     );
                 } else {
+                    let mut actions = row![].spacing(6);
+                    if !failed {
+                        actions = actions.push(finer_path(can_start));
+                    }
                     body = body
                         .push(line("No reliable transition state found.", Tone::Warning))
                         .push(line(result_view.reason.unwrap_or_default(), Tone::Muted))
                         .push(
-                            row![
-                                finer_path(can_start),
-                                accessible_command(
-                                    "xtb-ts-card-path",
-                                    "Show the path found by the search",
-                                    "Show what was found"
+                            actions
+                                .push(
+                                    accessible_command(
+                                        "xtb-ts-card-path",
+                                        "Show the path found by the search",
+                                        "Show what was found",
+                                    )
+                                    .on_press(send(Action::ShowPath)),
                                 )
-                                .on_press(send(Action::ShowPath)),
-                            ]
-                            .spacing(6)
-                            .wrap()
-                            .vertical_spacing(6),
+                                .wrap()
+                                .vertical_spacing(6),
                         );
                     if let Some(highest) = result_view.highest_path_kcal {
                         body = body.push(line(
@@ -551,10 +579,11 @@ impl App {
                     return body.into();
                 }
             }
+            _ if failed => return body.into(),
             ArrowResult::Missing | ArrowResult::Ambiguous => {
                 match review::scheme_plan(doc, arrow) {
                     Ok(plan) => {
-                        body = body.push(BondChanges::from_plan(doc, &plan).view(doc, false))
+                        body = body.push(BondChanges::from_plan(doc, &plan).view(doc, arrow, false))
                     }
                     Err(TsPlanError::Shape { .. }) => {
                         body = body.push(line(review::SHAPE_NOTE, Tone::Muted))

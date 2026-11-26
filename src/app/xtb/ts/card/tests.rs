@@ -1,8 +1,85 @@
 //! Reaction drawings and regression coverage for Predict’s reaction card.
 use super::*;
+#[cfg(not(target_arch = "wasm32"))]
+use iced::advanced::{
+    Layout, layout,
+    renderer::Headless,
+    widget::{Id, Operation, Tree, operation},
+};
+#[cfg(not(target_arch = "wasm32"))]
+use iced::{Rectangle, Size};
 use reshiki::document::{Arrow, Point};
 use reshiki::reactions::{Participant, Reaction};
 use std::collections::BTreeMap;
+
+/// Inspect the widgets a production view actually creates, including lazy cards.
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app::xtb::ts) struct ViewHarness {
+    renderer: iced::Renderer,
+    viewport: Rectangle,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app::xtb::ts) struct ViewSnapshot {
+    pub texts: Vec<String>,
+    pub semantics: reshiki::accessibility::Snapshot,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ViewHarness {
+    pub async fn new() -> Self {
+        Self {
+            renderer: <iced::Renderer as Headless>::new(
+                iced::Font::with_name(reshiki::style::ui_font_family()),
+                iced::Pixels(16.),
+                None,
+            )
+            .await
+            .expect("headless renderer"),
+            viewport: Rectangle::with_size(Size::new(600., 2400.)),
+        }
+    }
+
+    fn operate(&self, view: &mut Element<'_, Message>, operation: &mut dyn Operation) {
+        let mut tree = Tree::new(view.as_widget());
+        let node = view.as_widget_mut().layout(
+            &mut tree,
+            &self.renderer,
+            &layout::Limits::new(Size::ZERO, self.viewport.size()),
+        );
+        view.as_widget_mut()
+            .operate(&mut tree, Layout::new(&node), &self.renderer, operation);
+    }
+
+    pub fn inspect(&self, mut view: Element<'_, Message>) -> ViewSnapshot {
+        #[derive(Default)]
+        struct Texts(Vec<String>);
+        impl Operation for Texts {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+
+            fn text(&mut self, _: Option<&Id>, _: Rectangle, content: &str) {
+                self.0.push(content.to_owned());
+            }
+        }
+
+        let mut texts = Texts::default();
+        self.operate(&mut view, &mut texts);
+        let mut semantics = reshiki::accessibility::Collect::new(self.viewport);
+        self.operate(&mut view, &mut operation::black_box(&mut semantics));
+        ViewSnapshot {
+            texts: texts.0,
+            semantics: semantics.snapshot().clone(),
+        }
+    }
+
+    pub fn activate(&self, mut view: Element<'_, Message>, id: &str) -> Option<Message> {
+        let mut activate = reshiki::accessibility::Activate::<Message>::new(id);
+        self.operate(&mut view, &mut operation::black_box(&mut activate));
+        activate.message().cloned()
+    }
+}
 
 fn molecule(
     doc: &mut Document,
@@ -142,6 +219,39 @@ fn the_run_captures_the_drawn_map_numbers() {
 }
 
 #[test]
+fn bond_change_colors_use_the_reaction_atoms_and_canvas_ink() {
+    let (mut doc, arrow) = claisen();
+    let reaction = reshiki::reactions::preview(&doc, arrow).unwrap();
+    let label = MappedAtom {
+        element: "C".into(),
+        number: 1,
+    };
+    let unrelated = doc.add_atom("C", Point::new(800., 0.));
+    let atom = doc.atom_mut(unrelated).unwrap();
+    atom.map_num = 1;
+    atom.display.mapping.style.color = Color::Custom([180, 50, 55]);
+    assert_eq!(
+        mapped_label_color(&doc, &reaction, &label),
+        Color::Ink,
+        "an unrelated reaction's same-map color must not replace canvas Ink"
+    );
+
+    let selected = reaction.reactants[0]
+        .atoms
+        .iter()
+        .copied()
+        .find(|&id| doc.atom(id).is_some_and(|atom| atom.map_num == 1))
+        .unwrap();
+    let custom = Color::Custom([17, 126, 108]);
+    doc.atom_mut(selected).unwrap().display.mapping.style.color = custom;
+    assert_eq!(
+        mapped_label_color(&doc, &reaction, &label),
+        custom,
+        "a selected reaction atom's custom color must match its canvas label"
+    );
+}
+
+#[test]
 fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
     let mut doc = Document::default();
     let diene = molecule(
@@ -170,17 +280,62 @@ fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
     assert!(bonds.0.broken.is_empty());
 }
 
-#[test]
-fn prediction_reaction_selection_requires_one_chemistry_arrow() {
+#[cfg(not(target_arch = "wasm32"))]
+#[tokio::test]
+async fn predict_view_switches_reaction_controls_with_the_selected_chemistry_arrow() {
     let (doc, arrow) = claisen();
     let atom = doc.atoms[0].id;
     let mut app = app(doc, arrow);
-    assert_eq!(app.xtb_selected_reaction(), Some(arrow));
-    app.tab.selected = vec![atom];
-    assert_eq!(app.xtb_selected_reaction(), None);
-    app.tab.selected = vec![arrow, atom];
-    assert_eq!(app.xtb_selected_reaction(), None);
+    app.xtb.page = xtb::Page::Xtb;
+    let ui = ViewHarness::new().await;
+    let reaction = ui.inspect(app.predict_inspector());
+    assert!(reaction.semantics.duplicate_ids.is_empty());
+    for id in ["xtb-ts-review", "xtb-ts-find", "xtb-ts-export-input"] {
+        assert!(
+            reaction.semantics.nodes.iter().any(|node| node.id == id),
+            "the selected reaction must produce {id} in Predict"
+        );
+    }
+    assert!(
+        reaction
+            .texts
+            .iter()
+            .any(|text| text.starts_with("Reaction (xTB) · "))
+    );
+    for selection in [vec![atom], vec![arrow, atom], vec![]] {
+        app.tab.selected = selection;
+        let molecule = ui.inspect(app.predict_inspector());
+        assert!(
+            molecule
+                .semantics
+                .nodes
+                .iter()
+                .all(|node| !node.id.starts_with("xtb-ts-")),
+            "a molecule or mixed selection must replace the reaction card"
+        );
+        assert!(
+            molecule
+                .texts
+                .iter()
+                .all(|text| !text.starts_with("Reaction (xTB) · "))
+        );
+    }
     app.tab.selected = vec![arrow];
+    assert!(
+        ui.inspect(app.predict_inspector())
+            .semantics
+            .nodes
+            .iter()
+            .any(|node| node.id == "xtb-ts-find"),
+        "returning to the arrow restores the reaction controls"
+    );
     app.tab.doc.arrows[0].kind = "resonance".into();
-    assert_eq!(app.xtb_selected_reaction(), None);
+    assert!(
+        ui.inspect(app.predict_inspector())
+            .semantics
+            .nodes
+            .iter()
+            .all(|node| !node.id.starts_with("xtb-ts-")),
+        "a resonance arrow must not produce reaction calculation controls"
+    );
 }

@@ -1,9 +1,9 @@
 use reshiki_qcdata::{
     AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Convergence, Endpoints,
-    Error, Frame, MAX_RUN_EVALUATIONS, MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance,
-    RunSummary, ScfRetry, Settings, Shell, SolvationState, Solvent, SolventCorrection,
-    SolventModel, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbConventions,
-    XtbMethod, XtbSettings,
+    Error, Frame, MAX_RUN_EVALUATIONS, MAX_SAVED_CONFORMERS, MappedAtom, OrbitalSet, Orbitals,
+    Provenance, RunSummary, ScfRetry, Settings, Shell, SolvationState, Solvent, SolventCorrection,
+    SolventModel, Source, Spin, Status, Task, Thermo, Trajectory, TransitionStateContext,
+    TransitionStateMapping, TransitionStateRun, Vibrations, XtbConventions, XtbMethod, XtbSettings,
 };
 
 fn assert_compact(expected: &[f64], decoded: &mut [f64], quantized: bool) {
@@ -550,6 +550,135 @@ fn transition_state_path_round_trips_and_light_drops_positions() {
     let light_path = light.trajectory.unwrap();
     assert!(light_path.positions_angstrom.is_empty());
     assert_eq!(light_path.energies_hartree, full_path.energies_hartree);
+}
+
+#[test]
+fn transition_state_context_survives_light_save_and_old_metadata_loads() {
+    fn details(result: &mut CalcResult) -> &mut TransitionStateRun {
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+    }
+
+    let (frame, mut result) = imported();
+    result.task = Task::TransitionState;
+    result.endpoints = Some(Endpoints {
+        reactant: result.input_frame.unwrap(),
+        product: result.frame,
+    });
+    result.run = Some(RunSummary {
+        seconds: 42.5,
+        scf_iterations: vec![6, 8],
+        finished: Some("2026-11-26T05:03:00Z".into()),
+        transition_state: Some(Box::new(TransitionStateRun {
+            arrow: Some(123),
+            context: None,
+            saddle_converged: true,
+            imaginary: 1,
+            imaginary_cm1: Some(-721.3),
+            climbing_image: 1,
+            mapping: TransitionStateMapping {
+                formed: vec![[
+                    MappedAtom {
+                        element: "O".into(),
+                        number: 1,
+                    },
+                    MappedAtom {
+                        element: "H".into(),
+                        number: 2,
+                    },
+                ]],
+                broken: vec![],
+                hydrogen_moves: vec![],
+                automatic: false,
+            },
+            diagnostics: vec![("IRC".into(), "Connects both endpoints".into())],
+        })),
+    });
+    result.validate(&frame).unwrap();
+    let baseline_heap = result.heap_bytes();
+    let context = TransitionStateContext {
+        reactant_chemistry: "ab".repeat(32),
+        product_chemistry: "cd".repeat(32),
+        title: "Reactant → product".into(),
+        reactant: "Reactant".into(),
+    };
+    let added_heap = context.reactant_chemistry.len()
+        + context.product_chemistry.len()
+        + context.title.len()
+        + context.reactant.len();
+    details(&mut result).context = Some(context.clone());
+    result.validate(&frame).unwrap();
+    assert_eq!(result.heap_bytes() - baseline_heap, added_heap);
+
+    let light = result.light(&[]);
+    let json = serde_json::to_vec_pretty(&light).unwrap();
+    let decoded: CalcResult = serde_json::from_slice(&json).unwrap();
+    decoded.validate(&frame).unwrap();
+    assert_eq!(decoded.run, result.run);
+    assert!(decoded.trajectory.unwrap().positions_angstrom.is_empty());
+
+    let mut old: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    let search = old["run"]["transition_state"].as_object_mut().unwrap();
+    search.remove("context");
+    let decoded: CalcResult = serde_json::from_value(old.clone()).unwrap();
+    decoded.validate(&frame).unwrap();
+    let search = decoded.run.unwrap().transition_state.unwrap();
+    assert_eq!(search.arrow, Some(123));
+    assert_eq!(search.context, None);
+
+    old["run"]["transition_state"]
+        .as_object_mut()
+        .unwrap()
+        .remove("arrow");
+    let mut unbound: CalcResult = serde_json::from_value(old).unwrap();
+    unbound.validate(&frame).unwrap();
+    assert!(details(&mut unbound).arrow.is_none());
+    assert!(
+        serde_json::to_value(&unbound).unwrap()["run"]["transition_state"]
+            .get("arrow")
+            .is_none()
+    );
+    details(&mut unbound).arrow = Some(0);
+    assert!(unbound.validate(&frame).is_err());
+
+    // Three maximum-size drawing captions fit in a reaction title.
+    details(&mut result).context = Some(TransitionStateContext {
+        title: "t".repeat(3 * 64 * 1024),
+        reactant: "r".repeat(64 * 1024),
+        ..context.clone()
+    });
+    result.validate(&frame).unwrap();
+
+    for invalid in [
+        TransitionStateContext {
+            reactant_chemistry: "A".repeat(64),
+            ..context.clone()
+        },
+        TransitionStateContext {
+            product_chemistry: "f".repeat(63),
+            ..context.clone()
+        },
+        TransitionStateContext {
+            product_chemistry: "g".repeat(64),
+            ..context.clone()
+        },
+        TransitionStateContext {
+            title: "t".repeat(256 * 1024 + 1),
+            ..context.clone()
+        },
+        TransitionStateContext {
+            reactant: "r".repeat(256 * 1024 + 1),
+            ..context
+        },
+    ] {
+        details(&mut result).context = Some(invalid);
+        assert!(result.validate(&frame).is_err());
+    }
 }
 
 #[test]

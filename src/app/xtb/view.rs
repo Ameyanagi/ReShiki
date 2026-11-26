@@ -300,7 +300,9 @@ impl App {
         let mut body = column![].spacing(6);
         if let Some(run) = run {
             body = body.push(progress(run));
-        } else if let Some(outcome) = &self.tab.xtb.outcome {
+        } else if let Some(outcome) = &self.tab.xtb.outcome
+            && !matches!(outcome, Outcome::Failed(failed) if failed.ts().is_some())
+        {
             body = body.push(outcome_view(outcome, self.xtb_palette_visible()));
         }
         if let Some(show) = self.xtb_show_results() {
