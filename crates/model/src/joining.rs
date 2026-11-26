@@ -3,6 +3,7 @@
 use crate::{
     document::{Document, Point},
     editing,
+    models3d::surface::keep_signed,
     templates::{self, Anchor, Connection},
 };
 use std::collections::{HashMap, HashSet};
@@ -330,13 +331,6 @@ impl Prepared {
         // a model left without atoms goes. Then only a moved model has every
         // remaining ID in `restore`.
         crate::models3d::prune(&mut placed);
-        let mut models = std::mem::take(&mut placed.models);
-        for model in &mut models {
-            let mut moved = model.clone();
-            if moved.remap(&restore).is_some() {
-                *model = moved;
-            }
-        }
         // Restore IDs of moved objects simultaneously. Only shared atoms disappear;
         // destination IDs, labels, remote stereo and unrelated objects retain identity.
         let restored: HashMap<_, _> = placed
@@ -345,8 +339,19 @@ impl Prepared {
             .chain(placed.groups.iter().map(|g| g.id))
             .map(|id| (id, original_id(id)))
             .collect();
-        editing::remap_ids(&mut placed, &restored).ok_or("The fragment could not be joined.")?;
-        placed.models = models;
+        keep_signed(&mut placed, |placed| {
+            let mut models = std::mem::take(&mut placed.models);
+            for model in &mut models {
+                let mut moved = model.clone();
+                if moved.remap(&restore).is_some() {
+                    *model = moved;
+                }
+            }
+            let result = editing::remap_ids(placed, &restored);
+            placed.models = models;
+            result
+        })
+        .ok_or("The fragment could not be joined.")?;
         // Preparation deletes moving atoms only from a detached preview base.
         // An unselected arrow still belongs to the original document and must
         // follow the moved/shared target rather than lose its attachment.

@@ -559,46 +559,10 @@ fn mapped_append_part(
 /// when one has no entry in `mapping`. The destructure names every field, so
 /// a new collection does not compile until its IDs are handled here.
 pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
-    let snapshots: Vec<usize> = doc
-        .models
-        .iter()
-        .enumerate()
-        .filter(|(_, model)| {
-            model
-                .surface
-                .as_ref()
-                .and_then(|figure| figure.snapshot.as_ref())
-                .is_some_and(|snapshot| {
-                    snapshot.view == crate::models3d::surface::draw::view_signature(doc, model)
-                })
-        })
-        .map(|(index, _)| index)
-        .collect();
-    // Panels keep snapshots signed by their small model copies.
-    let panel_snapshots: Vec<(usize, usize)> = doc
-        .models
-        .iter()
-        .enumerate()
-        .flat_map(|(index, model)| {
-            let doc = &*doc;
-            model
-                .panels
-                .iter()
-                .enumerate()
-                .filter_map(move |(k, panel)| {
-                    let small = crate::models3d::panel_model(model, &panel.figure);
-                    panel
-                        .figure
-                        .snapshot
-                        .as_ref()
-                        .is_some_and(|snapshot| {
-                            snapshot.view
-                                == crate::models3d::surface::draw::view_signature(doc, &small)
-                        })
-                        .then_some((index, k))
-                })
-        })
-        .collect();
+    crate::models3d::surface::keep_signed(doc, |doc| rename_ids(doc, mapping))
+}
+
+fn rename_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
     let Document {
         generic,
         canvas_theme: _,
@@ -736,35 +700,6 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         }
     }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
-    // ID changes preserve a matching picture, while invalid snapshots stay invalid.
-    for index in snapshots {
-        let view = crate::models3d::surface::draw::view_signature(doc, doc.models.get(index)?);
-        if let Some(snapshot) = doc
-            .models
-            .get_mut(index)?
-            .surface
-            .as_mut()
-            .and_then(|figure| figure.snapshot.as_mut())
-        {
-            snapshot.view = view;
-        }
-    }
-    for (index, k) in panel_snapshots {
-        let model = doc.models.get(index)?;
-        let small = crate::models3d::panel_model(model, &model.panels.get(k)?.figure);
-        let view = crate::models3d::surface::draw::view_signature(doc, &small);
-        if let Some(snapshot) = doc
-            .models
-            .get_mut(index)?
-            .panels
-            .get_mut(k)?
-            .figure
-            .snapshot
-            .as_mut()
-        {
-            snapshot.view = view;
-        }
-    }
     Some(())
 }
 pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
