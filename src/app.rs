@@ -794,6 +794,7 @@ impl App {
             self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
+            self.xtb_subscription(),
             self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
@@ -1195,10 +1196,21 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
+        let vibration_context = |app: &Self| {
+            (app.xtb_vibrations_visible() && app.tab.xtb.run.is_none()).then_some((
+                app.tab.id,
+                app.tab.file_epoch,
+                app.tab.revision,
+            ))
+        };
+        let vibrations = vibration_context(self);
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
+        if vibrations != vibration_context(self) {
+            task = Task::batch([task, tagged(self.xtb_vibrations_resume(), self.tab.id)]);
+        }
         // The canvas forgets the pointer when a context menu closes
         // (canvas::reset_menu_pointer), so the hovered atom or bond goes too:
         // a key pressed later acts on what the pointer touches next, never on

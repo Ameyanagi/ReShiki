@@ -114,19 +114,29 @@ impl App {
         let set = |action: Action| idle.then_some(Message::Xtb(action));
 
         // Task and method: what the worker runs now, then what comes later.
-        let tasks = row(CalcTask::ALL.map(|(task, name)| {
-            segment(
-                format!("xtb-task-{}", name.to_lowercase()),
-                name,
-                settings.task == task,
-                set(Action::Task(task)),
-                None,
-            )
-        }))
-        .spacing(4);
-        let later = row(LATER_TASKS.map(|(name, reason)| {
+        // Three per row, with available tasks first.
+        let mut segments: Vec<Element<'_, Message>> = CalcTask::ALL
+            .map(|(task, name)| {
+                segment(
+                    format!("xtb-task-{}", name.to_lowercase()),
+                    name,
+                    settings.task == task,
+                    set(Action::Task(task)),
+                    None,
+                )
+            })
+            .into();
+        segments.extend(LATER_TASKS.map(|(name, reason)| {
             segment(format!("xtb-task-{name}"), name, false, None, Some(reason))
-        }))
+        }));
+        let mut segments = segments.into_iter();
+        let tasks = column(
+            std::iter::from_fn(|| {
+                let three: Vec<_> = segments.by_ref().take(3).collect();
+                (!three.is_empty()).then(|| row(three).spacing(4).into())
+            })
+            .collect::<Vec<Element<'_, Message>>>(),
+        )
         .spacing(4);
         let methods = row(METHODS.map(|method| {
             segment(
@@ -297,11 +307,7 @@ impl App {
             column![
                 label("Task"),
                 tasks,
-                later,
-                line(
-                    "Opt + freq and Orbitals are coming in the Vibrations and Orbitals tabs.",
-                    Tone::Muted
-                ),
+                line("Orbitals are coming in the Orbitals tab.", Tone::Muted),
                 label("Method"),
                 methods,
             ]
@@ -336,7 +342,8 @@ impl App {
         let count = numbers
             .as_ref()
             .map_or_else(|| target.as_ref().map_or(0, Vec::len), Vec::len);
-        let too_many = count > state::MAX_ATOMS;
+        let limit = settings.task.limit();
+        let too_many = count > limit;
         let search_ok = !search
             || self
                 .xtb
@@ -376,10 +383,13 @@ impl App {
             );
             if too_many {
                 body = body.push(line(
-                    format!(
-                        "Too many atoms: {count}. The limit is {} atoms.",
-                        state::MAX_ATOMS
-                    ),
+                    if settings.task.frequencies() {
+                        format!(
+                            "Frequencies are limited to {limit} atoms; this molecule has {count}."
+                        )
+                    } else {
+                        format!("Too many atoms: {count}. The limit is {limit} atoms.")
+                    },
                     Tone::Error,
                 ));
             }
@@ -559,7 +569,7 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
         Tone::Muted,
     );
     let mut rows = column![text_line].spacing(6);
-    let optimizing = run.config.task == CalcTask::Optimize && run.launch.is_some();
+    let optimizing = run.config.task.optimizes() && run.launch.is_some() && !run.progress.hessian;
     let mut controls = row![].spacing(8).align_y(Alignment::Center);
     if optimizing {
         controls = controls.push(

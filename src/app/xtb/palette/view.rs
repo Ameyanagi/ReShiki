@@ -1,5 +1,5 @@
 //! The results palette's widgets: header, method lines, the stale banner,
-//! the Summary, Steps and Log tabs, and the footer with file sizes.
+//! the result tabs, and the footer with file sizes.
 use super::super::results::{self, View};
 use super::super::tone::{Tone, line};
 use super::super::{Action as XtbAction, state};
@@ -133,6 +133,7 @@ impl App {
         }
         let body = match view {
             View::Summary => summary(&shown, inspector),
+            View::Vibrations => self.xtb_vibrations(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Log => log(&shown, &method),
@@ -487,6 +488,12 @@ impl App {
                         Action::Labels(!self.tab.xtb.palette.labels),
                     ));
             }
+            View::Vibrations => {
+                footer = footer.push(line(
+                    "Normal modes are recomputed when shown; the file keeps frequencies, intensities and thermochemistry.",
+                    Tone::Muted,
+                ));
+            }
             View::Steps => {
                 footer = footer.push(line(
                     "The file keeps the first and last steps; keep full results to save every step.",
@@ -538,7 +545,7 @@ impl App {
 
 /// An inline card with a round "!" icon: red for an error, amber for a
 /// warning. The status bar repeats an error's sentence.
-fn alert<'a>(
+pub(in crate::app::xtb) fn alert<'a>(
     warning: bool,
     title: String,
     detail: String,
@@ -598,10 +605,13 @@ fn alert<'a>(
 fn summary<'a>(shown: &Shown<'a>, inspector: bool) -> Element<'a, Message> {
     let rows = shown.rows();
     let label_width = if inspector { 104. } else { LABEL_WIDTH };
-    let column_of = |rows: &[(&'static str, String)]| {
+    let column_of = |rows: &[(String, String)]| {
         Column::with_children(rows.iter().map(|(label, content)| {
             row![
-                text(*label).size(12).style(muted_text).width(label_width),
+                text(label.clone())
+                    .size(12)
+                    .style(muted_text)
+                    .width(label_width),
                 text(content.clone())
                     .size(12)
                     .width(Length::Fill)

@@ -339,7 +339,7 @@ Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gf
     [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
     [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
     [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
-    [--gradient] [--wbo] FILE.xyz
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
 
 Options:
   --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
@@ -354,6 +354,7 @@ Options:
   --gbsa NAME                  Use the GBSA solvent model.
   --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
   --etemp K                    Set the electronic temperature in kelvin.
+  --thermo-temperature K       Thermochemistry temperature in kelvin (default 298.15)
   --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
   --max-iter N                 Set the SCF iteration limit (default 250).
   --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.

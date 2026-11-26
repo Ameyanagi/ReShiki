@@ -432,6 +432,7 @@ mod tests {
             rotor_cutoff_cm1: 0.0,
             imaginary_cutoff_cm1: 0.0,
             symmetry_number: 2,
+            point_group: None,
         };
         result.thermo = Some(original.clone());
         let energy = result.energy_hartree.unwrap();
