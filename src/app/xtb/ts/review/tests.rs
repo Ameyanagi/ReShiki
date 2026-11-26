@@ -380,7 +380,7 @@ fn cancelling_silent_mapping_discards_a_late_proposal() {
     let proposal = reshiki::reaction_mapping::propose(&source, arrow, Default::default()).unwrap();
     let _ = app.update(send(Action::Cancel));
     assert!(!app.xtb_automatic_mapping_pending(arrow));
-    assert_eq!(app.status, "Atom matching cancelled");
+    assert_eq!(app.status, "Atom matching canceled");
     let _ = app.update(send(Action::Ready(id, Ok(Arc::new(proposal)))));
     assert!(!app.ts_review_open());
     assert!(!app.xtb_running());

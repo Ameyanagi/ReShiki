@@ -299,7 +299,7 @@ fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
     assert_eq!(value("Images"), "3 · climbing image 2");
     assert_eq!(value("NEB"), "34 iterations · converged");
     assert_eq!(value("Saddle"), "7 steps · converged · stationary");
-    assert!(value("Worker check").contains("engine 1 imaginary mode(s); worker 1 · agree"));
+    assert!(value("Worker check").contains("imaginary modes: engine 1 · worker 1 · agree"));
     assert!(value("IRC +mode").starts_with("reactant"));
     assert!(value("IRC −mode").starts_with("product"));
     assert_eq!(value("Evaluations"), "12");

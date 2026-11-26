@@ -206,7 +206,7 @@ fn matching_thermo(result: &CalcResult, frame: &Frame) -> bool {
     {
         return false;
     }
-    let symmetry = if let Some(expected_masses) = xtb::isotope_masses(frame) {
+    let symmetry = if let Some(expected_masses) = reshiki::science::isotope_masses(frame) {
         if masses != &expected_masses {
             return false;
         }
@@ -448,9 +448,7 @@ impl App {
             if snapshot(&self.tab.doc, batch.arrow, &batch.species).as_ref()
                 != Some(&batch.snapshot)
             {
-                self.status =
-                    "Reaction energy stopped: the reaction changed; review its species again"
-                        .into();
+                self.status = "Reaction energy stopped: the reaction changed".into();
                 self.tab.xtb.energy_state.stopped = Some((batch.arrow, self.status.clone()));
                 self.error = false;
                 return Task::none();
@@ -459,8 +457,7 @@ impl App {
                 let Some(totals) =
                     input_totals(&self.tab.doc, &batch.species, &batch.inputs, batch.task)
                 else {
-                    self.status =
-                        "Reaction energy stopped: a species result is no longer current".into();
+                    self.status = "Reaction energy stopped: a species result is stale".into();
                     self.tab.xtb.energy_state.stopped = Some((batch.arrow, self.status.clone()));
                     self.error = false;
                     return Task::none();
@@ -533,7 +530,7 @@ impl App {
             return Task::none();
         };
         if snapshot(&self.tab.doc, batch.arrow, &batch.species).as_ref() != Some(&batch.snapshot) {
-            let reason = "Reaction energy stopped: the reaction changed; review its species again";
+            let reason = "Reaction energy stopped: the reaction changed";
             self.tab.xtb.energy_state.stop(reason);
             self.status = reason.into();
             self.error = false;

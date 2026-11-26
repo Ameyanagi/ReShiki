@@ -70,10 +70,10 @@ The four test reactions (HCN → HNC, an identity SN2, a Claisen and a Diels–A
 
 1. From one structure, fold it first when it is stretched: soft restraints pull the atoms of each forming bond within twice their covalent radii without changing any bond, then it relaxes freely. The fold is kept only if those atoms stay closer; the report lists it (`reactive_start` in the JSON, "Folded the starting conformer" in the app's Log). Then build the other side from the bond changes.
 1. Optimize both ends and superpose them by the atom map.
-2. Interpolate a path between them (IDPP) and relax it with a climbing-image nudged elastic band.
-3. Refine the highest image inside the band to a saddle with the analytic GFN2-xTB Hessian (P-RFO).
-4. Check it: the saddle must be converged with exactly one frequency below −50 cm⁻¹, both in ReShiki's own analysis and in the xTB engine's.
-5. Follow the IRC both ways and optimize each end. The IRC **connects** when the ends have the reactant's and the product's bonds, even as another conformer. When reactant and product have the same bonds, each end must also lie within 0.5 Å RMSD of its own endpoint.
+1. Interpolate a path between them (IDPP) and relax it with a climbing-image nudged elastic band.
+1. Refine the highest image inside the band to a saddle with the analytic GFN2-xTB Hessian (P-RFO).
+1. Check it: the saddle must be converged with exactly one frequency below −50 cm⁻¹, both in ReShiki's own analysis and in the xTB engine's.
+1. Follow the IRC both ways and optimize each end. The IRC **connects** when the ends have the reactant's and the product's bonds, even as another conformer. When reactant and product have the same bonds, each end must also lie within 0.5 Å RMSD of its own endpoint.
 
 The search is local: different starting conformers can lead to different saddles, so the report always names the one it found. When a found saddle fails a check, the report and files still keep it and say why (if the IRC was skipped, `irc.xyz` holds only that saddle). The exit status is 0 only when every check passes.
 
