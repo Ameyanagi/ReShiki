@@ -16,18 +16,23 @@ use results::RunInfo;
 use state::{Progress, Settings};
 use std::sync::{Arc, Weak};
 
+mod conformers;
 pub(super) mod orbitals;
+pub(super) use conformers::superposed;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
 mod state;
 mod tone;
+mod vibrations;
 mod view;
 
 #[cfg(test)]
 pub(super) use results::{Evaluation, View};
 pub(crate) use state::Task as CalcTask;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use vibrations::Action as VibrationsAction;
 
 /// The Predict tab's two pages.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -67,15 +72,20 @@ pub(crate) enum Action {
     Discard,
     Palette(palette::Action),
     Orbitals(orbitals::Action),
+    /// The card's Conformers fields and the Conformers tab.
+    Conformers(conformers::Action),
+    Vibrations(vibrations::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
+    #[cfg(not(target_arch = "wasm32"))]
+    Search(u64, conformers::Event),
 }
 
 /// Ways to start a calculation without the card's Run button. Each shows
 /// the card, sets what it names and runs with the card's other settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Entry {
-    /// Right-click → Calculate (xTB) ▸ Energy / Optimize.
+    /// A task from the right-click Calculate (xTB) menu.
     Task(CalcTask),
     /// The context row's "Optimize with GFN2-xTB".
     OptimizeGfn2,
@@ -98,6 +108,8 @@ pub(super) fn available() -> bool {
 pub(crate) struct Window {
     pub(super) page: Page,
     pub(super) settings: Settings,
+    /// The card's Conformers fields.
+    pub(super) conformers: conformers::Settings,
     /// Where the results palette sits, for every document of the window.
     pub(super) dock: palette::Dock,
 }
@@ -110,6 +122,7 @@ pub(crate) struct State {
     serial: u64,
     pub(super) palette: palette::Palette,
     pub(super) orbitals: orbitals::Orbitals,
+    pub(super) vibrations: vibrations::State,
     /// What this session knows about stored results' runs, by result.
     infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
 }
@@ -142,6 +155,18 @@ pub(crate) struct Request {
     config: state::Config,
     /// "Keep full results in this file" for the new result.
     keep_full: bool,
+    /// Start here (Å, frame order) instead of the model: "Push along mode".
+    /// Only a converged optimization from here replaces the model geometry.
+    start: Option<Start>,
+    /// The search, for a Conformers task.
+    search: Option<conformers::Config>,
+}
+
+/// A displaced input and the accepted geometry from which it was pushed.
+#[derive(Clone)]
+struct Start {
+    positions: Vec<[f64; 3]>,
+    from: Vec<[f64; 3]>,
 }
 
 pub(crate) struct Run {
@@ -149,6 +174,9 @@ pub(crate) struct Run {
     atoms: Vec<u64>,
     config: state::Config,
     keep_full: bool,
+    start: Option<Start>,
+    /// A conformer search's settings and progress.
+    search: Option<conformers::Live>,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -260,6 +288,10 @@ pub(crate) struct Review {
 
 /// A finished calculation, not yet stored.
 struct Pending {
+    /// Started away from the model ("Push along mode").
+    pushed: bool,
+    /// The accepted model geometry before a push, in frame order.
+    accepted: Option<Vec<[f64; 3]>>,
     launch: Launch,
     frames: Vec<Frame>,
     result: CalcResult,
@@ -271,7 +303,12 @@ struct Pending {
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return matches!(message, Message::Xtb(Action::Event(..)));
+    return matches!(
+        message,
+        Message::Xtb(
+            Action::Event(..) | Action::Search(..) | Action::Vibrations(vibrations::Action::Tick)
+        )
+    );
     #[cfg(target_arch = "wasm32")]
     false
 }
@@ -335,7 +372,35 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             Action::Event(serial, event) => self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
-            Action::Palette(action) => return self.xtb_palette(action),
+            Action::Palette(action) => {
+                let opened = matches!(action, palette::Action::View(results::View::Vibrations));
+                let showing = matches!(action, palette::Action::Show);
+                let before = showing
+                    .then(|| {
+                        self.xtb_shown()
+                            .map(|shown| Arc::clone(&shown.stored.result))
+                    })
+                    .flatten();
+                let task = self.xtb_palette(action);
+                if showing
+                    && self.xtb_shown().is_some_and(|shown| {
+                        before
+                            .as_ref()
+                            .is_none_or(|before| !Arc::ptr_eq(before, &shown.stored.result))
+                    })
+                {
+                    self.tab.xtb.vibrations.mode = 0;
+                }
+                if opened {
+                    return Task::batch([task, self.xtb_vibrations_opened()]);
+                }
+                self.xtb_vibrations_sync();
+                return task;
+            }
+            Action::Vibrations(action) => return self.xtb_vibrations_action(action),
+            Action::Conformers(action) => return self.xtb_conformers(action),
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::Search(serial, event) => self.xtb_search_event(serial, event),
             Action::Orbitals(action) => return self.xtb_orbitals(action),
             setting => {
                 let target = self.xtb_key();
@@ -395,11 +460,13 @@ impl App {
         (!self.model_stale(index)).then_some(index)
     }
 
-    /// The model preview while a run is current, else a previewed step.
+    /// The model preview while a run is current, else a previewed step,
+    /// else an animated vibration.
     pub(super) fn xtb_preview(&self) -> Option<&Document> {
         let Some(run) = self.tab.xtb.run.as_ref() else {
             return self
                 .xtb_step_preview()
+                .or_else(|| self.xtb_vibration_preview())
                 .or_else(|| self.xtb_orbital_preview());
         };
         (run.revision == (self.tab.file_epoch, self.tab.revision))
@@ -486,7 +553,7 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let settings = &self.xtb.settings;
+        let settings = &conformers::effective(&self.xtb.settings, &self.xtb.conformers);
         let (charge, multiplicity) = science::drawn_state(&self.tab.doc, first);
         let drawn = (charge, multiplicity.saturating_sub(1));
         let typed = settings.molecule.is_some() && settings.molecule == self.xtb_key();
@@ -507,20 +574,33 @@ impl App {
                 return Task::none();
             }
         };
+        let search = match config.task {
+            CalcTask::Conformers => match self.xtb.conformers.config(None) {
+                Ok(search) => Some(search),
+                Err(reason) => {
+                    self.xtb_fail(state::Failure::Other(reason));
+                    return Task::none();
+                }
+            },
+            _ => None,
+        };
         let request = Request {
             atoms,
             config,
             keep_full: false,
+            start: None,
+            search,
         };
         self.xtb_begin(request)
     }
 
     /// Start `request`; its run replaces the card's last outcome.
     fn xtb_begin(&mut self, request: Request) -> Task<Message> {
-        if request.atoms.len() > state::MAX_ATOMS {
+        let limit = request.config.task.limit();
+        if request.atoms.len() > limit {
             self.xtb_fail(state::Failure::TooMany {
                 count: request.atoms.len(),
-                limit: state::MAX_ATOMS,
+                limit,
             });
             return Task::none();
         }
@@ -530,8 +610,15 @@ impl App {
         self.tab.xtb.run = Some(Run {
             serial: self.tab.xtb.serial,
             atoms: request.atoms,
+            search: request.search.map(|config| conformers::Live {
+                method: request.config.method,
+                config,
+                phase: Default::default(),
+                stopping: false,
+            }),
             config: request.config,
             keep_full: request.keep_full,
+            start: request.start,
             launch: None,
             model: None,
             started: iced::time::Instant::now(),
@@ -543,6 +630,7 @@ impl App {
             cancel: Default::default(),
             handle: None,
         });
+        self.xtb_vibrations_sync();
         self.xtb_launch()
     }
 
@@ -615,57 +703,49 @@ impl App {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn xtb_start(&mut self, launch: Launch) -> Task<Message> {
-        use reshiki_xtb_worker::protocol::{
-            Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
-        };
-
-        let atoms = launch.frame.numbers.len();
-        if atoms > state::MAX_ATOMS {
-            self.xtb_fail(state::Failure::TooMany {
-                count: atoms,
-                limit: state::MAX_ATOMS,
-            });
-            return Task::none();
-        }
+    fn xtb_start(&mut self, mut launch: Launch) -> Task<Message> {
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
         };
+        if run.search.is_some() {
+            return self.xtb_search_start(launch);
+        }
         let config = &run.config;
-        let method = match config.method {
-            qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
-            qcdata::XtbMethod::GXtb => Method::Gxtb,
-            qcdata::XtbMethod::GfnFf => Method::Gfnff,
-        };
-        let job = run::Job {
-            optimize: config.task == CalcTask::Optimize,
-            numbers: launch.frame.numbers.clone(),
-            positions: launch.frame.positions_angstrom.clone(),
-            charge: config.charge,
-            uhf: config.unpaired,
-            method,
-            conventions: if config.xtb68 {
-                Conventions::Xtb68
-            } else {
-                Conventions::Axtb
-            },
-            scf: ScfSettings {
-                accuracy: config.accuracy,
-                electronic_temperature_k: config.temperature_k,
-                max_iterations: config.max_iterations,
-                retries: vec![],
-            },
-            solvent: config.solvent.map(|name| Solvent {
-                model: SolventModel::Alpb,
-                name: name.to_lowercase(),
-                state: Default::default(),
-                correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-            }),
-            threads: config.threads,
-            fixed: fixed_indices(&launch.atoms, &config.fixed).collect(),
-            tight: config.tight,
-        };
+        let count = launch.frame.numbers.len();
+        let limit = config.task.limit();
+        if count > limit {
+            self.xtb_fail(state::Failure::TooMany { count, limit });
+            return Task::none();
+        }
+        if let Some(start) = &run.start {
+            if start.positions.len() != count
+                || start.from.len() != count
+                || !model_shows(&self.tab.doc, &launch.atoms, &start.from)
+            {
+                self.xtb_fail(state::Failure::Other(
+                    "The 3D model moved after this calculation".into(),
+                ));
+                return Task::none();
+            }
+            launch.frame = Arc::new(Frame {
+                positions_angstrom: start.positions.clone(),
+                ..(*launch.frame).clone()
+            });
+        }
+        // The vibrational analysis needs the masses of isotope-labelled atoms;
+        // the stored frame keeps them, so a recompute uses the same ones.
+        if config.task.frequencies()
+            && launch.frame.masses_amu.is_empty()
+            && let Some(masses) = isotope_masses(&launch.frame)
+        {
+            launch.frame = Arc::new(Frame {
+                masses_amu: masses,
+                ..(*launch.frame).clone()
+            });
+        }
+        let fixed = fixed_indices(&launch.atoms, &config.fixed).collect();
+        let job = job(config, &launch.frame, fixed);
         run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
         run.launch = Some(launch);
         run.revision = (epoch, revision);
@@ -694,7 +774,8 @@ impl App {
             return;
         };
         match event {
-            run::Event::Tick => {
+            run::Event::Tick | run::Event::Hessian => {
+                run.progress.hessian |= matches!(event, run::Event::Hessian);
                 self.status = run.status();
                 self.error = false;
             }
@@ -742,6 +823,8 @@ impl App {
                 atoms: std::mem::take(&mut run.atoms),
                 config: run.config.clone(),
                 keep_full: run.keep_full,
+                start: run.start.take(),
+                search: run.search.as_ref().map(|live| live.config.clone()),
             })
         });
         let failed = Failed {
@@ -761,6 +844,9 @@ impl App {
 
     /// Cancel stops the worker (or the model generation) and applies nothing.
     pub(super) fn xtb_cancel(&mut self) {
+        if self.xtb_search_stop() {
+            return;
+        }
         let Some(run) = self.tab.xtb.run.take() else {
             return;
         };
@@ -799,9 +885,15 @@ impl App {
                 return;
             }
         };
-        let optimized = pending.result.task == qcdata::Task::Optimize;
+        let optimized = matches!(
+            pending.result.task,
+            qcdata::Task::Optimize | qcdata::Task::Conformers
+        );
         let mut notes = pending.notes.clone();
-        let moved = !shows(&self.tab.doc, &pending.launch);
+        let moved = pending.accepted.as_ref().map_or_else(
+            || !shows(&self.tab.doc, &pending.launch),
+            |accepted| !model_shows(&self.tab.doc, &pending.launch.atoms, accepted),
+        );
         if attached.freshness == Freshness::Stale {
             notes.push(
                 "The molecule changed during the calculation: the result is kept, the 3D model is unchanged."
@@ -838,7 +930,16 @@ impl App {
                 return;
             }
         }
+        // A push that did not converge never replaces the accepted structure.
+        let unconverged_push =
+            pending.pushed && !matches!(pending.result.status, qcdata::Status::Converged);
+        if unconverged_push {
+            notes.push(
+                "The re-optimization did not converge: the accepted structure is unchanged.".into(),
+            );
+        }
         let applied = optimized
+            && !unconverged_push
             && !moved
             && attached.freshness == Freshness::Current
             && match science::apply_geometry(&mut doc, attached.attachment, &pending.result.frame) {
@@ -864,6 +965,11 @@ impl App {
         {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
             self.tab.xtb.palette.show(&result);
+            self.tab.xtb.vibrations.mode = 0;
+            // After a push the question was the imaginary mode: show its answer.
+            if pending.pushed && applied {
+                self.tab.xtb.palette.view = results::View::Vibrations;
+            }
         }
         self.status = if applied {
             format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
@@ -874,6 +980,8 @@ impl App {
             line: pending.line,
             notes,
         });
+        // A fresh result holds its modes, so nothing needs recomputing.
+        self.xtb_vibrations_sync();
     }
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
@@ -895,11 +1003,86 @@ impl Run {
         if self.launch.is_none() {
             return "xTB · making the 3D model first (MMFF94s)".into();
         }
+        if let Some(live) = &self.search {
+            return format!("{} · {}", self.label, live.line(self.seconds()));
+        }
         format!(
             "{} · {}",
             self.label,
             self.progress.line(self.config.task, self.seconds())
         )
+    }
+}
+
+/// Masses (u) for a frame with isotope labels: labelled atoms take their
+/// isotope's mass, the others the standard atomic weight; `None` without labels.
+fn isotope_masses(frame: &Frame) -> Option<Vec<f64>> {
+    use reshiki::chemistry::{ELEMENTS, ISOTOPES};
+    if frame.isotopes.iter().all(|&isotope| isotope == 0) {
+        return None;
+    }
+    Some(
+        frame
+            .numbers
+            .iter()
+            .enumerate()
+            .map(
+                |(index, &z)| match frame.isotopes.get(index).copied().unwrap_or(0) {
+                    0 => ELEMENTS
+                        .get(usize::from(z))
+                        .map_or(0., |element| element.average_mass_amu()),
+                    isotope => ISOTOPES
+                        .binary_search_by_key(&(z, isotope), |&(n, i, _)| (n, i))
+                        .ok()
+                        .and_then(|found| ISOTOPES.get(found))
+                        .map_or(f64::from(isotope), |&(_, _, mass)| mass),
+                },
+            )
+            .collect(),
+    )
+}
+
+/// The worker job for `config` on `frame`, holding frame atoms `fixed`.
+#[cfg(not(target_arch = "wasm32"))]
+fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
+    use reshiki_xtb_worker::protocol::{
+        Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
+    };
+    let method = match config.method {
+        qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
+        qcdata::XtbMethod::GXtb => Method::Gxtb,
+        qcdata::XtbMethod::GfnFf => Method::Gfnff,
+    };
+    run::Job {
+        optimize: config.task.optimizes(),
+        frequencies: config.task.frequencies(),
+        masses: (!frame.masses_amu.is_empty()).then(|| frame.masses_amu.clone()),
+        numbers: frame.numbers.clone(),
+        positions: frame.positions_angstrom.clone(),
+        charge: config.charge,
+        uhf: config.unpaired,
+        method,
+        conventions: if config.xtb68 {
+            Conventions::Xtb68
+        } else {
+            Conventions::Axtb
+        },
+        scf: ScfSettings {
+            accuracy: config.accuracy,
+            electronic_temperature_k: config.temperature_k,
+            max_iterations: config.max_iterations,
+            retries: vec![],
+        },
+        solvent: config.solvent.map(|name| Solvent {
+            model: SolventModel::Alpb,
+            name: name.to_lowercase(),
+            state: Default::default(),
+            correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
+        }),
+        threads: config.threads,
+        fixed,
+        tight: config.tight,
+        topology: None,
     }
 }
 
@@ -917,15 +1100,19 @@ fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) ->
         .iter()
         .find(|m| m.linked_atoms.contains(atom))
         .is_some_and(|model| {
+            let mut sources = model.geometry_sources();
+            sources.resize(model.atoms.len() + model.hydrogens.len(), None);
             let now = model.atoms.iter().map(|a| a.xyz);
             let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
-            now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
+            atoms.len() == positions.len()
+                && sources == atoms
+                && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
         })
 }
 
 /// The document with the model of `atom`'s molecule at `positions` (Å,
 /// frame order), shown beside the drawing if it was 2D only.
-fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document> {
+pub(super) fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document> {
     let index = doc
         .models
         .iter()
@@ -965,7 +1152,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         .clone()
         .ok_or_else(|| state::Failure::Other("the run finished before it started".into()))?;
     let input = launch.frame.hash();
-    let optimized = run.config.task == CalcTask::Optimize;
+    let optimized = run.config.task.optimizes();
     let frames = if optimized {
         vec![Frame {
             positions_angstrom: report.positions.clone(),
@@ -975,10 +1162,11 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         vec![]
     };
     let frame = frames.first().unwrap_or(&launch.frame);
-    let task = if optimized {
-        qcdata::Task::Optimize
-    } else {
-        qcdata::Task::Energy
+    let task = match run.config.task {
+        CalcTask::Energy => qcdata::Task::Energy,
+        CalcTask::Optimize | CalcTask::OptFreq => qcdata::Task::Optimize,
+        CalcTask::Frequencies => qcdata::Task::Hessian,
+        CalcTask::Conformers => qcdata::Task::Conformers,
     };
     let gfnff_reference = (run.config.method == qcdata::XtbMethod::GfnFf).then_some(input);
     let computed = &report.computed;
@@ -987,11 +1175,12 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         .map_err(|error| state::Failure::Other(error.to_string()))?;
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
         settings.threads = Some(run.config.threads);
-        settings.convergence = optimized.then_some(if run.config.tight {
-            qcdata::Convergence::Tight
-        } else {
-            qcdata::Convergence::Normal
-        });
+        settings.convergence =
+            optimized.then_some(if run.config.tight || run.config.task.frequencies() {
+                qcdata::Convergence::Tight
+            } else {
+                qcdata::Convergence::Normal
+            });
         settings.fixed_atoms = fixed_indices(&launch.atoms, &run.config.fixed)
             .map(|index| index as u32)
             .collect();
@@ -1038,16 +1227,20 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         evaluations: report.evaluations.clone(),
         numerics: computed.numerics.clone(),
     };
+    let line = state::summary(
+        report.energy,
+        computed.homo_lumo_gap_ev,
+        optimized.then_some((report.converged, report.steps)),
+        result.vibrations.as_ref(),
+    );
     Ok(Pending {
+        pushed: run.start.is_some(),
+        accepted: run.start.as_ref().map(|start| start.from.clone()),
         info,
         launch,
         frames,
         result,
-        line: state::summary(
-            report.energy,
-            computed.homo_lumo_gap_ev,
-            optimized.then_some((report.converged, report.steps)),
-        ),
+        line,
         notes,
     })
 }

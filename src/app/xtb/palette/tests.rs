@@ -1,6 +1,8 @@
 //! The results palette after runs answered by hand, as in the card's tests.
 use super::super::results::Evaluation;
-use super::super::tests::{MOVED, START, event, f32s, halocarbon, model, optimized, send, water};
+use super::super::tests::{
+    MOVED, START, event, f32s, halocarbon, model, optfreq, optimized, send, water,
+};
 use super::super::{
     Action as XtbAction, CalcTask, Outcome, RunEvent as Event, RunReport as Report,
 };
@@ -72,7 +74,8 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
         "{}",
         shown.method()
     );
-    let labels: Vec<_> = shown.rows().iter().map(|(label, _)| *label).collect();
+    let rows = shown.rows();
+    let labels: Vec<_> = rows.iter().map(|(label, _)| label.as_str()).collect();
     assert_eq!(
         &labels[..3],
         ["Total energy", "HOMO–LUMO gap", "Optimization"]
@@ -94,6 +97,35 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     assert!(app.xtb_bottom_palette().is_none());
     assert!(app.xtb_inspector_palette().is_some());
     assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
+}
+
+#[test]
+fn a_reopened_light_optfreq_result_shows_the_vibrations_tab() {
+    let (mut app, _) = water(CalcTask::OptFreq);
+    event(&mut app, Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))));
+    let bytes = app.tab.doc.file_json().expect("save");
+    let (mut reopened, _) = App::new();
+    reopened.tab.doc = Document::from_native_file(&bytes).expect("reopen");
+    let result = reopened.tab.doc.science.results[0].result.clone();
+    assert!(result.vibrations.as_ref().unwrap().modes.is_empty());
+    assert!(View::available(&result).contains(&View::Vibrations));
+    reopened.tab.xtb.palette.show(&result);
+    let shown = reopened.xtb_shown().expect("a saved result");
+    assert!(shown.info.is_none());
+    let rows = shown.rows();
+    for (label, value) in [
+        ("Frequencies", "lowest 1590 cm⁻¹"),
+        ("ZPVE", "0.019453 Eh (12.21 kcal/mol)"),
+        ("G (298.15 K)", "−5.068407 Eh"),
+        ("Point group", "C2v"),
+    ] {
+        assert!(
+            rows.iter().any(|(l, v)| l == label && v == value),
+            "{rows:?}"
+        );
+    }
+    palette(&mut reopened, Action::View(View::Vibrations));
+    assert!(reopened.xtb_bottom_palette().is_some());
 }
 
 #[test]

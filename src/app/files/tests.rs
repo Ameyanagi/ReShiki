@@ -498,6 +498,7 @@ fn cli_input_formats_match_the_app() {
             Prepared::Import { format, .. } => format,
             Prepared::Picture(..) => panic!("Structure files are not pictures"),
             Prepared::Records(_) => panic!("Structure files are not SD files"),
+            Prepared::Frames(_) => panic!("One structure has one frame"),
         };
         assert_eq!(
             chosen,

@@ -266,6 +266,7 @@ fn result(frame: &Frame, task: Task, full: bool) -> CalcResult {
             rotor_cutoff_cm1: 100.,
             imaginary_cutoff_cm1: 50.,
             symmetry_number: 1,
+            point_group: Some("C1".into()),
         }),
         trajectory: None,
         keep_full: false,
