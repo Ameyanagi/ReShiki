@@ -127,10 +127,7 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
             data.rsplit_once(" E ")
                 .map(|(_, s)| energy(s.trim()))
                 .transpose()?
-        } else if let Some((_, data)) = label.rsplit_once(" E = ")
-            && let Some(value) = data.trim().strip_suffix("Eh")
-        {
-            // ReShiki's own conformer export: "… · E = -5.0701760000 Eh".
+        } else if let Some(value) = reshiki_energy(label) {
             Some(energy(value.trim())?)
         } else {
             // CREST writes each conformer's energy (Eh) as the whole comment,
@@ -177,6 +174,16 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
         }],
         warnings,
     })
+}
+
+fn reshiki_energy(label: &str) -> Option<&str> {
+    // IRC starts with the energy, while conformer and optimization XYZ end with it.
+    let data = if let Some(data) = label.strip_prefix("E = ") {
+        data.split_once(" · ").map_or(data, |(energy, _)| energy)
+    } else {
+        label.rsplit_once(" E = ")?.1
+    };
+    data.trim().strip_suffix("Eh")
 }
 
 #[cfg(test)]

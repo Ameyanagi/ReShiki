@@ -783,20 +783,32 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .any(Option::is_some)
             .then_some(analysis.corrections)
     });
+    let irc = ordered_irc(&report, &transition)?;
+    let image_positions: Vec<_> = report
+        .path
+        .iter()
+        .map(|point| angstroms(&point.positions))
+        .collect();
+    if irc.is_some()
+        && let Some(band) = &mut result.trajectory
+    {
+        band.positions_angstrom = image_positions
+            .iter()
+            .flatten()
+            .flatten()
+            .copied()
+            .collect();
+    }
     let extras = Extras {
         endpoint_energies_hartree: [report.reactant.energy, report.product.energy],
         endpoint_thermo: endpoint_corrections,
         saddle_converged: report.saddle_converged,
         num_imaginary: report.imaginary,
         diagnostics: diagnostic_rows,
-        image_positions: report
-            .path
-            .iter()
-            .map(|point| angstroms(&point.positions))
-            .collect(),
+        image_positions,
         neb_converged: report.neb_converged,
         reached_positions_angstrom: reached_endpoint(&report),
-        irc: ordered_irc(&report, &transition)?,
+        irc,
         connects: report.connects,
         forming: changes.form.iter().map(|&(a, b)| [a, b]).collect(),
         breaking: changes.break_.iter().map(|&(a, b)| [a, b]).collect(),
@@ -833,11 +845,12 @@ fn ordered_irc(report: &TsReport, frame: &Frame) -> Result<Option<qcdata::IrcPat
         (_, Reactant) | (Product, _) => [minus, plus],
         _ => [plus, minus],
     };
-    let points: Vec<_> = std::iter::once(&ordered[0].end)
-        .chain(ordered[0].path.iter().rev())
+    let points: Vec<_> = ordered[0]
+        .path
+        .iter()
+        .rev()
         .chain(std::iter::once(&report.ts))
         .chain(ordered[1].path.iter())
-        .chain(std::iter::once(&ordered[1].end))
         .collect();
     let trajectory = |points: &[&ts::Minimum]| qcdata::Trajectory {
         numbers: frame.numbers.clone(),
@@ -862,9 +875,18 @@ fn ordered_irc(report: &TsReport, frame: &Frame) -> Result<Option<qcdata::IrcPat
     });
     let mut path = qcdata::IrcPath::new(
         trajectory(&points),
-        ordered[0].path.len() + 1,
+        ordered[0].path.len(),
         reached,
         ordered.map(|branch| branch.completed),
+        ordered.map(|branch| qcdata::IrcRelaxedEnd {
+            energy_hartree: branch.end.energy,
+            positions_angstrom: branch
+                .end
+                .positions
+                .iter()
+                .map(|x| x * ANGSTROM_PER_BOHR)
+                .collect(),
+        }),
     )
     .map_err(|error| Failure::Other(error.to_string()))?;
     let neb = trajectory(&report.path.iter().collect::<Vec<_>>());

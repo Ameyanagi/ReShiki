@@ -1,8 +1,8 @@
 use super::*;
 use crate::appearance::EnergyUnit;
-use reshiki::qcdata::{IrcEndpoint, IrcPath, KCAL_PER_HARTREE};
+use reshiki::qcdata::{IrcEndpoint, IrcPath, IrcRelaxedEnd, KCAL_PER_HARTREE};
 
-fn finished() -> (App, u64) {
+pub(in crate::app::xtb::ts) fn finished() -> (App, u64) {
     let (mut doc, arrow) = card::tests::claisen();
     name_reactant(&mut doc, arrow, "Allyl vinyl ether");
     let mut app = reaction_app(doc, arrow);
@@ -33,6 +33,7 @@ fn finished() -> (App, u64) {
     });
     let band = report.result.trajectory.as_mut().unwrap();
     band.masses_amu.clone_from(&ts.masses_amu);
+    band.energies_hartree[0] = -5.0002;
     let mut trajectory = band.clone();
     trajectory.positions_angstrom = [r, ts, p]
         .into_iter()
@@ -40,11 +41,21 @@ fn finished() -> (App, u64) {
         .collect();
     trajectory.energies_hartree[0] = -5.001;
     trajectory.energies_hartree[1] = report.result.energy_hartree.unwrap();
+    let relaxed = [(r, -5.003), (p, -5.024)].map(|(frame, energy_hartree)| {
+        let mut positions_angstrom: Vec<_> =
+            frame.positions_angstrom.iter().flatten().copied().collect();
+        positions_angstrom[0] += 0.3;
+        IrcRelaxedEnd {
+            energy_hartree,
+            positions_angstrom,
+        }
+    });
     let mut path = IrcPath::new(
         trajectory,
         1,
         [IrcEndpoint::Reactant, IrcEndpoint::Product],
         [true; 2],
+        relaxed,
     )
     .unwrap();
     path.neb_arc_lengths_sqrt_amu_bohr = path.arc_lengths_sqrt_amu_bohr.clone();
@@ -94,12 +105,14 @@ fn default_profile_uses_a_completed_or_connected_irc_and_keeps_partial_traces_se
 }
 
 #[test]
-fn animate_irc_previews_reactant_saddle_product_and_stop_restores_the_model() {
+fn animate_irc_previews_only_traced_frames_and_stop_restores_the_model() {
     let (mut app, _) = finished();
     let before = app.tab.doc.clone();
     let revision = app.tab.revision;
     let result = app.xtb_shown().unwrap().stored.result.clone();
     let path = irc::saved(&result).unwrap();
+    assert_ne!(path.frame(0), path.relaxed_frame(0));
+    assert_ne!(path.frame(path.steps() - 1), path.relaxed_frame(1));
     assert_eq!(app.xtb_profile(&result), irc::Profile::Irc);
     send(&mut app, XtbAction::Ts(Action::PlayIrc));
     for step in 0..path.steps() {
@@ -162,11 +175,14 @@ fn reopened_irc_exports_ordered_xyz_in_the_selected_unit_only_from_a_full_save()
             for (i, lines) in lines.chunks_exact(count + 2).enumerate() {
                 assert_eq!(lines[0], count.to_string());
                 let s = path.arc_lengths_sqrt_amu_bohr[i];
-                let delta = unit
-                    .convert_kcal((path.trajectory.energies_hartree[i] + 5.001) * KCAL_PER_HARTREE);
+                let energy = path.trajectory.energies_hartree[i];
+                let delta = (energy + 5.) * unit.convert_kcal(KCAL_PER_HARTREE);
                 assert_eq!(
                     lines[1],
-                    format!("s = {s:.6} amu½·bohr  ΔE = {delta:.6} {}", unit.label())
+                    format!(
+                        "E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {}",
+                        unit.label()
+                    )
                 );
                 let parsed = reshiki::qc_input::parse_xyz(&lines.join("\n")).unwrap();
                 let frame = path.frame(i).unwrap();

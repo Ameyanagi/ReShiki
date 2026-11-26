@@ -32,6 +32,8 @@ fn fixture(energies: &[f64], saddle: f64) -> Profile {
                 side: Side::Below,
                 transition: false,
                 note: None,
+                connector_from: None,
+                tooltip: None,
                 thumbnail: Some(0),
             },
             Marker {
@@ -43,6 +45,8 @@ fn fixture(energies: &[f64], saddle: f64) -> Profile {
                 side: Side::Above,
                 transition: true,
                 note: Some("Forming C1···C6 1.85 Å · 393i cm⁻¹".into()),
+                connector_from: None,
+                tooltip: None,
                 thumbnail: Some(1),
             },
             Marker {
@@ -54,6 +58,8 @@ fn fixture(energies: &[f64], saddle: f64) -> Profile {
                 side: Side::Below,
                 transition: false,
                 note: None,
+                connector_from: None,
+                tooltip: None,
                 thumbnail: Some(2),
             },
         ],
@@ -143,12 +149,20 @@ fn labelled_paths_keep_text_outside_the_curve_at_narrow_and_full_widths() {
 }
 
 #[test]
-fn thumbnails_hide_below_either_size_threshold_and_keep_endpoint_identity() {
+fn thumbnails_fit_startup_dock_and_inspector_and_hide_only_in_small_figures() {
     let profile = fixture(&[0., 12., 20., 5., -8.], 19.5);
-    for size in [(359., 260.), (560., 199.), (330., 190.)] {
+    for size in [(259., 260.), (560., 139.), (259., 139.)] {
         assert!(profile.layout(bounds(size.0, size.1)).models.is_empty());
     }
-    for size in [(360., 200.), (560., 260.)] {
+    // A 1280 × 820 window gives its bottom-dock chart 180 logical pixels;
+    // the inspector is fixed to 320 pixels wide.
+    for size in [
+        (980., 180.),
+        (320., 180.),
+        (320., 260.),
+        (260., 140.),
+        (560., 260.),
+    ] {
         let layout = profile.layout(bounds(size.0, size.1));
         assert_eq!(
             layout
@@ -161,6 +175,14 @@ fn thumbnails_hide_below_either_size_threshold_and_keep_endpoint_identity() {
         for pair in layout.models.windows(2) {
             assert!(!overlaps(pair[0].bounds, pair[1].bounds));
         }
+        for model in &layout.models {
+            assert!(model.bounds.width >= 36. && model.bounds.height >= 36.);
+            assert!(!overlaps(model.bounds, layout.plot));
+            for label in &layout.labels {
+                assert!(!overlaps(model.bounds, label.bounds));
+            }
+        }
+        assert!(layout.plot.height >= 30., "{size:?}: {layout:?}");
     }
     let mut no_saddle = profile;
     no_saddle.markers.remove(1);
@@ -214,7 +236,7 @@ fn irc_uses_signed_coordinates_and_overlay_extents_without_changing_trace_values
 }
 
 #[test]
-fn compact_irc_keeps_two_forming_distances_and_ticks_inside_the_allocated_height() {
+fn compact_irc_keeps_full_notes_in_tooltips_and_ticks_inside_the_allocated_height() {
     let mut profile = fixture(&[0., 16., 23., 9., -8.], 22.5);
     profile.markers[1].note = Some("Forming C1···C6 2.10 Å · C2···C5 2.15 Å · 393i cm⁻¹".into());
     for (sample, x) in profile.samples.iter_mut().zip([-8., -2., 0., 2., 9.]) {
@@ -227,7 +249,7 @@ fn compact_irc_keeps_two_forming_distances_and_ticks_inside_the_allocated_height
     profile.x_ticks = true;
     profile.highlight_curve = true;
     let layout = profile.layout(bounds(330., 146.));
-    assert!(layout.models.is_empty());
+    assert_eq!(layout.models.len(), 3);
     assert!(layout.plot.height >= 1.);
     assert!(layout.plot.y + layout.plot.height < 146.);
     assert!(layout.footer_legend);
@@ -244,7 +266,73 @@ fn compact_irc_keeps_two_forming_distances_and_ticks_inside_the_allocated_height
         .map(|label| label.text.as_str())
         .collect::<Vec<_>>()
         .join(" ");
-    assert_eq!(notes, profile.markers[1].note.as_deref().unwrap());
+    assert!(notes.is_empty() || notes.ends_with('…'));
+    let tooltip = profile
+        .hover_text(layout.point(profile.markers[1].sample), &layout)
+        .unwrap();
+    assert!(tooltip.contains(profile.markers[1].note.as_deref().unwrap()));
+}
+
+#[test]
+fn coincident_neb_dots_are_painted_after_endpoint_markers() {
+    let mut profile = fixture(&[0., 20., -8.], 19.5);
+    profile.overlay = vec![profile.markers[0].sample, profile.markers[2].sample];
+    let dots = profile.dots_in_draw_order().collect::<Vec<_>>();
+    assert!(matches!(dots[0], PlotDot::Marker(_)));
+    assert!(matches!(dots[1], PlotDot::Marker(_)));
+    assert!(matches!(dots[2], PlotDot::Marker(_)));
+    for (dot, endpoint) in dots[3..].iter().zip([0, 2]) {
+        let PlotDot::Overlay(sample) = dot else {
+            panic!("NEB must paint above marker disks");
+        };
+        assert_eq!(sample.x, profile.markers[endpoint].sample.x);
+        assert_eq!(sample.energy, profile.markers[endpoint].sample.energy);
+    }
+}
+
+#[test]
+fn relaxed_endpoints_have_dotted_vertical_connectors_and_distinct_tooltips() {
+    let mut profile = fixture(&[1.5, 20., -7.], 19.5);
+    profile.markers[0].connector_from = Some(profile.samples[0]);
+    profile.markers[0].sample.energy = 0.;
+    profile.markers[0].tooltip = Some("R · relaxed IRC end".into());
+    profile.markers[2].connector_from = Some(profile.samples[2]);
+    profile.markers[2].sample.energy = -12.;
+    profile.overlay = vec![profile.markers[0].sample, profile.markers[2].sample];
+    profile.x_ticks = true;
+    for size in [(980., 180.), (320., 180.), (320., 260.), (260., 140.)] {
+        let layout = profile.layout(bounds(size.0, size.1));
+        assert_eq!(layout.models.len(), 3);
+        assert_eq!(layout.connectors.len(), 2);
+        for connector in &layout.connectors {
+            assert_eq!(connector.from.x, connector.to.x);
+            assert_ne!(connector.from.y, connector.to.y);
+            assert!(connector.from.y >= layout.plot.y);
+            assert!(connector.to.y <= layout.plot.y + layout.plot.height);
+            let midpoint = connector.from + (connector.to - connector.from) * 0.5;
+            assert!(
+                profile
+                    .hover_text(midpoint, &layout)
+                    .unwrap()
+                    .contains(RELAXED_LEGEND)
+            );
+        }
+        let tooltip = profile
+            .hover_text(layout.point(profile.markers[0].sample), &layout)
+            .unwrap();
+        assert!(tooltip.contains("relaxed IRC end"));
+        assert!(tooltip.contains(RELAXED_LEGEND));
+        assert!(layout.legend_y.is_some());
+        for label in &layout.labels {
+            assert!(!overlaps(label.bounds, layout.plot));
+            assert!(label.bounds.y + label.bounds.height <= size.1);
+        }
+    }
+    let stroke = relaxation_stroke(Color::BLACK);
+    assert_eq!(stroke.line_dash.segments, &[1., 3.]);
+    assert_eq!(RELAXED_LEGEND, "relaxed to the minimum");
+    assert_eq!(profile.samples[0].energy, 1.5);
+    assert_eq!(profile.samples[2].energy, -7.);
 }
 
 #[test]

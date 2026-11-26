@@ -156,7 +156,7 @@ fn worker_pool_respects_cores_and_inner_images() {
 }
 
 #[test]
-fn ordered_irc_uses_endpoint_classification_actual_geometries_and_single_saddle() {
+fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
     let mut report = ts_report();
     let branches = report.irc.as_mut().unwrap();
     branches[0].path = vec![point(-1.5, 2.75), point(-2., 2.5)];
@@ -174,26 +174,35 @@ fn ordered_irc_uses_endpoint_classification_actual_geometries_and_single_saddle(
         drawing_atoms: vec![],
     };
     let path = ordered_irc(&report, &frame).unwrap().unwrap();
-    assert_eq!(path.steps(), 6);
-    assert_eq!(path.ts_index, 3);
-    assert_eq!(
-        path.trajectory.energies_hartree,
-        [-3., -2., -1.5, -1., -1.25, -2.]
-    );
+    assert_eq!(path.steps(), 4);
+    assert_eq!(path.ts_index, 2);
+    assert_eq!(path.trajectory.energies_hartree, [-2., -1.5, -1., -1.25]);
     assert_eq!(path.completed, [false, true]);
     assert_eq!(
         path.reached,
         [qcdata::IrcEndpoint::Reactant, qcdata::IrcEndpoint::Product]
     );
     assert_eq!(path.frame(path.ts_index), Some(frame));
+    assert_eq!(
+        path.relaxed_ends
+            .as_ref()
+            .unwrap()
+            .each_ref()
+            .map(|end| end.energy_hartree),
+        [-3., -2.]
+    );
     for (actual, expected) in path
         .arc_lengths_sqrt_amu_bohr
         .iter()
-        .zip([-2., -1., -0.5, 0., 0.5, 2.])
+        .zip([-1., -0.5, 0., 0.5])
     {
         assert!((actual - expected).abs() < 1e-12);
     }
-    for (actual, expected) in path.neb_arc_lengths_sqrt_amu_bohr.iter().zip([-2., 0., 2.]) {
+    for (actual, expected) in path
+        .neb_arc_lengths_sqrt_amu_bohr
+        .iter()
+        .zip([-1., 0., 0.5])
+    {
         assert!((actual - expected).abs() < 1e-12);
     }
 

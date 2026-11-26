@@ -18,6 +18,7 @@ use crate::{
 
 /// One calculation or imported job step tied to an exact frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(remote = "CalcResult")]
 pub struct CalcResult {
     /// Geometry the values describe.
     pub frame: FrameHash,
@@ -85,6 +86,28 @@ pub struct CalcResult {
     /// Run metadata for a calculated result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run: Option<RunSummary>,
+}
+
+impl Serialize for CalcResult {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        CalcResult::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for CalcResult {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut result = CalcResult::deserialize(deserializer)?;
+        if let Some(search) = result
+            .run
+            .as_mut()
+            .and_then(|run| run.transition_state.as_mut())
+            && let Some(irc) = &mut search.irc
+        {
+            irc.restore(result.trajectory.as_ref(), search.climbing_image)
+                .map_err(serde::de::Error::custom)?;
+        }
+        Ok(result)
+    }
 }
 
 /// Wall time, SCF effort, and optional search details for one run.

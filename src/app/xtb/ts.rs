@@ -453,6 +453,12 @@ pub(super) fn path_energies(result: &CalcResult) -> &[f64] {
         .map_or(&[], |path| &path.energies_hartree)
 }
 
+fn optimized_reactant_energy(result: &CalcResult) -> Option<f64> {
+    saved_search(result)
+        .and_then(|search| search.endpoint_energies_hartree.map(|[r, _]| r))
+        .or_else(|| path_energies(result).first().copied())
+}
+
 /// A saved TS links to its starting molecule. Find current plans that can
 /// still start from that molecule, including the roles on the opposite side.
 pub(super) fn matching_plans<'a>(
