@@ -1,13 +1,16 @@
-//! Orbital isosurfaces drawn as vector shapes in a 3D model (prototype; see
+//! Orbital isosurfaces drawn as vector shapes in a 3D model (see
 //! docs/plans/xtb-surfaces.md).
 pub mod draw;
+mod figure;
 pub mod fit;
 pub mod look;
 pub mod mesh;
+pub mod orbital;
 pub mod snapshot;
 pub mod visible;
 
-pub use draw::{demo_on_this_thread, enable_demo};
+pub use draw::demo_on_this_thread;
+pub use figure::{Figure, OrbitalRef, Snapshot};
 pub use look::{Fill, Look};
 
 /// Export size above which the export dialog warns (owner: 5 MB).

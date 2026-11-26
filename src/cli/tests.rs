@@ -1,7 +1,7 @@
 use super::{
     args::{
         Calc, CalcTask, Calculate, Compose, Convert, Export, Input, Labels, Name, Output,
-        PredictNmr, Preview, ReadOutput, Render, Schema, Skill, Source, SvgText, parse,
+        PredictNmr, Preview, ReadOutput, Render, Schema, Skill, Source, SvgText, Ts, parse,
     },
     *,
 };
@@ -872,6 +872,278 @@ async fn calc_without_xtb_reports_unavailability_and_no_stdout() {
     assert_eq!(code, FAILURE);
     assert!(out.is_empty());
     assert_eq!(err, "reshiki: xTB is not included in this build\n");
+}
+
+#[test]
+fn ts_parses_mapped_endpoints_and_defaults() {
+    let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    let expected = Ts {
+        reactant: Some("r.xyz".into()),
+        product: Some("p.xyz".into()),
+        form: Vec::new(),
+        break_: Vec::new(),
+        charge: 0,
+        uhf: None,
+        images: 15,
+        workers: 4.min(cpus),
+        remap_hydrogens: false,
+        keep_endpoints: false,
+        out_dir: None,
+        json: None,
+    };
+    assert_eq!(
+        parsed(&["ts", "--reactant", "r.xyz", "--product", "p.xyz"]),
+        Ok(Command::Ts(expected)),
+    );
+    let Command::Ts(command) = parsed(&[
+        "ts",
+        "--reactant",
+        "r.xyz",
+        "--product",
+        "p.xyz",
+        "--images",
+        "5",
+    ])
+    .unwrap() else {
+        panic!("ts command");
+    };
+    assert_eq!(command.workers, 3.min(cpus));
+}
+
+#[test]
+fn ts_parses_repeatable_bond_edits_and_output_paths() {
+    assert_eq!(
+        parsed(&[
+            "ts",
+            "--product",
+            "p.xyz",
+            "--form",
+            "3-7",
+            "--form",
+            "5-3",
+            "--break",
+            "1-3",
+            "--break",
+            "3-2",
+            "--charge",
+            "-1",
+            "--uhf",
+            "2",
+            "--images",
+            "24",
+            "--workers",
+            "8",
+            "--keep-endpoints",
+            "--out-dir",
+            "results",
+            "--json",
+            "report.json",
+        ]),
+        Ok(Command::Ts(Ts {
+            reactant: None,
+            product: Some("p.xyz".into()),
+            form: vec![(3, 7), (3, 5)],
+            break_: vec![(1, 3), (2, 3)],
+            charge: -1,
+            uhf: Some(2),
+            images: 24,
+            workers: 8,
+            remap_hydrogens: false,
+            keep_endpoints: true,
+            out_dir: Some("results".into()),
+            json: Some("report.json".into()),
+        })),
+    );
+    assert!(
+        parsed(&[
+            "ts",
+            "--reactant",
+            "r.xyz",
+            "--break",
+            "1-2",
+            "--images",
+            "5",
+            "--workers",
+            "8"
+        ])
+        .is_ok()
+    );
+}
+
+#[test]
+fn ts_rejects_hydrogen_remapping_with_explicit_bond_edits() {
+    let message = "--remap-hydrogens requires two XYZ endpoints without --form or --break";
+    for (endpoint, edit) in [("--reactant", "--form"), ("--product", "--break")] {
+        assert_eq!(
+            parsed(&["ts", endpoint, "end.xyz", edit, "1-2", "--remap-hydrogens"]),
+            Err(message.into()),
+        );
+    }
+    let Command::Ts(command) = parsed(&[
+        "ts",
+        "--reactant",
+        "r.xyz",
+        "--product",
+        "p.xyz",
+        "--remap-hydrogens",
+    ])
+    .unwrap() else {
+        panic!("ts command");
+    };
+    assert!(command.remap_hydrogens);
+}
+
+#[test]
+fn ts_rejects_invalid_options_and_endpoint_combinations() {
+    for tokens in [
+        &[][..],
+        &["--form", "1-2"],
+        &["--reactant", "r.xyz"],
+        &["--product", "p.xyz"],
+        &["--reactant", "r.xyz", "--product", "p.xyz", "--form", "1-2"],
+        &[
+            "--reactant",
+            "r.xyz",
+            "--product",
+            "p.xyz",
+            "--break",
+            "1-2",
+        ],
+        &["--reactant", "r.xyz", "--form", "3-7", "--break", "7-3"],
+        &["--reactant", "-", "--form", "1-2"],
+        &["--reactant", "", "--form", "1-2"],
+        &["r.xyz", "--product", "p.xyz", "--form", "1-2"],
+    ] {
+        assert!(parsed(&[&["ts"], tokens].concat()).is_err(), "{tokens:?}");
+    }
+    for pair in [
+        "3:7", "3", "3-", "3--7", "3-7-2", "0-7", "3-0", "3-3", "+3-7", "3 -7", "3-X",
+    ] {
+        for flag in ["--form", "--break"] {
+            assert!(
+                parsed(&["ts", "--reactant", "r.xyz", flag, pair]).is_err(),
+                "{flag} {pair}"
+            );
+        }
+    }
+    for options in [
+        &["--images", "4"][..],
+        &["--images", "25"],
+        &["--images", "5.5"],
+        &["--workers", "0"],
+        &["--workers", "9"],
+        &["--workers", "-1"],
+        &["--charge", "2147483648"],
+        &["--charge", "1.5"],
+        &["--uhf", "-1"],
+        &["--uhf", "4294967296"],
+        &["--uhf", "1.5"],
+        &["--uhf"],
+        &["--reactant", "again.xyz"],
+        &["--product", "again.xyz"],
+        &["--json"],
+        &["--json", "a", "--json", "b"],
+        &["--keep-endpoints", "--keep-endpoints"],
+        &["--out-dir", ""],
+        &["--method", "gfn2"],
+        &["--alpb", "water"],
+        &["--conventions", "xtb-6.8"],
+    ] {
+        let tokens = [
+            &["ts", "--reactant", "r.xyz", "--product", "p.xyz"],
+            options,
+        ]
+        .concat();
+        assert!(parsed(&tokens).is_err(), "{options:?}");
+    }
+}
+
+#[cfg(feature = "xtb")]
+#[tokio::test]
+async fn ts_preflight_rejects_json_collisions_with_the_output_directory_and_its_files() {
+    let temp = tempfile::tempdir().unwrap();
+    let missing_xyz = temp.path().join("missing.xyz");
+    let out_dir = temp.path().join("out");
+    let structure = out_dir.join("ts.xyz");
+    let cases = [
+        (out_dir.clone(), &out_dir),
+        (temp.path().join("absent/../out"), &out_dir),
+        (temp.path().join("absent/../out/ts.xyz"), &structure),
+    ];
+    let mut results = Vec::new();
+    for (json, target) in cases {
+        let (code, out, err) = call_os(vec![
+            "ts".into(),
+            "--reactant".into(),
+            missing_xyz.clone().into_os_string(),
+            "--product".into(),
+            missing_xyz.clone().into_os_string(),
+            "--out-dir".into(),
+            out_dir.clone().into_os_string(),
+            "--json".into(),
+            json.into_os_string(),
+        ])
+        .await;
+        results.push((
+            code,
+            out,
+            err,
+            format!("--json and --out-dir both target {}", target.display()),
+        ));
+    }
+    for (code, out, err, expected) in results {
+        assert_eq!(code, FAILURE);
+        assert!(out.is_empty());
+        assert!(err.contains(&expected), "expected {expected}, got {err}");
+    }
+    assert!(!out_dir.exists());
+}
+
+#[test]
+fn ts_is_cli_only() {
+    let spec = commands::find("ts").unwrap();
+    assert!(spec.tools.is_empty());
+    assert!(
+        reshiki_agent::ops::catalog::catalog_json()
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|tool| tool["name"] != "ts")
+    );
+}
+
+#[cfg(not(feature = "xtb"))]
+#[tokio::test]
+async fn ts_without_xtb_reports_unavailability() {
+    let (code, out, err) =
+        call(&["ts", "--reactant", "unread.xyz", "--product", "unread.xyz"]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert_eq!(err, "reshiki: xTB is not included in this build\n");
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_worker_failure_keeps_characterized_candidate_and_files() {
+    ts::tests::worker_failure_keeps_characterized_candidate_and_files();
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_worker_count_disagreement_fails_with_diagnostics() {
+    ts::tests::worker_count_disagreement_fails_with_diagnostics();
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_irc_failure_preserves_candidate_and_explains_missing_branches() {
+    ts::tests::irc_failure_preserves_candidate_and_explains_missing_branches();
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_worker_hessian_uses_engine_masses_and_explicit_symmetry() {
+    ts::tests::worker_hessian_uses_engine_masses_and_explicit_symmetry();
 }
 
 #[test]
@@ -2812,6 +3084,7 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
         "calc",
         include_str!("../../tests/fixtures/cli-help/calc.txt"),
     ),
+    ("ts", include_str!("../../tests/fixtures/cli-help/ts.txt")),
     (
         "pieces",
         include_str!("../../tests/fixtures/cli-help/pieces.txt"),

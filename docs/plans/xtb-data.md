@@ -488,9 +488,10 @@ and the agent API call the functions named here.
   colours), pins that MO's row and the basis in the saved result, and saves a simplified
   projected outline (a compact array, at most 300 KB) so it prints and exports in builds
   without xTB. Its 3D surface is rebuilt from the pinned row. (Phase 5.)
-- **Clipboard, figures and templates.** Copies carry no calculation data: `editing::selection`
-  and the whole-drawing copy drop `science`, the editable drawing embedded in PNG, SVG and PDF
-  figures drops it, and templates store none. Inserting a native file that has results remaps the
+- **Clipboard, figures and templates.** A native clipboard drawing carries the light results
+  required by its placed orbital figures, including their pinned rows and bases. The editable
+  drawing embedded in PNG, SVG and PDF figures drops calculation data, and templates store none.
+  Inserting a native file that has results remaps the
   attachments' atom IDs with the drawing and keeps the results. Any other ID remapping that loses
   an atom (a join moving a fragment) unlinks it as a delete would.
 

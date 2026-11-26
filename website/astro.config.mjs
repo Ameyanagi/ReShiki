@@ -12,6 +12,7 @@ const calculationPages = [
   { label: "Transition states", slug: "guide/calculation-transition-states" },
   { label: "Gaussian, ORCA and GAMESS files", slug: "guide/calculation-files" },
   { label: "From scripts", slug: "guide/calculation-scripts" },
+  { label: "How to cite", slug: "guide/calculation-citing" },
 ];
 
 const archivedPages = [

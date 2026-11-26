@@ -6,7 +6,8 @@ use glam::{DMat3, DVec3};
 const TOL: f64 = 1e-3; // ångströms
 
 // The second-moment tensor and the inertia tensor have the same eigenvectors.
-// Jacobi rotations diagonalize the former while accumulating its principal axes.
+// Jacobi rotations diagonalize the former while accumulating its principal axes
+// [Golub2013Matrix].
 fn principal_axes(positions: &[DVec3], masses: &[f64]) -> [DVec3; 3] {
     let mut tensor = DMat3::ZERO;
     for (&p, &mass) in positions.iter().zip(masses) {
@@ -34,7 +35,8 @@ fn principal_axes(positions: &[DVec3], masses: &[f64]) -> [DVec3; 3] {
 }
 
 // Usually each atom has just one image. If tolerance balls overlap, find an
-// augmenting path so a valid permutation does not depend on atom ordering.
+// augmenting path so a valid permutation does not depend on atom ordering
+// [Kuhn1955Hungarian].
 fn assign_image<I: Iterator<Item = usize>>(
     atom: usize,
     images: &impl Fn(usize) -> I,

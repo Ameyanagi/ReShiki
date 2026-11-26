@@ -467,10 +467,9 @@ async fn prepare_copy_with_limit(
             original
         }
     };
-    // Marked like a saved file, so pasting it never migrates its colors again.
-    // The clipboard carries no calculation data.
+    // Marked like a saved file, with the results needed by placed orbitals.
     let doc = Document {
-        science: Default::default(),
+        science: crate::science::for_figures(&doc),
         ..doc
     }
     .current();

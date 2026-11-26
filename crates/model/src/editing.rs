@@ -90,6 +90,15 @@ pub enum Arrange {
 /// The selected part as its own document: [`crate::attachments::selection`],
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
+    let mut part = selection_part(doc, ids);
+    if part.models.iter().any(|model| model.surface.is_some()) {
+        part.science = doc.science.clone();
+        part.science = crate::science::for_figures(&part);
+    }
+    part
+}
+
+fn selection_part(doc: &Document, ids: &[u64]) -> Document {
     let ids = crate::graphics::table::with_contents(doc, ids);
     let ids = crate::generic::selection(doc, &ids);
     let ids = crate::attachments::selection(doc, &ids);
@@ -104,7 +113,7 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     crate::arrow_labels::include_labels(doc, &mut ids);
     crate::shape_text::include_texts(doc, &mut ids);
     let mut part = doc.clone();
-    // The clipboard carries no calculation data.
+    // Calculation data is restored below only for retained orbital figures.
     part.science = Default::default();
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
@@ -292,7 +301,7 @@ pub fn analysis_atoms(doc: &Document, selected: &[u64]) -> Vec<u64> {
 /// count, such as an imported ChemDraw label, get explicit ones, so the open
 /// valences do not read as radicals while intended radicals stay.
 pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
-    let mut part = selection(doc, atoms);
+    let mut part = selection_part(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
     let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
     // Twice the valence `b` gives `atom`, as in the chemistry graph: a
@@ -546,6 +555,21 @@ fn mapped_append_part(
 /// when one has no entry in `mapping`. The destructure names every field, so
 /// a new collection does not compile until its IDs are handled here.
 pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
+    let snapshots: Vec<usize> = doc
+        .models
+        .iter()
+        .enumerate()
+        .filter(|(_, model)| {
+            model
+                .surface
+                .as_ref()
+                .and_then(|figure| figure.snapshot.as_ref())
+                .is_some_and(|snapshot| {
+                    snapshot.view == crate::models3d::surface::draw::view_signature(doc, model)
+                })
+        })
+        .map(|(index, _)| index)
+        .collect();
     let Document {
         generic,
         canvas_theme: _,
@@ -666,6 +690,19 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         }
     }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
+    // ID changes preserve a matching picture, while invalid snapshots stay invalid.
+    for index in snapshots {
+        let view = crate::models3d::surface::draw::view_signature(doc, doc.models.get(index)?);
+        if let Some(snapshot) = doc
+            .models
+            .get_mut(index)?
+            .surface
+            .as_mut()
+            .and_then(|figure| figure.snapshot.as_mut())
+        {
+            snapshot.view = view;
+        }
+    }
     Some(())
 }
 pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {

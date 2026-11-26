@@ -7,7 +7,8 @@ mod symmetry;
 #[cfg(test)]
 mod symmetry_tests;
 
-// SI definitions and CODATA 2022 recommended values.
+// SI definitions and CODATA 2022 recommended values [Mohr2025CODATA]. Full
+// references: docs/references/xtb.md.
 const PLANCK_J_S: f64 = 6.626_070_15e-34;
 const BOLTZMANN_J_PER_K: f64 = 1.380_649e-23;
 const LIGHT_CM_PER_S: f64 = 2.997_924_58e10;
@@ -85,6 +86,7 @@ fn center_of_mass(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> [f
 /// approach the tolerance. Well-converged geometries typically have much
 /// smaller deviations. A linear rotor has symmetry number 2 if
 /// its ends can be exchanged, and 1 otherwise. A single atom returns 1.
+/// See Fernández-Ramos et al. (2007) \[FernandezRamos2007Symmetry\].
 /// Supply finite positions and positive finite masses, one per label.
 pub fn rotational_symmetry_number(
     labels: &[u32],
@@ -132,7 +134,7 @@ fn inertia_invariants(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -
 ///
 /// Uses classical translation and rigid rotation, harmonic vibrational enthalpies,
 /// and the quasi-RRHO entropy of Grimme, Chem. Eur. J. 18, 9955 (2012),
-/// <https://doi.org/10.1002/chem.201200497>. The heat-capacity field holds
+/// <https://doi.org/10.1002/chem.201200497> \[Grimme2012QRRHO\]. The heat-capacity field holds
 /// the worker's constant-pressure value. Supply finite positive masses,
 /// temperature, pressure and scale, a nonempty geometry, and nonnegative cutoffs.
 pub fn thermochemistry(input: &ThermoInput<'_>) -> Thermo {
