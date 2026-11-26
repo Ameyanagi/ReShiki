@@ -7,6 +7,9 @@ From 0.14.0, each ReShiki release publishes abi3 wheels
 with the app's version for macOS, Windows and Linux on x64 and ARM64; see
 [Releasing](releasing.md#configure-pypi-publishing).
 
+Ctrl+C cancels an xTB calculation running on the main thread, while a
+calculation started in another thread runs to completion.
+
 ## Draw and analyze
 
 ```python
@@ -372,7 +375,7 @@ From the repository root, with Rust and uv installed:
 uv run --no-project --python 3.12.15 python scripts/license_notices.py
 uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
 uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py 'artifacts/python/*.whl'
-uv sync --project crates/python --all-extras --no-install-project
+uv sync --project crates/python --extra excel --extra pandas --no-install-project
 uv run --project crates/python --no-sync --with ./artifacts/python/*.whl --with rdkit pytest crates/python/tests
 uv run --project crates/python --no-sync ruff check crates/python/python crates/python/tests
 uv run --project crates/python --no-sync ruff format --check crates/python/python crates/python/tests

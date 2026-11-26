@@ -242,7 +242,6 @@ fn warnings_have_exact_text_and_order() {
             .warnings,
         [
             "Charge 1 and multiplicity 1 do not fit 9 electrons.",
-            "Isotopes are not written; set them in Gaussian if you need them.",
             "No basis set: Gaussian uses STO-3G.",
         ]
     );
@@ -309,9 +308,9 @@ fn warnings_have_exact_text_and_order() {
 }
 
 #[test]
-fn xyz_ignores_settings_and_warns_about_isotopes() {
+fn xyz_ignores_settings_and_preserves_isotopes() {
     let mut frame = water();
-    frame.isotopes = vec![18, 0, 0];
+    frame.isotopes = vec![18, 2, 3];
     let mut settings = settings(Program::Xyz, Job::Qst3);
     settings.method.clear();
     settings.basis.clear();
@@ -320,12 +319,12 @@ fn xyz_ignores_settings_and_warns_about_isotopes() {
     settings.memory_gb = 0;
     settings.charge = i32::MAX;
     let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
-    assert_eq!(
-        output.warnings,
-        ["XYZ files carry no isotopes; they are not written."]
-    );
+    assert!(output.warnings.is_empty());
     assert!(output.companions.is_empty());
     assert_eq!(output.main.name, "water.xyz");
+    let restored = crate::qcread::read(&output.main.name, output.main.text.as_bytes()).unwrap();
+    assert_eq!(restored.jobs[0].steps[0].frame.isotopes, [18, 2, 3]);
+    assert_eq!(parse_xyz(&output.main.text).unwrap().isotopes, [18, 2, 3]);
     frame.numbers.clear();
     frame.positions_angstrom.clear();
     frame.isotopes.clear();
