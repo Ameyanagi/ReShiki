@@ -1,7 +1,8 @@
 //! The results palette after runs answered by hand, as in the card's tests.
 use super::super::results::Evaluation;
 use super::super::tests::{
-    MOVED, START, event, f32s, halocarbon, model, optfreq, optimized, send, water,
+    MOVED, START, duplicate_molecule, event, f32s, halocarbon, model, optfreq, optimized, send,
+    water,
 };
 use super::super::{
     Action as XtbAction, CalcTask, Outcome, RunEvent as Event, RunReport as Report,
@@ -418,6 +419,23 @@ fn a_step_previews_on_the_model_and_use_this_geometry_is_one_undo_step() {
     send(&mut app, XtbAction::Run);
     palette(&mut app, Action::Step(1));
     assert_eq!(app.xtb_step(), None);
+}
+
+#[test]
+fn selecting_a_duplicate_hides_the_original_step_preview() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    let copied = duplicate_molecule(&mut app);
+
+    palette(&mut app, Action::View(View::Steps));
+    palette(&mut app, Action::Step(0));
+    assert_eq!(app.xtb_step(), Some(0));
+    assert_eq!(model(app.display_document()), f32s(&START));
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(copied)));
+    assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
+    assert!(app.xtb_step().is_none());
+    assert_eq!(model(app.display_document()), f32s(&MOVED));
 }
 
 #[test]
