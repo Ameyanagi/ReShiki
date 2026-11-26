@@ -863,14 +863,14 @@ fn animate_dispatch_opens_the_imaginary_mode_and_previews_the_saddle_without_app
         app.tab.xtb.vibrations.mode = 1;
         app.tab.xtb.vibrations.playing = false;
         app.tab.xtb.palette.open = false;
-        app.xtb.dock.collapsed = true;
+        app.tab.xtb.palette.collapsed = true;
         app.xtb.dock.inspector = inspector;
         app.inspector_open = false;
         app.inspector_tab = crate::app::InspectorTab::Reactions;
         send(&mut app, action);
 
         assert!(app.tab.xtb.palette.open);
-        assert!(!app.xtb.dock.collapsed);
+        assert!(!app.tab.xtb.palette.collapsed);
         assert_eq!(app.tab.xtb.palette.view, results::View::Vibrations);
         assert!(Arc::ptr_eq(
             &app.xtb_shown().unwrap().stored.result,
@@ -1239,12 +1239,12 @@ fn background_ts_completion_preserves_the_foreground_predict_page_and_dock() {
     let foreground = app.tab.id;
     app.xtb.page = crate::app::xtb::Page::Nmr;
     app.xtb.dock.inspector = true;
-    app.xtb.dock.collapsed = true;
+    app.tab.xtb.palette.collapsed = true;
     let finished = Message::Xtb(XtbAction::TsEvent(serial, Event::Done(Ok(report))));
     let _ = app.update(Message::Tab(first, Box::new(finished)));
     assert_eq!(app.tab.id, foreground);
     assert_eq!(app.xtb.page, crate::app::xtb::Page::Nmr);
-    assert!(app.xtb.dock.collapsed);
+    assert!(app.tab.xtb.palette.collapsed);
     assert!(app.tab.doc.science.results.is_empty());
     assert_eq!(
         app.in_tab(first, |app| app.tab.doc.science.results.len()),

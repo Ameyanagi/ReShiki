@@ -4,10 +4,11 @@ use super::super::palette::Shown;
 use super::super::state::signed;
 use super::super::tone::{Tone, line};
 use super::super::{Action as XtbAction, unavailable};
+use super::mode_list::mode_list;
 use super::{Action, State, thermo_at};
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use crate::app::{App, Message};
-use iced::widget::{Column, canvas, column, container, row, scrollable, slider, text};
+use iced::widget::{Column, canvas, column, container, row, slider, text};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 use reshiki::graphics::YAxis;
 use reshiki::qcdata::vibrational::{self, BandShape};
@@ -16,7 +17,7 @@ use std::sync::{Arc, Weak};
 
 /// cal/mol per hartree.
 const CAL_PER_MOL_PER_HARTREE: f64 = 627_509.474;
-const LIST_WIDTH: f32 = 250.;
+const LIST_WIDTH: f32 = 258.;
 const CHART_WIDTH: f32 = 480.;
 const SPECTRUM_CONTROLS_WIDTH: f32 = 280.;
 /// Chart height in the inspector; the bottom dock's body is shorter.
@@ -31,7 +32,7 @@ const RANGE_ERROR: &str = "Use 0–10000 cm⁻¹ with From at least 200 above To
 const SCALE_ERROR: &str = "Use a scale factor from 0.5 to 1.5.";
 const WAVENUMBER_TITLE: &str = "Wavenumber (cm⁻¹)";
 
-fn send(action: Action) -> Message {
+pub(super) fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Vibrations(action))
 }
 
@@ -60,23 +61,23 @@ impl App {
         if let Some(banner) = self.xtb_imaginary_banner(shown) {
             body = body.push(banner);
         }
-        let list = mode_list(result, selected, shown.stale);
-        let left = column![
-            container(scrollable(list).id("xtb-vibration-modes"))
-                .height(if inspector {
-                    Length::Fixed(160.)
-                } else {
-                    Length::Fixed(120.)
-                })
-                .width(Length::Fill),
-            thermochemistry(settings, shown),
-        ]
-        .spacing(8)
-        .width(if inspector {
-            Length::Fill
-        } else {
-            Length::Fixed(LIST_WIDTH)
-        });
+        let names = self.xtb_motion_names(shown);
+        let list = mode_list(
+            vibrations,
+            settings,
+            names.as_deref().unwrap_or_default(),
+            settings.recomputing(result),
+            selected,
+            shown.stale,
+            inspector,
+        );
+        let left = column![list, thermochemistry(settings, shown)]
+            .spacing(8)
+            .width(if inspector {
+                Length::Fill
+            } else {
+                Length::Fixed(LIST_WIDTH)
+            });
         let spectrum = Spectrum::new(result, settings, selected);
         let spectrum_controls = spectrum_controls(settings, spectrum.data.can_plot());
         let chart = canvas(spectrum).width(Length::Fill);
@@ -106,7 +107,7 @@ impl App {
         body.into()
     }
 
-    /// "1 imaginary frequency (−212 cm⁻¹): this is not a minimum." with
+    /// Warn about imaginary frequencies and offer
     /// "Push along mode and re-optimize".
     fn xtb_imaginary_banner(&self, shown: &Shown<'_>) -> Option<Element<'_, Message>> {
         let vibrations = shown.stored.result.vibrations.as_ref()?;
@@ -218,7 +219,9 @@ impl App {
                 ),
             ]
             .spacing(10)
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .wrap()
+            .vertical_spacing(4),
         );
         controls = controls.push(labelled_slider(
             "Amplitude",
@@ -257,82 +260,6 @@ fn labelled_slider<'a>(
     .spacing(6)
     .align_y(Alignment::Center)
     .into()
-}
-
-/// "1590 cm⁻¹ · IR 127.7", imaginary modes first in red with a chip.
-fn mode_list<'a>(result: &CalcResult, selected: usize, stale: bool) -> Column<'a, Message> {
-    let Some(vibrations) = &result.vibrations else {
-        return column![];
-    };
-    Column::with_children(vibrations.frequencies_cm1.iter().enumerate().map(
-        |(index, &frequency)| {
-            let imaginary = frequency < 0.;
-            let mut label = wavenumber(frequency);
-            if imaginary {
-                label.push_str(" · imaginary");
-            } else if let Some(ir) = vibrations.ir_intensities_km_mol.get(index) {
-                label.push_str(&format!(" · IR {ir:.1}"));
-            }
-            let chip: Element<'a, Message> = if imaginary {
-                container(text("not a minimum").size(10))
-                    .padding([0, 4])
-                    .style(|theme: &Theme| container::Style {
-                        text_color: Some(theme.palette().danger),
-                        background: Some(
-                            Color {
-                                a: 0.1,
-                                ..theme.palette().danger
-                            }
-                            .into(),
-                        ),
-                        border: iced::Border {
-                            radius: 3.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    })
-                    .into()
-            } else {
-                text(format!("{}", index + 1))
-                    .size(11)
-                    .style(muted_text)
-                    .into()
-            };
-            let active = index == selected;
-            reshiki::accessibility::button(
-                format!("xtb-mode-{}", index + 1),
-                format!("Mode {}, {label}", index + 1),
-                row![
-                    text(label)
-                        .size(12)
-                        .width(Length::Fill)
-                        .style(move |theme: &Theme| text::Style {
-                            color: Some(if imaginary {
-                                theme.palette().danger
-                            } else if stale {
-                                Color {
-                                    a: 0.55,
-                                    ..crate::appearance::muted(theme)
-                                }
-                            } else {
-                                theme.palette().text
-                            }),
-                        }),
-                    chip,
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .checked(active)
-            .style(control(active))
-            .on_press(send(Action::Mode(index)))
-            .into()
-        },
-    ))
-    .spacing(2)
-    .padding(iced::Padding::ZERO.right(10))
 }
 
 /// The collapsed Thermochemistry block: T and p fields and the values at them.
@@ -614,9 +541,12 @@ pub(super) struct SpectrumData {
     peaks: Vec<[f64; 2]>,
     high: f64,
     low: f64,
+    shape: BandShape,
+    fwhm: f64,
     y: YAxis,
     settings_error: Option<&'static str>,
     has_ir: bool,
+    intensities_missing: bool,
     scale: f64,
 }
 
@@ -658,6 +588,8 @@ impl SpectrumData {
             peaks: vec![],
             high,
             low,
+            shape,
+            fwhm,
             y: settings.y,
             settings_error: if range.is_none() {
                 Some(RANGE_ERROR)
@@ -667,6 +599,7 @@ impl SpectrumData {
                 None
             },
             has_ir: false,
+            intensities_missing: true,
             scale: scale.unwrap_or(1.),
         };
         let scale = data.scale;
@@ -675,6 +608,7 @@ impl SpectrumData {
         };
         let frequencies = &vibrations.frequencies_cm1;
         let intensities = &vibrations.ir_intensities_km_mol;
+        data.intensities_missing = intensities.is_empty();
         data.sticks = frequencies
             .iter()
             .enumerate()
@@ -717,6 +651,13 @@ impl SpectrumData {
         data.peaks.truncate(LABELS);
         data.peaks.sort_by(|a, b| b[0].total_cmp(&a[0]));
         data
+    }
+
+    fn pickable_sticks(&self) -> impl Iterator<Item = &(usize, f64, f64)> {
+        // Results without IR data still show selectable frequency sticks.
+        self.sticks
+            .iter()
+            .filter(|stick| self.intensities_missing || stick.2 > 0.)
     }
 
     fn message(&self) -> Option<&'static str> {
@@ -817,7 +758,7 @@ fn spectrum_ticks(high: f64, low: f64) -> Vec<f64> {
 }
 
 /// The broadened IR spectrum, wavenumber decreasing to the right; a click
-/// picks the nearest mode.
+/// picks the mode contributing most to the band.
 struct Spectrum {
     data: Arc<SpectrumData>,
     left: f32,
@@ -884,10 +825,31 @@ impl canvas::Program<Message> for Spectrum {
             return None;
         };
         let point = cursor.position_in(bounds)?;
-        let (index, _, _) = self.data.sticks.iter().min_by(|a, b| {
-            (self.x(a.1, bounds) - point.x)
-                .abs()
-                .total_cmp(&(self.x(b.1, bounds) - point.x).abs())
+        let plot = self.plot(bounds);
+        if plot.width <= 0. {
+            return None;
+        }
+        let frequency = self.data.high
+            - f64::from((point.x - plot.x) / plot.width) * (self.data.high - self.data.low);
+        // The normalization is shared by every band. Logs keep distant
+        // Gaussian tails comparable when their profiles would underflow.
+        let log_contribution = |&(_, center, intensity): &(usize, f64, f64)| {
+            let offset = (frequency - center) / self.data.fwhm;
+            intensity.ln()
+                - match self.data.shape {
+                    BandShape::Lorentzian => (4. * offset * offset).ln_1p(),
+                    BandShape::Gaussian => 4. * std::f64::consts::LN_2 * offset * offset,
+                }
+        };
+        let (index, _, _) = self.data.pickable_sticks().min_by(|a, b| {
+            log_contribution(b)
+                .total_cmp(&log_contribution(a))
+                .then_with(|| {
+                    (self.x(a.1, bounds) - point.x)
+                        .abs()
+                        .total_cmp(&(self.x(b.1, bounds) - point.x).abs())
+                })
+                .then_with(|| b.2.total_cmp(&a.2))
         })?;
         Some(canvas::Action::publish(send(Action::Mode(*index))).and_capture())
     }
@@ -898,7 +860,7 @@ impl canvas::Program<Message> for Spectrum {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if !self.data.sticks.is_empty() && cursor.is_over(bounds) {
+        if cursor.is_over(bounds) && self.data.pickable_sticks().next().is_some() {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::default()
@@ -916,6 +878,7 @@ impl canvas::Program<Message> for Spectrum {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let muted = crate::appearance::muted(theme);
         let ink = theme.palette().text;
+        let axis_text = Color { a: 0.75, ..ink };
         let accent = theme.palette().primary;
         let plot = self.plot(bounds);
         let base = plot.y + plot.height;
@@ -957,7 +920,7 @@ impl canvas::Program<Message> for Spectrum {
                 frame.fill_text(small(
                     format!("{tick:.0}"),
                     Point::new(x, base + 6.),
-                    muted,
+                    axis_text,
                     iced::alignment::Horizontal::Center,
                 ));
             }
@@ -965,7 +928,7 @@ impl canvas::Program<Message> for Spectrum {
         frame.fill_text(small(
             WAVENUMBER_TITLE.into(),
             Point::new(plot.center_x(), bounds.height - 12.),
-            muted,
+            axis_text,
             iced::alignment::Horizontal::Center,
         ));
         let transmittance = self.data.y == YAxis::Transmittance;
@@ -977,7 +940,7 @@ impl canvas::Program<Message> for Spectrum {
             }
             .into(),
             Point::new(plot.x, plot.y - 14.),
-            muted,
+            axis_text,
             iced::alignment::Horizontal::Left,
         ));
         let message = self.data.message();
@@ -1118,6 +1081,96 @@ mod tests {
             .computed
             .to_calc_result(&frame, Task::Hessian, &report.engine, None)
             .unwrap()
+    }
+
+    #[test]
+    fn clicking_coincident_sticks_selects_the_strongest_ir_active_mode() {
+        use canvas::Program;
+
+        let mut result = spectrum_result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.frequencies_cm1 = vec![1500.; 3];
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(480., CHART_HEIGHT));
+        let click = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        for (intensities, expected) in [([0., 5., 80.], Some(2)), ([0.; 3], None)] {
+            result.vibrations.as_mut().unwrap().ir_intensities_km_mol = intensities.to_vec();
+            let spectrum = Spectrum::new(&Arc::new(result.clone()), &State::default(), 0);
+            let cursor = mouse::Cursor::Available(Point::new(spectrum.x(1500., bounds), 50.));
+            let selected = spectrum
+                .update(&mut (), &click, bounds, cursor)
+                .map(|action| {
+                    let (Some(Message::Xtb(XtbAction::Vibrations(Action::Mode(mode)))), _, _) =
+                        action.into_inner()
+                    else {
+                        panic!("a peak click selects its mode");
+                    };
+                    mode
+                });
+            assert_eq!(selected, expected);
+        }
+    }
+
+    #[test]
+    fn clicking_a_broadened_band_selects_a_strong_contributor() {
+        let mut result = spectrum_result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.frequencies_cm1 = vec![1500., 1504., 1508.];
+        vibrations.ir_intensities_km_mol = vec![100., 0.01, 100.];
+        let result = Arc::new(result);
+        for shape in [BandShape::Lorentzian, BandShape::Gaussian] {
+            for fwhm in [5., 20., 60.] {
+                let settings = State {
+                    shape,
+                    fwhm,
+                    ..State::default()
+                };
+                let spectrum = Spectrum::new(&result, &settings, 1);
+                assert!(matches!(picked_mode(&spectrum, 1504.), Some(0 | 2)));
+            }
+        }
+    }
+
+    #[test]
+    fn distant_clicks_use_current_shape_and_width() {
+        let mut result = spectrum_result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.frequencies_cm1 = vec![1500., 1501.];
+        vibrations.ir_intensities_km_mol = vec![1., 1e12];
+        let result = Arc::new(result);
+        // Both Gaussian profiles underflow at this distance in linear space.
+        for (shape, fwhm, expected) in [
+            (BandShape::Gaussian, 20., 1),
+            (BandShape::Gaussian, 5., 0),
+            (BandShape::Lorentzian, 5., 1),
+        ] {
+            let settings = State {
+                shape,
+                fwhm,
+                ..State::default()
+            };
+            let spectrum = Spectrum::new(&result, &settings, 0);
+            assert_eq!(picked_mode(&spectrum, 400.), Some(expected));
+        }
+    }
+
+    fn picked_mode(spectrum: &Spectrum, frequency: f64) -> Option<usize> {
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(480., CHART_HEIGHT));
+        let cursor = mouse::Cursor::Available(Point::new(spectrum.x(frequency, bounds), 50.));
+        canvas::Program::update(
+            spectrum,
+            &mut (),
+            &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        )
+        .map(|action| {
+            let (Some(Message::Xtb(XtbAction::Vibrations(Action::Mode(mode)))), _, _) =
+                action.into_inner()
+            else {
+                panic!("a spectrum click selects its mode");
+            };
+            mode
+        })
     }
 
     #[test]

@@ -675,6 +675,9 @@ impl App {
         };
         let typed = self.commands.query().to_owned();
         let prefer_selection = !typed.is_empty() && !self.tab.selected.is_empty();
+        let use_outcome_titles = super::xtb::available()
+            && prefer_selection
+            && !reshiki::editing::ELEMENTS.contains(&typed.as_str());
         let normalized = search::normalize_spelling(&typed);
         let normalized = (normalized != typed).then_some(normalized.as_str());
         let mut availability = HashMap::new();
@@ -768,14 +771,30 @@ impl App {
                         }
                         _ => false,
                     };
+                // An outcome title lets a selection's calculation compete with
+                // tools whose labels overlap its subject or abbreviation.
+                let alternate = use_outcome_titles
+                    .then_some(command.search_title)
+                    .flatten()
+                    .map(|title| {
+                        let mut alternate = command.clone();
+                        alternate.name = title.into();
+                        alternate
+                    });
                 let score = if keyword {
                     let mut exact = command.clone();
                     exact.name = query.into();
                     search::score(&exact, query)
                 } else {
                     search::score(command, query)
-                }?;
-                let tier = (keyword || search::in_name_or_keys(command, query)) as u8;
+                }
+                .max(alternate.as_ref().and_then(|c| search::score(c, query)))?;
+                let tier = (keyword
+                    || search::in_name_or_keys(command, query)
+                    || alternate
+                        .as_ref()
+                        .is_some_and(|c| search::in_name_or_keys(c, query)))
+                    as u8;
                 Some((tier, score + boost(command.category)))
             };
             catalog
@@ -912,8 +931,14 @@ impl App {
 
     pub(super) fn run_command(&mut self, command: Command) -> Task<Message> {
         if let Some(reason) = self.command_unavailable(&command) {
-            self.status = reason.into();
-            self.error = true;
+            if matches!(&command.run, Run::Send(messages) if matches!(messages.as_slice(),
+                [Message::Xtb(super::xtb::Action::Entry(_))]))
+            {
+                self.xtb_show_selection_hint();
+            } else {
+                self.status = reason.into();
+                self.error = true;
+            }
             return Task::none();
         }
         let state = &mut self.commands;

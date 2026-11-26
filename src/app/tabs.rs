@@ -292,6 +292,7 @@ impl App {
         }
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
+        self.xtb_clear_palette_status(None);
         self.retire_assistant(self.tab.id);
         let old = std::mem::replace(
             &mut self.tab,
@@ -343,6 +344,7 @@ impl App {
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
         self.xtb_vibrations_leave();
+        self.xtb_clear_palette_status(None);
         self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();

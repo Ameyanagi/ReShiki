@@ -310,7 +310,9 @@ impl App {
             }
             Action::Window(id, event) if self.accessibility.window == Some(id) => {
                 match event {
-                    window::Event::Resized(size) => self.accessibility.viewport = size,
+                    window::Event::Resized(size) => {
+                        self.accessibility.viewport = size;
+                    }
                     window::Event::Rescaled(scale) => {
                         self.accessibility.scale = scale;
                         #[cfg(windows)]

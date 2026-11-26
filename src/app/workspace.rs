@@ -22,6 +22,8 @@ mod model_controls_qa;
 #[cfg(test)]
 mod model_face_qa;
 #[cfg(test)]
+mod model_menu_tests;
+#[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
 mod status_tests;
@@ -1128,6 +1130,7 @@ impl App {
     /// Context row commands, most important first: a short row folds them
     /// into ⋯ from the end. Selection commands come before global ones.
     pub(super) fn context_commands(&self) -> Vec<RowCommand> {
+        let xtb = super::xtb::available();
         let mut commands = Vec::new();
         let constraints = self.tool.bond_preset().is_some()
             || matches!(self.tool, Tool::Chain(_))
@@ -1188,18 +1191,7 @@ impl App {
             });
         }
         commands.extend(self.depth_commands());
-        // With a molecule selected; builds that cannot calculate hide it.
-        if super::xtb::available()
-            && reshiki::models3d::selected_molecule(&self.tab.doc, &self.tab.selected).is_some()
-        {
-            commands.push(RowCommand {
-                label: "Optimize with GFN2-xTB",
-                menu: "Optimize with GFN2-xTB",
-                message: Message::Xtb(super::xtb::Action::Entry(super::xtb::Entry::OptimizeGfn2)),
-                enabled: !self.tab.busy && !self.xtb_running(),
-            });
-        }
-        if super::xtb::available()
+        if xtb
             && let Some(arrow) = self
                 .selected_reaction_arrow()
                 .filter(|arrow| super::xtb::ts::review::reaction_arrow(&self.tab.doc, arrow.id))
@@ -1228,9 +1220,24 @@ impl App {
             });
         }
         commands.push(RowCommand {
-            label: "3D optimize…",
-            menu: "3D optimize…",
-            message: Message::Optimization(super::optimization::Action::Begin),
+            label: if xtb {
+                "3D model ▾"
+            } else {
+                "3D optimize…"
+            },
+            menu: if xtb {
+                "3D model menu"
+            } else {
+                "3D optimize…"
+            },
+            message: if xtb {
+                Message::ContextMenu(super::context_menu::Action::Open(
+                    super::context_menu::Page::Model3d,
+                    0.,
+                ))
+            } else {
+                Message::Optimization(super::optimization::Action::Begin)
+            },
             enabled: !self.tab.doc.atoms.is_empty() && !self.tab.busy,
         });
         commands
@@ -1511,16 +1518,36 @@ impl App {
             if let Some(key) = chip {
                 label = label.push(keycap(key, c.enabled));
             }
-            row = row.push(hover_keys(
-                reshiki::accessibility::button(
+            let message = if c.model_menu() {
+                Message::ContextMenu(super::context_menu::Action::Open(
+                    super::context_menu::Page::Model3d,
+                    x + CONTEXT_GAP,
+                ))
+            } else {
+                c.message.clone()
+            };
+            let mut button = reshiki::accessibility::button(
+                if c.model_menu() {
+                    "context-3d-model".into()
+                } else {
                     keyboard_control_id(&c.message)
-                        .map_or_else(|| format!("context-command-{index}"), str::to_owned),
-                    c.menu,
-                    label,
-                )
-                .padding([7, 9])
-                .style(control(false))
-                .on_press_maybe(c.enabled.then(|| c.message.clone())),
+                        .map_or_else(|| format!("context-command-{index}"), str::to_owned)
+                },
+                c.menu,
+                label,
+            )
+            .padding([7, 9])
+            .style(control(false))
+            .on_press_maybe(c.enabled.then_some(message));
+            if c.model_menu() {
+                button = button.expanded(
+                    self.context_menu
+                        .as_ref()
+                        .is_some_and(|menu| menu.page == super::context_menu::Page::Model3d),
+                );
+            }
+            row = row.push(hover_keys(
+                button,
                 c.menu,
                 super::shortcuts::label(&c.message),
                 tooltip::Position::Bottom,
@@ -1528,7 +1555,17 @@ impl App {
             x += CONTEXT_GAP + w;
         }
         if folded > 0 {
-            let labels: Vec<_> = commands.iter().skip(shown).map(|c| c.menu).collect();
+            let labels: Vec<_> = commands
+                .iter()
+                .skip(shown)
+                .flat_map(|c| {
+                    if c.model_menu() {
+                        self.model_commands().into_iter().map(|c| c.menu).collect()
+                    } else {
+                        vec![c.menu]
+                    }
+                })
+                .collect();
             let page = super::context_menu::Page::More(folded);
             row = row.push(
                 self.menu_anchor(
@@ -2170,6 +2207,9 @@ impl App {
             content = content.push(container(self.optimization_footer()).padding([10, 16]));
             // The 3D preview is modal: Tab cycles its controls, Cancel and Apply last.
             return self.inspector_frame(reshiki::accessibility::focus_scope(content));
+        }
+        if let Some(footer) = self.xtb_run_footer() {
+            content = content.push(container(footer).padding([10, 16]));
         }
         self.inspector_frame(content)
     }
@@ -3375,6 +3415,16 @@ pub(super) struct RowCommand {
 }
 
 impl RowCommand {
+    pub(super) fn model_menu(&self) -> bool {
+        matches!(
+            self.message,
+            Message::ContextMenu(super::context_menu::Action::Open(
+                super::context_menu::Page::Model3d,
+                _
+            ))
+        )
+    }
+
     /// The single key of a keyboard drawing command, shown on its button.
     fn keycap(&self) -> Option<String> {
         matches!(self.message, Message::KeyboardDrawing(_))

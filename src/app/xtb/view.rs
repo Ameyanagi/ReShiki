@@ -1,12 +1,14 @@
 //! The Predict tab's NMR · xTB switch and the Calculate card.
-use super::state::{self, LATER_TASKS, METHODS, SOLVENTS};
+use super::state::{self, LATER_TASKS, METHODS, SOLVENTS, Settings};
 use super::tone::{Tone, line};
 use super::{Action, CalcTask, Outcome, Page};
 use crate::app::inspector::Section;
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, hover_hint};
-use crate::app::{App, Message};
+use crate::app::{App, InspectorTab, Message};
 use iced::widget::{Space, canvas, column, container, progress_bar, row, text, tooltip};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
+use reshiki::models3d::Model3d;
+use reshiki::qcdata::XtbMethod;
 
 const WIDE: Length = Length::Fill;
 
@@ -95,12 +97,10 @@ impl App {
         let idle = run.is_none();
         let target = self.xtb_target().filter(|atoms| !atoms.is_empty());
         let first = target.as_ref().and_then(|atoms| atoms.first().copied());
-        let model = first
-            .and_then(|atom| self.xtb_model(atom))
-            .and_then(|index| self.tab.doc.models.get(index));
+        let model = self.xtb_card_model(first);
         let numbers = model.and_then(|model| model_numbers(&self.tab.doc, model));
         let subtitle = match (&target, &numbers) {
-            (None, _) => "Select a molecule".to_owned(),
+            (None, _) => self.xtb_selection_hint().0,
             (Some(_), Some(numbers)) => format!(
                 "{} · {} ({} atoms)",
                 settings.method.label(),
@@ -141,25 +141,41 @@ impl App {
             .collect::<Vec<Element<'_, Message>>>(),
         )
         .spacing(4);
-        let methods = row(METHODS.map(|method| {
-            segment(
-                format!("xtb-method-{}", method.label().to_lowercase()),
-                method.label(),
-                settings.method == method,
-                set(Action::Method(method)).filter(|_| !fixed_method),
-                fixed_method.then_some("The search's minimizer sets the method"),
+        let methods = column(METHODS.map(|method| {
+            let name = method.label();
+            let purpose = match method {
+                XtbMethod::Gfn2Xtb => "default · most molecules",
+                XtbMethod::GXtb => "closer to DFT energies",
+                XtbMethod::GfnFf => "very large molecules, metals",
+            };
+            let active = settings.method == method;
+            let button = reshiki::accessibility::button(
+                format!("xtb-method-{}", name.to_lowercase()),
+                format!("{name} — {purpose}"),
+                column![label(name), line(purpose, Tone::Muted)].spacing(2),
             )
+            .padding([7, 8])
+            .checked(active)
+            .style(control(active))
+            .width(WIDE)
+            .on_press_maybe(set(Action::Method(method)).filter(|_| !fixed_method));
+            if fixed_method {
+                hover_hint(
+                    button,
+                    "The search's minimizer sets the method",
+                    tooltip::Position::Top,
+                )
+                .into()
+            } else {
+                button.into()
+            }
         }))
         .spacing(4);
         let electronic = state::electronic(settings.method);
         let solvent_ok = reshiki_xtb_jobs::method::supports_solvent(settings.method);
 
         // Charge and spin, prefilled from the drawing, with the live check.
-        let drawn = first.map_or((0, 0), |atom| {
-            let (charge, multiplicity) = reshiki::science::drawn_state(&self.tab.doc, atom);
-            (charge, multiplicity.saturating_sub(1))
-        });
-        let typed = settings.molecule.is_some() && settings.molecule == self.xtb_key();
+        let (drawn, typed) = self.xtb_card_charge(first);
         let (charge_text, unpaired_text) = if typed {
             (settings.charge.clone(), settings.unpaired.clone())
         } else {
@@ -191,37 +207,23 @@ impl App {
             field(
                 "xtb-charge",
                 "Charge",
-                charge_text.clone(),
+                charge_text,
                 drawn.0.to_string(),
                 Action::Charge
             ),
             field(
                 "xtb-unpaired",
                 "Unpaired electrons",
-                unpaired_text.clone(),
+                unpaired_text,
                 drawn.1.to_string(),
                 Action::Unpaired
             ),
         ]
         .spacing(8);
-        let config = Settings {
-            charge: charge_text,
-            unpaired: unpaired_text,
-            ..super::conformers::effective(settings, &self.xtb.conformers)
-        }
-        .config(drawn, true, vec![]);
-        let check = match (&config, &numbers) {
-            (Err(reason), _) => Err((*reason).to_owned()),
-            (Ok(config), Some(numbers)) => {
-                let protons = numbers.iter().map(|&z| u32::from(z)).sum();
-                state::electrons(protons, config.charge, config.unpaired)
-            }
-            (Ok(_), None) => Ok("Electrons are checked once the 3D model is made".to_owned()),
-        };
-        let check_line = match &check {
-            Ok(text) if numbers.is_some() => line(text.clone(), Tone::Good),
-            Ok(text) => line(text.clone(), Tone::Muted),
-            Err(text) => line(text.clone(), Tone::Warning),
+        let check_line = match check_electrons(settings, drawn, typed, numbers.as_deref()) {
+            Ok(text) if numbers.is_some() => line(text, Tone::Good),
+            Ok(text) => line(text, Tone::Muted),
+            Err(text) => line(text, Tone::Warning),
         };
 
         // Solvent: the ALPB list, gas phase first.
@@ -342,64 +344,89 @@ impl App {
             body = body.push(self.xtb_conformer_fields(idle, numbers.as_deref()));
         }
         body = body.push(self.xtb_advanced(idle, electronic));
+        self.inspector_section(Section::Xtb, "xTB calculation", subtitle, true, body)
+    }
 
-        // Run; while running, the progress row above replaces it.
-        let count = numbers
-            .as_ref()
-            .map_or_else(|| target.as_ref().map_or(0, Vec::len), Vec::len);
+    /// Keep Run in reach while the calculation settings scroll.
+    pub(in crate::app) fn xtb_run_footer(&self) -> Option<Element<'_, Message>> {
+        if !super::available()
+            || self.inspector_tab != InspectorTab::Predict
+            || self.xtb.page != Page::Xtb
+            || self.xtb_selected_reaction().is_some()
+            || self.xtb_running()
+            || self.tube_bend_active()
+        {
+            return None;
+        }
+        let settings = &super::conformers::effective(&self.xtb.settings, &self.xtb.conformers);
+        let target = self.xtb_target().unwrap_or_default();
+        let first = target.first().copied();
+        let numbers = self
+            .xtb_card_model(first)
+            .and_then(|model| model_numbers(&self.tab.doc, model));
+        let (drawn, typed) = self.xtb_card_charge(first);
+        let count = numbers.as_ref().map_or(target.len(), Vec::len);
         let limit = settings.task.limit();
-        let too_many = count > limit;
-        let search_ok = !search
+        let search_ok = settings.task != CalcTask::Conformers
             || self
                 .xtb
                 .conformers
                 .config(numbers.as_ref().map(Vec::len))
                 .is_ok();
-        if run.is_none() {
-            let ready = target.is_some() && check.is_ok() && !too_many && search_ok;
-            body = body.push(
-                row![
-                    hover_hint(
-                        reshiki::accessibility::button(
-                            "xtb-run",
-                            "Run xTB calculation",
-                            text("Run").size(12)
-                        )
-                        .padding([7, 18])
-                        .style(crate::appearance::primary)
-                        .on_press_maybe(ready.then_some(Message::Xtb(Action::Run))),
-                        format!("Run ({})", super::rerun_keys()),
-                        tooltip::Position::Top,
-                    ),
-                    text(super::rerun_keys())
-                        .size(11)
-                        .style(crate::app::workspace::muted_text),
-                    line(
-                        if target.is_none() {
-                            "Select a molecule to calculate".to_owned()
-                        } else {
-                            String::new()
-                        },
-                        Tone::Muted
-                    ),
-                ]
-                .spacing(10)
-                .align_y(Alignment::Center),
-            );
-            if too_many {
-                body = body.push(line(
-                    if settings.task.frequencies() {
-                        format!(
-                            "Frequencies are limited to {limit} atoms; this molecule has {count}."
-                        )
-                    } else {
-                        format!("Too many atoms: {count}. The limit is {limit} atoms.")
-                    },
-                    Tone::Error,
-                ));
-            }
+        let ready = first.is_some()
+            && count <= limit
+            && search_ok
+            && check_electrons(settings, drawn, typed, numbers.as_deref()).is_ok();
+        let keys = super::rerun_keys();
+        let mut footer = column![
+            row![
+                hover_hint(
+                    reshiki::accessibility::button(
+                        "xtb-run",
+                        "Run xTB calculation",
+                        text("Run").size(12)
+                    )
+                    .padding([7, 18])
+                    .style(crate::appearance::primary)
+                    .on_press_maybe(ready.then_some(Message::Xtb(Action::Run))),
+                    format!("Run ({keys})"),
+                    tooltip::Position::Top,
+                ),
+                line(keys, Tone::Muted),
+                first
+                    .is_none()
+                    .then(|| line(self.xtb_selection_hint().1, Tone::Muted)),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center)
+        ]
+        .spacing(6);
+        if count > limit {
+            footer = footer.push(line(
+                if settings.task.frequencies() {
+                    format!("Frequencies are limited to {limit} atoms; this molecule has {count}.")
+                } else {
+                    format!("Too many atoms: {count}. The limit is {limit} atoms.")
+                },
+                Tone::Error,
+            ));
         }
-        self.inspector_section(Section::Xtb, "xTB calculation", subtitle, true, body)
+        Some(footer.into())
+    }
+
+    fn xtb_card_model(&self, first: Option<u64>) -> Option<&Model3d> {
+        first
+            .and_then(|atom| self.xtb_model(atom))
+            .and_then(|index| self.tab.doc.models.get(index))
+    }
+
+    fn xtb_card_charge(&self, first: Option<u64>) -> ((i32, u32), bool) {
+        let drawn = first.map_or((0, 0), |atom| {
+            let (charge, multiplicity) = reshiki::science::drawn_state(&self.tab.doc, atom);
+            (charge, multiplicity.saturating_sub(1))
+        });
+        let typed = first.is_some() && self.xtb.settings.molecule == self.xtb_key();
+        (drawn, typed)
     }
 
     fn xtb_advanced(&self, idle: bool, electronic: bool) -> Element<'_, Message> {
@@ -521,7 +548,19 @@ impl App {
     }
 }
 
-use super::state::Settings;
+fn check_electrons(
+    settings: &Settings,
+    drawn: (i32, u32),
+    typed: bool,
+    numbers: Option<&[u8]>,
+) -> Result<String, String> {
+    let config = settings.config(drawn, typed, vec![])?;
+    let Some(numbers) = numbers else {
+        return Ok("Electrons are checked once the 3D model is made".into());
+    };
+    let protons = numbers.iter().map(|&z| u32::from(z)).sum();
+    state::electrons(protons, config.charge, config.unpaired)
+}
 
 /// A solvent choice for the pick list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

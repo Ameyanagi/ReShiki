@@ -20,12 +20,14 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
 mod conformers;
+mod history;
 pub(super) mod orbitals;
 pub(super) use conformers::superposed;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
+mod selection;
 mod source;
 pub(super) use source::Source;
 mod state;
@@ -36,6 +38,8 @@ mod view;
 
 #[cfg(test)]
 pub(super) use results::{Evaluation, View};
+#[cfg(test)]
+pub(super) use state::Failure;
 pub(crate) use state::Task as CalcTask;
 pub(crate) use vibrations::Action as VibrationsAction;
 
@@ -97,8 +101,10 @@ pub(crate) enum Action {
 pub(crate) enum Entry {
     /// A task from the right-click Calculate (xTB) menu.
     Task(CalcTask),
-    /// The context row's "Optimize with GFN2-xTB".
+    /// Optimize the geometry with GFN2-xTB.
     OptimizeGfn2,
+    /// Calculate energy with a method that gives molecular orbitals.
+    Orbitals,
     /// ⌘R: the last calculation again, on the selected molecule.
     Rerun,
 }
@@ -106,6 +112,14 @@ pub(crate) enum Entry {
 /// ⌘R, as menus and tooltips show it.
 pub(super) fn rerun_keys() -> String {
     super::shortcuts::label(&Message::Xtb(Action::Entry(Entry::Rerun))).unwrap_or_default()
+}
+
+/// Choose xTB before showing Predict so opening its settings does not start NMR.
+pub(super) fn settings_messages() -> [Message; 2] {
+    [
+        Message::Xtb(Action::Page(Page::Xtb)),
+        Message::Inspector(super::InspectorTab::Predict),
+    ]
 }
 
 /// Whether this build can calculate; the entry points hide otherwise.
@@ -129,6 +143,7 @@ pub(crate) struct Window {
 pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
+    selection_hint: Option<String>,
     serial: u64,
     pub(super) palette: palette::Palette,
     ts_card: ts::card::State,
@@ -450,27 +465,14 @@ impl App {
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
-                let showing = matches!(action, palette::Action::Show);
-                let before = showing
-                    .then(|| {
-                        self.xtb_shown()
-                            .map(|shown| Arc::clone(&shown.stored.result))
-                    })
-                    .flatten();
+                let was_visible = self.xtb_vibrations_visible();
                 let task = self.xtb_palette(action);
-                if showing
-                    && self.xtb_shown().is_some_and(|shown| {
-                        before
-                            .as_ref()
-                            .is_none_or(|before| !Arc::ptr_eq(before, &shown.stored.result))
-                    })
-                {
-                    self.tab.xtb.vibrations.mode = 0;
-                }
                 if opened {
-                    return Task::batch([task, self.xtb_vibrations_opened()]);
+                    return Task::batch([task, self.xtb_vibrations_opened(was_visible)]);
                 }
-                self.xtb_vibrations_sync();
+                if was_visible == self.xtb_vibrations_visible() {
+                    self.xtb_vibrations_sync();
+                }
                 return task;
             }
             Action::Vibrations(action) => return self.xtb_vibrations_action(action),
@@ -664,8 +666,7 @@ impl App {
             return Task::none();
         }
         if self.xtb_target().is_none() {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         }
         match entry {
@@ -673,6 +674,12 @@ impl App {
             Entry::OptimizeGfn2 => {
                 self.xtb.settings.task = CalcTask::Optimize;
                 self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+            }
+            Entry::Orbitals => {
+                self.xtb.settings.task = CalcTask::Energy;
+                if !self.xtb.settings.method.capabilities().orbitals {
+                    self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+                }
             }
             Entry::Rerun => {}
         }
@@ -689,8 +696,7 @@ impl App {
             .xtb_target()
             .and_then(|atoms| Some((atoms.clone(), *atoms.first()?)))
         else {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         };
         let settings = &conformers::effective(&self.xtb.settings, &self.xtb.conformers);
@@ -1012,7 +1018,7 @@ impl App {
             self.tab.xtb.palette.open = true;
             self.tab.xtb.palette.previous = false;
             // The card's actions must show, so a collapsed dock opens.
-            self.xtb.dock.collapsed = false;
+            self.tab.xtb.palette.collapsed = false;
         }
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
@@ -1169,7 +1175,7 @@ impl App {
             if let Some(ts) = ts {
                 self.tab.xtb.ts_sessions.remember(&result, ts);
                 if self.tabs.temporary_depth == 0 {
-                    self.xtb.dock.collapsed = false;
+                    self.tab.xtb.palette.collapsed = false;
                     if self.xtb.dock.inspector {
                         self.xtb.page = Page::Xtb;
                         let _ = self.show_inspector_tab(super::InspectorTab::Predict);
@@ -1177,7 +1183,6 @@ impl App {
                 }
             }
             self.xtb_show_result(&result);
-            self.tab.xtb.vibrations.mode = 0;
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
                 self.tab.xtb.palette.view = results::View::Vibrations;
@@ -1193,8 +1198,6 @@ impl App {
             line: pending.line,
             notes,
         });
-        // A fresh result holds its modes, so nothing needs recomputing.
-        self.xtb_vibrations_sync();
     }
 
     fn xtb_store_failed(&mut self, mut pending: Pending, reason: String) {
@@ -1326,15 +1329,21 @@ fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) ->
     doc.models
         .iter()
         .find(|m| m.linked_atoms.contains(atom))
-        .is_some_and(|model| {
-            let mut sources = model.geometry_sources();
-            sources.resize(model.atoms.len() + model.hydrogens.len(), None);
-            let now = model.atoms.iter().map(|a| a.xyz);
-            let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
-            atoms.len() == positions.len()
-                && sources == atoms
-                && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
-        })
+        .is_some_and(|model| model_matches(model, atoms, positions))
+}
+
+fn model_matches(
+    model: &reshiki::models3d::Model3d,
+    atoms: &[Option<u64>],
+    positions: &[[f64; 3]],
+) -> bool {
+    let mut sources = model.geometry_sources();
+    sources.resize(model.atoms.len() + model.hydrogens.len(), None);
+    let now = model.atoms.iter().map(|a| a.xyz);
+    let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
+    atoms.len() == positions.len()
+        && sources == atoms
+        && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
 }
 
 /// The document with the model of `atom`'s molecule at `positions` (Å,
@@ -1400,6 +1409,12 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
     let mut result = computed
         .to_calc_result(frame, task, &report.engine, gfnff_reference)
         .map_err(|error| state::Failure::Other(error.to_string()))?;
+    if optimized {
+        result.provenance.method = Some(run::optimizer_provenance(
+            result.provenance.method.as_deref().unwrap_or("xTB"),
+            &report.optimizers,
+        ));
+    }
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
         settings.threads = Some(run.config.threads);
         settings.convergence =
