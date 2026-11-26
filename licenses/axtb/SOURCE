@@ -18,9 +18,11 @@ permission for its g-xTB parts. CHANGES-reshiki.md is the fork's notice of
 modification: what changed relative to upstream commit
 65d0f64a9a8211f73b0738ff908b7a414975f50b (axtb 0.2.0), and when.
 
-Only ReShiki builds with the Cargo feature `xtb` contain axtb: the macOS and
-Linux desktop releases. Each such release publishes
-reshiki-<version>-source.tar.gz on its GitHub release page
-(https://github.com/Ameyanagi/ReShiki/releases), containing ReShiki's source,
-this revision of the fork, every Cargo dependency, and BUILD-WITH-XTB.md with
-the steps to rebuild ReShiki, including with a modified axtb.
+The macOS and Linux desktop releases contain axtb through the Cargo feature
+`xtb`. The separate Python package `reshiki-xtb` also contains axtb. The base
+Python package `reshiki` excludes it. Each release that contains
+axtb publishes reshiki-<version>-source.tar.gz on the GitHub release of the
+same version (https://github.com/Ameyanagi/ReShiki/releases/tag/v<version>),
+containing ReShiki's source, this revision of the fork, every Cargo dependency,
+and BUILD-WITH-XTB.md with the steps to rebuild the application and Python
+worker wheel, including with a modified axtb.

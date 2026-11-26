@@ -14,6 +14,7 @@ import sys
 import unicodedata
 import warnings
 from dataclasses import dataclass, field
+from importlib import metadata as _metadata
 from os import PathLike
 from pathlib import Path
 from types import MappingProxyType, ModuleType
@@ -37,7 +38,10 @@ from ._errors import ReShikiError
 if TYPE_CHECKING:
     from . import excel as excel
 
-__version__ = _native.version()
+try:
+    __version__ = _metadata.version("reshiki")
+except _metadata.PackageNotFoundError:
+    __version__ = _native.version()
 __all__ = [
     "Drawing",
     "Molecule",

@@ -1,0 +1,75 @@
+---
+title: Transition states
+description: Find a transition state with GFN2-xTB from the command line, check it, and export it as a starting point for Gaussian or ORCA.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+:::caution[Not released yet]
+The transition-state search is on the `xtb/next` branch and not in a released version of ReShiki yet. It runs from the command line, `reshiki --cli ts`, in macOS and Linux builds with xTB. Starting it from a reaction drawn in the app is coming.
+:::
+
+The main use: get a good transition-state guess and its Hessian cheaply with xTB, then refine them with DFT in Gaussian or ORCA. Barriers from GFN2-xTB are rough (it underestimates many of them); trust the geometry more than the number.
+
+## Run a search
+
+Give the reactant and the product as XYZ files with the same atoms in the same order (the order is the atom map):
+
+```sh
+reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+```
+
+Or give one side and the bonds that change, numbered from 1. ReShiki builds the other side itself:
+
+```sh
+reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+```
+
+- GFN2-xTB in the gas phase only, 2 to 120 atoms. Set `--charge` and `--uhf` (unpaired electrons) when they are not 0.
+- `--remap-hydrogens` (with two files) reassigns the product's hydrogens by least motion and lists any hydrogen that moved to another heavy atom.
+- `--images N` sets the number of path images, 5 to 24 (default 15); `--workers N` runs 1 to 8 calculations at once.
+- `--keep-endpoints` uses your reactant and product as they are instead of optimizing them first.
+
+The four test reactions (HCN → HNC, an identity SN2, a Claisen and a Diels–Alder) take 3 to 13 seconds each on an Apple M4.
+
+## How it works
+
+1. Optimize both ends and superpose them by the atom map.
+2. Interpolate a path between them (IDPP) and relax it with a climbing-image nudged elastic band.
+3. Refine the highest image inside the band to a saddle with the analytic GFN2-xTB Hessian (P-RFO).
+4. Check it: the saddle must be converged with exactly one frequency below −50 cm⁻¹, both in ReShiki's own analysis and in the xTB engine's.
+5. Follow the IRC both ways and optimize each end. The IRC **connects** when the ends have the reactant's and the product's bonds, even as another conformer. When reactant and product have the same bonds, each end must also lie within 0.5 Å RMSD of its own endpoint.
+
+The search is local: different starting conformers can lead to different saddles, so the report always names the one it found. When a found saddle fails a check, the report and files still keep it and say why (if the IRC was skipped, `irc.xyz` holds only that saddle). The exit status is 0 only when every check passes.
+
+<Screenshot
+  src="/manual/ts-profiles.webp"
+  alt="Energy profiles of four reshiki --cli ts runs with GFN2-xTB, relative to the reactant: HCN to HNC (73.2/53.2 kcal/mol, −1426 cm⁻¹), the identity SN2 Cl⁻ + CH3Cl (10.6/10.6, −431 cm⁻¹), the Claisen rearrangement of allyl vinyl ether (26.5/34.7, −387 cm⁻¹) and a Diels–Alder of butadiene and ethylene (7.0/74.8, −392 cm⁻¹). Each shows the CI-NEB images, the refined P-RFO saddle and both IRC branches; every IRC connects."
+/>
+
+_Plotted from the JSON reports of four runs. In the Claisen run the band stopped at its iteration limit with its highest image 4 kcal/mol above the saddle; the P-RFO refinement still found the GFN2-xTB saddle._
+
+## What it writes
+
+With `--out-dir`: `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz` (the final band), `irc.xyz` and `ts.hess`, the Hessian at the saddle in ORCA's format. `--json` writes a report with the energies, barriers, frequencies and checks.
+
+## Export to Gaussian, ORCA and GAMESS
+
+`reshiki --cli export-input` turns the result into DFT inputs. The XYZ files carry no charge or spin, so pass `--charge` and `--multiplicity` again when they are not 0 and 1:
+
+```sh
+# ORCA OptTS that reads the xTB Hessian (no first Hessian to compute)
+reshiki --cli export-input --program orca --job ts --hessian results/ts.hess --out claisen_ts.inp results/ts.xyz
+
+# Gaussian QST3 from the reactant, product and TS guess
+reshiki --cli export-input --program gaussian --job qst3 --reactant results/reactant.xyz --product results/product.xyz --out claisen_qst3.gjf results/ts.xyz
+
+# ORCA NEB-TS
+reshiki --cli export-input --program orca --job neb-ts --reactant results/reactant.xyz --product results/product.xyz --out claisen_neb.inp results/ts.xyz
+```
+
+- Gaussian: `Opt=(TS,CalcFC,NoEigenTest) Freq` on the guess, QST2 (reactant and product) and QST3 (plus the guess), or IRC.
+- ORCA: `OptTS Freq` with `InHess Read` when you pass `--hessian`, NEB-TS with the product and the guess, or IRC (`--hessian` works there too). The `.hess` file must list the same atoms, in the same order and place, as the input geometry; otherwise it is refused.
+- GAMESS: `RUNTYP=SADPOINT`.
+
+The app's [export dialog](/guide/calculation-files/) writes the transition-state and IRC inputs from a 3D model; QST2, QST3 and NEB-TS come to the app with the search.

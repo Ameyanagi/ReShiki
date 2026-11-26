@@ -1,9 +1,12 @@
 //! Geometry optimization and conformer ranking for any energy-and-gradient potential.
 //!
-//! Written from the published methods (TRIC, Wang & Song 2016, Lindh et al. 1995
-//! model Hessian, rational function optimization, BFGS, L-BFGS, Horn quaternion
-//! superposition, and Butina clustering). The implementation is independent of
-//! xtb, tblite, and axtb.
+//! Written from the published methods (TRIC, Wang & Song 2016 \[Wang2016TRIC\], Lindh
+//! et al. 1995 model Hessian \[Lindh1995Hessian\], rational function optimization
+//! \[Banerjee1985PRFO\], BFGS, L-BFGS \[Liu1989LBFGS\], Horn quaternion superposition
+//! \[Horn1987Quaternion\], and Butina clustering \[Butina1999Clustering\]). The
+//! implementation is independent of xtb, tblite, and axtb.
+//!
+//! Full references: docs/references/xtb.md.
 
 #![forbid(unsafe_code)]
 
@@ -12,6 +15,7 @@ mod linalg;
 
 mod model_hessian;
 mod optimizer;
+pub mod ts;
 
 pub use optimizer::{
     Acceleration, Convergence, Criteria, InitialHessian, Level, Method, Options, Outcome, Rebuild,

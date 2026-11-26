@@ -1,9 +1,54 @@
 //! Molecular geometries from plain and extended XYZ.
-use super::{Error, Format, Job, JobKind, QcFile, Step, element, frame, lowest_multiplicity};
+use super::{
+    Error, Format, Job, JobKind, QcFile, Step, check_file_size, frame, lowest_multiplicity,
+    xyz_species,
+};
 use crate::crystal::xyz::{self, FrameError, value};
-use reshiki_qcdata::{MAX_FRAME_ATOMS, MAX_FRAMES};
+use reshiki_qcdata::{Frame, MAX_FRAME_ATOMS, MAX_FRAMES};
 
 const EV_PER_HARTREE: f64 = 27.211_386_245_988;
+
+/// Read the first XYZ geometry and title with neutral charge and lowest spin.
+pub fn read_geometry(text: &str) -> Result<(Frame, &str), Error> {
+    check_file_size(text.len())?;
+    let mut lines = text.trim_end().lines().enumerate();
+    let header = xyz::header(&mut lines)
+        .map_err(|e| Error::Invalid(e.to_string()))?
+        .ok_or_else(|| Error::Invalid("The file has no geometry".into()))?;
+    check_atom_count(&header, 1)?;
+    let parsed = read_atoms(&header, &mut lines, 1)?;
+    let (atoms, positions): (Vec<_>, Vec<_>) = parsed.atoms.into_iter().unzip();
+    let frame = frame(&atoms, positions, 0, lowest_multiplicity(&atoms, 0))?;
+    Ok((frame, header.comment.trim()))
+}
+
+fn check_atom_count(header: &xyz::Header<'_>, frame: usize) -> Result<(), Error> {
+    if header.count > MAX_FRAME_ATOMS {
+        return Err(Error::Unsupported(format!(
+            "Frame {frame} has {} atoms; ReShiki reads at most {MAX_FRAME_ATOMS}",
+            header.count
+        )));
+    }
+    Ok(())
+}
+
+fn incomplete_frame(line: usize, frame: usize, count: usize) -> Error {
+    Error::at(
+        line,
+        format!("The file ends before frame {frame}'s {count} atoms"),
+    )
+}
+
+fn read_atoms(
+    header: &xyz::Header<'_>,
+    lines: &mut xyz::Lines<'_>,
+    frame: usize,
+) -> Result<xyz::Frame<(u8, u16)>, Error> {
+    xyz::read_frame(header, lines, xyz_species, |_| Ok(())).map_err(|error| match error {
+        FrameError::Invalid(error) => Error::Invalid(error.to_string()),
+        FrameError::Incomplete(line) => incomplete_frame(line, frame, header.count),
+    })
+}
 
 /// Read XYZ atom rows and any recognized per-frame metadata.
 pub(super) fn read(text: &str) -> Result<QcFile, Error> {
@@ -17,44 +62,19 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
     let mut frames = 0;
     while let Some(header) = xyz::header(&mut lines).map_err(|e| Error::Invalid(e.to_string()))? {
         frames += 1;
-        if header.count > MAX_FRAME_ATOMS {
-            return Err(Error::Unsupported(format!(
-                "Frame {frames} has {} atoms; ReShiki reads at most {MAX_FRAME_ATOMS}",
-                header.count
-            )));
-        }
-        let incomplete = |line| {
-            Error::at(
-                line,
-                format!(
-                    "The file ends before frame {frames}'s {} atoms",
-                    header.count
-                ),
-            )
-        };
+        check_atom_count(&header, frames)?;
         if frames > MAX_FRAMES {
             if !xyz::skip_atoms(&mut lines, header.count) {
-                return Err(incomplete(text.lines().count() + 1));
+                return Err(incomplete_frame(
+                    text.lines().count() + 1,
+                    frames,
+                    header.count,
+                ));
             }
             continue;
         }
 
-        let parsed = xyz::read_frame(
-            &header,
-            &mut lines,
-            |name| {
-                if let Ok(z) = name.parse::<u8>() {
-                    (1..=118).contains(&z).then_some((z, 0))
-                } else {
-                    element(name)
-                }
-            },
-            |_| Ok(()),
-        )
-        .map_err(|error| match error {
-            FrameError::Invalid(error) => Error::Invalid(error.to_string()),
-            FrameError::Incomplete(line) => incomplete(line),
-        })?;
+        let parsed = read_atoms(&header, &mut lines, frames)?;
         let (atoms, positions): (Vec<_>, Vec<_>) = parsed.atoms.into_iter().unzip();
         let property = |key| value(&parsed.pairs, key);
         let line = header.line + 1;

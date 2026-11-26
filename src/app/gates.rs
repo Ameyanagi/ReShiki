@@ -12,6 +12,14 @@ pub(super) type Gate = ControlFlow<Task<Message>, Message>;
 
 impl App {
     pub(super) fn gate(&mut self, message: Message) -> Gate {
+        // A stale Properties action cannot commit the current inline text draft.
+        if let Message::IrFigure(
+            super::ir_figure::Action::Apply(target) | super::ir_figure::Action::Edit(target, _),
+        ) = &message
+            && self.current_ir_figure(*target).is_none()
+        {
+            return Break(Task::none());
+        }
         let message = self.early_results_gate(message)?;
         let message = self.exit_gate(message)?;
         #[cfg(any(windows, target_os = "linux"))]
@@ -280,8 +288,7 @@ impl App {
             return Break(self.context_action(action));
         }
         if self.context_menu.is_some() && matches!(message, Message::Escape) {
-            self.context_menu = None;
-            return Break(Task::none());
+            return Break(self.context_action(super::context_menu::Action::Close));
         }
         if self.templates.add_menu_open && matches!(message, Message::Escape) {
             self.templates.add_menu_open = false;

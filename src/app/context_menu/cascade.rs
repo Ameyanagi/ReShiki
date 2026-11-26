@@ -37,6 +37,7 @@ pub(super) struct Cascade<'a> {
     base: Element<'a, Message>,
     panels: Vec<Panel<'a>>,
     menu: Option<&'a State>,
+    closes_outside_canvas: bool,
 }
 
 struct Pages {
@@ -72,8 +73,14 @@ impl<'a> Cascade<'a> {
         base: Element<'a, Message>,
         panels: Vec<Panel<'a>>,
         menu: Option<&'a State>,
+        closes_outside_canvas: bool,
     ) -> Self {
-        Self { base, panels, menu }
+        Self {
+            base,
+            panels,
+            menu,
+            closes_outside_canvas,
+        }
     }
 }
 
@@ -501,7 +508,7 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             Event::Mouse(mouse::Event::ButtonPressed(_))
                 | Event::Touch(iced::touch::Event::FingerPressed { .. })
         ) && hovered.is_none()
-            && cursor.is_over(layout.bounds())
+            && (cursor.is_over(layout.bounds()) || self.closes_outside_canvas)
         {
             shell.publish(Message::ContextMenu(Action::Close));
             shell.capture_event();

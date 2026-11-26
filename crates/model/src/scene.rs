@@ -1524,6 +1524,14 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
     selections_bounds_in_axes(doc, selections, None)
 }
 
+/// Visible selected ink, with 3D model frames measured separately by the caller.
+pub(crate) fn selections_ink_bounds(
+    doc: &Document,
+    selections: &[Vec<u64>],
+) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_with_indicators(doc, selections, None, true, false)
+}
+
 /// The live drawing's extents in axes turned clockwise about `pivot`.
 /// Upright text boxes contribute all four corners; the caller rotates the
 /// resulting display frame back, without changing its gesture or document.
@@ -1543,14 +1551,14 @@ pub(crate) fn selections_bounds_in_axes(
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,
 ) -> Vec<Option<(Point, Point)>> {
-    selections_bounds_with_indicators(doc, selections, axes, true)
+    selections_bounds_with_indicators(doc, selections, axes, true, true)
 }
 
 pub(crate) fn primary_selections_bounds(
     doc: &Document,
     selections: &[Vec<u64>],
 ) -> Vec<Option<(Point, Point)>> {
-    selections_bounds_with_indicators(doc, selections, None, false)
+    selections_bounds_with_indicators(doc, selections, None, false, true)
 }
 
 fn selections_bounds_with_indicators(
@@ -1558,6 +1566,7 @@ fn selections_bounds_with_indicators(
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,
     indicators: bool,
+    model_frames: bool,
 ) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
     let drawn = doc.abbreviation_render_copy();
@@ -1644,7 +1653,7 @@ fn selections_bounds_with_indicators(
     for model in doc
         .models
         .iter()
-        .filter(|m| m.display != crate::models3d::Display::TwoD)
+        .filter(|m| model_frames && m.display != crate::models3d::Display::TwoD)
     {
         if let Some(id) = model
             .linked_ids(doc)

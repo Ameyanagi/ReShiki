@@ -451,7 +451,6 @@ impl State {
         self.resolution_menu = false;
         self.chemical_menu = false;
     }
-    #[cfg(test)]
     pub(super) fn expanded(&self, section: Section) -> Option<bool> {
         self.expanded.get(&section).copied()
     }
@@ -1010,13 +1009,7 @@ impl App {
         expanded: bool,
         content: impl FnOnce() -> Content,
     ) -> Element<'a, Message> {
-        let expanded = self
-            .tab
-            .inspector_ui
-            .expanded
-            .get(&section)
-            .copied()
-            .unwrap_or(expanded);
+        let expanded = self.tab.inspector_ui.expanded(section).unwrap_or(expanded);
         let summary = summary.into();
         let mut heading = column![
             row![
@@ -1122,6 +1115,9 @@ impl App {
             .any(|g| selected.contains(&g.id) && g.tlc.is_some())
         {
             body = body.push(card(container(self.tlc_panel()).padding(12)));
+        }
+        if let Some(ir) = self.ir_figure_card() {
+            body = body.push(card(container(ir).padding(12)));
         }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
@@ -2617,6 +2613,38 @@ impl App {
                     .padding([3, 5])
                     .style(button::text)
                     .on_press(Message::Stereo(super::stereo::Action::Results(true))),
+                ]
+                .spacing(4)
+                .align_y(Alignment::Center),
+            );
+        }
+        if let Some(model) = self
+            .tab
+            .doc
+            .models
+            .iter()
+            .enumerate()
+            .find(|(index, model)| {
+                model.display != reshiki::models3d::Display::TwoD && self.model_stale(*index)
+            })
+            .map(|(_, model)| model)
+        {
+            body = body.push(
+                row![
+                    text("The 3D model does not match the drawing.")
+                        .size(11)
+                        .width(Length::Fill)
+                        .style(crate::appearance::text_color(Color::from_rgb8(161, 98, 7))),
+                    reshiki::accessibility::button(
+                        "export-outdated-show",
+                        "Show the outdated 3D model",
+                        text("Show").size(11),
+                    )
+                    .padding([3, 5])
+                    .style(button::text)
+                    .on_press(Message::Canvas(crate::canvas::Edit::Select(
+                        model.linked_ids(&self.tab.doc),
+                    ))),
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),

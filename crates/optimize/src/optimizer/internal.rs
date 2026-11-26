@@ -2,10 +2,13 @@
 //!
 //! Each covalent fragment contributes valence coordinates, a centroid and an
 //! orientation relative to its reference geometry [Wang & Song, J. Chem.
-//! Phys. **144**, 214108 (2016)]. An orthonormal basis for the range of the
-//! free-column Wilson matrix defines delocalized coordinates [Baker, Kessi &
-//! Delley, J. Chem. Phys. **105**, 192 (1996)]. A basis remains fixed across accepted
-//! steps until a rebuild. The Wilson matrix follows the instantaneous geometry.
+//! Phys. **144**, 214108 (2016)] \[Wang2016TRIC\]. An orthonormal basis for the range
+//! of the free-column Wilson matrix defines delocalized coordinates [Baker, Kessi &
+//! Delley, J. Chem. Phys. **105**, 192 (1996)] \[Baker1996DLC\]. A basis remains fixed
+//! across accepted steps until a rebuild. The Wilson matrix follows the instantaneous
+//! geometry.
+//!
+//! Full references: docs/references/xtb.md.
 
 #[cfg(test)]
 mod profile;
@@ -71,7 +74,7 @@ impl InternalModel {
     /// Unanchored global rigid directions receive the same curvature floor.
     /// The transformation (B_u⁺)ᵀ H_x B_u⁺ omits the gradient-weighted coordinate
     /// second derivatives (the K term), and is exact at a stationary point
-    /// [Peng, Ayala, Schlegel & Frisch, J. Comput. Chem. **17**, 49 (1996)].
+    /// [Peng, Ayala, Schlegel & Frisch, J. Comput. Chem. **17**, 49 (1996)] \[Peng1996Redundant\].
     pub(crate) fn build(
         numbers: &[u8],
         free: &[usize],
@@ -219,7 +222,7 @@ impl InternalModel {
     }
 
     /// Lowest augmented-Hessian eigenvector, following Banerjee et al.,
-    /// J. Phys. Chem. **89**, 52 (1985). The caller supplies the projected
+    /// J. Phys. Chem. **89**, 52 (1985) \[Banerjee1985PRFO\]. The caller supplies the projected
     /// gradient in full atom order or, when shorter, free-component order.
     pub(crate) fn direction<'a>(
         &'a self,

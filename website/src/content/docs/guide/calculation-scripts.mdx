@@ -1,0 +1,63 @@
+---
+title: xTB from scripts
+description: Run xTB calculations from the command line, AI agents and Python, and where to find the engine's licence and source.
+---
+
+:::caution[Not released yet]
+The command line, agent tools and Python API below are on the `xtb/next` branch and not in a released version of ReShiki yet.
+:::
+
+## Command line
+
+The macOS and Linux `reshiki` executables calculate one molecule from the first frame of an XYZ file (ångströms) and print the result as one JSON line:
+
+```sh
+reshiki --cli calculate water.xyz                             # GFN2-xTB energy
+reshiki --cli calculate --task optimize water.xyz             # optimized geometry and energy
+reshiki --cli calculate --task opt+freq --solvent water water.xyz
+reshiki --cli calculate --method gxtb --task frequencies water.xyz
+```
+
+`--task` is `energy` (default), `optimize`, `frequencies` or `opt+freq`; `--method` is `gfn2` (default), `gxtb` or `gfnff`. Set the charge with `--charge`, unpaired electrons with `--uhf`, an ALPB solvent with `--solvent`, held atoms with `--fix`. The result has the energy (hartree), gap, dipole and charges; optimizations add the final XYZ, and frequency tasks add the frequencies, IR intensities, the number of imaginary modes, and the zero-point correction, H and G at 298.15 K.
+
+Two more commands handle files from other programs:
+
+```sh
+reshiki --cli export-input water.xyz --program orca           # write an ORCA input (also gaussian, gamess)
+reshiki --cli read-output job.log                             # jobs, energies, frequencies, geometry
+```
+
+All options: [`calculate`, `export-input` and `read-output` in the command-line reference](/developer/agent-cli/#calculate). The lower-level `reshiki --cli calc` prints the engine's raw output.
+
+`reshiki --version` says whether the build includes xTB:
+
+```text
+reshiki <version>
+xTB: included (axtb 0.2.0, LGPL-3.0-or-later, source https://github.com/Ameyanagi/axtb/tree/<revision>)
+```
+
+## AI agents (MCP)
+
+The MCP server (`reshiki --mcp`) offers the same three tools, `calculate`, `export_input` and `read_output`, so an agent can optimize a structure, read its frequencies, get a DFT input as text and read the program's log back. `calculate` is listed only by builds that include xTB; it reports progress at each optimization step when the client asks for progress, and stops the calculation when the agent cancels. Calculations may run for up to 30 minutes. See [Connect AI agents](/guide/agents/) and the [tool reference](/developer/agent-reference/).
+
+## Python
+
+`reshiki.xtb` runs energies, optimizations, frequencies and conformer searches from Python, `reshiki.qc` reads Gaussian, ORCA, Molden and fchk files and writes DFT inputs. Calculations need the separate `reshiki-xtb` package, which holds the engine. See [xTB from Python](/guide/calculation-python/).
+
+## Licence and source
+
+The xTB engine is [axtb](https://github.com/atomsforhumanity/axtb), used through ReShiki's fork at [github.com/Ameyanagi/axtb](https://github.com/Ameyanagi/axtb) (branch `reshiki`, one pinned revision). axtb is licensed under the GNU Lesser General Public License, version 3 or later (LGPL-3.0-or-later). ReShiki's own code stays MIT OR Apache-2.0.
+
+| Download                            | Contains axtb                            |
+| ----------------------------------- | ---------------------------------------- |
+| macOS and Linux apps                | yes, built into the `reshiki` executable |
+| Windows app                         | no, not yet                              |
+| Python `reshiki`                    | no                                       |
+| Python `reshiki-xtb`                | yes, as the `reshiki-xtb-worker` program |
+| npm packages, web editor, Nix flake | no                                       |
+
+- The licence texts (GPL-3.0 and LGPL-3.0), axtb's notice and the fork's list of changes ship with every download that contains axtb, in the third-party notices.
+- Each release that contains axtb publishes `reshiki-<version>-source.tar.gz` on its [GitHub release page](https://github.com/Ameyanagi/ReShiki/releases): ReShiki's source, the fork at the pinned revision and every dependency, so it builds offline.
+- **Use a modified axtb.** The archive's `BUILD-WITH-XTB.md` gives the steps to rebuild the ReShiki app with your own changes to axtb. Each release checks those steps by rebuilding with a modified axtb before it is published.
+
+Details for developers: [xTB licensing and packaging](/developer/xtb-licensing/).

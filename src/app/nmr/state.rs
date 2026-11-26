@@ -14,6 +14,8 @@ pub(in crate::app) struct State {
     pub(super) dock: Dock,
     pub(super) labels: Labels,
     pub(super) job: Job,
+    /// The status this document's NMR actions last wrote, if still owned.
+    pub(super) last_status: Option<String>,
     checked: Option<Checked>,
 }
 
@@ -96,6 +98,7 @@ impl Default for State {
                 presentation: None,
                 notice: None,
             },
+            last_status: None,
             checked: None,
         }
     }

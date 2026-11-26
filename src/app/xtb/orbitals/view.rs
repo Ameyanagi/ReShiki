@@ -12,8 +12,8 @@ use iced::widget::{Column, Space, canvas, column, container, row, slider, text};
 use iced::{Alignment, Color, Element, Length, Theme};
 use reshiki::qcdata::Settings;
 
-/// The tab's height in the bottom dock.
-pub(crate) const HEIGHT: f32 = 236.;
+/// The height of the diagram and level list in the bottom dock.
+const LEVELS_HEIGHT: f32 = 142.;
 
 impl App {
     pub(in crate::app::xtb) fn xtb_orbitals_tab(&self, inspector: bool) -> Element<'_, Message> {
@@ -28,7 +28,7 @@ impl App {
             live,
         })
         .width(Diagram::width(target.columns.len()))
-        .height(if inspector { 220. } else { HEIGHT - 8. });
+        .height(if inspector { 220. } else { LEVELS_HEIGHT });
 
         // The list: HOMO and LUMO first, the spin switch for open shells,
         // then the levels around the gap, highest first.
@@ -111,7 +111,7 @@ impl App {
             list.into()
         } else {
             iced::widget::scrollable(container(list).padding(iced::Padding::ZERO.right(10)))
-                .height(HEIGHT - 8.)
+                .height(LEVELS_HEIGHT)
                 .width(230)
                 .into()
         };
@@ -355,7 +355,11 @@ impl App {
     }
 
     /// The footer line under the Orbitals tab.
-    pub(in crate::app::xtb) fn xtb_orbitals_note(&self, shown: &Shown<'_>) -> Element<'_, Message> {
+    pub(in crate::app::xtb) fn xtb_orbitals_note(
+        &self,
+        shown: &Shown<'_>,
+        wrapping: text::Wrapping,
+    ) -> Element<'_, Message> {
         let note = match &shown.stored.result.settings {
             Settings::Xtb(_) => {
                 "Orbitals are recomputed when shown (≈0.1 s); a placed orbital is saved with the file."
@@ -364,6 +368,10 @@ impl App {
                 "Orbitals from the opened file; a placed orbital is saved with the file."
             }
         };
-        line(note, Tone::Muted)
+        text(note)
+            .size(11)
+            .style(muted_text)
+            .wrapping(wrapping)
+            .into()
     }
 }

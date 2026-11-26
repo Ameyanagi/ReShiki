@@ -2,16 +2,16 @@
 //!
 //! Bond assignment and the 175-degree linear-bend criterion follow Sec. II A 1
 //! of V. Bakken and T. Helgaker, J. Chem. Phys. 117, 9160–9174 (2002),
-//! <https://doi.org/10.1063/1.1515483>. Covalent radii for Z = 1–118 are from
+//! <https://doi.org/10.1063/1.1515483> \[Bakken2002Coordinates\]. Covalent radii for Z = 1–118 are from
 //! P. Pyykkö and M. Atsumi, Chem. Eur. J. 15, 186–197 (2009), Fig. 2,
-//! <https://doi.org/10.1002/chem.200800987>. Values were also checked against
+//! <https://doi.org/10.1002/chem.200800987> \[Pyykko2009Radii\]. Values were also checked against
 //! Pyykkö's author table of the year-2009 single-, double- and triple-bond
 //! radii (the single-bond column of Fig. 3 of the companion paper,
-//! <https://doi.org/10.1002/chem.200901472>).
+//! <https://doi.org/10.1002/chem.200901472> \[Pyykko2009Double\]).
 //!
 //! The ordinary stretch, bend, and torsion force constants follow Lindh et al.,
 //! Chem. Phys. Lett. 241, 423–428 (1995),
-//! <https://doi.org/10.1016/0009-2614(95)00646-L>, using the parameters in
+//! <https://doi.org/10.1016/0009-2614(95)00646-L> \[Lindh1995Hessian\], using the parameters in
 //! Bakken–Helgaker Table I and Eqs. (40)–(41). Periods beyond three use the
 //! existing model Hessian's explicit period-three extrapolation.
 //!
@@ -390,7 +390,7 @@ fn improper_mask(vectors: [Vector; 3]) -> u8 {
 }
 
 // Mantina et al., J. Phys. Chem. A 113, 5806–5812 (2009),
-// doi:10.1021/jp8111556, Table 6 (Bondi values, in Å). The H radius is
+// doi:10.1021/jp8111556 [Mantina2009Radii], Table 6 (Bondi values, in Å). The H radius is
 // 1.10 Å, the Rowland–Taylor value recommended in the same paper.
 fn hbond_acceptor_radius(number: u8) -> Option<f64> {
     match number {

@@ -2,13 +2,13 @@
 //! `reshiki --cli help`.
 //!
 //! Tokens stay [`OsString`]s, so paths need not be UTF-8. `--` ends the
-//! options, each option except `--scf-retry` is allowed at most once, and
-//! every problem is a usage error (exit 2) found before anything is read or run.
+//! options, and syntax errors are usage errors (exit 2) found before anything
+//! is read or run.
 use super::{
     commands::{self, CommandSpec},
     input_format, input_formats, output_formats, render_formats,
 };
-use reshiki_io::qc_input::{Job, Program, builtin_templates};
+use reshiki_io::qc_input::{Job, Program, builtin_templates, nearest_gamess_basis};
 use reshiki_xtb_worker::protocol::{
     Conventions, Method, ScfRetry, ScfSettings, SolvationState, Solvent, SolventCorrection,
     SolventModel,
@@ -28,6 +28,7 @@ pub(crate) enum Command {
     Info,
     Version,
     Calc(Calc),
+    Ts(Ts),
     Calculate(Calculate),
     ReadOutput(ReadOutput),
     Tools,
@@ -67,6 +68,24 @@ pub(crate) enum CalcTask {
     Gradient,
     Hessian,
     Orbitals,
+}
+
+/// `ts`: mapped XYZ endpoints, or one XYZ with directed bond changes.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Ts {
+    pub(crate) reactant: Option<PathBuf>,
+    pub(crate) product: Option<PathBuf>,
+    /// Pairs are canonicalized and use one-based XYZ atom numbers.
+    pub(crate) form: Vec<(usize, usize)>,
+    pub(crate) break_: Vec<(usize, usize)>,
+    pub(crate) charge: i32,
+    pub(crate) uhf: Option<u32>,
+    pub(crate) images: usize,
+    pub(crate) workers: usize,
+    pub(crate) remap_hydrogens: bool,
+    pub(crate) keep_endpoints: bool,
+    pub(crate) out_dir: Option<PathBuf>,
+    pub(crate) json: Option<PathBuf>,
 }
 
 /// `calculate`: one XYZ file and the compact calculation tool's settings.
@@ -128,6 +147,9 @@ pub(crate) struct ExportInput {
     pub(crate) input: PathBuf,
     pub(crate) program: Program,
     pub(crate) job: Job,
+    pub(crate) reactant: Option<PathBuf>,
+    pub(crate) product: Option<PathBuf>,
+    pub(crate) hessian: Option<PathBuf>,
     pub(crate) method: String,
     pub(crate) basis: String,
     pub(crate) charge: i32,
@@ -258,6 +280,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "skill" => skill(&options(spec, rest)?),
         "pieces" => pieces(spec, rest),
         "calc" => calc(&options(spec, rest)?),
+        "ts" => ts(&options(spec, rest)?),
         "calculate" => calculate(&options(spec, rest)?),
         "read-output" => read_output(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
@@ -308,27 +331,8 @@ fn calc(options: &Options) -> Result<Command, String> {
     {
         return Err("calc needs an XYZ file: FILE.xyz".into());
     }
-    let charge = options
-        .charge
-        .as_deref()
-        .map(|value| {
-            value
-                .to_str()
-                .and_then(|value| value.parse::<i32>().ok())
-                .ok_or("--charge must be a whole number in the signed 32-bit range")
-        })
-        .transpose()?
-        .unwrap_or(0);
-    let uhf = options
-        .uhf
-        .as_deref()
-        .map(|value| {
-            value
-                .to_str()
-                .and_then(|value| value.parse::<u32>().ok())
-                .ok_or("--uhf must be a nonnegative whole number in the unsigned 32-bit range")
-        })
-        .transpose()?;
+    let charge = charge(options.charge.as_deref())?;
+    let uhf = uhf(options.uhf.as_deref())?;
     let conventions = match options.conventions.as_deref().map(OsStr::to_str) {
         None | Some(Some("axtb")) => Conventions::Axtb,
         Some(Some("xtb-6.8")) => Conventions::Xtb68,
@@ -484,6 +488,115 @@ fn calc(options: &Options) -> Result<Command, String> {
         thermo_temperature_k,
         threads,
     }))
+}
+
+fn charge(value: Option<&OsStr>) -> Result<i32, &'static str> {
+    optional_integer("--charge", value)
+        .map(|charge| charge.unwrap_or_default())
+        .map_err(|_| "--charge must be a whole number in the signed 32-bit range")
+}
+
+fn uhf(value: Option<&OsStr>) -> Result<Option<u32>, &'static str> {
+    optional_integer("--uhf", value)
+        .map_err(|_| "--uhf must be a nonnegative whole number in the unsigned 32-bit range")
+}
+
+fn ts(options: &Options) -> Result<Command, String> {
+    if options.input.is_some() {
+        return Err("ts takes no positional input; use --reactant or --product".into());
+    }
+    let path = |flag, value: Option<&OsStr>| {
+        value
+            .map(|value| {
+                if value.is_empty() || value == "-" {
+                    Err(format!("{flag} needs a file or directory path"))
+                } else {
+                    Ok(PathBuf::from(value))
+                }
+            })
+            .transpose()
+    };
+    let reactant = path("--reactant", options.reactant.as_deref())?;
+    let product = path("--product", options.product.as_deref())?;
+    let has_edits = !options.form.is_empty() || !options.break_.is_empty();
+    if options.remap_hydrogens && has_edits {
+        return Err(
+            "--remap-hydrogens requires two XYZ endpoints without --form or --break".into(),
+        );
+    }
+    match (&reactant, &product, has_edits) {
+        (None, None, _) => return Err("ts needs --reactant or --product".into()),
+        (Some(_), Some(_), true) => {
+            return Err("--form and --break require exactly one XYZ endpoint".into());
+        }
+        (Some(_), None, false) | (None, Some(_), false) => {
+            return Err("one XYZ endpoint requires at least one --form or --break".into());
+        }
+        _ => {}
+    }
+    let form = ts_pairs("--form", &options.form)?;
+    let break_ = ts_pairs("--break", &options.break_)?;
+    if let Some(&(i, j)) = form.iter().find(|pair| break_.contains(pair)) {
+        return Err(format!(
+            "atom pair {i}-{j} cannot be both formed and broken"
+        ));
+    }
+    let count = |value: Option<&OsStr>, flag, min, max| {
+        value
+            .map(|value| {
+                value
+                    .to_str()
+                    .and_then(|text| text.parse::<usize>().ok())
+                    .filter(|value| (min..=max).contains(value))
+                    .ok_or_else(|| format!("{flag} must be a whole number from {min} to {max}"))
+            })
+            .transpose()
+    };
+    let images = count(options.images.as_deref(), "--images", 5, 24)?
+        .unwrap_or_else(|| reshiki_optimize::ts::TsOptions::default().images);
+    let workers = count(options.workers.as_deref(), "--workers", 1, 8)?.unwrap_or_else(|| {
+        let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        4.min(cpus).min(images - 2)
+    });
+    Ok(Command::Ts(Ts {
+        reactant,
+        product,
+        form,
+        break_,
+        charge: charge(options.charge.as_deref())?,
+        uhf: uhf(options.uhf.as_deref())?,
+        images,
+        workers,
+        remap_hydrogens: options.remap_hydrogens,
+        keep_endpoints: options.keep_endpoints,
+        out_dir: path("--out-dir", options.out_dir.as_deref())?,
+        json: path("--json", options.json_file.as_deref())?,
+    }))
+}
+
+fn ts_pairs(flag: &str, values: &[OsString]) -> Result<Vec<(usize, usize)>, String> {
+    fn atom(text: &str) -> Option<usize> {
+        if !text.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        text.parse::<usize>().ok().filter(|&value| value > 0)
+    }
+    values
+        .iter()
+        .map(|value| {
+            let pair = value.to_str().and_then(|text| {
+                let (i, j) = text.split_once('-')?;
+                Some((atom(i)?, atom(j)?))
+            });
+            match pair {
+                Some((i, j)) if i != j => Ok((i.min(j), i.max(j))),
+                _ => Err(format!(
+                    "{flag} needs two distinct positive atom numbers as I-J, got `{}`",
+                    value.to_string_lossy()
+                )),
+            }
+        })
+        .collect()
 }
 
 fn calculate(options: &Options) -> Result<Command, String> {
@@ -730,7 +843,7 @@ fn schema(options: &Options) -> Result<Command, String> {
     }
 }
 
-/// The tokens after a command; only the SCF retry ladder is repeatable.
+/// The tokens after a command.
 #[derive(Default)]
 struct Options {
     /// INPUT, PROPOSAL, FILE or `-`.
@@ -770,6 +883,17 @@ struct Options {
     max_iter: Option<OsString>,
     scf_retry: Vec<OsString>,
     threads: Option<OsString>,
+    reactant: Option<OsString>,
+    product: Option<OsString>,
+    hessian: Option<OsString>,
+    form: Vec<OsString>,
+    break_: Vec<OsString>,
+    images: Option<OsString>,
+    workers: Option<OsString>,
+    remap_hydrogens: bool,
+    keep_endpoints: bool,
+    out_dir: Option<OsString>,
+    json_file: Option<OsString>,
     solvent: Option<OsString>,
     convergence: Option<OsString>,
     fix: Option<OsString>,
@@ -817,7 +941,7 @@ fn parse_options(
             return Err(foreign_option(command, token));
         };
         let name = option.flag;
-        if name != "--scf-retry" && seen.contains(&name) {
+        if !matches!(name, "--scf-retry" | "--form" | "--break") && seen.contains(&name) {
             return Err(format!("{name} given more than once"));
         }
         seen.push(name);
@@ -862,6 +986,15 @@ fn parse_options(
                 "--max-iter" => options.max_iter = Some(value),
                 "--scf-retry" => options.scf_retry.push(value),
                 "--threads" => options.threads = Some(value),
+                "--reactant" => options.reactant = Some(value),
+                "--product" => options.product = Some(value),
+                "--hessian" => options.hessian = Some(value),
+                "--form" => options.form.push(value),
+                "--break" => options.break_.push(value),
+                "--images" => options.images = Some(value),
+                "--workers" => options.workers = Some(value),
+                "--out-dir" => options.out_dir = Some(value),
+                "--json" => options.json_file = Some(value),
                 "--solvent" => options.solvent = Some(value),
                 "--convergence" => options.convergence = Some(value),
                 "--fix" => options.fix = Some(value),
@@ -884,6 +1017,8 @@ fn parse_options(
                 "--locants" => options.locants = true,
                 "--gradient" => options.gradient = true,
                 "--wbo" => options.wbo = true,
+                "--remap-hydrogens" => options.remap_hydrogens = true,
+                "--keep-endpoints" => options.keep_endpoints = true,
                 _ => {}
             }
         }
@@ -1110,15 +1245,45 @@ fn export_input(options: &Options) -> Result<Command, String> {
         return Err(format!("{} is available only for ORCA", template.name));
     }
     let job = match option_text("--job", options.job.as_deref())? {
-        Some(text) => Job::parse(text)
-            .ok_or("--job must be single-point, optimize, opt-freq, transition-state or irc")?,
+        Some(text) => Job::parse(text).ok_or(
+            "--job must be single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts",
+        )?,
         None => template.job,
     };
-    if matches!(job, Job::Qst2 | Job::Qst3 | Job::NebTs) {
-        return Err(
-            "QST2, QST3 and NEB-TS need a transition-state result; export them from the app."
-                .into(),
-        );
+    let path = |flag, value: Option<&OsStr>| {
+        value
+            .map(|value| {
+                if value.is_empty() || value == "-" {
+                    Err(format!("{flag} needs a file path"))
+                } else {
+                    Ok(PathBuf::from(value))
+                }
+            })
+            .transpose()
+    };
+    let reactant = path("--reactant", options.reactant.as_deref())?;
+    let product = path("--product", options.product.as_deref())?;
+    let hessian = path("--hessian", options.hessian.as_deref())?;
+    if matches!(
+        (program, job),
+        (Program::Gaussian, Job::Qst2 | Job::Qst3) | (Program::Orca, Job::NebTs)
+    ) {
+        let missing = match (&reactant, &product) {
+            (None, None) => Some("--reactant and --product"),
+            (None, Some(_)) => Some("--reactant"),
+            (Some(_), None) => Some("--product"),
+            (Some(_), Some(_)) => None,
+        };
+        if let Some(missing) = missing {
+            return Err(format!("{} requires {missing}", job.label()));
+        }
+    } else if reactant.is_some() || product.is_some() {
+        return Err("--reactant and --product require Gaussian qst2/qst3 or ORCA neb-ts".into());
+    }
+    if hessian.is_some()
+        && !(program == Program::Orca && matches!(job, Job::TransitionState | Job::Irc))
+    {
+        return Err("--hessian requires --program orca with --job ts or irc".into());
     }
     let output = match &options.output {
         None => Output::Stdout,
@@ -1126,16 +1291,28 @@ fn export_input(options: &Options) -> Result<Command, String> {
         Some(path) if path.is_empty() => return Err("--out needs a file path".into()),
         Some(path) => Output::File(path.into()),
     };
+    if output == Output::Stdout
+        && (hessian.is_some() || (program == Program::Orca && job == Job::NebTs))
+    {
+        return Err("use --out PATH to write the main input and its companion files".into());
+    }
+    let method = option_text("--method", options.method.as_deref())?.unwrap_or(&template.method);
+    let basis = match option_text("--basis", options.basis.as_deref())? {
+        Some(basis) => basis,
+        None if program == Program::Gamess => {
+            nearest_gamess_basis(&template.basis).unwrap_or(&template.basis)
+        }
+        None => &template.basis,
+    };
     Ok(Command::ExportInput(ExportInput {
         input: input.into(),
         program,
         job,
-        method: option_text("--method", options.method.as_deref())?
-            .unwrap_or(&template.method)
-            .into(),
-        basis: option_text("--basis", options.basis.as_deref())?
-            .unwrap_or(&template.basis)
-            .into(),
+        reactant,
+        product,
+        hessian,
+        method: method.into(),
+        basis: basis.into(),
         charge: integer("--charge", options.charge.as_deref(), 0)?,
         multiplicity: integer("--multiplicity", options.multiplicity.as_deref(), 1)?,
         cores: integer("--cores", options.cores.as_deref(), template.cores)?,
@@ -1167,12 +1344,19 @@ fn integer<T: std::str::FromStr>(
     value: Option<&OsStr>,
     default: T,
 ) -> Result<T, String> {
-    match option_text(flag, value)? {
-        None => Ok(default),
-        Some(text) => text
-            .parse()
-            .map_err(|_| format!("{flag} must be a whole number")),
-    }
+    optional_integer(flag, value).map(|value| value.unwrap_or(default))
+}
+
+fn optional_integer<T: std::str::FromStr>(
+    flag: &str,
+    value: Option<&OsStr>,
+) -> Result<Option<T>, String> {
+    option_text(flag, value)?
+        .map(|text| {
+            text.parse()
+                .map_err(|_| format!("{flag} must be a whole number"))
+        })
+        .transpose()
 }
 
 /// `render`: the input, the image format and destination, then the size.

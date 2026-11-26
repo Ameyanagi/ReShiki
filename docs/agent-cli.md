@@ -34,6 +34,7 @@ has every help text as the program prints it.
 | [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
 | [name](#name)                 | Print the systematic name of a structure                          |
 | [calc](#calc)                 | Print an xTB calculation as one JSON line                         |
+| [ts](#ts)                     | Search for a transition state with GFN2-xTB                       |
 | [pieces](#pieces)             | Check or render equipment piece files                             |
 | [info](#info)                 | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)               | Print the agent tool catalog as one JSON line                     |
@@ -45,7 +46,7 @@ has every help text as the program prints it.
 
 - Each run takes one command. A command accepts only its own options; any
   other option is a usage error, such as `render does not take --pages`.
-- Each option is allowed once, except the repeatable `calc --scf-retry` ladder. A second `--to` gives `--to given more than once`.
+- `calc --scf-retry`, `ts --form` and `ts --break` can repeat. Other options are allowed once each.
 - An option that takes a value uses the next argument as the value, even one
   that starts with `-`.
 - `--` ends the options. Every argument after it is the input, so a file
@@ -555,30 +556,59 @@ MCP tool's `path` argument.
 ## export-input
 
 ```text
-reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz [--job JOB] [--template N|--method M --basis B] [--charge C] [--multiplicity M] [--cores N] [--memory-gb G] [--title T] [--extra TEXT] [--out PATH]
+reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+    [--job JOB] [--template N|--method M --basis B]
+    [--charge C] [--multiplicity M] [--cores N] [--memory-gb G] [--title T] [--extra TEXT]
+    [--reactant R.xyz] [--product P.xyz] [--hessian H.hess] [--out PATH]
 ```
 
 `reshiki --cli help export-input` prints the [full help](agent-reference.md#reshiki---cli-export-input).
 
-The command and the MCP `export_input` tool share the XYZ parser and the input
-writer; the command also offers XYZ output and the transition-state jobs, and
-writes the main input and any companions to the requested location. `--title` defaults to the
-input file's stem.
+The command shares its XYZ parser and input writer with the MCP `export_input`
+tool. The command also supports XYZ output and transition-state jobs.
+`--title` defaults to the input file's stem.
 
-| Option              | Commands     | Meaning                                                 |
-| ------------------- | ------------ | ------------------------------------------------------- |
-| `--program PROGRAM` | export-input | gaussian, orca, gamess or xyz                           |
-| `--job JOB`         | export-input | single-point, optimize, opt-freq, transition-state, irc |
-| `--template N`      | export-input | Built-in template 1 to 3                                |
-| `--method M`        | export-input | Method, with `--basis`                                  |
-| `--basis B`         | export-input | Basis; empty for ORCA composites                        |
-| `--charge C`        | export-input | Total charge (0)                                        |
-| `--multiplicity M`  | export-input | 2S + 1 (1)                                              |
-| `--cores N`         | export-input | Cores (8)                                               |
-| `--memory-gb G`     | export-input | Memory in GB (16)                                       |
-| `--title T`         | export-input | Title                                                   |
-| `--extra TEXT`      | export-input | More keywords                                           |
-| `--out PATH`        | export-input | Replaces PATH; companions go beside it                  |
+| Option              | Commands     | Meaning                                                                                              |
+| ------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| `--program PROGRAM` | export-input | gaussian, orca, gamess or xyz                                                                        |
+| `--job JOB`         | export-input | single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts                   |
+| `--template N`      | export-input | Built-in template 1 to 3                                                                             |
+| `--method M`        | export-input | Method, with `--basis`                                                                               |
+| `--basis B`         | export-input | Basis, which can be empty for ORCA composites                                                        |
+| `--charge C`        | export-input | Total charge (0)                                                                                     |
+| `--multiplicity M`  | export-input | 2S + 1 (1)                                                                                           |
+| `--cores N`         | export-input | Cores (8)                                                                                            |
+| `--memory-gb G`     | export-input | Memory in GB (16)                                                                                    |
+| `--title T`         | export-input | Title                                                                                                |
+| `--extra TEXT`      | export-input | More keywords                                                                                        |
+| `--reactant R.xyz`  | export-input | First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                           |
+| `--product P.xyz`   | export-input | First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                            |
+| `--hessian H.hess`  | export-input | ORCA Cartesian Hessian for ORCA ts or irc.                                                           |
+| `--out PATH`        | export-input | Replaces the main file and writes new companions beside it. Required for ORCA neb-ts or `--hessian`. |
+
+Endpoint flags are only for Gaussian `qst2` and `qst3` and ORCA `neb-ts`.
+All XYZ files are read in ångströms and must list the same elements in the
+same order. Corresponding atoms must have the same index in every structure.
+Gaussian QST2 writes the endpoints. QST3 adds `INPUT.xyz` as the TS guess.
+ORCA NEB-TS puts the reactant inline and writes product and TS guess XYZ
+companions.
+
+For ORCA `ts` or `irc`, `--hessian` reads the `$hessian` and `$atoms` blocks
+and writes a Hessian companion for `INPUT.xyz`. The matrix dimension must be
+three times the number of input atoms. All entries must be finite, and
+mirrored entries `a` and `b` may differ by at most
+`1e-6 + 1e-6 × max(|a|, |b|)`. The atom count and element order must match
+`INPUT.xyz`, and each coordinate must agree within `1e-3` Å in the original
+coordinate frame. For example, use `ts.xyz` and `ts.hess` from
+`reshiki --cli ts --out-dir DIR`.
+
+ORCA companion filenames replace characters outside ASCII letters, digits,
+`.`, `_` and `-` in the output stem with underscores.
+
+```sh
+reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz
+reshiki --cli export-input --program orca --job ts --hessian results/ts.hess --out opt-ts.inp results/ts.xyz
+```
 
 ## name
 
@@ -933,6 +963,82 @@ unchanged. Use [`calculate`](#calculate) for a compact summary.
 In a build without xTB, it writes `reshiki: xTB is not included in this build`
 to stderr and exits 1.
 
+## ts
+
+```text
+reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]
+```
+
+Searches for a gas-phase transition state with GFN2-xTB and axtb conventions.
+The command requires the `xtb` feature. [xTB worker reference](xtb-worker.md)
+
+Each endpoint uses the first plain XYZ frame with 2 to 120 atoms and
+coordinates in ångströms. Two files must have the same element sequence.
+Their atom order defines the map. `--remap-hydrogens` requires two XYZ files.
+With one file, supply at least one bond change in the reactant-to-product
+direction to construct the missing endpoint.
+
+| Option              | Command | Meaning                                                                                                                |
+| ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `--reactant R.xyz`  | ts      | Read the reactant XYZ.                                                                                                 |
+| `--product P.xyz`   | ts      | Read the product XYZ.                                                                                                  |
+| `--form I-J`        | ts      | Form a bond using 1-based atom numbers. Repeatable.                                                                    |
+| `--break I-J`       | ts      | Break a bond using 1-based atom numbers. Repeatable.                                                                   |
+| `--charge N`        | ts      | Molecular charge. Defaults to 0.                                                                                       |
+| `--uhf N`           | ts      | Unpaired electron count. The worker infers it from the valence electron count when omitted.                            |
+| `--images N`        | ts      | Use 5 to 24 NEB images, including the endpoints. Defaults to 15.                                                       |
+| `--workers N`       | ts      | Use 1 to 8 single-threaded xTB sessions. Defaults to the smallest of 4, available CPUs and interior images.            |
+| `--remap-hydrogens` | ts      | Map heavy atoms by order and assign hydrogens by least motion. Print changed nearest heavy atoms on stderr.            |
+| `--keep-endpoints`  | ts      | Skip endpoint relaxation before the search. A missing endpoint is still constructed with restrained minimization.      |
+| `--out-dir DIR`     | ts      | Create the directory if needed and write `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz` and `ts.hess`. |
+| `--json FILE`       | ts      | Write the machine-readable report to a new file.                                                                       |
+
+The table on stdout gives energies in hartree, barriers in kcal/mol and
+frequencies in cm⁻¹. The worker independently checks the frequencies at the
+reported TS with the same atomic masses and cutoff of −50 cm⁻¹. Exit 0
+requires a converged saddle refinement, exactly one imaginary mode in each
+check, and IRC branches whose relaxed ends match the two endpoints. A failed
+worker check or a count disagreement appears in the table and JSON report
+and exits 1. Progress appears on stderr. Set `RESHIKI_TS_TRACE` to `1` or
+lowercase `true` to enable detailed tracing. All other values disable it.
+The NEB trace gives the peak energy across all images and the active climbing
+image's energy (`pending` before climbing starts). Each P-RFO trial logs the
+measured-to-predicted energy and squared-force ratios alongside the decision.
+The trace also gives projected gradients, followed curvatures, mode overlaps,
+trust radii and stopping reasons.
+
+Refinement allows 10 kcal/mol of headroom by default. Library callers can set
+`TsOptions::saddle_headroom_kcal`. The reference is the higher of the climbing
+image and the midpoint accepted for a restart. A midpoint above the initial
+ceiling is eligible when both images on its link have lower energies.
+The restart shares the original accepted-step limit. Rejected trial checks,
+force-only steps, stale-model refreshes and restart Hessians share a budget of
+eight extra Hessian builds. The engine can also verify one final provisional
+candidate. The JSON report records the
+stopping reason in `saddle.reason` and optional SCF failures in
+`saddle.diagnostics`.
+
+`path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
+from the reactant side through the TS to the product side. When refinement
+is unconverged or the engine imaginary count differs from one, IRC is skipped.
+If IRC is skipped or fails, `irc.xyz` contains the TS frame. `ts.hess` can be
+read with ORCA's `InHess Read`. It uses the worker's Cartesian Hessian when
+available and the engine's Cartesian Hessian if the worker computation fails.
+The JSON report includes spectra, IRC branch labels and energies, convergence,
+work counts and the hydrogen mapping review. `irc_error` and `worker_check_error`
+record verification failures when present. Each branch’s `completed` field
+records whether the downhill trace reached its gradient tolerance before final
+relaxation.
+Output files must be new. The JSON destination must differ from the output
+directory and its six generated files.
+
+```sh
+reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+```
+
 ## help
 
 ```text
@@ -954,8 +1060,8 @@ Prints the overview, or one command's help. `--help` and `-h` work in place of
 
 ## Output and messages
 
-Standard output carries only the result: the file, one JSON line, or one
-receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
+Standard output carries only the result: a file, a text report, one JSON line,
+or one receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
 empty. Every JSON line has `"experimental": true` and an `api` object with
 `operation_api` and `stability`, except the raw schema from `schema proposal`
 and the worker calculation result from `calc`.

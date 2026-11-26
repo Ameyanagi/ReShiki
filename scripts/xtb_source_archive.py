@@ -293,6 +293,15 @@ def build_instructions(root):
     for index in range(first_patch, len(arguments), 2):
         lines.append(shlex.join(arguments[index : index + 2]))
     command = (" \\" + "\n  ").join(lines)
+    wheel_arguments = ["maturin", "build", "--release", "--offline"]
+    wheel_arguments.extend(
+        argument.replace('="axtb-source/', '="../../axtb-source/')
+        for argument in patch_arguments(root / "axtb-source")
+    )
+    wheel_lines = [shlex.join(wheel_arguments[:4])]
+    for index in range(4, len(wheel_arguments), 2):
+        wheel_lines.append(shlex.join(wheel_arguments[index : index + 2]))
+    wheel_command = (" \\" + "\n  ").join(wheel_lines)
     settings = []
     for platform, environment in DIST_ENV.items():
         exports = "\n".join(
@@ -304,8 +313,9 @@ def build_instructions(root):
     return f"""# Rebuilding ReShiki with xTB
 
 This archive contains the sources for building and testing the ReShiki
-application, the pinned axtb fork, and all locked Cargo sources. Cargo's source
-replacements in `.cargo/config.toml` let both builds use `vendored-crates/` in
+application and the `reshiki-xtb` Python wheel, the pinned axtb fork, and all
+locked Cargo sources. Cargo's source
+replacements in `.cargo/config.toml` let these builds use `vendored-crates/` in
 a fresh, offline Cargo environment. Install the prerequisites below and run
 the commands from this directory.
 
@@ -326,7 +336,7 @@ used by the website are excluded. Use the full repository to build the website.
 
 ## Release profile settings
 
-Run the exports for your platform in the same shell as either rebuild command.
+Run the exports for your platform in the same shell as the rebuild command.
 These settings match the desktop release workflow.
 
 {dist_environment}
@@ -353,6 +363,33 @@ settings. Cargo updates `Cargo.lock` for the path patches while offline.
 
 Check the result with `target/dist/reshiki --version` (or
 `target/debug/reshiki --version` if you omit `--profile dist`).
+
+## Python wheel with a modified axtb
+
+Install Python 3.10 or later and maturin 1.15.0. Edit `axtb-source/`, then
+generate the wheel's license notices from this directory:
+
+```sh
+CARGO_NET_OFFLINE=true python3 scripts/license_notices.py --manifest-path crates/xtb-worker/Cargo.toml --features engine --destination crates/python-xtb/wheel-licenses
+```
+
+Build the worker wheel from `crates/python-xtb`. Maturin forwards each
+`--config` to Cargo. These are the same seven patches as the desktop build,
+with paths relative to `crates/python-xtb`. Omit `--locked` so Cargo can update
+the lockfile for the local sources.
+
+```sh
+cd crates/python-xtb
+{wheel_command}
+cd ../..
+```
+
+The wheel is in `target/wheels/`. Install it into the Python environment
+where the matching version of `reshiki` is installed:
+
+```sh
+pip install --force-reinstall target/wheels/reshiki_xtb-*.whl
+```
 
 ## macOS signing and app bundle
 
