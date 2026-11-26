@@ -2,7 +2,8 @@
 //!
 //! L.-P. Wang and C. Song, J. Chem. Phys. 144, 214108 (2016),
 //! doi:10.1063/1.4952956, Eqs. (2), (6)–(8), and (12), and B. K. P. Horn,
-//! J. Opt. Soc. Am. A 4, 629–642 (1987), doi:10.1364/JOSAA.4.000629.
+//! J. Opt. Soc. Am. A 4, 629–642 (1987), doi:10.1364/JOSAA.4.000629
+//! \[Wang2016TRIC\] \[Horn1987Quaternion\]. Full references: docs/references/xtb.md.
 //!
 //! The quaternion fits the reference **to the current geometry**. Its principal
 //! logarithm is multiplied by the reference radius of gyration, so all six

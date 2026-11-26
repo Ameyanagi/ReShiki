@@ -1,4 +1,6 @@
 //! Limited-memory inverse BFGS in free Cartesian coordinates.
+//!
+//! Liu & Nocedal 1989 \[Liu1989LBFGS\]. Full references: docs/references/xtb.md.
 
 use std::collections::VecDeque;
 
@@ -40,7 +42,7 @@ impl Lbfgs {
     }
 
     pub fn direction(&mut self, g: &[f64], rigid: &[Vec<f64>]) -> Option<Vec<f64>> {
-        // Nocedal & Wright, Numerical Optimization (2nd ed.), Algorithm 7.4.
+        // Nocedal & Wright, Numerical Optimization (2nd ed.), Algorithm 7.4 [Nocedal2006Numerical].
         let mut q = g.to_vec();
         let mut alphas = Vec::with_capacity(self.pairs.len());
         for pair in self.pairs.iter().rev() {

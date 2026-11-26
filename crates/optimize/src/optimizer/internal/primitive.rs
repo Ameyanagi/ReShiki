@@ -2,10 +2,12 @@
 //!
 //! Stretch, angle and signed dihedral derivatives follow V. Bakken and
 //! T. Helgaker, J. Chem. Phys. 117, 9160–9174 (2002), Sec. II B,
-//! doi:10.1063/1.1515483, Eqs. (17), (25) and (34). The signed out-of-plane
-//! angle follows by differentiating the unit bond and plane normal (Wilson,
-//! Decius and Cross, *Molecular Vibrations*, 1955, Ch. 4). Lengths use the
-//! Cartesian input units and angles are in radians.
+//! doi:10.1063/1.1515483, Eqs. (17), (25) and (34) \[Bakken2002Coordinates\]. The signed
+//! out-of-plane angle follows by differentiating the unit bond and plane normal (Wilson,
+//! Decius and Cross, *Molecular Vibrations*, 1955, Ch. 4) \[Wilson1955Vibrations\].
+//! Lengths use the Cartesian input units and angles are in radians.
+//!
+//! Full references: docs/references/xtb.md.
 
 use std::f64::consts::{PI, TAU};
 

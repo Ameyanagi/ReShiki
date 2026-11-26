@@ -1,19 +1,21 @@
 //! Weak nonbonded stretch curvature for the Lindh Hessian.
 //!
 //! Packwood et al., J. Chem. Phys. 144, 164109 (2016), Eq. (13),
-//! doi:10.1063/1.4947024, give the exponential distance weight with A = 3.
+//! doi:10.1063/1.4947024 \[Packwood2016Contacts\], give the exponential distance weight with A = 3.
 //! For molecules we take R as the sum of the pair's van der Waals radii
 //! and select k = 0.001 exp[−3(r/R − 1)] Eh/bohr² for r < 1.2 R.
 //! The amplitude and hard cutoff are model parameters. The radial Wilson
 //! term k b bᵀ preserves the rigid-motion null space (Lindh et al.,
-//! doi:10.1016/0009-2614(95)00646-L).
+//! doi:10.1016/0009-2614(95)00646-L) \[Lindh1995Hessian\].
 //!
 //! The TRIC covalent criterion excludes bonded pairs and pairs sharing a
 //! bonded neighbor. Its cutoff is 1.3 times the sum of Pyykkö–Atsumi
-//! single-bond radii (2009), doi:10.1002/chem.200800987. The van der Waals
+//! single-bond radii (2009), doi:10.1002/chem.200800987 \[Pyykko2009Radii\]. The van der Waals
 //! radii cover the 44 main-group elements tabulated by Mantina et al.,
-//! J. Phys. Chem. A 113, 5806–5812 (2009), Table 12, doi:10.1021/jp8111556.
-//! Pairs involving other elements retain the base Lindh model.
+//! J. Phys. Chem. A 113, 5806–5812 (2009), Table 12, doi:10.1021/jp8111556
+//! \[Mantina2009Radii\]. Pairs involving other elements retain the base Lindh model.
+//!
+//! Full references: docs/references/xtb.md.
 
 use crate::ANGSTROM_PER_BOHR;
 
