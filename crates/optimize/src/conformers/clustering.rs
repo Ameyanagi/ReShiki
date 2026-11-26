@@ -1,7 +1,10 @@
 //! Select diverse low-energy representatives from minimized starts with Butina clustering.
 //!
 //! Adapted from D. Butina, J. Chem. Inf. Comput. Sci. 39, 747–750 (1999),
-//! using a heavy-atom RMSD cutoff and updating neighbor counts after each assignment.
+//! using a heavy-atom RMSD cutoff and updating neighbor counts after each assignment
+//! \[Butina1999Clustering\].
+//!
+//! Full references: docs/references/xtb.md.
 
 use std::{cmp::Reverse, sync::Mutex, thread};
 

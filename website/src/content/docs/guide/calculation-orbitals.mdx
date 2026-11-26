@@ -1,0 +1,21 @@
+---
+title: Molecular orbitals
+description: Orbital energies and orbital surfaces from xTB, Molden and Gaussian fchk files, as vector shapes in the drawing.
+---
+
+:::caution[In progress]
+Orbital levels already appear in the results **Summary** (HOMO−2 to LUMO+2). The Orbitals tab and orbital surfaces on the 3D model are being built and are not on the `xtb/next` branch yet; until they land, the **Orbitals** task on the Calculate card is off. This page describes the agreed design.
+:::
+
+xTB orbitals come from a minimal basis. Use them to see the shape and node structure of frontier orbitals, not for quantitative orbital energies.
+
+## What you will see
+
+- **Orbitals** tab: a level diagram (occupied levels with ↑↓, HOMO and LUMO labelled, the gap marked) and a list of orbitals with their energies in eV. Click an orbital, or use ↑ and ↓, to choose one.
+- The chosen orbital is drawn as a surface on the molecule's 3D model, in two phase colours. Controls: **Isovalue**, **Look** (Solid, Shaded, Outline, Mesh) and **Opacity**.
+- The surface is a vector shape: it rotates with the model, hides correctly behind atoms and bonds, and exports sharp to SVG, PDF and EMF. Exported surfaces are simplified to about 20,000 triangles to keep files small.
+- Orbitals of results read from Molden and Gaussian fchk files appear the same way.
+
+## File size
+
+Orbital coefficients and surfaces are not saved in the `.rsk` file. ReShiki recomputes them from the saved geometry and settings when you show an orbital (a fraction of a second for small molecules). Orbitals imported from other programs cannot be recomputed; they are kept when they take no more than 2 MB per molecule.
