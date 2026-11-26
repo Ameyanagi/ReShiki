@@ -5,7 +5,8 @@
 //! expands a finite Legendre polynomial, independently of the evaluator's recurrence.
 //! The fixture tests compare this evaluator with signed grid values from PySCF,
 //! including ORCA references whose convention is fixed by implied AO overlap.
-use crate::qcread::tests::{fixture, open};
+use super::{fixture, open};
+use reshiki_model::models3d::surface::orbital::{OrbitalField, orbital_meshes};
 use reshiki_qcdata::{
     ANGSTROM_PER_BOHR, BasisSet, CartesianNorm, Frame, Orbitals, Shell, mo_from_molden,
     mo_to_molden, primitive_norm,
@@ -258,13 +259,40 @@ fn reference_error(reference: &Reference, orbitals: &Orbitals, frame: &Frame) ->
     worst
 }
 
-fn compare(reference: &Reference) -> (f64, usize, usize) {
+fn compare(stem: &str) {
+    let reference = read_reference(stem);
     let file = open(&reference.source);
     let job = &file.jobs[0];
     let orbitals = job.result.as_ref().unwrap().orbitals.as_ref().unwrap();
     let frame = &job.result_step().unwrap().frame;
-    let error = reference_error(reference, orbitals, frame);
-    (error, reference.points.len(), reference.orbitals.len())
+    let error = reference_error(&reference, orbitals, frame);
+    let points = reference.points.len();
+    let rows = reference.orbitals.len();
+    eprintln!("reference {stem}: {rows} orbitals x {points} points, max |error| = {error:.3e}");
+    assert!(error < 1e-9, "{stem}: {error:e}");
+
+    let basis = orbitals.basis.as_ref().expect("reference requires a basis");
+    let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
+    let alpha = &orbitals.alpha;
+    let mut worst = 0.0_f64;
+    for orbital in &reference.orbitals {
+        let index = alpha.rows.binary_search(&orbital.index).unwrap();
+        let row = &alpha.coefficients[index * n_ao..(index + 1) * n_ao];
+        let field = OrbitalField::new(basis, row, &frame.positions_angstrom).unwrap();
+        for (point, expected) in reference.points.iter().zip(&orbital.values) {
+            let point = point.map(|x| x * ANGSTROM_PER_BOHR);
+            let error = (f64::from(field.value(point)) - expected).abs();
+            let scale = expected.abs().max(1e-3);
+            let tolerance = 1e-6 * scale;
+            assert!(
+                error <= tolerance,
+                "{stem} production orbital {} at {point:?}: |error| = {error:e}, reference = {expected:e}, tolerance = {tolerance:e}",
+                orbital.index
+            );
+            worst = worst.max(error / scale);
+        }
+    }
+    eprintln!("production {stem}: max scaled point error = {worst:.3e}");
 }
 
 macro_rules! reference_tests {
@@ -272,9 +300,7 @@ macro_rules! reference_tests {
         $(
             #[test]
             fn $test() {
-                let (error, points, orbitals) = compare(&read_reference($stem));
-                eprintln!("reference {}: {orbitals} orbitals x {points} points, max |error| = {error:.3e}", $stem);
-                assert!(error < 1e-9, "{}: {error:e}", $stem);
+                compare($stem);
             }
         )+
     };
@@ -292,6 +318,57 @@ reference_tests! {
     reference_orca611_water_tzvp => "orca611_water_tzvp",
     reference_orca611_h2co_tddft => "orca611_h2co_tddft",
     reference_orca_ch3f_pbe0 => "orca_ch3f_pbe0",
+}
+
+#[test]
+fn imported_water_bonding_orbital_has_closed_oriented_manifold_meshes() {
+    use std::collections::HashMap;
+
+    let file = open("cclib/g09_water_mp2.fchk");
+    let job = &file.jobs[0];
+    let orbitals = job.result.as_ref().unwrap().orbitals.as_ref().unwrap();
+    let frame = &job.result_step().unwrap().frame;
+    let basis = orbitals.basis.as_ref().unwrap();
+    let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
+    assert_eq!(n_ao, 7);
+    // Occupied MO 2 combines O p_y with H s coefficients +0.446376722 and -0.446376722.
+    let index = orbitals.alpha.rows.binary_search(&2).unwrap();
+    let row = &orbitals.alpha.coefficients[index * n_ao..(index + 1) * n_ao];
+    assert_eq!(orbitals.alpha.occupations[2], 2.);
+    assert!(row[5] > 0.4 && row[6] < -0.4);
+    let field = OrbitalField::new(basis, row, &frame.positions_angstrom).unwrap();
+    let points: Vec<_> = frame
+        .positions_angstrom
+        .iter()
+        .map(|p| p.map(|x| x as f32))
+        .collect();
+    let meshes = orbital_meshes(&field, &points, 0.05).expect("water lobes fit the grown box");
+    for mesh in meshes {
+        assert!(!mesh.truncated);
+        assert_eq!(mesh.triangles.len(), mesh.positive.len());
+        assert!(mesh.positive.contains(&true) && mesh.positive.contains(&false));
+        let mut links = vec![HashMap::new(); mesh.positions.len()];
+        for (&[a, b, c], &phase) in mesh.triangles.iter().zip(&mesh.positive) {
+            assert!(a != b && b != c && c != a);
+            for (u, v, w) in [(a, b, c), (b, c, a), (c, a, b)] {
+                assert!(links[u as usize].insert((v, phase), (w, phase)).is_none());
+            }
+        }
+        // A single oriented cycle per vertex pairs each edge with exactly
+        // one reverse use of the same phase and excludes pinched vertices.
+        for link in links {
+            let first = *link.keys().next().expect("unused vertex");
+            let mut current = first;
+            for visited in 1..=link.len() {
+                current = *link.get(&current).expect("open vertex link");
+                assert_eq!(
+                    current == first,
+                    visited == link.len(),
+                    "disconnected vertex link"
+                );
+            }
+        }
+    }
 }
 
 #[test]
