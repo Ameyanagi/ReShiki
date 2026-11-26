@@ -44,7 +44,7 @@ Then click **Run**. The results palette opens on **Summary**; choose its **Vibra
 
 ## Thermochemistry
 
-Open **Thermochemistry** in the Vibrations tab for the zero-point vibrational energy (ZPVE), enthalpy, entropy, Gibbs free energy and heat capacity, with the point group and symmetry number. For a molecule with isotope labels, the symmetry number counts the labels at the final geometry: D₂O has 2, HDO 1 and CD₄ 12. ReShiki uses the quasi-RRHO treatment that xtb uses by default: low-frequency modes blend toward free rotors, with the crossover at 50 cm⁻¹. Enter another temperature or pressure to recompute them without a new calculation.
+Open **Thermochemistry** in the Vibrations tab for the zero-point vibrational energy (ZPVE), enthalpy, entropy, Gibbs free energy and heat capacity, with the point group and symmetry number. For a molecule with isotope labels, the symmetry number counts only the rotations that map each atom onto one of the same element and isotope, at the geometry of the frequency calculation (the optimized one for **Opt + freq**): a symmetric D₂O has 2, HDO 1 and CD₄ 12. ReShiki uses the quasi-RRHO treatment that xtb uses by default: low-frequency modes blend toward free rotors, with the crossover at 50 cm⁻¹. Enter another temperature or pressure to recompute them without a new calculation.
 
 ## Imaginary frequencies
 
