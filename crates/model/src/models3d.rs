@@ -240,6 +240,9 @@ pub struct Model3d {
     /// An orbital placed on this model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub surface: Option<surface::Figure>,
+    /// Small copies of the model under it, each with one captioned orbital.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub panels: Vec<surface::Panel>,
     pub force_field: ForceField,
     #[serde(default, skip_serializing_if = "is_original")]
     pub layout: Layout,
@@ -599,6 +602,13 @@ fn van_der_waals(symbol: &str) -> f32 {
 }
 
 impl Model3d {
+    /// Every orbital this model shows: its own, then its panels'.
+    pub fn figures(&self) -> impl Iterator<Item = &surface::Figure> {
+        self.surface
+            .iter()
+            .chain(self.panels.iter().map(|panel| &panel.figure))
+    }
+
     pub(crate) fn needs_ortep(&self) -> bool {
         self.style == Style::Ellipsoids
             || self.molecule_only
@@ -646,6 +656,7 @@ impl Model3d {
             manual_along: false,
             background: Background::default(),
             surface: None,
+            panels: vec![],
             force_field,
             layout: Layout::Original,
             drawn: None,
@@ -2737,8 +2748,56 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let mut out = vec![];
     for model in doc.models.iter().filter(|m| m.display != Display::TwoD) {
         push_model(doc, model, &mut out);
+        for (panel, caption) in panels(doc, model) {
+            push_model(doc, &panel, &mut out);
+            out.push(caption);
+        }
     }
     out
+}
+
+/// Share of the model's frame side each panel takes.
+const PANEL_SCALE: f32 = 0.55;
+
+/// The model's panels as small models side by side under its frame, each
+/// with its orbital, and their captions centred below them.
+pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
+    if model.panels.is_empty() {
+        return vec![];
+    }
+    let Some((lo, hi)) = frame(doc, model) else {
+        return vec![];
+    };
+    let side = (hi.x - lo.x) * PANEL_SCALE;
+    let gap = side * 0.15;
+    let count = model.panels.len() as f32;
+    let left = (lo.x + hi.x) / 2. - (count * side + (count - 1.) * gap) / 2.;
+    let centre = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    let size = (model.size / 22.).clamp(7., 14.);
+    let style = crate::typography::TextStyle::default();
+    model
+        .panels
+        .iter()
+        .enumerate()
+        .map(|(k, panel)| {
+            let x = left + side / 2. + k as f32 * (side + gap);
+            let y = hi.y + gap + side / 2.;
+            let mut small = model.clone();
+            small.panels = vec![];
+            small.surface = Some(panel.figure.clone());
+            small.size = model.size * PANEL_SCALE;
+            small.offset = Point::new(model.offset.x + x - centre.x, model.offset.y + y - centre.y);
+            let width = crate::style::styled_text_width(&panel.caption, size, &style);
+            let caption = Primitive::Text {
+                position: Point::new(x - width / 2., y + side / 2. + size * 0.4),
+                text: panel.caption.clone(),
+                size,
+                color: doc.canvas_theme.color([24, 24, 24]),
+                style: style.clone(),
+            };
+            (small, caption)
+        })
+        .collect()
 }
 
 /// Each bond between two drawn points as a pair of indices into the model's
@@ -3165,6 +3224,18 @@ impl View<'_> {
 }
 
 pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
+    let refreshed: Vec<_> = panels(doc, model)
+        .into_iter()
+        .map(|(mut small, _)| {
+            refresh_surface_snapshot(doc, &mut small);
+            small.surface
+        })
+        .collect();
+    for (panel, figure) in model.panels.iter_mut().zip(refreshed) {
+        if let Some(figure) = figure {
+            panel.figure = figure;
+        }
+    }
     if model.surface.is_none() {
         return;
     }

@@ -339,3 +339,65 @@ fn mesh_registry_keeps_twenty_four_recent_figures() {
     assert!(registered(1).is_none());
     REGISTERED.lock().unwrap().clear();
 }
+
+#[test]
+fn panels_draw_small_models_with_captions_and_keep_their_snapshots() {
+    let _guard = lock_registry();
+    let mut doc = tests::ethylene();
+    let atom = doc.atoms[0].id;
+    let launch = science::launch(&doc, atom, 0, 1).unwrap();
+    let result = energy_result(&launch.frame);
+    place(&mut doc.models[0], &result);
+    let figure = doc.models[0].surface.take().unwrap();
+    doc.models[0].panels = ["HOMO (−11.33 eV)", "LUMO (−7.66 eV)"]
+        .into_iter()
+        .enumerate()
+        .map(|(k, caption)| crate::models3d::surface::Panel {
+            figure: Figure {
+                orbital: OrbitalRef {
+                    index: k as u32,
+                    ..figure.orbital.clone()
+                },
+                ..figure.clone()
+            },
+            caption: caption.into(),
+        })
+        .collect();
+    assert_eq!(doc.file_version(), CALCULATIONS);
+    science::attach(&mut doc, &launch, vec![], result).unwrap();
+    let model = &doc.models[0];
+    let (lo, hi) = frame(&doc, model).unwrap();
+    let panels = crate::models3d::panels(&doc, model);
+    assert_eq!(panels.len(), 2);
+    let frames: Vec<_> = panels
+        .iter()
+        .map(|(small, _)| frame(&doc, small).unwrap())
+        .collect();
+    // Under the model's frame, side by side, smaller, not overlapping.
+    assert!(frames.iter().all(|(plo, _)| plo.y > hi.y));
+    assert!(frames[0].1.x <= frames[1].0.x);
+    assert!(frames[0].1.x - frames[0].0.x < hi.x - lo.x);
+    let pins = doc.orbital_pins();
+    assert_eq!(
+        pins.values().next().unwrap(),
+        &[(Spin::Alpha, 0), (Spin::Alpha, 1)]
+    );
+
+    // A registered mesh draws its panel, and saving keeps its snapshot.
+    let key = key(&doc, &panels[0].0).unwrap();
+    register(key, two_lobes());
+    assert!(groups(&doc).is_some());
+    let saved = doc.current();
+    assert!(saved.models[0].panels[0].figure.snapshot.is_some());
+    assert!(saved.models[0].panels[1].figure.snapshot.is_none());
+    REGISTERED.lock().unwrap().clear();
+    assert!(
+        groups(&saved).is_some(),
+        "the snapshot draws without the mesh"
+    );
+    let texts = primitives(&saved)
+        .into_iter()
+        .filter(|p| matches!(p, Primitive::Text { text, .. } if text.ends_with("eV)")))
+        .count();
+    assert_eq!(texts, 2);
+}

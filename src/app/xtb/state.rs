@@ -42,7 +42,6 @@ impl Task {
 }
 
 /// Shown disabled, each with the reason, until their tabs arrive.
-pub(crate) const LATER_TASKS: [(&str, &str); 1] = [("Orbitals", "Coming in the Orbitals tab")];
 /// The methods in the card's order; GFN2-xTB is the default.
 pub(crate) const METHODS: [XtbMethod; 3] = [XtbMethod::Gfn2Xtb, XtbMethod::GXtb, XtbMethod::GfnFf];
 /// The electronic temperature "Retry at 1000 K" uses.

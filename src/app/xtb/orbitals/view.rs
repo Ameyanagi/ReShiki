@@ -234,13 +234,39 @@ impl App {
         .spacing(6)
         .align_y(Alignment::Center);
 
-        let action: Element<'_, Message> = if target.placed.is_some() {
+        // What a chemist needs first: the frontier figure, then this orbital.
+        let column = &target.columns[choice.column];
+        let primary = |id: &'static str, name: &'static str, label: &'static str, action| {
+            reshiki::accessibility::button(id, name, text(label).size(12))
+                .padding([6, 14])
+                .style(crate::appearance::primary)
+                .on_press_maybe(action)
+        };
+        let frontier: Element<'_, Message> = if target.frontier {
+            accessible_command(
+                "xtb-orbital-remove-frontier",
+                "Remove the HOMO and LUMO figure",
+                "Remove HOMO + LUMO figure",
+            )
+            .on_press(send(Action::RemoveFrontier))
+            .into()
+        } else {
+            primary(
+                "xtb-orbital-place-frontier",
+                "Place the HOMO and LUMO side by side under the molecule",
+                "Place HOMO + LUMO figure",
+                (live && self.xtb_orbital_frontier_ready(target))
+                    .then(|| send(Action::PlaceFrontier)),
+            )
+            .into()
+        };
+        let this: Element<'_, Message> = if target.placed.is_some() {
             row![
-                line("Placed on the canvas", Tone::Good),
+                line("Placed on the model", Tone::Good),
                 accessible_command(
                     "xtb-orbital-remove",
-                    "Remove the orbital from the canvas",
-                    "Remove from canvas"
+                    "Remove the orbital from the model",
+                    "Remove"
                 )
                 .on_press(send(Action::Remove)),
             ]
@@ -248,29 +274,78 @@ impl App {
             .align_y(Alignment::Center)
             .into()
         } else {
-            let ready = live && self.xtb_orbital_ready(target, choice);
-            reshiki::accessibility::button(
+            accessible_command(
                 "xtb-orbital-place",
-                "Place the orbital on the canvas",
-                text("Place on canvas").size(12),
+                "Place this orbital on the model",
+                "Place this orbital",
             )
-            .padding([6, 14])
-            .style(crate::appearance::primary)
-            .on_press_maybe(ready.then(|| send(Action::Place)))
+            .on_press_maybe(
+                (live && self.xtb_orbital_ready(target, choice)).then(|| send(Action::Place)),
+            )
             .into()
         };
-        let mut controls = column![
-            isovalue,
-            row![field("Look"), looks]
-                .spacing(6)
+        let mut controls = column![row![frontier, this].spacing(10).align_y(Alignment::Center)]
+            .spacing(8)
+            .max_width(400);
+        // A degenerate level: which member is shown, and its partner.
+        let group = column.group(choice.index);
+        if group.end() > group.start() {
+            let members = group.end() - group.start() + 1;
+            let partner = if choice.index == *group.end() {
+                *group.start()
+            } else {
+                choice.index + 1
+            };
+            let name = column.name(choice.index);
+            controls = controls.push(
+                row![
+                    text(format!(
+                        "{name} is {} of {members} (degenerate)",
+                        choice.index - group.start() + 1
+                    ))
+                    .size(12),
+                    accessible_command(
+                        "xtb-orbital-partner",
+                        "Show the degenerate partner",
+                        "Show partner"
+                    )
+                    .on_press_maybe(live.then(|| send(Action::Choose(choice.column, partner)))),
+                ]
+                .spacing(8)
                 .align_y(Alignment::Center),
-            mesh_lines,
-            opacity,
-            colours,
-            action,
-        ]
-        .spacing(8)
-        .max_width(380);
+            );
+        }
+        // Appearance, folded away until asked for.
+        let open = self.tab.xtb.orbitals.appearance;
+        controls = controls.push(
+            reshiki::accessibility::button(
+                "xtb-orbital-appearance",
+                "Show or hide the orbital appearance",
+                text(if open {
+                    "Appearance ▾"
+                } else {
+                    "Appearance ▸ (isovalue, look, opacity, colours)"
+                })
+                .size(12),
+            )
+            .padding([4, 0])
+            .style(control(false))
+            .on_press(send(Action::Appearance(!open))),
+        );
+        if open {
+            controls = controls.push(
+                column![
+                    isovalue,
+                    row![field("Look"), looks]
+                        .spacing(6)
+                        .align_y(Alignment::Center),
+                    mesh_lines,
+                    opacity,
+                    colours,
+                ]
+                .spacing(8),
+            );
+        }
         if let Some(problem) = &target.problem {
             controls = controls.push(line(problem.clone(), Tone::Warning));
         } else if let Some(busy) = self.xtb_orbital_busy(target) {
