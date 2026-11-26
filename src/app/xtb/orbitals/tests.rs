@@ -300,6 +300,8 @@ fn levels_follow_the_spin_columns_of_an_open_shell() {
 }
 
 #[test]
+// Waiting needs a build that can recompute xTB orbitals.
+#[cfg_attr(any(not(feature = "xtb"), windows), ignore = "needs the xTB engine")]
 fn a_reopened_placed_orbital_waits_for_its_new_level() {
     let mut app = tab();
     answer(&mut app);
