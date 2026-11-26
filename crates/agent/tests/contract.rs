@@ -848,6 +848,56 @@ async fn export_input_checks_xyz_and_output_byte_limits() {
 }
 
 #[tokio::test]
+async fn export_input_uses_program_file_names_and_the_gamess_basis_default() {
+    let host = HeadlessHost::new("contract-test", Budgets::default());
+    for (program, basis, file_name, keyword) in [
+        ("orca", None, "molecule-orca.inp", "def2-SVP"),
+        (
+            "gamess",
+            None,
+            "molecule-gamess.inp",
+            " $BASIS GBASIS=N31 NGAUSS=6 NDFUNC=1 $END\n",
+        ),
+        (
+            "gamess",
+            Some("STO-3G"),
+            "molecule-gamess.inp",
+            " $BASIS GBASIS=STO NGAUSS=3 $END\n",
+        ),
+    ] {
+        let mut arguments = export_input_args();
+        arguments["program"] = json!(program);
+        arguments["basis"] = json!(basis);
+        let result = successful_result(&host, "export_input", arguments).await;
+        assert_eq!(result["value"]["file_name"], file_name);
+        let text = result["value"]["text"].as_str().unwrap();
+        assert!(text.contains(keyword), "{text}");
+    }
+
+    for basis in ["def2-SVP", ""] {
+        let mut arguments = export_input_args();
+        arguments["program"] = json!("gamess");
+        arguments["basis"] = json!(basis);
+        let rejected = host
+            .call(Call {
+                principal: Principal::local(),
+                request: RequestId::Int(1),
+                tool: "export_input".into(),
+                arguments,
+                progress: None,
+            })
+            .await
+            .unwrap();
+        assert!(rejected.is_error, "{basis:?}");
+        assert_eq!(rejected.value["error"]["code"], "failed");
+        assert_eq!(
+            rejected.value["error"]["message"],
+            "GAMESS exports use built-in bases only: 6-31G(d), 6-31G or STO-3G."
+        );
+    }
+}
+
+#[tokio::test]
 #[allow(clippy::disallowed_methods, clippy::disallowed_types)]
 async fn read_output_accepts_a_granted_file_at_the_text_limit_and_uses_its_detection_name() {
     let dir = tempfile::tempdir().unwrap();

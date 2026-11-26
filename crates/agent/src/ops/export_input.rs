@@ -143,7 +143,13 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<ExportInput, OpEr
         Job::OptFreq => qc_input::Job::OptFreq,
     };
     settings.method = args.method.unwrap_or(settings.method);
-    settings.basis = args.basis.unwrap_or(settings.basis);
+    if let Some(basis) = args.basis {
+        settings.basis = basis;
+    } else if program == qc_input::Program::Gamess
+        && let Some(basis) = qc_input::nearest_gamess_basis(&settings.basis)
+    {
+        settings.basis = basis.into();
+    }
     settings.cores = args.cores.unwrap_or(settings.cores);
     settings.memory_gb = args.memory_gb.unwrap_or(settings.memory_gb);
     settings.extra = args.extra.unwrap_or(settings.extra);
@@ -187,7 +193,8 @@ pub(crate) async fn export_input(
             result: None,
         };
         let generator = format!("ReShiki {}", versions.app);
-        let output = qc_input::write(&args.settings, &geometry, STEM, &generator)
+        let stem = qc_input::default_stem(STEM, args.settings.program);
+        let output = qc_input::write(&args.settings, &geometry, &stem, &generator)
             .map_err(|error| OpError::failed(error.to_string()))?;
         let bytes = output.main.text.len()
             + output

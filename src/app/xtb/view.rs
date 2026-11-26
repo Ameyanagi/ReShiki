@@ -296,8 +296,8 @@ impl App {
         let mut body = column![].spacing(6);
         if let Some(run) = run {
             body = body.push(progress(run));
-        } else if let Some(outcome) = &self.tab.xtb.outcome {
-            body = body.push(outcome_view(outcome, self.xtb_palette_visible()));
+        } else if let Some(outcome) = self.xtb_outcome() {
+            body = body.push(outcome_view(self, outcome));
         }
         if let Some(show) = self.xtb_show_results() {
             body = body.push(show);
@@ -611,14 +611,15 @@ fn reshiki_optimize_steps() -> usize {
 
 /// The card's last outcome. A finished result defers to the results
 /// palette while it shows; its notes stay here.
-fn outcome_view(outcome: &Outcome, in_palette: bool) -> Element<'_, Message> {
+fn outcome_view<'a>(app: &App, outcome: &'a Outcome) -> Element<'a, Message> {
     match outcome {
         Outcome::Done {
             line: summary,
             notes,
+            ..
         } => {
             let mut lines = column![].spacing(4);
-            if !in_palette {
+            if !app.xtb_palette_visible() {
                 lines = lines.push(line(summary.clone(), Tone::Good));
             }
             for note in notes {
@@ -626,7 +627,7 @@ fn outcome_view(outcome: &Outcome, in_palette: bool) -> Element<'_, Message> {
             }
             lines.into()
         }
-        Outcome::Failed(failed) => line(failed.explain().0, Tone::Error),
+        Outcome::Failed(failed) => line(failed.explain(app.xtb_can_retry(failed)).0, Tone::Error),
         Outcome::Review(review) => {
             let mut lines = column![].spacing(4);
             for reason in &review.reasons {

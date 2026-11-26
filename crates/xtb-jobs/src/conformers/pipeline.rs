@@ -109,6 +109,10 @@ impl Search {
 #[derive(Clone, Debug)]
 pub struct Found {
     pub engine: Engine,
+    /// Effective start minimizer, including MMFF-to-UFF fallback.
+    pub minimizer: Minimizer,
+    /// Algorithms selected for the converged representatives, including fallbacks.
+    pub optimizers: Vec<reshiki_optimize::Method>,
     /// The report at exactly the final positions of `ranked[0]`.
     pub best: Arc<run::Report>,
     /// Lowest first, aligned onto the best.
@@ -154,7 +158,7 @@ pub fn search_conformers(
     }
     let xtb_minimizer = search.config.minimizer.xtb();
     let mut notes = Vec::new();
-    let mut starts = sample(&search, cancel, &mut on_event, &mut notes)?;
+    let (mut starts, minimizer) = sample(&search, cancel, &mut on_event, &mut notes)?;
     let minimized = if xtb_minimizer.is_some() {
         let positions = starts
             .iter()
@@ -297,8 +301,18 @@ pub fn search_conformers(
     if !reranking {
         check_cancel(cancel)?;
     }
+    let mut optimizers = Vec::new();
+    for (_, report) in &reports {
+        for &method in &report.optimizers {
+            if !optimizers.contains(&method) {
+                optimizers.push(method);
+            }
+        }
+    }
     Ok(Found {
         engine,
+        minimizer,
+        optimizers,
         best,
         ranked,
         starts: starts.len(),
@@ -325,16 +339,13 @@ fn sample(
     cancel: &Cancel,
     on_event: &mut impl FnMut(Phase),
     notes: &mut Vec<String>,
-) -> Result<Vec<Start>, Failure> {
+) -> Result<(Vec<Start>, Minimizer), Failure> {
     on_event(Phase::Starts);
     let minimizer = search.config.minimizer;
     let embedded = minimizer.xtb().is_some();
-    let mut field = starting_force_field(minimizer);
-    if field != ForceField::Uff && !search.prepared.mmff_available() {
-        field = ForceField::Uff;
-        if !embedded {
-            notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
-        }
+    let (field, effective) = sampling_minimizer(minimizer, search.prepared.mmff_available());
+    if effective != minimizer {
+        notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
     }
     let mode = if embedded {
         Ensemble::Embedded
@@ -385,7 +396,7 @@ fn sample(
             "No start converged with the force field: clustering used unconverged geometries, and xTB re-optimized the representatives.".into(),
         );
     }
-    conformers
+    let starts = conformers
         .into_iter()
         .map(|entry| {
             let positions = frame_positions(
@@ -404,7 +415,22 @@ fn sample(
                 energy_hartree,
             })
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+    Ok((starts, effective))
+}
+
+fn sampling_minimizer(minimizer: Minimizer, mmff_available: bool) -> (ForceField, Minimizer) {
+    let field = starting_force_field(minimizer);
+    if field != ForceField::Uff && !mmff_available {
+        let effective = if minimizer.xtb().is_some() {
+            minimizer
+        } else {
+            Minimizer::Uff
+        };
+        (ForceField::Uff, effective)
+    } else {
+        (field, minimizer)
+    }
 }
 
 fn frame_positions(
@@ -703,6 +729,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn unavailable_mmff_records_uff_but_keeps_xtb_start_minimizers() {
+        for minimizer in [Minimizer::Mmff94s, Minimizer::Mmff94] {
+            assert_eq!(
+                sampling_minimizer(minimizer, false),
+                (ForceField::Uff, Minimizer::Uff)
+            );
+            assert_eq!(sampling_minimizer(minimizer, true).1, minimizer);
+        }
+        for minimizer in [Minimizer::GfnFf, Minimizer::Gfn2] {
+            assert_eq!(
+                sampling_minimizer(minimizer, false),
+                (ForceField::Uff, minimizer)
+            );
+        }
+        assert_eq!(
+            sampling_minimizer(Minimizer::Uff, true),
+            (ForceField::Uff, Minimizer::Uff)
+        );
+    }
+
     fn water_search(minimizer: Minimizer, geometry: Client) -> Search {
         let mut doc = Document::default();
         let oxygen = doc.add_atom("O", Point::default());
@@ -906,6 +953,7 @@ mod tests {
             converged: true,
             positions: vec![[0.0; 3]],
             steps: 0,
+            optimizers: vec![],
             energies: vec![-1.0],
             path: vec![],
             evaluations: vec![],
