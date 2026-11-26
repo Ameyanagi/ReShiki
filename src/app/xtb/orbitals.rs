@@ -66,7 +66,7 @@ pub(crate) enum Action {
     /// HOMO and LUMO side by side under the molecule, each captioned.
     PlaceFrontier,
     RemoveFrontier,
-    /// Show or fold the isovalue, look, opacity and colours.
+    /// Show or fold the isovalue, look, opacity and colors.
     Appearance(bool),
     Computed(String, Result<Arc<qcdata::Orbitals>, String>),
     Built(u64, Result<Meshes, String>),
@@ -1114,7 +1114,7 @@ impl App {
         self.xtb_follow_results(&doc);
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
-        self.status = "Placed the HOMO and LUMO under the molecule · ⌘Z removes them".into();
+        self.status = "Placed HOMO and LUMO under the molecule · ⌘Z removes them".into();
         self.error = false;
     }
 
