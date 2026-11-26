@@ -174,7 +174,8 @@ def energy(
     the energy and gradient in water. Request orbital energies and occupations
     with ``orbitals=True`` or bond orders with ``bond_orders=True``.
     ``unpaired`` sets the number of unpaired electrons in the engine's valence
-    space and defaults to the multiplicity minus one.
+    space and defaults to the multiplicity minus one. For lanthanides, pass
+    ``unpaired=result.unpaired`` to follow-up calls to keep the same valence spin.
     """
     request = {
         "operation": "energy",
@@ -225,7 +226,8 @@ def optimize(
     first atom fixed. Indices start at zero. The default limit is 500 steps.
     A calculation that reaches the limit returns with ``converged=False``.
     ``unpaired`` sets the number of unpaired electrons in the engine's valence
-    space and defaults to the multiplicity minus one.
+    space and defaults to the multiplicity minus one. For lanthanides, pass
+    ``unpaired=result.unpaired`` to follow-up calls to keep the same valence spin.
     """
     request = {
         "operation": "optimize",
@@ -269,6 +271,7 @@ def frequencies(
     *,
     temperature: float = 298.15,
     pressure: float = 101325.0,
+    symmetry_number: int | None = None,
     method: str = "gfn2",
     charge: int | None = None,
     multiplicity: int | None = None,
@@ -286,11 +289,19 @@ def frequencies(
     Use an optimized geometry, for example ``frequencies(optimize(water).geometry)``.
     Specify the thermochemistry temperature in kelvin and pressure in pascals.
     Frequencies are in cm⁻¹, with imaginary modes reported as negative values.
-    For isotope-labeled geometries, thermochemistry uses a symmetry number of 1.
+    By default the engine chooses the rotational symmetry number from the geometry.
+    For isotopologues with lower symmetry than the geometry, such as HDO, pass
+    ``symmetry_number=1``.
     ``unpaired`` sets the number of unpaired electrons in the engine's valence
-    space and defaults to the multiplicity minus one.
+    space and defaults to the multiplicity minus one. For lanthanides, pass
+    ``unpaired=result.unpaired`` to follow-up calls to keep the same valence spin.
     """
-    request = {"operation": "frequencies", "temperature": temperature, "pressure": pressure}
+    request = {
+        "operation": "frequencies",
+        "temperature": temperature,
+        "pressure": pressure,
+        "symmetry_number": symmetry_number,
+    }
     return _result_from_data(
         _calculate(
             request,

@@ -4,7 +4,7 @@ import _thread
 import json
 import sys
 from pathlib import Path
-from threading import Event, Thread
+from threading import Timer
 
 import numpy as np
 import pytest
@@ -98,6 +98,19 @@ def test_deuterated_water_lowers_frequencies(worker):
     np.testing.assert_allclose(light.frequencies[1:] / heavy.frequencies[1:], np.sqrt(2), rtol=0.06)
 
 
+def test_isotopologue_thermochemistry_symmetry(worker):
+    water = xtb.optimize(geometry("water")).geometry
+    d2o = qc.Geometry.from_symbols(water.symbols, water.positions, isotopes=[0, 2, 2])
+    hdo = qc.Geometry.from_symbols(water.symbols, water.positions, isotopes=[0, 2, 0])
+    default = xtb.frequencies(d2o).thermo
+    symmetric = xtb.frequencies(d2o, symmetry_number=2).thermo
+    asymmetric = xtb.frequencies(hdo, symmetry_number=1).thermo
+    assert default is not None and symmetric is not None and asymmetric is not None
+    assert all(thermo.free_energy is not None for thermo in (default, symmetric, asymmetric))
+    assert default.free_energy == pytest.approx(symmetric.free_energy, rel=0, abs=1e-12)
+    assert default.free_energy != pytest.approx(asymmetric.free_energy, rel=0, abs=1e-6)
+
+
 def test_cef3_can_set_valence_spin_independently(worker):
     cef3 = qc.Geometry.from_symbols(
         ["Ce", "F", "F", "F"], [[0, 0, 0], [2, 0, 0], [-2, 0, 0], [0, 2, 0]]
@@ -108,6 +121,7 @@ def test_cef3_can_set_valence_spin_independently(worker):
     result = xtb.energy(cef3, unpaired=0)
     assert np.isfinite(result.energy)
     assert result.geometry.multiplicity == 2
+    assert result.unpaired == 0
 
 
 def test_worker_gap_is_reported_without_requesting_orbitals(worker):
@@ -141,21 +155,19 @@ def test_version_mismatch(worker, monkeypatch):
 
 
 def test_keyboard_interrupt(worker):
+    # A distorted caffeine takes dozens of optimizer steps (about 0.2-0.4 s),
+    # several of the extension's 100 ms signal checks.
     caffeine = geometry("caffeine")
-    stop = Event()
-
-    def interrupt():
-        # Keep interrupting until the call has raised, so a fast machine cannot
-        # finish the calculation between one interrupt and the next check.
-        while not stop.wait(0.002):
-            _thread.interrupt_main()
-
-    thread = Thread(target=interrupt)
-    with pytest.raises(KeyboardInterrupt):
-        thread.start()
-        try:
-            xtb.frequencies(caffeine)
-        finally:
-            stop.set()
-            thread.join()
+    distorted = qc.Geometry(
+        caffeine.numbers,
+        caffeine.positions + np.random.default_rng(1).normal(0, 0.15, caffeine.positions.shape),
+    )
+    timer = Timer(0.05, _thread.interrupt_main)
+    timer.daemon = True
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            timer.start()
+            xtb.optimize(distorted, level="tight")
+    finally:
+        timer.cancel()
     assert xtb.energy(geometry("water")).energy is not None

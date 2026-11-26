@@ -98,11 +98,18 @@ def verify_wheel(wheel, licenses=None, *, xtb=False):
             if archive.read(prefix + name) != content:
                 raise ValueError(f"License file has differing bytes: {name}")
         # The SBOM maturin writes lists the Rust crates compiled into the wheel.
+        sbom_paths = [name for name in archive.namelist() if name.endswith(".cyclonedx.json")]
+        if not sbom_paths:
+            raise ValueError("The wheel has no Rust SBOM")
+        components = []
+        for name in sbom_paths:
+            sbom = json.loads(archive.read(name))
+            if not isinstance(sbom, dict) or not isinstance(sbom.get("components"), list):
+                raise ValueError(f"The wheel has no Rust SBOM components list: {name}")
+            components.extend(sbom["components"])
         engine = {
             component["name"]
-            for name in archive.namelist()
-            if name.endswith(".cyclonedx.json")
-            for component in json.loads(archive.read(name)).get("components", [])
+            for component in components
             if component.get("name", "").startswith("axtb")
         }
         if xtb and "axtb-driver" not in engine:

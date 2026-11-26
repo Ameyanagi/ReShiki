@@ -292,6 +292,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(render_many, module)?)?;
     module.add_function(wrap_pyfunction!(qc::qc_elements, module)?)?;
     module.add_function(wrap_pyfunction!(qc::qc_read, module)?)?;
+    module.add_function(wrap_pyfunction!(qc::qc_read_xyz_geometry, module)?)?;
     module.add_function(wrap_pyfunction!(qc::qc_write_input, module)?)?;
     module.add_function(wrap_pyfunction!(xtb::xtb_engine, module)?)?;
     module.add_function(wrap_pyfunction!(xtb::xtb_calculate, module)?)?;

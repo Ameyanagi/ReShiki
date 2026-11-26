@@ -14,6 +14,13 @@ def workspace_version():
 
 
 class PythonXtbPinTests(unittest.TestCase):
+    def test_application_and_wheel_versions_match(self):
+        with (ROOT / "Cargo.toml").open("rb") as file:
+            manifest = tomllib.load(file)
+        self.assertEqual(
+            manifest["package"]["version"], manifest["workspace"]["package"]["version"]
+        )
+
     def test_extra_pins_matching_worker_version(self):
         with (ROOT / "crates/python/pyproject.toml").open("rb") as file:
             dependencies = tomllib.load(file)["project"]["optional-dependencies"]["xtb"]
