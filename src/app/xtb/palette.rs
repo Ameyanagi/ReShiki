@@ -52,7 +52,6 @@ pub(crate) enum Action {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Dock {
     pub inspector: bool,
-    pub collapsed: bool,
 }
 
 /// One document's palette.
@@ -63,6 +62,7 @@ pub(crate) struct Palette {
     /// index or an attachment ID.
     result: Vec<Weak<CalcResult>>,
     pub(super) open: bool,
+    pub(in crate::app) collapsed: bool,
     pub(super) previous: bool,
     pub(super) view: View,
     pub(super) labels: bool,
@@ -71,6 +71,7 @@ pub(crate) struct Palette {
     pub(super) confirm: Vec<String>,
     /// The Conformers tab's overlay choice and its table.
     pub(super) ensemble: super::conformers::Ensemble,
+    status: Option<(StatusKind, String)>,
     /// Save asked about large results once for this document.
     size_asked: bool,
     /// File sizes for one document state; serializing is too slow per frame.
@@ -188,7 +189,9 @@ fn is_charge_label(text: &str) -> bool {
 impl App {
     /// Open the palette on this result's Summary.
     pub(in crate::app) fn xtb_show_result(&mut self, result: &Arc<CalcResult>) {
+        self.xtb_clear_palette_status(Some(StatusKind::Mode));
         self.tab.xtb.palette.show(result);
+        self.xtb_palette_opened();
     }
 
     /// The result the palette follows, while the document holds it.
@@ -300,7 +303,7 @@ impl App {
                     && self.inspector_tab == crate::app::InspectorTab::Predict
                     && self.xtb.page == super::Page::Xtb
             } else {
-                !self.xtb.dock.collapsed
+                !self.tab.xtb.palette.collapsed
             }
     }
 
@@ -518,7 +521,7 @@ impl App {
                 self.tab.xtb.palette.previous = false;
                 if self.xtb_failed().is_some() {
                     self.tab.xtb.palette.open = true;
-                    self.xtb.dock.collapsed = false;
+                    self.tab.xtb.palette.collapsed = false;
                 }
                 let result = self
                     .xtb_newest()
@@ -530,9 +533,10 @@ impl App {
             }
             Action::Close => {
                 self.tab.xtb.palette.open = false;
+                self.xtb_clear_palette_status(None);
                 self.xtb_end_preview();
             }
-            Action::Collapse => self.xtb.dock.collapsed = !self.xtb.dock.collapsed,
+            Action::Collapse => self.tab.xtb.palette.collapsed = !self.tab.xtb.palette.collapsed,
             Action::Previous => self.tab.xtb.palette.previous = !self.tab.xtb.palette.previous,
             Action::Dock => {
                 let old_width = self.inspector_width();
@@ -541,10 +545,15 @@ impl App {
                     self.inspector_open = true;
                     self.inspector_tab = crate::app::InspectorTab::Predict;
                     self.xtb.page = super::Page::Xtb;
+                } else {
+                    self.xtb_palette_opened();
                 }
                 self.expect_inspector_width_change(old_width);
             }
             Action::View(view) => {
+                if view != View::Vibrations {
+                    self.xtb_clear_palette_status(Some(StatusKind::Mode));
+                }
                 self.tab.xtb.palette.view = view;
                 if !matches!(view, View::Steps | View::Conformers) {
                     self.xtb_end_preview();
@@ -561,8 +570,7 @@ impl App {
             Action::UseStepAnyway => self.xtb_use_step(true),
             Action::KeepModel => {
                 self.xtb_end_preview();
-                self.status = "Step geometry not used".into();
-                self.error = false;
+                self.xtb_set_result_status("Step geometry not used", false);
             }
             Action::CopyMethods | Action::CopyTable | Action::Export | Action::CopyLog => {
                 if self.xtb_failed().is_some() {
@@ -573,23 +581,27 @@ impl App {
                 };
                 if matches!(action, Action::CopyMethods) {
                     let text = results::methods_text(&shown.stored.result, shown.frame);
-                    self.status =
-                        "Copied the methods text (BibTeX keys from ReShiki's xtb.bib)".into();
-                    self.error = false;
+                    self.xtb_set_palette_status(
+                        StatusKind::Palette,
+                        "Copied the methods text (BibTeX keys from ReShiki's xtb.bib)",
+                        false,
+                    );
                     return iced::clipboard::write(text);
                 }
                 let method = shown.method();
                 if matches!(action, Action::CopyLog) {
                     let log = results::log(&shown.stored.result, shown.frame, shown.info, &method);
-                    self.status = "Copied the xTB log".into();
-                    self.error = false;
+                    self.xtb_set_palette_status(StatusKind::Palette, "Copied the xTB log", false);
                     return iced::clipboard::write(log);
                 }
                 let rows = shown.rows();
                 let table = results::tsv(&method, &rows);
                 if matches!(action, Action::CopyTable) {
-                    self.status = format!("Copied {} rows of xTB results", rows.len());
-                    self.error = false;
+                    self.xtb_set_palette_status(
+                        StatusKind::Palette,
+                        format!("Copied {} rows of xTB results", rows.len()),
+                        false,
+                    );
                     return iced::clipboard::write(table);
                 }
                 let stem = std::path::Path::new(&self.document_name())
@@ -606,28 +618,8 @@ impl App {
                     cfg!(target_arch = "wasm32"),
                 );
             }
-            Action::Exported(result) => match result {
-                Ok(Some(path)) => {
-                    self.status = format!("Exported xTB results to {}", path.display());
-                    self.error = false;
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    self.status = error;
-                    self.error = true;
-                }
-            },
-            Action::IrExported(result) => match result {
-                Ok(Some(path)) => {
-                    self.status = format!("Exported the IR spectrum\n{}", path.display());
-                    self.error = false;
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    self.status = format!("Could not export the IR spectrum\n{error}");
-                    self.error = true;
-                }
-            },
+            Action::Exported(result) => self.xtb_palette_exported(result, false),
+            Action::IrExported(result) => self.xtb_palette_exported(result, true),
             Action::Labels(on) => self.tab.xtb.palette.labels = on,
             Action::PlaceCharges => {
                 if self.xtb_failed().is_none() {
@@ -641,7 +633,7 @@ impl App {
                     .map(|(_, stored)| Arc::clone(&stored.result));
                 if let Some(result) = result {
                     self.xtb_show_result(&result);
-                    self.xtb.dock.collapsed = false;
+                    self.tab.xtb.palette.collapsed = false;
                     return self.xtb_recalculate();
                 }
             }
@@ -653,12 +645,12 @@ impl App {
                 if science::set_keep_full(&mut doc, index, keep) {
                     let before = std::mem::replace(&mut self.tab.doc, doc);
                     self.changed(before);
-                    self.status = if keep {
-                        "Full results will be saved in this file".into()
+                    let text = if keep {
+                        "Full results will be saved in this file"
                     } else {
-                        "Only the light results will be saved in this file".into()
+                        "Only the light results will be saved in this file"
                     };
-                    self.error = false;
+                    self.xtb_set_palette_status(StatusKind::Palette, text, false);
                 }
             }
             Action::SaveNamed(name) => return self.save_drawing_named(name),
@@ -704,7 +696,7 @@ impl App {
         let name = super::conformers::step_name(&shown.stored.result, index);
         let attachment = shown.stored.attachment;
         let result = Arc::downgrade(&shown.stored.result);
-        self.status = if let Some(error) = failure {
+        let text = if let Some(error) = failure {
             format!("{name} cannot be shown: {error}")
         } else if preview.is_some() {
             super::conformers::previewing(
@@ -716,7 +708,7 @@ impl App {
         } else {
             format!("{name} is not saved in this file")
         };
-        self.error = false;
+        self.xtb_set_result_status(text, false);
         self.tab.xtb.palette.confirm.clear();
         self.tab.xtb.palette.step = Some(Step {
             index,
@@ -734,8 +726,7 @@ impl App {
             return;
         };
         if self.tab.drawing_edit_active() || self.xtb_running() {
-            self.status = "Finish the current operation, then use the step".into();
-            self.error = false;
+            self.xtb_set_result_status("Finish the current operation, then use the step", false);
             return;
         }
         let Some(shown) = self.xtb_shown().filter(|shown| !shown.stale) else {
@@ -767,22 +758,23 @@ impl App {
                 Err(error) => vec![format!("The stereo check could not run: {error}.")],
             };
             if let Some(first) = reasons.first() {
-                self.status = format!("{} · nothing applied", first.trim_end_matches('.'));
-                self.error = false;
+                self.xtb_set_result_status(
+                    format!("{} · nothing applied", first.trim_end_matches('.')),
+                    false,
+                );
                 self.tab.xtb.palette.confirm = reasons;
                 return;
             }
         }
         let mut doc = self.tab.doc.clone();
         if let Err(error) = science::move_model(&mut doc, &atoms, &frame) {
-            self.status = format!("{error}; nothing applied");
-            self.error = true;
+            self.xtb_set_result_status(format!("{error}; nothing applied"), true);
             return;
         }
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if !self.error {
-            self.status = match self.xtb_shown() {
+            let text = match self.xtb_shown() {
                 Some(shown) if super::conformers::is_search(&shown.stored.result) => {
                     format!(
                         "Applied conformer {} to the 3D model · ⌘Z undoes",
@@ -791,6 +783,7 @@ impl App {
                 }
                 _ => format!("Applied xTB geometry of step {index} · ⌘Z undoes"),
             };
+            self.xtb_set_result_status(text, false);
         }
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
@@ -814,8 +807,7 @@ impl App {
             .copied()
             .find(|id| self.tab.doc.atom(*id).is_some())
         else {
-            self.status = "The molecule was deleted".into();
-            self.error = true;
+            self.xtb_set_result_status("The molecule was deleted", true);
             return Task::none();
         };
         let Some(mut config) = results::config(
@@ -824,8 +816,7 @@ impl App {
             shown.atoms,
             self.xtb.settings.threads(),
         ) else {
-            self.status = "The Calculate card cannot repeat this calculation".into();
-            self.error = true;
+            self.xtb_set_result_status("The Calculate card cannot repeat this calculation", true);
             return Task::none();
         };
         config.fixed.retain(|id| self.tab.doc.atom(*id).is_some());
@@ -975,7 +966,11 @@ pub(in crate::app) fn size_question(
     (title, text)
 }
 
+mod sizing;
+mod status;
 mod view;
+
+pub(super) use status::StatusKind;
 pub(super) use view::alert;
 
 #[cfg(test)]

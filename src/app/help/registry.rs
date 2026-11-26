@@ -7,6 +7,7 @@
 use super::super::{
     Message, command_palette, optimization, printing, settings_page,
     shortcuts::{self, TabKey, keys, tab_keys},
+    xtb,
 };
 use iced::keyboard::Modifiers;
 use reshiki::{arrows::Preset as ArrowPreset, editing::Transform};
@@ -492,10 +493,18 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
         entry(
             label(Message::Optimization(optimization::Action::Begin)),
-            "3D optimize…",
+            if xtb::available() {
+                "Force-field 3D model (MMFF94s)…"
+            } else {
+                "3D optimize…"
+            },
             "Generate an optimized 3D conformer and preview it before Apply",
             Selection,
-            &["conformer", "mmff", "uff", "geometry"],
+            if xtb::available() {
+                &["conformer", "mmff", "uff", "geometry", "3d optimize"]
+            } else {
+                &["conformer", "mmff", "uff", "geometry"]
+            },
         ),
         entry(
             if crate::platform::windows() {

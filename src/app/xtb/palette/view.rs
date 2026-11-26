@@ -11,9 +11,9 @@ use iced::widget::{
 };
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
-/// The bottom dock's body height; the inspector shows the body in full.
-const BODY_HEIGHT: f32 = 150.;
 const FOOTER_LINE_HEIGHT: f32 = 32.;
+/// Failure details and the previous result scroll within this height.
+const DETAILS_HEIGHT: f32 = 150.;
 const LABEL_WIDTH: f32 = 130.;
 
 fn send(action: Action) -> Message {
@@ -85,10 +85,19 @@ impl App {
             return None;
         }
         let content = self.xtb_palette_content(false)?;
+        // Expanded, the dock has one height for every tab, at most 40 % of
+        // the window; its middle scrolls between the pinned header and footer.
+        let height = if self.tab.xtb.palette.collapsed {
+            Length::Shrink
+        } else {
+            Length::Fixed(super::sizing::dock_height(self.window_size.height))
+        };
         Some(
             container(content)
+                .id("xtb-results-bottom")
                 .padding([10, 16])
                 .width(Length::Fill)
+                .height(height)
                 .style(panel)
                 .into(),
         )
@@ -106,16 +115,23 @@ impl App {
         if !self.tab.xtb.palette.open {
             return None;
         }
-        let collapsed = self.xtb.dock.collapsed && !inspector;
+        let collapsed = self.tab.xtb.palette.collapsed && !inspector;
         if let Some(failed) = self.xtb_failed() {
             let header = self.xtb_palette_header(vec![], View::Summary, inspector);
             return Some(if collapsed {
                 header
             } else {
-                column![header, self.xtb_failure_card(failed)]
-                    .extend(self.xtb_previous_result(failed, inspector))
-                    .spacing(8)
-                    .into()
+                {
+                    let card = column![self.xtb_failure_card(failed, inspector)]
+                        .extend(self.xtb_previous_result(failed, inspector))
+                        .spacing(8);
+                    let card: Element<'_, Message> = if inspector {
+                        card.into()
+                    } else {
+                        scrollable(card).height(Length::Fill).into()
+                    };
+                    column![header, card].spacing(8).into()
+                }
             });
         }
         let Some(shown) = self.xtb_shown() else {
@@ -143,11 +159,8 @@ impl App {
             return Some(header);
         }
 
-        let mut content = column![
-            header,
-            text(results::headline(&shown.stored.result, shown.frame)).size(12)
-        ]
-        .spacing(4);
+        let mut content =
+            column![text(results::headline(&shown.stored.result, shown.frame)).size(12)].spacing(4);
         content = content.extend(key_tiles(&shown, inspector, false));
         // The semi-empirical caveat is about xTB, not imported results.
         if matches!(
@@ -170,17 +183,20 @@ impl App {
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Log => log(&shown, &shown.method()),
         };
-        let body: Element<'_, Message> = if inspector {
-            body
+        content = content.push(container(body).padding([6, 0]));
+        let middle: Element<'_, Message> = if inspector {
+            content.into()
         } else {
-            scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
+            scrollable(container(content).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(BODY_HEIGHT)
+                .height(Length::Fill)
                 .into()
         };
-        content = content.push(container(body).padding([6, 0]));
-        content = content.push(self.xtb_footer(&shown, view, inspector));
-        Some(content.into())
+        Some(
+            column![header, middle, self.xtb_footer(&shown, view, inspector)]
+                .spacing(4)
+                .into(),
+        )
     }
 
     /// The result title, tabs with `view` chosen, and dock commands.
@@ -204,7 +220,7 @@ impl App {
             .into()
         }))
         .spacing(4);
-        let collapsed = self.xtb.dock.collapsed && !inspector;
+        let collapsed = self.tab.xtb.palette.collapsed && !inspector;
         let title = results::title(self.xtb_shown().map(|s| s.stored.result.as_ref()));
         let mut header = row![text(title).size(14), tabs]
             .spacing(14)
@@ -252,7 +268,7 @@ impl App {
     }
 
     /// The last run's failure and the actions available for it.
-    fn xtb_failure_card(&self, failed: &Failed) -> Element<'_, Message> {
+    fn xtb_failure_card(&self, failed: &Failed, inspector: bool) -> Element<'_, Message> {
         let retry = self.xtb_can_retry(failed);
         let (title, detail) = failed.explain(retry);
         let button = |id: &'static str, name: &'static str, label: &'static str, action| {
@@ -307,7 +323,18 @@ impl App {
             }
             _ => vec![],
         };
-        alert(false, title, detail, actions)
+        let card = alert(false, title, detail, actions);
+        if inspector {
+            card
+        } else {
+            container(
+                scrollable(card)
+                    .id("xtb-failure-body")
+                    .height(Length::Shrink),
+            )
+            .max_height(DETAILS_HEIGHT)
+            .into()
+        }
     }
 
     /// A failed run leaves the previous result available as a read-only summary.
@@ -345,7 +372,7 @@ impl App {
             previous = if inspector {
                 previous.push(body)
             } else {
-                previous.push(container(scrollable(body)).max_height(BODY_HEIGHT))
+                previous.push(container(scrollable(body)).max_height(DETAILS_HEIGHT))
             };
         }
         Some(previous.into())
@@ -445,7 +472,7 @@ impl App {
         } else {
             Length::Fixed(420.)
         })
-        .height(140);
+        .height(140.);
         let list = Column::with_children(energies.iter().enumerate().map(|(index, energy)| {
             let delta = index
                 .checked_sub(1)
@@ -701,16 +728,19 @@ pub(in crate::app::xtb) fn alert<'a>(
             }
         });
     let mut words = column![text(title).size(12)].spacing(2);
+    if !actions.is_empty() {
+        words = words.push(row(actions).spacing(8).wrap().vertical_spacing(4));
+    }
     if !detail.is_empty() {
         words = words.push(line(detail, Tone::Muted));
     }
-    let heading = row![icon, words.width(Length::Fill)]
+    let content = row![icon, words.width(Length::Fill)]
         .spacing(10)
-        .align_y(Alignment::Center);
-    let mut content = column![heading].spacing(6);
-    if !actions.is_empty() {
-        content = content.push(row(actions).spacing(8).wrap().vertical_spacing(4));
-    }
+        .align_y(if warning {
+            Alignment::Center
+        } else {
+            Alignment::Start
+        });
     let card = container(content)
         .padding([8, 10])
         .width(Length::Fill)
@@ -857,12 +887,76 @@ struct StepChart {
 
 impl StepChart {
     const LEFT: f32 = 70.;
-    const TOP: f32 = 8.;
-    const BOTTOM: f32 = 22.;
+    const TOP: f32 = 14.;
+    const BOTTOM: f32 = 36.;
 
     fn x(&self, index: usize, bounds: Rectangle) -> f32 {
         let span = (bounds.width - Self::LEFT - 10.).max(1.);
         Self::LEFT + span * index as f32 / self.energies.len().saturating_sub(1).max(1) as f32
+    }
+
+    fn y(energy: f64, bounds: Rectangle, lo: f64, hi: f64) -> f32 {
+        let height = bounds.height - Self::TOP - Self::BOTTOM;
+        Self::TOP + 4. + ((hi - energy) / (hi - lo).max(1e-9)) as f32 * (height - 8.)
+    }
+
+    fn ticks(&self) -> Vec<usize> {
+        let last = self.energies.len().saturating_sub(1);
+        let mut ticks = vec![0, last / 2, last];
+        ticks.dedup();
+        ticks
+    }
+
+    fn axis_labels(
+        &self,
+        theme: &Theme,
+        bounds: Rectangle,
+        lo: f64,
+        hi: f64,
+    ) -> (canvas::Text, Vec<canvas::Text>) {
+        let color = Color {
+            a: 0.75,
+            ..theme.palette().text
+        };
+        let mut labels = [hi, lo]
+            .into_iter()
+            .map(|energy| canvas::Text {
+                content: state::signed(energy, 5),
+                position: Point::new(Self::LEFT - 4., Self::y(energy, bounds, lo, hi) - 6.),
+                color,
+                size: 10.into(),
+                align_x: iced::alignment::Horizontal::Right.into(),
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+        labels.extend(self.ticks().into_iter().map(|index| canvas::Text {
+            content: index.to_string(),
+            position: Point::new(self.x(index, bounds), bounds.height - Self::BOTTOM + 4.),
+            color,
+            size: 10.into(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..Default::default()
+        }));
+        labels.push(canvas::Text {
+            content: "Optimization step".into(),
+            position: Point::new(
+                Self::LEFT + (bounds.width - Self::LEFT - 10.) / 2.,
+                bounds.height - 12.,
+            ),
+            color,
+            size: 10.into(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..Default::default()
+        });
+        let y_title = canvas::Text {
+            content: "Energy (Eh)".into(),
+            position: Point::ORIGIN,
+            color,
+            size: 10.into(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..Default::default()
+        };
+        (y_title, labels)
     }
 }
 
@@ -934,8 +1028,7 @@ impl canvas::Program<Message> for StepChart {
             .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), e| {
                 (lo.min(*e), hi.max(*e))
             });
-        let range = (hi - lo).max(1e-9);
-        let y = |e: f64| Self::TOP + 4. + ((hi - e) / range) as f32 * (height - 8.);
+        let y = |energy| Self::y(energy, bounds, lo, hi);
         let points: Vec<Point> = self
             .energies
             .iter()
@@ -959,24 +1052,59 @@ impl canvas::Program<Message> for StepChart {
             let dot = canvas::Path::circle(*point, if chosen { 4.5 } else { 2.5 });
             frame.fill(&dot, if chosen && self.live { accent } else { ink });
         }
-        for (e, label) in [(hi, hi), (lo, lo)] {
-            frame.fill_text(canvas::Text {
-                content: state::signed(label, 5),
-                position: Point::new(Self::LEFT - 4., y(e) - 6.),
-                color: muted,
-                size: 10.into(),
-                align_x: iced::alignment::Horizontal::Right.into(),
-                ..Default::default()
-            });
+        for index in self.ticks() {
+            let x = self.x(index, bounds);
+            frame.stroke(
+                &canvas::Path::line(
+                    Point::new(x, bounds.height - Self::BOTTOM),
+                    Point::new(x, bounds.height - Self::BOTTOM + 3.),
+                ),
+                canvas::Stroke::default()
+                    .with_color(Color { a: 0.4, ..muted })
+                    .with_width(1.),
+            );
         }
-        frame.fill_text(canvas::Text {
-            content: "Step (energy in Eh)".into(),
-            position: Point::new(Self::LEFT + width / 2., bounds.height - 16.),
-            color: muted,
-            size: 10.into(),
-            align_x: iced::alignment::Horizontal::Center.into(),
-            ..Default::default()
+        let (y_title, labels) = self.axis_labels(theme, bounds, lo, hi);
+        frame.with_save(|frame| {
+            frame.translate(iced::Vector::new(1., Self::TOP + height / 2.));
+            frame.rotate(-std::f32::consts::FRAC_PI_2);
+            frame.fill_text(y_title);
         });
+        for label in labels {
+            frame.fill_text(label);
+        }
         vec![frame.into_geometry()]
+    }
+}
+
+#[cfg(test)]
+mod chart_tests {
+    use super::*;
+
+    #[test]
+    fn step_axes_name_both_axes_and_use_theme_text_for_every_label() {
+        let chart = StepChart {
+            energies: vec![-20., -20.01, -20.012],
+            selected: 2,
+            live: true,
+        };
+        let bounds = Rectangle::with_size(iced::Size::new(420., 140.));
+        for theme in [Theme::Light, Theme::Dark] {
+            let (y_title, mut labels) = chart.axis_labels(&theme, bounds, -20.012, -20.);
+            labels.push(y_title);
+            for expected in ["Energy (Eh)", "Optimization step", "0", "1", "2"] {
+                assert!(labels.iter().any(|label| label.content == expected));
+            }
+            for label in labels {
+                assert_eq!(
+                    label.color,
+                    Color {
+                        a: 0.75,
+                        ..theme.palette().text
+                    }
+                );
+                assert!(label.position.y >= 0. && label.position.y <= bounds.height - 10.);
+            }
+        }
     }
 }

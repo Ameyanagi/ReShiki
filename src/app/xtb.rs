@@ -26,6 +26,7 @@ pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
+mod selection;
 mod source;
 pub(super) use source::Source;
 mod state;
@@ -35,6 +36,8 @@ mod view;
 
 #[cfg(test)]
 pub(super) use results::{Evaluation, View, headline, method_line, title as results_title};
+#[cfg(test)]
+pub(super) use state::Failure;
 pub(crate) use state::Task as CalcTask;
 pub(super) use state::formula;
 pub(crate) use vibrations::Action as VibrationsAction;
@@ -94,8 +97,10 @@ pub(crate) enum Action {
 pub(crate) enum Entry {
     /// A task from the right-click Calculate (xTB) menu.
     Task(CalcTask),
-    /// The context row's "Optimize with GFN2-xTB".
+    /// Optimize the geometry with GFN2-xTB.
     OptimizeGfn2,
+    /// Calculate energy with a method that gives molecular orbitals.
+    Orbitals,
     /// ⌘R: the last calculation again, on the selected molecule.
     Rerun,
 }
@@ -103,6 +108,14 @@ pub(crate) enum Entry {
 /// ⌘R, as menus and tooltips show it.
 pub(super) fn rerun_keys() -> String {
     super::shortcuts::label(&Message::Xtb(Action::Entry(Entry::Rerun))).unwrap_or_default()
+}
+
+/// Choose xTB before showing Predict so opening its settings does not start NMR.
+pub(super) fn settings_messages() -> [Message; 2] {
+    [
+        Message::Xtb(Action::Page(Page::Xtb)),
+        Message::Inspector(super::InspectorTab::Predict),
+    ]
 }
 
 /// Whether this build can calculate; the entry points hide otherwise.
@@ -126,6 +139,7 @@ pub(crate) struct Window {
 pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
+    selection_hint: Option<String>,
     serial: u64,
     pub(super) palette: palette::Palette,
     pub(super) orbitals: orbitals::Orbitals,
@@ -411,27 +425,14 @@ impl App {
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
-                let showing = matches!(action, palette::Action::Show);
-                let before = showing
-                    .then(|| {
-                        self.xtb_shown()
-                            .map(|shown| Arc::clone(&shown.stored.result))
-                    })
-                    .flatten();
+                let was_visible = self.xtb_vibrations_visible();
                 let task = self.xtb_palette(action);
-                if showing
-                    && self.xtb_shown().is_some_and(|shown| {
-                        before
-                            .as_ref()
-                            .is_none_or(|before| !Arc::ptr_eq(before, &shown.stored.result))
-                    })
-                {
-                    self.tab.xtb.vibrations.mode = 0;
-                }
                 if opened {
-                    return Task::batch([task, self.xtb_vibrations_opened()]);
+                    return Task::batch([task, self.xtb_vibrations_opened(was_visible)]);
                 }
-                self.xtb_vibrations_sync();
+                if was_visible == self.xtb_vibrations_visible() {
+                    self.xtb_vibrations_sync();
+                }
                 return task;
             }
             Action::Vibrations(action) => return self.xtb_vibrations_action(action),
@@ -590,8 +591,7 @@ impl App {
             return Task::none();
         }
         if self.xtb_target().is_none() {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         }
         match entry {
@@ -599,6 +599,12 @@ impl App {
             Entry::OptimizeGfn2 => {
                 self.xtb.settings.task = CalcTask::Optimize;
                 self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+            }
+            Entry::Orbitals => {
+                self.xtb.settings.task = CalcTask::Energy;
+                if !self.xtb.settings.method.capabilities().orbitals {
+                    self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+                }
             }
             Entry::Rerun => {}
         }
@@ -615,8 +621,7 @@ impl App {
             .xtb_target()
             .and_then(|atoms| Some((atoms.clone(), *atoms.first()?)))
         else {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         };
         let settings = &conformers::effective(&self.xtb.settings, &self.xtb.conformers);
@@ -913,7 +918,7 @@ impl App {
         self.tab.xtb.palette.open = true;
         self.tab.xtb.palette.previous = false;
         // The card's actions must show, so a collapsed dock opens.
-        self.xtb.dock.collapsed = false;
+        self.tab.xtb.palette.collapsed = false;
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
@@ -1039,8 +1044,7 @@ impl App {
             .map(|s| s.result.clone())
         {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
-            self.tab.xtb.palette.show(&result);
-            self.tab.xtb.vibrations.mode = 0;
+            self.xtb_show_result(&result);
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
                 self.tab.xtb.palette.view = results::View::Vibrations;
@@ -1056,8 +1060,6 @@ impl App {
             line: pending.line,
             notes,
         });
-        // A fresh result holds its modes, so nothing needs recomputing.
-        self.xtb_vibrations_sync();
     }
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
