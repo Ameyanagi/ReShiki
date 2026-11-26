@@ -1391,7 +1391,7 @@ pub(in crate::app) fn size_question(
 }
 
 mod sizing;
-pub(super) use sizing::dock_height;
+pub(super) use sizing::{dock_height, path_dock_height};
 mod status;
 mod view;
 

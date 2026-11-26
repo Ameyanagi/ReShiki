@@ -923,7 +923,7 @@ fn ordered_irc(
         trajectory(&points),
         ordered[0].path.len(),
         reached,
-        ordered.map(|branch| branch.completed),
+        ordered.map(ts::IrcBranch::completed),
         ordered.map(|branch| qcdata::IrcRelaxedEnd {
             energy_hartree: branch.end.energy,
             positions_angstrom: branch
@@ -1087,9 +1087,11 @@ fn diagnostics(
             rows.push((
                 label.into(),
                 format!(
-                    "{endpoint} · downhill trace {} · {} points",
-                    convergence(branch.completed),
-                    branch.path.len()
+                    "{endpoint} · {} · accepted steps: {} · gradient calls: {} · path length: {:.6} amu½·bohr",
+                    branch.reason,
+                    branch.path.len(),
+                    branch.gradient_calls,
+                    branch.path_length
                 ),
             ));
         }

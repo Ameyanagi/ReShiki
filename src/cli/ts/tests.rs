@@ -2,7 +2,7 @@
 
 use super::{finish, output::Summary, worker};
 use crate::cli::args::Ts;
-use reshiki_optimize::ts::{IrcBranch, Minimum, Reached, TsReport};
+use reshiki_optimize::ts::{IrcBranch, IrcReason, Minimum, Reached, TsReport};
 use reshiki_xtb_worker::{
     client::Error,
     protocol::{Engine, Method, Units},
@@ -116,16 +116,20 @@ fn report() -> TsReport {
         transition_mode: vec![0., 0., -1., 0., 0., 1.],
         irc: Some([
             IrcBranch {
-                energies: vec![-1., -3.],
+                energies: vec![-1., -1.5, -3.],
                 path: vec![point(-1.5, 2.5)],
-                completed: true,
+                reason: IrcReason::Converged,
+                path_length: 0.13,
+                gradient_calls: 5,
                 end: reactant,
                 reached: Reached::Reactant,
             },
             IrcBranch {
-                energies: vec![-1., -2.],
+                energies: vec![-1., -1.5, -2.],
                 path: vec![point(-1.5, 3.5)],
-                completed: true,
+                reason: IrcReason::Converged,
+                path_length: 0.15,
+                gradient_calls: 7,
                 end: product,
                 reached: Reached::Product,
             },
@@ -347,8 +351,23 @@ fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
     let original = command(directory.path());
     let mut original_summary = summary(&original);
     // A short trace can still connect after relaxation: completed is diagnostic.
-    original_summary.report.irc.as_mut().unwrap()[0].completed = false;
-    let (_, _, _, original_json) = finish_report(&original_summary);
+    original_summary.report.irc.as_mut().unwrap()[0].reason = IrcReason::LengthCap;
+    let (_, table, _, original_json) = finish_report(&original_summary);
+    assert_eq!(
+        table.lines().find(|line| line.starts_with("IRC ")),
+        Some("IRC           connects reactant and product")
+    );
+    for (mode, reason, calls, length, converged) in [
+        ("plus", "length cap", 5, 0.13, false),
+        ("minus", "converged", 7, 0.15, true),
+    ] {
+        let branch = &original_json["irc"][mode];
+        assert_eq!(branch["completed"], converged);
+        assert_eq!(branch["stop_reason"], reason);
+        assert_eq!(branch["gradient_calls"], calls);
+        assert_eq!(branch["path_length_sqrt_amu_bohr"], length);
+        assert_eq!(branch["steps"], 1);
+    }
     let dir = original.out_dir.as_ref().unwrap();
     let source_ts = std::fs::read(dir.join("ts.xyz")).unwrap();
     let mut refine = from_command(directory.path());

@@ -144,7 +144,6 @@ impl Live {
     // These are the engine's default iteration limits.
     const NEB_LIMIT: usize = 300;
     const SADDLE_LIMIT: usize = 100;
-    const IRC_LIMIT: usize = 60;
 
     pub(super) fn new(request: Request) -> Self {
         let reused_path = request.retry == Some(Retry::RefineHighest);
@@ -239,7 +238,12 @@ impl Live {
             Stage::Saddle => 0.65 + 0.15 * part(self.step, Self::SADDLE_LIMIT),
             Stage::Irc => {
                 let branch = if self.forward { 0.8 } else { 0.9 };
-                branch + 0.1 * part(self.step, Self::IRC_LIMIT)
+                branch
+                    + 0.1
+                        * part(
+                            self.step,
+                            reshiki_optimize::ts::TsOptions::default().irc_max_steps,
+                        )
             }
             Stage::Thermochemistry => 0.99,
         })

@@ -301,7 +301,7 @@ mod report {
 
         pub fn write_table(&self, out: &mut dyn Write) -> Result<(), CliError> {
             let report = &self.report;
-            let mut irc = match &report.irc {
+            let irc = match &report.irc {
                 Some(_) if report.connects => "connects reactant and product".into(),
                 Some([plus, minus]) => {
                     format!(
@@ -320,13 +320,6 @@ mod report {
                     .map_or_else(|| "skipped".into(), |reason| format!("skipped ({reason})")),
                 },
             };
-            if let Some(branches) = &report.irc {
-                for (branch, mode) in branches.iter().zip(["+mode", "-mode"]) {
-                    if !branch.completed {
-                        let _ = write!(irc, " · {mode} descent ended before gradient convergence");
-                    }
-                }
-            }
             let worker_check = match &self.worker_check {
                 Ok(analysis) => {
                     let mut text = format!(
@@ -509,7 +502,11 @@ Work          {} gradients · {} Hessians · {:.1} s",
                     "method": method,
                     "energy_units": "hartree",
                     "reached": reached(branch.reached),
-                    "completed": branch.completed,
+                    "completed": branch.completed(),
+                    "stop_reason": branch.reason.to_string(),
+                    "steps": branch.path.len(),
+                    "path_length_sqrt_amu_bohr": branch.path_length,
+                    "gradient_calls": branch.gradient_calls,
                     "energies": branch.energies,
                 })
             };
@@ -643,6 +640,7 @@ pub(super) use report::{Summary, check_destinations, write_retained};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use reshiki_optimize::ts::IrcReason;
 
     fn point(energy: f64, z: f64) -> Minimum {
         Minimum {
@@ -662,14 +660,18 @@ mod tests {
             path: vec![point(-1.5, 1.)],
             end: reactant.clone(),
             reached: Reached::Reactant,
-            completed: true,
+            reason: IrcReason::Converged,
+            path_length: 0.15,
+            gradient_calls: 5,
         };
         let minus = IrcBranch {
             energies: vec![-1., -1.25, -2.],
             path: vec![point(-1.25, 3.)],
             end: product.clone(),
             reached: Reached::Product,
-            completed: true,
+            reason: IrcReason::Converged,
+            path_length: 0.15,
+            gradient_calls: 5,
         };
         let path = path_xyz(&numbers, &[reactant, ts.clone(), product], "");
         assert_eq!(

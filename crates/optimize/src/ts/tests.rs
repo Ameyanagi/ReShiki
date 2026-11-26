@@ -1228,6 +1228,27 @@ fn invalid_inputs_skip_evaluations_and_events() {
             },
             ..base
         },
+        Search {
+            options: &TsOptions {
+                irc_max_length: 0.,
+                ..Default::default()
+            },
+            ..base
+        },
+        Search {
+            options: &TsOptions {
+                irc_max_length: f64::NAN,
+                ..Default::default()
+            },
+            ..base
+        },
+        Search {
+            options: &TsOptions {
+                irc_max_length: f64::INFINITY,
+                ..Default::default()
+            },
+            ..base
+        },
     ] {
         assert!(matches!(
             search(&mut p, &input, |_| panic!("invalid input emitted progress")),
@@ -2019,7 +2040,7 @@ fn soft_saddle_refines_until_both_irc_launches_descend() {
     let stretch = |p: &Minimum| distance(&p.positions[..3], &p.positions[3..]);
     assert!((stretch(&report.ts) - 2.).abs() * 6_f64.sqrt() < 0.015);
     let first = report.irc.unwrap().map(|branch| {
-        assert!(branch.completed);
+        assert!(branch.completed());
         let end_offset = stretch(branch.path.last().unwrap()) - 2.;
         assert!(
             3. * end_offset.powi(2) > 1.,
