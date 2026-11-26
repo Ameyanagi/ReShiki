@@ -949,12 +949,13 @@ pub fn figure_result<'a>(
 ) -> Option<(usize, &'a Stored)> {
     let figure = model.surface.as_ref()?;
     let atom = model.linked_atoms.first()?;
-    doc.science
+    let mut matches = doc
+        .science
         .results
         .iter()
         .enumerate()
         .rev()
-        .find(|(_, stored)| {
+        .filter(|(_, stored)| {
             doc.science
                 .attachment(stored.attachment)
                 .is_some_and(|attachment| {
@@ -966,7 +967,23 @@ pub fn figure_result<'a>(
                             .all(|id| model.contains(*id))
                         && result_key(&stored.result) == figure.orbital.result
                 })
+        });
+    // A repeated calculation shares the key: the figure stays with the
+    // result that keeps its row, so its signs never change.
+    let newest = matches.next()?;
+    let keeps = |stored: &Stored| {
+        stored.result.orbitals.as_ref().is_some_and(|orbitals| {
+            let set = match (&orbitals.beta, figure.orbital.spin) {
+                (Beta::Unrestricted(beta), Spin::Beta) => beta,
+                _ => &orbitals.alpha,
+            };
+            set.rows.binary_search(&figure.orbital.index).is_ok()
         })
+    };
+    if keeps(newest.1) {
+        return Some(newest);
+    }
+    Some(matches.find(|(_, stored)| keeps(stored)).unwrap_or(newest))
 }
 
 /// Clipboard calculation data needed by the document's placed orbital figures.
