@@ -17,7 +17,7 @@ pub(crate) enum Event {
     Phase(Phase),
     Tick,
     /// Always the last event.
-    Done(Result<Found, Failure>),
+    Done(Result<Box<Found>, Failure>),
 }
 
 /// Start `search` on a new thread. The stream ends after `Event::Done`.
@@ -56,7 +56,7 @@ pub(crate) fn start(search: Search, cancel: Cancel) -> impl Stream<Item = Event>
                 }
                 Err(error) => Err(Failure::Other(error.to_string())),
             };
-            let _ = worker_tx.unbounded_send(Event::Done(result));
+            let _ = worker_tx.unbounded_send(Event::Done(result.map(Box::new)));
             worker_tx.close_channel();
         });
     if let Err(error) = worker {

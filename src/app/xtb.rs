@@ -19,6 +19,7 @@ use state::{FailureDetails, Progress, Settings};
 use std::sync::{Arc, Weak};
 
 mod conformers;
+mod history;
 pub(super) mod orbitals;
 pub(super) use conformers::superposed;
 pub(super) mod palette;
@@ -26,6 +27,8 @@ mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
 mod selection;
+mod source;
+pub(super) use source::Source;
 mod state;
 mod tone;
 pub(crate) mod vibrations;
@@ -1154,15 +1157,21 @@ fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) ->
     doc.models
         .iter()
         .find(|m| m.linked_atoms.contains(atom))
-        .is_some_and(|model| {
-            let mut sources = model.geometry_sources();
-            sources.resize(model.atoms.len() + model.hydrogens.len(), None);
-            let now = model.atoms.iter().map(|a| a.xyz);
-            let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
-            atoms.len() == positions.len()
-                && sources == atoms
-                && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
-        })
+        .is_some_and(|model| model_matches(model, atoms, positions))
+}
+
+fn model_matches(
+    model: &reshiki::models3d::Model3d,
+    atoms: &[Option<u64>],
+    positions: &[[f64; 3]],
+) -> bool {
+    let mut sources = model.geometry_sources();
+    sources.resize(model.atoms.len() + model.hydrogens.len(), None);
+    let now = model.atoms.iter().map(|a| a.xyz);
+    let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
+    atoms.len() == positions.len()
+        && sources == atoms
+        && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
 }
 
 /// The document with the model of `atom`'s molecule at `positions` (Å,
@@ -1228,6 +1237,12 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
     let mut result = computed
         .to_calc_result(frame, task, &report.engine, gfnff_reference)
         .map_err(|error| state::Failure::Other(error.to_string()))?;
+    if optimized {
+        result.provenance.method = Some(run::optimizer_provenance(
+            result.provenance.method.as_deref().unwrap_or("xTB"),
+            &report.optimizers,
+        ));
+    }
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
         settings.threads = Some(run.config.threads);
         settings.convergence =

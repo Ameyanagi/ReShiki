@@ -73,6 +73,20 @@ pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
     Event::Done(Ok(Arc::new(optimization(start, end))))
 }
 
+impl App {
+    pub(in crate::app) fn xtb_test_finish_optimization(
+        &mut self,
+        start: &[[f64; 3]],
+        end: &[[f64; 3]],
+    ) {
+        let config = &self.tab.xtb.run.as_ref().unwrap().config;
+        let mut report = optimization(start, end);
+        report.computed.settings.charge = config.charge;
+        report.computed.settings.uhf = config.unpaired;
+        event(self, Event::Done(Ok(Arc::new(report))));
+    }
+}
+
 fn optimization(start: &[[f64; 3]], end: &[[f64; 3]]) -> Report {
     // An optimization's last compute carries the gradient.
     let mut computed = run::example_computed(-5.070176, 14.01);
@@ -84,6 +98,7 @@ fn optimization(start: &[[f64; 3]], end: &[[f64; 3]]) -> Report {
         converged: true,
         positions: end.to_vec(),
         steps: 1,
+        optimizers: vec![reshiki_optimize::Method::Internal],
         energies: vec![-5.06, -5.070176],
         path: [start.as_flattened(), end.as_flattened()].concat(),
         evaluations: vec![],
@@ -152,6 +167,14 @@ fn an_optimization_moves_a_preview_then_applies_as_one_undo_step() {
     assert!(!app.xtb_running());
     assert_eq!(model(&app.tab.doc), f32s(&MOVED));
     assert_eq!(app.tab.doc.science.results.len(), 1);
+    assert_eq!(
+        app.tab.doc.science.results[0]
+            .result
+            .provenance
+            .method
+            .as_deref(),
+        Some("GFN2-xTB · optimizer TRIC")
+    );
     assert!(
         app.status
             .starts_with("Applied xTB geometry · E −5.070176 Eh"),
@@ -225,6 +248,7 @@ fn frequencies_store_a_hessian_on_the_starting_geometry() {
     let (mut app, _) = water(CalcTask::Frequencies);
     let report = Report {
         steps: 0,
+        optimizers: vec![],
         energies: vec![-5.070176],
         path: vec![],
         ..optfreq(&START, &START)
@@ -279,6 +303,7 @@ fn an_energy_keeps_the_result_and_the_model() {
             converged: true,
             positions: START.to_vec(),
             steps: 0,
+            optimizers: vec![],
             energies: vec![-5.070176],
             path: vec![],
             evaluations: vec![],
@@ -339,6 +364,7 @@ fn an_energy_stores_the_worker_charges_bond_orders_and_orbital_levels() {
         converged: true,
         positions: START.to_vec(),
         steps: 0,
+        optimizers: vec![],
         energies: vec![-5.070176],
         path: vec![],
         evaluations: vec![],
@@ -778,6 +804,7 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
             converged: true,
             positions: START.to_vec(),
             steps: 0,
+            optimizers: vec![],
             energies: vec![-5.2],
             path: vec![],
             evaluations: vec![],
@@ -883,6 +910,7 @@ fn saved_optimization() -> (Vec<u8>, [u64; 2]) {
             converged: true,
             positions: end.clone(),
             steps: 1,
+            optimizers: vec![reshiki_optimize::Method::Internal],
             energies: vec![-5.06, -5.2],
             path: [start.as_flattened(), end.as_flattened()].concat(),
             evaluations: [(-5.06, 9), (-5.1, 5), (-5.2, 6)]
@@ -905,6 +933,14 @@ fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
     let shown = reopened.xtb_shown().expect("the palette shows the result");
     assert!(shown.info.is_none());
     let result = &shown.stored.result;
+    assert_eq!(
+        result.provenance.method.as_deref(),
+        Some("GFN2-xTB · optimizer TRIC")
+    );
+    assert_eq!(
+        results::headline(result, shown.frame),
+        "Converged in 1 step · GFN2-xTB · gas phase · neutral singlet"
+    );
     let run = result.run.as_ref().expect("saved run summary");
     assert!(run.seconds >= 1.);
     assert!(shown.rows().contains(&(
@@ -916,7 +952,16 @@ fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
         .expect("RFC 3339 finish time")
         .with_timezone(&chrono::Local);
     let method = shown.method();
-    assert!(method.ends_with(&format!(" · {}", local.format("%-d %b %Y %H:%M"))));
+    assert_eq!(
+        method,
+        format!(
+            "GFN2-xTB · axtb 0.2.0 · gas phase · charge 0 · multiplicity 1 · {}",
+            local.format("%-d %b %Y %H:%M")
+        )
+    );
+    let table = results::tsv(&method, &shown.rows());
+    assert!(table.starts_with(&format!("# {method}\nQuantity\tValue\n")));
+    assert!(!table.contains(" · optimizer "));
     let log = results::log(result, shown.frame, shown.info, &method);
     assert!(log.contains("task optimize · 3 threads · tight convergence · 2 atoms held fixed"));
     let mut table = log
@@ -961,18 +1006,28 @@ fn a_reopened_legacy_optimization_recalculates_with_defaults() {
         .as_object_mut()
         .unwrap();
     assert!(result.remove("run").is_some());
+    result["provenance"]["method"] = "GFN2-xTB".into();
     let settings = result["settings"]["xtb"].as_object_mut().unwrap();
     for key in ["threads", "convergence", "fixed_atoms"] {
         assert!(settings.remove(key).is_some());
     }
     let mut reopened = reopen_result(&serde_json::to_vec(&json).unwrap());
     let shown = reopened.xtb_shown().expect("the palette shows the result");
-    let log = results::log(
-        &shown.stored.result,
-        shown.frame,
-        shown.info,
-        &shown.method(),
+    let result = &shown.stored.result;
+    assert_eq!(result.provenance.method.as_deref(), Some("GFN2-xTB"));
+    assert_eq!(
+        results::headline(result, shown.frame),
+        "Converged in 1 step · GFN2-xTB · gas phase · neutral singlet"
     );
+    let method = shown.method();
+    assert_eq!(
+        method,
+        "GFN2-xTB · axtb 0.2.0 · gas phase · charge 0 · multiplicity 1"
+    );
+    let table = results::tsv(&method, &shown.rows());
+    assert!(table.starts_with(&format!("# {method}\nQuantity\tValue\n")));
+    assert!(!table.contains(" · optimizer "));
+    let log = results::log(result, shown.frame, shown.info, &method);
     assert!(log.lines().any(|line| line == "task optimize"));
     assert!(log.contains("SCF details were not saved with this result; recalculate to see them."));
 
@@ -1152,4 +1207,125 @@ fn isotope_labels_give_explicit_analysis_masses() {
         })
         .is_none()
     );
+}
+
+#[test]
+fn history_names_xtb_results_and_the_restored_model() {
+    for (task, what) in [
+        (CalcTask::Optimize, "geometry optimization"),
+        (CalcTask::OptFreq, "optimization + frequencies"),
+        (CalcTask::Energy, "energy"),
+        (CalcTask::Frequencies, "frequencies"),
+    ] {
+        let (mut app, _) = water(task);
+        let end = if task.optimizes() { &MOVED } else { &START };
+        let mut report = if task.frequencies() {
+            optfreq(&START, end)
+        } else {
+            optimization(&START, end)
+        };
+        if !task.optimizes() {
+            report.steps = 0;
+            report.path.clear();
+            report.energies = vec![report.energy];
+        }
+        event(&mut app, Event::Done(Ok(Arc::new(report))));
+        assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Done { .. })));
+        let result = app.tab.doc.science.results[0].result.clone();
+
+        let _ = app.update(Message::Undo);
+        assert_eq!(
+            app.status,
+            format!("Undid xTB {what} · 3D model back to the MMFF94s force-field model")
+        );
+        assert!(app.tab.doc.science.results.is_empty());
+
+        let _ = app.update(Message::Redo);
+        let source = if task.optimizes() {
+            "GFN2-xTB optimized geometry"
+        } else {
+            "MMFF94s force-field model"
+        };
+        assert_eq!(
+            app.status,
+            format!("Redid xTB {what} · 3D model is the {source}")
+        );
+        assert!(Arc::ptr_eq(&result, &app.tab.doc.science.results[0].result));
+    }
+
+    let (mut app, _) = App::xtb_searched_water();
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.status,
+        "Undid xTB conformer search · 3D model back to the MMFF94s force-field model"
+    );
+    let _ = app.update(Message::Redo);
+    assert_eq!(
+        app.status,
+        "Redid xTB conformer search · 3D model is the GFN2-xTB conformer 1"
+    );
+}
+
+#[test]
+fn history_names_attached_geometry_changes_and_leaves_view_edits_generic() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    let result = app.tab.doc.science.results[0].result.clone();
+    send(&mut app, Action::Palette(palette::Action::Step(0)));
+    send(&mut app, Action::Palette(palette::Action::UseStep));
+    assert_eq!(model(&app.tab.doc), f32s(&START));
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.status,
+        "Undid the 3D model change · now the GFN2-xTB optimized geometry"
+    );
+    assert_eq!(model(&app.tab.doc), f32s(&MOVED));
+    let _ = app.update(Message::Redo);
+    assert_eq!(
+        app.status,
+        "Redid the 3D model change · now the GFN2-xTB step 0"
+    );
+    assert!(Arc::ptr_eq(&result, &app.tab.doc.science.results[0].result));
+
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].rotation = [0., 1., 0., 0.];
+    app.changed(before);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "History restored");
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "History restored");
+}
+
+#[test]
+fn history_describes_pasting_a_calculation_as_a_drawing_edit() {
+    let (mut source, _) = water(CalcTask::Optimize);
+    event(&mut source, optimized(&START, &MOVED));
+
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    app.tab.busy = false;
+    assert!(app.append_pasted(&source.tab.doc));
+    assert_eq!(app.tab.doc.science.results.len(), 1);
+
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.atoms.is_empty());
+    assert!(app.tab.doc.science.results.is_empty());
+    assert_eq!(app.status, "History restored");
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc.science.results.len(), 1);
+    assert_eq!(app.status, "History restored");
+}
+
+#[test]
+fn history_omits_the_model_clause_when_the_result_has_no_model() {
+    let (mut app, _) = water(CalcTask::Energy);
+    app.tab.doc.models.clear();
+    event(&mut app, optimized(&START, &START));
+    assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Done { .. })));
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "Undid xTB energy");
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "Redid xTB energy");
 }

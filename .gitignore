@@ -27,3 +27,7 @@ __pycache__/
 
 # Swift Package Manager build cache
 .build/
+
+# Built Python extension (maturin develop)
+/crates/python/python/reshiki/_native*.so
+/crates/python/python/reshiki/_native*.pyd

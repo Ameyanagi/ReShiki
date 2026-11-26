@@ -1,5 +1,4 @@
 //! The bottom dock's window budget and short-window collapse behavior.
-use super::super::results::View;
 use crate::app::App;
 
 pub(super) const MAX_HEIGHT_FRACTION: f32 = 0.4;
@@ -10,13 +9,9 @@ const MIN_BODY_HEIGHT: f32 = 60.;
 /// The outer scrollable also caps unusually tall warnings and wrapped notes.
 const CHROME_HEIGHT_ESTIMATE: f32 = 150.;
 
-pub(super) fn body_height(view: View, window_height: f32) -> f32 {
-    let default = if view == View::Orbitals {
-        super::super::orbitals::HEIGHT
-    } else {
-        BODY_HEIGHT
-    };
-    default.min((window_height * MAX_HEIGHT_FRACTION - CHROME_HEIGHT_ESTIMATE).max(MIN_BODY_HEIGHT))
+pub(super) fn body_height(window_height: f32) -> f32 {
+    BODY_HEIGHT
+        .min((window_height * MAX_HEIGHT_FRACTION - CHROME_HEIGHT_ESTIMATE).max(MIN_BODY_HEIGHT))
 }
 
 impl App {
@@ -240,12 +235,10 @@ mod tests {
 
     #[test]
     fn the_body_budget_keeps_the_default_height_and_a_usable_floor() {
-        assert_eq!(body_height(View::Summary, 900.), BODY_HEIGHT);
-        for view in [View::Summary, View::Orbitals] {
-            let height = body_height(view, 712.);
-            assert!(height >= MIN_BODY_HEIGHT);
-            assert!(height + CHROME_HEIGHT_ESTIMATE <= 712. * MAX_HEIGHT_FRACTION);
-            assert_eq!(body_height(view, 400.), MIN_BODY_HEIGHT);
-        }
+        assert_eq!(body_height(900.), BODY_HEIGHT);
+        let height = body_height(712.);
+        assert!(height >= MIN_BODY_HEIGHT);
+        assert!(height + CHROME_HEIGHT_ESTIMATE <= 712. * MAX_HEIGHT_FRACTION);
+        assert_eq!(body_height(400.), MIN_BODY_HEIGHT);
     }
 }
