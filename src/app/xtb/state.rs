@@ -11,14 +11,17 @@ pub(crate) enum Task {
     Optimize,
     OptFreq,
     Frequencies,
+    /// A conformer search, set up in the card's Conformers fields.
+    Conformers,
 }
 
 impl Task {
-    pub(crate) const ALL: [(Self, &'static str); 4] = [
+    pub(crate) const ALL: [(Self, &'static str); 5] = [
         (Self::Energy, "Energy"),
         (Self::Optimize, "Optimize"),
         (Self::OptFreq, "Opt + freq"),
         (Self::Frequencies, "Frequencies"),
+        (Self::Conformers, "Conformers"),
     ];
 
     pub(crate) fn optimizes(self) -> bool {
@@ -30,19 +33,16 @@ impl Task {
     }
 
     pub(crate) fn limit(self) -> usize {
-        if self.frequencies() {
-            qcdata::MAX_HESSIAN_ATOMS
-        } else {
-            qcdata::MAX_CALC_ATOMS
+        match self {
+            Self::Energy | Self::Optimize => qcdata::MAX_CALC_ATOMS,
+            Self::OptFreq | Self::Frequencies => qcdata::MAX_HESSIAN_ATOMS,
+            Self::Conformers => super::conformers::MAX_ATOMS,
         }
     }
 }
 
 /// Shown disabled, each with the reason, until their tabs arrive.
-pub(crate) const LATER_TASKS: [(&str, &str); 2] = [
-    ("Orbitals", "Coming in the Orbitals tab"),
-    ("Conformers", "Coming with the conformer search"),
-];
+pub(crate) const LATER_TASKS: [(&str, &str); 1] = [("Orbitals", "Coming in the Orbitals tab")];
 /// The methods in the card's order; GFN2-xTB is the default.
 pub(crate) const METHODS: [XtbMethod; 3] = [XtbMethod::Gfn2Xtb, XtbMethod::GXtb, XtbMethod::GfnFf];
 /// The electronic temperature "Retry at 1000 K" uses.
@@ -59,7 +59,7 @@ pub(crate) const SOLVENTS: [&str; 9] = [
     "THF",
     "hexane",
 ];
-pub(crate) const NEAR_DEGENERATE: &str = "Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.";
+pub(crate) use reshiki::XTB_NEAR_DEGENERATE as NEAR_DEGENERATE;
 
 /// Whether `method` runs an SCF, and so has orbitals and SCF settings.
 pub(crate) fn electronic(method: XtbMethod) -> bool {
@@ -488,6 +488,7 @@ impl Progress {
         match task {
             Task::Energy => format!("Computing energy · {time}"),
             Task::Frequencies => format!("Computing frequencies · {time}"),
+            Task::Conformers => format!("Searching conformers · {time}"),
             Task::OptFreq if self.hessian => format!("Computing frequencies · {time}"),
             Task::Optimize | Task::OptFreq => match self.deltas().last() {
                 Some(delta) => format!(

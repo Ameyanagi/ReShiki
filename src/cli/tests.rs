@@ -1,7 +1,7 @@
 use super::{
     args::{
-        Calc, CalcTask, Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Preview,
-        Render, Schema, Skill, Source, SvgText, parse,
+        Calc, CalcTask, Calculate, Compose, Convert, Export, Input, Labels, Name, Output,
+        PredictNmr, Preview, ReadOutput, Render, Schema, Skill, Source, SvgText, parse,
     },
     *,
 };
@@ -81,6 +81,8 @@ async fn help_describes_one_command() {
         ("compose", "Usage: reshiki --cli compose "),
         ("analyze", "Usage: reshiki --cli analyze "),
         ("predict-nmr", "Usage: reshiki --cli predict-nmr "),
+        ("calculate", "Usage: reshiki --cli calculate "),
+        ("read-output", "Usage: reshiki --cli read-output "),
         ("export-input", "Usage: reshiki --cli export-input "),
         ("name", "Usage: reshiki --cli name "),
         ("calc", "Usage: reshiki --cli calc "),
@@ -870,6 +872,252 @@ async fn calc_without_xtb_reports_unavailability_and_no_stdout() {
     assert_eq!(code, FAILURE);
     assert!(out.is_empty());
     assert_eq!(err, "reshiki: xTB is not included in this build\n");
+}
+
+#[test]
+fn calculate_parses_tool_defaults_and_all_tasks() {
+    assert_eq!(
+        parsed(&["calculate", "water.xyz"]),
+        Ok(Command::Calculate(Calculate {
+            file: "water.xyz".into(),
+            task: "energy",
+            method: "gfn2",
+            charge: 0,
+            uhf: 0,
+            solvent: None,
+            conventions: "axtb",
+            electronic_temperature_k: None,
+            accuracy: None,
+            max_iterations: None,
+            threads: None,
+            convergence: None,
+            fixed_atoms: None,
+        }))
+    );
+    for task in ["energy", "optimize", "frequencies", "opt+freq"] {
+        let Command::Calculate(command) =
+            parsed(&["calculate", "--task", task, "water.XYZ"]).unwrap()
+        else {
+            panic!("calculate command");
+        };
+        assert_eq!(command.task, task);
+    }
+    for method in ["gfn2", "gxtb", "gfnff"] {
+        let Command::Calculate(command) =
+            parsed(&["calculate", "--method", method, "water.xyz"]).unwrap()
+        else {
+            panic!("calculate command");
+        };
+        assert_eq!(command.method, method);
+    }
+    assert!(parsed(&["calculate", "--", "-water.xyz"]).is_ok());
+}
+
+#[test]
+fn calculate_parses_solvent_scf_and_optimization_settings() {
+    assert_eq!(
+        parsed(&[
+            "calculate",
+            "--task",
+            "opt+freq",
+            "--method",
+            "gxtb",
+            "--charge",
+            "-1",
+            "--uhf",
+            "2",
+            "--solvent",
+            "water",
+            "--conventions",
+            "xtb-6.8",
+            "--etemp",
+            "0",
+            "--accuracy",
+            "0.5",
+            "--max-iter",
+            "400",
+            "--threads",
+            "4",
+            "--convergence",
+            "tight",
+            "--fix",
+            "3, 1",
+            "water.xyz",
+        ]),
+        Ok(Command::Calculate(Calculate {
+            file: "water.xyz".into(),
+            task: "opt+freq",
+            method: "gxtb",
+            charge: -1,
+            uhf: 2,
+            solvent: Some("water".into()),
+            conventions: "xtb-6.8",
+            electronic_temperature_k: Some(0.0),
+            accuracy: Some(0.5),
+            max_iterations: Some(400),
+            threads: Some(4),
+            convergence: Some("tight"),
+            fixed_atoms: Some(vec![3, 1]),
+        }))
+    );
+}
+
+#[test]
+fn calculate_rejects_invalid_options_before_reading() {
+    for options in [
+        vec!["--task", "hessian"],
+        vec!["--method", "gfn1"],
+        vec!["--conventions", "xtb"],
+        vec!["--charge", "2147483648"],
+        vec!["--charge", "1.5"],
+        vec!["--uhf", "-1"],
+        vec!["--uhf", "4294967295"],
+        vec!["--uhf", "1.5"],
+        vec!["--solvent", " "],
+        vec!["--etemp", "-1"],
+        vec!["--etemp", "NaN"],
+        vec!["--etemp", "inf"],
+        vec!["--accuracy", "0"],
+        vec!["--accuracy", "-1"],
+        vec!["--accuracy", "NaN"],
+        vec!["--max-iter", "0"],
+        vec!["--max-iter", "1.5"],
+        vec!["--threads", "0"],
+        vec!["--threads", "65"],
+        vec!["--convergence", "tight"],
+        vec!["--fix", "1"],
+        vec!["--task", "optimize", "--convergence", "loose"],
+        vec!["--task", "optimize", "--fix", ""],
+        vec!["--task", "optimize", "--fix", "0"],
+        vec!["--task", "optimize", "--fix", "1,1"],
+        vec!["--task", "optimize", "--fix", "1,"],
+        vec!["--task", "optimize", "--fix", "-1,2"],
+        vec!["--task", "optimize", "--fix", "1.5"],
+        vec!["--task", "energy", "--task", "energy"],
+        vec!["--gradient"],
+        vec!["--scf-retry", "300"],
+        vec!["--alpb", "water"],
+    ] {
+        let mut tokens = vec!["calculate", "unread.xyz"];
+        tokens.extend_from_slice(&options);
+        assert!(parsed(&tokens).is_err(), "{tokens:?}");
+    }
+    for tokens in [
+        vec!["calculate"],
+        vec!["calculate", "-"],
+        vec!["calculate", "water.mol"],
+        vec!["calculate", "water.xyz", "another.xyz"],
+        vec!["calculate", "water.xyz", "--charge"],
+    ] {
+        assert!(parsed(&tokens).is_err(), "{tokens:?}");
+    }
+}
+
+#[cfg(not(feature = "xtb"))]
+#[tokio::test]
+async fn calculate_without_xtb_reports_unavailability_before_reading() {
+    let (code, out, err) = call(&["calculate", "unread.xyz"]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert_eq!(err, "reshiki: xTB is not included in this build\n");
+}
+
+#[test]
+fn read_output_parses_file_and_zero_based_job() {
+    assert_eq!(
+        parsed(&["read-output", "result.out"]),
+        Ok(Command::ReadOutput(ReadOutput {
+            file: "result.out".into(),
+            job: None,
+        }))
+    );
+    for job in [0, 2] {
+        assert_eq!(
+            parsed(&["read-output", "--job", &job.to_string(), "--", "-run.out"]),
+            Ok(Command::ReadOutput(ReadOutput {
+                file: "-run.out".into(),
+                job: Some(job),
+            }))
+        );
+    }
+    for tokens in [
+        vec!["read-output"],
+        vec!["read-output", "-"],
+        vec!["read-output", "a.out", "b.out"],
+        vec!["read-output", "a.out", "--job"],
+        vec!["read-output", "a.out", "--job", "-1"],
+        vec!["read-output", "a.out", "--job", "0.5"],
+        vec!["read-output", "a.out", "--job", "0", "--job", "1"],
+        vec!["read-output", "a.out", "--from", "xyz"],
+    ] {
+        assert!(parsed(&tokens).is_err(), "{tokens:?}");
+    }
+}
+
+#[tokio::test]
+async fn read_output_prints_the_labelled_tool_value_and_selected_job_errors() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    let (code, out, err) = call(&["read-output", input.to_str().unwrap(), "--job", "0"]).await;
+    assert_eq!(code, SUCCESS);
+    assert_eq!(
+        err,
+        "reshiki: warning: Charge and spin are not recorded in XYZ; assumed neutral and the lowest spin state\n"
+    );
+    assert_eq!(out.lines().count(), 1);
+    let result: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(result["experimental"], true);
+    assert!(result["api"].is_object());
+    assert_eq!(result["value"]["format"], "XYZ");
+    assert_eq!(result["value"]["jobs"][0]["atoms"], 3);
+    assert_eq!(result["value"]["job"]["index"], 0);
+    assert_eq!(result["value"]["job"]["kind"], "geometry");
+    assert!(
+        result["value"]["job"]["xyz"]
+            .as_str()
+            .unwrap()
+            .starts_with("3\n")
+    );
+    let (code, out, err) = call(&["read-output", input.to_str().unwrap(), "--job", "1"]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert_eq!(
+        err,
+        "reshiki: error[invalid_arguments]: job 1 is out of range; the file has 1 jobs\n"
+    );
+}
+
+#[tokio::test]
+async fn read_output_bounds_file_bytes() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("large.out");
+    let limit = Budgets::default().max_text_bytes;
+    std::fs::File::create(&input)
+        .unwrap()
+        .set_len((limit + 1) as u64)
+        .unwrap();
+    let (code, out, err) = call(&["read-output", input.to_str().unwrap()]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert_eq!(
+        err,
+        format!("reshiki: error: input exceeds max_text_bytes ({limit} bytes)\n")
+    );
+}
+
+#[tokio::test]
+async fn read_output_accepts_a_gaussian_log_with_a_non_utf8_byte() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("result.log");
+    let mut log = include_bytes!("../../tests/fixtures/qc/pymatgen/H2O_gau_vib.out").to_vec();
+    log.extend_from_slice(b"Date locale: f\xe9vrier\n");
+    std::fs::write(&input, log).unwrap();
+    let (code, out, err) = call(&["read-output", input.to_str().unwrap()]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    let result: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(result["value"]["program"], "Gaussian");
+    assert_eq!(result["value"]["job"]["completion"], "normal");
 }
 
 #[test]
@@ -3076,6 +3324,28 @@ async fn export_input_writes_a_file_and_uses_its_stem_for_checkpoint() {
     let (code, out, err) = call(&args).await;
     assert_eq!((code, out.as_str(), err.as_str()), (SUCCESS, "", ""));
     assert_eq!(std::fs::read_to_string(&output).unwrap(), written);
+}
+
+#[tokio::test]
+async fn export_input_changes_only_the_generated_checkpoint_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    let (code, out, err) = call(&[
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "gaussian",
+        "--title",
+        "molecule.chk reference",
+        "--extra",
+        "molecule.chk",
+    ])
+    .await;
+    assert_eq!((code, err.as_str()), (SUCCESS, ""));
+    assert!(out.contains("\n%chk=water.chk\n"), "{out}");
+    assert!(out.contains("\n\nmolecule.chk reference\n\n"), "{out}");
+    assert!(out.contains("Opt Freq molecule.chk\n"), "{out}");
 }
 
 #[tokio::test]

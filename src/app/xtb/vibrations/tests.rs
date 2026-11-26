@@ -238,6 +238,7 @@ fn push_is_refused_if_the_model_moved_after_calculation() {
             ),
             from: START.to_vec(),
         }),
+        search: None,
     };
     app.tab.doc = super::super::preview(&app.tab.doc, atom, &MOVED).unwrap();
     vibrations(&mut app, Action::Push);

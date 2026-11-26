@@ -100,7 +100,7 @@ fn frequency_tasks_have_the_hessian_atom_limit() {
     assert_eq!(Task::default(), Task::Optimize);
     assert_eq!(
         Task::ALL.map(|(task, _)| task.limit()),
-        [500, 500, 200, 200]
+        [500, 500, 200, 200, 200]
     );
     let settings = Settings {
         task: Task::OptFreq,
