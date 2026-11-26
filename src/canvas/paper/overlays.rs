@@ -68,6 +68,45 @@ fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
 }
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn outdated_frames<'a>(
+        &'a self,
+        preview: &'a Document,
+    ) -> impl Iterator<Item = (World, World)> + 'a {
+        self.outdated_models.iter().filter_map(move |atoms| {
+            let model = preview.models.iter().find(|model| {
+                model.display != reshiki::models3d::Display::TwoD
+                    && model.linked_atoms.as_slice() == *atoms
+            })?;
+            reshiki::models3d::frame(preview, model)
+        })
+    }
+
+    pub(super) fn draw_outdated_models(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        preview: &Document,
+        bounds: Rectangle,
+    ) {
+        for (lo, hi) in self.outdated_frames(preview) {
+            let lo = self.camera.screen(lo, bounds);
+            let hi = self.camera.screen(hi, bounds);
+            let size = iced::Size::new(hi.x - lo.x, hi.y - lo.y);
+            if !Rectangle::new(lo, size).intersects(&Rectangle::with_size(bounds.size())) {
+                continue;
+            }
+            // White follows the canvas theme in the layered frame, so the
+            // veil always has the paper's color, including on dark paper.
+            frame.fill_rectangle(lo, size, Color::WHITE.scale_alpha(0.55));
+            badge(
+                frame,
+                bounds,
+                lo - Vector::new(4., 9.),
+                "Outdated · drawing changed".into(),
+                false,
+            );
+        }
+    }
+
     pub(super) fn draw_tube_bend_handle(
         &self,
         frame: &mut layered::Frame<'_>,

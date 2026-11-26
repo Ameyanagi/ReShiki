@@ -68,6 +68,7 @@ pub(in crate::app::xtb) fn searched(method: &str) -> CalcResult {
             labels: vec!["1".into(), "2".into(), "3".into()],
             minimizer_energies_hartree: vec![0.010, 0.0101, 0.0105],
             cluster_sizes: vec![12, 5, 1],
+            rmsd_to_best_angstrom: vec![],
         }),
         keep_full: false,
         omitted_bytes: None,
@@ -208,6 +209,70 @@ fn rows_rank_by_xtb_with_start_energies_populations_and_clusters() {
     }
 }
 
+#[test]
+fn saved_fixture_keeps_the_existing_table_display() {
+    let result = searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+    // The saved compact coordinates follow the same path as an existing file.
+    let result: CalcResult =
+        serde_json::from_str(&serde_json::to_string(&result).unwrap()).unwrap();
+    let rows = rows(
+        &reshiki::document::Document::default(),
+        &[None; 3],
+        &result,
+        true,
+    );
+    let display: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            (
+                format!("{:.2}", row.delta_kcal),
+                format!("{:.2}", row.start_kcal.unwrap()),
+                format!("{:.1} %", row.percent),
+                row.cluster.unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        display,
+        [
+            ("0.00".into(), "0.00".into(), "74.0 %".into(), "12".into()),
+            ("0.63".into(), "0.06".into(), "25.7 %".into(), "5".into()),
+            ("3.14".into(), "0.31".into(), "0.4 %".into(), "1".into()),
+        ]
+    );
+    #[cfg(not(target_arch = "wasm32"))]
+    assert_eq!(
+        rows.iter()
+            .map(|row| format!("{:.2} Å", row.rmsd.unwrap()))
+            .collect::<Vec<_>>(),
+        ["0.00 Å", "0.00 Å", "0.00 Å"]
+    );
+}
+
+#[test]
+fn table_uses_the_first_saved_energy_even_when_it_is_higher() {
+    let mut result = searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+    let path = result.trajectory.as_mut().unwrap();
+    path.positions_angstrom.truncate(2 * path.numbers.len() * 3);
+    path.energies_hartree = vec![-5.068, -5.070];
+    path.labels.truncate(2);
+    path.minimizer_energies_hartree.truncate(2);
+    path.cluster_sizes.truncate(2);
+
+    let (_, exported) = reshiki_xtb_jobs::conformers::ranked_trajectory(Some(path)).unwrap();
+    assert_eq!(exported[0].step, 1);
+    assert_eq!(exported[0].statistics.delta_kcal, 0.0);
+    assert_eq!(format!("{:.2}", exported[1].statistics.delta_kcal), "1.26");
+
+    let doc = reshiki::document::Document::default();
+    let rows = rows(&doc, &[None; 3], &result, true);
+    let table_deltas: Vec<_> = rows
+        .iter()
+        .map(|row| format!("{:.2}", row.delta_kcal))
+        .collect();
+    assert_eq!(table_deltas, ["0.00", "-1.26"]);
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod app {
     use super::{A, B, C};
@@ -226,7 +291,7 @@ mod app {
         let _ = app.update(Message::Xtb(XtbAction::Search(serial, event)));
     }
 
-    fn ranked(positions: [[f64; 3]; 3], energy: f64, cluster_size: u32) -> Ranked {
+    fn ranked(positions: [[f64; 3]; 3], energy: f64, cluster_size: u32, rmsd: f64) -> Ranked {
         Ranked {
             positions: positions.to_vec(),
             energy_hartree: energy,
@@ -234,7 +299,7 @@ mod app {
             start_energy_hartree: 0.01 + (energy + 5.070176),
             cluster_size,
             boltzmann: 0.,
-            rmsd_to_best: 0.,
+            rmsd_to_best: rmsd,
         }
     }
 
@@ -255,9 +320,9 @@ mod app {
                 evaluations: vec![],
             }),
             ranked: vec![
-                ranked(A, -5.070176, 12),
-                ranked(B, -5.069176, 5),
-                ranked(C, -5.065176, 1),
+                ranked(A, -5.070176, 12, 0.),
+                ranked(B, -5.069176, 5, 0.35),
+                ranked(C, -5.065176, 1, 0.50),
             ],
             starts: 100,
             clusters: 14,
@@ -329,6 +394,7 @@ mod app {
         let rows = app.xtb_conformer_rows(&shown);
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].stereo, Some(true));
+        assert_eq!(rows[1].rmsd, Some(0.35));
 
         send(&mut app, XtbAction::Palette(PaletteAction::Step(1)));
         assert_eq!(model(app.display_document()), f32s(&B));
@@ -423,6 +489,11 @@ mod app {
         );
         // Three water conformers: a few kilobytes at most.
         assert!(bytes < 4_000, "{bytes}");
+        let file = app.tab.doc.file_json().unwrap();
+        let restored = reshiki::document::Document::from_native_file(&file).unwrap();
+        let result = &restored.science.results[0].result;
+        let path = result.trajectory.as_ref().unwrap();
+        assert_eq!(path.rmsd_to_best_angstrom, [0., 0.35, 0.50]);
         let xyz =
             super::super::export::xyz(&app.tab.doc.science.results[0].result, "water").unwrap();
         assert_eq!(xyz.lines().filter(|l| l.trim() == "3").count(), 3);

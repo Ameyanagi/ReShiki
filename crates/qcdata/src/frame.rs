@@ -221,6 +221,10 @@ pub struct Trajectory {
     /// Number of starts in each conformer's cluster, if recorded.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cluster_sizes: Vec<u32>,
+    /// Symmetry-aware heavy-atom RMSDs to the first conformer, in ångströms,
+    /// as measured when ranking with the search's launch topology.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rmsd_to_best_angstrom: Vec<f64>,
 }
 
 impl Trajectory {
@@ -232,6 +236,7 @@ impl Trajectory {
                 .max(self.labels.len())
                 .max(self.minimizer_energies_hartree.len())
                 .max(self.cluster_sizes.len())
+                .max(self.rmsd_to_best_angstrom.len())
         } else {
             self.positions_angstrom
                 .len()
@@ -321,6 +326,14 @@ impl Trajectory {
         {
             return Err(Error::Invalid("invalid trajectory cluster sizes".into()));
         }
+        if (!self.rmsd_to_best_angstrom.is_empty() && self.rmsd_to_best_angstrom.len() != steps)
+            || self
+                .rmsd_to_best_angstrom
+                .iter()
+                .any(|&rmsd| !rmsd.is_finite() || rmsd < 0.0)
+        {
+            return Err(Error::Invalid("invalid trajectory conformer RMSDs".into()));
+        }
         Ok(())
     }
 
@@ -335,6 +348,7 @@ impl Trajectory {
             + self.labels.iter().map(String::len).sum::<usize>()
             + size_of_val(self.minimizer_energies_hartree.as_slice())
             + size_of_val(self.cluster_sizes.as_slice())
+            + size_of_val(self.rmsd_to_best_angstrom.as_slice())
     }
 }
 
@@ -484,6 +498,7 @@ mod tests {
             labels: vec!["first".into(), "second".into()],
             minimizer_energies_hartree: vec![],
             cluster_sizes: vec![],
+            rmsd_to_best_angstrom: vec![],
         }
     }
 

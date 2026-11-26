@@ -1,23 +1,21 @@
 //! Run the optional external worker without holding the Python GIL.
 
+mod conformers;
+pub use conformers::xtb_conformers;
+
 use crate::qc::{GeometryData, computed_data};
 use pyo3::prelude::*;
-use reshiki_model::chemistry::{ELEMENTS, ISOTOPES};
-use reshiki_optimize::{
-    ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
-};
+use reshiki_model::science::isotope_masses;
+use reshiki_qcdata::XtbMethod;
+use reshiki_xtb_jobs::method;
+use reshiki_xtb_jobs::run::{self, Failure, Job, Properties, Report};
 use reshiki_xtb_worker::{
-    client::{self, Cancel, Error, Limits, Session},
-    protocol::{
-        Compute, Computed, Conventions, Engine, ErrorKind, HessianRequest, MAX_HESSIAN_ATOMS,
-        Method, Open, OrbitalOutput, ScfSettings, Solvent, SolventCorrection, SolventModel,
-        ThermoRequest, Units,
-    },
+    client::{Cancel, Error, Limits, Session},
+    protocol::{Conventions, ErrorKind, OrbitalOutput, ScfSettings, SolventModel, ThermoRequest},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
-    ops::ControlFlow,
     path::PathBuf,
     sync::mpsc::{self, RecvTimeoutError},
     thread,
@@ -25,8 +23,7 @@ use std::{
 };
 
 #[derive(Deserialize)]
-struct Calculation {
-    geometry: GeometryData,
+struct WorkerSettings {
     method: String,
     unpaired: Option<u32>,
     conventions: Conventions,
@@ -35,7 +32,60 @@ struct Calculation {
     electronic_temperature: Option<f64>,
     accuracy: Option<f64>,
     max_iterations: Option<u32>,
+}
+
+impl WorkerSettings {
+    fn method(&self) -> Result<XtbMethod, String> {
+        let method = &self.method;
+        match method.to_ascii_lowercase().as_str() {
+            "gfn2" | "gfn2-xtb" => Ok(XtbMethod::Gfn2Xtb),
+            "gfnff" | "gfn-ff" => Ok(XtbMethod::GfnFf),
+            "gxtb" | "g-xtb" => Ok(XtbMethod::GXtb),
+            _ => Err(format!(
+                "Unknown xTB method {method:?}. Use gfn2, gfnff or gxtb."
+            )),
+        }
+    }
+
+    fn job(self, geometry: &GeometryData, uhf: u32, method: XtbMethod, threads: u32) -> Job {
+        Job {
+            optimize: false,
+            frequencies: false,
+            masses: None,
+            isotope_labels: Vec::new(),
+            numbers: geometry.numbers.clone(),
+            positions: geometry.positions.clone(),
+            charge: geometry.charge,
+            uhf,
+            method: run::worker_method(method),
+            conventions: self.conventions,
+            scf: ScfSettings {
+                accuracy: self.accuracy,
+                electronic_temperature_k: self.electronic_temperature,
+                max_iterations: self.max_iterations,
+                ..Default::default()
+            },
+            solvent: self
+                .solvent
+                .as_deref()
+                .map(|name| method::solvent(self.solvent_model, name)),
+            threads,
+            fixed: vec![],
+            tight: false,
+            topology: None,
+            max_steps: None,
+            properties: None,
+            thermo: Default::default(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct Calculation {
+    geometry: GeometryData,
     threads: u32,
+    #[serde(flatten)]
+    settings: WorkerSettings,
     request: Request,
 }
 
@@ -68,46 +118,155 @@ enum Request {
 
 #[pyfunction]
 pub fn xtb_engine(py: Python<'_>, executable: PathBuf) -> PyResult<String> {
-    run_with_worker(py, executable, |_, _, engine| Ok(json!(engine)))
+    run_interruptibly(py, move |cancel| {
+        let (session, hello) = Session::start(&executable, Limits::default(), cancel)?;
+        let engine = hello.engine.ok_or(Error::Unavailable)?;
+        let _ = session.close(cancel);
+        Ok(json!(engine).to_string())
+    })?
+    .map_err(|error: Error| crate::failed(py)(error.to_string()))
 }
 
 #[pyfunction]
 pub fn xtb_calculate(py: Python<'_>, executable: PathBuf, request_json: &str) -> PyResult<String> {
     let calculation: Calculation = serde_json::from_str(request_json)
         .map_err(|error| crate::invalid(py)(format!("Invalid xTB settings: {error}")))?;
-    let method = parse_method(&calculation.method).map_err(crate::invalid(py))?;
-    run_with_worker(py, executable, move |session, cancel, engine| {
-        let program = format!("{} {}", engine.name, engine.version);
-        calculation.run(session, cancel, method, &program)
-    })
+    let method = calculation.settings.method().map_err(crate::invalid(py))?;
+    let mut geometry = calculation.geometry;
+    let uhf = calculation
+        .settings
+        .unpaired
+        .or_else(|| geometry.multiplicity.checked_sub(1))
+        .ok_or_else(|| crate::failed(py)("xTB input: Multiplicity must be positive".into()))?;
+    let mut job = calculation
+        .settings
+        .job(&geometry, uhf, method, calculation.threads);
+    match calculation.request {
+        Request::Energy {
+            gradient,
+            bond_orders,
+            orbitals,
+        } => {
+            job.properties = Some(Properties {
+                gradient,
+                bond_orders,
+                orbitals: if orbitals {
+                    OrbitalOutput::Levels
+                } else {
+                    OrbitalOutput::None
+                },
+            });
+        }
+        Request::Frequencies {
+            temperature,
+            pressure,
+            symmetry_number,
+        } => {
+            job.frequencies = true;
+            job.masses = isotope_masses(&geometry.to_frame());
+            if job.masses.is_some() {
+                job.isotope_labels = geometry
+                    .numbers
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &number)| {
+                        u32::from(number) * 1000
+                            + u32::from(geometry.isotopes.get(index).copied().unwrap_or(0))
+                    })
+                    .collect();
+            }
+            job.thermo = ThermoRequest {
+                temperature_k: Some(temperature),
+                pressure_pa: Some(pressure),
+                symmetry_number,
+                ..Default::default()
+            };
+            job.properties = Some(Properties {
+                gradient: false,
+                bond_orders: false,
+                orbitals: OrbitalOutput::None,
+            });
+        }
+        Request::Optimize {
+            level,
+            max_steps,
+            fixed_atoms,
+        } => {
+            job.optimize = true;
+            job.tight = matches!(level, OptimizationLevel::Tight);
+            job.max_steps = max_steps;
+            job.fixed = fixed_atoms;
+        }
+    }
+    let optimize = job.optimize;
+    run_interruptibly(py, move |cancel| {
+        let report = run::run(&executable, job, cancel, |_| {})?;
+        geometry.positions.clone_from(&report.positions);
+        let result = if optimize {
+            optimization_data(&report, &geometry)
+        } else {
+            report_data(&report, &geometry)
+        };
+        Ok(result.to_string())
+    })?
+    .map_err(|failure| crate::failed(py)(failure_message(&failure)))
 }
 
-fn run_with_worker(
+fn report_data(report: &Report, geometry: &GeometryData) -> Value {
+    let computed = &report.computed;
+    let method = computed.method.xtb_method();
+    let program = format!("{} {}", report.engine.name, report.engine.version);
+    computed_data(computed, geometry, method.label(), &program)
+}
+
+fn optimization_data(report: &Report, geometry: &GeometryData) -> Value {
+    let mut result = report_data(report, geometry);
+    if !report.converged {
+        result["warnings"] = json!(["Optimization reached the step limit."]);
+    }
+    let trajectory: Vec<_> = report
+        .path
+        .as_chunks::<3>()
+        .0
+        .chunks(geometry.numbers.len())
+        .collect();
+    result["converged"] = json!(report.converged);
+    result["steps"] = json!(report.steps);
+    result["energies"] = json!(report.energies);
+    result["trajectory"] = json!(trajectory);
+    result
+}
+
+fn failure_message(failure: &Failure) -> String {
+    match failure {
+        Failure::Worker { error, .. } => match error.as_ref() {
+            Error::Engine {
+                kind: ErrorKind::Input,
+                message,
+            } if message.contains("same parity as the valence electron count") => {
+                format!("{error}. Pass unpaired= with the number of unpaired valence electrons.")
+            }
+            _ => error.to_string(),
+        },
+        Failure::Crashed {
+            details: Some(details),
+            ..
+        } => details.clone(),
+        _ => failure.to_string(),
+    }
+}
+
+fn run_interruptibly<T: Send + 'static>(
     py: Python<'_>,
-    executable: PathBuf,
-    run: impl FnOnce(&mut Session, &Cancel, Engine) -> client::Result<Value> + Send + 'static,
-) -> PyResult<String> {
+    run: impl FnOnce(&Cancel) -> T + Send + 'static,
+) -> PyResult<T> {
     let cancel = Cancel::default();
     let worker_cancel = cancel.clone();
     let (sender, mut receiver) = mpsc::channel();
     let worker = thread::Builder::new()
         .name("reshiki-xtb".into())
         .spawn(move || {
-            let result: client::Result<Value> = (|| {
-                let (mut session, hello) =
-                    Session::start(&executable, Limits::default(), &worker_cancel)?;
-                let engine = hello.engine.ok_or(Error::Unavailable)?;
-                let result = run(&mut session, &worker_cancel, engine)?;
-                // The result is complete. A worker that fails to close is still reaped.
-                let _ = session.close(&worker_cancel);
-                Ok(result)
-            })();
-            let json = result
-                .map_err(|error| error.to_string())
-                .and_then(|result| {
-                    serde_json::to_string(&result).map_err(|error| error.to_string())
-                });
-            let _ = sender.send(json);
+            let _ = sender.send(run(&worker_cancel));
         })
         .map_err(|error| crate::failed(py)(format!("Could not start the xTB thread: {error}")))?;
     let received = loop {
@@ -124,276 +283,5 @@ fn run_with_worker(
     };
     py.detach(move || worker.join())
         .map_err(|_| crate::failed(py)("The xTB thread stopped unexpectedly".into()))?;
-    received
-        .map_err(|_| crate::failed(py)("The xTB thread returned no result".into()))?
-        .map_err(crate::failed(py))
-}
-
-fn parse_method(method: &str) -> Result<Method, String> {
-    match method.to_ascii_lowercase().as_str() {
-        "gfn2" | "gfn2-xtb" => Ok(Method::Gfn2),
-        "gfnff" | "gfn-ff" => Ok(Method::Gfnff),
-        "gxtb" | "g-xtb" => Ok(Method::Gxtb),
-        _ => Err(format!(
-            "Unknown xTB method {method:?}. Use gfn2, gfnff or gxtb."
-        )),
-    }
-}
-
-impl Calculation {
-    fn run(
-        self,
-        session: &mut Session,
-        cancel: &Cancel,
-        method: Method,
-        program: &str,
-    ) -> client::Result<Value> {
-        let mut geometry = self.geometry;
-        let uhf = self
-            .unpaired
-            .or_else(|| geometry.multiplicity.checked_sub(1))
-            .ok_or_else(|| Error::Input("Multiplicity must be positive".into()))?;
-        session.open(
-            &Open {
-                numbers: geometry.numbers.clone(),
-                positions: geometry.positions.clone(),
-                units: Units::Angstrom,
-                charge: geometry.charge,
-                uhf: Some(uhf),
-                method,
-                conventions: self.conventions,
-                solvent: self.solvent.map(|name| Solvent {
-                    model: self.solvent_model,
-                    name: name.to_lowercase(),
-                    state: Default::default(),
-                    correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-                }),
-                scf: ScfSettings {
-                    accuracy: self.accuracy,
-                    electronic_temperature_k: self.electronic_temperature,
-                    max_iterations: self.max_iterations,
-                    retries: vec![],
-                },
-                gfnff: None,
-                threads: self.threads,
-                heap_bytes: Limits::default().heap_bytes,
-            },
-            cancel,
-        )
-        .map_err(|error| match error {
-            Error::Engine {
-                kind: ErrorKind::Input,
-                message,
-            } if message.contains("same parity as the valence electron count") => Error::Engine {
-                kind: ErrorKind::Input,
-                message: format!(
-                    "{message}. Pass unpaired= with the number of unpaired valence electrons."
-                ),
-            },
-            error => error,
-        })?;
-
-        let mut optimization = None;
-        let request = match self.request {
-            Request::Energy {
-                gradient,
-                bond_orders,
-                orbitals,
-            } => Compute {
-                gradient,
-                bond_orders,
-                orbitals: orbital_levels(orbitals),
-                ..Compute::default()
-            },
-            Request::Frequencies {
-                temperature,
-                pressure,
-                symmetry_number,
-            } => Compute {
-                hessian: Some(HessianRequest {
-                    thermo: ThermoRequest {
-                        temperature_k: Some(temperature),
-                        pressure_pa: Some(pressure),
-                        symmetry_number,
-                        ..ThermoRequest::default()
-                    },
-                    masses_amu: isotope_masses(&geometry),
-                }),
-                ..Compute::default()
-            },
-            Request::Optimize {
-                level,
-                max_steps,
-                fixed_atoms,
-            } => {
-                let mut options = Options {
-                    level: match level {
-                        OptimizationLevel::Normal => Level::Normal,
-                        OptimizationLevel::Tight => Level::Tight,
-                    },
-                    fixed_atoms,
-                    ..Options::default()
-                };
-                if let Some(max_steps) = max_steps {
-                    options.max_steps = max_steps;
-                }
-                let mut trajectory = Vec::new();
-                let positions = geometry
-                    .positions
-                    .as_flattened()
-                    .iter()
-                    .map(|coordinate| coordinate / ANGSTROM_PER_BOHR)
-                    .collect::<Vec<_>>();
-                let mut xtb = Xtb {
-                    session,
-                    cancel,
-                    failure: None,
-                };
-                let outcome = optimize(&mut xtb, &geometry.numbers, &positions, &options, |step| {
-                    trajectory.truncate(step.index);
-                    trajectory.push(angstroms(step.positions));
-                    ControlFlow::Continue(())
-                });
-                match outcome.status {
-                    Status::Converged | Status::MaxSteps => {}
-                    Status::ScfFailure(message) => {
-                        return Err(Error::Engine {
-                            kind: ErrorKind::Scf,
-                            message,
-                        });
-                    }
-                    Status::Failed(message) => {
-                        return Err(xtb.failure.unwrap_or(Error::Input(message)));
-                    }
-                    Status::Cancelled => return Err(Error::Cancelled),
-                }
-                geometry.positions = angstroms(&outcome.positions);
-                let capabilities = method.xtb_method().capabilities();
-                let request = Compute {
-                    positions: Some(outcome.positions.as_chunks::<3>().0.to_vec()),
-                    units: Units::Bohr,
-                    gradient: true,
-                    bond_orders: capabilities.bond_orders,
-                    orbitals: orbital_levels(capabilities.orbitals),
-                    ..Compute::default()
-                };
-                optimization = Some((outcome, trajectory));
-                request
-            }
-        };
-        let computed = session.compute(&request, cancel)?;
-        let mut result = computed_data(&computed, &geometry, method.xtb_method().label(), program);
-        if let Some((mut outcome, trajectory)) = optimization {
-            let converged = outcome.status == Status::Converged;
-            if let Some(last) = outcome.energies.last_mut() {
-                *last = computed.energy;
-            }
-            if !converged {
-                result["warnings"] = json!(["Optimization reached the step limit."]);
-            }
-            result["converged"] = json!(converged);
-            result["steps"] = json!(outcome.steps);
-            result["energies"] = json!(outcome.energies);
-            result["trajectory"] = json!(trajectory);
-        }
-        Ok(result)
-    }
-}
-
-fn isotope_masses(geometry: &GeometryData) -> Option<Vec<f64>> {
-    if geometry.isotopes.iter().all(|&isotope| isotope == 0) {
-        return None;
-    }
-    Some(
-        geometry
-            .numbers
-            .iter()
-            .zip(&geometry.isotopes)
-            .map(|(&number, &isotope)| {
-                if isotope == 0 {
-                    ELEMENTS[usize::from(number)].average_mass_amu()
-                } else {
-                    ISOTOPES
-                        .binary_search_by_key(&(number, isotope), |&(z, a, _)| (z, a))
-                        .map_or(f64::from(isotope), |index| ISOTOPES[index].2)
-                }
-            })
-            .collect(),
-    )
-}
-
-fn orbital_levels(requested: bool) -> OrbitalOutput {
-    if requested {
-        OrbitalOutput::Levels
-    } else {
-        OrbitalOutput::None
-    }
-}
-
-fn angstroms(positions: &[f64]) -> Vec<[f64; 3]> {
-    positions
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .map(|xyz| xyz.map(|coordinate| coordinate * ANGSTROM_PER_BOHR))
-        .collect()
-}
-
-struct Xtb<'a> {
-    session: &'a mut Session,
-    cancel: &'a Cancel,
-    failure: Option<Error>,
-}
-
-impl Xtb<'_> {
-    fn compute(&mut self, request: &Compute) -> Result<Computed, EvalError> {
-        self.failure = None;
-        self.session.compute(request, self.cancel).map_err(|error| {
-            let status = match &error {
-                Error::Cancelled => EvalError::Cancelled,
-                Error::Engine {
-                    kind: ErrorKind::Scf,
-                    message,
-                } => EvalError::Scf(message.clone()),
-                error => EvalError::Failed(error.to_string()),
-            };
-            self.failure = Some(error);
-            status
-        })
-    }
-}
-
-impl Potential for Xtb<'_> {
-    fn evaluate(
-        &mut self,
-        positions: &[f64],
-        gradient: &mut [f64],
-        _accuracy: Accuracy,
-    ) -> Result<f64, EvalError> {
-        let computed = self.compute(&Compute {
-            positions: Some(positions.as_chunks::<3>().0.to_vec()),
-            gradient: true,
-            ..Compute::default()
-        })?;
-        let rows = computed
-            .gradient
-            .ok_or_else(|| EvalError::Failed("The xTB worker returned no gradient".into()))?;
-        gradient.copy_from_slice(rows.as_flattened());
-        Ok(computed.energy)
-    }
-
-    fn hessian(&mut self, positions: &[f64], out: &mut [f64]) -> Option<Result<(), EvalError>> {
-        if positions.len() / 3 > MAX_HESSIAN_ATOMS {
-            return None;
-        }
-        let request = Compute {
-            positions: Some(positions.as_chunks::<3>().0.to_vec()),
-            hessian: Some(HessianRequest::default()),
-            ..Compute::default()
-        };
-        Some(
-            self.compute(&request)
-                .map(|computed| out.copy_from_slice(&computed.hessian)),
-        )
-    }
+    received.map_err(|_| crate::failed(py)("The xTB thread returned no result".into()))
 }

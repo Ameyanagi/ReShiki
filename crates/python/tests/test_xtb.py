@@ -3,7 +3,9 @@
 import json
 import subprocess
 import sys
+from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -28,6 +30,8 @@ def test_missing_engine(monkeypatch):
     with pytest.raises(xtb.XtbNotInstalled, match=r'pip install "reshiki\[xtb\]"') as caught:
         xtb.energy(geometry("water"))
     assert caught.value.code == "xtb_not_installed"
+    with pytest.raises(xtb.XtbNotInstalled, match=r'pip install "reshiki\[xtb\]"'):
+        xtb.conformers("CCCC")
     assert not xtb.available()
 
 
@@ -118,6 +122,9 @@ def test_isotopologue_thermochemistry_symmetry(worker):
     assert symmetric is not None and asymmetric is not None
     assert symmetric.free_energy is not None and asymmetric.free_energy is not None
     assert symmetric.free_energy != pytest.approx(asymmetric.free_energy, rel=0, abs=1e-6)
+    d2o_without_symmetry = xtb.frequencies(d2o, symmetry_number=1).thermo
+    assert d2o_without_symmetry is not None and d2o_without_symmetry.free_energy is not None
+    assert symmetric.free_energy > d2o_without_symmetry.free_energy + 1e-4
 
 
 def test_cef3_can_set_valence_spin_independently(worker):
@@ -125,12 +132,26 @@ def test_cef3_can_set_valence_spin_independently(worker):
         ["Ce", "F", "F", "F"], [[0, 0, 0], [2, 0, 0], [-2, 0, 0], [0, 2, 0]]
     )
     assert cef3.multiplicity == 2
-    with pytest.raises(xtb.XtbError, match=r"valence electron count.*unpaired="):
+    with pytest.raises(
+        xtb.XtbError, match=r"xTB input: .*valence electron count and cannot exceed it.*unpaired="
+    ):
         xtb.energy(cef3)
+    with pytest.raises(
+        xtb.XtbError, match=r"xTB input: .*valence electron count and cannot exceed it"
+    ):
+        xtb.energy(cef3, unpaired=100)
     result = xtb.energy(cef3, unpaired=0)
     assert np.isfinite(result.energy)
     assert result.geometry.multiplicity == 2
     assert result.unpaired == 0
+
+
+def test_frequencies_preserve_the_worker_limit_error(worker):
+    atoms = qc.Geometry.from_symbols(["He"] * 201, [[3.0 * i, 0.0, 0.0] for i in range(201)])
+    with pytest.raises(
+        xtb.XtbError, match=r"xTB resource limit: expected at most 200 Hessian atoms"
+    ):
+        xtb.frequencies(atoms)
 
 
 def test_worker_gap_is_reported_without_requesting_orbitals(worker):
@@ -161,6 +182,19 @@ def test_version_mismatch(worker, monkeypatch):
     assert caught.value.code == "failed"
     assert f'pip install "reshiki[xtb]=={reshiki.__version__}"' in str(caught.value)
     assert not xtb.available()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="The xTB worker is unavailable on Windows")
+def test_missing_worker_keeps_os_error(monkeypatch, tmp_path):
+    monkeypatch.setitem(
+        sys.modules,
+        "reshiki_xtb",
+        SimpleNamespace(
+            __version__=reshiki.__version__, worker_path=lambda: tmp_path / "missing-worker"
+        ),
+    )
+    with pytest.raises(xtb.XtbError, match=r"Could not start bounded xTB worker: .*\(os error 2\)"):
+        xtb.energy(geometry("water"))
 
 
 _INTERRUPT_SCRIPT = """
@@ -202,3 +236,124 @@ def test_keyboard_interrupt(worker):
     lines = done.stdout.splitlines()
     assert lines[0].startswith("interrupted"), done.stdout + done.stderr
     assert lines[1].startswith("energy -42.")
+
+
+def test_butane_conformers(worker):
+    result = xtb.conformers("CCCC")
+    repeated = xtb.conformers("CCCC")
+    np.testing.assert_equal(asdict(result), asdict(repeated))
+    assert result.conformers
+    energies = [conformer.energy for conformer in result.conformers]
+    assert energies == sorted(energies)
+    assert sum(conformer.population for conformer in result.conformers) == pytest.approx(
+        1.0, rel=0, abs=1e-9
+    )
+    lowest = result.conformers[0]
+    assert result.best.energy == lowest.energy
+    assert lowest.rank == 1
+    assert lowest.delta == lowest.rmsd == 0.0
+    np.testing.assert_array_equal(result.best.geometry.positions, lowest.geometry.positions)
+    lines = result.to_xyz().splitlines()
+    frame_length = len(lowest.geometry) + 2
+    assert len(lines) == len(result.conformers) * frame_length
+    for conformer, comment in zip(result.conformers, lines[1::frame_length], strict=True):
+        assert f"conformer {conformer.rank} · ΔE {conformer.delta:.2f} kcal/mol" in comment
+        assert comment.endswith(f"E = {conformer.energy:.10f} Eh")
+
+
+def test_borane_conformers_use_uff_for_the_first_model(worker):
+    result = xtb.conformers("B", minimizer="uff", starts=1)
+    assert result.conformers
+    assert result.method.startswith("UFF ")
+
+    with pytest.raises(xtb.XtbError, match="MMFF parameters") as caught:
+        xtb.conformers("B", starts=1)
+    assert caught.value.code == "failed"
+
+
+def test_lysine_conformers_preserve_stereo(worker):
+    lysine = reshiki.Molecule.from_smiles("NCCCC[C@H](N)C(=O)O")
+    result = xtb.conformers(lysine)
+    assert len(result.conformers) > 1
+    assert all(conformer.stereo is True for conformer in result.conformers)
+
+
+def test_conformers_refresh_stale_model_in_native_bytes(worker):
+    path = FIXTURES.parent / "models3d" / "model-frame-methanol.rsk"
+    drawing = json.loads(path.read_bytes())
+    # A chemistry edit saves the old methanol geometry with its original fingerprint.
+    drawing["version"] = 33
+    model = drawing["models"][0]
+    model["fingerprint"] = "27f09dccaae6f1e0"
+    model["force_field"] = "uff"
+    model["seed"] = 91_337
+    model["linked_atoms"] = [1, 2]
+    model["generated"] = {"sources": [1, 2], "elements": ["C", "O"], "bonds": [[0, 1]]}
+    for atom in model["atoms"]:
+        atom["id"] -= 1
+    for hydrogen in model["hydrogens"]:
+        hydrogen["parent"] -= 1
+    drawing["atoms"][1]["element"] = "C"
+
+    result = xtb.conformers(json.dumps(drawing).encode(), starts=1)
+    np.testing.assert_array_equal(np.sort(result.best.geometry.numbers), [1] * 6 + [6] * 2)
+
+
+@pytest.mark.parametrize("threads", [None, 1, 8])
+def test_conformers_accepts_auto_and_search_thread_limits(worker, threads):
+    assert xtb.conformers("CCCC", starts=1, threads=threads).conformers
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"starts": 0},
+        {"starts": 301},
+        {"window": 0.09},
+        {"window": 100.1},
+        {"representatives": 0},
+        {"representatives": 61},
+        {"per_cluster": 2},
+        {"minimizer": "unknown"},
+        {"diversity": "unknown"},
+        {"accuracy": 1001.0},
+        {"electronic_temperature": -1.0},
+        {"max_iterations": 10001},
+        {"threads": 0},
+        {"threads": 9},
+    ],
+)
+def test_conformer_argument_validation(worker, options):
+    with pytest.raises(reshiki.ReShikiError) as caught:
+        xtb.conformers("CCCC", **options)
+    assert caught.value.code == "invalid_arguments"
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+@pytest.mark.parametrize("option", ["window", "accuracy", "electronic_temperature"])
+def test_conformers_reject_nonfinite_options(worker, option, value):
+    with pytest.raises(ReShikiError) as caught:
+        xtb.conformers("CCCC", **{option: value})
+    assert caught.value.code == "invalid_arguments"
+
+
+@pytest.mark.parametrize(
+    ("limit", "minimizer"),
+    [(200, "mmff94s"), (120, "gfn2")],
+)
+def test_conformer_atom_limits(worker, limit, minimizer):
+    with pytest.raises(reshiki.ReShikiError, match=f"up to {limit} atoms") as caught:
+        xtb.conformers("C" * (limit + 1), minimizer=minimizer)
+    assert caught.value.code == "invalid_arguments"
+
+
+@pytest.mark.parametrize(
+    ("carbons", "limit", "minimizer"),
+    [(67, 200, "mmff94s"), (40, 120, "gfn2")],
+)
+def test_conformer_atom_limits_include_hydrogens(worker, carbons, limit, minimizer):
+    # The alkane has 2n + 2 implicit hydrogens and n drawn carbons.
+    assert carbons <= limit < 3 * carbons + 2
+    with pytest.raises(ReShikiError, match=f"up to {limit} atoms") as caught:
+        xtb.conformers("C" * carbons, starts=1, minimizer=minimizer)
+    assert caught.value.code == "invalid_arguments"

@@ -2,6 +2,7 @@
 mod arc;
 mod effects;
 mod heads;
+mod ir_figure;
 pub mod panel;
 mod path;
 mod superscript;
@@ -15,6 +16,7 @@ pub use effects::{
     lobe_shading, shade, tiled, wave_radius, wavy,
 };
 pub use heads::PathHeads;
+pub use ir_figure::{BandShape, Columns, Frame, IrFigure, Journal, YAxis};
 pub use panel::{Divider, Panel, TitlePlace};
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
@@ -363,6 +365,9 @@ pub struct Graphic {
     /// TLC lanes, spot dimensions and Rf labels, in the graphic frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlc: Option<Box<TlcPlate>>,
+    /// Original IR bands and presentation parameters for a spectrum pen path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ir: Option<Box<IrFigure>>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
@@ -504,6 +509,7 @@ impl Graphic {
                 piece: None,
                 icon: None,
                 tlc: None,
+                ir: None,
                 id,
                 kind,
                 origin: start,
@@ -560,6 +566,7 @@ impl Graphic {
             piece: None,
             icon: None,
             tlc: None,
+            ir: None,
             id,
             kind,
             origin,
@@ -947,6 +954,9 @@ impl Graphic {
         if let Some(tlc) = &self.tlc {
             tlc.validate(self)?;
         }
+        if self.ir.is_some() && self.kind != GraphicKind::Path {
+            return Err("IR figure parameters require a pen path".into());
+        }
         if self.superscript.is_some() && !self.kind.brackets() {
             return Err("A superscript requires a bracket graphic".into());
         }
@@ -1225,6 +1235,48 @@ mod path_tests;
 mod tests {
     use super::*;
     use crate::scientific::SymbolKind;
+
+    #[test]
+    fn ir_parameters_belong_to_pen_paths_and_round_trip_as_optional_metadata() {
+        let mut graphic = Graphic::dragged(
+            1,
+            GraphicKind::Path,
+            Point::default(),
+            Point::new(100., 50.),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        assert!(serde_json::to_value(&graphic).unwrap().get("ir").is_none());
+        graphic.ir = Some(Box::new(IrFigure::with_defaults(
+            "acetic acid".into(),
+            "GFN2-xTB".into(),
+            vec![[1700., 120.]],
+            Journal::Acs,
+        )));
+        graphic.validate().unwrap();
+        let value = serde_json::to_value(&graphic).unwrap();
+        assert_eq!(value["ir"]["bands"], serde_json::json!([[1700., 120.]]));
+        assert_eq!(serde_json::from_value::<Graphic>(value).unwrap(), graphic);
+        for kind in [
+            GraphicKind::Rectangle,
+            GraphicKind::Curve,
+            GraphicKind::Line,
+        ] {
+            graphic.kind = kind;
+            assert_eq!(
+                graphic.validate().unwrap_err(),
+                "IR figure parameters require a pen path"
+            );
+        }
+        graphic.kind = GraphicKind::Path;
+        // In-memory edits do not repeat the stored-parameter boundary validation.
+        graphic.ir.as_mut().unwrap().scale = 0.;
+        graphic.validate().unwrap();
+        assert!(
+            serde_json::from_value::<Graphic>(serde_json::to_value(&graphic).unwrap()).is_err()
+        );
+    }
 
     #[test]
     fn a_condition_icon_keeps_its_shape_when_a_point_edit_is_attempted() {
