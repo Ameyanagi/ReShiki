@@ -4,7 +4,7 @@ description: Run xTB calculations from the command line, AI agents and Python, a
 ---
 
 :::caution[Not released yet]
-The command line and agent tools below are on the `xtb/next` branch and not in a released version of ReShiki yet. The Python API is planned.
+The command line, agent tools and Python API below are on the `xtb/next` branch and not in a released version of ReShiki yet.
 :::
 
 ## Command line
@@ -42,36 +42,7 @@ The MCP server (`reshiki --mcp`) offers the same three tools, `calculate`, `expo
 
 ## Python
 
-:::note[Planned]
-The Python API below and the `reshiki-xtb` package are in review and not on this branch yet. The `reshiki` package on PyPI today has neither `reshiki.qc` nor `reshiki.xtb`.
-:::
-
-Calculations will need the optional `reshiki-xtb` package, which holds the engine. Install both with:
-
-```sh
-pip install "reshiki[xtb]"        # or: uv add "reshiki[xtb]"
-```
-
-`reshiki-xtb` will be built for macOS (Apple silicon and Intel) and Linux (x86-64 and ARM64), not for Windows yet. Without it, the calculation functions raise `reshiki.xtb.XtbNotInstalled` with the install command; reading and writing files works without it.
-
-```python
-from reshiki import qc, xtb
-
-water = qc.Geometry.from_xyz(open("water.xyz").read())
-result = xtb.energy(water, method="gfn2", solvent="water")
-print(result.energy, result.homo_lumo_gap)          # hartree, eV
-
-opt = xtb.optimize(water)
-print(opt.converged, opt.steps, opt.energies[-1])
-freq = xtb.frequencies(opt.geometry)
-print(freq.frequencies)                              # cm⁻¹, imaginary negative
-
-log = qc.read("job.log")                            # Gaussian, ORCA, Molden, fchk, XYZ, SDF
-print(log.default_job.result.energy)
-qc.write_input("water.inp", opt.geometry, program="orca", job="opt-freq")
-```
-
-Results are plain Python objects with NumPy arrays: positions in ångström, energies in hartree, gradients in hartree/bohr, frequencies in cm⁻¹. Ctrl+C stops a long calculation, and the engine process with it. The [Python package](/developer/python/) page will carry the full reference.
+`reshiki.xtb` runs energies, optimizations, frequencies and conformer searches from Python, `reshiki.qc` reads Gaussian, ORCA, Molden and fchk files and writes DFT inputs. Calculations need the separate `reshiki-xtb` package, which holds the engine. See [xTB from Python](/guide/calculation-python/).
 
 ## Licence and source
 
@@ -82,7 +53,7 @@ The xTB engine is [axtb](https://github.com/atomsforhumanity/axtb), used through
 | macOS and Linux apps                | yes, built into the `reshiki` executable |
 | Windows app                         | no, not yet                              |
 | Python `reshiki`                    | no                                       |
-| Python `reshiki-xtb` (planned)      | yes, as the `reshiki-xtb-worker` program |
+| Python `reshiki-xtb`                | yes, as the `reshiki-xtb-worker` program |
 | npm packages, web editor, Nix flake | no                                       |
 
 - The licence texts (GPL-3.0 and LGPL-3.0), axtb's notice and the fork's list of changes ship with every download that contains axtb, in the third-party notices.
