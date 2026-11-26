@@ -10,12 +10,12 @@
 use std::{collections::BTreeSet, ops::ControlFlow};
 
 use crate::{
-    ANGSTROM_PER_BOHR, Accuracy, EvalError, Potential,
+    ANGSTROM_PER_BOHR, Accuracy, EvalError, Options, Potential,
     linalg::{dot, norm, symmetric_eigen},
     model_hessian::covalent_radius,
 };
 
-use super::{Minimum, TsError, minimize, validate_geometry};
+use super::{Minimum, TsError, minimize_with_options, validate_geometry};
 
 const TS_BOND_FACTOR: f64 = 1.2;
 const RESTRAINT_STIFFNESS: f64 = 0.5; // Eh/bohr², E = k (r - r_target)² / 2.
@@ -94,7 +94,7 @@ pub fn build_endpoint<P: Potential>(
     start: &[f64],
     form: &[(usize, usize)],
     break_: &[(usize, usize)],
-    mut on_step: impl FnMut(usize, f64) -> ControlFlow<()>,
+    on_step: impl FnMut(usize, f64) -> ControlFlow<()>,
 ) -> Result<(Minimum, bool), TsError> {
     validate_geometry(numbers, start)?;
     validate_nuclei_separation(start)?;
@@ -121,7 +121,11 @@ pub fn build_endpoint<P: Potential>(
                 } else {
                     covalent_radius(numbers[a]) + covalent_radius(numbers[b])
                 },
-                breaking,
+                limit: if breaking {
+                    DistanceLimit::Lower
+                } else {
+                    DistanceLimit::Harmonic
+                },
             }
         })
         .collect();
@@ -134,24 +138,13 @@ pub fn build_endpoint<P: Potential>(
     if let Some(atom) = changing_atom {
         seed_linear_bend(&mut positions, atom)?;
     }
-    let mut offset = 0;
-    for stage in 1..=STAGES {
-        let mut restrained = Restrained {
-            potential,
-            restraints: &restraints,
-            fraction: stage as f64 / STAGES as f64,
-        };
-        let mut last_step = 0;
-        positions = minimize(&mut restrained, numbers, &positions, |step, energy| {
-            last_step = step;
-            on_step(offset + step, energy)
-        })?
-        .positions;
-        offset += last_step + 1;
-    }
-    let endpoint = minimize(potential, numbers, &positions, |step, energy| {
-        on_step(offset + step, energy)
-    })?;
+    let endpoint = Restrained::new(potential, &restraints, RESTRAINT_STIFFNESS).relax_and_release(
+        numbers,
+        positions,
+        STAGES,
+        &Options::default(),
+        on_step,
+    )?;
     let final_graph: BTreeSet<_> = bonds(numbers, &endpoint.positions)?.into_iter().collect();
     let correct = final_graph.difference(&initial_graph).eq(&form)
         && initial_graph.difference(&final_graph).eq(&break_);
@@ -161,7 +154,7 @@ pub fn build_endpoint<P: Potential>(
 /// Fit the principal Cartesian axis and leave its invariant linear subspace.
 /// For three or more atoms, shift one reacting atom relative to the rest and
 /// subtract the mean displacement to preserve the center.
-fn seed_linear_bend(positions: &mut [f64], changing_atom: usize) -> Result<(), TsError> {
+pub(super) fn seed_linear_bend(positions: &mut [f64], changing_atom: usize) -> Result<(), TsError> {
     let atoms = positions.len() / 3;
     if atoms < 3 {
         return Ok(());
@@ -231,7 +224,7 @@ fn seed_linear_bend(positions: &mut [f64], changing_atom: usize) -> Result<(), T
     Ok(())
 }
 
-fn canonical_pairs(
+pub(super) fn canonical_pairs(
     pairs: &[(usize, usize)],
     atoms: usize,
 ) -> Result<BTreeSet<(usize, usize)>, TsError> {
@@ -249,18 +242,67 @@ fn canonical_pairs(
         .collect()
 }
 
-struct Restraint {
-    a: usize,
-    b: usize,
-    initial: f64,
-    target: f64,
-    breaking: bool,
+pub(super) enum DistanceLimit {
+    Harmonic,
+    Lower,
+    Upper,
 }
 
-struct Restrained<'a, P> {
+pub(super) struct Restraint {
+    pub(super) a: usize,
+    pub(super) b: usize,
+    pub(super) initial: f64,
+    pub(super) target: f64,
+    pub(super) limit: DistanceLimit,
+}
+
+pub(super) struct Restrained<'a, P> {
     potential: &'a mut P,
     restraints: &'a [Restraint],
     fraction: f64,
+    stiffness: f64,
+}
+
+impl<'a, P: Potential> Restrained<'a, P> {
+    pub(super) fn new(potential: &'a mut P, restraints: &'a [Restraint], stiffness: f64) -> Self {
+        Self {
+            potential,
+            restraints,
+            stiffness,
+            fraction: 0.0,
+        }
+    }
+
+    /// Move each target in equal increments. The final relaxation evaluates
+    /// the underlying potential alone, and supplies the reported energy.
+    pub(super) fn relax_and_release(
+        mut self,
+        numbers: &[u8],
+        mut positions: Vec<f64>,
+        stages: usize,
+        options: &Options,
+        mut on_step: impl FnMut(usize, f64) -> ControlFlow<()>,
+    ) -> Result<Minimum, TsError> {
+        let mut offset = 0;
+        for stage in 1..=stages {
+            self.fraction = stage as f64 / stages as f64;
+            let mut last_step = 0;
+            positions =
+                minimize_with_options(&mut self, numbers, &positions, options, |step, energy| {
+                    last_step = step;
+                    on_step(offset + step, energy)
+                })?
+                .positions;
+            offset += last_step + 1;
+        }
+        minimize_with_options(
+            self.potential,
+            numbers,
+            &positions,
+            options,
+            |step, energy| on_step(offset + step, energy),
+        )
+    }
 }
 
 impl<P: Potential> Potential for Restrained<'_, P> {
@@ -275,7 +317,9 @@ impl<P: Potential> Potential for Restrained<'_, P> {
             let r = distance(positions, restraint.a, restraint.b);
             let target = restraint.initial + self.fraction * (restraint.target - restraint.initial);
             let delta = r - target;
-            if restraint.breaking && delta >= 0.0 {
+            if matches!(restraint.limit, DistanceLimit::Lower) && delta >= 0.0
+                || matches!(restraint.limit, DistanceLimit::Upper) && delta <= 0.0
+            {
                 continue;
             }
             if r == 0.0 {
@@ -283,9 +327,9 @@ impl<P: Potential> Potential for Restrained<'_, P> {
                     "a distance restraint cannot separate coincident atoms".into(),
                 ));
             }
-            energy += 0.5 * RESTRAINT_STIFFNESS * delta * delta;
+            energy += 0.5 * self.stiffness * delta * delta;
             for k in 0..3 {
-                let force = RESTRAINT_STIFFNESS * delta / r
+                let force = self.stiffness * delta / r
                     * (positions[3 * restraint.a + k] - positions[3 * restraint.b + k]);
                 gradient[3 * restraint.a + k] += force;
                 gradient[3 * restraint.b + k] -= force;
@@ -295,7 +339,7 @@ impl<P: Potential> Potential for Restrained<'_, P> {
     }
 }
 
-fn distance(x: &[f64], a: usize, b: usize) -> f64 {
+pub(super) fn distance(x: &[f64], a: usize, b: usize) -> f64 {
     (x[3 * a] - x[3 * b])
         .hypot(x[3 * a + 1] - x[3 * b + 1])
         .hypot(x[3 * a + 2] - x[3 * b + 2])
@@ -397,13 +441,14 @@ mod tests {
             b: 1,
             initial: 2.0,
             target: 4.0,
-            breaking: true,
+            limit: DistanceLimit::Lower,
         }];
         let mut potential = Zero;
         let mut restrained = Restrained {
             potential: &mut potential,
             restraints: &restraint,
             fraction: 0.5,
+            stiffness: RESTRAINT_STIFFNESS,
         };
         for r in [2.0, 4.0] {
             let mut x = [0.0, 0.0, 0.0, r, 0.4, -0.2];
@@ -424,6 +469,47 @@ mod tests {
                 assert!((gradient[k] - (plus - minus) / 2e-5).abs() < 1e-10);
             }
             if r > 3.0 {
+                assert_eq!(energy, 0.0);
+                assert_eq!(gradient, [0.0; 6]);
+            }
+        }
+    }
+
+    #[test]
+    fn upper_restraint_leaves_close_contacts_free_and_has_the_correct_gradient() {
+        let restraints = [Restraint {
+            a: 0,
+            b: 1,
+            initial: 6.0,
+            target: 4.0,
+            limit: DistanceLimit::Upper,
+        }];
+        let mut potential = Zero;
+        let mut restrained = Restrained {
+            potential: &mut potential,
+            restraints: &restraints,
+            fraction: 0.5,
+            stiffness: 0.02,
+        };
+        for r in [4.0, 6.0] {
+            let mut x = [0.0, 0.0, 0.0, r, 0.4, -0.2];
+            let mut gradient = [0.0; 6];
+            let energy = restrained
+                .evaluate(&x, &mut gradient, Accuracy::Normal)
+                .unwrap();
+            for k in 0..6 {
+                x[k] += 1e-5;
+                let plus = restrained
+                    .evaluate(&x, &mut [0.0; 6], Accuracy::Normal)
+                    .unwrap();
+                x[k] -= 2e-5;
+                let minus = restrained
+                    .evaluate(&x, &mut [0.0; 6], Accuracy::Normal)
+                    .unwrap();
+                x[k] += 1e-5;
+                assert!((gradient[k] - (plus - minus) / 2e-5).abs() < 1e-10);
+            }
+            if r < 5.0 {
                 assert_eq!(energy, 0.0);
                 assert_eq!(gradient, [0.0; 6]);
             }

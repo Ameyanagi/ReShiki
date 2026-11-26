@@ -176,6 +176,7 @@ fn summary<'a>(command: &'a Ts) -> Summary<'a> {
         evaluations: 12,
         seconds: 0.,
         moving_hydrogens: Vec::new(),
+        reactive_start: None,
     }
 }
 
@@ -191,6 +192,29 @@ fn finish_report(summary: &Summary<'_>) -> (bool, String, String, serde_json::Va
         String::from_utf8(err).unwrap(),
         json,
     )
+}
+
+#[test]
+fn reactive_start_json_preserves_units_and_one_based_pairs() {
+    let directory = tempfile::tempdir().unwrap();
+    let command = command(directory.path());
+    let mut summary = summary(&command);
+    summary.reactive_start = Some(reshiki_optimize::ts::ReactiveStart {
+        pairs: vec![(0, 1)],
+        before_angstrom: vec![4.72],
+        after_angstrom: vec![3.05],
+        energy_change_kcal: 2.1,
+    });
+    let (_, _, _, json) = finish_report(&summary);
+    assert_eq!(
+        json["reactive_start"],
+        serde_json::json!({
+            "pairs": [[1, 2]],
+            "before_angstrom": [4.72],
+            "after_angstrom": [3.05],
+            "energy_change_kcal": 2.1,
+        })
+    );
 }
 
 pub(in crate::cli) fn worker_failure_keeps_characterized_candidate_and_files() {
@@ -257,6 +281,7 @@ fn ceiling_reason_and_optional_probe_failure_reach_cli_report() {
     let (success, table, stderr, json) = finish_report(&summary);
     assert!(!success);
     assert!(table.contains("energy ceiling exhausted"));
+    assert_eq!(json.get("reactive_start"), Some(&serde_json::Value::Null));
     assert!(stderr.contains("energy ceiling exhausted") && stderr.contains(diagnostic));
     assert_eq!(json["saddle"]["reason"], "energy ceiling exhausted");
     assert_eq!(

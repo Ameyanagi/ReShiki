@@ -234,6 +234,14 @@ explains how the crates and modules fit together.
 - `src/app/xtb/source.rs`: Where a molecule's 3D coordinates came from (an xTB conformer, an optimized geometry or step, the file or the force field) and the other geometries its current xTB results hold, for the input-file dialog and the Undo status.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
+- `src/app/xtb/ts.rs`: Transition-state searches from the reaction arrow, with session-only path previews.
+- `src/app/xtb/ts/card.rs`: Predict controls and results for a single selected reaction arrow.
+- `src/app/xtb/ts/energy.rs`: Reaction energies are ordinary, sequential molecule calculations.
+- `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
+- `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
+- `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
+- `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
+- `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
 - `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
 - `src/app/xtb/vibrations/mode_list.rs`
@@ -322,7 +330,7 @@ explains how the crates and modules fit together.
 - `src/cli/ts.rs`: Gas-phase transition-state searches using the isolated xTB worker.
 - `src/cli/ts/geometry.rs`: XYZ admission and atom mapping before a transition-state search.
 - `src/cli/ts/output.rs`: Transition-state table and optional machine-readable outputs.
-- `src/cli/ts/worker.rs`: A sendable potential backed by a thread-affine xTB session.
+- `src/cli/ts/worker.rs`: Shared thread-affine workers used by CLI and desktop TS searches.
 - `src/clipboard.rs`: Explicit native Copy/Paste with editable and image representations.
 - `src/clipboard/browser.rs`: The browser's clipboard.
 - `src/clipboard/copy_as.rs`: Format-specific copy.
@@ -397,6 +405,7 @@ explains how the crates and modules fit together.
 - `src/window_fit.rs`: Windows work-area sizing; UI scale stays under Iced's DPI handling.
 - `src/workers.rs`: Worker modes
 - `src/xtb_agent.rs`: The worker-backed calculation hook for the CLI and MCP hosts.
+- `src/xtb_pool.rs`: A sendable potential backed by a thread-affine xTB session.
 
 ## reshiki-agent
 
@@ -930,6 +939,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/reaction_mapping/search.rs`: Bounded maximum-cardinality graph matching.
 - `crates/model/src/reactions.rs`: Explicit reaction membership, independent of where a scheme is drawn.
 - `crates/model/src/reactions/hints.rs`: Informational checks of arrow meaning; neither chemistry nor drawing is edited.
+- `crates/model/src/reactions/ts_plan.rs`: Derive transition-state search inputs from a reaction's drawing and atom map.
 - `crates/model/src/rear_opacity.rs`: Transparency for view-occluded cage/atom/bond ink, independent of RGB.
 - `crates/model/src/rear_opacity/clip.rs`: Clipping and tessellation for rear-opacity paint in drawing coordinates.
 - `crates/model/src/rear_opacity/ink.rs`: Resolve alpha-affected ink once
@@ -1025,6 +1035,7 @@ explains how the crates and modules fit together.
 - `crates/optimize/src/ts/mapping.rs`: Proper rigid fits (Horn, J.
 - `crates/optimize/src/ts/modes.rs`: Eckart translation/rotation projection and harmonic normal modes.
 - `crates/optimize/src/ts/neb.rs`: Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J.
+- `crates/optimize/src/ts/reactive_start.rs`: Graph-preserving preparation of a reactive starting conformer.
 - `crates/optimize/src/ts/saddle.rs`: Partitioned rational-function saddle refinement.
 - `crates/optimize/src/ts/saddle_regressions.rs`: Analytic counterexamples for trust-model recovery and force-only acceptance.
 

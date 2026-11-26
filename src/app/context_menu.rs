@@ -28,6 +28,8 @@ pub enum Page {
     Model,
     /// xTB on the selected molecule: Energy or Optimize.
     Calculate,
+    /// Review the clicked reaction arrow before calculating.
+    CalculateReaction(u64),
     /// Property lines under the clicked molecule, ticked when shown.
     Properties,
     /// Chemistry, Reference or Illustration, ticked for the current one.
@@ -305,6 +307,26 @@ impl App {
                         command(label, Message::Xtb(Action::Entry(Entry::Task(task))), idle)
                     })
                     .into()
+            }
+            Page::CalculateReaction(arrow) => {
+                use super::xtb::{Action, ts};
+                use ts::review::Mode;
+                let enabled = super::xtb::available()
+                    && !self.tab.busy
+                    && !self.xtb_running()
+                    && ts::review::reaction_arrow(&self.tab.doc, arrow);
+                [
+                    ("Reaction energy", Mode::Energy),
+                    ("Transition state", Mode::TransitionState),
+                ]
+                .map(|(label, mode)| {
+                    command(
+                        label,
+                        Message::Xtb(Action::Ts(ts::Action::Review(mode, Some(arrow)))),
+                        enabled,
+                    )
+                })
+                .into()
             }
             Page::Properties => self.property_entries(),
             Page::Purpose => reshiki::purpose::Purpose::ALL
@@ -821,10 +843,14 @@ impl App {
             entries.push(submenu("Show as", Page::Model));
         }
         // Builds that cannot calculate hide it, as they hide Run.
-        if super::xtb::available()
-            && reshiki::models3d::selected_molecule(&self.tab.doc, &self.tab.selected).is_some()
-        {
-            entries.push(submenu("Calculate (xTB)", Page::Calculate));
+        if super::xtb::available() {
+            if let Some(arrow) = self.context_calculate_reaction_arrow() {
+                entries.push(submenu("Calculate (xTB)", Page::CalculateReaction(arrow)));
+            } else if reshiki::models3d::selected_molecule(&self.tab.doc, &self.tab.selected)
+                .is_some()
+            {
+                entries.push(submenu("Calculate (xTB)", Page::Calculate));
+            }
         }
         if self
             .tab
@@ -918,6 +944,22 @@ impl App {
             ));
         }
         entries
+    }
+
+    /// Keep a reaction calculation on the arrow that was secondary-clicked,
+    /// even when the selection also contains another arrow or its molecules.
+    fn context_calculate_reaction_arrow(&self) -> Option<u64> {
+        let ids = self
+            .context_menu
+            .as_ref()
+            .and_then(|menu| menu.hit.as_deref())
+            .unwrap_or(&self.tab.selected);
+        let mut arrows = ids
+            .iter()
+            .copied()
+            .filter(|id| super::xtb::ts::review::reaction_arrow(&self.tab.doc, *id));
+        let arrow = arrows.next()?;
+        arrows.next().is_none().then_some(arrow)
     }
 
     /// Expansion of the clicked component, including its native dependencies.

@@ -57,7 +57,7 @@ fn a_running_failure_keeps_its_target_after_selection_changes() {
 }
 
 #[test]
-fn clearing_selection_does_not_disclose_a_different_molecules_pinned_result() {
+fn clearing_selection_does_not_show_a_different_molecules_failure() {
     let (mut app, _) = water(CalcTask::Optimize);
     event(&mut app, optimized(&START, &MOVED));
     let pinned = Arc::clone(&app.xtb_shown().unwrap().stored.result);
@@ -77,10 +77,8 @@ fn clearing_selection_does_not_disclose_a_different_molecules_pinned_result() {
         &app.xtb_shown().unwrap().stored.result,
         &pinned
     ));
-    let failed = app.xtb_failed().expect("the most recent run failed");
-    assert_eq!(failed.atoms, vec![other]);
-    assert!(app.xtb_last_successful(failed).is_none());
-    assert!(app.xtb_previous_result(failed, false).is_none());
+    assert!(app.xtb_failed().is_none());
+    assert!(app.xtb_outcome().is_none());
 }
 
 #[test]
@@ -116,7 +114,6 @@ fn the_previous_run_is_the_newest_matching_converged_result() {
 
     app.tab.selected = vec![first];
     app.xtb_fail(state::Failure::Other("invalid settings".into()));
-    app.tab.selected.clear();
     let failed = app.xtb_failed().unwrap();
     let shown = app.xtb_last_successful(failed).unwrap();
     assert_eq!(shown.index, 1);
@@ -128,6 +125,19 @@ fn the_previous_run_is_the_newest_matching_converged_result() {
         };
     }
     assert!(app.xtb_last_successful(app.xtb_failed().unwrap()).is_none());
+}
+
+#[test]
+fn the_previous_molecule_run_skips_a_newer_transition_state_result() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    let mut saddle = app.tab.doc.science.results[0].clone();
+    Arc::make_mut(&mut saddle.result).task = reshiki::qcdata::Task::TransitionState;
+    app.tab.doc.science.results.push(saddle);
+
+    app.xtb_fail(state::Failure::Other("invalid settings".into()));
+    let shown = app.xtb_last_successful(app.xtb_failed().unwrap()).unwrap();
+    assert_eq!(shown.index, 0);
 }
 
 #[test]

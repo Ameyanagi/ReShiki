@@ -18,6 +18,8 @@ use std::borrow::Cow;
 use std::cell::{Cell, Ref, RefCell};
 use std::path::PathBuf;
 
+use super::xtb::ts::export::Source as TsSource;
+
 const ACCENT: Color = Color::from_rgb8(47, 122, 95);
 const WARNING: Color = Color::from_rgb8(161, 98, 7);
 const ERROR: Color = Color::from_rgb8(185, 28, 28);
@@ -99,6 +101,8 @@ pub(super) struct Dialog {
     /// Tells this dialog's save receipts from an earlier dialog's.
     id: u64,
     atoms: Vec<u64>,
+    /// A TS export uses the saved frames rather than the drawing's model.
+    ts_source: Option<TsSource>,
     name: String,
     program: Program,
     job: Job,
@@ -180,6 +184,45 @@ fn line_color(program: Program, line: &str) -> Option<Color> {
 }
 
 impl Dialog {
+    pub(super) fn new(atoms: Vec<u64>, name: String, charge: i32, multiplicity: u32) -> Self {
+        let [default, ..] = qc_input::builtin_templates();
+        let mut dialog = Self {
+            id: NEXT_DIALOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            atoms,
+            ts_source: None,
+            title: String::new(),
+            title_edited: false,
+            source: Cell::new(0),
+            source_frame: None,
+            sources: RefCell::default(),
+            name,
+            program: Program::Gaussian,
+            job: Job::OptFreq,
+            template: default.clone(),
+            method: String::new(),
+            basis: String::new(),
+            replaced_basis: None,
+            charge: charge.to_string(),
+            multiplicity: multiplicity.to_string(),
+            electronic_state_edited: false,
+            cores: String::new(),
+            memory: String::new(),
+            extra: String::new(),
+            irc_points: "30".into(),
+            template_name: None,
+            message: String::new(),
+            saved: false,
+        };
+        dialog.apply(default);
+        dialog
+    }
+
+    pub(super) fn with_source(mut self, source: TsSource, job: Job) -> Self {
+        self.ts_source = Some(source);
+        self.job = job;
+        self
+    }
+
     fn apply(&mut self, template: Template) {
         self.method = template.method.clone();
         self.basis = template.basis.clone();
@@ -335,7 +378,11 @@ impl Dialog {
     }
 
     fn file_stem(&self) -> String {
-        qc_input::default_stem(&stem(&self.name), self.program)
+        let stem = self
+            .ts_source
+            .as_ref()
+            .map_or_else(|| stem(&self.name), |source| source.stem(self.job));
+        qc_input::default_stem(&stem, self.program)
     }
 }
 
@@ -406,34 +453,11 @@ impl App {
             .map(|name| name.text.clone())
             .or_else(|| self.export_stem())
             .unwrap_or_else(|| "molecule".into());
-        let [default, ..] = qc_input::builtin_templates();
-        let mut dialog = Dialog {
-            id: NEXT_DIALOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-            atoms,
-            title: String::new(),
-            title_edited: false,
-            source: Cell::new(0),
-            source_frame: None,
-            sources: RefCell::default(),
-            name,
-            program: Program::Gaussian,
-            job: Job::OptFreq,
-            template: default.clone(),
-            method: String::new(),
-            basis: String::new(),
-            replaced_basis: None,
-            charge: charge.to_string(),
-            multiplicity: (unpaired + 1).to_string(),
-            electronic_state_edited: false,
-            cores: String::new(),
-            memory: String::new(),
-            extra: String::new(),
-            irc_points: "30".into(),
-            template_name: None,
-            message: String::new(),
-            saved: false,
-        };
-        dialog.apply(default);
+        let dialog = Dialog::new(atoms, name, charge, unpaired + 1);
+        self.show_qc_export(dialog)
+    }
+
+    pub(super) fn show_qc_export(&mut self, dialog: Dialog) -> Task<Message> {
         self.qc_export = Some(dialog);
         self.context_menu = None;
         self.palette = None;
@@ -684,8 +708,11 @@ impl App {
                 .iter()
                 .find(|model| dialog.atoms.iter().any(|&id| model.contains(id)))
                 .map(|model| model.atoms.len() + model.hydrogens.len());
-            let entries = self
-                .xtb_geometry_sources(&dialog.atoms)
+            let sources = match &dialog.ts_source {
+                Some(ts) => vec![Source::saved((*ts.frame).clone(), ts.label())],
+                None => self.xtb_geometry_sources(&dialog.atoms),
+            };
+            let entries = sources
                 .into_iter()
                 .enumerate()
                 .map(|(index, source)| {
@@ -715,7 +742,7 @@ impl App {
     }
 
     /// The files the dialog would write, or why it cannot.
-    fn qc_output(&self) -> Result<Output, String> {
+    pub(super) fn qc_output(&self) -> Result<Output, String> {
         let dialog = self.qc_export.as_ref().ok_or_else(String::new)?;
         let sources = self.qc_sources(dialog);
         let (_, source) = dialog.selected_source(&sources).ok_or(GEOMETRY_CHANGED)?;
@@ -724,6 +751,11 @@ impl App {
 
     fn qc_output_for(dialog: &Dialog, source: &Source, model: Model) -> Result<Output, String> {
         let settings = dialog.settings(Some(source))?;
+        let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
+        let stem = dialog.file_stem();
+        if let Some(ts) = &dialog.ts_source {
+            return ts.output(&settings, &stem, &generator);
+        }
         let mut frame = match model {
             Model::Ready { stale: true, .. } => {
                 return Err(
@@ -742,9 +774,7 @@ impl App {
             product: None,
             result: None,
         };
-        let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
-        qc_input::write(&settings, &geometry, &dialog.file_stem(), &generator)
-            .map_err(|error| error.to_string())
+        qc_input::write(&settings, &geometry, &stem, &generator).map_err(|error| error.to_string())
     }
 
     pub(super) fn with_qc_export<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
@@ -870,6 +900,10 @@ impl App {
         };
 
         // Job: the plain tasks, then the transition-state tasks.
+        let endpoints = dialog
+            .ts_source
+            .as_ref()
+            .is_some_and(TsSource::has_endpoints);
         let job_row = |jobs: &[Job]| {
             let mut buttons = row![].spacing(4);
             for &job in jobs {
@@ -880,7 +914,7 @@ impl App {
                     format!("qc-export-job-{job:?}"),
                     job.label(),
                     !xyz && dialog.job == job,
-                    (offered && !needs_path).then(|| send(Action::Job(job))),
+                    (offered && (!needs_path || endpoints)).then(|| send(Action::Job(job))),
                 ));
             }
             buttons.wrap()
@@ -892,6 +926,8 @@ impl App {
             .collect();
         let job_note = if xyz {
             "XYZ writes the coordinates only.".to_owned()
+        } else if endpoints {
+            "Reactant, product and TS guess from this transition-state search.".to_owned()
         } else if path_jobs.is_empty() {
             format!("{} offers no QST2, QST3 or NEB-TS.", dialog.program.label())
         } else {
@@ -1024,7 +1060,9 @@ impl App {
             ]
             .spacing(8),
             (!dialog.electronic_state_edited).then(|| {
-                let hint = if source.and_then(Source::electronic_state).is_some() {
+                let hint = if dialog.ts_source.is_some() {
+                    "Charge and multiplicity from the TS result"
+                } else if source.and_then(Source::electronic_state).is_some() {
                     "Charge and multiplicity from the xTB geometry"
                 } else {
                     "Charge and multiplicity from the drawing"

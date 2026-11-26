@@ -16,6 +16,7 @@ use reshiki::science::isotope_masses;
 use reshiki::science::{self, Freshness, Launch};
 use results::RunInfo;
 use state::{FailureDetails, Progress, Settings};
+use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
 mod conformers;
@@ -31,6 +32,7 @@ mod source;
 pub(super) use source::Source;
 mod state;
 mod tone;
+pub(super) mod ts;
 pub(crate) mod vibrations;
 mod view;
 
@@ -84,11 +86,14 @@ pub(crate) enum Action {
     Orbitals(orbitals::Action),
     /// The card's Conformers fields and the Conformers tab.
     Conformers(conformers::Action),
+    Ts(ts::Action),
     Vibrations(vibrations::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
     #[cfg(not(target_arch = "wasm32"))]
     Search(u64, conformers::Event),
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    TsEvent(u64, ts::Event),
 }
 
 /// Ways to start a calculation without the card's Run button. Each shows
@@ -145,6 +150,10 @@ pub(crate) struct State {
     serial: u64,
     pub(super) palette: palette::Palette,
     conformer_stereo: std::cell::RefCell<conformers::CardStereo>,
+    ts_card: ts::card::State,
+    ts_sessions: ts::Sessions,
+    pub(in crate::app::xtb) ts_review: Option<ts::review::Dialog>,
+    energy_state: ts::energy::State,
     pub(super) orbitals: orbitals::Orbitals,
     pub(super) vibrations: vibrations::State,
     /// What this session knows about stored results' runs, by result.
@@ -184,6 +193,7 @@ pub(crate) struct Request {
     start: Option<Start>,
     /// The search, for a Conformers task.
     search: Option<conformers::Config>,
+    ts: Option<ts::Request>,
 }
 
 /// A displaced input and the accepted geometry from which it was pushed.
@@ -201,6 +211,7 @@ pub(crate) struct Run {
     start: Option<Start>,
     /// A conformer search's settings and progress.
     search: Option<conformers::Live>,
+    ts: Option<ts::Live>,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -252,6 +263,10 @@ pub(crate) struct Failed {
 }
 
 impl Failed {
+    fn ts(&self) -> Option<&ts::Request> {
+        self.request.as_ref()?.ts.as_ref()
+    }
+
     fn method(&self) -> qcdata::XtbMethod {
         self.request
             .as_ref()
@@ -259,7 +274,11 @@ impl Failed {
     }
 
     fn scf_iteration_limit(&self) -> Option<u32> {
-        self.request.as_ref()?.config.max_iterations.filter(|&n| {
+        let request = self
+            .request
+            .as_ref()
+            .filter(|request| request.ts.is_none())?;
+        request.config.max_iterations.filter(|&n| {
             matches!(self.failure.reason(), state::Failure::Scf(_))
                 && n < state::DEFAULT_SCF_ITERATIONS
         })
@@ -330,6 +349,7 @@ impl Failed {
 pub(crate) struct Review {
     pending: Pending,
     reasons: Vec<String>,
+    ts: Option<Rc<ts::Session>>,
 }
 
 /// A finished calculation, not yet stored.
@@ -344,10 +364,21 @@ struct Pending {
     line: String,
     notes: Vec<String>,
     info: RunInfo,
+    attempt: Option<Attempt>,
+}
+
+struct Attempt {
+    request: Box<Request>,
+    seconds: f64,
+    revision: (u64, u64),
 }
 
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    if matches!(message, Message::Xtb(Action::TsEvent(..))) {
+        return true;
+    }
     #[cfg(not(target_arch = "wasm32"))]
     return matches!(
         message,
@@ -360,7 +391,7 @@ pub(super) fn is_progress(message: &Message) -> bool {
 }
 
 /// Why this build cannot calculate, if it cannot.
-fn unavailable() -> Option<&'static str> {
+pub(super) fn unavailable() -> Option<&'static str> {
     if cfg!(windows) {
         return Some("xTB calculations are coming to Windows once code signing is in place.");
     }
@@ -389,6 +420,9 @@ impl App {
                 }
                 let mut request = request.clone();
                 if matches!(action, Action::Retry) {
+                    if request.ts.is_some() {
+                        return Task::none();
+                    }
                     let Some(hotter) = request.config.hotter() else {
                         return Task::none();
                     };
@@ -415,16 +449,23 @@ impl App {
                     return iced::clipboard::write(details);
                 }
             }
-            Action::Cancel => self.xtb_cancel(),
-            Action::ApplyAnyway => self.xtb_apply_anyway(),
+            Action::Cancel => return self.xtb_cancel(),
+            Action::ApplyAnyway => {
+                self.xtb_apply_anyway();
+                return self.xtb_reaction_energy_continue();
+            }
             Action::Discard => {
                 if let Some(Outcome::Review(_)) = self.tab.xtb.outcome.take() {
                     self.status = "Optimized geometry discarded".into();
                     self.error = false;
                 }
+                self.tab
+                    .xtb
+                    .energy_state
+                    .stop("Reaction energy canceled: optimized geometry discarded");
             }
             #[cfg(not(target_arch = "wasm32"))]
-            Action::Event(serial, event) => self.xtb_event(serial, event),
+            Action::Event(serial, event) => return self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
@@ -440,8 +481,11 @@ impl App {
             }
             Action::Vibrations(action) => return self.xtb_vibrations_action(action),
             Action::Conformers(action) => return self.xtb_conformers(action),
+            Action::Ts(action) => return self.xtb_ts_action(action),
             #[cfg(not(target_arch = "wasm32"))]
             Action::Search(serial, event) => self.xtb_search_event(serial, event),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            Action::TsEvent(serial, event) => self.xtb_ts_event(serial, event),
             Action::Orbitals(action) => return self.xtb_orbitals(action),
             setting => {
                 let target = self.xtb_key();
@@ -513,8 +557,14 @@ impl App {
     /// The last outcome, if it describes the card's molecule.
     fn xtb_outcome(&self) -> Option<&Outcome> {
         let outcome = self.tab.xtb.outcome.as_ref()?;
+        if self.xtb_selected_reaction().is_some()
+            || matches!(outcome, Outcome::Failed(failed) if failed.ts().is_some())
+        {
+            return None;
+        }
         let Some(target) = self.xtb_target() else {
-            return Some(outcome);
+            return (!matches!(outcome, Outcome::Failed(_)) || self.xtb_failed().is_some())
+                .then_some(outcome);
         };
         let intersects = |atoms: &[u64]| atoms.iter().any(|id| target.contains(id));
         let belongs = match outcome {
@@ -531,12 +581,33 @@ impl App {
         belongs.then_some(outcome)
     }
 
-    /// The failure that belongs on the card and in the palette.
+    /// The molecule failure that belongs with the result on display.
     fn xtb_failed(&self) -> Option<&Failed> {
         let Outcome::Failed(failed) = self.tab.xtb.outcome.as_ref()? else {
             return None;
         };
-        self.xtb_outcome().map(|_| failed.as_ref())
+        if failed.ts().is_some() || self.xtb_selected_reaction().is_some() {
+            return None;
+        }
+        // The targeted molecule decides; with none, any shown result must
+        // be this molecule's own.
+        let belongs = match (self.xtb_target(), self.xtb_shown_entry()) {
+            (Some(target), _) => target.iter().any(|atom| failed.atoms.contains(atom)),
+            (None, Some((_, stored))) => {
+                !ts::is_ts(&stored.result)
+                    && self
+                        .tab
+                        .doc
+                        .science
+                        .attachment(stored.attachment)?
+                        .atoms
+                        .iter()
+                        .flatten()
+                        .any(|atom| failed.atoms.contains(atom))
+            }
+            (None, None) => true,
+        };
+        belongs.then_some(failed)
     }
 
     /// The current 3D model of the molecule of `atom`, by index.
@@ -588,6 +659,11 @@ impl App {
         // A build without the engine shows no Run button; its worker would
         // answer "not included" anyway.
         if self.tab.xtb.run.is_some() {
+            return false;
+        }
+        if self.tab.xtb.energy_state.in_progress() {
+            self.status = "Finish or cancel the reaction energy calculation first".into();
+            self.error = false;
             return false;
         }
         if self.tab.busy
@@ -685,6 +761,7 @@ impl App {
             keep_full: false,
             start: None,
             search,
+            ts: None,
         };
         self.xtb_begin(request)
     }
@@ -715,6 +792,7 @@ impl App {
                 phase: Default::default(),
                 stopping: false,
             }),
+            ts: request.ts.map(ts::Live::new),
             config: request.config,
             keep_full: request.keep_full,
             start: request.start,
@@ -762,8 +840,8 @@ impl App {
                 if let Some(run) = &mut self.tab.xtb.run {
                     run.model = Some(key);
                     run.started = iced::time::Instant::now();
+                    self.status = run.status();
                 }
-                self.status = "xTB · making the 3D model first (MMFF94s)".into();
                 self.error = false;
                 task
             }
@@ -817,6 +895,10 @@ impl App {
             self.xtb_fail(state::Failure::TooMany { count, limit });
             return Task::none();
         }
+        #[cfg(feature = "xtb")]
+        if run.ts.is_some() {
+            return self.xtb_ts_start(launch);
+        }
         if let Some(start) = &run.start {
             if start.positions.len() != count
                 || start.from.len() != count
@@ -867,10 +949,11 @@ impl App {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn xtb_event(&mut self, serial: u64, event: run::Event) {
+    fn xtb_event(&mut self, serial: u64, event: run::Event) -> Task<Message> {
         let current = (self.tab.file_epoch, self.tab.revision);
+        let reaction_energy = self.tab.xtb.energy_state.running(serial);
         let Some(run) = self.tab.xtb.run.as_mut().filter(|run| run.serial == serial) else {
-            return;
+            return Task::none();
         };
         match event {
             run::Event::Tick | run::Event::Hessian => {
@@ -897,15 +980,26 @@ impl App {
                 Ok(pending) => {
                     self.tab.xtb.run = None;
                     self.xtb_store(pending, false);
+                    if reaction_energy {
+                        return self.xtb_reaction_energy_continue();
+                    }
                 }
                 Err(failure) => self.xtb_fail(failure),
             },
         }
+        if reaction_energy && let Some(progress) = self.tab.xtb.energy_state.progress() {
+            self.status = format!("{progress} · {}", self.status);
+        }
+        Task::none()
     }
 
     /// End the run in flight, if any, with `failure`. The card and the
     /// results palette show it, keeping the request for Retry and Run again.
     fn xtb_fail(&mut self, failure: state::Failure) {
+        self.tab
+            .xtb
+            .energy_state
+            .stop("Reaction energy stopped: a species calculation failed");
         let run = self.tab.xtb.run.take();
         let atoms = run.as_ref().map_or_else(
             || self.xtb_target().unwrap_or_default(),
@@ -916,53 +1010,75 @@ impl App {
             .and_then(|run| run.launch.as_ref())
             .map(|launch| launch.frame.numbers.clone())
             .unwrap_or_default();
-        let seconds = run.as_ref().map_or(0., Run::seconds);
-        // The state the run calculated: an edit during the run retires Retry.
-        let revision = run
-            .as_ref()
-            .map_or((self.tab.file_epoch, self.tab.revision), |run| run.revision);
-        let request = run.map(|mut run| {
-            Box::new(Request {
-                atoms: std::mem::take(&mut run.atoms),
-                config: run.config.clone(),
-                keep_full: run.keep_full,
-                start: run.start.take(),
-                search: run.search.as_ref().map(|live| live.config.clone()),
-            })
-        });
-        let failed = Failed {
+        let attempt = run.as_ref().map(Run::attempt);
+        self.xtb_record_failure(failure, attempt, atoms, numbers);
+    }
+
+    fn xtb_record_failure(
+        &mut self,
+        failure: state::Failure,
+        attempt: Option<Attempt>,
+        atoms: Vec<u64>,
+        numbers: Vec<u8>,
+    ) {
+        let mut failed = Failed {
             failure,
             atoms,
-            request,
+            request: None,
             numbers,
-            seconds,
-            revision,
+            seconds: 0.,
+            revision: (self.tab.file_epoch, self.tab.revision),
         };
+        if let Some(attempt) = attempt {
+            failed.request = Some(attempt.request);
+            failed.seconds = attempt.seconds;
+            // An edit during the run retires Retry.
+            failed.revision = attempt.revision;
+        }
         self.status = format!(
             "xTB calculation failed: {}",
             failed.explain(self.xtb_can_retry(&failed)).0
         );
         self.error = true;
-        self.tab.xtb.palette.open = true;
-        self.tab.xtb.palette.previous = false;
-        // The card's actions must show, so a collapsed dock opens.
-        self.tab.xtb.palette.collapsed = false;
+        if failed
+            .ts()
+            .is_none_or(|ts| self.xtb_selected_reaction() == Some(ts.arrow))
+        {
+            self.tab.xtb.palette.open = true;
+            self.tab.xtb.palette.previous = false;
+            // The card's actions must show, so a collapsed dock opens.
+            self.tab.xtb.palette.collapsed = false;
+        }
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
     /// Cancel stops the worker (or the model generation) and applies nothing.
-    pub(super) fn xtb_cancel(&mut self) {
+    pub(super) fn xtb_cancel(&mut self) -> Task<Message> {
         if self.xtb_search_stop() {
-            return;
+            return Task::none();
         }
+        let reaction_energy = self.tab.xtb.energy_state.stop("Reaction energy canceled");
         let Some(run) = self.tab.xtb.run.take() else {
-            return;
+            if reaction_energy {
+                self.status = "Reaction energy canceled".into();
+                self.error = false;
+            }
+            return Task::none();
         };
         if run.launch.is_none() {
             self.tab.model_job.take_if(|job| Some(job.key) == run.model);
         }
-        self.status = "Calculation canceled".into();
+        self.status = if reaction_energy {
+            "Reaction energy canceled"
+        } else {
+            "Calculation canceled"
+        }
+        .into();
         self.error = false;
+        if run.ts.is_some() {
+            return super::focus_drawing();
+        }
+        Task::none()
     }
 
     fn xtb_apply_anyway(&mut self) {
@@ -972,7 +1088,7 @@ impl App {
             return;
         }
         if let Some(Outcome::Review(review)) = self.tab.xtb.outcome.take() {
-            self.xtb_store(review.pending, true);
+            self.xtb_store_with_session(review.pending, true, review.ts);
         }
     }
 
@@ -980,6 +1096,15 @@ impl App {
     /// as one Undo step. Unless `forced`, a stereo change or an open edit
     /// stops at the review card instead.
     fn xtb_store(&mut self, pending: Pending, forced: bool) {
+        self.xtb_store_with_session(pending, forced, None);
+    }
+
+    fn xtb_store_with_session(
+        &mut self,
+        pending: Pending,
+        forced: bool,
+        ts: Option<Rc<ts::Session>>,
+    ) {
         let mut doc = self.tab.doc.clone();
         let attached = match science::attach(
             &mut doc,
@@ -989,7 +1114,7 @@ impl App {
         ) {
             Ok(attached) => attached,
             Err(error) => {
-                self.xtb_fail(state::Failure::Other(error.to_string()));
+                self.xtb_store_failed(pending, error.to_string());
                 return;
             }
         };
@@ -1034,7 +1159,11 @@ impl App {
             if let Some(first) = reasons.first() {
                 self.status = format!("{} · nothing applied", first.trim_end_matches('.'));
                 self.error = false;
-                self.tab.xtb.outcome = Some(Outcome::Review(Box::new(Review { pending, reasons })));
+                self.tab.xtb.outcome = Some(Outcome::Review(Box::new(Review {
+                    pending,
+                    reasons,
+                    ts,
+                })));
                 return;
             }
         }
@@ -1060,7 +1189,7 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if self.error {
-            self.xtb_fail(state::Failure::Other(self.status.clone()));
+            self.xtb_store_failed(pending, self.status.clone());
             return;
         }
         if let Some(result) = self
@@ -1072,6 +1201,16 @@ impl App {
             .map(|s| s.result.clone())
         {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
+            if let Some(ts) = ts {
+                self.tab.xtb.ts_sessions.remember(&result, ts);
+                if self.tabs.temporary_depth == 0 {
+                    self.tab.xtb.palette.collapsed = false;
+                    if self.xtb.dock.inspector {
+                        self.xtb.page = Page::Xtb;
+                        let _ = self.show_inspector_tab(super::InspectorTab::Predict);
+                    }
+                }
+            }
             self.xtb_show_result(&result);
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
@@ -1090,6 +1229,21 @@ impl App {
         });
     }
 
+    fn xtb_store_failed(&mut self, mut pending: Pending, reason: String) {
+        let failure = state::Failure::Other(reason);
+        if let Some(attempt) = pending.attempt.take() {
+            let atoms = pending.launch.atoms.into_iter().flatten().collect();
+            self.xtb_record_failure(
+                failure,
+                Some(attempt),
+                atoms,
+                pending.launch.frame.numbers.clone(),
+            );
+        } else {
+            self.xtb_fail(failure);
+        }
+    }
+
     /// "C3" for the third frame atom, and the drawing's CIP code there.
     fn xtb_atom_name(&self, atoms: &[Option<u64>], id: u64) -> (String, Option<String>) {
         let index = atoms.iter().position(|a| *a == Some(id));
@@ -1101,11 +1255,29 @@ impl App {
 }
 
 impl Run {
+    fn attempt(&self) -> Attempt {
+        Attempt {
+            request: Box::new(Request {
+                atoms: self.atoms.clone(),
+                config: self.config.clone(),
+                keep_full: self.keep_full,
+                start: self.start.clone(),
+                search: self.search.as_ref().map(|live| live.config.clone()),
+                ts: self.ts.as_ref().map(|live| live.request.clone()),
+            }),
+            seconds: self.seconds(),
+            revision: self.revision,
+        }
+    }
+
     fn seconds(&self) -> f64 {
         self.started.elapsed().as_secs_f64()
     }
 
     fn status(&self) -> String {
+        if let Some(live) = &self.ts {
+            return format!("xTB · {}", live.line());
+        }
         if self.launch.is_none() {
             return "xTB · making the 3D model first (MMFF94s)".into();
         }
@@ -1293,6 +1465,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
         search: None,
+        transition_state: None,
     });
     let status = if report.converged {
         qcdata::Status::Converged
@@ -1343,6 +1516,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         result,
         line,
         notes,
+        attempt: None,
     })
 }
 

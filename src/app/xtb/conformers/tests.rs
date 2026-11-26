@@ -72,6 +72,7 @@ fn funnel_describes_the_stored_minimizer_and_skips_absent_data() {
             reranked: 4,
             kept: 3,
         }),
+        transition_state: None,
     });
     assert_eq!(
         view::search_funnel(&result).unwrap(),

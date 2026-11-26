@@ -26,6 +26,7 @@ pub(super) struct State {
     pub(super) pending: Option<(u64, u64)>,
     pub(super) proposal: Option<Arc<Proposal>>,
     preview: Option<Preview>,
+    inferred_arrow: Option<u64>,
     pub(super) review_pair: Option<(u64, u64)>,
     /// The catalytic cycle and step the proposal maps, on a copy of the
     /// step's parts; `None` maps an arrow's reaction in the drawing.
@@ -34,7 +35,7 @@ pub(super) struct State {
     pub(super) color_step: bool,
 }
 
-struct Preview {
+pub(super) struct Preview {
     key: (u64, u64),
     current: bool,
     document: Option<Document>,
@@ -44,10 +45,57 @@ struct Preview {
     theme: Option<Box<reshiki::theme_files::ThemeFile>>,
 }
 
+/// Keep the map numbers in a review and a reaction card in the same colours.
+pub(super) fn map_label_color(number: u32) -> reshiki::palette::Color {
+    use reshiki::palette::{Color, Hue, Row};
+    let index = number.saturating_sub(1) as usize % Hue::ALL.len();
+    Color::Palette(
+        Hue::ALL.get(index).copied().unwrap_or(Hue::Blue),
+        Row::Strong,
+    )
+}
+
+fn pair_label(doc: &Document, proposal: &Proposal, a: u64, b: u64) -> String {
+    let atom = |id| {
+        let element = doc.atom(id).map_or("?", |atom| atom.element.as_str());
+        let number = proposal.number(id).unwrap_or_default();
+        format!("{element}{number}")
+    };
+    let number = proposal.number(a).unwrap_or_default();
+    format!("Map {number} · {} → {}", atom(a), atom(b))
+}
+
 impl Preview {
     fn new(key: (u64, u64), proposal: &Proposal, doc: &Document) -> Self {
-        let current = proposal.current(doc);
-        let document = proposal.apply(doc, true).ok().map(|mut document| {
+        let mut preview = Self::empty(key, doc, proposal.current(doc));
+        preview.set_drawing(proposal.apply(doc, true).ok(), proposal.arrow);
+        preview
+    }
+
+    pub(super) fn for_reaction(mut doc: Document, arrow: u64) -> Self {
+        for atom in &mut doc.atoms {
+            if atom.map_num != 0 {
+                atom.display.mapping.style.color = map_label_color(atom.map_num);
+            }
+        }
+        let mut preview = Self::empty((0, 0), &doc, true);
+        preview.set_drawing(Some(doc), arrow);
+        preview
+    }
+
+    fn empty(key: (u64, u64), doc: &Document, current: bool) -> Self {
+        Self {
+            key,
+            current,
+            document: None,
+            focus: None,
+            version: doc.version,
+            theme: doc.custom_theme.clone(),
+        }
+    }
+
+    fn set_drawing(&mut self, document: Option<Document>, arrow: u64) {
+        self.document = document.map(|mut document| {
             document.atom_labels.maps = true;
             for atom in &mut document.atoms {
                 atom.display.mapping.show = Some(true);
@@ -56,19 +104,35 @@ impl Preview {
         });
         // The thumbnail frames the reaction under review, all its parts and
         // its arrow's labels, so it shows large; neighbours are clipped.
-        let focus = document.as_ref().and_then(|document| {
-            let reaction = reshiki::reactions::preview(document, proposal.arrow).ok()?;
+        self.focus = self.document.as_ref().and_then(|document| {
+            let reaction = reshiki::reactions::preview(document, arrow).ok()?;
             reshiki::scene::selection_bounds(document, &reaction.ids())
         });
-        Self {
-            key,
-            current,
-            document,
-            focus,
-            version: doc.version,
-            theme: doc.custom_theme.clone(),
-        }
     }
+
+    pub(super) fn thumbnail(&self, height: u32) -> Option<Element<'_, Message>> {
+        Some(
+            crate::canvas::layered::canvas(crate::canvas::TemplateThumbnail(
+                self.document.as_ref()?,
+                self.focus,
+            ))
+            .width(Length::Fill)
+            .height(height)
+            .into(),
+        )
+    }
+}
+
+/// Supply inferred roles on a copy so the mapper and planner can use their
+/// ordinary input. Only an accepted edit installs the copy in the document.
+pub(super) fn with_roles(doc: &Document, arrow: u64) -> Result<Cow<'_, Document>, &'static str> {
+    if mapping::reaction(doc, arrow).is_ok() {
+        return Ok(Cow::Borrowed(doc));
+    }
+    let reaction = reshiki::reactions::preview(doc, arrow)?;
+    let mut candidate = doc.clone();
+    candidate.reactions.push(reaction);
+    Ok(Cow::Owned(candidate))
 }
 
 impl State {
@@ -108,7 +172,7 @@ pub enum Action {
     ReviewPair(usize),
     Align,
 }
-async fn calculate(source: Document, arrow: u64) -> Result<Arc<Proposal>, String> {
+pub(super) async fn calculate(source: Document, arrow: u64) -> Result<Arc<Proposal>, String> {
     reshiki::task::spawn_blocking(move || mapping::propose(&source, arrow, Budget::default()))
         .await
         .map_err(|e| format!("Atom mapping failed: {e}"))?
@@ -166,7 +230,10 @@ impl App {
             Some((id, _)) => reshiki::cycles::steps::reactions(&self.tab.doc, id)
                 .ok()
                 .map(|(copy, _)| Cow::Owned(copy)),
-            None => Some(Cow::Borrowed(&self.tab.doc)),
+            None => match self.tab.mapping.inferred_arrow {
+                Some(arrow) => with_roles(&self.tab.doc, arrow).ok(),
+                None => Some(Cow::Borrowed(&self.tab.doc)),
+            },
         }
     }
 
@@ -241,23 +308,33 @@ impl App {
             Action::Pair => {
                 let arrow = self.reaction_arrow();
                 let selected = self.tab.selected.clone();
+                let inferred = self.tab.mapping.inferred_arrow;
                 self.commit_mapping(|before| {
-                    mapping::pair(
-                        before,
-                        arrow.ok_or("Assign reactants and products first")?,
-                        &selected,
-                    )
+                    let arrow = arrow.ok_or("Assign reactants and products first")?;
+                    let source = if inferred == Some(arrow) {
+                        with_roles(before, arrow)?
+                    } else {
+                        Cow::Borrowed(before)
+                    };
+                    mapping::pair(&source, arrow, &selected)
                 });
             }
             Action::Align => {
                 let arrow = self.reaction_arrow();
+                let inferred = self.tab.mapping.inferred_arrow;
                 self.commit_mapping(|before| {
-                    mapping::align(before, arrow.ok_or("Assign reactants and products first")?)
+                    let arrow = arrow.ok_or("Assign reactants and products first")?;
+                    let source = match inferred {
+                        Some(id) if id == arrow => with_roles(before, arrow)?,
+                        _ => Cow::Borrowed(before),
+                    };
+                    mapping::align(&source, arrow)
                 });
             }
             Action::ApplyProposal => {
                 let proposal = self.tab.mapping.proposal.clone();
                 let step = self.tab.mapping.step;
+                let inferred = self.tab.mapping.inferred_arrow;
                 let color_step = std::mem::take(&mut self.tab.mapping.color_step);
                 // Color by origin asked for these maps: maps and colors are
                 // one Undo step.
@@ -301,7 +378,12 @@ impl App {
                             }
                             doc
                         }
-                        None => proposal.apply(before, true)?,
+                        None => match inferred {
+                            Some(arrow) => {
+                                proposal.apply(with_roles(before, arrow)?.as_ref(), true)?
+                            }
+                            None => proposal.apply(before, true)?,
+                        },
                     };
                     // A colored figure reads without map numbers; Show maps
                     // brings them back.
@@ -418,6 +500,23 @@ impl App {
             .discard(),
         )
     }
+    pub(super) fn open_reaction_map(
+        &mut self,
+        arrow: u64,
+        proposal: Option<Arc<Proposal>>,
+    ) -> Task<Message> {
+        let _ = self.reaction_action(super::reactions::Action::Choose(arrow));
+        self.tab.reactions.color_after_maps = None;
+        self.tab.mapping.pending = None;
+        self.tab.mapping.step = None;
+        self.tab.mapping.color_step = false;
+        self.tab.mapping.inferred_arrow = mapping::reaction(&self.tab.doc, arrow)
+            .is_err()
+            .then_some(arrow);
+        self.tab.mapping.set_proposal(proposal);
+        self.open_mapping()
+    }
+
     fn start_auto_map(&mut self) -> Task<Message> {
         if self.tab.mapping.pending.is_some() || self.tab.busy {
             return Task::none();
@@ -427,7 +526,19 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        self.run_auto_map(self.tab.doc.clone(), arrow, None, false)
+        self.tab.mapping.inferred_arrow = self.tab.mapping.inferred_arrow.filter(|id| *id == arrow);
+        let source = match self.tab.mapping.inferred_arrow {
+            Some(_) => with_roles(&self.tab.doc, arrow).map(Cow::into_owned),
+            None => Ok(self.tab.doc.clone()),
+        };
+        match source {
+            Ok(source) => self.run_auto_map(source, arrow, None, false),
+            Err(error) => {
+                self.status = error.into();
+                self.error = true;
+                Task::none()
+            }
+        }
     }
     /// Propose atom maps for step `s` of cycle `id`; with `color`, applying
     /// them colors the cycle by origin.
@@ -507,6 +618,11 @@ impl App {
                 self.tab.doc = candidate;
                 self.changed(before);
                 self.tab.mapping.set_proposal(None);
+                self.tab.mapping.inferred_arrow = self
+                    .tab
+                    .mapping
+                    .inferred_arrow
+                    .filter(|arrow| mapping::reaction(&self.tab.doc, *arrow).is_err());
                 self.status = "Atom mapping updated".into();
                 self.error = false;
             }
@@ -518,10 +634,11 @@ impl App {
     }
     /// The Atom maps section, after the role list it depends on.
     pub(super) fn mapping_section(&self) -> Element<'_, Message> {
-        let ready = self
-            .reaction_arrow()
-            .and_then(|arrow| mapping::reaction(&self.tab.doc, arrow).ok())
-            .is_some_and(|r| r.ready());
+        let ready = self.reaction_arrow().is_some_and(|arrow| {
+            mapping::reaction(&self.tab.doc, arrow).is_ok_and(|r| r.ready())
+                || (self.tab.mapping.inferred_arrow == Some(arrow)
+                    && reshiki::reactions::preview(&self.tab.doc, arrow).is_ok_and(|r| r.ready()))
+        });
         let mapped = self.tab.doc.atoms.iter().filter(|a| a.map_num != 0).count();
         let summary = match mapped {
             _ if !ready => "Assign reactants and products first".to_owned(),
@@ -641,7 +758,7 @@ impl App {
         let certainty = if !proposal.complete {
             "Budget reached · optimality and uniqueness unknown"
         } else if proposal.multiple_best {
-            "Several mappings tie under the graph score"
+            "Several mappings tie"
         } else {
             "One best mapping under the graph score"
         };
@@ -658,17 +775,14 @@ impl App {
                 ))
                 .size(11),
             );
-        if let Some(preview) = &self.tab.mapping.preview
-            && let Some(document) = &preview.document
+        if let Some(thumbnail) = self
+            .tab
+            .mapping
+            .preview
+            .as_ref()
+            .and_then(|preview| preview.thumbnail(120))
         {
-            body = body.push(
-                crate::canvas::layered::canvas(crate::canvas::TemplateThumbnail(
-                    document,
-                    preview.focus,
-                ))
-                .width(Length::Fill)
-                .height(120),
-            );
+            body = body.push(thumbnail);
         }
         if !current {
             body = body.push(text("Drawing changed · Run Auto-map again").size(11));
@@ -693,13 +807,9 @@ impl App {
             .spacing(4)
             .align_y(Alignment::Center),
         );
-        let atom = |id: u64| {
-            let element = self.tab.doc.atom(id).map_or("?", |a| a.element.as_str());
-            format!("{element} #{id}")
-        };
+        let source = self.mapping_source();
         for (index, (a, b)) in proposal.pairs.iter().enumerate() {
-            let number = proposal.number(*a).unwrap_or_default();
-            let label = format!("Map {number} · {} → {}", atom(*a), atom(*b));
+            let label = pair_label(source.as_deref().unwrap_or(&self.tab.doc), proposal, *a, *b);
             body = body.push(
                 accessible_command(format!("mapping.review.{index}"), label.clone(), label)
                     .on_press_maybe(current.then_some(Message::Mapping(Action::ReviewPair(index)))),

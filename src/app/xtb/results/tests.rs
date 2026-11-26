@@ -89,6 +89,7 @@ fn optimized(full: bool) -> CalcResult {
             scf_iterations: vec![9, 5],
             finished: Some("2026-11-25T14:03:00Z".into()),
             search: None,
+            transition_state: None,
         }),
     }
 }

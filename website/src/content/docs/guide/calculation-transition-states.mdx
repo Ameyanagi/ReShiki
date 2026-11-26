@@ -1,17 +1,51 @@
 ---
 title: Transition states
-description: Find a transition state with GFN2-xTB from the command line, check it, and export it as a starting point for Gaussian or ORCA.
+description: Find a transition state with GFN2-xTB from a drawn reaction or the command line, check it, and export it as a starting point for Gaussian or ORCA.
 ---
 
 import Screenshot from "../../../components/Screenshot.astro";
 
 :::caution[Not released yet]
-The transition-state search is on the `xtb/next` branch and not in a released version of ReShiki yet. It runs from the command line, `reshiki --cli ts`, in macOS and Linux builds with xTB. Starting it from a reaction drawn in the app is coming.
+The transition-state search is on the `xtb/next` branch and not in a released version of ReShiki yet. It runs from a reaction drawn in the app and from the command line, `reshiki --cli ts`, in macOS and Linux builds with xTB.
 :::
 
 The main use: get a good transition-state guess and its Hessian cheaply with xTB, then refine them with DFT in Gaussian or ORCA. Barriers from GFN2-xTB are rough (it underestimates many of them); trust the geometry more than the number.
 
-## Run a search
+## From a drawn reaction
+
+Draw the reaction scheme, click its arrow and open **Predict ▸ xTB**. The **Reaction (xTB)** card has two parts:
+
+- **Reaction energy**: optimizes every species (**Optimize** for ΔE, **Opt + freq** for ΔG at 298.15 K) and respects the coefficients. Results already in the file with the same settings are reused.
+- **Barrier (transition state)**: **Find transition state** runs the search below for one-step reactions with one molecule on one side (1 → 1, 1 → 2, 2 → 1).
+
+Right-click the arrow ▸ **Calculate (xTB)**, or press ⌘K and type "barrier", for the same two commands. Reagents and conditions above or below the arrow are ignored.
+
+ReShiki needs to know which atom becomes which. It uses the drawing's atom map when it is complete. Otherwise it maps the atoms itself and starts at once when it is sure. When several maps tie, hydrogens move, isotope-labelled hydrogens need a map, or the scheme does not balance, a review sheet opens first. It shows the map numbers in colour, the bonds formed and broken, and the charge and multiplicity of each species. **Accept**, **Edit map** or **Cancel**.
+
+<Screenshot
+  src="/manual/ts-map-review.webp"
+  alt="Review sheet for butadiene + ethylene → cyclohexene: coloured atom-map numbers on both sides, 'Several mappings tie', bonds formed C1–C5 and C4–C6, broken none, charge 0 and multiplicity 1 for each species, 15 path points, and Edit map, Cancel and Accept buttons."
+/>
+
+The card always lists the bonds the search used, such as "Bonds formed: C1–C6 · broken: O3–C4". The search builds the other side from these bond changes, so stereochemistry drawn on that side (wedges, E/Z) is not enforced; the card says so when the drawing has any. An automatic map can pick another mechanism with the same number of bond changes. For allyl vinyl ether it maps a 1,3-shift instead of the Claisen [3,3] shift, so check that line, or draw the atom map yourself.
+
+<Screenshot
+  src="/manual/ts-reaction-card.webp"
+  alt="Claisen rearrangement drawn with atom maps. The Reaction (xTB) card shows ΔE −8.44 kcal/mol, bonds formed C1–C6 and broken O3–C4, ΔE‡ 27.3 kcal/mol, one imaginary frequency 393i cm⁻¹ that connects reactant and product. The Path tab below plots the energy along the reaction coordinate with the TS‡ 27.3 marker."
+/>
+
+A barrier appears only when the saddle converged with exactly one imaginary frequency and its IRC connects reactant and product. Then **Show path** opens the energy profile, **Animate** plays the imaginary mode in Vibrations, and **Export TS input…** writes a Gaussian, ORCA or GAMESS input named after the reaction (TS, QST2, QST3, NEB-TS or IRC, with the xTB Hessian for ORCA). The search details are in the **Log** tab. New 3D models go below the scheme, and the drawing never moves. The result is saved lightly with the file.
+
+Otherwise the card says **No reliable transition state found** and why, for example "The reaction path reaches the reactant on both sides". **Try again with a finer path** reruns with 20 path points, and **Show what was found** opens the path and the rejected saddle.
+
+<Screenshot
+  src="/manual/ts-no-reliable.webp"
+  alt="Reaction card with 'No reliable transition state found. The reaction path reaches the reactant on both sides.', the buttons Try again with a finer path and Show what was found, and 'Highest point on the path: about 76 kcal/mol above the reactants (not a transition state)'."
+/>
+
+_This failure came from a build without the conformer fold described below: the search started from a stretched 3D model and found only a bond rotation. The same drawing now gives the card above._
+
+## From the command line
 
 Give the reactant and the product as XYZ files with the same atoms in the same order (the order is the atom map):
 
@@ -28,26 +62,27 @@ reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
 - GFN2-xTB in the gas phase only, 2 to 120 atoms. Set `--charge` and `--uhf` (unpaired electrons) when they are not 0.
 - `--remap-hydrogens` (with two files) reassigns the product's hydrogens by least motion and lists any hydrogen that moved to another heavy atom.
 - `--images N` sets the number of path images, 5 to 24 (default 15); `--workers N` runs 1 to 8 calculations at once.
-- `--keep-endpoints` uses your reactant and product as they are instead of optimizing them first.
+- `--keep-endpoints` uses your reactant and product as they are instead of optimizing (or folding) them first.
 
-The four test reactions (HCN → HNC, an identity SN2, a Claisen and a Diels–Alder) take 3 to 13 seconds each on an Apple M4.
+The four test reactions (HCN → HNC, an identity SN2, a Claisen and a Diels–Alder) take 4 to 10 seconds each on an Apple M4.
 
 ## How it works
 
+1. From one structure, fold it first when it is stretched: soft restraints pull the atoms of each forming bond within twice their covalent radii without changing any bond, then it relaxes freely. The fold is kept only if those atoms stay closer; the report lists it (`reactive_start` in the JSON, "Folded the starting conformer" in the app's Log). Then build the other side from the bond changes.
 1. Optimize both ends and superpose them by the atom map.
-2. Interpolate a path between them (IDPP) and relax it with a climbing-image nudged elastic band.
-3. Refine the highest image inside the band to a saddle with the analytic GFN2-xTB Hessian (P-RFO).
-4. Check it: the saddle must be converged with exactly one frequency below −50 cm⁻¹, both in ReShiki's own analysis and in the xTB engine's.
-5. Follow the IRC both ways and optimize each end. The IRC **connects** when the ends have the reactant's and the product's bonds, even as another conformer. When reactant and product have the same bonds, each end must also lie within 0.5 Å RMSD of its own endpoint.
+1. Interpolate a path between them (IDPP) and relax it with a climbing-image nudged elastic band.
+1. Refine the highest image inside the band to a saddle with the analytic GFN2-xTB Hessian (P-RFO).
+1. Check it: the saddle must be converged with exactly one frequency below −50 cm⁻¹, both in ReShiki's own analysis and in the xTB engine's.
+1. Follow the IRC both ways and optimize each end. The IRC **connects** when the ends have the reactant's and the product's bonds, even as another conformer. When reactant and product have the same bonds, each end must also lie within 0.5 Å RMSD of its own endpoint.
 
 The search is local: different starting conformers can lead to different saddles, so the report always names the one it found. When a found saddle fails a check, the report and files still keep it and say why (if the IRC was skipped, `irc.xyz` holds only that saddle). The exit status is 0 only when every check passes.
 
 <Screenshot
   src="/manual/ts-profiles.webp"
-  alt="Energy profiles of four reshiki --cli ts runs with GFN2-xTB, relative to the reactant: HCN to HNC (73.2/53.2 kcal/mol, −1426 cm⁻¹), the identity SN2 Cl⁻ + CH3Cl (10.6/10.6, −431 cm⁻¹), the Claisen rearrangement of allyl vinyl ether (26.5/34.7, −387 cm⁻¹) and a Diels–Alder of butadiene and ethylene (7.0/74.8, −392 cm⁻¹). Each shows the CI-NEB images, the refined P-RFO saddle and both IRC branches; every IRC connects."
+  alt="Energy profiles of four reshiki --cli ts runs with GFN2-xTB, relative to the reactant: HCN to HNC (73.2/53.2 kcal/mol, −1426 cm⁻¹), the identity SN2 Cl⁻ + CH3Cl (10.6/10.6, −431 cm⁻¹), the Claisen rearrangement of allyl vinyl ether (27.3/34.9, −393 cm⁻¹) and a Diels–Alder of butadiene and ethylene (7.0/74.8, −392 cm⁻¹). Each shows the CI-NEB images, the refined P-RFO saddle and both IRC branches; every IRC connects."
 />
 
-_Plotted from the JSON reports of four runs. In the Claisen run the band stopped at its iteration limit with its highest image 4 kcal/mol above the saddle; the P-RFO refinement still found the GFN2-xTB saddle._
+_Plotted from the JSON reports of four runs. The Claisen run started from a stretched conformer (C1···C6 5.31 Å) and folded it to 3.77 Å first. Its IRC branches stop in neighbouring conformers of the reactant and product, so their ends sit slightly off the band's endpoints._
 
 ## What it writes
 
@@ -72,4 +107,4 @@ reshiki --cli export-input --program orca --job neb-ts --reactant results/reacta
 - ORCA: `OptTS Freq` with `InHess Read` when you pass `--hessian`, NEB-TS with the product and the guess, or IRC (`--hessian` works there too). The `.hess` file must list the same atoms, in the same order and place, as the input geometry; otherwise it is refused.
 - GAMESS: `RUNTYP=SADPOINT`.
 
-The app's [export dialog](/guide/calculation-files/) writes the transition-state and IRC inputs from a 3D model; QST2, QST3 and NEB-TS come to the app with the search.
+The app's [export dialog](/guide/calculation-files/) writes the transition-state and IRC inputs from a 3D model; after a search, **Export TS input…** on the reaction card also writes QST2, QST3 and NEB-TS inputs.

@@ -47,6 +47,8 @@ const PA_PER_ATM: f64 = 101_325.;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
+    /// Open the shown transition state's significant imaginary mode and play.
+    AnimateImaginary,
     Mode(usize),
     Sort(Sort),
     Play(bool),
@@ -363,6 +365,14 @@ impl App {
         super::model_shows(&self.tab.doc, shown.atoms, &shown.frame.positions_angstrom)
     }
 
+    /// A TS remains attached to its starting model. Its saddle animates in a
+    /// preview, so the accepted model may still show that saved input geometry.
+    fn xtb_vibration_model_matches(&self, shown: &Shown<'_>) -> bool {
+        self.xtb_model_at_result(shown)
+            || super::ts::is_ts(&shown.stored.result)
+                && super::model_shows(&self.tab.doc, shown.atoms, &shown.input.positions_angstrom)
+    }
+
     /// The normal modes of `result`: stored, or recomputed this session.
     pub(super) fn xtb_modes<'a>(&'a self, result: &'a Arc<CalcResult>) -> Option<&'a [f64]> {
         let vibrations = result.vibrations.as_ref()?;
@@ -451,7 +461,7 @@ impl App {
         self.xtb_shown().filter(|shown| {
             shown.stored.result.vibrations.is_some()
                 && !shown.stale
-                && self.xtb_model_at_result(shown)
+                && self.xtb_vibration_model_matches(shown)
         })
     }
 
@@ -557,6 +567,12 @@ impl App {
         let reveal = matches!(action, Action::Mode(_) | Action::Sort(_));
         let settings = &mut self.tab.xtb.vibrations;
         match action {
+            Action::AnimateImaginary => {
+                let Some(result) = self.xtb_shown().map(|shown| shown.stored.result.clone()) else {
+                    return Task::none();
+                };
+                return self.xtb_ts_animate(result);
+            }
             Action::Mode(mode) => settings.mode = mode,
             Action::Sort(sort) => settings.sort = sort,
             Action::Play(on) => settings.playing = on,
@@ -730,6 +746,15 @@ impl App {
         settings.playing = playing;
     }
 
+    /// Start a specific mode after restoring the displayed result's selection.
+    pub(super) fn xtb_vibrations_play_mode(&mut self, mode: usize) {
+        self.xtb_vibrations_select_on_open();
+        self.tab.xtb.vibrations.mode = mode;
+        self.tab.xtb.vibrations.playing = true;
+        self.xtb_vibrations_sync();
+        self.xtb_vibrations_status();
+    }
+
     fn xtb_reveal_mode(&self) -> Task<Message> {
         if let Some(stored) = self.xtb_vibration_entry()
             && let Some(vibrations) = &stored.result.vibrations
@@ -803,15 +828,15 @@ impl App {
             {
                 return Task::none();
             }
-            let Some(mut config) = super::results::config(
+            let Some(mut config) = super::results::config_for(
                 &result,
                 shown.frame,
                 shown.atoms,
                 self.xtb.settings.threads(),
+                Some(state::Task::Frequencies),
             ) else {
                 return Task::none();
             };
-            config.task = state::Task::Frequencies;
             config.fixed.clear();
             let job = super::job(&config, shown.frame, vec![]);
             let epoch = self.tab.file_epoch;
@@ -938,6 +963,10 @@ impl App {
         let Some(shown) = self.xtb_vibrations_live() else {
             return;
         };
+        // Adding arrows must not apply a TS saddle to the accepted model.
+        if !self.xtb_model_at_result(&shown) {
+            return;
+        }
         let Some(vibrations) = &shown.stored.result.vibrations else {
             return;
         };
@@ -1280,11 +1309,12 @@ impl App {
             );
             return self.xtb_recompute_modes();
         };
-        let Some(mut config) = super::results::config(
+        let Some(mut config) = super::results::config_for(
             &result,
             shown.frame,
             shown.atoms,
             self.xtb.settings.threads(),
+            Some(state::Task::OptFreq),
         ) else {
             self.xtb_set_palette_status(
                 StatusKind::Palette,
@@ -1293,7 +1323,6 @@ impl App {
             );
             return Task::none();
         };
-        config.task = state::Task::OptFreq;
         config.fixed.clear();
         let from = shown.frame.positions_angstrom.clone();
         let positions = vibrational::displaced(&from, vector, PUSH_ANGSTROM);
@@ -1312,6 +1341,7 @@ impl App {
             keep_full: shown.stored.keep_full,
             start: Some(Start { positions, from }),
             search: None,
+            ts: None,
         };
         self.xtb_begin(request)
     }

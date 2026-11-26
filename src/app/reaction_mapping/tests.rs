@@ -57,6 +57,37 @@ fn inside((lo, hi): (Point, Point), p: Point) -> bool {
 }
 
 #[test]
+fn review_pairs_name_proposed_maps_instead_of_drawing_ids() {
+    let mut app = app();
+    let proposal = mapping::propose(&app.tab.doc, 3, Budget::default()).unwrap();
+    assert_eq!(pair_label(&app.tab.doc, &proposal, 1, 2), "Map 1 · C1 → C1");
+    assert!(app.tab.doc.atoms.iter().all(|atom| atom.map_num == 0));
+
+    for atom in &mut app.tab.doc.atoms {
+        atom.map_num = 17;
+    }
+    let proposal = mapping::propose(&app.tab.doc, 3, Budget::default()).unwrap();
+    assert_eq!(
+        pair_label(&app.tab.doc, &proposal, 1, 2),
+        "Map 17 · C17 → C17"
+    );
+}
+
+#[test]
+fn reaction_preview_uses_the_shared_map_colours() {
+    let mut app = app();
+    app.tab.doc.atom_mut(1).unwrap().map_num = 17;
+    app.tab.doc.atom_mut(2).unwrap().map_num = 17;
+    let before = app.tab.doc.clone();
+    let preview = Preview::for_reaction(app.tab.doc.clone(), 3);
+    let drawing = preview.document.unwrap();
+    for atom in &drawing.atoms {
+        assert_eq!(atom.display.mapping.style.color, map_label_color(17));
+    }
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn review_thumbnail_frames_the_whole_reaction_under_review_only() {
     let mut app = app();
     // An unmatched reactant and a reagent belong to the reaction; a next
@@ -818,8 +849,8 @@ async fn atom_map_controls_and_review_rows_publish_unique_ids() -> Result<(), St
         node("mapping.show").checked,
         Some(app.tab.doc.atom_labels.maps)
     );
-    // Review rows name both atoms of the pair by element and id.
-    assert_eq!(node("mapping.review.0").name, "Map 1 · C #1 → C #2");
+    // Review rows use the map numbers printed on the reaction preview.
+    assert_eq!(node("mapping.review.0").name, "Map 1 · C1 → C1");
     assert!(node("mapping.apply").enabled);
     Ok(())
 }

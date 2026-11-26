@@ -1253,6 +1253,149 @@ fn clipboard_selection_carries_no_science() {
     );
 }
 
+fn transition_state_drawing() -> (Document, u64) {
+    use crate::{arrows::ArrowStyle, document::Arrow};
+    use reshiki_qcdata::{
+        Endpoints, RunSummary, Trajectory, TransitionStateContext, TransitionStateMapping,
+        TransitionStateRun,
+    };
+
+    let (mut doc, oxygen) = water();
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(80., 0.),
+        Point::new(160., 0.),
+        Default::default(),
+        ArrowStyle::default(),
+    ));
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let mut finished = result(&start.frame, Task::Energy, false);
+    add_result(&mut doc, &start, finished.clone());
+    finished.task = Task::TransitionState;
+    finished.endpoints = Some(Endpoints {
+        reactant: start.frame.hash(),
+        product: start.frame.hash(),
+    });
+    finished.trajectory = Some(Trajectory {
+        rmsd_to_best_angstrom: Vec::new(),
+        numbers: start.frame.numbers.clone(),
+        isotopes: start.frame.isotopes.clone(),
+        masses_amu: start.frame.masses_amu.clone(),
+        charge: start.frame.charge,
+        multiplicity: start.frame.multiplicity,
+        positions_angstrom: vec![],
+        energies_hartree: vec![-7.5, -7.4, -7.6],
+        labels: vec![],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
+    });
+    finished.run = Some(RunSummary {
+        seconds: 1.,
+        scf_iterations: vec![],
+        finished: None,
+        search: None,
+        transition_state: Some(Box::new(TransitionStateRun {
+            arrow: Some(arrow),
+            context: Some(TransitionStateContext {
+                reactant_chemistry: "a".repeat(64),
+                product_chemistry: "b".repeat(64),
+                title: "Saved water reaction".into(),
+                reactant: "water".into(),
+            }),
+            saddle_converged: false,
+            imaginary: 0,
+            imaginary_cm1: None,
+            climbing_image: 1,
+            mapping: TransitionStateMapping {
+                formed: vec![],
+                broken: vec![],
+                hydrogen_moves: vec![],
+                automatic: true,
+            },
+            diagnostics: vec![],
+        })),
+    });
+    add_result(&mut doc, &start, finished);
+    (doc, arrow)
+}
+
+fn saved_ts(doc: &Document) -> &reshiki_qcdata::TransitionStateRun {
+    doc.science.results[1]
+        .result
+        .run
+        .as_ref()
+        .unwrap()
+        .transition_state
+        .as_ref()
+        .unwrap()
+}
+
+#[test]
+fn native_insertion_remaps_saved_ts_arrow_and_unbinds_missing_arrow() {
+    let (source, arrow) = transition_state_drawing();
+    let source = Document::from_native_file(&source.file_json().unwrap()).unwrap();
+    let host_arrow = source.arrows[0].clone();
+    type Append = fn(&mut Document, &Document, Point) -> Vec<u64>;
+    let appenders: [Append; 2] = [editing::append, editing::append_preserving_layout];
+    for insert in appenders {
+        for include_arrow in [true, false] {
+            let mut source = source.clone();
+            if !include_arrow {
+                source.arrows.clear();
+            }
+            // The destination already owns the source arrow's old ID.
+            let (mut doc, _) = water();
+            doc.arrows.push(host_arrow.clone());
+            assert_eq!(doc.arrows[0].id, arrow);
+            let ids = insert(&mut doc, &source, Point::new(250., 0.));
+            assert_eq!(ids.len(), 1 + usize::from(include_arrow));
+            assert_eq!(doc.science.attachments[0].atoms[0], Some(ids[0]));
+            let expected = include_arrow.then(|| ids[1]);
+            assert_eq!(saved_ts(&doc).arrow, expected);
+            assert_eq!(saved_ts(&doc).context, saved_ts(&source).context);
+            assert_eq!(saved_ts(&source).arrow, Some(arrow));
+            assert!(Arc::ptr_eq(
+                &doc.science.results[0].result,
+                &source.science.results[0].result
+            ));
+            doc.validate().unwrap();
+            let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+            assert_eq!(saved_ts(&reopened).arrow, expected);
+            assert_eq!(saved_ts(&reopened).context, saved_ts(&source).context);
+        }
+    }
+}
+
+#[test]
+fn deleting_ts_arrow_unbinds_saved_result_before_id_reuse() {
+    let (mut doc, arrow) = transition_state_drawing();
+    let original = doc.clone();
+    let mut history = History::default();
+    reconciled_edit(&mut doc, &mut history, |doc| doc.delete(&[arrow]));
+    assert_eq!(saved_ts(&doc).arrow, None);
+    assert_eq!(saved_ts(&original).arrow, Some(arrow));
+    assert!(Arc::ptr_eq(
+        &doc.science.results[0].result,
+        &original.science.results[0].result
+    ));
+    assert_eq!(doc.next_id(), arrow);
+    reconciled_edit(&mut doc, &mut history, |doc| {
+        doc.arrows.push(original.arrows[0].clone());
+    });
+    assert_eq!(saved_ts(&doc).arrow, None);
+    let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(saved_ts(&reopened).arrow, None);
+    assert!(history.undo(&mut doc));
+    assert!(history.undo(&mut doc));
+    assert_eq!(saved_ts(&doc).arrow, Some(arrow));
+
+    let mut orphaned = original.clone();
+    orphaned.arrows.clear();
+    let reopened = Document::from_native_file(&orphaned.file_json().unwrap()).unwrap();
+    assert_eq!(saved_ts(&reopened).arrow, None);
+}
+
 #[test]
 fn clipboard_figures_keep_only_their_linked_results_and_pinned_rows() {
     use crate::models3d::surface::{Figure, OrbitalRef};

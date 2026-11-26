@@ -16,11 +16,11 @@ use reshiki_optimize::{
 };
 #[cfg(feature = "xtb")]
 use reshiki_xtb_worker::{
-    client::Limits,
+    client::{Cancel, Limits},
     protocol::{Conventions, Method, Open, Units},
 };
 #[cfg(feature = "xtb")]
-use std::{io::Write, ops::ControlFlow, thread, time::Instant};
+use std::{io::Write, ops::ControlFlow, time::Instant};
 #[cfg(feature = "xtb")]
 use worker::Worker;
 
@@ -60,26 +60,31 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         threads: 1,
         heap_bytes: limits.heap_bytes,
     };
-    let options = TsOptions {
-        images: command.images,
-        optimize_endpoints: !command.keep_endpoints,
-        ..TsOptions::default()
-    };
     let started = Instant::now();
-    let mut summary = thread::scope(|scope| {
+    let mut summary = (|| {
         let (first, engine, uhf) =
-            Worker::start(scope, &executable, &open, limits).map_err(failed)?;
+            Worker::start(executable.clone(), open.clone(), limits, Cancel::default())
+                .map_err(failed)?;
         let mut workers = vec![first];
         for _ in 1..command.workers {
             let (worker, _, _) =
-                Worker::start(scope, &executable, &open, limits).map_err(failed)?;
+                Worker::start(executable.clone(), open.clone(), limits, Cancel::default())
+                    .map_err(failed)?;
             workers.push(worker);
         }
         let first = workers
             .first_mut()
             .ok_or_else(|| CliError::Failed("no xTB worker".into()))?;
-        let (reactant, mut product) = match (&reactant, &product) {
-            (Some(r), Some(p)) => (bohr(r), bohr(p)),
+        let Endpoints {
+            reactant,
+            mut product,
+            reactive_start,
+        } = match (&reactant, &product) {
+            (Some(r), Some(p)) => Endpoints {
+                reactant: bohr(r),
+                product: bohr(p),
+                reactive_start: None,
+            },
             (_, from_product) => {
                 build_endpoint(first, start, &command, from_product.is_some(), err)?
             }
@@ -91,6 +96,11 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
             moved
         } else {
             Vec::new()
+        };
+        let options = TsOptions {
+            images: command.images,
+            optimize_endpoints: !command.keep_endpoints,
+            ..TsOptions::default()
         };
         let search = Search {
             numbers: &open.numbers,
@@ -121,8 +131,9 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
             evaluations: workers.iter().map(|worker| worker.gradients).sum(),
             seconds: 0.,
             moving_hydrogens,
+            reactive_start,
         })
-    })?;
+    })()?;
     summary.seconds = started.elapsed().as_secs_f64();
     finish(&summary, out, err)
 }
@@ -162,13 +173,20 @@ fn bohr(geometry: &Geometry) -> Vec<f64> {
 }
 
 #[cfg(feature = "xtb")]
+struct Endpoints {
+    reactant: Vec<f64>,
+    product: Vec<f64>,
+    reactive_start: Option<ts::ReactiveStart>,
+}
+
+#[cfg(feature = "xtb")]
 fn build_endpoint(
     worker: &mut Worker,
     start: &Geometry,
     command: &Ts,
     from_product: bool,
     err: &mut dyn Write,
-) -> Result<(Vec<f64>, Vec<f64>), CliError> {
+) -> Result<Endpoints, CliError> {
     let indices = |pairs: &[(usize, usize)]| {
         pairs
             .iter()
@@ -184,6 +202,24 @@ fn build_endpoint(
     };
     let _ = writeln!(err, "Building the {name} endpoint");
     let start_xyz = bohr(start);
+    let (start_xyz, reactive_start) = if command.keep_endpoints {
+        (start_xyz, None)
+    } else {
+        ts::prepare_reactive_start(worker, &start.numbers, &start_xyz, form, break_, |_, _| {
+            ControlFlow::Continue(())
+        })
+        .map_err(failed)?
+    };
+    if let Some(fold) = &reactive_start {
+        let detail = fold.description(|i| {
+            format!(
+                "{}{}",
+                start.numbers.get(i).copied().map_or("?", geometry::symbol),
+                i + 1
+            )
+        });
+        let _ = writeln!(err, "Folded the starting conformer: {detail}");
+    }
     let (built, matched) =
         ts::build_endpoint(worker, &start.numbers, &start_xyz, form, break_, |_, _| {
             ControlFlow::Continue(())
@@ -194,10 +230,15 @@ fn build_endpoint(
             "the constructed {name} does not match the requested bond changes"
         )));
     }
-    Ok(if from_product {
+    let (reactant, product) = if from_product {
         (built.positions, start_xyz)
     } else {
         (start_xyz, built.positions)
+    };
+    Ok(Endpoints {
+        reactant,
+        product,
+        reactive_start,
     })
 }
 

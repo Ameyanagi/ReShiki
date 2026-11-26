@@ -740,6 +740,11 @@ fn completion(message: &Message) -> Option<Completion> {
             match action {
                 #[cfg(not(target_arch = "wasm32"))]
                 Action::Event(..) | Action::Search(..) => Some(Completion::Xtb),
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                Action::TsEvent(..) => Some(Completion::Xtb),
+                Action::Ts(super::xtb::ts::Action::ReviewSheet(
+                    super::xtb::ts::review::Action::Ready(..),
+                )) => Some(Completion::Mapping),
                 Action::Page(..)
                 | Action::Task(..)
                 | Action::Charge(..)
@@ -767,7 +772,7 @@ fn completion(message: &Message) -> Option<Completion> {
                     super::xtb::palette::Action::Exported(..)
                     | super::xtb::palette::Action::IrExported(..),
                 ) => Some(Completion::Xtb),
-                Action::Conformers(..) | Action::Palette(..) => None,
+                Action::Conformers(..) | Action::Palette(..) | Action::Ts(..) => None,
                 Action::Vibrations(super::xtb::VibrationsAction::CaptionCopied(..)) => {
                     Some(Completion::Clipboard)
                 }

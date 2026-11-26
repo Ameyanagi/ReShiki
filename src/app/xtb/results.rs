@@ -42,6 +42,7 @@ pub(crate) enum View {
     Summary,
     /// A conformer search's ranked conformers.
     Conformers,
+    Path,
     Vibrations,
     Steps,
     Orbitals,
@@ -49,9 +50,13 @@ pub(crate) enum View {
 }
 
 impl View {
-    /// The tabs supported by the stored data.
+    /// The tabs `result` has, in display order.
     pub(crate) fn available(result: &CalcResult) -> Vec<Self> {
-        let mut views = vec![Self::Summary];
+        let mut views = Vec::new();
+        if super::ts::is_ts(result) {
+            views.push(Self::Path);
+        }
+        views.push(Self::Summary);
         if result.task == Task::Conformers {
             views.push(Self::Conformers);
         }
@@ -76,6 +81,7 @@ impl View {
         match self {
             Self::Summary => "Summary",
             Self::Conformers => "Conformers",
+            Self::Path => "Path",
             Self::Vibrations => "Vibrations",
             Self::Steps => "Steps",
             Self::Orbitals => "Orbitals",
@@ -160,10 +166,13 @@ fn imported_source(result: &CalcResult) -> Option<String> {
     )
 }
 
-pub(in crate::app) fn title(result: Option<&CalcResult>) -> String {
+pub(in crate::app) fn title(result: Option<&CalcResult>, reaction: Option<&str>) -> String {
     match result.map(|result| &result.provenance.source) {
         Some(Source::Imported { file_name, .. }) => format!("Results · {file_name}"),
-        _ => "xTB results".into(),
+        _ => reaction.map_or_else(
+            || "xTB results".into(),
+            |name| format!("xTB results · {name}"),
+        ),
     }
 }
 
@@ -187,7 +196,10 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
             let unit = if kept == 1 { "conformer" } else { "conformers" };
             format!("{kept} {unit} kept")
         }
-        Task::TransitionState => "Transition-state search".into(),
+        Task::TransitionState if matches!(result.status, Status::Converged) => {
+            "Transition state found".into()
+        }
+        Task::TransitionState => "Transition-state search · no reliable saddle".into(),
     };
     let (method, medium) = match &result.settings {
         Settings::Xtb(settings) => (
@@ -231,6 +243,13 @@ pub(super) fn finished_local(result: &CalcResult) -> Option<chrono::DateTime<chr
         chrono::DateTime::parse_from_rfc3339(finished)
             .ok()?
             .with_timezone(&chrono::Local),
+    )
+}
+
+pub(super) fn previous_result(result: &CalcResult) -> String {
+    finished_local(result).map_or_else(
+        || "Previous result".into(),
+        |date| format!("Previous result ({})", date.format("%-d %b %Y")),
     )
 }
 
@@ -620,6 +639,17 @@ pub(crate) fn config(
     atoms: &[Option<u64>],
     threads: u32,
 ) -> Option<Config> {
+    config_for(result, frame, atoms, threads, None)
+}
+
+/// Use the stored electronic settings for a new task, or repeat the original task.
+pub(super) fn config_for(
+    result: &qcdata::CalcResult,
+    frame: &qcdata::Frame,
+    atoms: &[Option<u64>],
+    threads: u32,
+    requested_task: Option<CardTask>,
+) -> Option<Config> {
     let qcdata::Settings::Xtb(settings) = &result.settings else {
         return None;
     };
@@ -629,6 +659,7 @@ pub(crate) fn config(
         qcdata::Task::Hessian => CardTask::Frequencies,
         qcdata::Task::Energy => CardTask::Energy,
         qcdata::Task::Conformers => CardTask::Conformers,
+        qcdata::Task::TransitionState => requested_task?,
         _ => return None,
     };
     // Settings the card cannot send: a retry ladder, GFN-FF fragment
@@ -651,7 +682,7 @@ pub(crate) fn config(
         Some(_) => return None,
     };
     Some(Config {
-        task,
+        task: requested_task.unwrap_or(task),
         method: settings.method,
         charge: frame.charge,
         unpaired: frame.multiplicity.saturating_sub(1),
@@ -704,11 +735,22 @@ pub(super) fn thermo_defaults(thermo: &qcdata::Thermo) -> bool {
 }
 
 /// The Log tab: settings, then each SCF the worker ran, then the result.
+#[cfg(test)]
 pub(crate) fn log(
     result: &CalcResult,
     frame: &Frame,
     info: Option<&RunInfo>,
     method: &str,
+) -> String {
+    log_with_ts(result, frame, info, method, None)
+}
+
+pub(super) fn log_with_ts(
+    result: &CalcResult,
+    frame: &Frame,
+    info: Option<&RunInfo>,
+    method: &str,
+    session: Option<&super::ts::Session>,
 ) -> String {
     let mut lines = vec![method.to_owned()];
     match &result.provenance.source {
@@ -747,6 +789,7 @@ pub(crate) fn log(
         Task::Hessian => "frequencies",
         Task::Energy => "energy",
         Task::Conformers => "conformer search",
+        Task::TransitionState => "transition-state search",
         _ => "other",
     };
     let mut task_line = format!("task {task}");
@@ -784,6 +827,11 @@ pub(crate) fn log(
     lines.push(task_line);
     if let Some(info) = info.filter(|info| !info.numerics.is_empty()) {
         lines.push(format!("numerics {}", info.numerics));
+    }
+    let search = super::ts::view::search_log(result, session);
+    if !search.is_empty() {
+        lines.push(String::new());
+        lines.push(search);
     }
     lines.push(String::new());
     if let Some(info) = info {
