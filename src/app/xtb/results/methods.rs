@@ -1,3 +1,5 @@
+//! The methods paragraph Copy methods text writes for a stored result, citing
+//! the BibTeX keys of docs/references/xtb.bib for what actually ran.
 use super::{OPTIMIZER_SEPARATOR, solvent_model};
 use reshiki::qcdata::{
     self, CalcResult, Convergence, Frame, Settings, Source, Status, Task, XtbConventions,

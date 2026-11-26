@@ -1,3 +1,7 @@
+//! Where a molecule's 3D coordinates came from (an xTB conformer, an
+//! optimized geometry or step, the file or the force field) and the other
+//! geometries its current xTB results hold, for the input-file dialog and
+//! the Undo status.
 use super::{conformers, model_matches, model_shows, results};
 use crate::app::App;
 use reshiki::models3d::{ForceField, Model3d};

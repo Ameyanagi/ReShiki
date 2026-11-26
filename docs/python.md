@@ -148,8 +148,8 @@ Install the optional xTB worker with `pip install "reshiki[xtb]"`. Pass
 `xtb.conformers()` a `reshiki.Molecule` or molecular input accepted by
 `reshiki.parse()`, such as a SMILES string. The search uses the same ETKDG
 sampling, symmetry-aware Butina clustering and xTB optimization as the
-desktop app. If the input lacks a 3D model, ReShiki builds one with MMFF94s
-before searching.
+desktop app. If the input lacks a 3D model, ReShiki builds one first, with
+the force field of the chosen minimizer (MMFF94s for GFN-FF and GFN2-xTB).
 
 ```python
 from pathlib import Path
