@@ -926,7 +926,12 @@ impl App {
         figure.add_to(&mut self.tab.doc);
         self.changed(before);
         if !self.error {
+            let inspector_width = self.inspector_width();
+            let viewport = self.viewport;
             self.set_selection(members);
+            // Properties can open when the figure is selected. Use the canvas
+            // size after that change for both the fit check and the reveal.
+            self.preserve_inspector_page_position(inspector_width, viewport);
             if let Some((lo, hi)) =
                 reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
             {

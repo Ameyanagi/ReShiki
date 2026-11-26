@@ -186,12 +186,13 @@ pub(super) fn select_labels(
         .filter(|&(_, [_, value])| value >= maximum * 0.05)
         .collect();
     fill.sort_unstable_by(|a, b| strength(b, a));
-    let neighbour = |i: usize, [number, value]: [f64; 2]| {
+    let neighbour = |i: usize, [number, value]: [f64; 2], selected: &[usize]| {
         let distance = |(_, [other, _]): (usize, [f64; 2])| (number - other).abs();
         [i.checked_sub(1), Some(i + 1)]
             .into_iter()
             .flatten()
             .filter_map(|j| visible.get(j).copied().flatten())
+            .filter(|(j, _)| !selected.contains(j))
             .filter(|&candidate @ (_, [_, height])| {
                 distance(candidate) <= 60. && height >= value * 0.30
             })
@@ -211,7 +212,7 @@ pub(super) fn select_labels(
                 let partner = if reserved && !in_bond_region(peak[0]) {
                     None
                 } else {
-                    neighbour(i, peak).filter(|(j, _)| !selected.contains(j))
+                    neighbour(i, peak, &selected)
                 };
                 [
                     Some(PeakLabel {
@@ -430,29 +431,65 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
         (pad, width - pad)
     };
     let offset = pt(3.);
-    // An open baseline has no upper frame. Use the highest curve mark or its
-    // label to set the top edge while keeping the curve's y scale linear.
+    // An open baseline has no upper frame. Use the highest curve mark to set
+    // the top edge while keeping the curve's y scale linear.
+    let upper_ordinate = if transmittance && !framed {
+        ordinate(points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min)) as f32
+    } else {
+        1.
+    };
     let mut plot_height = if framed {
         base - top
     } else if transmittance {
-        let lowest = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
-        (base - top) / ordinate(lowest) as f32
+        (base - top) / upper_ordinate
     } else {
         (base - top) * if maximum > 0. { y_max as f32 } else { 1. }
     };
+    // Absorbance stays anchored at zero; %T stays anchored at its upper edge,
+    // so shrinking the scale makes space below its downward-pointing tips.
+    let anchor = if transmittance { upper_ordinate } else { 0. };
+    let anchor_y = base - plot_height * anchor;
+    let label_top = if framed {
+        top + stroke + clearance
+    } else {
+        pad
+    };
+    let row_edge = if transmittance {
+        base - stroke - 2. * clearance
+    } else if framed {
+        label_top + clearance
+    } else if header > 0. {
+        top + clearance
+    } else {
+        top
+    };
+    let space = (anchor_y - row_edge).abs();
     let mut labels = select(plot_height);
-    if !framed
-        && !transmittance
-        && let Some(label) = labels.iter().find(|label| label.peak[1] == maximum)
-    {
-        let room = offset
-            + label_size(&(label.peak[0].round() as u32).to_string()).1
-            + if header > 0. { clearance } else { 0. };
-        plot_height -= room * y_max as f32;
+    loop {
+        let row = labels
+            .iter()
+            .map(|label| label_size(&(label.peak[0].round() as u32).to_string()).1)
+            .fold(0., f32::max);
+        let reach = labels
+            .iter()
+            .map(|label| (anchor - ordinate(label.peak[1]) as f32).abs())
+            .fold(0., f32::max);
+        if reach == 0. {
+            break;
+        }
+        // Leave a row and its leader beyond every selected tip. The extra
+        // clearance also keeps exact-fit positions off the floating-point edge.
+        let height = ((space - row - offset) / reach).max(0.);
+        if height >= plot_height {
+            break;
+        }
+        plot_height = height;
+        // A smaller scale can remove a shallow peak and promote another tip.
+        // Height only decreases, so drawn-depth eligibility never oscillates.
         labels = select(plot_height);
     }
-    let y = |value| base - plot_height * (value / y_max) as f32;
-    let tip = |intensity| base - plot_height * ordinate(intensity) as f32;
+    let y = |value| anchor_y + plot_height * (anchor - (value / y_max) as f32);
+    let tip = |intensity| anchor_y + plot_height * (anchor - ordinate(intensity) as f32);
     let curve_points: Vec<_> = points
         .into_iter()
         .map(|[number, intensity]| Point::new(x(number), tip(intensity)))
@@ -614,11 +651,6 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
     let mut labelled_peaks = Vec::new();
     let direction = if transmittance { 1. } else { -1. };
     let angle = if figure.vertical_labels { VERTICAL } else { 0. };
-    let label_top = if framed {
-        top + stroke + clearance
-    } else {
-        pad
-    };
     let curve_between = |left, right| {
         let first = curve_points
             .partition_point(|p| p.x < left)
@@ -801,5 +833,155 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
             layout: None,
         },
         labelled_peaks,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reshiki::graphics::{BandShape, Columns};
+
+    fn tip_at(chart: &Figure, ir: &IrFigure, number: f64) -> Point {
+        let curve = chart.graphics[0].commands();
+        let left = curve.first().unwrap().points()[0].x;
+        let right = curve.last().unwrap().points()[0].x;
+        let x = left + (right - left) * ((ir.from - number) / (ir.from - ir.to)) as f32;
+        curve
+            .iter()
+            .map(|command| command.points()[0])
+            .min_by(|a, b| (a.x - x).abs().total_cmp(&(b.x - x).abs()))
+            .unwrap()
+    }
+
+    fn assert_outward_label(doc: &Document, chart: &Figure, ir: &IrFigure, number: u32) {
+        assert_eq!(chart.labelled_peaks, [number]);
+        let label = chart.annotations.last().unwrap();
+        assert_eq!(label.text, number.to_string());
+        let (lo, hi) = label.bounds();
+        let tip = tip_at(chart, ir, f64::from(number));
+        if ir.y == YAxis::Transmittance {
+            assert!(lo.y > tip.y, "the label stays below its dip");
+            assert!(hi.y < chart.graphics[1].origin.y);
+        } else {
+            assert!(hi.y < tip.y, "the label stays above its peak");
+            assert!(lo.y >= doc.drawing_style.world(EXPORT_PAD_PT));
+        }
+        let clearance = doc.drawing_style.world(1.);
+        let (lo, hi) = (
+            lo.offset(-clearance, -clearance),
+            hi.offset(clearance, clearance),
+        );
+        let leader = chart.graphics.last().unwrap();
+        let start = leader.origin;
+        let end = start.offset(leader.axis_x.x, leader.axis_x.y);
+        assert!(!hits_box(start, end, lo, hi), "the leader clears its label");
+        let clear_start = start.lerp(end, doc.drawing_style.world(0.7) / start.distance(end));
+        for pair in chart.graphics[0].commands().windows(2) {
+            let (a, b) = (pair[0].points()[0], pair[1].points()[0]);
+            assert!(!hits_box(a, b, lo, hi), "the label clears the curve");
+            assert!(
+                !segments_cross(clear_start, end, a, b),
+                "the leader clears the curve after leaving its tip"
+            );
+        }
+    }
+
+    #[test]
+    fn baseline_absorbance_reserves_a_row_above_a_selected_near_maximum() {
+        let doc = Document::default();
+        let mut ir = IrFigure {
+            bands: vec![[3400., 99.], [1050., 100.]],
+            y: YAxis::Absorbance,
+            frame: Frame::Baseline,
+            labels: 1,
+            ..IrFigure::default()
+        };
+        for vertical in [false, true] {
+            ir.vertical_labels = vertical;
+            let chart = spectrum(&doc, &ir, Point::default());
+            assert_outward_label(&doc, &chart, &ir, 3400);
+            assert!(tip_at(&chart, &ir, 1050.).y < tip_at(&chart, &ir, 3400.).y);
+
+            ir.hidden_labels = vec![3400];
+            let hidden = spectrum(&doc, &ir, Point::default());
+            assert!(hidden.labelled_peaks.is_empty());
+            assert_eq!(hidden.graphics[0].path, chart.graphics[0].path);
+            ir.hidden_labels.clear();
+        }
+    }
+
+    #[test]
+    fn transmittance_reserves_a_vertical_label_row_below_a_near_edge_dip() {
+        let doc = Document::default();
+        let mut ir = IrFigure {
+            // This interior maximum rounds to a five-digit label. The long
+            // vertical row needs more room than the usual 20% lower margin.
+            bands: vec![[9999.6, 100.]],
+            from: 10000.,
+            to: 9800.,
+            fwhm: 2.,
+            shape: BandShape::Gaussian,
+            labels: 1,
+            vertical_labels: true,
+            method_line: true,
+            ..IrFigure::default()
+        };
+        for frame in [Frame::Box, Frame::Axes, Frame::Baseline] {
+            ir.frame = frame;
+            let chart = spectrum(&doc, &ir, Point::default());
+            assert_outward_label(&doc, &chart, &ir, 10000);
+            let without_labels = spectrum(
+                &doc,
+                &IrFigure {
+                    labels: 0,
+                    ..ir.clone()
+                },
+                Point::default(),
+            );
+            assert!(
+                tip_at(&chart, &ir, 9999.6).y < tip_at(&without_labels, &ir, 9999.6).y,
+                "{frame:?}: headroom moves the selected dip away from the bottom"
+            );
+            ir.hidden_labels = vec![10000];
+            let hidden = spectrum(&doc, &ir, Point::default());
+            assert!(hidden.labelled_peaks.is_empty());
+            assert_eq!(hidden.graphics[0].path, chart.graphics[0].path);
+            ir.hidden_labels.clear();
+        }
+    }
+
+    #[test]
+    fn a_selected_neighbour_does_not_block_the_other_doublet_partner() {
+        let bands = [
+            [2050., 400.],
+            [2010., 390.],
+            [1980., 300.],
+            [1940., 100.],
+            [1050., 10000.],
+        ];
+        let selected = select_labels(&bands, 10000., 6, |_| true);
+        let anchor = selected
+            .iter()
+            .find(|label| label.peak[0] == 1980.)
+            .unwrap();
+        assert_eq!(anchor.partner, Some(1940.));
+        assert_eq!(
+            selected
+                .iter()
+                .map(|label| label.peak[0])
+                .collect::<Vec<_>>(),
+            [2050., 2010., 1980., 1940., 1050.]
+        );
+        let ir = IrFigure {
+            bands: bands.into(),
+            shape: BandShape::Gaussian,
+            fwhm: 2.,
+            columns: Columns::Two,
+            labels: 6,
+            ..IrFigure::default()
+        };
+        let chart = spectrum(&Document::default(), &ir, Point::default());
+        assert!(chart.labelled_peaks.contains(&1940));
+        assert_eq!(chart.labelled_peaks.len(), 5);
     }
 }
