@@ -2886,6 +2886,16 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
 /// Share of the model's frame side each panel takes.
 const PANEL_SCALE: f32 = 0.55;
 
+/// The small copy of `model` that draws one panel's `figure`, at the model's
+/// own offset; its view signature is the one the panel's snapshot keeps.
+pub(crate) fn panel_model(model: &Model3d, figure: &surface::Figure) -> Model3d {
+    let mut small = model.clone();
+    small.panels = vec![];
+    small.surface = Some(figure.clone());
+    small.size = model.size * PANEL_SCALE;
+    small
+}
+
 /// The model's panels as small models side by side under its frame, each
 /// with its orbital, and their captions centred below them.
 pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
@@ -2918,10 +2928,7 @@ pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
             let x = left + slot / 2.;
             left += slot + between;
             let y = hi.y + gap + side / 2.;
-            let mut small = model.clone();
-            small.panels = vec![];
-            small.surface = Some(panel.figure.clone());
-            small.size = model.size * PANEL_SCALE;
+            let mut small = panel_model(model, &panel.figure);
             small.offset = Point::new(model.offset.x + x - centre.x, model.offset.y + y - centre.y);
             let width = crate::style::styled_text_width(&panel.caption, size, &style);
             // A stale result or another geometry shows neither the panel
@@ -3365,11 +3372,18 @@ impl View<'_> {
 }
 
 pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
-    let refreshed: Vec<_> = panels(doc, model)
-        .into_iter()
-        .map(|(mut small, _)| {
-            refresh_surface_snapshot(doc, &mut small);
-            small.surface
+    // Each panel in its own slot; a hidden (stale) panel keeps its picture.
+    let refreshed: Vec<_> = model
+        .panels
+        .iter()
+        .map(|panel| {
+            let mut small = panel_model(model, &panel.figure);
+            surface::draw::figure_ready(doc, &small)
+                .then(|| {
+                    refresh_surface_snapshot(doc, &mut small);
+                    small.surface
+                })
+                .flatten()
         })
         .collect();
     for (panel, figure) in model.panels.iter_mut().zip(refreshed) {
