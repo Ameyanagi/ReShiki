@@ -453,20 +453,20 @@ fn with_model(display: Display) -> (App, Vec<u64>) {
 }
 
 #[test]
-fn outdated_frames_follow_shown_models_without_requiring_selection() {
+fn outdated_models_are_identified_without_requiring_selection() {
     for display in [Display::ThreeD, Display::Both] {
         let (mut app, atoms) = with_model(display);
         app.tab.selected = atoms.clone();
         app.duplicate_selection();
         app.tab.selected.clear();
         assert_eq!(app.tab.doc.models.len(), 2);
-        assert!(app.outdated_model_frames().is_empty());
+        assert!(app.outdated_models().is_empty());
 
         let before = app.tab.doc.clone();
         app.tab.doc.atom_mut(atoms[2]).unwrap().element = "N".into();
         app.changed(before);
-        let expected = models3d::frame(&app.tab.doc, &app.tab.doc.models[0]).unwrap();
-        assert_eq!(app.outdated_model_frames(), vec![expected]);
+        let expected = app.tab.doc.models[0].linked_atoms.clone();
+        assert_eq!(app.outdated_models(), vec![expected.as_slice()]);
         assert!(
             app.stale_model().is_none(),
             "No selected model is needed for the veil"
@@ -476,14 +476,14 @@ fn outdated_frames_follow_shown_models_without_requiring_selection() {
         assert!(models3d::set_display(&mut app.tab.doc, 0, Display::TwoD));
         app.changed(before);
         assert!(
-            app.outdated_model_frames().is_empty(),
+            app.outdated_models().is_empty(),
             "A hidden model has no veil"
         );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.outdated_model_frames(), vec![expected]);
+        assert_eq!(app.outdated_models(), vec![expected.as_slice()]);
         let _ = app.update(Message::Undo);
         assert!(
-            app.outdated_model_frames().is_empty(),
+            app.outdated_models().is_empty(),
             "Undo restores the model's currency"
         );
     }

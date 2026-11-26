@@ -755,8 +755,8 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
     /// On-screen xTB energy and partial charges.
     pub(crate) result_label: Option<ResultLabel>,
-    /// World-space frames of outdated models; editing aids absent from exports.
-    pub(crate) outdated: Vec<(World, World)>,
+    /// Linked atoms of outdated models, for editing aids absent from exports.
+    pub(crate) outdated_models: Vec<&'a [u64]>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -821,7 +821,7 @@ impl<'a> MoleculeCanvas<'a> {
             morph: None,
             model_generation: None,
             result_label: None,
-            outdated: vec![],
+            outdated_models: vec![],
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,

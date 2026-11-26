@@ -1,15 +1,65 @@
-"""Verify wheels preserve the generated license files and declare them in METADATA."""
+"""Verify wheel license files, or release versions and engine source links."""
 
+import argparse
 import glob
-import sys
+import json
+import re
 import zipfile
 from email.parser import BytesParser
 from pathlib import Path
 
 LICENSES = Path(__file__).resolve().parents[1] / "crates/python/wheel-licenses"
+XTB_LICENSES = Path(__file__).resolve().parents[1] / "crates/python-xtb/wheel-licenses"
+AXTB_ATTRIBUTIONS = tuple(
+    f"licenses/axtb/{name}"
+    for name in ("COPYING", "COPYING.LESSER", "NOTICE", "CHANGES-reshiki.md", "SOURCE")
+)
+RELEASE_URL = "https://github.com/Ameyanagi/ReShiki/releases/tag/"
 
 
-def verify_wheel(wheel, licenses=LICENSES):
+def release_version(tag):
+    """Convert the stable and alpha/beta/rc SemVer release tags to PEP 440."""
+    component = r"(?:0|[1-9][0-9]*)"
+    match = re.fullmatch(
+        rf"v({component}\.{component}\.{component})(?:-(alpha|beta|rc)\.?([0-9]+))?", tag
+    )
+    if match is None:
+        raise ValueError(f"Unsupported Python release tag: {tag!r}")
+    version, stage, number = match.groups()
+    if stage:
+        version += {"alpha": "a", "beta": "b", "rc": "rc"}[stage] + str(int(number))
+    return version
+
+
+def verify_release_wheel(wheel, tag):
+    """Match filename and metadata versions, and engine source links, to the tag."""
+    expected = release_version(tag)
+    name = Path(wheel).name
+    match = re.fullmatch(r"(reshiki|reshiki_xtb)-([^-]+)-.+\.whl", name)
+    if match is None or match[2] != expected:
+        raise ValueError(f"Wheel {name} must have release version {expected}")
+    distribution = match[1].replace("_", "-")
+    with zipfile.ZipFile(wheel) as archive:
+        paths = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
+        if len(paths) != 1:
+            raise ValueError(f"Expected one wheel METADATA file in {name}")
+        content = archive.read(paths[0])
+    metadata = BytesParser().parsebytes(content)
+    if metadata.get("Name", "").replace("_", "-").lower() != distribution:
+        raise ValueError(f"Expected {distribution} metadata in {name}")
+    if metadata.get_all("Version") != [expected]:
+        raise ValueError(f"Wheel metadata must have release version {expected}: {name}")
+    if distribution == "reshiki":
+        return
+    links = re.findall(re.escape(RELEASE_URL) + r"([^\s)>\]`]+)", content.decode("utf-8"))
+    # The README also shows a literal v<version> template, which is not a release link.
+    tags = {link for link in links if re.match(r"v[0-9]", link)}
+    if tags != {tag}:
+        raise ValueError(f"Wheel source links must point to {RELEASE_URL}{tag}: {name}")
+
+
+def verify_wheel(wheel, licenses=None, *, xtb=False):
+    licenses = (XTB_LICENSES if xtb else LICENSES) if licenses is None else licenses
     expected = {
         path.relative_to(licenses).as_posix(): path.read_bytes()
         for path in licenses.rglob("*")
@@ -20,15 +70,21 @@ def verify_wheel(wheel, licenses=LICENSES):
             f"No generated notices in {licenses}; run scripts/license_notices.py first"
         )
     attribution_lines = expected["THIRD-PARTY-NOTICES.txt"].splitlines()
-    for name in ("licenses/liberation-fonts/LICENSE", "licenses/liberation-fonts/NOTICE"):
+    required = (
+        AXTB_ATTRIBUTIONS
+        if xtb
+        else ("licenses/liberation-fonts/LICENSE", "licenses/liberation-fonts/NOTICE")
+    )
+    for name in required:
         if f"  {name}".encode() not in attribution_lines:
             raise ValueError(f"Missing source attribution: {name}")
+    if not xtb and any(line.lstrip().startswith(b"licenses/axtb/") for line in attribution_lines):
+        raise ValueError("The base reshiki wheel must not contain licenses/axtb/ notices")
+    distribution, version, _ = Path(wheel).name.split("-", 2)
+    dist_info = f"{distribution}-{version}.dist-info/"
     with zipfile.ZipFile(wheel) as archive:
-        metadata_path = next(
-            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
-        )
-        metadata = BytesParser().parsebytes(archive.read(metadata_path))
-        prefix = metadata_path.removesuffix("METADATA") + "licenses/wheel-licenses/"
+        metadata = BytesParser().parsebytes(archive.read(dist_info + "METADATA"))
+        prefix = dist_info + "licenses/wheel-licenses/"
         actual = {
             name.removeprefix(prefix)
             for name in archive.namelist()
@@ -43,15 +99,52 @@ def verify_wheel(wheel, licenses=LICENSES):
                 raise ValueError(f"Missing License-File declaration: {name}")
             if archive.read(prefix + name) != content:
                 raise ValueError(f"License file has differing bytes: {name}")
+        crate = "reshiki-xtb-worker" if xtb else "reshiki-python"
+        sbom_path = f"{dist_info}sboms/{crate}.cyclonedx.json"
+        if sbom_path not in archive.namelist():
+            raise ValueError(f"The wheel has no Rust SBOM at {sbom_path}")
+        sbom = json.loads(archive.read(sbom_path))
+        components = sbom.get("components") if isinstance(sbom, dict) else None
+        if not isinstance(components, list) or not components:
+            raise ValueError(f"The wheel has no Rust SBOM component inventory: {sbom_path}")
+        # Maturin records the wheel's own crate in metadata.component and its
+        # dependencies in the top-level components list.
+        sbom_metadata = sbom.get("metadata")
+        package = sbom_metadata.get("component") if isinstance(sbom_metadata, dict) else None
+        if not isinstance(package, dict) or package.get("name") != crate:
+            raise ValueError(f"The wheel's Rust SBOM must identify {crate}: {sbom_path}")
+        engine = {
+            component["name"]
+            for component in components
+            if component.get("name", "").startswith("axtb")
+        }
+        if xtb and "axtb-driver" not in engine:
+            raise ValueError("The reshiki-xtb wheel's SBOM does not list the axtb engine")
+        if not xtb and engine:
+            raise ValueError(f"The base reshiki wheel contains the xTB engine: {sorted(engine)}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--xtb", action="store_true", help="Check engine wheel license notices")
+    mode.add_argument(
+        "--release-tag", help="Check wheel versions and engine source links for this tag"
+    )
+    parser.add_argument("wheels", nargs="+", metavar="WHEEL")
+    args = parser.parse_args()
+    for pattern in args.wheels:
+        wheels = glob.glob(pattern)
+        if not wheels:
+            parser.error(f"No wheel files matched: {pattern}")
+        for wheel in wheels:
+            if args.release_tag is not None:
+                verify_release_wheel(wheel, args.release_tag)
+                print(f"Verified release version: {wheel}")
+            else:
+                verify_wheel(wheel, xtb=args.xtb)
+                print(f"Verified license notices: {wheel}")
 
 
 if __name__ == "__main__":
-    if not sys.argv[1:]:
-        sys.exit("Usage: check_python_wheel_notices.py WHEEL [WHEEL ...]")
-    for pattern in sys.argv[1:]:
-        wheels = glob.glob(pattern)
-        if not wheels:
-            sys.exit(f"No wheel files matched: {pattern}")
-        for wheel in wheels:
-            verify_wheel(wheel)
-            print(f"Verified license notices: {wheel}")
+    main()

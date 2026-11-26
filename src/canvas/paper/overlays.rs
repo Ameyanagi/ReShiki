@@ -68,8 +68,26 @@ fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
 }
 
 impl MoleculeCanvas<'_> {
-    pub(super) fn draw_outdated_models(&self, frame: &mut layered::Frame<'_>, bounds: Rectangle) {
-        for &(lo, hi) in &self.outdated {
+    pub(super) fn outdated_frames<'a>(
+        &'a self,
+        preview: &'a Document,
+    ) -> impl Iterator<Item = (World, World)> + 'a {
+        self.outdated_models.iter().filter_map(move |atoms| {
+            let model = preview.models.iter().find(|model| {
+                model.display != reshiki::models3d::Display::TwoD
+                    && model.linked_atoms.as_slice() == *atoms
+            })?;
+            reshiki::models3d::frame(preview, model)
+        })
+    }
+
+    pub(super) fn draw_outdated_models(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        preview: &Document,
+        bounds: Rectangle,
+    ) {
+        for (lo, hi) in self.outdated_frames(preview) {
             let lo = self.camera.screen(lo, bounds);
             let hi = self.camera.screen(hi, bounds);
             let size = iced::Size::new(hi.x - lo.x, hi.y - lo.y);

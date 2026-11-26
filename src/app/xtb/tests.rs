@@ -273,7 +273,7 @@ fn frequencies_reject_a_target_above_the_hessian_limit() {
     });
     assert!(matches!(
         &app.tab.xtb.outcome,
-        Some(Outcome::Failed(failed)) if failed.failure == state::Failure::TooMany { count: 201, limit: 200 }
+        Some(Outcome::Failed(failed)) if matches!(failed.failure, state::Failure::TooMany { count: 201, limit: 200 })
     ));
     assert!(!app.xtb_running());
 }
@@ -455,8 +455,10 @@ fn an_scf_failure_retains_the_request_for_retry() {
         .clone();
     app.xtb.settings.task = CalcTask::Energy;
 
-    let failure = state::Failure::Scf("250 iterations".into());
-    event(&mut app, Event::Done(Err(failure.clone())));
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf("250 iterations".into()))),
+    );
     assert!(!app.xtb_running());
     let Some(Outcome::Failed(failed)) = &app.tab.xtb.outcome else {
         panic!("expected an SCF failure");
@@ -464,7 +466,9 @@ fn an_scf_failure_retains_the_request_for_retry() {
     let Some(request) = &failed.request else {
         panic!("the failure keeps its request");
     };
-    assert_eq!(failed.failure, failure);
+    assert!(
+        matches!(failed.failure.reason(), state::Failure::Scf(message) if message == "250 iterations")
+    );
     assert_eq!(request.atoms, [o]);
     assert_eq!(request.config, config);
     assert!(!request.keep_full);
@@ -685,9 +689,10 @@ fn a_crash_offers_run_again_and_details_without_the_structure() {
     let (mut app, _) = water(CalcTask::Energy);
     event(
         &mut app,
-        Event::Done(Err(state::Failure::Crashed(
-            "xTB worker exited with signal: 11: ".into(),
-        ))),
+        Event::Done(Err(state::Failure::Crashed {
+            summary: "xTB worker exited with signal: 11".into(),
+            details: Some("xTB worker exited with signal: 11: worker stderr".into()),
+        })),
     );
     assert_eq!(
         app.status,
@@ -707,6 +712,7 @@ fn a_crash_offers_run_again_and_details_without_the_structure() {
     );
     assert!(details.contains("H2O, 3 atoms"), "{details}");
     assert!(details.contains("signal: 11"), "{details}");
+    assert!(!details.contains("worker stderr"), "{details}");
     assert!(!details.contains("0.96"), "no coordinates: {details}");
     send(&mut app, Action::RunAgain);
     assert!(app.xtb_running());
@@ -1105,7 +1111,7 @@ fn manual_write_evidence_files() {
 
 #[test]
 fn isotope_labels_give_explicit_analysis_masses() {
-    let frame = Frame {
+    let mut frame = Frame {
         numbers: vec![8, 1, 1],
         positions_angstrom: START.to_vec(),
         isotopes: vec![0, 2, 0],
@@ -1117,6 +1123,15 @@ fn isotope_labels_give_explicit_analysis_masses() {
     let masses = isotope_masses(&frame).expect("a labelled atom");
     assert!((masses[1] - 2.014101778).abs() < 1e-9, "deuterium");
     assert!((masses[0] - 15.999).abs() < 0.01 && (masses[2] - 1.008).abs() < 0.001);
+    frame.masses_amu = masses;
+    let settings = Settings {
+        task: CalcTask::OptFreq,
+        ..Settings::default()
+    };
+    let config = settings.config((0, 0), false, vec![]).unwrap();
+    let job = job(&config, &frame, vec![]);
+    assert_eq!(job.isotope_labels, [8000, 1002, 1000]);
+    assert_eq!(job.masses.as_deref(), Some(frame.masses_amu.as_slice()));
     assert!(
         isotope_masses(&Frame {
             isotopes: vec![],
