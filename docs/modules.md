@@ -207,6 +207,7 @@ explains how the crates and modules fit together.
 - `src/app/workspace/layout_snapshots/context_status.rs`: Snapshots of the context row in keyboard drawing, the Check drawing findings and the status bar at the minimum and default window sizes.
 - `src/app/workspace/layout_snapshots/features.rs`: Snapshot scenes for the UI surfaces added after the maintainability refactor (40c8d82a)
 - `src/app/workspace/layout_snapshots/property_continuity.rs`: Matched real renderer fixtures for molecular Properties continuity.
+- `src/app/workspace/layout_snapshots/xtb_palette.rs`: The actual bottom dock, including chrome, at the minimum window size.
 - `src/app/workspace/model_controls_qa.rs`: Opt-in real-renderer captures at the issue's 1600 × 1000 logical pixels.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
@@ -223,15 +224,20 @@ explains how the crates and modules fit together.
 - `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
 - `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
 - `src/app/xtb/palette.rs`: The xTB results palette
+- `src/app/xtb/palette/sizing.rs`: The bottom dock's window budget and short-window collapse behavior.
+- `src/app/xtb/palette/status.rs`
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
 - `src/app/xtb/results/methods.rs`: The methods paragraph Copy methods text writes for a stored result, citing the BibTeX keys of docs/references/xtb.bib for what actually ran.
 - `src/app/xtb/run.rs`: Stream the shared xTB job's progress to the Calculate card.
+- `src/app/xtb/selection.rs`: Guidance when the drawing does not identify one molecule to calculate.
 - `src/app/xtb/source.rs`: Where a molecule's 3D coordinates came from (an xTB conformer, an optimized geometry or step, the file or the force field) and the other geometries its current xTB results hold, for the input-file dialog and the Undo status.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
 - `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
+- `src/app/xtb/vibrations/mode_list.rs`
+- `src/app/xtb/vibrations/motion.rs`: Geometric descriptions of normal modes, from internal-coordinate motion.
 - `src/app/xtb/vibrations/view.rs`: The Vibrations tab's widgets
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.

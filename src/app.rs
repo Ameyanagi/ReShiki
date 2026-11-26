@@ -194,6 +194,7 @@ pub enum InspectorTab {
 #[derive(Debug, Clone)]
 pub enum Message {
     ModifiersChanged(iced::keyboard::Modifiers),
+    WindowSize(iced::Size),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
     Accessibility(accessibility::Action),
@@ -566,6 +567,8 @@ pub struct App {
     xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
+    /// The complete window in logical points, independent of the drawing viewport.
+    window_size: iced::Size,
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
@@ -590,6 +593,16 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
 /// Leaves the focused field or control, so the next key reaches the drawing.
 fn focus_drawing() -> Task<Message> {
     iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
+}
+
+/// Logical window dimensions share the always-on input path on every platform.
+fn window_size_event(event: &iced::window::Event) -> Option<Message> {
+    match event {
+        iced::window::Event::Opened { size, .. } | iced::window::Event::Resized(size) => {
+            Some(Message::WindowSize(*size))
+        }
+        _ => None,
+    }
 }
 
 impl App {
@@ -704,6 +717,7 @@ impl App {
             xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
+            window_size: iced::Size::new(1280.0, 820.0),
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
@@ -820,6 +834,9 @@ impl App {
                     return Some(Message::ModifiersChanged(modifiers));
                 }
                 if let iced::Event::Window(event) = &event {
+                    if let Some(message) = window_size_event(event) {
+                        return Some(message);
+                    }
                     // Back in the window: may read-only repositories be sent to now?
                     #[cfg(not(target_arch = "wasm32"))]
                     if matches!(event, iced::window::Event::Focused) {
@@ -1200,25 +1217,36 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
-        let vibration_context = |app: &Self| (app.tab.id, app.tab.file_epoch, app.tab.revision);
-        let vibrations = vibration_context(self);
+        let xtb_page_was_shown = self.nmr_xtb_page_shown();
+        let revision = self.tab.revision;
+        let vibrations_were_running = self.xtb_running() && self.xtb_vibrations_visible();
         let vibration_result = self
             .xtb_vibration_entry()
             .map(|stored| (stored.attachment, Arc::downgrade(&stored.result)));
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
+        self.xtb_clear_selection_hint();
+        let document_changed = document != (self.tab.id, self.tab.file_epoch);
+        if !xtb_page_was_shown || document_changed {
+            self.nmr_clear_status_if_xtb();
+        }
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
         let shown = self
             .xtb_vibration_entry()
             .map(|stored| (stored.attachment, Arc::as_ptr(&stored.result)));
-        if vibration_result
+        let result_changed = vibration_result
             .as_ref()
             .map(|(attachment, result)| (*attachment, Weak::as_ptr(result)))
-            != shown
-            || (shown.is_some() && vibrations != vibration_context(self))
+            != shown;
+        if result_changed
+            || (shown.is_some() && (document_changed || revision != self.tab.revision))
         {
-            task = Task::batch([task, tagged(self.xtb_vibrations_resume(), self.tab.id)]);
+            let reveal = document_changed || (result_changed && !vibrations_were_running);
+            task = Task::batch([
+                task,
+                tagged(self.xtb_vibrations_resume(reveal), self.tab.id),
+            ]);
         }
         // The canvas forgets the pointer when a context menu closes
         // (canvas::reset_menu_pointer), so the hovered atom or bond goes too:
@@ -1236,7 +1264,7 @@ impl App {
         // All Properties pages share one scrollable, which keeps its offset
         // even while a short page hides it. Another tab or a newly opened
         // drawing starts from the top, whichever path brought it forward.
-        if document != (self.tab.id, self.tab.file_epoch) {
+        if document_changed {
             task = Task::batch([
                 task,
                 iced::widget::operation::snap_to(
@@ -1302,6 +1330,11 @@ impl App {
     /// tasks must not acquire a document tag.
     fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
         let message = match message {
+            Message::WindowSize(size) => {
+                self.xtb_palette_resized(size);
+                self.window_size = size;
+                return ControlFlow::Break(Task::none());
+            }
             Message::Recovery(action) if recovery_manager::completion(&action) => {
                 let task = self.recovery_action(action);
                 return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
