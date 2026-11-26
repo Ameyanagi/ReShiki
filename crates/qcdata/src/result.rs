@@ -267,6 +267,7 @@ impl TransitionStateRun {
                     .sum::<usize>()
         };
         size_of::<Self>()
+            + self.reached_positions_angstrom.capacity() * size_of::<[f64; 3]>()
             + self.endpoint_thermo.as_ref().map_or(0, |corrections| {
                 corrections
                     .iter()

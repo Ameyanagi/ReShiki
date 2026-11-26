@@ -789,7 +789,9 @@ impl App {
             self.xtb.conformer_inversion_target = None;
             self.xtb.conformers.invert_undefined_stereo = false;
         }
-        self.xtb_end_preview();
+        if request.ts.is_none() {
+            self.xtb_end_preview();
+        }
         self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
         self.tab.xtb.outcome = None;
         self.tab.xtb.run = Some(Run {
@@ -816,10 +818,7 @@ impl App {
             cancel: Default::default(),
             handle: None,
         });
-        if self.xtb_live_ts().is_some() {
-            self.tab.xtb.palette.open = true;
-            self.tab.xtb.palette.collapsed = false;
-        }
+        self.xtb_ts_palette_started();
         self.xtb_vibrations_sync();
         self.xtb_launch()
     }
@@ -1119,6 +1118,10 @@ impl App {
         ts: Option<Rc<ts::Session>>,
     ) {
         let reaction_arrow = ts.as_ref().map(|session| session.arrow);
+        // A completed search stays in the card when the dock was closed or
+        // used to inspect another result during the run.
+        let show_result =
+            reaction_arrow.is_none_or(|arrow| self.xtb_palette_follows_live_ts(arrow));
         let mut doc = self.tab.doc.clone();
         let attached = match science::attach(
             &mut doc,
@@ -1217,7 +1220,7 @@ impl App {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
             if let Some(ts) = ts {
                 self.tab.xtb.ts_sessions.remember(&result, ts);
-                if self.tabs.temporary_depth == 0 {
+                if show_result && self.tabs.temporary_depth == 0 {
                     self.tab.xtb.palette.collapsed = false;
                     if self.xtb.dock.inspector {
                         self.xtb.page = Page::Xtb;
@@ -1225,7 +1228,9 @@ impl App {
                     }
                 }
             }
-            self.xtb_show_result(&result);
+            if show_result {
+                self.xtb_show_result(&result);
+            }
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
                 self.tab.xtb.palette.view = results::View::Vibrations;

@@ -116,7 +116,7 @@ impl App {
             return None;
         }
         let collapsed = self.tab.xtb.palette.collapsed && !inspector;
-        if let Some(live) = self.xtb_live_ts() {
+        if let Some(live) = self.xtb_palette_live_ts() {
             let title = results::title(None, Some(&live.request.context.title));
             let header = self.xtb_palette_header(title, vec![View::Path], View::Path, inspector);
             return Some(if collapsed {

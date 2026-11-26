@@ -220,6 +220,7 @@ pub(super) fn run<P: Potential + Send>(
                 energies: &energies,
                 max_force: projected.maximum,
                 climbing,
+                finished: converged || iteration == options.neb_max_iterations,
             },
         )?;
         if converged || iteration == options.neb_max_iterations {

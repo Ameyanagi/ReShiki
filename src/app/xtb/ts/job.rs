@@ -33,6 +33,7 @@ const THERMO_TEMPERATURE_K: f64 = 298.15;
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
     Stage(Stage),
+    IrcSkipped,
     Neb {
         iteration: usize,
         energies: Vec<f64>,
@@ -62,6 +63,7 @@ pub(super) enum SearchPath {
     Saved {
         points: Vec<ts::Minimum>,
         converged: bool,
+        candidate: ts::SaddleCandidate,
     },
 }
 
@@ -193,8 +195,9 @@ fn run(
         options: &options,
     };
     let mut last_band = None;
+    let trace = std::cell::RefCell::new(trace);
     let observe = |event: ts::Event<'_>| {
-        trace.observe(event);
+        trace.borrow_mut().observe(event);
         if let Some(event) = progress(event, &mut last_band, Instant::now)
             && send(tx, cancel, event).is_err()
         {
@@ -202,21 +205,44 @@ fn run(
         }
         control(cancel, tx)
     };
-    let report = match path {
-        SearchPath::Saved { points, converged } => {
-            ts::refine_from_band(first, &search, &points, converged, observe)
+    let verify = |worker: &mut Worker, positions: &[f64], imaginary: usize| {
+        send(tx, cancel, Event::Stage(Stage::Saddle)).map_err(|_| ts::TsError::Cancelled)?;
+        trace.borrow_mut().enter("Worker check");
+        let check = worker
+            .checked_hessian(positions, &masses)
+            .map_err(ts::TsError::from);
+        if control(cancel, tx).is_break() || matches!(check, Err(ts::TsError::Cancelled)) {
+            return Err(ts::TsError::Cancelled);
         }
-        _ => ts::search_with_cancel(&mut workers, &search, observe, || control(cancel, tx)),
+        let agrees = check
+            .as_ref()
+            .ok()
+            .and_then(|computed| computed.vibrations.as_ref())
+            .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == imaginary);
+        Ok((agrees, check))
+    };
+    let (report, checked) = match path {
+        SearchPath::Saved {
+            points,
+            converged,
+            candidate,
+        } => ts::refine_from_candidate(
+            first, &search, &points, converged, &candidate, observe, verify,
+        ),
+        _ => ts::search_with_verification(
+            &mut workers,
+            &search,
+            observe,
+            || control(cancel, tx),
+            verify,
+        ),
     }
     .map_err(failed)?;
     check_cancel(cancel)?;
-    trace.enter("Worker check");
-    let checked = workers
-        .first_mut()
-        .ok_or_else(|| Failure::Other("No xTB worker".into()))?
-        .checked_hessian(&report.ts.positions, &masses)
-        .map_err(ts::TsError::from);
-    check_cancel(cancel)?;
+    if report.irc.is_none() && report.irc_error.is_none() {
+        send(tx, cancel, Event::IrcSkipped)?;
+    }
+    let mut trace = trace.into_inner();
     let endpoint_thermo = if free_energy {
         trace.enter("Endpoint thermochemistry");
         send(tx, cancel, Event::Stage(Stage::Thermochemistry))?;
@@ -616,8 +642,12 @@ impl SearchTrace {
 
     fn finish(&mut self) {
         if let Some((stage, started)) = self.current.take() {
-            self.times
-                .push((stage.into(), started.elapsed().as_secs_f64()));
+            let seconds = started.elapsed().as_secs_f64();
+            if let Some((_, total)) = self.times.iter_mut().find(|(name, _)| name == stage) {
+                *total += seconds;
+            } else {
+                self.times.push((stage.into(), seconds));
+            }
         }
     }
 
@@ -780,6 +810,10 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .first()
             .copied()
             .filter(|&f| f < -ts::IMAGINARY_CM1),
+        candidate: (report.imaginary >= 2).then_some(ts::SaddleCandidate {
+            positions: report.ts.positions,
+            hessian: report.hessian,
+        }),
     };
     Ok(Report {
         frames: vec![transition, reactant, product],
@@ -825,7 +859,7 @@ fn diagnostics(
         (
             "Method".into(),
             if refining {
-                "Saved path → P-RFO → IRC"
+                "Displaced saddle candidate → P-RFO → IRC"
             } else {
                 "IDPP → CI-NEB → P-RFO → IRC"
             }
@@ -871,7 +905,7 @@ fn diagnostics(
             "Retry".into(),
             match retry {
                 Retry::RefineHighest => {
-                    "Refined from the highest interior point of the saved path".into()
+                    "Displaced the saved candidate along an extra imaginary mode".into()
                 }
                 Retry::FinerPath => format!("New search with {} path points", report.path.len()),
             },
@@ -880,10 +914,7 @@ fn diagnostics(
     if let Some(detail) = &trace.reactive_start {
         rows.push(("Folded the starting conformer".into(), detail.clone()));
     }
-    let worker = worker_frequencies
-        .iter()
-        .filter(|&&f| f < -ts::IMAGINARY_CM1)
-        .count();
+    let worker = imaginary_count(worker_frequencies);
     rows.push((
         "Worker check".into(),
         if worker_frequencies.is_empty() {
@@ -1005,14 +1036,18 @@ fn engine_candidate(frame: &Frame, report: &TsReport, engine: &Engine) -> CalcRe
     }
 }
 
+fn imaginary_count(frequencies: &[f64]) -> usize {
+    frequencies
+        .iter()
+        .filter(|&&f| f < -ts::IMAGINARY_CM1)
+        .count()
+}
+
 /// Keep the same acceptance rule and diagnostic order as the CLI.
 fn failure_reason(report: &TsReport, worker_frequencies: &[f64]) -> Option<String> {
     use ts::Reached::{Other, Product, Reactant};
 
-    let worker = worker_frequencies
-        .iter()
-        .filter(|&&f| f < -ts::IMAGINARY_CM1)
-        .count();
+    let worker = imaginary_count(worker_frequencies);
     if worker != report.imaginary {
         Some(format!(
             "engine/worker imaginary frequency counts disagree: engine {}, worker {worker}",
@@ -1069,10 +1104,14 @@ fn progress(
         ts::Event::Neb {
             iteration,
             energies,
+            finished,
             ..
         } => {
             let now = clock();
-            if last_band.is_some_and(|last| now.duration_since(last) < Duration::from_millis(250)) {
+            if !finished
+                && last_band
+                    .is_some_and(|last| now.duration_since(last) < Duration::from_millis(250))
+            {
                 return None;
             }
             *last_band = Some(now);

@@ -66,6 +66,8 @@ pub(crate) struct Palette {
     pub(super) previous: bool,
     pub(super) view: View,
     pub(super) labels: bool,
+    /// The live search explicitly chosen for the dock, independently of saved results.
+    live_ts: Option<u64>,
     step: Option<Step>,
     ts_views: Vec<TsView>,
     /// Why the previewed step was not used: the stereo check's findings.
@@ -151,6 +153,7 @@ impl Palette {
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) -> bool {
         self.open = true;
         self.previous = false;
+        self.live_ts = None;
         let same = self.follows(result);
         if same && ts::is_ts(result) {
             return false;
@@ -264,6 +267,50 @@ fn is_charge_label(text: &str) -> bool {
 }
 
 impl App {
+    /// A running search occupies the dock only when that reaction chose it.
+    pub(super) fn xtb_palette_live_ts(&self) -> Option<&ts::Live> {
+        self.xtb_live_ts()
+            .filter(|live| self.xtb_palette_follows_live_ts(live.request.arrow))
+    }
+
+    pub(super) fn xtb_palette_follows_live_ts(&self, arrow: u64) -> bool {
+        self.tab.xtb.palette.open
+            && self.tab.xtb.palette.live_ts == Some(arrow)
+            && self.xtb_selected_reaction() == Some(arrow)
+    }
+
+    pub(super) fn xtb_show_live_path(&mut self, arrow: u64) -> bool {
+        if !self
+            .xtb_live_ts()
+            .is_some_and(|live| live.request.arrow == arrow)
+        {
+            return false;
+        }
+        self.xtb_end_preview();
+        let palette = &mut self.tab.xtb.palette;
+        palette.live_ts = Some(arrow);
+        palette.open = true;
+        palette.collapsed = false;
+        palette.previous = false;
+        palette.view = View::Path;
+        true
+    }
+
+    /// Keep an unrelated open result until the user chooses the live path.
+    pub(super) fn xtb_ts_palette_started(&mut self) {
+        let Some(arrow) = self.xtb_live_ts().map(|live| live.request.arrow) else {
+            return;
+        };
+        self.tab.xtb.palette.live_ts = None;
+        if !self.tab.xtb.palette.open
+            || self
+                .xtb_shown()
+                .is_none_or(|shown| shown.arrow == Some(arrow))
+        {
+            self.xtb_show_live_path(arrow);
+        }
+    }
+
     /// The result the palette follows, while the document holds it.
     fn xtb_palette_result(&self) -> Option<(usize, &Stored)> {
         self.tab
@@ -283,7 +330,7 @@ impl App {
     }
 
     pub(super) fn xtb_shown_entry(&self) -> Option<(usize, &Stored)> {
-        if self.xtb_live_ts().is_some() {
+        if self.xtb_palette_live_ts().is_some() {
             return None;
         }
         let palette = &self.tab.xtb.palette;
@@ -380,17 +427,26 @@ impl App {
 
     pub(in crate::app) fn xtb_sync_reaction_palette(&mut self, selection_changed: bool) -> bool {
         let palette = &self.tab.xtb.palette;
-        let Some(arrow) = self
-            .xtb_selected_reaction()
-            .filter(|_| palette.open && self.xtb_live_ts().is_none())
-        else {
+        let Some(arrow) = self.xtb_selected_reaction().filter(|&arrow| {
+            palette.open
+                && self
+                    .xtb_live_ts()
+                    .is_none_or(|live| live.request.arrow != arrow)
+        }) else {
             return false;
         };
         let showing_ts = palette.is_showing_ts();
         let failed = self
             .xtb_palette_failure(Some(arrow))
             .is_some_and(|failed| failed.ts().is_some());
-        if !selection_changed && !showing_ts && !failed {
+        if !selection_changed
+            && !failed
+            && (!showing_ts
+                || self
+                    .xtb_palette_result()
+                    .and_then(|(_, stored)| ts::saved_search(&stored.result)?.arrow)
+                    .is_some_and(|shown| shown != arrow))
+        {
             return false;
         }
         if let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) {
@@ -444,8 +500,11 @@ impl App {
     /// on results.
     pub(super) fn xtb_can_show(&self) -> bool {
         let open = self.tab.xtb.palette.open;
-        if self.xtb_live_ts().is_some() {
-            return !open;
+        if self
+            .xtb_live_ts()
+            .is_some_and(|live| self.xtb_selected_reaction() == Some(live.request.arrow))
+        {
+            return !open || self.xtb_palette_live_ts().is_none();
         }
         let reaction = self.xtb_selected_reaction();
         if self.xtb_palette_failure(reaction).is_some() {
@@ -531,7 +590,7 @@ impl App {
     /// The palette is showing a result.
     pub(super) fn xtb_palette_visible(&self) -> bool {
         self.tab.xtb.palette.open
-            && (self.xtb_live_ts().is_some() || self.xtb_shown_entry().is_some())
+            && (self.xtb_palette_live_ts().is_some() || self.xtb_shown_entry().is_some())
     }
 
     /// The step preview, while the document has not changed since.
@@ -735,11 +794,16 @@ impl App {
 
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::Show if self.xtb_live_ts().is_some() => {
-                self.tab.xtb.palette.open = true;
-                self.tab.xtb.palette.collapsed = false;
+            Action::Show
+                if self.xtb_live_ts().is_some_and(|live| {
+                    self.xtb_selected_reaction() == Some(live.request.arrow)
+                }) =>
+            {
+                if let Some(arrow) = self.xtb_selected_reaction() {
+                    self.xtb_show_live_path(arrow);
+                }
             }
-            Action::View(_) if self.xtb_live_ts().is_some() => {}
+            Action::View(_) if self.xtb_palette_live_ts().is_some() => {}
             Action::Show => {
                 self.tab.xtb.palette.previous = false;
                 let reaction = self.xtb_selected_reaction();
@@ -961,7 +1025,11 @@ impl App {
                 ..(**shown.frame).clone()
             };
             let moved = if path {
-                ts::preview_image(&mut doc, shown.atoms, shown.input, &frame)
+                if point == PreviewPoint::ReachedEndpoint {
+                    ts::preview_endpoint_image(&mut doc, shown.atoms, shown.input, &frame)
+                } else {
+                    ts::preview_image(&mut doc, shown.atoms, shown.input, &frame)
+                }
             } else {
                 science::move_model(&mut doc, shown.atoms, &frame)
             };

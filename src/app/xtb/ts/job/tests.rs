@@ -280,6 +280,7 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
     assert!(report.extras.connects);
     assert!(report.extras.saddle_converged);
     assert_eq!(report.extras.num_imaginary, 1);
+    assert!(report.extras.candidate.is_none());
     let trajectory = result.trajectory.as_ref().unwrap();
     assert_eq!(trajectory.energies_hartree, [-3., -1.1, -2.]);
     assert!(trajectory.positions_angstrom.is_empty());
@@ -598,31 +599,34 @@ fn irc_failure_names_the_reached_endpoints() {
 }
 
 #[test]
-fn live_band_events_copy_energies_at_most_four_times_per_second() {
+fn live_band_events_throttle_intermediate_samples_and_always_publish_the_final_band() {
     let mut last_band = None;
     let start = Instant::now();
-    let mut send_band = |iteration, millis, energies| {
+    let mut send_band = |iteration, millis, energies, finished| {
         progress(
             ts::Event::Neb {
                 iteration,
                 energies,
                 max_force: 0.1,
                 climbing: None,
+                finished,
             },
             &mut last_band,
             || start + Duration::from_millis(millis),
         )
     };
     assert!(matches!(
-        send_band(0, 0, &[-5., -4.9, -5.]),
+        send_band(0, 0, &[-5., -4.9, -5.], false),
         Some(Event::Neb { iteration: 0, .. })
     ));
-    assert!(send_band(1, 249, &[-5., -4.91, -5.]).is_none());
+    assert!(send_band(1, 249, &[-5., -4.91, -5.], false).is_none());
     assert!(
-        matches!(send_band(2, 250, &[-5., -4.92, -5.]), Some(Event::Neb {
+        matches!(send_band(2, 250, &[-5., -4.92, -5.], false), Some(Event::Neb {
         iteration: 2, energies
     }) if energies == [-5., -4.92, -5.])
     );
+    assert!(matches!(send_band(3, 251, &[-5., -4.93, -5.], true),
+        Some(Event::Neb { iteration: 3, energies }) if energies == [-5., -4.93, -5.]));
 }
 
 #[test]
