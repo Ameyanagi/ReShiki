@@ -317,6 +317,7 @@ impl App {
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             result_label: self.xtb_label(),
+            outdated_models: self.outdated_models(),
             element: self.atom_tool_element(),
             atom_label: (self.element == super::palettes::R_GROUP)
                 .then_some(super::palettes::R_GROUP),

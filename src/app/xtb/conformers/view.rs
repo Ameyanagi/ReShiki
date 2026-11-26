@@ -455,7 +455,7 @@ fn duration(seconds: f64) -> String {
 }
 
 /// The Conformers tab's footer: export every kept conformer.
-pub(crate) fn footer<'a>() -> Element<'a, Message> {
+pub(crate) fn footer<'a>(wrapping: text::Wrapping) -> Element<'a, Message> {
     row![
         accessible_command(
             "xtb-export-conformers-xyz",
@@ -472,7 +472,8 @@ pub(crate) fn footer<'a>() -> Element<'a, Message> {
         Space::new().width(8),
         text("Kept conformers are saved as compact frames (at most 32).")
             .size(11)
-            .style(muted_text),
+            .style(muted_text)
+            .wrapping(wrapping),
     ]
     .spacing(10)
     .align_y(Alignment::Center)

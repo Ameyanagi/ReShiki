@@ -25,6 +25,106 @@ fn prepared() -> Opened {
     ))
 }
 
+#[test]
+fn native_open_names_results_and_counts_outdated_results_and_models() {
+    use reshiki::models3d::{ForceField, Model3d, Placed};
+    use reshiki::{qcdata, science};
+
+    fn attach(doc: &mut Document, atom: u64) {
+        let launch = science::launch(doc, atom, 0, 1).unwrap();
+        let result: qcdata::CalcResult = serde_json::from_value(serde_json::json!({
+            "frame": launch.frame.hash(),
+            "task": "energy",
+            "settings": {"imported": {}},
+            "provenance": {
+                "program": "test",
+                "source": {"imported": {"format": "test", "file_name": "water.out", "job": 0}}
+            },
+            "status": "converged",
+            "energy_hartree": -75.0
+        }))
+        .unwrap();
+        science::attach(doc, &launch, vec![], result).unwrap();
+    }
+
+    let path = std::path::Path::new("drawings/water.rsk");
+    let mut doc = Document::default();
+    assert!(opened_results_status(path, &doc).is_none());
+    let atoms = [0., 150.].map(|x| {
+        let id = doc.add_atom("O", Point::new(x, 0.));
+        doc.models.push(Model3d::new(
+            &doc,
+            vec![Placed { id, xyz: [0.; 3] }],
+            vec![],
+            ForceField::Mmff94s,
+        ));
+        id
+    });
+    attach(&mut doc, atoms[0]);
+    assert_eq!(
+        opened_results_status(path, &doc).as_deref(),
+        Some("Opened water.rsk · 1 calculation result")
+    );
+    let mut outdated = doc.clone();
+    outdated.atom_mut(atoms[1]).unwrap().charge = -1;
+    assert_eq!(
+        opened_results_status(path, &outdated).as_deref(),
+        Some(
+            "Opened water.rsk · 1 calculation result · 1 outdated 3D model · the drawing changed since"
+        )
+    );
+    attach(&mut doc, atoms[0]);
+    assert_eq!(
+        opened_results_status(path, &doc).as_deref(),
+        Some("Opened water.rsk · 2 calculation results")
+    );
+    attach(&mut doc, atoms[1]);
+    doc.atom_mut(atoms[0]).unwrap().charge = -1;
+    assert_eq!(doc.science.attachments.len(), 2);
+    let (mut app, _) = App::new();
+    let _ = app.file_prepared(Some((
+        path.into(),
+        Ok(Prepared::Native(Box::new(doc.clone()), None)),
+    )));
+    assert_eq!(
+        app.status,
+        "Opened water.rsk · 3 calculation results (2 outdated) · 1 outdated 3D model · the drawing changed since"
+    );
+    doc.atom_mut(atoms[1]).unwrap().charge = -1;
+    assert_eq!(
+        opened_results_status(path, &doc).as_deref(),
+        Some(
+            "Opened water.rsk · 3 calculation results (3 outdated) · 2 outdated 3D models · the drawing changed since"
+        )
+    );
+}
+
+#[test]
+fn native_open_reports_outdated_models_without_calculation_results() {
+    use reshiki::models3d::{ForceField, Model3d, Placed};
+
+    let path = std::path::Path::new("drawings/x.rsk");
+    let mut doc = Document::default();
+    let id = doc.add_atom("O", Point::default());
+    doc.models.push(Model3d::new(
+        &doc,
+        vec![Placed { id, xyz: [0.; 3] }],
+        vec![],
+        ForceField::Mmff94s,
+    ));
+    assert!(opened_results_status(path, &doc).is_none());
+    doc.atom_mut(id).unwrap().charge = -1;
+    let (mut app, _) = App::new();
+    let _ = app.file_prepared(Some((
+        path.into(),
+        Ok(Prepared::Native(Box::new(doc), None)),
+    )));
+    assert_eq!(
+        app.status,
+        "Opened x.rsk · 1 outdated 3D model · the drawing changed since"
+    );
+}
+
 fn png() -> Vec<u8> {
     let mut bytes = std::io::Cursor::new(Vec::new());
     image::DynamicImage::new_rgba8(3, 2)
