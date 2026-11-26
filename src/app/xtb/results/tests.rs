@@ -80,6 +80,7 @@ fn optimized(full: bool) -> CalcResult {
             labels: vec![],
             minimizer_energies_hartree: vec![],
             cluster_sizes: vec![],
+            rmsd_to_best_angstrom: vec![],
         }),
         keep_full: false,
         omitted_bytes: None,

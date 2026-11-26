@@ -768,6 +768,7 @@ impl CalcResult {
                 labels: path.labels.clone(),
                 minimizer_energies_hartree: path.minimizer_energies_hartree.clone(),
                 cluster_sizes: path.cluster_sizes.clone(),
+                rmsd_to_best_angstrom: path.rmsd_to_best_angstrom.clone(),
             }),
             keep_full: self.keep_full,
             omitted_bytes: self.omitted_bytes,

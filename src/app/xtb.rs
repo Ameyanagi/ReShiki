@@ -1177,6 +1177,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         labels: vec![],
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     });
     result.input_frame = optimized.then_some(input);
     result.status = status;

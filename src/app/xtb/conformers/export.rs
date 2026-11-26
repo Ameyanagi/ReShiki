@@ -107,6 +107,7 @@ mod tests {
             labels: vec![],
             minimizer_energies_hartree: vec![-5.12, -5.10, -5.11],
             cluster_sizes: vec![6, 2, 4],
+            rmsd_to_best_angstrom: vec![],
         };
         let frame = path.frame(0).unwrap();
         let result = CalcResult {

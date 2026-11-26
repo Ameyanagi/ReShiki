@@ -80,17 +80,18 @@ serializes as 64 lowercase hex digits. A golden hash for water is pinned in the 
 
 A sequence of geometries of one molecule: an optimization, a scan, a reaction path, a
 conformer set, a multi-frame file.
-`Trajectory { numbers, isotopes, masses_amu, charge, multiplicity, positions_angstrom, energies_hartree, labels, minimizer_energies_hartree, cluster_sizes }`.
+`Trajectory { numbers, isotopes, masses_amu, charge, multiplicity, positions_angstrom, energies_hartree, labels, minimizer_energies_hartree, cluster_sizes, rmsd_to_best_angstrom }`.
 The atoms are stored once; `positions_angstrom` is flat (steps × atoms × 3), saved as `f32`, and
 heavy except in a conformer result, where the positions are the result
 ([File size](#file-size)); it is empty when the steps were not saved. `energies_hartree`,
-`labels`, `minimizer_energies_hartree` and `cluster_sizes` are empty or one per step and decide
-the step count when the positions are absent. Only optimization, conformer and
+`labels`, `minimizer_energies_hartree`, `cluster_sizes` and `rmsd_to_best_angstrom` are empty
+or have one entry per step and decide the step count when the positions are absent. Only optimization, conformer and
 transition-state results carry a trajectory; the last step of an optimization and the first
-conformer equal the result frame at `f32` precision. For a conformer set, `minimizer_energies_hartree` (the energy from the
-minimizer that made the starts, such as MMFF94s) and `cluster_sizes` (how many starts fell into
-each conformer's cluster) are empty or one per step; by convention other producers leave them
-empty.
+conformer equal the result frame at `f32` precision. In a conformer set,
+`minimizer_energies_hartree` records the energy from the minimizer that made the starts,
+`cluster_sizes` counts the starts in each conformer's cluster, and `rmsd_to_best_angstrom`
+records the symmetry-aware heavy-atom RMSD to the first conformer using the launch topology.
+Other producers leave these three arrays empty.
 `Trajectory::frame(i)` builds the frame of step `i`.
 
 Result identity never depends on a trajectory: the input and final frames of an optimization
