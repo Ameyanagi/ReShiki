@@ -1,0 +1,42 @@
+---
+title: Conformer search
+description: Find low-energy conformers with ETKDG starts, force-field minimization, clustering and xTB re-ranking.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+:::caution[Not released yet]
+The conformer search is on the `xtb/next` branch and is not in a released version of ReShiki yet.
+:::
+
+A conformer search looks for the low-energy shapes of a flexible molecule. Force-field energies alone often rank conformers in the wrong order, so ReShiki picks a diverse set with a force field and re-ranks it with xTB.
+
+## Run a search
+
+In **Predict → xTB**, choose the task **Conformers**, then set:
+
+- **Starting structures**: how many random 3D structures ETKDG makes (default 100, up to 300). Seeds are fixed, so the same molecule gives the same result.
+- **Minimize starts with**: MMFF94s (default), MMFF94, UFF, GFN-FF or GFN2-xTB. With GFN-FF or GFN2-xTB every start is minimized with that method and re-ranking is skipped; GFN2-xTB for every start is limited to 120 atoms and shows a time estimate.
+- **Diversity**: how close two structures must be to share a cluster: fine (0.5 Å), normal (0.75 Å, default) or coarse (1.25 Å) heavy-atom RMSD, after alignment and taking symmetry into account.
+- **Energy window**: starts more than this far above the lowest one (default 15 kcal/mol) are left out.
+- **Re-rank up to** and **Per cluster**: how many cluster representatives xTB optimizes and ranks (default 20, up to 60), taking the lowest 1 or the lowest 3 of each cluster.
+
+Click **Run**. The status shows the progress, for example `Embedding 100 · minimizing 64/100 (MMFF94s)`. **Cancel** keeps the conformers already re-ranked. The search is limited to 200 atoms, and to organic molecules the force fields can type.
+
+## Read the results
+
+<Screenshot
+  src="/manual/xtb-conformers.webp"
+  alt="The Conformers tab for L-lysine: MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank. Rows list rank, ΔE xTB, ΔE MMFF94s, Boltzmann, RMSD, Cluster and Stereo; conformer 1 has ΔE xTB 0.00 and ΔE MMFF94s 2.58 kcal/mol, 19.4 %. Overlay Off or All conformers, Use this conformer, Export XYZ… and Export SDF…."
+/>
+
+The **Conformers** tab lists the kept conformers, lowest first:
+
+- **ΔE xTB**, in kcal/mol, and the **ΔE** of the force field that minimized the starts (MMFF94s, MMFF94 or UFF), the **Boltzmann** population at 298.15 K, the **RMSD** to conformer 1, the **Cluster** size (how many starts fell into it) and a **Stereo** check against the drawing.
+- Click a row to preview that conformer on the 3D model; Esc returns. **Overlay: All conformers** draws the others faintly behind it, aligned on the heavy atoms.
+- **Use this conformer** puts it on the 3D model as one Undo step, after the same stereo check as an optimization.
+- **Export XYZ…** and **Export SDF…** write the whole ensemble with energies and populations.
+
+When the search finishes, the lowest conformer is applied to the 3D model after the same checks as an optimization (it waits for your choice if a stereocentre changed). Cancel during re-ranking keeps the conformers already finished. The file keeps up to 32 conformers in a compact form (about 16 KB for lysine).
+
+You can also open an ensemble from another program, such as CREST's `crest_conformers.xyz`, and keep it in the Conformers tab; see [Open a file with several frames](/guide/calculation-files/#open-a-file-with-several-frames).
