@@ -93,11 +93,18 @@ impl App {
         }
         let collapsed = self.xtb.dock.collapsed && !inspector;
         let shown = self.xtb_shown();
-        // The reaction on display, else the selected one.
+        // The reaction on display, else the selected one, else (with
+        // nothing shown) the reaction whose search just failed.
         let arrow = shown
             .as_ref()
             .and_then(|shown| shown.arrow)
-            .or_else(|| self.xtb_selected_reaction());
+            .or_else(|| self.xtb_selected_reaction())
+            .or_else(|| match (&shown, &self.tab.xtb.outcome) {
+                (None, Some(super::super::Outcome::Failed(failed))) => {
+                    failed.ts().map(|ts| ts.arrow)
+                }
+                _ => None,
+            });
         let failed = self.xtb_palette_failure(arrow);
         let reaction = failed
             .and_then(|failed| failed.ts())
