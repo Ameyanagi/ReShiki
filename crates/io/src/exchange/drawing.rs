@@ -72,13 +72,23 @@ pub const TEXT_LABEL_COPY_ADVICE: &str =
     "Try Copy for an editable copy · Save as .rsk keeps everything";
 
 pub const MO_DIAGRAM_EXPORT_NOTICE: &str = "CDXML/CDX exports MO diagrams as grouped lines and text, without orbital pictures or calculation links. Save a .rsk file to retain the complete diagram.";
+const MO_DIAGRAM_TEXT_SIZE_NOTICE: &str =
+    "MO diagram label sizes are adjusted to the supported 4–144 pt range.";
 
 pub(crate) fn mo_diagram_export_notice(document: &Document) -> Option<String> {
-    document
-        .graphics
-        .iter()
-        .any(|g| g.mo.is_some())
-        .then(|| MO_DIAGRAM_EXPORT_NOTICE.into())
+    let mut diagrams = document.graphics.iter().filter(|g| g.mo.is_some());
+    let first = diagrams.next()?;
+    let adjusted = std::iter::once(first).chain(diagrams).any(|g| {
+        g.mo_parts(&document.drawing_style)
+            .1
+            .iter()
+            .any(|a| !(4. ..=144.).contains(&a.format.style.size_pt))
+    });
+    Some(if adjusted {
+        format!("{MO_DIAGRAM_EXPORT_NOTICE} {MO_DIAGRAM_TEXT_SIZE_NOTICE}")
+    } else {
+        MO_DIAGRAM_EXPORT_NOTICE.into()
+    })
 }
 
 fn label_excerpt(label: &str) -> String {

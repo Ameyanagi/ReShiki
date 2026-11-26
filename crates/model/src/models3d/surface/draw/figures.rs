@@ -145,6 +145,21 @@ fn register_mo_picture(doc: &Document, index: usize) {
 }
 
 #[test]
+fn mo_diagram_pictures_draw_with_an_unsupported_source_style() {
+    let _guard = lock_registry();
+    let mut doc = mo_diagram_document();
+    for style in [Style::Wireframe, Style::Ellipsoids] {
+        doc.models[0].style = style;
+        for (index, picture) in doc.graphics[0].mo_picture_models(&doc).enumerate() {
+            assert_eq!(picture.style, Style::BallStick);
+            assert!(figure_ready(&doc, &picture));
+            register_mo_picture(&doc, index);
+        }
+        assert_eq!(mo_surfaces(&doc), 2, "{style:?}");
+    }
+}
+
+#[test]
 fn mo_diagram_pictures_draw_live_and_saved_after_reopening() {
     let _guard = lock_registry();
     let doc = mo_diagram_document();

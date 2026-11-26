@@ -210,6 +210,9 @@ impl MoDiagram {
         let mut small = models3d::panel_model(self.model(doc)?, figure);
         small.display = models3d::Display::ThreeD;
         small.morph = None;
+        if !models3d::surface::draw::supports_style(small.style) {
+            small.style = models3d::Style::BallStick;
+        }
         Some(small)
     }
 
@@ -399,7 +402,10 @@ impl<'a> Layout<'a> {
         let closed =
             mo.columns.len() == 1 && mo.columns.first().is_some_and(|c| c.label.is_empty());
         let width_of = |text: &str, size| style::styled_text_width(text, size, &font);
-        let (column_groups, energies) = shared_rows(mo, closed);
+        let homo = frontier(&mo.columns, Column::homo, f64::total_cmp);
+        let lumo = frontier(&mo.columns, Column::lumo, |a, b| b.total_cmp(a));
+        let (column_groups, energies) =
+            shared_rows(mo, closed, [homo.map(|(at, _)| at), lumo.map(|(at, _)| at)]);
 
         let mut columns: Vec<_> = mo
             .columns
@@ -444,8 +450,6 @@ impl<'a> Layout<'a> {
                 .iter()
                 .map(|label| width_of(label, tick_size))
                 .fold(em, f32::max);
-        let homo = frontier(&columns, Column::homo, f64::total_cmp);
-        let lumo = frontier(&columns, Column::lumo, |a, b| b.total_cmp(a));
         let gap = homo
             .zip(lumo)
             .map(|((hi, he), (li, le))| (hi, li, format!("gap {} eV", signed(le - he))));
@@ -743,49 +747,69 @@ fn shown_levels(c: &Column, below: u8, above: u8) -> Range<usize> {
     *c.group(first).start()..c.group(end).end() + 1
 }
 
-/// Merge the shown spectra before assigning rows so a degenerate run can
-/// span both columns. Its levels within each column still draw side by side.
-fn shared_rows(mo: &MoDiagram, closed: bool) -> (Vec<Vec<Group>>, Vec<f64>) {
-    let mut levels: Vec<_> = mo
-        .columns
-        .iter()
-        .enumerate()
-        .flat_map(|(column, c)| {
-            shown_levels(c, mo.below, mo.above)
-                .filter_map(move |index| Some((*c.energies_ev.get(index)?, column, index)))
-        })
-        .collect();
-    levels.sort_unstable_by(|a, b| b.0.total_cmp(&a.0));
+/// Find degeneracy within each column before aligning groups across columns.
+fn shared_rows(
+    mo: &MoDiagram,
+    closed: bool,
+    frontiers: [Option<Location>; 2],
+) -> (Vec<Vec<Group>>, Vec<f64>) {
+    let mut groups = vec![];
+    for (column, c) in mo.columns.iter().enumerate() {
+        let shown = shown_levels(c, mo.below, mo.above);
+        let mut end = shown.end;
+        while end > shown.start {
+            let levels = c.group(end - 1);
+            end = *levels.start();
+            let frontier = frontiers
+                .into_iter()
+                .flatten()
+                .find_map(|(i, index)| (i == column && levels.contains(&index)).then_some(index));
+            if let Some(group) = group(c, levels, frontier, closed) {
+                groups.push((column, group, frontier.is_some()));
+            }
+        }
+    }
+    groups.sort_by(|a, b| b.1.energy.total_cmp(&a.1.energy));
+    let mut groups = groups.into_iter().peekable();
     let mut columns: Vec<Vec<Group>> = mo.columns.iter().map(|_| vec![]).collect();
     let mut energies = vec![];
-    for row in levels.chunk_by(|a, b| a.0 - b.0 < DEGENERATE_EV) {
-        let mut energy = f64::INFINITY;
-        for (column, (c, groups)) in mo.columns.iter().zip(&mut columns).enumerate() {
-            let mut indices = row
-                .iter()
-                .filter_map(|&(_, i, index)| (i == column).then_some(index));
-            let Some(first) = indices.next() else {
-                continue;
-            };
-            let (lo, hi) = indices.fold((first, first), |(lo, hi), i| (lo.min(i), hi.max(i)));
-            if let Some(group) = group(c, lo..=hi, energies.len(), closed) {
-                energy = energy.min(group.energy);
-                groups.push(group);
-            }
+    while let Some((column, mut group, frontier)) = groups.next() {
+        let Some(column_groups) = columns.get_mut(column) else {
+            continue;
+        };
+        let row = energies.len();
+        let mut energy = group.energy;
+        group.row = row;
+        column_groups.push(group);
+        // A nonzero gap needs separate rows even if its endpoints are close.
+        if let Some((other, mut next, _)) = groups.next_if(|(other, next, next_frontier)| {
+            *other != column
+                && energy - next.energy < DEGENERATE_EV
+                && (!frontier || !*next_frontier || energy == next.energy)
+        }) && let Some(column_groups) = columns.get_mut(other)
+        {
+            next.row = row;
+            energy = next.energy;
+            column_groups.push(next);
         }
         energies.push(energy);
     }
     (columns, energies)
 }
 
-fn group(c: &Column, levels: RangeInclusive<usize>, row: usize, closed: bool) -> Option<Group> {
+fn group(
+    c: &Column,
+    levels: RangeInclusive<usize>,
+    frontier: Option<usize>,
+    closed: bool,
+) -> Option<Group> {
     let mut labelled: Vec<_> = [c.homo(), c.lumo()]
         .into_iter()
         .flatten()
         .filter(|i| levels.contains(i))
         .collect();
     let label_index = labelled.first().copied().unwrap_or(*levels.start());
-    let energy = *c.energies_ev.get(label_index)?;
+    let energy = *c.energies_ev.get(frontier.unwrap_or(label_index))?;
     if closed && labelled.is_empty() {
         labelled.push(label_index);
     }
@@ -808,7 +832,7 @@ fn group(c: &Column, levels: RangeInclusive<usize>, row: usize, closed: bool) ->
     Some(Group {
         levels,
         energy,
-        row,
+        row: 0,
         y: 0.,
         labels,
     })
@@ -821,7 +845,7 @@ fn level_count(levels: &RangeInclusive<usize>) -> usize {
 type Location = (usize, usize);
 
 fn frontier(
-    columns: &[PlacedColumn<'_>],
+    columns: &[Column],
     index: impl Fn(&Column) -> Option<usize>,
     order: impl Fn(&f64, &f64) -> std::cmp::Ordering,
 ) -> Option<(Location, f64)> {
@@ -829,8 +853,8 @@ fn frontier(
         .iter()
         .enumerate()
         .filter_map(|(i, c)| {
-            let level = index(c.column)?;
-            Some(((i, level), *c.column.energies_ev.get(level)?))
+            let level = index(c)?;
+            Some(((i, level), *c.energies_ev.get(level)?))
         })
         .max_by(|a, b| order(&a.1, &b.1))
 }

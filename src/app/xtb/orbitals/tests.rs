@@ -488,10 +488,13 @@ fn the_frontier_figure_places_homo_and_lumo_under_the_molecule() {
 
 #[test]
 fn placing_an_mo_diagram_selects_it_with_both_frontier_rows_in_one_edit() {
+    use reshiki::models3d::Style;
+
     let mut app = tab();
     computed(&mut app);
     act(&mut app, Action::Preset(0.07));
     act(&mut app, Action::Look(LookChoice::Mesh));
+    app.tab.doc.models[0].style = Style::Wireframe;
     let before = app.tab.doc.clone();
     let atoms = before.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
     let (lo, hi) = reshiki::scene::selection_bounds(&before, &atoms).unwrap();
@@ -530,6 +533,13 @@ fn placing_an_mo_diagram_selects_it_with_both_frontier_rows_in_one_edit() {
         mo.pictures
             .iter()
             .all(|p| p.figure.iso == 0.07 && p.figure.look.mesh)
+    );
+    assert_eq!(
+        graphic
+            .mo_picture_models(&app.tab.doc)
+            .map(|model| model.style)
+            .collect::<Vec<_>>(),
+        [Style::BallStick; 2]
     );
     let stored = app.tab.doc.science.results[0]
         .result
@@ -998,6 +1008,113 @@ fn an_mo_picture_beyond_either_range_limit_does_not_change_the_drawing() {
         assert_eq!(app.tab.history.frames(), frames);
         assert!(app.tab.xtb.orbitals.pending_pictures.is_empty());
         assert_eq!(app.status, "This orbital is out of the diagram's range");
+        assert!(app.status.chars().count() <= 60);
+    }
+}
+
+#[test]
+fn an_mo_picture_requires_its_spin_level_in_the_resolved_result() {
+    for column in 0..=1 {
+        let mut orbitals = worker_rows(&[3, 4]);
+        orbitals.alpha.occupations = vec![1., 1., 1., 1., 0., 0.];
+        orbitals.beta = Beta::Unrestricted(orbitals.alpha.clone());
+        let mut app = tab_with_orbitals(orbitals.clone());
+        let result_key = key(&app);
+        act(
+            &mut app,
+            Action::Computed(result_key.clone(), Ok(Arc::new(orbitals))),
+        );
+        act(
+            &mut app,
+            Action::PlaceDiagram {
+                for_selection: false,
+            },
+        );
+        let id = app.tab.selected[0];
+        // A native diagram can retain more levels than its referenced result.
+        // Keep the opposite spin's level so that the gate must check this spin.
+        let result = Arc::make_mut(&mut app.tab.doc.science.results[0].result);
+        let orbitals = result.orbitals.as_mut().unwrap();
+        let set = match (&mut orbitals.beta, column) {
+            (Beta::Unrestricted(beta), 1) => beta,
+            _ => &mut orbitals.alpha,
+        };
+        set.energies_hartree.pop();
+        set.occupations.pop();
+        assert_eq!(key(&app), result_key);
+        assert!(
+            app.tab.doc.graphics[0]
+                .mo
+                .as_ref()
+                .unwrap()
+                .range_for_picture(column, 5)
+                .is_some()
+        );
+        let before = app.tab.doc.clone();
+        let frames = app.tab.history.frames();
+
+        act(&mut app, Action::ToggleDiagramPicture(id, column, 5));
+
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.frames(), frames);
+        assert!(app.tab.xtb.orbitals.pending_pictures.is_empty());
+        assert!(app.tab.xtb.orbitals.computing.is_none());
+        assert!(!app.error);
+        assert_eq!(app.status, "This orbital is not in the result");
+        assert!(app.status.chars().count() <= 60);
+    }
+}
+
+#[cfg(all(feature = "xtb", not(windows)))]
+#[test]
+fn a_pending_mo_picture_retires_when_its_result_loses_the_requested_spin_level() {
+    for column in 0..=1 {
+        let mut orbitals = worker_rows(&[3, 4]);
+        orbitals.alpha.occupations = vec![1., 1., 1., 1., 0., 0.];
+        orbitals.beta = Beta::Unrestricted(orbitals.alpha.clone());
+        let mut app = tab_with_orbitals(orbitals.clone());
+        let result_key = key(&app);
+        act(
+            &mut app,
+            Action::Computed(result_key.clone(), Ok(Arc::new(orbitals.clone()))),
+        );
+        act(
+            &mut app,
+            Action::PlaceDiagram {
+                for_selection: false,
+            },
+        );
+        let id = app.tab.selected[0];
+        act(&mut app, Action::ToggleDiagramPicture(id, column, 5));
+        assert_eq!(app.tab.xtb.orbitals.pending_pictures.len(), 1);
+        assert!(app.tab.xtb.orbitals.computing.is_some());
+
+        // The result identity and model geometry remain valid, but the resolved
+        // spectrum no longer holds the row when its worker reply arrives.
+        let result = Arc::make_mut(&mut app.tab.doc.science.results[0].result);
+        for spectrum in [result.orbitals.as_mut().unwrap(), &mut orbitals] {
+            let set = match (&mut spectrum.beta, column) {
+                (Beta::Unrestricted(beta), 1) => beta,
+                _ => &mut spectrum.alpha,
+            };
+            set.energies_hartree.pop();
+            set.occupations.pop();
+        }
+        assert_eq!(key(&app), result_key);
+        let before = app.tab.doc.clone();
+        let frames = app.tab.history.frames();
+
+        act(
+            &mut app,
+            Action::Computed(result_key, Ok(Arc::new(orbitals))),
+        );
+
+        assert_eq!(app.tab.doc, before, "the late row is not pinned or placed");
+        assert_eq!(app.tab.history.frames(), frames);
+        assert!(app.tab.xtb.orbitals.pending_pictures.is_empty());
+        assert!(app.tab.xtb.orbitals.computing.is_none());
+        assert!(!app.error);
+        assert_eq!(app.status, "This orbital is not in the result");
         assert!(app.status.chars().count() <= 60);
     }
 }

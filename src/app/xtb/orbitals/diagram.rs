@@ -365,6 +365,11 @@ impl App {
             self.xtb_mo_invalid_picture();
             return true;
         };
+        if !super::levels_hold(&stored.result, orbital.spin, index) {
+            self.status = "This orbital is not in the result".into();
+            self.error = false;
+            return true;
+        }
         let Some((basis, row)) = self.xtb_orbital_row(stored, orbital.spin, index) else {
             return false;
         };
