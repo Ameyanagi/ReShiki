@@ -147,7 +147,7 @@ fn an_optimization_moves_a_preview_then_applies_as_one_undo_step() {
     );
     assert!(matches!(
         &app.tab.xtb.outcome,
-        Some(Outcome::Done { line, notes }) if line == "E −5.070176 Eh · gap 14.01 eV · converged in 1 step" && notes.is_empty()
+        Some(Outcome::Done { line, notes, .. }) if line == "E −5.070176 Eh · gap 14.01 eV · converged in 1 step" && notes.is_empty()
     ));
 
     let _ = app.update(Message::Undo);

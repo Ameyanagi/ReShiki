@@ -129,7 +129,92 @@ fn a_reopened_light_optfreq_result_shows_the_vibrations_tab() {
 }
 
 #[test]
-fn show_results_switches_to_the_selected_molecule() {
+fn a_failure_blocks_actions_on_the_previous_result() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    palette(&mut app, Action::Labels(true));
+    assert!(app.xtb_label().is_some());
+
+    app.xtb.settings.iterations = "1".into();
+    send(&mut app, XtbAction::Run);
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf("1 iteration".into()))),
+    );
+    let failure_status = app.status.clone();
+    assert_eq!(
+        failure_status,
+        "xTB calculation failed: The electronic structure did not converge (SCF) because Max SCF iterations is 1."
+    );
+    let failed = app.xtb_failed().expect("the selected molecule's failure");
+    assert!(app.xtb_can_retry(failed));
+    assert_eq!(failed.scf_iteration_limit(), Some(1));
+    assert!(!app.tab.xtb.palette.previous);
+    for action in [Action::CopyTable, Action::CopyLog, Action::Export] {
+        palette(&mut app, action);
+        assert_eq!(app.status, failure_status);
+    }
+    assert!(app.xtb_label().is_none());
+
+    palette(&mut app, Action::Previous);
+    assert!(app.tab.xtb.palette.previous);
+    palette(&mut app, Action::CopyTable);
+    assert_eq!(
+        app.status, failure_status,
+        "the expanded summary is read-only"
+    );
+    palette(&mut app, Action::Show);
+    assert!(!app.tab.xtb.palette.previous);
+
+    palette(&mut app, Action::Previous);
+    send(&mut app, XtbAction::ResetRetry);
+    let run = app
+        .tab
+        .xtb
+        .run
+        .as_ref()
+        .expect("Reset and retry starts a run");
+    assert_eq!(run.config.max_iterations, None);
+    assert_eq!(run.config.task, CalcTask::Optimize);
+    assert!(app.xtb.settings.iterations.is_empty());
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf("250 iterations".into()))),
+    );
+    assert!(
+        !app.tab.xtb.palette.previous,
+        "a new failure closes the disclosure"
+    );
+}
+
+#[test]
+fn selecting_a_molecule_without_results_hides_the_other_molecules_result() {
+    let (mut app, water) = water(CalcTask::Optimize);
+    event(&mut app, path(&[&START, &MIDDLE, &MOVED]));
+    let before = app.tab.doc.clone();
+    let other = app.tab.doc.add_atom("O", Point::new(200., 0.));
+    app.changed(before);
+    palette(&mut app, Action::View(View::Steps));
+    palette(&mut app, Action::Step(1));
+    assert!(app.xtb_step_preview().is_some());
+
+    app.tab.selected = vec![other];
+    assert!(app.xtb_outcome().is_none());
+    assert!(app.xtb_shown().is_none());
+    assert!(
+        app.xtb_bottom_palette().is_some(),
+        "the open palette stays visible"
+    );
+    assert!(app.xtb_step().is_none());
+    assert!(app.xtb_step_preview().is_none());
+    app.tab.selected = vec![water];
+    assert!(matches!(app.xtb_outcome(), Some(Outcome::Done { .. })));
+    assert!(app.xtb_shown().is_some());
+    assert_eq!(app.xtb_step(), Some(1));
+}
+
+#[test]
+fn the_palette_follows_the_selected_molecule() {
     let (mut app, water) = water(CalcTask::Energy);
     event(&mut app, path(&[&START]));
     let first = app.xtb_shown().expect("water").stored.result.clone();
@@ -138,24 +223,37 @@ fn show_results_switches_to_the_selected_molecule() {
     let other = app.tab.doc.add_atom("O", Point::new(200., 0.));
     app.changed(before);
     app.tab.selected = vec![other];
+    app.xtb.settings.task = CalcTask::Optimize;
     send(&mut app, XtbAction::Run);
     let positions = START.map(|[x, y, z]| Point3 { x, y, z }).to_vec();
     let _ = app.finish_model(positions, vec![0, 0]);
     assert!(app.xtb_running(), "{}", app.status);
-    event(&mut app, path(&[&START]));
+    event(&mut app, path(&[&START, &MIDDLE, &MOVED]));
+    palette(&mut app, Action::View(View::Steps));
+    palette(&mut app, Action::Step(1));
+    assert_eq!(app.xtb_step(), Some(1));
     assert!(
         !app.xtb_can_show(),
         "the selected molecule's result is shown"
     );
     app.tab.selected = vec![water];
-    assert!(
-        app.xtb_can_show(),
-        "water has a result the palette does not show"
-    );
-    palette(&mut app, Action::Show);
     let shown = app.xtb_shown().expect("water again");
     assert!(std::sync::Arc::ptr_eq(&shown.stored.result, &first));
     assert!(!app.xtb_can_show());
+    assert!(app.xtb_step_preview().is_none());
+    assert!(app.xtb_outcome().is_none());
+
+    app.tab.selected = vec![other];
+    send(&mut app, XtbAction::Run);
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf("250 iterations".into()))),
+    );
+    assert!(app.xtb_failed().is_some());
+    app.tab.selected = vec![water];
+    assert!(app.xtb_outcome().is_none());
+    palette(&mut app, Action::CopyTable);
+    assert!(app.status.starts_with("Copied "));
 }
 
 #[test]
@@ -178,9 +276,13 @@ fn an_edit_greys_the_results_undo_restores_them_and_recalculate_reruns() {
 
     let _ = app.update(Message::Redo);
     assert!(app.xtb_shown().is_some_and(|shown| shown.stale));
+    assert!(!app.outdated_model_frames().is_empty());
     palette(&mut app, Action::KeepFull(true));
+    palette(&mut app, Action::Close);
     app.xtb.settings.task = CalcTask::Energy;
-    palette(&mut app, Action::Recalculate);
+    palette(&mut app, Action::RecalculateMolecule);
+    assert!(app.xtb_running());
+    assert!(app.xtb_palette_visible());
     let run = app.tab.xtb.run.as_ref().expect("Recalculate starts a run");
     assert_eq!(
         run.config.task,

@@ -48,6 +48,222 @@ fn shown(display: Display) -> (Document, Vec<u64>, u64) {
     (doc, atoms, methane)
 }
 
+fn placement_scheme() -> (Document, Vec<u64>, u64) {
+    let (mut doc, atoms, methane) = drawing();
+    let id = doc.next_id();
+    let preset = crate::arrows::Preset::Forward;
+    doc.arrows.push(crate::document::Arrow::new(
+        id,
+        Point::new(110., 0.),
+        Point::new(170., 0.),
+        preset,
+        crate::arrows::ArrowStyle::preset(preset),
+    ));
+    (doc, atoms, methane)
+}
+
+fn placement_overlaps(a: (Point, Point), b: (Point, Point), margin: f32) -> bool {
+    a.0.x - margin < b.1.x
+        && a.1.x + margin > b.0.x
+        && a.0.y - margin < b.1.y
+        && a.1.y + margin > b.0.y
+}
+
+#[test]
+fn both_placement_keeps_a_lone_molecule_to_the_right() {
+    let (mut doc, atoms, methane) = drawing();
+    doc.delete(&[methane]);
+    let before = doc.atoms.clone();
+    assert!(set_display(&mut doc, 0, Display::Both));
+    let (lo, _) = frame(&doc, &doc.models[0]).unwrap();
+    let right = doc.atom(atoms[2]).unwrap().position.x;
+    assert!((lo.x - right - doc.drawing_style.bond_length_world).abs() < 1e-3);
+    assert_eq!(doc.models[0].offset.y, 0.);
+    assert_eq!(doc.atoms, before);
+    assert!(!set_display(&mut doc, 0, Display::Both));
+}
+
+#[test]
+fn both_placement_moves_below_a_scheme_without_overlapping_its_arrow_or_molecule() {
+    let (mut doc, atoms, methane) = placement_scheme();
+    let ink = scene::selection_bounds(&doc, &atoms).unwrap();
+    let other = scene::selection_bounds(&doc, &[methane]).unwrap();
+    let arrow = doc.arrows[0].bounds();
+    let bond = doc.drawing_style.bond_length_world;
+    assert!(set_display(&mut doc, 0, Display::Both));
+    let placed = frame(&doc, &doc.models[0]).unwrap();
+    assert!(doc.models[0].offset.x.abs() < 1e-3);
+    assert!((placed.0.y - ink.1.y - bond).abs() < 1e-3, "{placed:?}");
+    for obstacle in [ink, other, arrow] {
+        assert!(!placement_overlaps(placed, obstacle, bond / 4.));
+    }
+}
+
+#[test]
+fn both_placement_moves_farther_down_past_an_obstacle_below_the_scheme() {
+    let (mut doc, atoms, _) = placement_scheme();
+    let ink = scene::selection_bounds(&doc, &atoms).unwrap();
+    let bond = doc.drawing_style.bond_length_world;
+    let id = doc.next_id();
+    let note = crate::document::Annotation {
+        id,
+        position: Point::new(10., ink.1.y + bond + 20.),
+        text: "Reaction conditions".into(),
+        format: Default::default(),
+        angle: 0.,
+    };
+    let obstacle = note.bounds();
+    doc.annotations.push(note);
+    assert!(set_display(&mut doc, 0, Display::Both));
+    let placed = frame(&doc, &doc.models[0]).unwrap();
+    assert!(doc.models[0].offset.x.abs() < 1e-3);
+    assert!(
+        (placed.0.y - obstacle.1.y - bond).abs() < 1e-3,
+        "{placed:?}"
+    );
+    assert!(!placement_overlaps(placed, obstacle, bond / 4.));
+}
+
+#[test]
+fn both_placement_avoids_each_kind_of_neighboring_ink_and_visible_model_frame() {
+    for kind in [
+        "molecule", "arrow", "graphic", "text", "name", "caption", "model",
+    ] {
+        let (mut doc, _, methane) = drawing();
+        doc.delete(&[methane]);
+        match kind {
+            "molecule" => {
+                doc.add_atom("Cl", Point::new(160., 0.));
+            }
+            "arrow" => {
+                let id = doc.next_id();
+                let preset = crate::arrows::Preset::Forward;
+                doc.arrows.push(crate::document::Arrow::new(
+                    id,
+                    Point::new(130., 0.),
+                    Point::new(170., 0.),
+                    preset,
+                    crate::arrows::ArrowStyle::preset(preset),
+                ));
+            }
+            "graphic" => {
+                doc.graphics.push(crate::graphics::Graphic::dragged(
+                    doc.next_id(),
+                    crate::graphics::GraphicKind::Rectangle,
+                    Point::new(130., -15.),
+                    Point::new(170., 15.),
+                    Default::default(),
+                    Default::default(),
+                    false,
+                ));
+            }
+            "model" => {
+                let id = doc.add_atom("C", Point::new(500., 0.));
+                let mut model = Model3d::new(
+                    &doc,
+                    vec![Placed { id, xyz: [0.; 3] }],
+                    vec![],
+                    ForceField::Mmff94s,
+                );
+                model.offset = Point::new(-340., 0.);
+                model.display = Display::ThreeD;
+                model.size = 80.;
+                doc.models.push(model);
+            }
+            _ => {
+                let other = doc.add_atom("C", Point::new(500., 0.));
+                let id = doc.next_id();
+                let text = "Nearby caption".to_owned();
+                doc.annotations.push(crate::document::Annotation {
+                    id,
+                    position: Point::new(130., -10.),
+                    text: text.clone(),
+                    format: Default::default(),
+                    angle: 0.,
+                });
+                if kind == "name" {
+                    doc.molecule_names
+                        .push(crate::molecule_names::MoleculeName {
+                            annotation: id,
+                            atoms: vec![other],
+                            smiles: "C".into(),
+                            text,
+                        });
+                } else if kind == "caption" {
+                    doc.property_captions
+                        .push(crate::linked_properties::PropertyCaption {
+                            annotation: Some(id),
+                            atoms: vec![other],
+                            text,
+                            ..Default::default()
+                        });
+                }
+            }
+        }
+        assert!(set_display(&mut doc, 0, Display::Both), "{kind}");
+        assert!(doc.models[0].offset.x.abs() < 1e-3, "{kind}");
+        assert!(doc.models[0].offset.y > 0., "{kind}");
+    }
+}
+
+#[test]
+fn both_placement_excludes_its_own_linked_captions_and_hidden_model_frames() {
+    let (mut doc, atoms, methane) = drawing();
+    doc.atom_mut(methane).unwrap().position = Point::new(500., 0.);
+    let id = doc.next_id();
+    doc.annotations.push(crate::document::Annotation {
+        id,
+        position: Point::new(130., -10.),
+        text: "Ethanol".into(),
+        format: Default::default(),
+        angle: 0.,
+    });
+    doc.property_captions
+        .push(crate::linked_properties::PropertyCaption {
+            annotation: Some(id),
+            atoms,
+            text: "Ethanol".into(),
+            ..Default::default()
+        });
+    let mut hidden = Model3d::new(
+        &doc,
+        vec![Placed {
+            id: methane,
+            xyz: [0.; 3],
+        }],
+        vec![],
+        ForceField::Mmff94s,
+    );
+    hidden.offset = Point::new(-340., 0.);
+    hidden.size = 80.;
+    doc.models.push(hidden);
+    assert!(set_display(&mut doc, 0, Display::Both));
+    assert!(doc.models[0].offset.x > 0.);
+    assert_eq!(doc.models[0].offset.y, 0.);
+}
+
+#[test]
+fn both_placement_keeps_clear_space_between_another_molecule_and_its_model() {
+    let (mut doc, _, methane) = drawing();
+    doc.atom_mut(methane).unwrap().position = Point::new(500., 0.);
+    let mut other = Model3d::new(
+        &doc,
+        vec![Placed {
+            id: methane,
+            xyz: [0.; 3],
+        }],
+        vec![],
+        ForceField::Mmff94s,
+    );
+    other.display = Display::Both;
+    other.offset = Point::new(-800., 0.);
+    other.size = 80.;
+    doc.models.push(other);
+    assert!(set_display(&mut doc, 0, Display::Both));
+    assert!(doc.models[0].offset.x > 0.);
+    assert_eq!(doc.models[0].offset.y, 0.);
+}
+
 #[test]
 fn selected_molecule_preserves_document_order_groups_and_ignored_nonatoms() {
     let (mut doc, atoms, other) = drawing();
@@ -724,8 +940,10 @@ fn hidden_atoms_are_not_picked_and_the_frame_selects_the_molecule() {
     assert!(atoms.iter().all(|id| region.contains(id)));
     assert!(shows_3d(&doc, &atoms) && !shows_3d(&doc, &[methane]));
 
-    // Beside the drawing, the frame sits right of the atoms.
-    let (both, ..) = shown(Display::Both);
+    // Beside a lone drawing, the frame sits right of the atoms.
+    let (mut both, _, methane) = drawing();
+    both.delete(&[methane]);
+    assert!(set_display(&mut both, 0, Display::Both));
     assert!(shows_3d(&both, &atoms));
     assert!(!shows_3d(&drawing().0, &atoms));
     let (lo, _) = frame(&both, &both.models[0]).unwrap();
@@ -1608,10 +1826,10 @@ fn a_corner_resize_scales_the_frame_about_the_pivot_and_keeps_the_drawing() {
 fn the_morph_starts_flat_on_the_drawing_and_ends_on_the_model() {
     let (mut doc, atoms, _) = shown(Display::ThreeD);
     morphs_out_of_the_drawing(&mut doc, &atoms);
-    // Beside the drawing, and in a resized frame off the drawing's centre,
-    // the atoms still start on the drawing rather than beside it.
+    // Away from the drawing, and in a resized frame off its centre, the
+    // atoms still start on the drawing rather than at the model's frame.
     let (mut doc, atoms, _) = shown(Display::Both);
-    assert!(doc.models[0].offset.x > 0.);
+    assert_ne!(doc.models[0].offset, Point::default());
     morphs_out_of_the_drawing(&mut doc, &atoms);
     let (mut doc, atoms, _) = shown(Display::ThreeD);
     resize(&mut doc, &atoms, Point::new(-50., -40.), 1.5);

@@ -68,6 +68,27 @@ fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
 }
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn draw_outdated_models(&self, frame: &mut layered::Frame<'_>, bounds: Rectangle) {
+        for &(lo, hi) in &self.outdated {
+            let lo = self.camera.screen(lo, bounds);
+            let hi = self.camera.screen(hi, bounds);
+            let size = iced::Size::new(hi.x - lo.x, hi.y - lo.y);
+            if !Rectangle::new(lo, size).intersects(&Rectangle::with_size(bounds.size())) {
+                continue;
+            }
+            // White follows the canvas theme in the layered frame, so the
+            // veil always has the paper's color, including on dark paper.
+            frame.fill_rectangle(lo, size, Color::WHITE.scale_alpha(0.55));
+            badge(
+                frame,
+                bounds,
+                lo - Vector::new(4., 9.),
+                "Outdated · drawing changed".into(),
+                false,
+            );
+        }
+    }
+
     pub(super) fn draw_tube_bend_handle(
         &self,
         frame: &mut layered::Frame<'_>,
