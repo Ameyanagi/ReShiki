@@ -48,6 +48,8 @@ python-source = "python"
 module-name = "reshiki_xtb"
 strip = true
 include = ["python/reshiki_xtb/py.typed"]
+# Bytecode from local test runs must not ship.
+exclude = ["python/reshiki_xtb/__pycache__/**"]
 
 [tool.ruff]
 target-version = "py310"
