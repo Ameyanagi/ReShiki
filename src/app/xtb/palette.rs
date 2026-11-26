@@ -170,10 +170,11 @@ impl Shown<'_> {
     }
 }
 
-/// Placed charges have signed decimals. Unsigned decimals, including zero,
-/// may belong to the user or to NMR, so preserve them.
+/// Placed charges are decimals signed with "+" or a real minus sign (U+2212).
+/// NMR shift labels are unsigned or use an ASCII hyphen ("-0.25"), and user
+/// text is anything else, so those are preserved.
 fn is_charge_label(text: &str) -> bool {
-    let Some(digits) = text.strip_prefix(['+', '-', '−']) else {
+    let Some(digits) = text.strip_prefix(['+', '−']) else {
         return false;
     };
     let Some((whole, part)) = digits.split_once('.') else {
@@ -484,7 +485,11 @@ impl App {
         let kept = visible - n;
         let mut status = format!("Placed {n} {scheme} charges as atom labels · ⌘Z undoes");
         if kept > 0 {
-            status.push_str(&format!(" · {kept} atoms kept their own labels"));
+            status.push_str(&if kept == 1 {
+                " · 1 atom kept its own label".to_owned()
+            } else {
+                format!(" · {kept} atoms kept their own labels")
+            });
         }
         let before = self.tab.doc.clone();
         for (id, mut text) in labels {
