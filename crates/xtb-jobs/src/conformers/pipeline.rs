@@ -12,7 +12,7 @@ use reshiki_optimize::{
     KCAL_PER_HARTREE,
     conformers::{self, Candidate, Clustering, PerCluster, Ranked, Settings, Start, Topology},
 };
-use reshiki_qcdata::{Frame, Trajectory};
+use reshiki_qcdata::{Frame, MAX_SAVED_CONFORMERS, SearchSummary, Trajectory};
 use reshiki_xtb_worker::{
     client::Cancel,
     protocol::{Engine, Method},
@@ -47,6 +47,9 @@ pub struct Search {
     /// Bonds in frame order, for clustering.
     bonds: Vec<[usize; 2]>,
     config: Config,
+    unpinned_stereo: Vec<u64>,
+    /// An inference error or a caller's note naming the unpinned centres.
+    stereo_note: Option<String>,
     geometry: Client,
     executable: Option<PathBuf>,
     /// Template for every xTB optimization. The pipeline replaces positions,
@@ -66,8 +69,25 @@ impl Search {
         geometry: Client,
         executable: Option<PathBuf>,
     ) -> Result<Self, Failure> {
-        let prepared =
+        let mut prepared =
             Prepared::new(doc, ids).map_err(|error| Failure::Other(error.to_string()))?;
+        let positions = launch
+            .atoms
+            .iter()
+            .zip(&launch.frame.positions_angstrom)
+            .filter_map(|(&id, &[x, y, z])| id.map(|id| (id, geometry::Point3 { x, y, z })))
+            .collect();
+        let (unpinned_stereo, stereo_note) = match prepared
+            .pin_undefined_stereo(&positions, config.invert_undefined_stereo)
+        {
+            Ok(pinning) => (pinning.unpinned, None),
+            Err(error) => (
+                vec![],
+                Some(format!(
+                    "Could not preserve undefined stereocenters from the 3D model: {error}. Starts used the drawing's stereochemistry."
+                )),
+            ),
+        };
         let parents = science::hydrogen_parents(doc, launch).ok_or_else(|| {
             Failure::Other("The 3D model's hydrogens cannot be matched; update the 3D model".into())
         })?;
@@ -94,6 +114,8 @@ impl Search {
             parents,
             bonds,
             config,
+            unpinned_stereo,
+            stereo_note,
             job,
             geometry,
             executable,
@@ -103,6 +125,25 @@ impl Search {
     /// The prepared drawing component used to sample conformer starts.
     pub fn prepared(&self) -> &Prepared {
         &self.prepared
+    }
+
+    /// Describe the affected centres by name when the caller has labels for them.
+    pub fn describe_unpinned_stereo(&mut self, describe: impl FnOnce(&[u64]) -> String) {
+        if !self.unpinned_stereo.is_empty() {
+            self.stereo_note = Some(describe(&self.unpinned_stereo));
+        }
+    }
+
+    fn stereo_note(&self) -> Option<String> {
+        self.stereo_note.clone().or_else(|| match self.unpinned_stereo.len() {
+            0 => None,
+            1 => Some(
+                "1 undefined stereocentre could not be fixed from the 3D model. Both forms of it may appear among the conformers.".into(),
+            ),
+            count => Some(format!(
+                "{count} undefined stereocentres could not be fixed from the 3D model. Both forms of each may appear among the conformers."
+            )),
+        })
     }
 }
 
@@ -123,6 +164,7 @@ pub struct Found {
     /// Representatives with successful xTB reports, out of those planned.
     pub reranked: usize,
     pub planned: usize,
+    pub search: SearchSummary,
     /// Cancellation during re-ranking kept only completed representatives.
     pub stopped: bool,
     pub notes: Vec<String>,
@@ -157,8 +199,13 @@ pub fn search_conformers(
         return Err(frame_mismatch());
     }
     let xtb_minimizer = search.config.minimizer.xtb();
-    let mut notes = Vec::new();
-    let (mut starts, minimizer) = sample(&search, cancel, &mut on_event, &mut notes)?;
+    let mut notes = search.stereo_note().into_iter().collect();
+    let Sampled {
+        mut starts,
+        made,
+        minimizer,
+        used_unconverged_starts,
+    } = sample(&search, cancel, &mut on_event, &mut notes)?;
     let minimized = if xtb_minimizer.is_some() {
         let positions = starts
             .iter()
@@ -301,6 +348,17 @@ pub fn search_conformers(
     if !reranking {
         check_cancel(cancel)?;
     }
+    let counts = SearchSummary {
+        requested: search.config.starts as usize,
+        made,
+        minimized: starts.len(),
+        used_unconverged_starts,
+        distinct: clustering.kept.len(),
+        clusters: clustering.clusters.len(),
+        rerank_planned: if reranking { planned } else { 0 },
+        reranked: if reranking { reports.len() } else { 0 },
+        kept: ranked.len().min(MAX_SAVED_CONFORMERS),
+    };
     let mut optimizers = Vec::new();
     for (_, report) in &reports {
         for &method in &report.optimizers {
@@ -315,10 +373,11 @@ pub fn search_conformers(
         optimizers,
         best,
         ranked,
-        starts: starts.len(),
-        clusters: clustering.clusters.len(),
+        starts: counts.minimized,
+        clusters: counts.clusters,
         reranked: reports.len(),
         planned,
+        search: counts,
         stopped: reranking && cancel.is_cancelled(),
         notes,
         seconds: began.elapsed().as_secs_f64(),
@@ -334,12 +393,19 @@ pub fn starting_force_field(minimizer: Minimizer) -> ForceField {
     }
 }
 
+struct Sampled {
+    starts: Vec<Start>,
+    made: usize,
+    minimizer: Minimizer,
+    used_unconverged_starts: bool,
+}
+
 fn sample(
     search: &Search,
     cancel: &Cancel,
     on_event: &mut impl FnMut(Phase),
     notes: &mut Vec<String>,
-) -> Result<(Vec<Start>, Minimizer), Failure> {
+) -> Result<Sampled, Failure> {
     on_event(Phase::Starts);
     let minimizer = search.config.minimizer;
     let embedded = minimizer.xtb().is_some();
@@ -382,7 +448,12 @@ fn sample(
     // geometry and energy that are not a minimum; keep them only when no
     // start converged.
     let mut conformers = sampled.conformers;
-    if !embedded && conformers.iter().any(|entry| entry.converged) {
+    let used_unconverged_starts = !embedded && !conformers.iter().any(|entry| entry.converged);
+    if used_unconverged_starts {
+        notes.push(
+            "No start converged with the force field: clustering used unconverged geometries, and xTB re-optimized the representatives.".into(),
+        );
+    } else if !embedded {
         let before = conformers.len();
         conformers.retain(|entry| entry.converged);
         let dropped = before - conformers.len();
@@ -391,10 +462,6 @@ fn sample(
                 "{dropped} starts did not converge with the force field and were left out."
             ));
         }
-    } else if !embedded {
-        notes.push(
-            "No start converged with the force field: clustering used unconverged geometries, and xTB re-optimized the representatives.".into(),
-        );
     }
     let starts = conformers
         .into_iter()
@@ -415,8 +482,13 @@ fn sample(
                 energy_hartree,
             })
         })
-        .collect::<Result<_, _>>()?;
-    Ok((starts, effective))
+        .collect::<Result<_, Failure>>()?;
+    Ok(Sampled {
+        starts,
+        made: count,
+        minimizer: effective,
+        used_unconverged_starts,
+    })
 }
 
 fn sampling_minimizer(minimizer: Minimizer, mmff_available: bool) -> (ForceField, Minimizer) {
@@ -816,6 +888,36 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires RESHIKI_SEARCH_TEST_WORKER pointing to an xTB-enabled ReShiki binary"]
+    fn search_funnel_counts_follow_the_pipeline() {
+        let executable = PathBuf::from(std::env::var_os("RESHIKI_SEARCH_TEST_WORKER").unwrap());
+        let geometry = Client::new(executable.clone(), Default::default()).unwrap();
+        for minimizer in [Minimizer::Mmff94s, Minimizer::Gfn2] {
+            let mut search = water_search(minimizer, geometry.clone());
+            search.executable = Some(executable.clone());
+            search.config.starts = 8;
+            search.job.method = Method::Gfn2;
+            search.job.solvent = None;
+            let found = search_conformers(search, &Cancel::default(), |_| {}).unwrap();
+            let counts = &found.search;
+            assert_eq!(counts.requested, 8);
+            assert!(counts.requested >= counts.made);
+            assert!(counts.made >= counts.minimized);
+            assert!(counts.minimized >= counts.distinct);
+            assert!(counts.distinct >= counts.clusters);
+            assert!(counts.clusters > 0);
+            assert_eq!(counts.kept, found.ranked.len().min(MAX_SAVED_CONFORMERS));
+            if minimizer.xtb().is_none() {
+                assert!(counts.kept <= counts.reranked);
+                assert!(counts.reranked <= counts.rerank_planned);
+                assert!(counts.rerank_planned <= counts.distinct);
+            } else {
+                assert_eq!((counts.rerank_planned, counts.reranked), (0, 0));
+            }
+        }
+    }
+
+    #[test]
     fn an_xtb_minimizer_sets_the_method_and_options_for_every_job() {
         let gfnff = water_search(Minimizer::GfnFf, Client::default()).job;
         assert_eq!(gfnff.method, Method::Gfnff);
@@ -828,6 +930,105 @@ mod tests {
         assert_eq!(gfn2.topology, None);
         assert_eq!(gfn2.scf.accuracy, Some(0.1));
         assert!(gfn2.solvent.is_some());
+    }
+
+    fn undefined_stereo_search(invert: bool, planar: bool) -> (Document, Search) {
+        let mut doc = Document::default();
+        let centre = doc.add_atom("C", Point::default());
+        let mut placed = vec![models3d::Placed {
+            id: centre,
+            xyz: [0.; 3],
+        }];
+        for (element, [x, y, z]) in [
+            ("F", [1., 1., 1.]),
+            ("Cl", [1., -1., -1.]),
+            ("Br", [-1., 1., -1.]),
+            ("H", [-1., -1., 1.]),
+        ] {
+            let atom = doc.add_atom(element, Point::new(x * 42., y * 42.));
+            doc.add_bond(centre, atom, 1, "plain");
+            placed.push(models3d::Placed {
+                id: atom,
+                xyz: [x, y, if planar { 0. } else { z }],
+            });
+        }
+        // Launch order differs from both drawing and native graph atom order.
+        placed.rotate_left(2);
+        doc.models.push(Model3d::new(
+            &doc,
+            placed,
+            vec![],
+            models3d::ForceField::Uff,
+        ));
+        models3d::require_version(&mut doc);
+        let launch = science::launch(&doc, centre, 0, 1).unwrap();
+        let mut job = water_search(Minimizer::Uff, Client::default()).job;
+        job.numbers.clone_from(&launch.frame.numbers);
+        job.positions.clone_from(&launch.frame.positions_angstrom);
+        let mut config = Config::new(8, Minimizer::Uff, Diversity::Normal, 15., 20, 1).unwrap();
+        assert!(!config.invert_undefined_stereo);
+        config.invert_undefined_stereo = invert;
+        let search = Search::from_launch(
+            &doc,
+            &[centre],
+            &launch,
+            config,
+            job,
+            Client::default(),
+            None,
+        )
+        .unwrap();
+        (doc, search)
+    }
+
+    #[test]
+    fn undefined_stereo_search_pins_launch_configuration_and_inverts_only_when_requested() {
+        for invert in [false, true] {
+            let (doc, search) = undefined_stereo_search(invert, false);
+            let source = Prepared::new(&doc, &[]).unwrap();
+            assert!(
+                source
+                    .molecule()
+                    .state
+                    .metadata
+                    .atoms
+                    .iter()
+                    .all(|atom| atom.chiral_tag == 0)
+            );
+            let request = search
+                .prepared()
+                .ensemble_request(ForceField::Uff, BASE_SEED, 8, Ensemble::Embedded)
+                .unwrap();
+            assert_eq!(request.atoms[0].chiral_tag, if invert { 1 } else { 2 });
+            assert!(request.atoms[1..].iter().all(|atom| atom.chiral_tag == 0));
+            assert!(search.stereo_note().is_none());
+            assert_eq!(search.prepared().source(), &doc);
+        }
+    }
+
+    #[test]
+    fn undefined_stereo_search_reports_an_unreadable_model_configuration() {
+        let (doc, mut search) = undefined_stereo_search(true, true);
+        assert!(
+            search
+                .prepared()
+                .molecule()
+                .state
+                .metadata
+                .atoms
+                .iter()
+                .all(|atom| atom.chiral_tag == 0)
+        );
+        let note = search.stereo_note().unwrap();
+        assert_eq!(
+            note,
+            "1 undefined stereocentre could not be fixed from the 3D model. Both forms of it may appear among the conformers."
+        );
+        search.describe_unpinned_stereo(|ids| {
+            assert_eq!(ids, [doc.atoms[0].id]);
+            "named centre".into()
+        });
+        assert_eq!(search.stereo_note().as_deref(), Some("named centre"));
     }
 
     fn conformer() -> Conformer {

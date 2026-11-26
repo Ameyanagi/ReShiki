@@ -1,14 +1,23 @@
 //! A conformer search as the app runs it: the card's fields, the start
 //! from the molecule's 3D model, progress, Cancel (keeping what is
 //! re-ranked), the stored result and the tab's overlay and export.
-use super::{Action, Format, Row, Table};
+use super::{Action, Format, Table};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::app::xtb::{Action as XtbAction, Pending, results::RunInfo, state};
 use crate::app::{App, Message};
 use iced::Task;
+use reshiki::science;
 #[cfg(not(target_arch = "wasm32"))]
 use reshiki::{document::Document, qcdata, science::Launch};
 use std::sync::Arc;
+
+#[derive(Default)]
+pub(in crate::app::xtb) struct CardStereo {
+    revision: (u64, u64),
+    target: Vec<u64>,
+    has_model: bool,
+    labels: Option<(String, [String; 2])>,
+}
 
 impl App {
     pub(in crate::app::xtb) fn xtb_conformers(&mut self, action: Action) -> Task<Message> {
@@ -20,6 +29,14 @@ impl App {
             Action::Window(text) => settings.window = text,
             Action::Representatives(text) => settings.representatives = text,
             Action::Three(three) => settings.three = three,
+            Action::InvertUndefinedStereo(invert) => {
+                self.xtb.conformer_inversion_target = invert
+                    .then(|| self.xtb_target())
+                    .flatten()
+                    .map(|atoms| (self.tab.id.0, self.tab.file_epoch, atoms));
+                self.xtb.conformers.invert_undefined_stereo =
+                    self.xtb.conformer_inversion_target.is_some();
+            }
             Action::Overlay(on) => {
                 self.tab.xtb.palette.ensemble.overlay = on;
                 // Off only takes the ghosts away from a preview.
@@ -50,41 +67,84 @@ impl App {
 
     /// The Conformers tab's rows for the shown result, measured once per
     /// result and document state.
-    pub(in crate::app::xtb) fn xtb_conformer_rows(
+    pub(in crate::app::xtb) fn xtb_conformer_table(
         &self,
         shown: &crate::app::xtb::palette::Shown<'_>,
-    ) -> Vec<Row> {
+    ) -> std::cell::Ref<'_, Table> {
         let revision = (self.tab.file_epoch, self.tab.revision);
-        let mut cache = self.tab.xtb.palette.ensemble.table.borrow_mut();
-        let fresh = cache.as_ref().is_some_and(|table| {
-            table.revision == revision && crate::app::xtb::is(&table.result, &shown.stored.result)
-        });
+        let cache = &self.tab.xtb.palette.ensemble.table;
+        let fresh = {
+            let table = cache.borrow();
+            table.revision == revision
+                && table.attachment == shown.stored.attachment
+                && crate::app::xtb::is(&table.result, &shown.stored.result)
+        };
         if !fresh {
-            *cache = Some(Table {
+            let rows = super::rows(
+                &self.tab.doc,
+                shown.atoms,
+                &shown.stored.result,
+                shown.stale,
+            );
+            let stereo_note = self.xtb_conformer_stereo_note(shown, &rows);
+            *cache.borrow_mut() = Table {
                 result: Arc::downgrade(&shown.stored.result),
+                attachment: shown.stored.attachment,
                 revision,
-                rows: super::rows(
-                    &self.tab.doc,
-                    shown.atoms,
-                    &shown.stored.result,
-                    shown.stale,
-                ),
-            });
+                rows,
+                stereo_note,
+            };
         }
-        cache
-            .as_ref()
-            .map_or_else(Vec::new, |table| table.rows.clone())
+        cache.borrow()
+    }
+
+    /// Assess each drawing and target once, including targets with no undefined centres.
+    pub(super) fn xtb_conformer_stereo(
+        &self,
+        ids: &[u64],
+        has_model: bool,
+    ) -> Option<(String, [String; 2])> {
+        let revision = (self.tab.file_epoch, self.tab.revision);
+        let mut cache = self.tab.xtb.conformer_stereo.borrow_mut();
+        if cache.revision != revision || cache.target != ids || cache.has_model != has_model {
+            let first = *ids.first()?;
+            let doc = &self.tab.doc;
+            let launch = if has_model {
+                let (charge, multiplicity) = science::drawn_state(doc, first);
+                science::launch(doc, first, charge, multiplicity).ok()
+            } else {
+                None
+            };
+            let model = launch
+                .as_ref()
+                .map(|l| (l.atoms.as_slice(), l.frame.as_ref()));
+            let labels =
+                science::tetrahedral_stereo(doc, ids, model)
+                    .ok()
+                    .and_then(|mut stereo| {
+                        let drawing_order: Vec<_> = ids.iter().copied().map(Some).collect();
+                        let atoms = model.map_or(drawing_order.as_slice(), |(atoms, _)| atoms);
+                        stereo.undefined.sort_by_key(|centre| {
+                            atoms.iter().position(|&id| id == Some(centre.atom))
+                        });
+                        super::view::card_stereo(&stereo, launch.is_some(), |atom| {
+                            self.xtb_atom_name(atoms, atom).0
+                        })
+                    });
+            *cache = CardStereo {
+                revision,
+                target: ids.to_vec(),
+                has_model,
+                labels,
+            };
+        }
+        cache.labels.clone()
     }
 
     fn xtb_export_conformers(&mut self, format: Format) -> Task<Message> {
         let Some(shown) = self.xtb_shown() else {
             return Task::none();
         };
-        let stem = std::path::Path::new(&self.document_name())
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Molecule".into());
-        let result = &shown.stored.result;
         if format == Format::Sdf && shown.stale {
             // Bonds and charges come from the drawing, which no longer
             // describes these geometries.
@@ -92,32 +152,15 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        let text = match format {
-            Format::Xyz => super::export::xyz(result, &stem),
-            Format::Sdf => super::export::sdf(&self.tab.doc, shown.atoms, result, &stem),
-        };
-        let text = match text {
-            Ok(text) => text,
+        let export = match self.xtb_prepare_conformer_export(&shown, format) {
+            Ok(export) => export,
             Err(error) => {
                 self.status = error;
                 self.error = true;
                 return Task::none();
             }
         };
-        let extension = match format {
-            Format::Xyz => "xyz",
-            Format::Sdf => "sdf",
-        };
-        self.export_ready(
-            crate::app::figure_export::Prepared::new(
-                text.into_bytes(),
-                extension,
-                Some(format!("{stem} conformers")),
-                vec![],
-                crate::app::figure_export::Kind::Xtb,
-            ),
-            cfg!(target_arch = "wasm32"),
-        )
+        self.export_ready(export, cfg!(target_arch = "wasm32"))
     }
 
     /// Cancel while re-ranking: stop the workers and keep what finished.
@@ -163,7 +206,7 @@ impl App {
             self.xtb_fail(failure);
             return Task::none();
         }
-        let search = match search_for(
+        let mut search = match search_for(
             &self.tab.doc,
             &run.atoms,
             &launch,
@@ -176,6 +219,13 @@ impl App {
                 return Task::none();
             }
         };
+        search.describe_unpinned_stereo(|ids| {
+            let names: Vec<_> = ids
+                .iter()
+                .map(|&id| self.xtb_atom_name(&launch.atoms, id).0)
+                .collect();
+            super::view::unpinned_stereo_note(&names)
+        });
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = self.tab.xtb.run.as_mut() else {
             return Task::none();
@@ -345,12 +395,15 @@ pub(super) fn pending_for(
             .map(|evaluation| evaluation.scf_iterations as u32)
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+        search: Some(qcdata::SearchSummary {
+            kept,
+            ..found.search.clone()
+        }),
     });
     let mut notes = found.notes.clone();
     if found.stopped {
         notes.push(format!(
-            "Canceled. {} re-ranked conformers are kept and usable.",
-            found.reranked
+            "Canceled. {kept} re-ranked conformers are kept and usable."
         ));
     }
     if computed.near_degenerate {
@@ -362,7 +415,7 @@ pub(super) fn pending_for(
         found.starts,
         found.clusters,
         if found.clusters == 1 { "" } else { "s" },
-        state::summary(found.best.energy, computed.homo_lumo_gap_ev, None, None),
+        state::summary(found.best.energy, None, None, None),
     );
     let info = RunInfo {
         gap_ev: computed.homo_lumo_gap_ev,

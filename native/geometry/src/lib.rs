@@ -319,14 +319,23 @@ impl Request {
 }
 
 /// Execute one bounded operation using COSMolKit's Rust force fields and
-/// distance geometry. Only owned data leaves the disposable worker.
+/// distance geometry, using the historical 256 MiB heap allowance to cap
+/// ensemble concurrency. Only owned data leaves the disposable worker.
 pub fn solve(request: &Request) -> Result<Response, String> {
+    solve_with_heap_budget(request, REFERENCE_HEAP_BYTES)
+}
+
+/// Execute one operation with ensemble concurrency limited by the configured
+/// worker heap budget. The caller must enforce the allocation budget itself.
+pub fn solve_with_heap_budget(request: &Request, heap_bytes: usize) -> Result<Response, String> {
     request.validate()?;
     let _guard = SOLVER_OPERATION
         .lock()
         .map_err(|_| "Geometry solver lock poisoned")?;
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| solver::solve(request)))
-        .map_err(|_| "Rust geometry solver panicked".to_owned())?
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        solver::solve(request, heap_bytes)
+    }))
+    .map_err(|_| "Rust geometry solver panicked".to_owned())?
 }
 
 #[cfg(test)]
