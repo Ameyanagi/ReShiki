@@ -1033,16 +1033,13 @@ impl super::App {
                 #[cfg(target_arch = "wasm32")]
                 let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
+                    let result_status = opened_results_status(&path, &doc);
                     self.show_opened(*doc, Some(path));
                     if let Some(view) = view {
                         self.restore_view(view);
                     }
-                    let results = self.tab.doc.science.results.len();
-                    if results > 0 {
-                        self.status = format!(
-                            "{results} calculation result{} in this file",
-                            if results == 1 { "" } else { "s" }
-                        );
+                    if let Some(status) = result_status {
+                        self.status = status;
                     }
                 }
                 return kept;
@@ -1519,6 +1516,55 @@ mod performance;
 /// A browser download can still be blocked or cancelled after this handoff.
 fn download_status(filename: &str) -> String {
     format!("Downloaded {filename}")
+}
+
+/// A native open names the file, its saved results, and anything outdated.
+fn opened_results_status(
+    path: &std::path::Path,
+    doc: &reshiki::document::Document,
+) -> Option<String> {
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
+    let results = doc.science.results.len();
+    let outdated_models = doc
+        .models
+        .iter()
+        .filter(|model| model.is_stale(doc))
+        .count();
+    if results == 0 && outdated_models == 0 {
+        return None;
+    }
+    let outdated_results = doc
+        .science
+        .results
+        .iter()
+        .filter(|stored| {
+            doc.science
+                .attachment(stored.attachment)
+                .is_some_and(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
+        })
+        .count();
+    let name = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy();
+    let mut parts = vec![format!("Opened {name}")];
+    if results > 0 {
+        let mut text = format!("{results} calculation result{}", plural(results));
+        if outdated_results > 0 {
+            text.push_str(&format!(" ({outdated_results} outdated)"));
+        }
+        parts.push(text);
+    }
+    if outdated_models > 0 {
+        parts.push(format!(
+            "{outdated_models} outdated 3D model{}",
+            plural(outdated_models)
+        ));
+    }
+    if outdated_results + outdated_models > 0 {
+        parts.push("the drawing changed since".into());
+    }
+    Some(parts.join(" · "))
 }
 
 pub(super) fn export_status(path: &std::path::Path, details: &[String], browser: bool) -> String {

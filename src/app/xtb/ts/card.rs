@@ -520,14 +520,14 @@ impl App {
                 .as_ref()
                 .is_some_and(|session| session.arrow == arrow)
         {
-            return body.push(xtb::view::outcome_view(outcome, true)).into();
+            return body.push(xtb::view::outcome_view(self, outcome)).into();
         }
 
         let can_start = idle && xtb::available();
         let failed = if let Some(Outcome::Failed(failed)) = &self.tab.xtb.outcome
             && let Some(request) = failed.ts().filter(|request| request.arrow == arrow)
         {
-            let (reason, detail) = failed.explain();
+            let (reason, detail) = failed.explain(self.xtb_can_retry(failed));
             body = body
                 .push(request.bonds.view(doc, arrow, false))
                 .push(line("No reliable transition state found.", Tone::Warning))

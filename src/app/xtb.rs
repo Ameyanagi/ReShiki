@@ -26,6 +26,8 @@ pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
+mod source;
+pub(super) use source::Source;
 mod state;
 mod tone;
 pub(super) mod ts;
@@ -68,6 +70,8 @@ pub(crate) enum Action {
     Retry,
     /// A failed run again, unchanged.
     RunAgain,
+    /// A failed SCF run again with the default iteration limit.
+    ResetRetry,
     /// Copy a failed run's details.
     CopyDetails,
     Cancel,
@@ -215,6 +219,7 @@ impl Drop for Run {
 /// What the card shows after a run.
 pub(crate) enum Outcome {
     Done {
+        atoms: Vec<u64>,
         line: String,
         notes: Vec<String>,
     },
@@ -226,6 +231,8 @@ pub(crate) enum Outcome {
 /// A failed run and what Retry and Run again need.
 pub(crate) struct Failed {
     pub failure: state::Failure,
+    /// The molecule that failed, including errors before a run started.
+    pub atoms: Vec<u64>,
     /// The run's request; `None` when no run had started.
     pub request: Option<Box<Request>>,
     /// The frame's atomic numbers, once the 3D model existed.
@@ -247,9 +254,30 @@ impl Failed {
             .map_or(qcdata::XtbMethod::Gfn2Xtb, |r| r.config.method)
     }
 
+    fn scf_iteration_limit(&self) -> Option<u32> {
+        let request = self
+            .request
+            .as_ref()
+            .filter(|request| request.ts.is_none())?;
+        request.config.max_iterations.filter(|&n| {
+            matches!(self.failure.reason(), state::Failure::Scf(_))
+                && n < state::DEFAULT_SCF_ITERATIONS
+        })
+    }
+
     /// The error card's sentence and its second line.
-    pub(crate) fn explain(&self) -> (String, String) {
-        self.failure.explain(self.method(), &self.numbers)
+    fn explain(&self, retry: bool) -> (String, String) {
+        let (title, detail) = self.failure.explain(self.method(), &self.numbers);
+        if retry && let Some(n) = self.scf_iteration_limit() {
+            return (
+                format!(
+                    "The electronic structure (SCF) did not converge within {n} iteration{}, the Max SCF iterations you set.",
+                    if n == 1 { "" } else { "s" }
+                ),
+                detail,
+            );
+        }
+        (title, detail)
     }
 
     /// Copy details: versions, what ran and why it stopped; no structure.
@@ -292,7 +320,7 @@ impl Failed {
                 summary: message, ..
             }
             | state::Failure::Other(message) => message.clone(),
-            _ => self.explain().0,
+            _ => self.explain(false).0,
         };
         parts.push(format!("{reason} (after {:.1} s)", self.seconds));
         parts.join(" · ")
@@ -359,7 +387,7 @@ impl App {
         match action {
             Action::Run => return self.xtb_run(),
             Action::Entry(entry) => return self.xtb_entry(entry),
-            Action::Retry | Action::RunAgain => {
+            Action::Retry | Action::RunAgain | Action::ResetRetry => {
                 let Some(Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
                     return Task::none();
                 };
@@ -381,8 +409,16 @@ impl App {
                     };
                     request.config = hotter;
                 }
+                let reset = matches!(action, Action::ResetRetry);
+                if reset && failed.scf_iteration_limit().is_none() {
+                    return Task::none();
+                }
                 if !self.xtb_can_start() {
                     return Task::none();
+                }
+                if reset {
+                    self.xtb.settings.iterations.clear();
+                    request.config.max_iterations = None;
                 }
                 return self.xtb_begin(request);
             }
@@ -490,6 +526,40 @@ impl App {
         let first = doc.atoms.first()?.id;
         let atoms = reshiki::molecule_names::component(doc, first);
         (self.tab.selected.is_empty() && atoms.len() == doc.atoms.len()).then_some(atoms)
+    }
+
+    /// The last outcome, if it describes the card's molecule.
+    fn xtb_outcome(&self) -> Option<&Outcome> {
+        let outcome = self.tab.xtb.outcome.as_ref()?;
+        if self.xtb_selected_reaction().is_some()
+            || matches!(outcome, Outcome::Failed(failed) if failed.ts().is_some())
+        {
+            return None;
+        }
+        let Some(target) = self.xtb_target() else {
+            return Some(outcome);
+        };
+        let intersects = |atoms: &[u64]| atoms.iter().any(|id| target.contains(id));
+        let belongs = match outcome {
+            Outcome::Done { atoms, .. } => intersects(atoms),
+            Outcome::Failed(failed) => intersects(&failed.atoms),
+            Outcome::Review(review) => review
+                .pending
+                .launch
+                .atoms
+                .iter()
+                .flatten()
+                .any(|atom| target.contains(atom)),
+        };
+        belongs.then_some(outcome)
+    }
+
+    /// The failure that belongs on the card and in the palette.
+    fn xtb_failed(&self) -> Option<&Failed> {
+        let Outcome::Failed(failed) = self.tab.xtb.outcome.as_ref()? else {
+            return None;
+        };
+        self.xtb_outcome().map(|_| failed.as_ref())
     }
 
     /// The current 3D model of the molecule of `atom`, by index.
@@ -879,23 +949,29 @@ impl App {
             .energy_state
             .stop("Reaction energy stopped: a species calculation failed");
         let run = self.tab.xtb.run.take();
+        let atoms = run.as_ref().map_or_else(
+            || self.xtb_target().unwrap_or_default(),
+            |run| run.atoms.clone(),
+        );
         let numbers = run
             .as_ref()
             .and_then(|run| run.launch.as_ref())
             .map(|launch| launch.frame.numbers.clone())
             .unwrap_or_default();
         let attempt = run.as_ref().map(Run::attempt);
-        self.xtb_record_failure(failure, attempt, numbers);
+        self.xtb_record_failure(failure, attempt, atoms, numbers);
     }
 
     fn xtb_record_failure(
         &mut self,
         failure: state::Failure,
         attempt: Option<Attempt>,
+        atoms: Vec<u64>,
         numbers: Vec<u8>,
     ) {
         let mut failed = Failed {
             failure,
+            atoms,
             request: None,
             numbers,
             seconds: 0.,
@@ -907,13 +983,18 @@ impl App {
             // An edit during the run retires Retry.
             failed.revision = attempt.revision;
         }
-        self.status = format!("xTB calculation failed: {}", failed.explain().0);
+        self.status = format!(
+            "xTB calculation failed: {}",
+            failed.explain(self.xtb_can_retry(&failed)).0
+        );
         self.error = true;
         if failed
             .ts()
             .is_none_or(|ts| self.xtb_selected_reaction() == Some(ts.arrow))
         {
             self.tab.xtb.palette.open = true;
+            self.tab.xtb.palette.previous = false;
+            // The card's actions must show, so a collapsed dock opens.
             self.xtb.dock.collapsed = false;
         }
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
@@ -1091,6 +1172,7 @@ impl App {
             format!("xTB · {}", pending.line)
         };
         self.tab.xtb.outcome = Some(Outcome::Done {
+            atoms: pending.launch.atoms.into_iter().flatten().collect(),
             line: pending.line,
             notes,
         });
@@ -1101,7 +1183,13 @@ impl App {
     fn xtb_store_failed(&mut self, mut pending: Pending, reason: String) {
         let failure = state::Failure::Other(reason);
         if let Some(attempt) = pending.attempt.take() {
-            self.xtb_record_failure(failure, Some(attempt), pending.launch.frame.numbers.clone());
+            let atoms = pending.launch.atoms.into_iter().flatten().collect();
+            self.xtb_record_failure(
+                failure,
+                Some(attempt),
+                atoms,
+                pending.launch.frame.numbers.clone(),
+            );
         } else {
             self.xtb_fail(failure);
         }

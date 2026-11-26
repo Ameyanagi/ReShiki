@@ -8,14 +8,15 @@ use super::palette::Shown;
 use super::results::View;
 #[cfg(not(target_arch = "wasm32"))]
 use super::state::FailureDetails;
-use super::{Page, Request, Start, is, state};
+use super::{Request, Start, is, state};
 use crate::app::figure_export::{Kind, Prepared};
-use crate::app::{App, InspectorTab, Message};
+use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{Graphic, IrFigure, Journal, YAxis};
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
+use reshiki::science::Stored;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::{Arc, Weak};
@@ -145,7 +146,6 @@ impl Drop for Recompute {
 /// What the frames show; any change builds them again.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Key {
-    result: *const CalcResult,
     mode: usize,
     amplitude: f32,
     arrows: bool,
@@ -155,6 +155,8 @@ struct Key {
 /// One preview document; each frame swaps in the model (and its arrows), so
 /// a large drawing is copied once, not once per frame.
 struct Animation {
+    attachment: u64,
+    result: Weak<CalcResult>,
     key: Key,
     doc: Document,
     /// The animated model in `doc`, and how many graphics `doc` has without arrows.
@@ -168,6 +170,10 @@ struct Animation {
 }
 
 impl Animation {
+    fn is_for(&self, stored: &Stored) -> bool {
+        self.attachment == stored.attachment && is(&self.result, &stored.result)
+    }
+
     /// Put the frame for the current phase into the preview document.
     fn show(&mut self) {
         let index = ((self.phase * self.frames.len() as f32) as usize)
@@ -368,9 +374,19 @@ impl App {
             .animation
             .as_ref()
             .filter(|animation| {
-                self.xtb_vibrations_visible()
-                    && animation.key.revision == (self.tab.file_epoch, self.tab.revision)
+                animation.key.revision == (self.tab.file_epoch, self.tab.revision)
+                    && self
+                        .xtb_vibration_entry()
+                        .is_some_and(|stored| animation.is_for(stored))
             })
+    }
+
+    pub(in crate::app) fn xtb_vibration_entry(&self) -> Option<&Stored> {
+        if !self.xtb_vibrations_visible() || self.tab.xtb.run.is_some() {
+            return None;
+        }
+        let (_, stored) = self.xtb_shown_entry()?;
+        stored.result.vibrations.is_some().then_some(stored)
     }
 
     /// Ticks while a mode animates.
@@ -386,15 +402,9 @@ impl App {
     pub(in crate::app) fn xtb_vibrations_visible(&self) -> bool {
         let palette = &self.tab.xtb.palette;
         self.tabs.temporary_depth == 0
-            && palette.open
             && palette.view == View::Vibrations
-            && if self.xtb.dock.inspector {
-                self.inspector_open
-                    && self.inspector_tab == InspectorTab::Predict
-                    && self.xtb.page == Page::Xtb
-            } else {
-                !self.xtb.dock.collapsed
-            }
+            && self.xtb_palette_body_visible()
+            && self.xtb_failed().is_none()
     }
 
     fn xtb_vibrations_live(&self) -> Option<Shown<'_>> {
@@ -404,8 +414,11 @@ impl App {
         {
             return None;
         }
-        self.xtb_shown()
-            .filter(|shown| !shown.stale && self.xtb_vibration_model_matches(shown))
+        self.xtb_shown().filter(|shown| {
+            shown.stored.result.vibrations.is_some()
+                && !shown.stale
+                && self.xtb_vibration_model_matches(shown)
+        })
     }
 
     pub(in crate::app) fn xtb_vibrations_leave(&mut self) {
@@ -428,16 +441,19 @@ impl App {
             .as_ref()
             .map_or(0, |v| v.frequencies_cm1.len());
         let key = Key {
-            result: Arc::as_ptr(result),
             mode: self.xtb_mode(count),
             amplitude: settings.amplitude,
             arrows: settings.arrows,
             revision,
         };
-        if settings.animation.as_ref().is_some_and(|a| a.key == key) {
+        let previous = settings
+            .animation
+            .as_ref()
+            .filter(|a| a.is_for(shown.stored));
+        if previous.is_some_and(|a| a.key == key) {
             return;
         }
-        let phase = settings.animation.as_ref().map_or(0., |a| a.phase);
+        let phase = previous.map_or(0., |a| a.phase);
         let mut animation = self
             .xtb_modes(result)
             .and_then(|modes| vector(modes, shown.frame, key.mode))
@@ -489,6 +505,8 @@ impl App {
         }
         *doc.models.get_mut(index)? = rest;
         Some(Animation {
+            attachment: shown.stored.attachment,
+            result: Arc::downgrade(&shown.stored.result),
             key,
             graphics: doc.graphics.len(),
             doc,

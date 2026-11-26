@@ -502,6 +502,85 @@ fn with_model(display: Display) -> (App, Vec<u64>) {
 }
 
 #[test]
+fn outdated_models_are_identified_without_requiring_selection() {
+    for display in [Display::ThreeD, Display::Both] {
+        let (mut app, atoms) = with_model(display);
+        app.tab.selected = atoms.clone();
+        app.duplicate_selection();
+        app.tab.selected.clear();
+        assert_eq!(app.tab.doc.models.len(), 2);
+        assert!(app.outdated_models().is_empty());
+
+        let before = app.tab.doc.clone();
+        app.tab.doc.atom_mut(atoms[2]).unwrap().element = "N".into();
+        app.changed(before);
+        let expected = app.tab.doc.models[0].linked_atoms.clone();
+        assert_eq!(app.outdated_models(), vec![expected.as_slice()]);
+        assert!(
+            app.stale_model().is_none(),
+            "No selected model is needed for the veil"
+        );
+
+        let before = app.tab.doc.clone();
+        assert!(models3d::set_display(&mut app.tab.doc, 0, Display::TwoD));
+        app.changed(before);
+        assert!(
+            app.outdated_models().is_empty(),
+            "A hidden model has no veil"
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.outdated_models(), vec![expected.as_slice()]);
+        let _ = app.update(Message::Undo);
+        assert!(
+            app.outdated_models().is_empty(),
+            "Undo restores the model's currency"
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer export outdated-model control"]
+async fn export_outdated_show_selects_the_linked_atoms_of_a_shown_stale_model() -> Result<(), String>
+{
+    use iced::advanced::{renderer::Headless, widget::Operation, widget::operation};
+
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    for state in ["fresh", "outdated", "hidden"] {
+        let (mut app, atoms) = with_model(Display::Both);
+        app.tab.selected.clear();
+        if state != "fresh" {
+            let before = app.tab.doc.clone();
+            app.tab.doc.atom_mut(atoms[2]).unwrap().element = "N".into();
+            if state == "hidden" {
+                models3d::set_display(&mut app.tab.doc, 0, Display::TwoD);
+            }
+            app.changed(before);
+        }
+        let mut ui = iced_runtime::UserInterface::build(
+            app.export_panel(),
+            iced::Size::new(340., 1000.),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut activate = reshiki::accessibility::Activate::<Message>::new("export-outdated-show");
+        ui.operate(&renderer, &mut operation::black_box(&mut activate));
+        let selected = match activate.finish() {
+            operation::Outcome::Some(Message::Canvas(Edit::Select(ids))) => Some(ids),
+            operation::Outcome::Some(_) => return Err(format!("{state}: unexpected Show action")),
+            _ => None,
+        };
+        assert_eq!(selected, (state == "outdated").then_some(atoms), "{state}");
+    }
+    Ok(())
+}
+
+#[test]
 fn duplicate_copies_the_model_with_its_molecule() {
     let (mut app, atoms) = with_model(Display::ThreeD);
     app.tab.selected = atoms.clone();

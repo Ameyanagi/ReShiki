@@ -608,7 +608,7 @@ impl App {
             if batch.review
                 && let Some(outcome @ Outcome::Review(_)) = &self.tab.xtb.outcome
             {
-                body = body.push(xtb::view::outcome_view(outcome, true));
+                body = body.push(xtb::view::outcome_view(self, outcome));
             }
             body = body.push(
                 accessible_command(
