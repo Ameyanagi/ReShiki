@@ -413,7 +413,7 @@ fn an_xtb_geometry_defaults_to_its_calculated_electronic_state() {
         app.status
     );
     let gaussian = preview(&app).unwrap();
-    assert!(gaussian.contains(", GFN2-xTB optimized (ReShiki)"));
+    assert!(gaussian.contains(", GFN2-xTB optimized geometry (ReShiki)"));
     assert!(gaussian.contains("\n-2 3\n"));
 
     let start = app.qc_sources(app.qc_export.as_ref().unwrap())[1].0.clone();

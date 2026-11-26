@@ -1,4 +1,4 @@
-//! The results palette's widgets: header, method lines, the stale banner,
+//! The results palette's widgets: headline, key numbers, the stale banner,
 //! the result tabs, and the footer with file sizes.
 use super::super::results::{self, View};
 use super::super::tone::{Tone, line};
@@ -13,6 +13,7 @@ use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme,
 
 /// The bottom dock's body height; the inspector shows the body in full.
 const BODY_HEIGHT: f32 = 150.;
+const FOOTER_LINE_HEIGHT: f32 = 32.;
 const LABEL_WIDTH: f32 = 130.;
 
 fn send(action: Action) -> Message {
@@ -25,6 +26,7 @@ fn toggle<'a>(
     label: String,
     checked: bool,
     action: Action,
+    inspector: bool,
 ) -> Element<'a, Message> {
     let message = send(action);
     reshiki::accessibility::button(
@@ -37,7 +39,8 @@ fn toggle<'a>(
                 move |_| message.clone()
             })
             .size(14)
-            .text_size(12),
+            .text_size(12)
+            .text_wrapping(wrapping(inspector)),
     )
     .checked(checked)
     .on_press(message)
@@ -47,6 +50,18 @@ fn toggle<'a>(
         ..Default::default()
     })
     .into()
+}
+
+fn wrapping(inspector: bool) -> text::Wrapping {
+    if inspector {
+        text::Wrapping::default()
+    } else {
+        text::Wrapping::None
+    }
+}
+
+fn footer_note<'a>(note: impl text::IntoFragment<'a>) -> Element<'a, Message> {
+    text(note).size(11).style(muted_text).into()
 }
 
 /// Text in the palette: greyed while the result is stale.
@@ -128,8 +143,12 @@ impl App {
             return Some(header);
         }
 
-        let method = shown.method();
-        let mut content = column![header, text(method.clone()).size(12)].spacing(4);
+        let mut content = column![
+            header,
+            text(results::headline(&shown.stored.result, shown.frame)).size(12)
+        ]
+        .spacing(4);
+        content = content.extend(key_tiles(&shown, inspector, false));
         // The semi-empirical caveat is about xTB, not imported results.
         if matches!(
             shown.stored.result.settings,
@@ -149,18 +168,14 @@ impl App {
             View::Steps => self.xtb_steps(&shown, inspector),
             View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
-            View::Log => log(&shown, &method),
+            View::Log => log(&shown, &shown.method()),
         };
         let body: Element<'_, Message> = if inspector {
             body
         } else {
             scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(if view == View::Orbitals {
-                    super::super::orbitals::HEIGHT
-                } else {
-                    BODY_HEIGHT
-                })
+                .height(BODY_HEIGHT)
                 .into()
         };
         content = content.push(container(body).padding([6, 0]));
@@ -324,9 +339,12 @@ impl App {
         .spacing(6);
         if expanded {
             let body = column![
-                text(shown.method()).size(12).style(greyed(true)),
-                summary(&shown, inspector, true)
+                text(results::headline(&shown.stored.result, shown.frame))
+                    .size(12)
+                    .style(greyed(true))
             ]
+            .extend(key_tiles(&shown, inspector, true))
+            .push(summary(&shown, inspector, true))
             .spacing(6);
             previous = if inspector {
                 previous.push(body)
@@ -539,20 +557,29 @@ impl App {
         view: View,
         inspector: bool,
     ) -> Element<'a, Message> {
-        let mut footer = row![].spacing(10).align_y(Alignment::Center);
+        let mut actions = row![].spacing(10).align_y(Alignment::Center);
+        let command = |id, name, label| {
+            reshiki::accessibility::button(
+                id,
+                name,
+                text(label).size(12).wrapping(wrapping(inspector)),
+            )
+            .padding([7, 9])
+            .style(control(false))
+        };
         match view {
             View::Summary => {
-                footer = footer
+                actions = actions
                     .push(
-                        accessible_command(
-                            "xtb-copy-table",
-                            "Copy the results table",
-                            "Copy table",
-                        )
-                        .on_press(send(Action::CopyTable)),
+                        command("xtb-copy-methods", "Copy methods text", "Copy methods text")
+                            .on_press(send(Action::CopyMethods)),
                     )
                     .push(
-                        accessible_command(
+                        command("xtb-copy-table", "Copy the results table", "Copy table")
+                            .on_press(send(Action::CopyTable)),
+                    )
+                    .push(
+                        command(
                             "xtb-export-table",
                             "Export the results table as TSV",
                             "Export…",
@@ -561,31 +588,42 @@ impl App {
                     )
                     .push(toggle(
                         "xtb-labels",
-                        "Show as labels".into(),
+                        "Show charges (on screen only)".into(),
                         self.tab.xtb.palette.labels,
                         Action::Labels(!self.tab.xtb.palette.labels),
-                    ));
+                        inspector,
+                    ))
+                    .push(
+                        command(
+                            "xtb-place-charges",
+                            "Place the partial charges in the drawing as atom labels",
+                            "Place charges in drawing",
+                        )
+                        .on_press_maybe(
+                            (!shown.stale && !shown.stored.result.charges.is_empty())
+                                .then(|| send(Action::PlaceCharges)),
+                        ),
+                    );
             }
             View::Vibrations => {
-                footer = footer.push(line(
+                actions = actions.push(footer_note(
                     "Normal modes are recomputed when shown; the file keeps frequencies, intensities and thermochemistry.",
-                    Tone::Muted,
                 ));
             }
             View::Steps => {
-                footer = footer.push(line(
+                actions = actions.push(footer_note(
                     "The file keeps the first and last steps; keep full results to save every step.",
-                    Tone::Muted,
                 ));
             }
-            View::Orbitals => footer = footer.push(self.xtb_orbitals_note(shown)),
+            View::Orbitals => {
+                actions = actions.push(self.xtb_orbitals_note(shown, text::Wrapping::default()))
+            }
             View::Conformers => {
-                footer = footer.push(super::super::conformers::footer());
+                actions = actions.push(super::super::conformers::footer(text::Wrapping::default()));
             }
             View::Log => {
-                footer = footer.push(
-                    accessible_command("xtb-copy-log", "Copy the log", "Copy")
-                        .on_press(send(Action::CopyLog)),
+                actions = actions.push(
+                    command("xtb-copy-log", "Copy the log", "Copy").on_press(send(Action::CopyLog)),
                 );
             }
         }
@@ -597,28 +635,40 @@ impl App {
                 format!("Keep full results in this file (+{})", results::size(full)),
                 keep,
                 Action::KeepFull(!keep),
+                inspector,
             ),
-            text(format!("Saved in file: {}", results::size(saved))).size(12),
+            text(format!("Saved in file: {}", results::size(saved)))
+                .size(12)
+                .wrapping(wrapping(inspector)),
         ]
         .spacing(14)
         .align_y(Alignment::Center);
         let note = shown.stored.result.omitted_bytes.map(|bytes| {
             // Imported results whose heavy data did not fit; the import lane
             // adds the source file and the reopen action here.
-            line(
-                format!("Not saved in the file ({}).", results::size(bytes)),
-                Tone::Muted,
-            )
+            footer_note(format!("Not saved in the file ({}).", results::size(bytes)))
         });
-        let mut footer: Column<'_, Message> = if inspector {
-            column![footer.wrap(), sizes.wrap()].spacing(6)
-        } else {
-            column![footer.push(Space::new().width(Length::Fill)).push(sizes)]
-        };
-        if let Some(note) = note {
-            footer = footer.push(note);
+        if inspector {
+            return column![actions.wrap(), sizes.wrap()]
+                .spacing(6)
+                .extend(note)
+                .into();
         }
-        footer.into()
+        // Reserve both action lines on every tab so switching tabs cannot move the dock.
+        let main = column![
+            container(actions.wrap().vertical_spacing(4))
+                .width(Length::Fill)
+                .center_y(2. * FOOTER_LINE_HEIGHT + 4.)
+                .clip(true),
+            container(sizes)
+                .width(Length::Fill)
+                .center_y(FOOTER_LINE_HEIGHT)
+                .clip(true),
+        ]
+        .spacing(4);
+        column![main]
+            .extend(note.map(|note| container(note).clip(true).into()))
+            .into()
     }
 }
 
@@ -687,9 +737,38 @@ pub(in crate::app::xtb) fn alert<'a>(
     card.into()
 }
 
+/// Small tiles for the numbers available in this result.
+fn key_tiles<'a>(
+    shown: &Shown<'a>,
+    inspector: bool,
+    previous: bool,
+) -> Option<Element<'a, Message>> {
+    let numbers = results::key_numbers(&shown.stored.result, shown.info);
+    if numbers.is_empty() {
+        return None;
+    }
+    let stale = shown.stale || previous;
+    let tiles = row(numbers.into_iter().map(|(label, value)| {
+        container(
+            text(format!("{label} {value}"))
+                .size(12)
+                .style(greyed(stale)),
+        )
+        .padding([4, 8])
+        .style(panel)
+        .into()
+    }))
+    .spacing(6);
+    Some(if inspector {
+        tiles.wrap().vertical_spacing(4).into()
+    } else {
+        tiles.into()
+    })
+}
+
 /// Label and value rows: two columns at the bottom, one in the inspector.
 fn summary<'a>(shown: &Shown<'a>, inspector: bool, previous: bool) -> Element<'a, Message> {
-    let rows = shown.rows();
+    let rows = results::summary_grid_rows(&shown.stored.result, shown.input, shown.frame);
     let label_width = if inspector { 104. } else { LABEL_WIDTH };
     let column_of = |rows: &[(String, String)]| {
         Column::with_children(rows.iter().map(|(label, content)| {

@@ -10,6 +10,9 @@ pub mod scf;
 
 pub use failure::Failure;
 
+/// Separates the optimizer record from the method or conformer recipe.
+pub const OPTIMIZER_SEPARATOR: &str = " · optimizer ";
+
 /// One SCF the worker ran.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Evaluation {

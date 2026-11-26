@@ -3,6 +3,7 @@
 use super::state::Failure;
 use iced::futures::{Stream, channel::mpsc};
 use reshiki_xtb_jobs::run as driver;
+pub(super) use reshiki_xtb_jobs::run::optimizer_provenance;
 pub(crate) use reshiki_xtb_jobs::run::{Job, Report};
 #[cfg(test)]
 pub(crate) use reshiki_xtb_jobs::run::{example_computed, example_engine};
