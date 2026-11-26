@@ -8,7 +8,7 @@ use super::{
     commands::{self, CommandSpec},
     input_format, input_formats, output_formats, render_formats,
 };
-use reshiki_io::qc_input::{Job, Program, builtin_templates};
+use reshiki_io::qc_input::{Job, Program, builtin_templates, nearest_gamess_basis};
 use reshiki_xtb_worker::protocol::{
     Conventions, Method, ScfRetry, ScfSettings, SolvationState, Solvent, SolventCorrection,
     SolventModel,
@@ -1296,6 +1296,14 @@ fn export_input(options: &Options) -> Result<Command, String> {
     {
         return Err("use --out PATH to write the main input and its companion files".into());
     }
+    let method = option_text("--method", options.method.as_deref())?.unwrap_or(&template.method);
+    let basis = match option_text("--basis", options.basis.as_deref())? {
+        Some(basis) => basis,
+        None if program == Program::Gamess => {
+            nearest_gamess_basis(&template.basis).unwrap_or(&template.basis)
+        }
+        None => &template.basis,
+    };
     Ok(Command::ExportInput(ExportInput {
         input: input.into(),
         program,
@@ -1303,12 +1311,8 @@ fn export_input(options: &Options) -> Result<Command, String> {
         reactant,
         product,
         hessian,
-        method: option_text("--method", options.method.as_deref())?
-            .unwrap_or(&template.method)
-            .into(),
-        basis: option_text("--basis", options.basis.as_deref())?
-            .unwrap_or(&template.basis)
-            .into(),
+        method: method.into(),
+        basis: basis.into(),
         charge: integer("--charge", options.charge.as_deref(), 0)?,
         multiplicity: integer("--multiplicity", options.multiplicity.as_deref(), 1)?,
         cores: integer("--cores", options.cores.as_deref(), template.cores)?,

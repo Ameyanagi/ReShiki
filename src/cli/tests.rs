@@ -4245,6 +4245,44 @@ async fn export_input_applies_custom_settings() {
 }
 
 #[tokio::test]
+async fn export_input_uses_a_gamess_basis_when_omitted() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    let output = directory.path().join("chosen.inp");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    let args = [
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "gamess",
+    ];
+
+    let (code, out, err) = call(&args).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(out.contains(" $BASIS GBASIS=N31 NGAUSS=6 NDFUNC=1 $END\n"));
+
+    let explicit_path = [args.as_slice(), &["--out", output.to_str().unwrap()]].concat();
+    let (code, stdout, err) = call(&explicit_path).await;
+    assert_eq!((code, stdout.as_str()), (SUCCESS, ""), "{err}");
+    assert_eq!(std::fs::read_to_string(output).unwrap(), out);
+
+    let valid_basis = [args.as_slice(), &["--method", "HF", "--basis", "STO-3G"]].concat();
+    let (code, out, err) = call(&valid_basis).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(out.contains(" $BASIS GBASIS=STO NGAUSS=3 $END\n"));
+
+    for basis in ["def2-SVP", ""] {
+        let invalid_basis = [args.as_slice(), &["--method", "HF", "--basis", basis]].concat();
+        let (code, out, err) = call(&invalid_basis).await;
+        assert_eq!((code, out.as_str()), (FAILURE, ""), "{basis:?}");
+        assert_eq!(
+            err,
+            "reshiki: error: GAMESS exports use built-in bases only: 6-31G(d), 6-31G or STO-3G.\n"
+        );
+    }
+}
+
+#[tokio::test]
 async fn export_input_supports_all_programs_and_warns_on_stderr() {
     let directory = tempfile::tempdir().unwrap();
     let input = directory.path().join("water.xyz");

@@ -75,6 +75,15 @@ impl Program {
     }
 }
 
+/// Give programs that share the `.inp` extension distinct default file stems.
+pub fn default_stem(stem: &str, program: Program) -> String {
+    match program {
+        Program::Gaussian | Program::Xyz => stem.to_owned(),
+        Program::Orca => format!("{stem}-orca"),
+        Program::Gamess => format!("{stem}-gamess"),
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Job {

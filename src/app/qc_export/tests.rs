@@ -28,12 +28,17 @@ fn ethanol() -> (App, Vec<u64>) {
 fn finish_model(app: &mut App) {
     let job = app.tab.model_job.as_ref().expect("a generation in flight");
     let n = job.prepared.ids().len();
-    let positions = (0..n + 1)
+    let positions = (0..n)
         .map(|i| Point3 {
             x: i as f64 * 1.4,
             y: (i % 2) as f64 * 0.8,
             z: i as f64 * 0.1,
         })
+        .chain([Point3 {
+            x: -0.8,
+            y: 0.,
+            z: 0.,
+        }])
         .collect();
     let optimized = reshiki::geometry::Optimized {
         conformer: Conformer {
@@ -138,8 +143,8 @@ fn programs_jobs_and_bases_follow_the_writers() {
     let dialog = app.qc_export.as_ref().unwrap();
     assert_eq!(dialog.basis, "6-31G(d)");
     assert_eq!(
-        dialog.message,
-        "def2-SVP is not built into GAMESS; using 6-31G(d)."
+        dialog.basis_note().as_deref(),
+        Some("The ReShiki GAMESS exporter does not support def2-SVP. Using 6-31G(d).")
     );
     assert!(
         preview(&app)
@@ -147,7 +152,7 @@ fn programs_jobs_and_bases_follow_the_writers() {
             .contains("GBASIS=N31 NGAUSS=6 NDFUNC=1")
     );
     send(&mut app, Action::Job(Job::Optimize));
-    assert!(app.qc_export.as_ref().unwrap().message.contains("def2-SVP"));
+    assert!(app.qc_export.as_ref().unwrap().basis_note().is_some());
     send(&mut app, Action::Program(Program::Gaussian));
     assert_eq!(app.qc_export.as_ref().unwrap().basis, "def2-SVP");
 
@@ -164,6 +169,62 @@ fn programs_jobs_and_bases_follow_the_writers() {
     send(&mut app, Action::Field(Field::Basis, "STO-3G".into()));
     send(&mut app, Action::Program(Program::Orca));
     assert_eq!(app.qc_export.as_ref().unwrap().basis, "STO-3G");
+}
+
+#[test]
+fn an_explicit_basis_edit_survives_switching_from_gamess() {
+    let (mut app, _) = ethanol();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Program(Program::Gamess));
+    send(&mut app, Action::Field(Field::Basis, "6-31G".into()));
+    send(&mut app, Action::Field(Field::Basis, "6-31G(d)".into()));
+    assert!(app.qc_export.as_ref().unwrap().basis_note().is_none());
+    send(&mut app, Action::Program(Program::Orca));
+    assert_eq!(app.qc_export.as_ref().unwrap().basis, "6-31G(d)");
+}
+
+#[test]
+fn gamess_substitutes_unsupported_and_empty_template_bases() {
+    let (mut app, _) = ethanol();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Generate);
+    finish_model(&mut app);
+    send(&mut app, Action::Program(Program::Gamess));
+    let [default, ..] = qc_input::builtin_templates();
+    let gamess = Template {
+        name: "GAMESS".into(),
+        basis: String::new(),
+        only: Some(Program::Gamess),
+        ..default.clone()
+    };
+    for (template, note) in [
+        (
+            default,
+            "The ReShiki GAMESS exporter does not support def2-SVP. Using 6-31G(d).",
+        ),
+        (
+            gamess.clone(),
+            "No basis was specified for GAMESS. Using 6-31G(d).",
+        ),
+    ] {
+        send(&mut app, Action::Template(Choice(template)));
+        assert!(
+            preview(&app)
+                .unwrap()
+                .contains("GBASIS=N31 NGAUSS=6 NDFUNC=1")
+        );
+        assert_eq!(
+            app.qc_export.as_ref().unwrap().basis_note().as_deref(),
+            Some(note)
+        );
+    }
+    let supported = Template {
+        basis: "STO-3G".into(),
+        ..gamess
+    };
+    send(&mut app, Action::Template(Choice(supported)));
+    assert!(app.qc_export.as_ref().unwrap().basis_note().is_none());
+    assert!(preview(&app).unwrap().contains("GBASIS=STO NGAUSS=3"));
 }
 
 #[test]
@@ -260,7 +321,7 @@ fn each_program_has_its_own_default_file_name() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_conformer_changes_the_written_geometry_and_only_the_automatic_title() {
-    let (mut app, oxygen) = App::xtb_searched_water();
+    let (mut app, _) = App::xtb_searched_water();
     send(&mut app, Action::Open);
     send(&mut app, Action::Program(Program::Xyz));
     let first = preview(&app).unwrap();
@@ -272,16 +333,11 @@ fn a_conformer_changes_the_written_geometry_and_only_the_automatic_title() {
             .ends_with(", GFN2-xTB conformer 1 (ReShiki)")
     );
 
-    let sources = app.xtb_geometry_sources(&[oxygen]);
-    let choose = |i: usize| {
-        let source = &sources[i];
-        Action::Source(SourceChoice(
-            i,
-            source.label.clone(),
-            source.frame.as_ref().map(Frame::hash),
-        ))
+    let (cache, first_choice, second_choice) = {
+        let sources = app.qc_sources(app.qc_export.as_ref().unwrap());
+        (sources.as_ptr(), sources[0].0.clone(), sources[1].0.clone())
     };
-    send(&mut app, choose(1));
+    send(&mut app, Action::Source(second_choice.clone()));
     let second = preview(&app).unwrap();
     assert!(
         second
@@ -290,9 +346,15 @@ fn a_conformer_changes_the_written_geometry_and_only_the_automatic_title() {
             .unwrap()
             .ends_with(", GFN2-xTB conformer 2 (ReShiki)")
     );
+    let written = qc_input::parse_xyz(&second).unwrap();
+    let pairs: Vec<_> = written
+        .numbers
+        .into_iter()
+        .zip(written.positions_angstrom)
+        .collect();
     assert_eq!(
-        qc_input::parse_xyz(&second).unwrap().positions_angstrom,
-        sources[1].frame.as_ref().unwrap().positions_angstrom
+        pairs,
+        [(8, [0., 0., 0.]), (1, [0.97, 0., 0.]), (1, [-0.3, 0.9, 0.])]
     );
     assert_ne!(first.lines().nth(3), second.lines().nth(3));
 
@@ -300,14 +362,98 @@ fn a_conformer_changes_the_written_geometry_and_only_the_automatic_title() {
         &mut app,
         Action::Field(Field::Title, "DFT follow-up".into()),
     );
-    send(&mut app, choose(0));
+    assert_eq!(
+        app.qc_sources(app.qc_export.as_ref().unwrap()).as_ptr(),
+        cache
+    );
+    send(&mut app, Action::Source(first_choice));
     let custom = preview(&app).unwrap();
     assert_eq!(custom.lines().nth(1), Some("DFT follow-up"));
     assert_eq!(custom.lines().nth(3), first.lines().nth(3));
 
-    send(&mut app, choose(1));
+    send(&mut app, Action::Source(second_choice));
     app.tab.doc.atoms[0].charge = -1;
+    app.tab.revision += 1;
     assert_eq!(preview(&app), Err(GEOMETRY_CHANGED.into()));
+    assert_eq!(app.qc_export.as_ref().unwrap().source.get(), 0);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_xtb_geometry_defaults_to_its_calculated_electronic_state() {
+    use crate::app::xtb::{Action as XtbAction, CalcTask};
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let doc = &mut app.tab.doc;
+    let n = doc.add_atom("N", Point::default());
+    let o = doc.add_atom("O", Point::new(36., 0.));
+    doc.add_bond(n, o, 2, "plain");
+    app.tab.selected = vec![n];
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Generate);
+    finish_model(&mut app);
+    assert!(preview(&app).unwrap().contains("\n0 1\n"));
+
+    for action in [
+        XtbAction::Task(CalcTask::Optimize),
+        XtbAction::Charge("-2".into()),
+        XtbAction::Unpaired("2".into()),
+        XtbAction::Run,
+    ] {
+        let _ = app.update(Message::Xtb(action));
+    }
+    app.xtb_test_finish_optimization(
+        &[[0., 0., 0.], [1.4, 0.8, 0.1], [-0.8, 0., 0.]],
+        &[[0., 0., 0.], [1.3, 0.8, 0.1], [-0.75, 0., 0.]],
+    );
+    assert!(
+        app.status.starts_with("Applied xTB geometry"),
+        "{}",
+        app.status
+    );
+    let gaussian = preview(&app).unwrap();
+    assert!(gaussian.contains(", GFN2-xTB optimized (ReShiki)"));
+    assert!(gaussian.contains("\n-2 3\n"));
+
+    let start = app.qc_sources(app.qc_export.as_ref().unwrap())[1].0.clone();
+    send(&mut app, Action::Source(start));
+    let gaussian = preview(&app).unwrap();
+    assert!(gaussian.contains(", start geometry before xTB (ReShiki)"));
+    assert!(gaussian.contains("\n-2 3\n"));
+    send(&mut app, Action::Field(Field::Charge, "0".into()));
+    assert!(preview(&app).unwrap().contains("\n0 3\n"));
+    let dialog = app.qc_export.as_ref().unwrap();
+    let sources = app.qc_sources(dialog);
+    let (choice, source) = dialog.selected_source(&sources).unwrap();
+    assert_eq!(choice.index, 1);
+    assert_eq!(
+        dialog.electronic_state_warning(Some(source)).as_deref(),
+        Some("This geometry was calculated with charge -2 and multiplicity 3.")
+    );
+    let optimized = sources[0].0.clone();
+    drop(sources);
+
+    send(&mut app, Action::Field(Field::Multiplicity, "1".into()));
+    assert!(preview(&app).unwrap().contains("\n0 1\n"));
+    send(&mut app, Action::Program(Program::Xyz));
+    let xyz = qc_input::parse_xyz(&preview(&app).unwrap()).unwrap();
+    let expected = [(7, [0., 0., 0.]), (8, [1.4, 0.8, 0.1]), (1, [-0.8, 0., 0.])];
+    assert_eq!(xyz.numbers.len(), expected.len());
+    for ((number, xyz), (element, position)) in xyz
+        .numbers
+        .into_iter()
+        .zip(xyz.positions_angstrom)
+        .zip(expected)
+    {
+        assert_eq!(number, element);
+        for (actual, expected) in xyz.into_iter().zip(position) {
+            assert!((actual - expected).abs() < 1e-6, "{actual} != {expected}");
+        }
+    }
+    send(&mut app, Action::Source(optimized));
+    send(&mut app, Action::Program(Program::Gaussian));
+    assert!(preview(&app).unwrap().contains("\n0 1\n"));
 }
 
 #[test]
