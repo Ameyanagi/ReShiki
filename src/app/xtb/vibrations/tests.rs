@@ -222,6 +222,42 @@ fn placing_the_spectrum_reveals_the_whole_figure_and_keeps_zoom_when_it_fits() {
 }
 
 #[test]
+fn placing_the_spectrum_fits_after_properties_opens() {
+    let mut app = opened();
+    app.inspector_open = false;
+    app.inspector_tab = InspectorTab::Predict;
+    assert!(app.xtb_bottom_palette().is_some());
+    let initial_size = iced::Size::new(900., 600.);
+    app.viewport = initial_size;
+    app.guides.rulers = false;
+    app.tab.camera.zoom = 1.;
+    app.tab.camera.center = Point::new(-2000., -1500.);
+    app.tab.fit_to_view = true;
+
+    vibrations(&mut app, Action::PlaceSpectrum);
+
+    assert!(!app.error, "{}", app.status);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    let size = iced::Size::new(580., 600.);
+    let _ = app.update(Message::Viewport(size));
+    assert_eq!(app.viewport, size);
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    let figure_width = hi.x - lo.x;
+    assert!(size.width < figure_width && figure_width < initial_size.width);
+    let paper = app.guides.paper(iced::Rectangle::with_size(size));
+    let visible = iced::Rectangle::with_size(paper.size());
+    for point in [lo, hi] {
+        assert!(
+            visible.contains(app.tab.camera.screen(point, paper)),
+            "the resized canvas must show the whole figure: {point:?}"
+        );
+    }
+    assert!(app.tab.camera.zoom < 1.);
+    assert!(!app.tab.fit_to_view);
+}
+
+#[test]
 fn the_spectrum_clears_a_2d_component_extended_after_calculation() {
     let mut app = opened();
     let oxygen = *app
