@@ -158,7 +158,7 @@ impl App {
         Some(content.into())
     }
 
-    /// "xTB results", the tabs `views` with `view` chosen, and the dock commands.
+    /// The result title, tabs with `view` chosen, and dock commands.
     fn xtb_palette_header(
         &self,
         views: Vec<View>,
@@ -180,11 +180,7 @@ impl App {
         }))
         .spacing(4);
         let collapsed = self.xtb.dock.collapsed && !inspector;
-        // Results opened from other programs are not xTB's.
-        let title = match self.xtb_shown().map(|s| &s.stored.result.settings) {
-            Some(reshiki::qcdata::Settings::Imported { .. }) => "Calculation results",
-            _ => "xTB results",
-        };
+        let title = results::title(self.xtb_shown().map(|s| s.stored.result.as_ref()));
         let mut header = row![text(title).size(14), tabs]
             .spacing(14)
             .align_y(Alignment::Center);

@@ -7,7 +7,7 @@ use super::state::{
 };
 use reshiki::qcdata;
 use reshiki::qcdata::{
-    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Status, Task,
+    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Source, Status, Task,
     XtbConventions,
 };
 
@@ -87,6 +87,27 @@ pub(crate) struct RunInfo {
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
 pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
+    if let Source::Imported { file_name, .. } = &provenance.source {
+        let program = crate::app::files::program_label(
+            &provenance.program,
+            provenance.program_version.as_deref(),
+        );
+        let level = match (&provenance.method, &provenance.basis) {
+            (Some(method), Some(basis)) => Some(format!("{method}/{basis}")),
+            (Some(level), None) | (None, Some(level)) => Some(level.clone()),
+            (None, None) => None,
+        };
+        let from = format!("from {file_name}");
+        let source = level
+            .as_ref()
+            .is_none_or(|level| !level.ends_with(&from))
+            .then_some(from);
+        return [Some(program), level, source]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" · ");
+    }
     // Files from other programs may not name their method.
     let mut parts: Vec<String> = provenance
         .method
@@ -123,6 +144,13 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
         );
     }
     parts.join(" · ")
+}
+
+pub(in crate::app) fn title(result: Option<&CalcResult>) -> String {
+    match result.map(|result| &result.provenance.source) {
+        Some(Source::Imported { file_name, .. }) => format!("Results · {file_name}"),
+        _ => "xTB results".into(),
+    }
 }
 
 fn solvent(result: &CalcResult) -> String {
@@ -555,8 +583,21 @@ pub(crate) fn log(
     method: &str,
 ) -> String {
     let mut lines = vec![method.to_owned()];
-    if let reshiki::qcdata::Source::Calculated { engine_revision } = &result.provenance.source {
-        lines.push(format!("engine revision {engine_revision}"));
+    match &result.provenance.source {
+        Source::Calculated { engine_revision } => {
+            lines.push(format!("engine revision {engine_revision}"));
+        }
+        Source::Imported { .. } => {
+            let provenance = &result.provenance;
+            if let Some(version) = &provenance.program_version {
+                lines.push(format!("{} {version}", provenance.program));
+            }
+            lines.push(format!(
+                "charge {} · multiplicity {}",
+                signed(f64::from(frame.charge), 0),
+                frame.multiplicity
+            ));
+        }
     }
     lines.push(format!(
         "{} · {} atoms · {} electrons",

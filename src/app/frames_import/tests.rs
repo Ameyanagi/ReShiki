@@ -29,6 +29,179 @@ fn model(app: &App) -> Vec<[f32; 3]> {
         .collect()
 }
 
+async fn open_calculation(app: &mut App, fixture: &str) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/qc")
+        .join(fixture);
+    let _ = app.update(Message::FilePrepared(super::super::files::read(path).await));
+    assert!(!app.error, "{}", app.status);
+}
+
+async fn import_calculation(app: &mut App) {
+    use iced::futures::StreamExt;
+
+    let task = app.update(Message::FramesImport(Action::Import));
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action
+            && matches!(&message, Message::Tab(_, inner) if matches!(inner.as_ref(), Message::FilePrepared(_)))
+        {
+            let _ = app.update(message);
+            assert!(!app.error, "{}", app.status);
+            return;
+        }
+    }
+    panic!("missing chosen calculation");
+}
+
+#[tokio::test]
+async fn gaussian_job_rows_choose_the_molecule_and_its_results() {
+    use crate::app::xtb::{View, method_line, results_title};
+    use reshiki::models3d::Display;
+
+    let (mut app, _) = App::new();
+    open_calculation(&mut app, "pymatgen/CH2O_CO2.log").await;
+    let dialog = app.frames_import.as_ref().unwrap();
+    assert_eq!(
+        dialog.file.subtitle(),
+        "CH2O_CO2.log · Gaussian 09 · 3 jobs"
+    );
+    assert_eq!(dialog.index(), 2);
+    assert!(dialog.add_2d && !dialog.keep);
+    let rows: Vec<_> = dialog.file.file.jobs.iter().map(job_cells).collect();
+    assert_eq!(
+        rows.iter().map(|row| row[1].as_str()).collect::<Vec<_>>(),
+        ["CH₂O", "CO₂", "CO₂"]
+    );
+    assert_eq!(
+        rows[0],
+        [
+            "1",
+            "CH₂O",
+            "Frequencies · RB3LYP/6-31G",
+            "Normal termination",
+            "−114.461136600"
+        ]
+    );
+    assert!(rows[1][2].starts_with("Optimization"));
+    assert!(rows[2][2].starts_with("Frequencies"));
+    assert_eq!(dialog.preview.as_ref().unwrap().atoms.len(), 3);
+
+    send(&mut app, Action::Move(-1));
+    assert_eq!(app.frames_import.as_ref().unwrap().index(), 1);
+    send(&mut app, Action::Choose(Choice::Frame(0)));
+    let preview = app
+        .frames_import
+        .as_ref()
+        .unwrap()
+        .preview
+        .as_ref()
+        .unwrap();
+    assert_eq!(preview.atoms.len(), 4);
+    import_calculation(&mut app).await;
+    let doc = &app.tab.doc;
+    assert_eq!(doc.models[0].display, Display::Both);
+    assert_eq!(doc.atoms.len(), 4);
+    assert_eq!(doc.bonds.len(), 3);
+    assert!(doc.atoms.iter().all(|atom| atom.depth.abs() < 1e-5));
+    let [stored] = doc.science.results.as_slice() else {
+        panic!("{}", app.status);
+    };
+    let frame = doc.science.frame(&stored.result.frame).unwrap();
+    assert_eq!(frame.numbers.len(), 4);
+    assert_eq!(
+        model(&app),
+        frame
+            .positions_angstrom
+            .iter()
+            .map(|p| p.map(|v| v as f32))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(stored.result.energy_hartree, Some(-114.4611366));
+    assert_eq!(
+        stored
+            .result
+            .vibrations
+            .as_ref()
+            .unwrap()
+            .frequencies_cm1
+            .len(),
+        6
+    );
+    let views = View::available(&stored.result);
+    assert!(views.contains(&View::Vibrations) && views.contains(&View::Orbitals));
+    assert_eq!(
+        method_line(&stored.result, frame),
+        "Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log"
+    );
+    assert_eq!(
+        results_title(Some(&stored.result)),
+        "Results · CH2O_CO2.log"
+    );
+    assert!(app.xtb_bottom_palette().is_some());
+    assert!(
+        app.status
+            .starts_with("Job 1 of 3 opened · CH₂O · Frequencies · results in the palette"),
+        "{}",
+        app.status
+    );
+
+    open_calculation(&mut app, "pymatgen/CH2O_CO2.log").await;
+    send(&mut app, Action::Add2d(false));
+    import_calculation(&mut app).await;
+    assert_eq!(app.tab.doc.models[0].display, Display::ThreeD);
+    assert_eq!(app.tab.doc.atoms.len(), 3);
+    assert!(app.tab.doc.science.results[0].result.vibrations.is_some());
+    assert!(app.xtb_bottom_palette().is_some());
+    assert!(
+        app.status
+            .starts_with("Job 3 of 3 opened · CO₂ · Frequencies · results in the palette"),
+        "{}",
+        app.status
+    );
+}
+
+#[tokio::test]
+async fn gaussian_optimization_opens_at_the_chosen_step() {
+    let (mut app, _) = App::new();
+    open_calculation(&mut app, "cclib/g16_dvb_gopt.out").await;
+    let dialog = app.frames_import.as_ref().unwrap();
+    assert_eq!(
+        dialog.file.subtitle(),
+        "g16_dvb_gopt.out · Gaussian 16 · 6 steps"
+    );
+    assert_eq!(dialog.file.layout(), Some(Layout::Line));
+    assert_eq!(dialog.index(), 5);
+    assert!(!dialog.keep);
+    let steps = dialog.file.steps();
+    let last = &steps[5];
+    assert_eq!(eh(dialog.file.step_energy(last), true), "−382.308266602");
+    let (input, final_frame) = (steps[0].frame.hash(), last.frame.hash());
+    import_calculation(&mut app).await;
+    assert_eq!(model(&app)[0], [0.269445, 1.410118, 0.]);
+    let science = &app.tab.doc.science;
+    let [stored] = science.results.as_slice() else {
+        panic!("{}", app.status);
+    };
+    assert_eq!(stored.result.input_frame, Some(input));
+    assert!(science.frame(&input).is_some());
+    assert_eq!(stored.result.frame, final_frame);
+    assert_eq!(stored.result.energy_hartree, Some(-382.3082666));
+    assert!(stored.result.orbitals.is_some());
+    assert!(app.xtb_bottom_palette().is_some());
+
+    open_calculation(&mut app, "cclib/g16_dvb_gopt.out").await;
+    send(&mut app, Action::Choose(Choice::First));
+    import_calculation(&mut app).await;
+    assert_eq!(model(&app)[0], [1.205666, 0.676891, 0.]);
+    assert!(app.tab.doc.science.results.is_empty());
+    assert!(
+        app.status.contains("Reopen and choose step 6"),
+        "{}",
+        app.status
+    );
+}
+
 #[test]
 fn only_several_frames_of_one_molecule_ask() {
     assert!(detect(Path::new("w.xyz"), CREST.as_bytes()).is_some());
@@ -49,6 +222,7 @@ fn the_lowest_frame_opens_with_the_ensemble_kept() {
     // Not sorted by energy: an ordered trajectory, which opens its last frame.
     assert_eq!(dialog.file.layout(), Some(Layout::Line));
     assert_eq!(dialog.choice, Choice::Last);
+    assert!(!dialog.keep);
     send(&mut app, Action::Choose(Choice::Lowest));
     let dialog = app.frames_import.as_ref().unwrap();
     assert_eq!(dialog.index(), 1);
@@ -196,6 +370,73 @@ fn the_sheets_keys_leave_return_to_the_focused_control() {
     ));
 }
 
+#[cfg(debug_assertions)]
+#[test]
+fn import_button_fits_and_can_be_clicked_in_the_audit_windows() {
+    use iced::advanced::{Layout as WidgetLayout, clipboard, layout, widget::Tree};
+    use iced::widget::{Space, button};
+    use iced::{Event, Rectangle, Size};
+
+    for window in [Size::new(1440., 900.), Size::new(1280., 800.)] {
+        // The modal caps the panel to its configured size and pads both the panel and window.
+        let size = Size::new(
+            SHEET_WIDTH.min(window.width - 48.) - 48.,
+            SHEET_HEIGHT.min(window.height - 48.) - 48.,
+        );
+        let body = Space::new().width(Length::Fill).height(1000.);
+        let footer = row![
+            Space::new().width(Length::Fill),
+            button(Space::new().width(60.).height(20.))
+                .on_press(Message::FramesImport(Action::Close)),
+            button(Space::new().width(60.).height(20.))
+                .on_press(Message::FramesImport(Action::Import)),
+        ]
+        .spacing(10);
+        let mut view = sheet_content::<()>(body.into(), footer.into());
+        let mut tree = Tree::new(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, &(), &layout::Limits::new(Size::ZERO, size));
+        let layout = WidgetLayout::new(&node);
+        let column = layout.children().next().unwrap();
+        let footer = column.children().nth(1).unwrap();
+        let import = footer.children().nth(2).unwrap().bounds();
+        assert!(
+            import.width >= 60. && import.height >= 20.,
+            "{window:?}: {import:?}"
+        );
+        assert!(
+            Rectangle::with_size(size).contains(import.center()),
+            "{window:?}: {import:?}"
+        );
+        assert!(
+            import.x + import.width <= size.width && import.y + import.height <= size.height,
+            "{window:?}: {import:?}"
+        );
+        let mut ui = iced_runtime::UserInterface::build(
+            view,
+            size,
+            iced_runtime::user_interface::Cache::new(),
+            &mut (),
+        );
+        let mut messages = Vec::new();
+        let _ = ui.update(
+            &[
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            ],
+            mouse::Cursor::Available(import.center()),
+            &mut (),
+            &mut clipboard::Null,
+            &mut messages,
+        );
+        assert!(
+            matches!(messages.as_slice(), [Message::FramesImport(Action::Import)]),
+            "{window:?}"
+        );
+    }
+}
+
 #[test]
 fn reshikis_own_xyz_export_reopens_with_energies_charge_and_spin() {
     // As Export XYZ… writes a water cation's conformers.
@@ -224,6 +465,7 @@ fn a_sorted_file_is_an_ensemble_with_a_turnable_preview_and_the_lowest_overlaid(
     let dialog = app.frames_import.as_ref().unwrap();
     assert_eq!(dialog.file.layout(), Some(Layout::Levels));
     assert_eq!((dialog.choice, dialog.index()), (Choice::Lowest, 0));
+    assert!(dialog.keep);
     let preview = |app: &App| app.frames_import.as_ref().unwrap().preview.clone().unwrap();
     assert!(preview(&app).models[0].overlay.is_empty());
 
@@ -239,6 +481,20 @@ fn a_sorted_file_is_an_ensemble_with_a_turnable_preview_and_the_lowest_overlaid(
     let after = preview(&app).models[0].rotation;
     send(&mut app, Action::Move(-1));
     assert_eq!(preview(&app).models[0].rotation, after);
+
+    send(&mut app, Action::Import);
+    use crate::app::xtb::{Action as XtbAction, palette::Action as PaletteAction};
+    let _ = app.update(Message::Xtb(XtbAction::Palette(PaletteAction::Show)));
+    let result = &app.tab.doc.science.results[0].result;
+    assert_eq!(
+        crate::app::xtb::results_title(Some(result)),
+        "Results · crest_conformers.xyz"
+    );
+    assert_eq!(crate::app::xtb::results_title(None), "xTB results");
+    let _ = app.update(Message::Xtb(XtbAction::Palette(PaletteAction::Step(1))));
+    assert!(app.status.contains("Conformer 2 of 3"), "{}", app.status);
+    let _ = app.update(Message::Xtb(XtbAction::Palette(PaletteAction::StepBack)));
+    assert_eq!(app.status, "Showing the 3D model");
 }
 
 #[test]
