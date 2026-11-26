@@ -133,7 +133,7 @@ impl IrFigure {
             shape: BandShape::default(),
             fwhm: 20.,
             scale: 1.,
-            labels: 6,
+            labels: 8,
             vertical_labels: false,
             hidden_labels: Vec::new(),
             method_line: false,
@@ -353,6 +353,7 @@ mod tests {
         assert_eq!(defaults["shape"], "lorentzian");
         assert_eq!(defaults["journal"], "acs");
         assert_eq!(defaults["columns"], "one");
+        assert_eq!(defaults["labels"], 8);
         assert_eq!(to_value(Frame::Baseline).unwrap(), "baseline");
     }
 
