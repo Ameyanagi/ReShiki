@@ -87,6 +87,40 @@ def test_water_optimization_and_frequencies(worker):
     assert modes.thermo.pressure == 101325.0
 
 
+def test_deuterated_water_lowers_frequencies(worker):
+    water = xtb.optimize(geometry("water")).geometry
+    heavy_water = qc.Geometry.from_symbols(water.symbols, water.positions, isotopes=[0, 2, 2])
+    light = xtb.frequencies(water)
+    heavy = xtb.frequencies(heavy_water)
+    np.testing.assert_array_equal(heavy.geometry.isotopes, [0, 2, 2])
+    assert light.frequencies.shape == heavy.frequencies.shape == (3,)
+    assert np.all(heavy.frequencies < light.frequencies)
+    np.testing.assert_allclose(light.frequencies[1:] / heavy.frequencies[1:], np.sqrt(2), rtol=0.06)
+
+
+def test_cef3_can_set_valence_spin_independently(worker):
+    cef3 = qc.Geometry.from_symbols(
+        ["Ce", "F", "F", "F"], [[0, 0, 0], [2, 0, 0], [-2, 0, 0], [0, 2, 0]]
+    )
+    assert cef3.multiplicity == 2
+    with pytest.raises(xtb.XtbError, match=r"valence electron count.*unpaired="):
+        xtb.energy(cef3)
+    result = xtb.energy(cef3, unpaired=0)
+    assert np.isfinite(result.energy)
+    assert result.geometry.multiplicity == 2
+
+
+def test_worker_gap_is_reported_without_requesting_orbitals(worker):
+    water = geometry("water")
+    plain = xtb.energy(water)
+    with_orbitals = xtb.energy(water, orbitals=True)
+    assert plain.orbital_energies is None
+    assert with_orbitals.orbital_energies is not None
+    assert plain.homo_lumo_gap > 0
+    assert plain.homo_lumo_gap == with_orbitals.homo_lumo_gap
+    assert plain.near_degenerate == with_orbitals.near_degenerate
+
+
 def test_optimization_step_limit(worker):
     water = geometry("water")
     with pytest.warns(UserWarning, match="step limit"):

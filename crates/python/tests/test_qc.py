@@ -94,6 +94,34 @@ def test_unrestricted_orbitals(fixtures: Path) -> None:
     assert result.orbital_energies.shape == result.beta_orbital_energies.shape == (60,)
     assert result.occupations.sum() == 35
     assert result.beta_occupations.sum() == 34
+    homo = max(result.orbital_energies[34], result.beta_orbital_energies[33])
+    lumo = min(result.orbital_energies[35], result.beta_orbital_energies[34])
+    assert result.homo_lumo_gap == pytest.approx((lumo - homo) * 27.211386245988)
+
+
+def test_fractional_occupations_preserve_electron_count_gap(fixtures: Path) -> None:
+    path = fixtures / "qc/cclib/molden5.7_water_mp2.molden"
+    original = qc.read(path).default_job.result
+    occupied, virtual = path.read_text().rsplit("Occup=   2.000000", 1)
+    smeared = (
+        occupied
+        + "Occup=   1.990000"
+        + virtual.replace("Occup=   0.000000", "Occup=   0.010000", 1)
+    )
+    with pytest.warns(UserWarning, match="restricted MO occupations"):
+        result = qc.read(smeared.encode(), name=path.name).default_job.result
+    np.testing.assert_array_equal(result.orbital_energies, original.orbital_energies)
+    assert result.occupations.sum() == original.occupations.sum() == 10
+    np.testing.assert_array_equal(result.occupations[4:6], [1.99, 0.01])
+    assert original.homo_lumo_gap == pytest.approx(26.093, abs=0.001)
+    assert result.homo_lumo_gap == original.homo_lumo_gap
+    assert not result.near_degenerate
+
+    ambiguous = smeared.replace("Occup=   0.010000", "Occup=   0.020000", 1)
+    with pytest.warns(UserWarning, match="Charge and spin are not recorded"):
+        result = qc.read(ambiguous.encode(), name=path.name).default_job.result
+    assert result.homo_lumo_gap is None
+    assert not result.near_degenerate
 
 
 def test_default_job_and_result_own_geometry(fixtures: Path) -> None:
@@ -134,6 +162,20 @@ def test_geometry_copies_arrays_and_resolves_spin(water: qc.Geometry) -> None:
         water.charge = 2  # type: ignore[misc]
 
 
+def test_geometry_isotopes_are_copied_and_normalized(water: qc.Geometry) -> None:
+    assert water.isotopes is None
+    for natural in [[], [0, 0, 0]]:
+        assert (
+            qc.Geometry(water.numbers, water.positions, isotopes=np.array(natural)).isotopes is None
+        )
+    source = np.array([0, 2, 0])
+    labeled = qc.Geometry(water.numbers, water.positions, isotopes=source)
+    source[1] = 3
+    np.testing.assert_array_equal(labeled.isotopes, [0, 2, 0])
+    with pytest.raises(ValueError, match="read-only"):
+        labeled.isotopes[1] = 1
+
+
 @pytest.mark.parametrize(
     ("numbers", "positions", "options", "message"),
     [
@@ -151,6 +193,9 @@ def test_geometry_copies_arrays_and_resolves_spin(water: qc.Geometry) -> None:
         ([1], [[0, 0, 0]], {"charge": 2}, "electrons"),
         ([1], [[0, 0, 0]], {"charge": 0.5}, "integer"),
         ([1], [[0, 0, 0]], {"multiplicity": 2.5}, "integer"),
+        ([1], [[0, 0, 0]], {"isotopes": [2, 3]}, "one mass number"),
+        ([1], [[0, 0, 0]], {"isotopes": [2.5]}, "Isotope mass numbers must be integers"),
+        ([1], [[0, 0, 0]], {"isotopes": [-1]}, "Isotope mass numbers must be integers"),
     ],
 )
 def test_geometry_validation(numbers, positions, options, message: str) -> None:
@@ -180,6 +225,22 @@ def test_xyz_round_trip_and_first_frame(water: qc.Geometry) -> None:
     with pytest.warns(UserWarning, match="Charge and spin are not recorded in XYZ"):
         file = qc.read(b"1\noxygen\nO 0 0 0\n", name="oxygen.xyz")
     assert file.default_job.geometry.charge == 0
+
+
+def test_isotopes_round_trip_through_xyz_and_gaussian(tmp_path: Path) -> None:
+    geometry = qc.Geometry.from_xyz("3\nlabeled water\n18O 0 0 0\nD 0 0 1\nT 1 0 0\n")
+    assert geometry.symbols == ("O", "H", "H")
+    np.testing.assert_array_equal(geometry.isotopes, [18, 2, 3])
+    np.testing.assert_array_equal(qc.Geometry.from_xyz(geometry.to_xyz()).isotopes, [18, 2, 3])
+
+    xyz = tmp_path / "labeled.xyz"
+    assert qc.write_input(xyz, geometry) == [xyz]
+    with pytest.warns(UserWarning, match="Charge and spin are not recorded in XYZ"):
+        np.testing.assert_array_equal(qc.read(xyz).default_job.geometry.isotopes, [18, 2, 3])
+
+    gaussian = tmp_path / "labeled.gjf"
+    assert qc.write_input(gaussian, geometry) == [gaussian]
+    np.testing.assert_array_equal(qc.read(gaussian).default_job.geometry.isotopes, [18, 2, 3])
 
 
 def test_bytes_need_name() -> None:

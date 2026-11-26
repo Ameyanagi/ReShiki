@@ -190,8 +190,9 @@ class XtbWheelReleaseTests(unittest.TestCase):
             {"metadata_version": "1.2.2"},
             {"headers": "Version: 1.2.3\n"},
         ):
-            with self.subTest(options=options), self.assertRaisesRegex(
-                ValueError, "metadata must have release version 1.2.3"
+            with (
+                self.subTest(options=options),
+                self.assertRaisesRegex(ValueError, "metadata must have release version 1.2.3"),
             ):
                 verify_release_wheel(self.wheel(**options), "v1.2.3")
 
