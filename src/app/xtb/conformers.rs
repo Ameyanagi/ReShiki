@@ -21,6 +21,7 @@ pub(super) mod export;
 mod search;
 mod view;
 
+pub(super) use search::CardStereo;
 pub(super) use view::footer;
 
 #[cfg(test)]

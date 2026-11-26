@@ -6,6 +6,18 @@ use reshiki_qcdata::{
     XtbMethod, XtbSettings,
 };
 
+#[test]
+fn run_summary_without_search_keeps_its_legacy_json() {
+    for json in [
+        r#"{"seconds":12.5}"#,
+        r#"{"seconds":12.5,"scf_iterations":[7,5,4],"finished":"2026-11-26T05:03:00Z"}"#,
+    ] {
+        let run: RunSummary = serde_json::from_str(json).unwrap();
+        assert_eq!(run.search, None);
+        assert_eq!(serde_json::to_string(&run).unwrap(), json);
+    }
+}
+
 fn assert_compact(expected: &[f64], decoded: &mut [f64], quantized: bool) {
     assert_eq!(decoded.len(), expected.len());
     for (&x, &actual) in expected.iter().zip(decoded.iter()) {
@@ -294,6 +306,7 @@ fn calculated_result_round_trips_with_solvent_settings() {
         seconds: 12.5,
         scf_iterations: vec![7, 5, 4],
         finished: Some("2026-11-26T05:03:00Z".into()),
+        search: None,
     });
     calculated.validate(&frame).unwrap();
     let value = serde_json::to_value(&calculated).unwrap();
@@ -436,6 +449,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
             seconds,
             scf_iterations: vec![],
             finished: None,
+            search: None,
         });
         assert!(result.validate(&frame).is_err());
     }
@@ -443,6 +457,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
         seconds: 0.0,
         scf_iterations: vec![0; MAX_RUN_EVALUATIONS + 1],
         finished: None,
+        search: None,
     });
     assert!(matches!(
         result.validate(&frame),

@@ -1,6 +1,24 @@
 use super::*;
 
 #[test]
+fn ensemble_threads_reserve_half_the_heap_for_hydrogen_expanded_matrices() {
+    let atoms: usize = 500;
+    let bytes_per_thread = 2 * (4 * atoms).pow(2) * std::mem::size_of::<f64>();
+    let heap_bytes = 256 * 1024 * 1024;
+    assert_eq!(bytes_per_thread, 64_000_000);
+    assert_eq!(ensemble_threads(8, atoms, heap_bytes), 2);
+    assert_eq!(ensemble_threads(8, atoms, 6 * bytes_per_thread), 3);
+    assert_eq!(ensemble_threads(8, atoms, 6 * bytes_per_thread - 1), 2);
+    assert_eq!(ensemble_threads(1, atoms, heap_bytes), 1);
+    // Hydrogen expansion from 200 original atoms to 500 calculation atoms
+    // reduces concurrency under the same budget.
+    assert_eq!(ensemble_threads(8, 200, heap_bytes), 8);
+    assert_eq!(ensemble_threads(8, atoms, 0), 1);
+    assert_eq!(ensemble_threads(0, atoms, heap_bytes), 1);
+    assert_eq!(ensemble_threads(8, usize::MAX, usize::MAX), 1);
+}
+
+#[test]
 fn failed_embedding_ids_are_skipped_without_losing_valid_conformers() {
     assert_eq!(
         valid_conformer_ids(&[0, -1, 4, -7]).collect::<Vec<_>>(),

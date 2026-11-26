@@ -206,9 +206,7 @@ impl Prepared {
                 result.map(|saved| saved.map(|saved| saved.path)),
             )),
             Kind::Xtb => Message::Xtb(super::xtb::Action::Palette(
-                super::xtb::palette::Action::Exported(
-                    result.map(|saved| saved.map(|saved| saved.path)),
-                ),
+                super::xtb::palette::Action::Exported(result),
             )),
             Kind::Ir => Message::Xtb(super::xtb::Action::Palette(
                 super::xtb::palette::Action::IrExported(

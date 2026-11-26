@@ -12,7 +12,7 @@ use reshiki_optimize::{
     KCAL_PER_HARTREE,
     conformers::{self, Candidate, Clustering, PerCluster, Ranked, Settings, Start, Topology},
 };
-use reshiki_qcdata::{Frame, Trajectory};
+use reshiki_qcdata::{Frame, SearchSummary, Trajectory};
 use reshiki_xtb_worker::{
     client::Cancel,
     protocol::{Engine, Method},
@@ -136,6 +136,9 @@ pub struct Found {
     /// Representatives with successful xTB reports, out of those planned.
     pub reranked: usize,
     pub planned: usize,
+    pub search: SearchSummary,
+    /// The minimizer actually used (UFF if the requested force field could not type the molecule).
+    pub minimizer: Minimizer,
     /// Cancellation during re-ranking kept only completed representatives.
     pub stopped: bool,
     pub notes: Vec<String>,
@@ -171,7 +174,12 @@ pub fn search_conformers(
     }
     let xtb_minimizer = search.config.minimizer.xtb();
     let mut notes = search.stereo_note.iter().cloned().collect();
-    let mut starts = sample(&search, cancel, &mut on_event, &mut notes)?;
+    let Sampled {
+        mut starts,
+        made,
+        minimizer,
+        used_unconverged_starts,
+    } = sample(&search, cancel, &mut on_event, &mut notes)?;
     let minimized = if xtb_minimizer.is_some() {
         let positions = starts
             .iter()
@@ -314,14 +322,27 @@ pub fn search_conformers(
     if !reranking {
         check_cancel(cancel)?;
     }
+    let counts = SearchSummary {
+        requested: search.config.starts as usize,
+        made,
+        minimized: starts.len(),
+        used_unconverged_starts,
+        distinct: clustering.kept.len(),
+        clusters: clustering.clusters.len(),
+        rerank_planned: if reranking { planned } else { 0 },
+        reranked: if reranking { reports.len() } else { 0 },
+        kept: ranked.len(),
+    };
     Ok(Found {
         engine,
         best,
         ranked,
-        starts: starts.len(),
-        clusters: clustering.clusters.len(),
+        starts: counts.minimized,
+        clusters: counts.clusters,
         reranked: reports.len(),
         planned,
+        search: counts,
+        minimizer,
         stopped: reranking && cancel.is_cancelled(),
         notes,
         seconds: began.elapsed().as_secs_f64(),
@@ -337,19 +358,27 @@ pub fn starting_force_field(minimizer: Minimizer) -> ForceField {
     }
 }
 
+struct Sampled {
+    starts: Vec<Start>,
+    made: usize,
+    minimizer: Minimizer,
+    used_unconverged_starts: bool,
+}
+
 fn sample(
     search: &Search,
     cancel: &Cancel,
     on_event: &mut impl FnMut(Phase),
     notes: &mut Vec<String>,
-) -> Result<Vec<Start>, Failure> {
+) -> Result<Sampled, Failure> {
     on_event(Phase::Starts);
-    let minimizer = search.config.minimizer;
+    let mut minimizer = search.config.minimizer;
     let embedded = minimizer.xtb().is_some();
     let mut field = starting_force_field(minimizer);
     if field != ForceField::Uff && !search.prepared.mmff_available() {
         field = ForceField::Uff;
         if !embedded {
+            minimizer = Minimizer::Uff;
             notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
         }
     }
@@ -388,7 +417,12 @@ fn sample(
     // geometry and energy that are not a minimum; keep them only when no
     // start converged.
     let mut conformers = sampled.conformers;
-    if !embedded && conformers.iter().any(|entry| entry.converged) {
+    let used_unconverged_starts = !embedded && !conformers.iter().any(|entry| entry.converged);
+    if used_unconverged_starts {
+        notes.push(
+            "No start converged with the force field: clustering used unconverged geometries, and xTB re-optimized the representatives.".into(),
+        );
+    } else if !embedded {
         let before = conformers.len();
         conformers.retain(|entry| entry.converged);
         let dropped = before - conformers.len();
@@ -397,12 +431,8 @@ fn sample(
                 "{dropped} starts did not converge with the force field and were left out."
             ));
         }
-    } else if !embedded {
-        notes.push(
-            "No start converged with the force field: clustering used unconverged geometries, and xTB re-optimized the representatives.".into(),
-        );
     }
-    conformers
+    let starts = conformers
         .into_iter()
         .map(|entry| {
             let positions = frame_positions(
@@ -421,7 +451,13 @@ fn sample(
                 energy_hartree,
             })
         })
-        .collect()
+        .collect::<Result<_, Failure>>()?;
+    Ok(Sampled {
+        starts,
+        made: count,
+        minimizer,
+        used_unconverged_starts,
+    })
 }
 
 fn frame_positions(
@@ -783,6 +819,36 @@ mod tests {
             search_conformers(search, &Cancel::default(), |phase| phases.push(phase)).unwrap_err();
         assert_eq!(phases, [Phase::Starts]);
         assert!(error.to_string().starts_with("3D geometry: Worker limits"));
+    }
+
+    #[test]
+    #[ignore = "requires RESHIKI_SEARCH_TEST_WORKER pointing to an xTB-enabled ReShiki binary"]
+    fn search_funnel_counts_follow_the_pipeline() {
+        let executable = PathBuf::from(std::env::var_os("RESHIKI_SEARCH_TEST_WORKER").unwrap());
+        let geometry = Client::new(executable.clone(), Default::default()).unwrap();
+        for minimizer in [Minimizer::Mmff94s, Minimizer::Gfn2] {
+            let mut search = water_search(minimizer, geometry.clone());
+            search.executable = Some(executable.clone());
+            search.config.starts = 8;
+            search.job.method = Method::Gfn2;
+            search.job.solvent = None;
+            let found = search_conformers(search, &Cancel::default(), |_| {}).unwrap();
+            let counts = &found.search;
+            assert_eq!(counts.requested, 8);
+            assert!(counts.requested >= counts.made);
+            assert!(counts.made >= counts.minimized);
+            assert!(counts.minimized >= counts.distinct);
+            assert!(counts.distinct >= counts.clusters);
+            assert!(counts.clusters > 0);
+            assert_eq!(counts.kept, found.ranked.len());
+            if minimizer.xtb().is_none() {
+                assert!(counts.kept <= counts.reranked);
+                assert!(counts.reranked <= counts.rerank_planned);
+                assert!(counts.rerank_planned <= counts.distinct);
+            } else {
+                assert_eq!((counts.rerank_planned, counts.reranked), (0, 0));
+            }
+        }
     }
 
     #[test]

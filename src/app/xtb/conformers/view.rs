@@ -1,13 +1,75 @@
 //! The card's Conformers fields, the Conformers tab and its footer.
 use super::{Action, Diversity, Format, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer, Row};
-use crate::app::workspace::{accessible_command, control, muted_text};
+use crate::app::workspace::{accessible_command, control};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
-use crate::app::xtb::tone::{Tone, line};
+use crate::app::xtb::tone::{Tone, line, toned_text};
 use crate::app::xtb::{Action as XtbAction, view::segment};
 use crate::app::{App, Message};
-use iced::widget::{Column, Space, column, container, row, text};
+use iced::widget::{Column, column, container, row, text};
 use iced::{Alignment, Element, Length};
+use reshiki::qcdata::{CalcResult, Settings};
 use reshiki::science::{self, TetrahedralStereo};
+
+const STEREO_WIDTH: f32 = 60.;
+const FOOTNOTE: &str = "Pop. = Boltzmann population of the kept conformers at 298 K · RMSD: heavy atoms after superposition";
+
+pub(super) fn headers(result: &CalcResult, inspector: bool) -> Vec<(String, f32)> {
+    let (delta, pop) = if inspector {
+        (("ΔE", 64.), ("Pop.", 60.))
+    } else {
+        let label = match result.settings {
+            Settings::Xtb(_) => "ΔE xTB (kcal/mol)",
+            Settings::Imported { .. } => "ΔE (kcal/mol)",
+        };
+        ((label, 114.), ("Pop. 298 K", 68.))
+    };
+    let mut columns = vec![("#".into(), 24.), (delta.0.into(), delta.1)];
+    if !inspector && let Some(field) = super::start_field(result) {
+        columns.push((format!("ΔE {field} (kcal/mol)"), 144.));
+    }
+    columns.push((pop.0.into(), pop.1));
+    if !inspector {
+        columns.extend([("RMSD to #1 (Å)".into(), 100.), ("Starts".into(), 42.)]);
+    }
+    columns.push(("Stereo".into(), STEREO_WIDTH));
+    columns
+}
+
+pub(super) fn search_funnel(result: &CalcResult) -> Option<String> {
+    let Settings::Xtb(settings) = &result.settings else {
+        return None;
+    };
+    let counts = result.run.as_ref()?.search.as_ref()?;
+    let method = settings.method.label();
+    let minimizer = super::start_field(result).unwrap_or(method);
+    let starts = if counts.made == counts.requested {
+        format!("{} starts", counts.made)
+    } else {
+        format!("{} of {} starts made", counts.made, counts.requested)
+    };
+    let minimized = if counts.used_unconverged_starts {
+        format!("{} unconverged with {minimizer}", counts.minimized)
+    } else {
+        format!("{} minimized with {minimizer}", counts.minimized)
+    };
+    let clusters = if counts.clusters == 1 {
+        "cluster"
+    } else {
+        "clusters"
+    };
+    let mut summary = format!(
+        "{starts} · {minimized} · {} distinct · {} {clusters}",
+        counts.distinct, counts.clusters
+    );
+    if counts.rerank_planned > 0 {
+        summary.push_str(&format!(" · {method} re-ranked {}", counts.reranked));
+        if counts.reranked < counts.rerank_planned {
+            summary.push_str(&format!(" of {}", counts.rerank_planned));
+        }
+    }
+    summary.push_str(&format!(" · {} kept", counts.kept));
+    Some(summary)
+}
 
 fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Conformers(action))
@@ -231,39 +293,6 @@ impl App {
         body.into()
     }
 
-    pub(super) fn xtb_conformer_stereo(
-        &self,
-        ids: &[u64],
-        has_model: bool,
-    ) -> Option<(String, [String; 2])> {
-        let doc = &self.tab.doc;
-        let first = *ids.first()?;
-        let launch = has_model
-            .then(|| {
-                let (charge, multiplicity) = science::drawn_state(doc, first);
-                science::launch(doc, first, charge, multiplicity).ok()
-            })
-            .flatten();
-        let mut stereo = science::tetrahedral_stereo(
-            doc,
-            ids,
-            launch
-                .as_ref()
-                .map(|l| (l.atoms.as_slice(), l.frame.as_ref())),
-        )
-        .ok()?;
-        let drawing_order: Vec<_> = ids.iter().copied().map(Some).collect();
-        let atoms = launch
-            .as_ref()
-            .map_or(drawing_order.as_slice(), |l| l.atoms.as_slice());
-        stereo
-            .undefined
-            .sort_by_key(|centre| atoms.iter().position(|&id| id == Some(centre.atom)));
-        card_stereo(&stereo, launch.is_some(), |atom| {
-            self.xtb_atom_name(atoms, atom).0
-        })
-    }
-
     /// The Conformers tab: the ranked table, then the shown conformer's
     /// actions and the overlay choice.
     pub(in crate::app::xtb) fn xtb_conformers_tab<'a>(
@@ -282,90 +311,79 @@ impl App {
         let current = selected.or(shows).and_then(|step| table.rank(step));
         // The inspector is narrow: there the table keeps rank, ΔE, share and
         // the stereo check; the selected row's details follow below it.
-        let field = super::start_field(&shown.stored.result).filter(|_| !inspector);
-        let cell = |content: String, width: f32| text(content).size(12).width(width);
-        // Ensembles read from files carry their program's energies.
-        let delta = match &shown.stored.result.settings {
-            reshiki::qcdata::Settings::Xtb(_) => "ΔE xTB",
-            reshiki::qcdata::Settings::Imported { .. } => "ΔE",
+        let result = &shown.stored.result;
+        let field = super::start_field(result).filter(|_| !inspector);
+        let headers = headers(result, inspector);
+        let cell = |content: String, width: f32| {
+            text(content)
+                .size(12)
+                .width(width)
+                .wrapping(text::Wrapping::None)
         };
-        let mut header = row![cell("#".into(), 24.), cell(delta.into(), 64.)].spacing(8);
-        if let Some(field) = field {
-            header = header.push(cell(format!("ΔE {field}"), 84.));
-        }
-        header = header.push(cell("Boltzmann".into(), 72.));
-        if !inspector {
-            header = header
-                .push(cell("RMSD".into(), 60.))
-                .push(cell("Cluster".into(), 50.));
-        }
-        header = header.push(cell("Stereo".into(), 60.));
+        let header = row(headers
+            .iter()
+            .map(|(label, width)| cell(label.clone(), *width).into()))
+        .spacing(8);
         let header = container(header).padding([2, 8]);
         let list = Column::with_children(rows.iter().enumerate().map(|(index, r)| {
             let active = current == Some(index);
-            let mut cells = row![
-                cell((index + 1).to_string(), 24.),
-                cell(format!("{:.2}", r.delta_kcal), 64.),
-            ]
-            .spacing(8);
-            if field.is_some() {
-                cells = cells.push(cell(
+            let (stereo, tone) = stereo_text(r);
+            let values = [
+                Some((index + 1).to_string()),
+                Some(format!("{:.2}", r.delta_kcal)),
+                field.map(|_| {
                     r.start_kcal
-                        .map_or_else(|| "—".into(), |e| format!("{e:.2}")),
-                    84.,
-                ));
-            }
-            cells = cells.push(cell(format!("{:.1} %", r.percent), 72.));
-            if !inspector {
-                cells = cells
-                    .push(cell(
-                        r.rmsd.map_or_else(|| "—".into(), |x| format!("{x:.2} Å")),
-                        60.,
-                    ))
-                    .push(cell(
-                        r.cluster.map_or_else(|| "—".into(), |c| c.to_string()),
-                        50.,
-                    ));
-            }
-            cells = cells.push(stereo(r));
-            reshiki::accessibility::button(
-                format!("xtb-conformer-{}", r.step),
-                format!("Conformer {}, {:.2} kcal/mol", index + 1, r.delta_kcal),
-                cells,
+                        .map_or_else(|| "—".into(), |e| format!("{e:.2}"))
+                }),
+                Some(format!("{:.1} %", r.percent)),
+                (!inspector).then(|| r.rmsd.map_or_else(|| "—".into(), |x| format!("{x:.2}"))),
+                (!inspector).then(|| r.cluster.map_or_else(|| "—".into(), |c| c.to_string())),
+            ];
+            let cells = row(values
+                .into_iter()
+                .flatten()
+                .zip(&headers)
+                .map(|(value, (_, width))| cell(value, *width).into()))
+            .push(
+                container(toned_text(stereo.clone(), tone).wrapping(text::Wrapping::None))
+                    .width(STEREO_WIDTH)
+                    .clip(true),
             )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .checked(active)
-            .style(control(active))
-            .on_press_maybe(live.then(|| palette(PaletteAction::Step(r.step))))
-            .into()
+            .spacing(8);
+            let mut name = format!("Conformer {}, {:.2} kcal/mol", index + 1, r.delta_kcal);
+            if stereo != "—" {
+                name.push_str(&format!(" · Stereo {stereo}"));
+            }
+            reshiki::accessibility::button(format!("xtb-conformer-{}", r.step), name, cells)
+                .padding([3, 8])
+                .width(Length::Fill)
+                .checked(active)
+                .style(control(active))
+                .on_press_maybe(live.then(|| palette(PaletteAction::Step(r.step))))
+                .into()
         }))
         .spacing(1);
-        let note = line(
-            format!(
-                "{} kept · ΔE in kcal/mol · Boltzmann at 298 K · heavy-atom RMSD to #1 after superposition",
-                rows.len()
-            ),
-            Tone::Muted,
-        );
         // The same energy diagram as the import sheet: levels with their
         // Boltzmann shares; a click shows that conformer.
         let plot = iced::widget::canvas(crate::app::energy_plot::EnergyPlot {
             delta_kcal: rows.iter().map(|r| r.delta_kcal).collect(),
             layout: crate::app::energy_plot::Layout::Levels,
             selected: current,
-            notes: rows.iter().map(|r| format!("{:.0}%", r.percent)).collect(),
+            notes: rows.iter().map(|r| format!("{:.1}%", r.percent)).collect(),
             select: live
                 .then_some((|step| palette(PaletteAction::Step(step))) as fn(usize) -> Message),
             steps: rows.iter().map(|r| r.step).collect(),
         })
         .width(Length::Fill)
         .height(84);
-        let mut body = column![].spacing(4);
+        let mut body = column![header, list].spacing(4);
+        if let Some(funnel) = search_funnel(result) {
+            body = body.push(line(funnel, Tone::Muted));
+        }
+        body = body.push(line(FOOTNOTE, Tone::Muted));
         if let Some(stereo_note) = &table.stereo_note {
             body = body.push(line(stereo_note.clone(), Tone::Muted));
         }
-        body = body.push(plot).push(header).push(list);
         let pairs = rows.iter().filter(|r| r.mirror_step.is_some()).count();
         if pairs > 0 {
             let noun = if pairs == 1 { "pair" } else { "pairs" };
@@ -374,16 +392,17 @@ impl App {
                 Tone::Muted,
             ));
         }
-        let body = body.push(note);
         let side = self.xtb_conformer_side(shown, rows, current, live);
         if inspector {
-            return column![body, side].spacing(10).into();
+            return column![body, plot, side].spacing(10).into();
         }
         row![
-            container(body).width(Length::FillPortion(3)),
-            container(side).width(Length::FillPortion(2)),
+            container(body).width(640),
+            container(side).width(320),
+            container(plot).width(240),
         ]
         .spacing(20)
+        .wrap()
         .into()
     }
 
@@ -482,7 +501,9 @@ impl App {
                     if let Some(rmsd) = r.rmsd.filter(|_| index > 0) {
                         text.push_str(&format!(" · RMSD to #1 {rmsd:.2} Å"));
                     }
-                    if r.stereo == Some(false) {
+                    if !r.undefined().is_empty() {
+                        text.push_str(&format!(" · Stereo {}", stereo_text(r).0));
+                    } else if r.stereo == Some(false) {
                         text.push_str(" · the stereo check finds a change");
                     }
                     text
@@ -523,11 +544,6 @@ impl App {
 }
 
 /// The unspecified centres' configurations or the status of drawn stereo.
-fn stereo<'a>(row: &Row) -> Element<'a, Message> {
-    let (content, tone) = stereo_text(row);
-    container(line(content, tone)).width(60).into()
-}
-
 pub(super) fn stereo_text(row: &Row) -> (String, Tone) {
     let centres = row.undefined();
     if centres.is_empty() {
@@ -585,7 +601,7 @@ fn wedge_text(names: &[String]) -> String {
     )
 }
 
-fn card_stereo(
+pub(super) fn card_stereo(
     stereo: &TetrahedralStereo,
     has_model: bool,
     name: impl Fn(u64) -> String,
@@ -714,25 +730,16 @@ fn duration(seconds: f64) -> String {
 }
 
 /// The Conformers tab's footer: export every kept conformer.
-pub(crate) fn footer<'a>() -> Element<'a, Message> {
-    row![
-        accessible_command(
-            "xtb-export-conformers-xyz",
-            "Export the conformers as multi-frame XYZ",
-            "Export XYZ…"
-        )
-        .on_press(send(Action::Export(Format::Xyz))),
-        accessible_command(
-            "xtb-export-conformers-sdf",
-            "Export the conformers as SDF with energies",
-            "Export SDF…"
-        )
-        .on_press(send(Action::Export(Format::Sdf))),
-        Space::new().width(8),
-        text("Kept conformers are saved as compact frames (at most 32).")
-            .size(11)
-            .style(muted_text),
-    ]
+pub(crate) fn footer<'a>(result: &CalcResult) -> Element<'a, Message> {
+    let count = result.trajectory.as_ref().map_or(0, |path| path.steps());
+    row(
+        [(Format::Sdf, "sdf", "SDF"), (Format::Xyz, "xyz", "XYZ")].map(|(format, id, name)| {
+            let label = format!("Export all {count} as {name}…");
+            accessible_command(format!("xtb-export-conformers-{id}"), label.clone(), label)
+                .on_press_maybe((count > 0).then(|| send(Action::Export(format))))
+                .into()
+        }),
+    )
     .spacing(10)
     .align_y(Alignment::Center)
     .into()
