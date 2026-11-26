@@ -151,7 +151,8 @@ Each release has a validation record, `docs/changes/release-<version>-validation
 1. Update the application and workspace versions in `Cargo.toml`, the corresponding entries in `Cargo.lock`, and the app version in the [agent API version table](agent-api.md#versioning). Update the `reshiki-xtb==<version>` pin in `crates/python/pyproject.toml` to the PEP 440 form of the workspace version (`0.17.1-rc.1` becomes `0.17.1rc1`), then run `uv lock --project crates/python` to update its lockfile. Update the corresponding-source release link in `crates/python-xtb/README.md` to the new Cargo version. Repository tests check both values. Record the release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
 3. In the release build, run Clean up from the toolbar and close its ▾ menu with Esc, and close 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal, cycle layout review and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. Make catalytic cycle and Clean up ▾ → Clean up cycle must apply immediately as one Undo step and return the keys to the drawing. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
-4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.16.0` for version `0.16.0`.
+4. Until the matching `reshiki-xtb` version is on PyPI, keep any `reshiki` wheel that declares the `xtb` extra off PyPI, or accept that `pip install "reshiki[xtb]"` fails to resolve.
+5. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.16.0` for version `0.16.0`.
 
 ```sh
 git tag -a v0.16.0 -m "ReShiki 0.16.0"
@@ -190,9 +191,10 @@ CI installs the matching base and engine wheels from a local wheelhouse with
 `--no-index --find-links dist`, checks that
 the worker is executable, and runs the calculation and file tests. The base wheel
 tests use only the `excel` and `pandas` extras, so they do not build the engine.
-The **testpypi_xtb** job publishes only the engine wheels to TestPyPI after a
-version-tag run has published its GitHub release and corresponding source.
-The owner publishes `reshiki-xtb` to PyPI manually, as described below.
+The owner has deferred publishing `reshiki-xtb` to TestPyPI and PyPI. The
+**xtb_wheels_check** job runs a publish dry run only, after the version-tag run
+has published its GitHub release with corresponding source and built the
+wheels. Trusted publishing will be set up when publishing starts.
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
@@ -271,51 +273,6 @@ gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -
 To try the publishing path on [TestPyPI](https://test.pypi.org/) first, add a pending publisher there with the same values, then run with `-f pypi_only=true -f pypi_repository=testpypi`. TestPyPI is a sandbox, so the version check is skipped there. It keeps the first upload of each version, and later runs skip it.
 
 After the first release, protect the `pypi` environment if publishing should wait for an approval (**Settings → Environments → pypi → Required reviewers**), and install with `uv add reshiki` or `pip install reshiki`.
-
-### Configure and publish `reshiki-xtb`
-
-Create a pending publisher before the first engine-wheel release. Use the
-values below. [TestPyPI publisher setup](https://test.pypi.org/manage/account/publishing/)
-
-| Field            | Value         |
-| ---------------- | ------------- |
-| Project name     | `reshiki-xtb` |
-| Owner            | `Ameyanagi`   |
-| Repository name  | `ReShiki`     |
-| Workflow name    | `release.yml` |
-| Environment name | `testpypi`    |
-
-The **testpypi_xtb** job uses trusted publishing from the `testpypi` GitHub
-environment, with no token or secret, and skips files already on TestPyPI.
-It runs only on `v*` tag pushes after both **publish** and **python_wheels**
-succeed. It never runs on `pypi_only` dispatches, which do not publish the
-required source archive. CI never publishes `reshiki-xtb` to PyPI.
-
-Publish each version in this order.
-
-1. Publish the tagged GitHub release with
-   `reshiki-<Cargo version>-source.tar.gz` at
-   `https://github.com/Ameyanagi/ReShiki/releases/tag/v<Cargo version>`.
-   Keep this archive public for as long as the engine wheels are available.
-2. Wait for the matching candidate-wheel tests and **testpypi_xtb** upload to
-   pass. Download the `python-xtb-wheel-*` artifacts from that same tag's run.
-3. As the PyPI project owner, upload those engine wheels manually and verify
-   that the matching version installs from PyPI.
-
-   ```sh
-   gh run download RUN_ID --pattern 'python-xtb-wheel-*' --dir build/xtb-wheels
-   uvx twine upload build/xtb-wheels/python-xtb-wheel-*/*.whl
-   uv venv build/xtb-check
-   uv pip install --python build/xtb-check/bin/python 'reshiki[xtb]==<PEP 440 version>'
-   build/xtb-check/bin/python -c 'from reshiki import xtb; print(xtb.engine())'
-   ```
-
-4. Tell users to install `reshiki[xtb]` once the matching `reshiki-xtb` wheel
-   is on PyPI.
-
-The source archive and tag use the Cargo version. The wheel filenames, PyPI
-versions and extra pin use its PEP 440 form. Keep the worker wheel's README and
-`SOURCE` notice pointed at the source archive for that release.
 
 ## Configure macOS signing
 

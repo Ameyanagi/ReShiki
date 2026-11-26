@@ -187,8 +187,8 @@ source_archive}`.
 
 ## Python wheels for xTB
 
-The `reshiki` wheel stays MIT OR Apache-2.0 and excludes axtb. Install the
-matching `reshiki-xtb` wheel to run calculations.
+The `reshiki` wheel stays MIT OR Apache-2.0 and excludes axtb. Calculations
+require the matching `reshiki-xtb` wheel.
 
 - **`reshiki-xtb`** (LGPL-3.0-or-later as a whole) provides import package
   `reshiki_xtb` and the executable `reshiki-xtb-worker`, built from
@@ -200,17 +200,12 @@ matching `reshiki-xtb` wheel to run calculations.
 - The client finds the installed executable through `reshiki_xtb.worker_path()`.
   It checks the package version and verifies the worker's protocol handshake
   before starting a calculation.
-- `pip install "reshiki[xtb]"` installs both packages. The extra pins
-  `reshiki-xtb==<same version>`.
+- The `xtb` extra pins `reshiki-xtb==<same version>`.
 - Wheels support macOS 14 or later on Apple Silicon and Intel, and manylinux
   x86_64 and aarch64. CI checks that the installed worker is executable.
-- Publish the matching source archive on the tagged GitHub release before
-  publishing the worker candidate to TestPyPI. Configure the TestPyPI trusted
-  publisher before the first upload. CI tests the candidate pair from a local wheelhouse
-  (`--no-index --find-links`). The owner publishes `reshiki-xtb` to PyPI
-  manually and verifies installation before telling users to install
-  `reshiki[xtb]`. See the publisher setup and release steps in
-  `docs/releasing.md`.
+- Publishing `reshiki-xtb` to TestPyPI and PyPI is deferred. CI tests the wheel
+  pair from a local wheelhouse (`--no-index --find-links`), and tagged releases
+  run a publish dry run only. See the [release checklist](releasing.md#publish-a-version).
 - To use a modified axtb, edit `axtb-source/` in that archive and follow the
   Python wheel section of `BUILD-WITH-XTB.md`. Maturin forwards the same
   Cargo patch overrides used by the desktop rebuild.
