@@ -61,6 +61,11 @@ pub(crate) enum Action {
     MeshLines(bool),
     Place,
     Remove,
+    /// HOMO and LUMO side by side under the molecule, each captioned.
+    PlaceFrontier,
+    RemoveFrontier,
+    /// Show or fold the isovalue, look, opacity and colors.
+    Appearance(bool),
     Computed(String, Result<Arc<qcdata::Orbitals>, String>),
     Built(u64, Result<Meshes, String>),
 }
@@ -128,6 +133,8 @@ pub(crate) struct Orbitals {
     /// The drawing state after the last slider change to a placed figure:
     /// the next change from that state joins its Undo step.
     sliding: Option<(u64, u64)>,
+    /// The appearance controls are unfolded.
+    appearance: bool,
     /// The drawing state when an orbital was chosen in the tab: ↑ and ↓ go
     /// on choosing while it lasts.
     keys: Option<(u64, u64)>,
@@ -156,6 +163,7 @@ impl Default for Orbitals {
             iso: ISO,
             look: Look::default(),
             sliding: None,
+            appearance: false,
             keys: None,
             pending: None,
             computed: vec![],
@@ -235,6 +243,8 @@ struct Target {
     /// Why no surface can be shown, in words.
     pub problem: Option<String>,
     pub placed: Option<Figure>,
+    /// The model shows this result's frontier figure.
+    pub frontier: bool,
 }
 
 impl App {
@@ -284,6 +294,9 @@ impl App {
         let placed = model
             .and_then(|m| doc.models[m].surface.clone())
             .filter(|figure| figure.orbital.result == key);
+        let frontier = atom
+            .and_then(|atom| doc.models.iter().find(|m| m.linked_atoms.contains(&atom)))
+            .is_some_and(|m| m.panels.iter().any(|p| p.figure.orbital.result == key));
         let problem = if shown.stale {
             Some(
                 "The molecule changed after this calculation. Recalculate to show orbitals.".into(),
@@ -333,6 +346,7 @@ impl App {
             model: model.filter(|_| shows),
             problem,
             placed,
+            frontier,
         })
     }
 
@@ -362,10 +376,12 @@ impl App {
                         .position(|c| c.spin == figure.orbital.spin)
                 })
                 .unwrap_or(0);
+            // A saved index outside the spectrum falls back to its last level.
+            let last = target.columns[column].energies_ev.len() - 1;
             return Choice {
                 result: target.key.clone(),
                 column,
-                index: figure.orbital.index as usize,
+                index: (figure.orbital.index as usize).min(last),
             };
         }
         chosen.cloned().unwrap_or_else(|| Choice {
@@ -488,14 +504,27 @@ impl App {
             return Task::none();
         }
         let doc = self.display_document();
-        if doc.models.iter().all(|m| m.surface.is_none()) {
+        if doc.models.iter().all(|m| m.figures().next().is_none()) {
             return Task::none();
         }
+        // Each model with a figure, then the small models of its panels.
+        let models: Vec<std::borrow::Cow<'_, reshiki::models3d::Model3d>> = doc
+            .models
+            .iter()
+            .flat_map(|model| {
+                std::iter::once(std::borrow::Cow::Borrowed(model)).chain(
+                    reshiki::models3d::panels(doc, model)
+                        .into_iter()
+                        .map(|(small, _)| std::borrow::Cow::Owned(small)),
+                )
+            })
+            .collect();
         let state = &self.tab.xtb.orbitals;
         let mut recompute = None;
         let mut build = None;
         let mut failed = vec![];
-        for model in &doc.models {
+        for model in &models {
+            let model = model.as_ref();
             let Some(figure) = &model.surface else {
                 continue;
             };
@@ -557,6 +586,28 @@ impl App {
         {
             let frame = self.tab.doc.science.frame(&stored.result.frame).cloned();
             recompute = frame.map(|f| (stored.result.clone(), f, vec![pending.index as u32]));
+        }
+        // The tab's frontier figure needs HOMO and LUMO even when a placed
+        // figure already has its own row (a reopened drawing).
+        if recompute.is_none()
+            && state.computing.is_none()
+            && self.xtb_orbitals_visible()
+            && let Some(target) = self.xtb_orbital_target()
+            && target.problem.is_none()
+            && self.xtb_orbital_frontier(&target).is_none()
+            && let choice = self.xtb_orbital_choice(&target)
+            && let Some(column) = target.columns.get(choice.column)
+            && let (Some(homo), Some(lumo)) = (column.homo(), column.lumo())
+            && let Some((_, stored)) = self.xtb_orbital_stored()
+            && matches!(stored.result.settings, Settings::Xtb(_))
+            && super::available()
+            && !state.errors.iter().any(|(k, _)| *k == target.key)
+            && let Some(frame) = self.tab.doc.science.frame(&stored.result.frame)
+        {
+            // The chosen column's pair (β's can lie outside the rows around
+            // α's frontier) and the shown level, so neither evicts the other.
+            let rows = [homo, lumo, choice.index].map(|i| i as u32).to_vec();
+            recompute = Some((stored.result.clone(), frame.clone(), rows));
         }
         let tab = self.tab.id;
         self.tab.xtb.orbitals.failed.extend(failed);
@@ -762,6 +813,29 @@ impl App {
                 );
             }
             Action::Place => self.xtb_orbital_place(),
+            Action::PlaceFrontier => self.xtb_orbital_place_frontier(),
+            Action::RemoveFrontier => {
+                // Whatever geometry the model shows now.
+                let atom = self
+                    .xtb_shown()
+                    .and_then(|shown| shown.atoms.iter().flatten().next().copied());
+                let Some(model) = atom.and_then(|atom| {
+                    self.tab
+                        .doc
+                        .models
+                        .iter()
+                        .position(|m| m.linked_atoms.contains(&atom))
+                }) else {
+                    return Task::none();
+                };
+                let mut doc = self.tab.doc.clone();
+                doc.models[model].panels.clear();
+                let before = std::mem::replace(&mut self.tab.doc, doc);
+                self.changed(before);
+                self.status = "Removed the HOMO and LUMO figure · ⌘Z restores it".into();
+                self.error = false;
+            }
+            Action::Appearance(open) => self.tab.xtb.orbitals.appearance = open,
             Action::Remove => {
                 let Some(model) = self
                     .xtb_orbital_target()
@@ -973,6 +1047,91 @@ impl App {
         surface::draw::registered(key)
             .filter(|meshes| meshes[0].triangles.is_empty())
             .map(|_| "No surface at this isovalue: lower it.".into())
+    }
+
+    /// The shown result, by its place in the document.
+    fn xtb_orbital_stored(&self) -> Option<(usize, &Stored)> {
+        let shown = self.xtb_shown()?;
+        let index = shown.index;
+        Some((index, self.tab.doc.science.results.get(index)?))
+    }
+
+    /// HOMO and LUMO of the chosen spin column, with captions, while both
+    /// rows are at hand.
+    fn xtb_orbital_frontier(&self, target: &Target) -> Option<[(usize, String); 2]> {
+        let choice = self.xtb_orbital_choice(target);
+        let column = target.columns.get(choice.column)?;
+        let (_, stored) = self.xtb_orbital_stored()?;
+        [column.homo()?, column.lumo()?]
+            .map(|index| {
+                self.xtb_orbital_row(stored, column.spin, index).map(|_| {
+                    let energy = super::state::signed(column.energies_ev[index], 2);
+                    (index, format!("{} ({energy} eV)", column.name(index)))
+                })
+            })
+            .into_iter()
+            .collect::<Option<Vec<_>>>()?
+            .try_into()
+            .ok()
+    }
+
+    fn xtb_orbital_frontier_ready(&self, target: &Target) -> bool {
+        target.problem.is_none() && self.xtb_orbital_frontier(target).is_some()
+    }
+
+    /// Place HOMO + LUMO figure: two small models under the molecule, each
+    /// with its orbital and a caption, keeping both rows; one Undo step.
+    fn xtb_orbital_place_frontier(&mut self) {
+        let Some(target) = self.xtb_orbital_target() else {
+            return;
+        };
+        if target.problem.is_some() {
+            return;
+        }
+        let (Some(model), Some(levels), Some((stored_index, stored))) = (
+            target.model,
+            self.xtb_orbital_frontier(&target),
+            self.xtb_orbital_stored(),
+        ) else {
+            return;
+        };
+        let choice = self.xtb_orbital_choice(&target);
+        let spin = target.columns[choice.column].spin;
+        let rows: Vec<_> = levels
+            .iter()
+            .filter_map(|(index, _)| {
+                let (basis, row) = self.xtb_orbital_row(stored, spin, *index)?;
+                Some((*index, basis.clone(), row.to_vec()))
+            })
+            .collect();
+        let template = self.xtb_orbital_figure(&target, &choice);
+        let mut doc = self.tab.doc.clone();
+        for (index, basis, row) in rows {
+            if let Err(error) =
+                science::pin_orbital(&mut doc, stored_index, spin, index as u32, &basis, &row)
+            {
+                self.status = format!("The orbitals cannot be kept with the drawing: {error}");
+                self.error = true;
+                return;
+            }
+        }
+        doc.models[model].panels = levels
+            .into_iter()
+            .map(|(index, caption)| {
+                let mut figure = template.clone();
+                figure.orbital.spin = spin;
+                figure.orbital.index = index as u32;
+                surface::Panel { figure, caption }
+            })
+            .collect();
+        if doc.models[model].display == reshiki::models3d::Display::TwoD {
+            reshiki::models3d::set_display(&mut doc, model, reshiki::models3d::Display::Both);
+        }
+        self.xtb_follow_results(&doc);
+        let before = std::mem::replace(&mut self.tab.doc, doc);
+        self.changed(before);
+        self.status = "Placed HOMO and LUMO under the molecule · ⌘Z removes them".into();
+        self.error = false;
     }
 
     /// The row of the chosen orbital is at hand: Place can keep it.

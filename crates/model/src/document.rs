@@ -698,7 +698,7 @@ impl Document {
         for figure in self
             .models
             .iter()
-            .filter_map(|model| model.surface.as_ref())
+            .flat_map(crate::models3d::Model3d::figures)
         {
             let orbital = &figure.orbital;
             pins.entry(orbital.result.clone())
@@ -710,7 +710,12 @@ impl Document {
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
         use crate::graphics::{GraphicKind, LinePattern};
-        if !self.science.is_empty() || self.models.iter().any(|model| model.surface.is_some()) {
+        if !self.science.is_empty()
+            || self
+                .models
+                .iter()
+                .any(|model| model.figures().next().is_some())
+        {
             CALCULATIONS
         } else if self.graphics.iter().any(|g| {
             g.piece
@@ -1603,13 +1608,16 @@ fn frame_bytes(doc: &Document) -> usize {
                         + bytes(&g.bonds[..])
                         + bytes(&g.sources[..])
                 })
-                + m.surface.as_ref().map_or(0, |figure| {
-                    figure.orbital.result.len()
-                        + figure
-                            .snapshot
-                            .as_ref()
-                            .map_or(0, |s| s.view.len() + s.shapes.len())
-                })
+                + m.panels.iter().map(|p| p.caption.len()).sum::<usize>()
+                + m.figures()
+                    .map(|figure| {
+                        figure.orbital.result.len()
+                            + figure
+                                .snapshot
+                                .as_ref()
+                                .map_or(0, |s| s.view.len() + s.shapes.len())
+                    })
+                    .sum::<usize>()
         })
         .sum();
     size_of::<Document>()
