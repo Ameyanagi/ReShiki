@@ -817,17 +817,15 @@ impl App {
         stale
     }
 
-    /// Editing-only frames of outdated models that are currently shown.
-    pub(super) fn outdated_model_frames(
-        &self,
-    ) -> Vec<(reshiki::document::Point, reshiki::document::Point)> {
+    /// Linked atom IDs identify the shown outdated models in canvas previews.
+    pub(super) fn outdated_models(&self) -> Vec<&[u64]> {
         self.tab
             .doc
             .models
             .iter()
             .enumerate()
             .filter(|(index, model)| model.display != Display::TwoD && self.model_stale(*index))
-            .filter_map(|(_, model)| models3d::frame(&self.tab.doc, model))
+            .map(|(_, model)| model.linked_atoms.as_slice())
             .collect()
     }
 
