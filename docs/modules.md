@@ -904,6 +904,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/reaction_mapping/search.rs`: Bounded maximum-cardinality graph matching.
 - `crates/model/src/reactions.rs`: Explicit reaction membership, independent of where a scheme is drawn.
 - `crates/model/src/reactions/hints.rs`: Informational checks of arrow meaning; neither chemistry nor drawing is edited.
+- `crates/model/src/reactions/ts_plan.rs`: Derive transition-state search inputs from a reaction's drawing and atom map.
 - `crates/model/src/rear_opacity.rs`: Transparency for view-occluded cage/atom/bond ink, independent of RGB.
 - `crates/model/src/rear_opacity/clip.rs`: Clipping and tessellation for rear-opacity paint in drawing coordinates.
 - `crates/model/src/rear_opacity/ink.rs`: Resolve alpha-affected ink once

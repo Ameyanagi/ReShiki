@@ -7,6 +7,7 @@ mod copy_tests;
 mod hints;
 #[cfg(test)]
 mod tests;
+pub mod ts_plan;
 pub use hints::{ArrowSemanticsHint, ArrowSemanticsHintKind, arrow_semantics_hints};
 
 /// Shared orientation-independent end-side geometry for reaction inference and hints.
