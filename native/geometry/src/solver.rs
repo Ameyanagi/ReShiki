@@ -5,8 +5,8 @@ use super::{
 use cosmolkit::{
     AddHsParams, AtomId, AtomSpec, BondOrder, BondSpec, BondStereo, ChiralTag, Element,
     EmbedFailureCause, EmbedMultipleConfsResult, EmbedParams, ForceFieldMinimizeParams,
-    Hybridization, MmffForceFieldParams, MmffPropertiesParams, MmffVariant, MolecularForceField,
-    Molecule, MoleculeBuilder, PropertyValue, StructureTagParams, UffForceFieldParams,
+    MmffForceFieldParams, MmffPropertiesParams, MmffVariant, MolecularForceField, Molecule,
+    MoleculeBuilder, PropertyValue, StructureTagParams, UffForceFieldParams,
 };
 
 mod relaxed;
@@ -383,18 +383,16 @@ fn validate_geometry(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
     Ok(())
 }
 
-// UFF bends angles at an octahedral (sp3d2) centre with (1 - cos 4θ) / 16,
-// which has minima at 90° and 180° but also at 0°, past a 45° barrier, and
-// UFF has no 1-3 repulsion. Ligands that cross the barrier collapse onto
-// RDKit's 30° penalty wall (UF6 from a flat drawing: F···F 1.19 Å). Two
-// ligands bonded to each other, such as an η2 alkene, may legitimately be
-// closer and are not checked.
+// UFF has no 1-3 repulsion, and some of its angle terms also have a minimum
+// at 0°: at an octahedral (sp3d2) centre, (1 - cos 4θ) / 16 has minima at 0°,
+// 90° and 180° with a barrier at 45°. Ligands that cross such a barrier slide
+// onto RDKit's 30° penalty wall (UF6 from a flat drawing: F···F 1.19 Å; PF5
+// from ETKDG). Real angles between two ligands of one atom stay above 45°
+// unless the two are bonded to each other, as in an η2 alkene, which is not
+// checked.
 fn reject_collapsed_ligands(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
     let adjacency = &mol.topology().adjacency;
     for atom in mol.atoms() {
-        if atom.hybridization() != Hybridization::Sp3d2 {
-            continue;
-        }
         let centre = atom.id().index();
         let ligands = adjacency.neighbors_of(centre);
         for (index, a) in ligands.iter().enumerate() {

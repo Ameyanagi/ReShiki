@@ -465,26 +465,63 @@ pub(super) fn relax_hydrogens(
 /// Six ligands drawn flat around an octahedral (sp3d2) centre go alternately
 /// above and below the plane, 35.3° out of it, in their drawn angular order:
 /// a flat star becomes an octahedron seen along its threefold axis, and each
-/// ligand pair starts at 90° or 180°. Flat, some pairs began below the 45°
+/// donor pair starts at 90° or 180°. Flat, some pairs began below the 45°
 /// barrier of UFF's octahedral angle term and collapsed (see
-/// `reject_collapsed_ligands`). Only the donor atoms move.
+/// `reject_collapsed_ligands`). Each ligand moves with its donor; an atom
+/// reached from several donors, such as a chelate backbone, moves by their
+/// mean.
 fn lift_octahedral_ligands(mol: &Molecule, points: &mut [[f64; 3]]) {
+    let adjacency = &mol.topology().adjacency;
     for atom in mol.atoms() {
         let centre = atom.id().index();
-        let ligands = mol.topology().adjacency.neighbors_of(centre);
-        if atom.hybridization() != Hybridization::Sp3d2 || ligands.len() != 6 {
+        if atom.hybridization() != Hybridization::Sp3d2 || adjacency.neighbors_of(centre).len() != 6
+        {
             continue;
         }
-        let [x, y, _] = points[centre];
-        let mut ligands: Vec<_> = ligands.iter().map(|n| n.atom_index).collect();
-        ligands.sort_by(|&a, &b| {
-            let turn = |i: usize| (points[i][1] - y).atan2(points[i][0] - x);
-            turn(a).total_cmp(&turn(b))
-        });
-        for (index, ligand) in ligands.into_iter().enumerate() {
-            let radius = (points[ligand][0] - x).hypot(points[ligand][1] - y);
-            let side = if index % 2 == 0 { 1. } else { -1. };
-            points[ligand][2] = points[centre][2] + side * radius * std::f64::consts::FRAC_1_SQRT_2;
+        let [x, y, z] = points[centre];
+        let mut donors: Vec<_> = adjacency
+            .neighbors_of(centre)
+            .iter()
+            .map(|n| n.atom_index)
+            .collect();
+        let turn = |p: [f64; 3]| (p[1] - y).atan2(p[0] - x);
+        donors.sort_by(|&a, &b| turn(points[a]).total_cmp(&turn(points[b])));
+        let lifts: Vec<_> = donors
+            .iter()
+            .enumerate()
+            .map(|(rank, &donor)| {
+                let side = if rank % 2 == 0 { 1. } else { -1. };
+                let radius = (points[donor][0] - x).hypot(points[donor][1] - y);
+                z + side * radius * std::f64::consts::FRAC_1_SQRT_2 - points[donor][2]
+            })
+            .collect();
+        // Every other atom moves by the mean lift of the donors it hangs from,
+        // searched without passing the centre or another donor.
+        let mut shift = vec![(0., 0_u32); points.len()];
+        for (&donor, &lift) in donors.iter().zip(&lifts) {
+            let mut reached = vec![false; points.len()];
+            reached[centre] = true;
+            for &other in &donors {
+                reached[other] = true;
+            }
+            let mut pending = vec![donor];
+            while let Some(index) = pending.pop() {
+                for neighbor in adjacency.neighbors_of(index) {
+                    if !std::mem::replace(&mut reached[neighbor.atom_index], true) {
+                        shift[neighbor.atom_index].0 += lift;
+                        shift[neighbor.atom_index].1 += 1;
+                        pending.push(neighbor.atom_index);
+                    }
+                }
+            }
+        }
+        for (&donor, &lift) in donors.iter().zip(&lifts) {
+            points[donor][2] += lift;
+        }
+        for (point, (lift, count)) in points.iter_mut().zip(shift) {
+            if count > 0 {
+                point[2] += lift / f64::from(count);
+            }
         }
     }
 }
