@@ -574,6 +574,31 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         })
         .map(|(index, _)| index)
         .collect();
+    // Panels keep snapshots signed by their small model copies.
+    let panel_snapshots: Vec<(usize, usize)> = doc
+        .models
+        .iter()
+        .enumerate()
+        .flat_map(|(index, model)| {
+            let doc = &*doc;
+            model
+                .panels
+                .iter()
+                .enumerate()
+                .filter_map(move |(k, panel)| {
+                    let small = crate::models3d::panel_model(model, &panel.figure);
+                    panel
+                        .figure
+                        .snapshot
+                        .as_ref()
+                        .is_some_and(|snapshot| {
+                            snapshot.view
+                                == crate::models3d::surface::draw::view_signature(doc, &small)
+                        })
+                        .then_some((index, k))
+                })
+        })
+        .collect();
     let Document {
         generic,
         canvas_theme: _,
@@ -703,6 +728,22 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
             .surface
             .as_mut()
             .and_then(|figure| figure.snapshot.as_mut())
+        {
+            snapshot.view = view;
+        }
+    }
+    for (index, k) in panel_snapshots {
+        let model = doc.models.get(index)?;
+        let small = crate::models3d::panel_model(model, &model.panels.get(k)?.figure);
+        let view = crate::models3d::surface::draw::view_signature(doc, &small);
+        if let Some(snapshot) = doc
+            .models
+            .get_mut(index)?
+            .panels
+            .get_mut(k)?
+            .figure
+            .snapshot
+            .as_mut()
         {
             snapshot.view = view;
         }

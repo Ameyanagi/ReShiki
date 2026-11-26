@@ -428,4 +428,30 @@ fn panels_draw_small_models_with_captions_and_keep_their_snapshots() {
         .filter(|p| matches!(p, Primitive::Text { text, .. } if text.ends_with("eV)")))
         .count();
     assert_eq!(texts, 2);
+
+    // A pasted copy gets new IDs and still draws its saved panel.
+    let surfaces = |doc: &Document| {
+        primitives(doc)
+            .iter()
+            .filter(|p| matches!(p, Primitive::Surface { .. }))
+            .count()
+    };
+    assert_eq!(surfaces(&saved), 1);
+    let part = crate::editing::selection(&saved, &saved.all_ids());
+    let mut pasted = saved.clone();
+    assert!(!crate::editing::append(&mut pasted, &part, Point::new(200., 0.)).is_empty());
+    assert_eq!(surfaces(&pasted), 2);
+
+    // A stale first panel keeps its own figure when the second is refreshed.
+    let mut mixed = doc.clone();
+    mixed.models[0].panels[0].figure.orbital.result = "stale".into();
+    let shown = crate::models3d::panels(&mixed, &mixed.models[0]);
+    assert_eq!(shown.len(), 1);
+    register(super::key(&mixed, &shown[0].0).unwrap(), two_lobes());
+    let saved = mixed.current();
+    let kept = &saved.models[0].panels;
+    assert_eq!(kept[0].figure.orbital.result, "stale");
+    assert_eq!(kept[1].figure.orbital.index, 1);
+    assert!(kept[1].figure.snapshot.is_some());
+    REGISTERED.lock().unwrap().clear();
 }
