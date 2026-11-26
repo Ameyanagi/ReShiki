@@ -1,6 +1,10 @@
 //! Informational checks of arrow meaning; neither chemistry nor drawing is edited.
 use super::{Row, molecules};
-use crate::{chemistry, document::Document, editing};
+use crate::{
+    chemistry::{self, document::Molecule, graph::Graph},
+    document::Document,
+    editing,
+};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +129,57 @@ struct Label {
     charge: i8,
     radicals: u8,
 }
+
+/// Attached H isotopes by drawing graph index. A folded drawn H has no entry
+/// of its own. Callers can retain drawn H whose identity must stay in the graph.
+// The drawing graph and prepared molecule are built from the same document
+// atom order, and their bonds have validated endpoints.
+#[allow(clippy::indexing_slicing)]
+pub(super) fn attached_hydrogens(
+    graph: &Graph,
+    prepared: &Molecule,
+    retain_drawn: impl Fn(usize) -> bool,
+) -> Vec<Option<Vec<u16>>> {
+    let mut neighbors = vec![Vec::new(); graph.atoms.len()];
+    for bond in &graph.bonds {
+        neighbors[bond.a].push((bond.b, bond.order));
+        neighbors[bond.b].push((bond.a, bond.order));
+    }
+    let folded: Vec<_> = graph
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, atom)| {
+            atom.atomic_number == 1
+                && !retain_drawn(i)
+                && atom.charge == 0
+                && prepared.state.graph.atoms[i].radical_electrons == 0
+                && atom.explicit_hydrogens == 0
+                && prepared.state.valences[i].implicit_hydrogens == 0
+                && matches!(neighbors[i].as_slice(), [(other, 1)] if graph.atoms[*other].atomic_number != 1)
+        })
+        .collect();
+    neighbors
+        .iter()
+        .enumerate()
+        .map(|(i, neighbors)| {
+            if folded[i] {
+                return None;
+            }
+            let count = u32::from(prepared.state.graph.atoms[i].explicit_hydrogens)
+                + prepared.state.valences[i].implicit_hydrogens;
+            let mut hydrogens = vec![0; count as usize];
+            for &(other, _) in neighbors {
+                if folded[other] {
+                    hydrogens.push(graph.atoms[other].isotope);
+                }
+            }
+            hydrogens.sort_unstable();
+            Some(hydrogens)
+        })
+        .collect()
+}
+
 impl Signature {
     // Graph endpoints are validated by drawing_graph; prepare uses the same
     // build. Retained indices are built from these same arrays.
@@ -154,39 +209,13 @@ impl Signature {
         if graph.atoms.iter().any(|atom| atom.atomic_number == 0) {
             return None;
         }
-        let mut neighbors = vec![Vec::new(); graph.atoms.len()];
-        for bond in &graph.bonds {
-            neighbors[bond.a].push((bond.b, bond.order));
-            neighbors[bond.b].push((bond.a, bond.order));
-        }
-        let folded: Vec<_> = graph
-            .atoms
-            .iter()
-            .enumerate()
-            .map(|(i, atom)| {
-                atom.atomic_number == 1
-                    && atom.charge == 0
-                    && prepared.state.graph.atoms[i].radical_electrons == 0
-                    && atom.explicit_hydrogens == 0
-                    && prepared.state.valences[i].implicit_hydrogens == 0
-                    && matches!(neighbors[i].as_slice(), [(other, 1)] if graph.atoms[*other].atomic_number != 1)
-            })
-            .collect();
         let mut atoms = Vec::new();
         let mut indices = vec![None; graph.atoms.len()];
-        for (i, atom) in graph.atoms.iter().enumerate() {
-            if folded[i] {
+        let hydrogens = attached_hydrogens(&graph, &prepared, |_| false);
+        for (i, (atom, hydrogens)) in graph.atoms.iter().zip(hydrogens).enumerate() {
+            let Some(hydrogens) = hydrogens else {
                 continue;
-            }
-            let count = u32::from(prepared.state.graph.atoms[i].explicit_hydrogens)
-                + prepared.state.valences[i].implicit_hydrogens;
-            let mut hydrogens = vec![0; count as usize];
-            for &(other, _) in &neighbors[i] {
-                if folded[other] {
-                    hydrogens.push(graph.atoms[other].isotope);
-                }
-            }
-            hydrogens.sort_unstable();
+            };
             indices[i] = Some(atoms.len());
             atoms.push(Atom {
                 number: atom.atomic_number,
