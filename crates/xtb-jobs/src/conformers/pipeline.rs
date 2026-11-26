@@ -306,6 +306,15 @@ pub fn search_conformers(
     })
 }
 
+/// The force field used to prepare starting geometries for this minimizer.
+pub fn starting_force_field(minimizer: Minimizer) -> ForceField {
+    match minimizer {
+        Minimizer::Mmff94 => ForceField::Mmff94,
+        Minimizer::Uff => ForceField::Uff,
+        Minimizer::Mmff94s | Minimizer::GfnFf | Minimizer::Gfn2 => ForceField::Mmff94s,
+    }
+}
+
 fn sample(
     search: &Search,
     cancel: &Cancel,
@@ -315,11 +324,7 @@ fn sample(
     on_event(Phase::Starts);
     let minimizer = search.config.minimizer;
     let embedded = minimizer.xtb().is_some();
-    let mut field = match minimizer {
-        Minimizer::Mmff94 => ForceField::Mmff94,
-        Minimizer::Uff => ForceField::Uff,
-        Minimizer::Mmff94s | Minimizer::GfnFf | Minimizer::Gfn2 => ForceField::Mmff94s,
-    };
+    let mut field = starting_force_field(minimizer);
     if field != ForceField::Uff && !search.prepared.mmff_available() {
         field = ForceField::Uff;
         if !embedded {
@@ -679,6 +684,19 @@ mod tests {
     use super::*;
     use geometry::Point3;
     use reshiki_model::{document::Point, models3d};
+
+    #[test]
+    fn starting_force_field_matches_the_minimizer() {
+        for (minimizer, expected) in [
+            (Minimizer::Mmff94s, ForceField::Mmff94s),
+            (Minimizer::Mmff94, ForceField::Mmff94),
+            (Minimizer::Uff, ForceField::Uff),
+            (Minimizer::GfnFf, ForceField::Mmff94s),
+            (Minimizer::Gfn2, ForceField::Mmff94s),
+        ] {
+            assert_eq!(starting_force_field(minimizer), expected, "{minimizer}");
+        }
+    }
 
     fn water_search(minimizer: Minimizer, geometry: Client) -> Search {
         let mut doc = Document::default();

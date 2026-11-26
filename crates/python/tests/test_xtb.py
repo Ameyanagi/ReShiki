@@ -252,6 +252,16 @@ def test_butane_conformers(worker):
         assert comment.endswith(f"E = {conformer.energy:.10f} Eh")
 
 
+def test_borane_conformers_use_uff_for_the_first_model(worker):
+    result = xtb.conformers("B", minimizer="uff", starts=1)
+    assert result.conformers
+    assert result.method.startswith("UFF ")
+
+    with pytest.raises(xtb.XtbError, match="MMFF parameters") as caught:
+        xtb.conformers("B", starts=1)
+    assert caught.value.code == "failed"
+
+
 def test_lysine_conformers_preserve_stereo(worker):
     lysine = reshiki.Molecule.from_smiles("NCCCC[C@H](N)C(=O)O")
     result = xtb.conformers(lysine)
