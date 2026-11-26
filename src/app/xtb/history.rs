@@ -1,7 +1,6 @@
 //! Name the calculation or attached geometry restored by drawing history.
 use crate::app::App;
 use reshiki::document::Document;
-use reshiki::models3d::Model3d;
 use reshiki::qcdata::{CalcResult, Settings, Task};
 use reshiki::science::Stored;
 use std::sync::Arc;
@@ -9,43 +8,59 @@ use std::sync::Arc;
 impl App {
     pub(in crate::app) fn xtb_history_status(
         &self,
-        before: &Document,
+        mut before: Document,
         redo: bool,
     ) -> Option<String> {
         let after = &self.tab.doc;
         let previous = &before.science.results;
         let restored = &after.science.results;
+        if previous.is_empty() && restored.is_empty()
+            || !drawing_unchanged(&before, after)
+            || before.models.len() != after.models.len()
+        {
+            return None;
+        }
+        let mut moved = None;
+        for (old, now) in before.models.iter_mut().zip(&after.models) {
+            if old == now {
+                continue;
+            }
+            for (old, now) in old.atoms.iter_mut().zip(&now.atoms) {
+                old.xyz = now.xyz;
+            }
+            for (old, now) in old.hydrogens.iter_mut().zip(&now.hydrogens) {
+                old.xyz = now.xyz;
+            }
+            if old != now || moved.replace(now).is_some() {
+                return None;
+            }
+        }
         let action = if redo { "Redid" } else { "Undid" };
-        let source = |atoms: &[u64]| {
-            self.xtb_geometry_sources(atoms)
-                .into_iter()
-                .next()
-                .map(|source| source.short)
-                .filter(|short| !short.is_empty())
-        };
         if previous.len() == restored.len()
             && previous
                 .iter()
                 .zip(restored)
                 .all(|(a, b)| Arc::ptr_eq(&a.result, &b.result))
         {
-            return restored.iter().rev().find_map(|stored| {
-                what(&stored.result)?;
-                let link = after.science.attachment(stored.attachment)?;
-                let atoms: Vec<_> = link.atoms.iter().flatten().copied().collect();
-                let old = model(before, &atoms)?;
-                let now = model(after, &atoms)?;
-                if coordinates(old).eq(coordinates(now)) {
-                    return None;
-                }
-                source(&atoms)
-                    .map(|source| format!("{action} the 3D model change · now the {source}"))
+            let model = moved?;
+            let has_result = restored.iter().any(|stored| {
+                what(&stored.result).is_some()
+                    && after
+                        .science
+                        .attachment(stored.attachment)
+                        .is_some_and(|link| {
+                            link.atoms.iter().flatten().any(|&id| model.contains(id))
+                        })
+            });
+            return has_result.then(|| {
+                let source = self.xtb_model_source(model).short;
+                format!("{action} the 3D model change · now the {source}")
             });
         }
         let (doc, without, with) = if redo {
             (after, previous, restored)
         } else {
-            (before, restored, previous)
+            (&before, restored, previous)
         };
         let contains = |results: &[Stored], stored: &Stored| {
             results
@@ -61,9 +76,13 @@ impl App {
             .find(|stored| !contains(without, stored))?;
         let what = what(&stored.result)?;
         let link = doc.science.attachment(stored.attachment)?;
-        let atoms: Vec<_> = link.atoms.iter().flatten().copied().collect();
         let mut status = format!("{action} xTB {what}");
-        if let Some(source) = source(&atoms) {
+        if let Some(model) = after
+            .models
+            .iter()
+            .find(|model| link.atoms.iter().flatten().any(|&id| model.contains(id)))
+        {
+            let source = self.xtb_model_source(model).short;
             let state = if redo { "is" } else { "back to" };
             status.push_str(&format!(" · 3D model {state} the {source}"));
         }
@@ -85,16 +104,30 @@ fn what(result: &CalcResult) -> Option<&'static str> {
     })
 }
 
-fn model<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a Model3d> {
-    doc.models
-        .iter()
-        .find(|model| atoms.iter().any(|id| model.contains(*id)))
-}
-
-fn coordinates(model: &Model3d) -> impl Iterator<Item = [f32; 3]> + '_ {
-    model
-        .atoms
-        .iter()
-        .map(|atom| atom.xyz)
-        .chain(model.hydrogens.iter().map(|atom| atom.xyz))
+fn drawing_unchanged(before: &Document, after: &Document) -> bool {
+    before.atoms == after.atoms
+        && before.bonds == after.bonds
+        && before.arrows == after.arrows
+        && before.graphics == after.graphics
+        && before.annotations == after.annotations
+        && before.generic == after.generic
+        && before.canvas_theme == after.canvas_theme
+        && before.color_theme == after.color_theme
+        && before.custom_theme == after.custom_theme
+        && before.drawing_style == after.drawing_style
+        && before.page_layout == after.page_layout
+        && before.abbreviations == after.abbreviations
+        && before.atom_labels == after.atom_labels
+        && before.ring_fills == after.ring_fills
+        && before.highlight_style == after.highlight_style
+        && before.depth_appearance == after.depth_appearance
+        && before.molecule_names == after.molecule_names
+        && before.property_captions == after.property_captions
+        && before.compound_numbers == after.compound_numbers
+        && before.arrow_labels == after.arrow_labels
+        && before.groups == after.groups
+        && before.reactions == after.reactions
+        && before.recent_colors == after.recent_colors
+        && before.piece_definitions == after.piece_definitions
+        && before.seats == after.seats
 }

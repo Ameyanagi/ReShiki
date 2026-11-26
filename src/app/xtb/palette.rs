@@ -151,6 +151,40 @@ impl Shown<'_> {
     fn repeatable(&self) -> bool {
         results::config(&self.stored.result, self.frame, self.atoms, 1).is_some()
     }
+
+    /// Only atoms present in the drawing can carry a preview or placed charge.
+    fn charge_labels(&self, doc: &Document, places: usize) -> Vec<(u64, String)> {
+        self.stored
+            .result
+            .charges
+            .first()
+            .map(|charges| {
+                self.atoms
+                    .iter()
+                    .zip(&charges.values)
+                    .filter_map(|(atom, q)| {
+                        let id = (*atom)?;
+                        doc.atom_visible(id)
+                            .then(|| (id, results::signed_charge(*q, places)))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+/// Previously placed charges have signed decimals, except for unsigned zero.
+/// Plain nonzero decimals may be NMR shifts, so preserve those too.
+fn is_charge_label(text: &str) -> bool {
+    let signed = text.strip_prefix(['+', '-', '−']);
+    let digits = signed.unwrap_or(text);
+    let Some((whole, part)) = digits.split_once('.') else {
+        return false;
+    };
+    [whole, part]
+        .iter()
+        .all(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+        && (signed.is_some() || digits.bytes().all(|b| matches!(b, b'0' | b'.')))
 }
 
 impl App {
@@ -416,20 +450,7 @@ impl App {
                 format!("E {} Eh", state::signed(energy, 6))
             });
         // Partial charges beside the drawn atoms (implicit hydrogens have none).
-        let atom_labels: Vec<_> = shown
-            .stored
-            .result
-            .charges
-            .first()
-            .map(|charges| {
-                shown
-                    .atoms
-                    .iter()
-                    .zip(&charges.values)
-                    .filter_map(|(atom, q)| Some(((*atom)?, results::signed_charge(*q, 3))))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let atom_labels = shown.charge_labels(&self.tab.doc, 3);
         (!text.is_empty() || !atom_labels.is_empty()).then(|| crate::canvas::ResultLabel {
             atoms: shown.atoms.iter().flatten().copied().collect(),
             text,
@@ -452,14 +473,22 @@ impl App {
             ChargeScheme::Loewdin => "Löwdin",
             ChargeScheme::Other(name) => name,
         };
-        let labels: Vec<_> = shown
-            .atoms
-            .iter()
-            .zip(&charges.values)
-            .filter_map(|(atom, q)| Some(((*atom)?, results::signed_charge(*q, 2))))
-            .collect();
+        let mut labels = shown.charge_labels(&self.tab.doc, 2);
+        let visible = labels.len();
+        labels.retain(|(id, _)| {
+            self.tab.doc.atom(*id).is_some_and(|atom| {
+                atom.display
+                    .number
+                    .as_ref()
+                    .is_none_or(|label| label.text.is_empty() || is_charge_label(&label.text))
+            })
+        });
         let n = labels.len();
-        let status = format!("Placed {n} {scheme} charges as atom labels · ⌘Z undoes");
+        let kept = visible - n;
+        let mut status = format!("Placed {n} {scheme} charges as atom labels · ⌘Z undoes");
+        if kept > 0 {
+            status.push_str(&format!(" · {kept} atoms kept their own labels"));
+        }
         let before = self.tab.doc.clone();
         let style = shift_label_style(&before);
         for (id, text) in labels {

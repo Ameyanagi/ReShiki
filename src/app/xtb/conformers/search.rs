@@ -339,7 +339,14 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
     trajectory.isotopes = frame.isotopes.clone();
     trajectory.masses_amu = frame.masses_amu.clone();
     let kept = trajectory.steps();
-    result.provenance.method = Some(live.config.describe(method));
+    let effective = super::Config {
+        minimizer: found.minimizer,
+        ..live.config.clone()
+    };
+    result.provenance.method = Some(crate::app::xtb::run::optimizer_provenance(
+        &effective.describe(method),
+        &found.optimizers,
+    ));
     result.input_frame = Some(launch.frame.hash());
     result.status = if found.stopped {
         qcdata::Status::NotConverged {

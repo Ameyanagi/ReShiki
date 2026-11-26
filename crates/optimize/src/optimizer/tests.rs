@@ -657,6 +657,7 @@ fn singular_model_falls_back_without_evaluating_the_input_twice() {
         });
         assert_eq!(result.status, Status::Converged);
         assert_eq!(result.method, Method::Lbfgs);
+        assert_eq!(result.methods, [Method::AncRfo, Method::Lbfgs]);
         assert!((result.positions[3] - 1.).abs() < 1e-10);
         // Each capped descent step is accepted, plus the input and the opt-in recheck.
         assert_eq!(
@@ -1229,18 +1230,27 @@ fn internal_build_failure_preserves_the_potential_hessian_for_anc() {
     let (tight, tight_calls, _) = run(Method::Internal, true);
     assert_eq!(tight.status, Status::Converged);
     assert_eq!(tight.method, Method::AncRfo);
+    assert_eq!(tight.methods, [Method::Internal, Method::AncRfo]);
     assert_eq!(tight.evaluations, tight.steps + 2);
     assert_eq!(tight_calls.last().unwrap().1, Accuracy::Tight);
     let (direct, direct_calls, direct_callbacks) = run(Method::AncRfo, false);
     let (fallback, fallback_calls, fallback_callbacks) = run(Method::Internal, false);
     assert_eq!(fallback.status, Status::Converged);
     assert_eq!(fallback.method, Method::AncRfo);
+    assert_eq!(fallback.methods, [Method::Internal, Method::AncRfo]);
+    assert_eq!(direct.methods, [Method::AncRfo]);
     assert!(fallback.steps > 0);
     assert_eq!(fallback.hessian_evaluations, 1);
     assert_eq!(fallback.evaluations, fallback.steps + 1);
     assert_eq!(fallback_callbacks.len(), fallback.steps + 1);
     assert!((fallback.positions[3] - 1.4).abs() < 1e-5);
-    assert_eq!(fallback, direct);
+    assert_eq!(
+        Outcome {
+            methods: direct.methods.clone(),
+            ..fallback
+        },
+        direct
+    );
     assert_eq!(fallback_calls, direct_calls);
     assert_eq!(fallback_callbacks, direct_callbacks);
     assert_eq!(

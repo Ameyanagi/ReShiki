@@ -1,8 +1,8 @@
-use super::{conformers, model_shows, results};
+use super::{conformers, model_matches, model_shows, results};
 use crate::app::App;
-use reshiki::models3d::ForceField;
+use reshiki::models3d::{ForceField, Model3d};
 use reshiki::qcdata::{CalcResult, Frame, Settings, Task};
-use reshiki::science::Freshness;
+use reshiki::science::{Attachment, Freshness, Science};
 
 /// One geometry the input-file dialog can write.
 pub(in crate::app) struct Source {
@@ -30,97 +30,22 @@ impl App {
     pub(in crate::app) fn xtb_geometry_sources(&self, atoms: &[u64]) -> Vec<Source> {
         let doc = &self.tab.doc;
         let science = &doc.science;
-        let mut geometries = science.results.iter().rev().filter_map(|stored| {
-            let result = &*stored.result;
-            let Settings::Xtb(settings) = &result.settings else {
-                return None;
-            };
-            if !matches!(result.task, Task::Optimize | Task::Conformers) {
-                return None;
-            }
-            let link = science.attachment(stored.attachment)?;
-            link.atoms
-                .iter()
-                .flatten()
-                .any(|id| atoms.contains(id))
-                .then_some((
-                    result,
-                    link,
-                    method_label(result).unwrap_or_else(|| settings.method.label()),
-                ))
-        });
-        let model = geometries.clone().find_map(|(result, link, method)| {
-            let shows = |xyz: &[[f64; 3]]| model_shows(doc, &link.atoms, xyz);
-            let (mut source, state) = if conformers::is_search(result) {
-                let path = result.trajectory.as_ref()?;
-                let count = path.steps();
-                let step = (0..count).find(|&i| {
-                    path.frame(i)
-                        .is_some_and(|frame| shows(&frame.positions_angstrom))
-                })?;
-                (
-                    conformer(method, step, count),
-                    (path.charge, path.multiplicity),
-                )
-            } else {
-                let output = science.frame(&result.frame)?;
-                let source = if shows(&output.positions_angstrom) {
-                    optimized(method)
-                } else {
-                    let input = science.frame(&link.frame)?;
-                    let count = results::energies(result).len();
-                    let step = (0..count.saturating_sub(1)).rev().find(|&i| {
-                        results::step_positions(result, i, input, output)
-                            .is_some_and(|xyz| shows(&xyz))
-                    })?;
-                    Source {
-                        label: format!("xTB optimization step {step} · {method}"),
-                        short: format!("{method} step {step}"),
-                        frame: None,
-                        model_state: None,
-                    }
-                };
-                (source, (output.charge, output.multiplicity))
-            };
-            source.model_state = Some(state);
-            if let Some(time) = results::finished_local(result) {
-                source
-                    .label
-                    .push_str(&format!(" · {}", time.format("%-d %b %H:%M")));
-            }
-            Some(source)
-        });
-        let model = model.unwrap_or_else(|| {
-            let (label, short) = match doc
-                .models
-                .iter()
-                .find(|m| atoms.iter().any(|&id| m.contains(id)))
-            {
-                Some(model) if model.is_file_derived() => {
-                    ("From the file".into(), "geometry from the file".into())
-                }
-                Some(model) => {
-                    let ff = match model.force_field {
-                        ForceField::Mmff94 => "MMFF94",
-                        ForceField::Mmff94s => "MMFF94s",
-                        ForceField::Uff => "UFF",
-                    };
-                    (
-                        format!("Force-field model ({ff})"),
-                        format!("{ff} force-field model"),
-                    )
-                }
-                None => ("No 3D model yet.".into(), String::new()),
-            };
-            Source {
-                label,
-                short,
-                frame: None,
-                model_state: None,
-            }
-        });
+        let mut geometries = geometries(science);
+        let model = doc
+            .models
+            .iter()
+            .find(|m| atoms.iter().any(|&id| m.contains(id)))
+            .map_or_else(
+                || Source {
+                    label: "No 3D model yet.".into(),
+                    short: String::new(),
+                    frame: None,
+                    model_state: None,
+                },
+                |model| self.xtb_model_source(model),
+            );
         let mut sources = vec![model];
-        let current = |link: &reshiki::science::Attachment| {
+        let current = |link: &Attachment| {
             let mut ids = link.atoms.iter().flatten();
             ids.clone().count() == atoms.len()
                 && ids.all(|id| atoms.contains(id))
@@ -178,10 +103,99 @@ impl App {
         }
         sources
     }
+
+    /// Resolve only the geometry displayed by this particular model.
+    pub(in crate::app) fn xtb_model_source(&self, model: &Model3d) -> Source {
+        let science = &self.tab.doc.science;
+        let source = geometries(science).find_map(|(result, link, method)| {
+            let atom = link.atoms.iter().flatten().next()?;
+            if !model.contains(*atom) {
+                return None;
+            }
+            let shows = |xyz: &[[f64; 3]]| model_matches(model, &link.atoms, xyz);
+            let (mut source, state) = if conformers::is_search(result) {
+                let path = result.trajectory.as_ref()?;
+                let count = path.steps();
+                let step = (0..count).find(|&i| {
+                    path.frame(i)
+                        .is_some_and(|frame| shows(&frame.positions_angstrom))
+                })?;
+                (
+                    conformer(method, step, count),
+                    (path.charge, path.multiplicity),
+                )
+            } else {
+                let output = science.frame(&result.frame)?;
+                let source = if shows(&output.positions_angstrom) {
+                    optimized(method)
+                } else {
+                    let input = science.frame(&link.frame)?;
+                    let count = results::energies(result).len();
+                    let step = (0..count.saturating_sub(1)).rev().find(|&i| {
+                        results::step_positions(result, i, input, output)
+                            .is_some_and(|xyz| shows(&xyz))
+                    })?;
+                    Source {
+                        label: format!("xTB optimization step {step} · {method}"),
+                        short: format!("{method} step {step}"),
+                        frame: None,
+                        model_state: None,
+                    }
+                };
+                (source, (output.charge, output.multiplicity))
+            };
+            source.model_state = Some(state);
+            if let Some(time) = results::finished_local(result) {
+                source
+                    .label
+                    .push_str(&format!(" · {}", time.format("%-d %b %H:%M")));
+            }
+            Some(source)
+        });
+        source.unwrap_or_else(|| {
+            let (label, short) = if model.is_file_derived() {
+                ("From the file".into(), "geometry from the file".into())
+            } else {
+                let ff = match model.force_field {
+                    ForceField::Mmff94 => "MMFF94",
+                    ForceField::Mmff94s => "MMFF94s",
+                    ForceField::Uff => "UFF",
+                };
+                (
+                    format!("Force-field model ({ff})"),
+                    format!("{ff} force-field model"),
+                )
+            };
+            Source {
+                label,
+                short,
+                frame: None,
+                model_state: None,
+            }
+        })
+    }
+}
+
+fn geometries(science: &Science) -> impl Iterator<Item = (&CalcResult, &Attachment, &str)> + Clone {
+    science.results.iter().rev().filter_map(|stored| {
+        let result = &*stored.result;
+        let Settings::Xtb(settings) = &result.settings else {
+            return None;
+        };
+        if !matches!(result.task, Task::Optimize | Task::Conformers) {
+            return None;
+        }
+        let link = science.attachment(stored.attachment)?;
+        Some((
+            result,
+            link,
+            method_label(result).unwrap_or_else(|| settings.method.label()),
+        ))
+    })
 }
 
 fn method_label(result: &CalcResult) -> Option<&str> {
-    let method = result.provenance.method.as_deref()?;
+    let method = results::method_without_optimizer(result.provenance.method.as_deref()?);
     // A search records its recipe. Name the method that relaxed the kept geometries.
     if conformers::is_search(result) {
         if let Some((_, rerank)) = method.rsplit_once(" · ")

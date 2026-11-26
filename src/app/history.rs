@@ -80,7 +80,7 @@ impl App {
                 }
             }
             self.status = self
-                .xtb_history_status(&before, redo)
+                .xtb_history_status(before, redo)
                 .unwrap_or_else(|| "History restored".into());
         }
     }
