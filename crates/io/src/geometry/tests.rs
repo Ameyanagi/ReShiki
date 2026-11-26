@@ -251,13 +251,9 @@ fn ensemble_request_encodes_fresh_generation_and_validates_limits() {
     source.atoms[0].depth = 17.;
     let prepared = Prepared::new(&source, &[]).unwrap();
     let field = ForceField::Mmff94s;
-    assert!(
-        !prepared
-            .generation_request(field, 42)
-            .unwrap()
-            .coordinates
-            .is_empty()
-    );
+    let generation = prepared.generation_request(field, 42).unwrap();
+    assert!(!generation.coordinates.is_empty());
+    assert_eq!(generation.max_iterations, 500);
     for (mode, name) in [
         (Ensemble::Minimized, "Minimized"),
         (Ensemble::Embedded, "Embedded"),
@@ -269,6 +265,7 @@ fn ensemble_request_encodes_fresh_generation_and_validates_limits() {
         assert_eq!(request.field, field.native());
         assert_eq!(request.seed, 42);
         assert_eq!(request.conformers, 16);
+        assert_eq!(request.max_iterations, 2000);
         assert!(request.coordinates.is_empty());
     }
     for count in [0, reshiki_geometry::MAX_CONFORMERS + 1] {
@@ -302,6 +299,41 @@ fn ensemble_request_encodes_fresh_generation_and_validates_limits() {
     ));
 }
 
+#[tokio::test]
+async fn ritonavir_ensemble_embeds_and_converges_all_starts() {
+    use crate::engine::{LocalEngine, Request};
+
+    let smiles = "CC(C)c1nc(CN(C)C(=O)N[C@@H](C(C)C)C(=O)N[C@@H](Cc2ccccc2)C[C@H](O)[C@H](Cc2ccccc2)NC(=O)OCc2cncs2)cs1";
+    let doc = LocalEngine::in_process()
+        .request(Request::import_smiles(smiles))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let prepared = Prepared::new(&doc, &[]).unwrap();
+    let starts = 12;
+    let request = prepared
+        .ensemble_request(
+            ForceField::Mmff94s,
+            DEFAULT_SEED,
+            starts,
+            Ensemble::Minimized,
+        )
+        .unwrap();
+    let result = reshiki_geometry::solve(&request).unwrap();
+    let converged = result
+        .ensemble
+        .iter()
+        .filter(|member| member.converged)
+        .count();
+    assert_eq!(
+        (result.ensemble.len(), converged),
+        (starts as usize, starts as usize),
+        "{:?}",
+        result.diagnostics
+    );
+}
+
 #[test]
 fn butane_ensemble_round_trips_through_the_worker_frame() {
     let prepared = Prepared::new(&carbon_chain(4), &[]).unwrap();
@@ -322,6 +354,12 @@ fn butane_ensemble_round_trips_through_the_worker_frame() {
     assert_eq!(response.version, reshiki_geometry::RDKIT_VERSION);
     let response = response.result.unwrap();
     assert!(response.ensemble.len() > 1);
+    assert!(
+        response
+            .diagnostics
+            .iter()
+            .any(|line| line.contains("iteration_limit=2000"))
+    );
     assert_eq!(response.original_count, 4);
     assert_eq!(response.hydrogen_parents.len(), 10);
     assert!(response.hydrogen_parents.iter().all(|&parent| parent < 4));

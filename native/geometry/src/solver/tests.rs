@@ -19,7 +19,7 @@ fn pruning_never_searches_molecule_symmetry() {
         "max_iterations": 500
     }))
     .unwrap();
-    let parameters = embedding_parameters(&request);
+    let parameters = embedding_parameters(&request, 1);
     assert!(parameters.prune_rms_thresh > 0.);
     assert!(!parameters.use_symmetry_for_pruning);
 }
