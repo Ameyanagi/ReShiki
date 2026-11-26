@@ -972,7 +972,12 @@ reported TS with the same atomic masses and cutoff of −50 cm⁻¹. Exit 0
 requires a converged saddle refinement, exactly one imaginary mode in each
 check, and IRC branches whose relaxed ends match the two endpoints. A failed
 worker check or a count disagreement appears in the table and JSON report
-and exits 1. Progress appears on stderr.
+and exits 1. Progress appears on stderr. Set `RESHIKI_TS_TRACE=1` to log band
+peaks, P-RFO energies and projected gradients, followed curvatures, mode
+overlaps, trust radii, trial decisions and stopping reasons. Refinement accepts
+points at most 10 kcal/mol above the original climbing image. A positive
+initial curvature or an exhausted trust radius can trigger one restart from
+the band within the same step budget.
 
 `path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
 from the reactant side through the TS to the product side. When refinement

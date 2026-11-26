@@ -730,6 +730,86 @@ impl Potential for CarbonStretch {
     }
 }
 
+#[test]
+fn sparse_band_restart_recovers_a_saddle_hidden_after_a_positive_mode() {
+    let mut surface = CarbonStretch(0.02);
+    let minimum = Minimum {
+        positions: vec![0., 0., 0., 1., 0., 0.],
+        energy: 0.,
+    };
+    let tangent = vec![-1., 0., 0., 1., 0., 0.];
+    let options = TsOptions::default();
+    let bare = saddle::refine(
+        &mut surface,
+        &minimum,
+        &tangent,
+        &[12.; 2],
+        &options,
+        &mut proceed,
+    )
+    .unwrap();
+    assert!(bare.converged && bare.point.energy.abs() < 1e-12);
+    let (before, _) =
+        modes::frequencies(&bare.point.positions, &bare.hessian.unwrap(), &[12.; 2]).unwrap();
+    assert!(before[0] > 0.);
+    // The CI has collapsed into the first well, but its next link spans the
+    // barrier. The exact midpoint has r=2 and fits within the energy ceiling.
+    let band = neb::Band {
+        path: vec![
+            minimum.clone(),
+            minimum,
+            Minimum {
+                positions: vec![0., 0., 0., 3., 0., 0.],
+                energy: 0.,
+            },
+        ],
+        converged: false,
+        climbing: 1,
+        tangent,
+    };
+    let recovered =
+        saddle::refine_band(&mut surface, &band, &[12.; 2], &options, &mut proceed).unwrap();
+    assert!(recovered.converged);
+    assert!((recovered.point.energy - 0.005).abs() < 1e-10);
+    let x = &recovered.point.positions;
+    assert!((distance(&x[..3], &x[3..]) - 2.).abs() < 1e-8);
+    let (frequencies, _) = modes::frequencies(x, &recovered.hessian.unwrap(), &[12.; 2]).unwrap();
+    assert_eq!(
+        frequencies.iter().filter(|f| **f < -IMAGINARY_CM1).count(),
+        1
+    );
+}
+
+#[test]
+fn refinement_cannot_leave_the_band_for_a_remote_higher_saddle() {
+    // A sparse band hands off a point barely outside the reactant well.
+    // The true saddle on this stretch is 0.25 Eh above it.
+    let mut surface = CarbonStretch(1.);
+    let x = vec![0., 0., 0., 1.03, 0., 0.];
+    let (energy, _) = evaluate(&mut surface, &x).unwrap();
+    let start = Minimum {
+        positions: x,
+        energy,
+    };
+    let limit = energy + 10.0 / KCAL_PER_HARTREE;
+    let result = saddle::refine(
+        &mut surface,
+        &start,
+        &[-1., 0., 0., 1., 0., 0.],
+        &[12.; 2],
+        &TsOptions::default(),
+        &mut |event| {
+            if let Event::Saddle { energy, .. } = event {
+                assert!(energy <= limit, "accepted energy {energy} above {limit}");
+            }
+            proceed(event)
+        },
+    )
+    .unwrap();
+    assert!(!result.converged);
+    assert!(result.point.energy <= limit);
+}
+
 fn carbon_stretch(k: f64, options: TsOptions) -> TsReport {
     search(
         &mut [CarbonStretch(k)],
