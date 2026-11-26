@@ -1908,6 +1908,158 @@ fn unavailable_commands_rank_after_available_ones_in_each_match_tier() {
 }
 
 #[test]
+fn force_field_command_title_and_legacy_search_follow_xtb_availability() {
+    let mut app = app();
+    let (a, b) = ethane(&mut app);
+    app.tab.selected = vec![a, b];
+    let expected = if crate::app::xtb::available() {
+        "Force-field 3D model (MMFF94s)…"
+    } else {
+        "3D optimize…"
+    };
+    search(&mut app, "3d optimize");
+    assert_eq!(top(&app).name, expected);
+    assert!(matches!(
+        &top(&app).run,
+        Run::Send(messages)
+            if matches!(messages.as_slice(), [Message::Optimization(crate::app::optimization::Action::Begin)])
+    ));
+    let entries = crate::app::help::registry::entries();
+    let shortcut = entries
+        .iter()
+        .find(|entry| entry.name == expected)
+        .expect("Help uses the same force-field title");
+    if crate::app::xtb::available() {
+        assert!(shortcut.synonyms.contains(&"3d optimize"));
+    } else {
+        assert!(
+            !app.commands
+                .catalog()
+                .iter()
+                .any(|c| c.name.contains("xTB"))
+        );
+    }
+}
+
+#[test]
+fn xtb_commands_rank_first_for_calculation_intents() {
+    if !crate::app::xtb::available() {
+        return;
+    }
+    let mut app = app();
+    let (a, b) = ethane(&mut app);
+    app.tab.selected = vec![a, b];
+    for query in [
+        "optimize",
+        "geometry",
+        "minimize",
+        "energy",
+        "frequencies",
+        "ir",
+        "homo",
+        "lumo",
+        "orbital",
+        "conformer",
+        "quantum",
+        "dft",
+    ] {
+        search(&mut app, query);
+        assert!(
+            top(&app).name.contains("xTB"),
+            "{query}: {} is first",
+            top(&app).name
+        );
+    }
+    search(&mut app, "optimize");
+    let ranked = app.commands.ranked();
+    let position = |name| ranked.iter().position(|c| c.name == name).unwrap();
+    assert!(
+        position("Optimize geometry (xTB quantum)") < position("Force-field 3D model (MMFF94s)…")
+    );
+}
+
+#[test]
+fn xtb_direct_commands_route_calculations_and_require_a_molecule() {
+    use crate::app::xtb::{self, CalcTask, Entry};
+    if !xtb::available() {
+        return;
+    }
+    let mut app = app();
+    let catalog = catalog::build(&app);
+    let calculate = catalog
+        .iter()
+        .position(|c| c.name == "Calculate (xTB)…")
+        .unwrap();
+    for (index, (name, entry)) in [
+        ("Optimize geometry (xTB quantum)", Entry::OptimizeGfn2),
+        (
+            "Optimize and calculate frequencies (xTB Opt + freq)",
+            Entry::Task(CalcTask::OptFreq),
+        ),
+        (
+            "Frequencies at the current geometry (xTB)",
+            Entry::Task(CalcTask::Frequencies),
+        ),
+        (
+            "Single-point energy, HOMO and LUMO (xTB)",
+            Entry::Task(CalcTask::Energy),
+        ),
+        (
+            "Find low-energy conformers (xTB)",
+            Entry::Task(CalcTask::Conformers),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let command = &catalog[calculate + index + 1];
+        assert_eq!(command.name, name);
+        assert_eq!(command.need, Need::Molecule);
+        assert!(app.command_unavailable(command).is_some(), "{name}");
+        assert!(matches!(
+            &command.run,
+            Run::Send(messages)
+                if matches!(messages.as_slice(), [Message::Xtb(xtb::Action::Entry(actual))] if *actual == entry)
+        ));
+    }
+    let _ = app.run_command(catalog[calculate + 1].clone());
+    assert_eq!(app.status, "Draw or add a molecule to calculate it");
+    assert!(!app.error);
+}
+
+#[test]
+fn alternate_outcome_titles_preserve_explicit_titles_keys_and_empty_selection() {
+    if !crate::app::xtb::available() {
+        return;
+    }
+    let mut app = app();
+    let (a, b) = ethane(&mut app);
+    app.tab.selected = vec![a, b];
+    search(&mut app, "orbital");
+    assert_eq!(top(&app).name, "Single-point energy, HOMO and LUMO (xTB)");
+    for (query, expected) in [
+        ("s orbital", "s orbital"),
+        ("p orbital", "p orbital"),
+        ("Iridium (Ir)", "Iridium (Ir)"),
+        (
+            "Single-point energy, HOMO and LUMO (xTB)",
+            "Single-point energy, HOMO and LUMO (xTB)",
+        ),
+        ("v", "Flip horizontal"),
+    ] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, expected, "{query}");
+    }
+    app.tab.selected.clear();
+    search(&mut app, "v");
+    assert_eq!(top(&app).name, "Select tool");
+    search(&mut app, "orbital");
+    assert!(!top(&app).name.contains("xTB"));
+    search(&mut app, "ir");
+    assert_eq!(top(&app).name, "Iridium (Ir)");
+}
+
+#[test]
 fn name_matches_outrank_synonym_and_description_matches() {
     let mut app = app();
     open(&mut app);

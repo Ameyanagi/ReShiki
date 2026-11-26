@@ -1196,6 +1196,7 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
+        let xtb_page_was_shown = self.nmr_xtb_page_shown();
         let vibration_context = |app: &Self| {
             (app.xtb_vibrations_visible() && app.tab.xtb.run.is_none()).then_some((
                 app.tab.id,
@@ -1206,6 +1207,11 @@ impl App {
         let vibrations = vibration_context(self);
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
+        self.xtb_clear_selection_hint();
+        let document_changed = document != (self.tab.id, self.tab.file_epoch);
+        if !xtb_page_was_shown || document_changed {
+            self.nmr_clear_status_if_xtb();
+        }
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
         if vibrations != vibration_context(self) {
@@ -1227,7 +1233,7 @@ impl App {
         // All Properties pages share one scrollable, which keeps its offset
         // even while a short page hides it. Another tab or a newly opened
         // drawing starts from the top, whichever path brought it forward.
-        if document != (self.tab.id, self.tab.file_epoch) {
+        if document_changed {
             task = Task::batch([
                 task,
                 iced::widget::operation::snap_to(

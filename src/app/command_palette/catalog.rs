@@ -167,6 +167,8 @@ pub(crate) struct Command {
     pub keys: String,
     pub category: Category,
     pub synonyms: String,
+    /// An alternate outcome title for searching commands that act on a selection.
+    pub search_title: Option<&'static str>,
     pub detail: String,
     /// Vim-style ex commands; an exact alias ranks first.
     pub aliases: &'static [&'static str],
@@ -197,6 +199,7 @@ impl Command {
             keys,
             category,
             synonyms: synonyms.into(),
+            search_title: None,
             detail: detail.into(),
             aliases: &[],
             need: Need::Nothing,
@@ -209,6 +212,10 @@ impl Command {
     }
     fn need(mut self, need: Need) -> Self {
         self.need = need;
+        self
+    }
+    fn search_title(mut self, title: &'static str) -> Self {
+        self.search_title = Some(title);
         self
     }
     fn alias(mut self, aliases: &'static [&'static str]) -> Self {
@@ -986,9 +993,17 @@ fn edits(app: &App) -> Vec<Command> {
         )
         .need(Need::OneAtom),
         selection(
-            "3D optimize…",
+            if xtb::available() {
+                "Force-field 3D model (MMFF94s)…"
+            } else {
+                "3D optimize…"
+            },
             "Generate an optimized 3D conformer",
-            "conformer mmff uff geometry optimize",
+            if xtb::available() {
+                "conformer mmff uff geometry optimize 3d optimize"
+            } else {
+                "conformer mmff uff geometry optimize"
+            },
             Message::Optimization(optimization::Action::Begin),
         ),
         selection(
@@ -1616,12 +1631,57 @@ fn analysis(app: &App) -> Vec<Command> {
             "Calculate (xTB)…",
             Analyze,
             "Energy, geometry optimization or conformer search with GFN2-xTB, g-xTB or GFN-FF",
-            "xtb gfn2 gfn-ff gfnff g-xtb gxtb semiempirical quantum chemistry energy optimize calculate conformer conformers search ensemble",
-            Run::Send(vec![
-                Message::Inspector(InspectorTab::Predict),
-                Message::Xtb(xtb::Action::Page(xtb::Page::Xtb)),
-            ]),
+            "xtb gfn2 gfn-ff gfnff g-xtb gxtb semiempirical quantum chemistry energy optimize calculate conformer conformers search ensemble dft homo lumo orbital frequencies ir",
+            Run::Send(xtb::settings_messages().into()),
         ));
+        for (name, detail, synonyms, entry, search_title) in [
+            (
+                "Optimize geometry (xTB quantum)",
+                "Optimize the selected molecule's geometry with GFN2-xTB",
+                "optimize optimise optimization geometry minimize minimise minimum relax structure quantum qm semiempirical dft xtb gfn2 energy",
+                xtb::Entry::OptimizeGfn2,
+                None,
+            ),
+            (
+                "Optimize and calculate frequencies (xTB Opt + freq)",
+                "Optimize the selected molecule and calculate its vibrational frequencies",
+                "frequencies frequency freq vibrations vibrational ir infrared spectrum hessian zpve thermochemistry enthalpy gibbs free energy minimum opt+freq",
+                xtb::Entry::Task(xtb::CalcTask::OptFreq),
+                Some("IR spectrum and vibrational frequencies"),
+            ),
+            (
+                "Frequencies at the current geometry (xTB)",
+                "Calculate vibrational frequencies without optimizing the current geometry",
+                "frequencies hessian vibrations ir normal modes",
+                xtb::Entry::Task(xtb::CalcTask::Frequencies),
+                None,
+            ),
+            (
+                "Single-point energy, HOMO and LUMO (xTB)",
+                "Calculate the selected molecule's energy and frontier molecular orbitals",
+                "energy single point sp homo lumo gap orbital orbitals frontier dipole charges quantum",
+                xtb::Entry::Task(xtb::CalcTask::Energy),
+                Some("Molecular orbitals"),
+            ),
+            (
+                "Find low-energy conformers (xTB)",
+                "Search for low-energy conformers of the selected molecule",
+                "conformer conformers conformation conformational search ensemble rotamer crest boltzmann",
+                xtb::Entry::Task(xtb::CalcTask::Conformers),
+                None,
+            ),
+        ] {
+            let mut command = molecule(
+                name,
+                detail,
+                synonyms,
+                vec![Message::Xtb(xtb::Action::Entry(entry))],
+            );
+            if let Some(title) = search_title {
+                command = command.search_title(title);
+            }
+            list.push(command);
+        }
         list.push(
             Command::new(
                 "Run the last xTB calculation",

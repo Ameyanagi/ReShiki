@@ -501,7 +501,7 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             Event::Mouse(mouse::Event::ButtonPressed(_))
                 | Event::Touch(iced::touch::Event::FingerPressed { .. })
         ) && hovered.is_none()
-            && cursor.is_over(layout.bounds())
+            && (cursor.is_over(layout.bounds()) || menu.page == Page::Model3d)
         {
             shell.publish(Message::ContextMenu(Action::Close));
             shell.capture_event();

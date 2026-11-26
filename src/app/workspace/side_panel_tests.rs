@@ -308,10 +308,12 @@ async fn a_narrow_context_row_keeps_selection_commands_ahead_of_global_modes() -
     app.tab.selected = app.tab.doc.all_ids();
     let commands = app.context_commands();
     let labels: Vec<_> = commands.iter().map(|c| c.label).collect();
-    assert_eq!(
-        labels[labels.len() - 2..],
-        ["Keyboard drawing", "3D optimize…"]
-    );
+    let (model, overflow_model) = if super::super::xtb::available() {
+        ("3D model ▾", "Force-field 3D model (MMFF94s)…")
+    } else {
+        ("3D optimize…", "3D optimize…")
+    };
+    assert_eq!(labels[labels.len() - 2..], ["Keyboard drawing", model]);
     let names: Vec<_> = commands.iter().map(|c| c.menu).collect();
     let mut partly_folded = 0;
     for width in (360..=1200).step_by(40) {
@@ -338,7 +340,7 @@ async fn a_narrow_context_row_keeps_selection_commands_ahead_of_global_modes() -
             && !shown.is_empty()
         {
             partly_folded += 1;
-            assert!(more.name.contains("3D optimize…"), "{}", more.name);
+            assert!(more.name.contains(overflow_model), "{}", more.name);
             assert!(!more.name.contains("Join"), "{width} px: {}", more.name);
         }
     }
