@@ -181,6 +181,22 @@ fn the_headline_names_the_outcome_medium_and_electronic_state() {
 }
 
 #[test]
+fn imported_scan_headline_uses_a_generic_energy_label() {
+    let file = reshiki_io::qcread::read(
+        "so2_scan.log",
+        include_bytes!("../../../../tests/fixtures/qc/pymatgen/so2_scan.log"),
+    )
+    .unwrap();
+    let job = &file.jobs[0];
+    assert_eq!(job.kind, reshiki_io::qcread::JobKind::Scan);
+    let result = job.result.as_ref().unwrap();
+    assert_eq!(result.task, Task::Energy);
+    let output = &job.result_step().unwrap().frame;
+    let text = headline(result, output);
+    assert!(text.starts_with("Energy · Gaussian 09 ·"), "{text}");
+}
+
+#[test]
 fn imported_optimizations_without_step_energies_omit_the_step_count() {
     let mut result = optimized(true);
     let output = frame(&END);
@@ -389,6 +405,33 @@ fn methods_text_qualifies_missing_legacy_optimizer_and_convergence_provenance() 
     assert!(text.contains("convergence criteria were not recorded"));
     assert!(text.contains("optimizer algorithms were not recorded"));
     assert!(text.contains("ReShiki’s default optimizer uses TRIC [Wang2016TRIC]"));
+}
+
+#[test]
+fn imported_method_line_omits_blank_provenance_fields() {
+    let file = reshiki_io::qcread::read(
+        "water.log",
+        include_bytes!("../../../../tests/fixtures/qc/cclib/g16_water_mp2.log"),
+    )
+    .unwrap();
+    let job = &file.jobs[0];
+    let mut result = job.result.clone().unwrap();
+    let output = &job.result_step().unwrap().frame;
+    for (method, basis, version, expected) in [
+        ("", " \t", " \t", "Gaussian · from water.log"),
+        ("RMP2-FC", " ", "", "Gaussian · RMP2-FC · from water.log"),
+        (
+            " ",
+            " STO-3G ",
+            " 16 Revision A.03 ",
+            "Gaussian 16 · STO-3G · from water.log",
+        ),
+    ] {
+        result.provenance.method = Some(method.into());
+        result.provenance.basis = Some(basis.into());
+        result.provenance.program_version = Some(version.into());
+        assert_eq!(method_line(&result, output), expected);
+    }
 }
 
 #[test]

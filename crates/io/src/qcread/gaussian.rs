@@ -161,7 +161,7 @@ fn read_job(
     let archive = archive(lines);
     let kind = job_kind(lines, &keywords, archive.as_ref());
     let (method, basis) = match &archive {
-        Some(archive) => (Some(archive.method.clone()), Some(archive.basis.clone())),
+        Some(archive) => (archive.method.clone(), archive.basis.clone()),
         None => route_level(&keywords),
     };
     let mut job = Job {
@@ -403,8 +403,8 @@ fn route_level(keywords: &[String]) -> (Option<String>, Option<String>) {
 struct Archive {
     line: usize,
     kind: String,
-    method: String,
-    basis: String,
+    method: Option<String>,
+    basis: Option<String>,
     record: String,
 }
 
@@ -428,11 +428,14 @@ fn archive(lines: &Lines<'_>) -> Option<Archive> {
         record.push_str(part.strip_prefix(' ').unwrap_or(part));
         if record.ends_with("\\@") {
             let mut fields = record.split('\\').skip(3);
+            let kind = fields.next()?.into();
+            let method = fields.next()?.trim();
+            let basis = fields.next()?.trim();
             return Some(Archive {
                 line,
-                kind: fields.next()?.into(),
-                method: fields.next()?.into(),
-                basis: fields.next()?.into(),
+                kind,
+                method: (!method.is_empty()).then(|| method.into()),
+                basis: (!basis.is_empty()).then(|| basis.into()),
                 record,
             });
         }
