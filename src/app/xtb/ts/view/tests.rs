@@ -669,12 +669,14 @@ mod presentation_tests {
                     .any(|text| text == "No reliable transition state found.")
             );
             assert!(snapshot.texts.iter().all(|text| !text.contains("ΔE‡")));
-            assert!(
+            // Builds without the engine offer no rerun.
+            assert_eq!(
                 snapshot
                     .semantics
                     .nodes
                     .iter()
-                    .any(|node| node.id == "xtb-ts-rerun-20")
+                    .any(|node| node.id == "xtb-ts-rerun-20"),
+                crate::app::xtb::available()
             );
         }
     }

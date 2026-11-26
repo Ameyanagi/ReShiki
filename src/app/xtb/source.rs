@@ -77,10 +77,12 @@ impl App {
                 {
                     let mut source = conformer(method, i, count);
                     if let Some((energy, lowest)) = energies.get(i).zip(energies.first()) {
-                        let delta = (energy - lowest) * conformers::KCAL_PER_HARTREE;
+                        let unit = self.appearance.energy_unit;
+                        let delta =
+                            unit.convert_kcal((energy - lowest) * conformers::KCAL_PER_HARTREE);
                         source
                             .label
-                            .push_str(&format!(" · ΔE {delta:+.2} kcal/mol"));
+                            .push_str(&format!(" · ΔE {delta:+.2} {}", unit.label()));
                     }
                     frame.drawing_atoms.clone_from(&link.atoms);
                     source.frame = Some(frame);
@@ -297,7 +299,7 @@ mod tests {
 
     #[test]
     fn a_search_names_the_applied_conformer_and_offers_other_ranks() {
-        let (app, oxygen) = App::xtb_searched_water();
+        let (mut app, oxygen) = App::xtb_searched_water();
         let sources = app.xtb_geometry_sources(&[oxygen]);
         assert_eq!(sources.len(), 4);
         assert!(
@@ -322,5 +324,16 @@ mod tests {
             START.map(|xyz| xyz.map(|x| f64::from(x as f32)))
         );
         assert_eq!(start.drawing_atoms, [Some(oxygen), None, None]);
+        for (unit, delta) in [
+            (crate::appearance::EnergyUnit::KjPerMol, "+2.63 kJ/mol"),
+            (crate::appearance::EnergyUnit::Ev, "+0.03 eV"),
+        ] {
+            app.appearance.energy_unit = unit;
+            let sources = app.xtb_geometry_sources(&[oxygen]);
+            assert_eq!(
+                sources[1].label,
+                format!("xTB conformer 2 of 3 · GFN2-xTB · ΔE {delta}")
+            );
+        }
     }
 }

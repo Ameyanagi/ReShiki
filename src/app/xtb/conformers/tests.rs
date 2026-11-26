@@ -13,7 +13,7 @@ const C: [[f64; 3]; 3] = [[0., 0., 0.], [0.95, 0.1, 0.], [-0.20, 0.95, 0.1]];
 fn conformer_headers_show_units_and_fit_the_inspector_subset() {
     let mut result = searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
     let labels = |r: &CalcResult, inspector| {
-        view::headers(r, inspector)
+        view::headers(r, inspector, crate::appearance::EnergyUnit::default())
             .into_iter()
             .map(|(label, _)| label)
             .collect::<Vec<_>>()
@@ -35,7 +35,10 @@ fn conformer_headers_show_units_and_fit_the_inspector_subset() {
         ["#", "ΔE (kcal/mol)", "Pop.", "Stereo"]
     );
     assert_eq!(
-        view::headers(&result, true).last().unwrap().1,
+        view::headers(&result, true, crate::appearance::EnergyUnit::default())
+            .last()
+            .unwrap()
+            .1,
         iced::Length::Fill
     );
     result.settings = QcSettings::Imported { keywords: vec![] };
@@ -51,6 +54,33 @@ fn conformer_headers_show_units_and_fit_the_inspector_subset() {
             "Stereo"
         ]
     );
+}
+
+#[test]
+fn conformer_table_converts_relative_energies_to_kilojoules() {
+    use crate::appearance::EnergyUnit;
+
+    let result = searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+    let labels: Vec<_> = view::headers(&result, false, EnergyUnit::KjPerMol)
+        .into_iter()
+        .map(|(label, _)| label)
+        .collect();
+    assert_eq!(labels[1], "ΔE xTB (kJ/mol)");
+    assert_eq!(labels[2], "ΔE MMFF94s (kJ/mol)");
+    assert_eq!(
+        view::headers(&result, true, EnergyUnit::KjPerMol)[1].0,
+        "ΔE (kJ/mol)"
+    );
+    let rows = rows(
+        &reshiki::document::Document::default(),
+        &[None; 3],
+        &result,
+        true,
+    );
+    let values = view::row_values(&rows[1], 2, false, true, EnergyUnit::KjPerMol);
+    assert_eq!(&values[..4], ["2", "2.63", "0.26", "25.7 %"]);
+    let inspector = view::row_values(&rows[1], 2, true, false, EnergyUnit::KjPerMol);
+    assert_eq!(inspector, ["2", "2.63", "25.7 %"]);
 }
 
 #[test]
@@ -345,12 +375,20 @@ fn saved_fixture_keeps_the_existing_table_display() {
     );
     let display: Vec<_> = rows
         .iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(index, row)| {
+            let values = view::row_values(
+                row,
+                index + 1,
+                false,
+                true,
+                crate::appearance::EnergyUnit::default(),
+            );
             (
-                format!("{:.2}", row.delta_kcal),
-                format!("{:.2}", row.start_kcal.unwrap()),
-                format!("{:.1} %", row.percent),
-                row.cluster.unwrap().to_string(),
+                values[1].clone(),
+                values[2].clone(),
+                values[3].clone(),
+                values[5].clone(),
             )
         })
         .collect();
@@ -530,11 +568,15 @@ mod app {
         );
         assert_eq!(shown.stored.result.trajectory.as_ref().unwrap().steps(), 4);
         assert_eq!(
-            super::super::export::xyz(&shown.stored.result, "2-butanol")
-                .unwrap()
-                .lines()
-                .filter(|l| *l == "5")
-                .count(),
+            super::super::export::xyz(
+                &shown.stored.result,
+                "2-butanol",
+                crate::appearance::EnergyUnit::default()
+            )
+            .unwrap()
+            .lines()
+            .filter(|l| *l == "5")
+            .count(),
             4
         );
         drop(table);
@@ -1086,8 +1128,12 @@ mod app {
         );
         let path = result.trajectory.as_ref().unwrap();
         assert_eq!(path.rmsd_to_best_angstrom, [0., 0.35, 0.50]);
-        let xyz =
-            super::super::export::xyz(&app.tab.doc.science.results[0].result, "water").unwrap();
+        let xyz = super::super::export::xyz(
+            &app.tab.doc.science.results[0].result,
+            "water",
+            crate::appearance::EnergyUnit::default(),
+        )
+        .unwrap();
         assert_eq!(xyz.lines().filter(|l| l.trim() == "3").count(), 3);
     }
 
@@ -1222,6 +1268,58 @@ mod app {
         assert!(sdf.bytes.starts_with(b"H2O conformer 1\n"));
     }
 
+    #[test]
+    fn conformer_exports_use_the_app_energy_unit() {
+        use super::Format;
+        use crate::appearance::EnergyUnit;
+
+        let (mut app, _) = App::xtb_searched_water();
+        for (unit, label, property, delta, number) in [
+            (
+                EnergyUnit::KjPerMol,
+                "kJ/mol",
+                "DELTA_E_KJ_MOL",
+                "2.625",
+                "2.63",
+            ),
+            (EnergyUnit::Ev, "eV", "DELTA_E_EV", "0.027", "0.03"),
+        ] {
+            app.appearance.energy_unit = unit;
+            let shown = app.xtb_shown().unwrap();
+            for (format, separator) in [(Format::Tsv, '\t'), (Format::Csv, ',')] {
+                let prepared = app.xtb_prepare_conformer_export(&shown, format).unwrap();
+                let text = String::from_utf8(prepared.bytes).unwrap();
+                let mut lines = text.lines();
+                let headers: Vec<_> = lines.next().unwrap().split(separator).collect();
+                assert_eq!(headers[1], "Energy (Eh)");
+                assert_eq!(headers[2], format!("ΔE ({label})"));
+                assert_eq!(headers[3], format!("ΔE start ({label})"));
+                assert_eq!(headers[7], "Start energy (Eh)");
+                let second: Vec<_> = lines.nth(1).unwrap().split(separator).collect();
+                assert_eq!(second[0], "2");
+                assert_eq!(second[1], "-5.0691760000");
+                assert_eq!(second[2], delta);
+                assert_eq!(second[3], delta);
+                assert_eq!(second[7], "0.0110000000");
+                assert!(!text.contains("kcal/mol"));
+            }
+            let sdf = app
+                .xtb_prepare_conformer_export(&shown, Format::Sdf)
+                .unwrap();
+            let sdf = String::from_utf8(sdf.bytes).unwrap();
+            assert!(sdf.contains(&format!("> <{property}>\n{delta}\n")));
+            assert!(sdf.contains("> <ENERGY_HARTREE>\n-5.0691760000\n"));
+            assert!(!sdf.contains("DELTA_E_KCAL_MOL"));
+            let xyz = app
+                .xtb_prepare_conformer_export(&shown, Format::Xyz)
+                .unwrap();
+            let xyz = String::from_utf8(xyz.bytes).unwrap();
+            assert!(xyz.contains(&format!("ΔE {number} {label}")));
+            assert!(xyz.contains("E = -5.0691760000 Eh"));
+            assert!(!xyz.contains("kcal/mol"));
+        }
+    }
+
     #[tokio::test]
     #[ignore = "Opt-in bottom dock layout check with a headless renderer"]
     async fn bottom_dock_shows_five_full_rows_and_counts_the_saved_frames() {
@@ -1265,6 +1363,8 @@ mod app {
         for (id, label) in [
             ("xtb-export-conformers-sdf", "Export all 9 as SDF…"),
             ("xtb-export-conformers-xyz", "Export all 9 as XYZ…"),
+            ("xtb-export-conformers-tsv", "Export all 9 as TSV…"),
+            ("xtb-export-conformers-csv", "Export all 9 as CSV…"),
         ] {
             assert!(nodes.iter().any(|node| node.id == id && node.name == label));
         }

@@ -88,8 +88,8 @@ pub fn map_review(doc: &Document, arrow: u64) -> Result<MapReview, TsPlanError> 
     };
     let reactants = drawing(Role::Reactant)?;
     let products = drawing(Role::Product)?;
-    let from = MappedSide::new(&reactants)?;
-    let to = MappedSide::new(&products)?;
+    let from = MappedSide::new(&reactants, &prepare(&reactants)?)?;
+    let to = MappedSide::new(&products, &prepare(&products)?)?;
     compatible_maps(&from, &to)?;
     mapped_changes(&from, &to)
 }
@@ -138,9 +138,24 @@ fn plan_inner(doc: &Document, arrow: u64, check_drawn_charge: bool) -> Result<Ts
         Side::Product => (product_ids, reactant_ids),
     };
     let start_drawing = side_drawing(doc, &start_atoms)?;
+    let prepared = prepare(&start_drawing)?;
+    let atoms = prepared.state.graph.atoms.len()
+        + prepared
+            .state
+            .graph
+            .atoms
+            .iter()
+            .zip(&prepared.state.valences)
+            .map(|(atom, valence)| {
+                atom.explicit_hydrogens as usize + valence.implicit_hydrogens as usize
+            })
+            .sum::<usize>();
+    if atoms > MAX_TS_ATOMS {
+        return Err(TsPlanError::TooLarge { atoms });
+    }
     let other_drawing = side_drawing(doc, &other_atoms)?;
-    let from = MappedSide::new(&start_drawing)?;
-    let to = MappedSide::new(&other_drawing)?;
+    let from = MappedSide::new(&start_drawing, &prepared)?;
+    let to = MappedSide::new(&other_drawing, &prepare(&other_drawing)?)?;
     compatible_maps(&from, &to)?;
     if check_drawn_charge && from.charge != to.charge {
         return Err(TsPlanError::Mismatch(
@@ -148,10 +163,6 @@ fn plan_inner(doc: &Document, arrow: u64, check_drawn_charge: bool) -> Result<Ts
         ));
     }
 
-    let atoms = from.atoms.len() + from.atoms.values().map(|a| a.hydrogens).sum::<usize>();
-    if atoms > MAX_TS_ATOMS {
-        return Err(TsPlanError::TooLarge { atoms });
-    }
     let MapReview {
         form,
         break_,
@@ -273,6 +284,10 @@ fn side_drawing(doc: &Document, ids: &[u64]) -> Result<Document, TsPlanError> {
     Ok(part)
 }
 
+fn prepare(part: &Document) -> Result<chemistry::Molecule, TsPlanError> {
+    chemistry::prepare(part).map_err(|error| TsPlanError::Unsupported(error.to_string()))
+}
+
 struct MappedAtom<'a> {
     drawing: &'a Atom,
     hydrogens: usize,
@@ -286,7 +301,7 @@ struct MappedSide<'a> {
 }
 
 impl<'a> MappedSide<'a> {
-    fn new(part: &'a Document) -> Result<Self, TsPlanError> {
+    fn new(part: &'a Document, prepared: &chemistry::Molecule) -> Result<Self, TsPlanError> {
         // Folding an isotope-labelled H into its heavy atom's hydrogen count
         // loses its identity, even when an exchange preserves every count.
         if part
@@ -297,9 +312,8 @@ impl<'a> MappedSide<'a> {
             return Err(TsPlanError::UnmappedIsotopeHydrogen);
         }
         let unsupported = |error: chemistry::Error| TsPlanError::Unsupported(error.to_string());
-        let prepared = chemistry::prepare(part).map_err(unsupported)?;
         let graph = chemistry::drawing_graph(part).map_err(unsupported)?;
-        let hydrogens = attached_hydrogens(&graph, &prepared, |i| {
+        let hydrogens = attached_hydrogens(&graph, prepared, |i| {
             part.atoms.get(i).is_some_and(|atom| atom.map_num != 0)
         });
         let mut atoms = BTreeMap::new();

@@ -827,7 +827,7 @@ impl App {
                 None,
                 vec![Item::choice(
                     "Energy unit",
-                    "Reaction energies, paths and exports.",
+                    "Relative energies in xTB results and exports.",
                     choices(
                         "settings-energy-unit",
                         &EnergyUnit::ALL.map(|unit| (unit, unit.label().to_owned())),

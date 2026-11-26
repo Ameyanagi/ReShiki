@@ -91,10 +91,14 @@ impl App {
         if let Some(ignored) = &dialog.ignored {
             content = content.push(line(ignored, Tone::Muted));
         }
-        if let Some(note) = dialog.target_stereo_note {
+        if let Some(note) = dialog
+            .target_stereo_note
+            .filter(|_| dialog.mode == Mode::TransitionState)
+        {
             content = content.push(line(note, Tone::Muted));
         }
-        if dialog.unmapped_isotope_hydrogen {
+        let barrier_refusal = dialog.barrier_refusal();
+        if dialog.unmapped_isotope_hydrogen && barrier_refusal.is_none() {
             content = content.push(line(
                 "Isotope-labelled hydrogens need an explicit atom map.",
                 Tone::Muted,
@@ -194,7 +198,12 @@ impl App {
             ));
         }
         if dialog.mode == Mode::Energy {
-            if let Mapping::Failed(reason) = &dialog.mapping {
+            if let Some(reason) = barrier_refusal {
+                content = content.push(line(
+                    format!("Barrier not available: {reason}"),
+                    Tone::Muted,
+                ));
+            } else if let Mapping::Failed(reason) = &dialog.mapping {
                 content = content.push(line(reason, Tone::Muted));
             } else if let Err(reason) = &dialog.changes
                 && !matches!(dialog.mapping, Mapping::Finding)
