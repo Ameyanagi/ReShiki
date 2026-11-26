@@ -100,6 +100,7 @@ fn what(result: &CalcResult) -> Option<&'static str> {
         Task::Energy => "energy",
         Task::Hessian => "frequencies",
         Task::Conformers => "conformer search",
+        Task::TransitionState => "transition-state search",
         _ => return None,
     })
 }

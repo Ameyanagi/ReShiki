@@ -188,14 +188,16 @@ impl App {
             return Some(header);
         }
 
-        let mut content = column![].spacing(4);
+        // A failed rerun stays above the scrolling body, before its previous result.
+        let mut pinned = column![].spacing(4);
         if let Some(failed) = failed.filter(|failed| failed.ts().is_some()) {
-            content = content.push(self.xtb_failure_card(failed, inspector));
-            content = content.push(line(
+            pinned = pinned.push(self.xtb_failure_card(failed, inspector));
+            pinned = pinned.push(line(
                 results::previous_result(&shown.stored.result),
                 Tone::Muted,
             ));
         }
+        let mut content = column![].spacing(4);
         content = content.push(text(results::headline(&shown.stored.result, shown.frame)).size(12));
         content = content.extend(key_tiles(&shown, inspector, false));
         // The semi-empirical caveat is about xTB, not imported results.
@@ -230,9 +232,14 @@ impl App {
                 .into()
         };
         Some(
-            column![header, middle, self.xtb_footer(&shown, view, inspector)]
-                .spacing(4)
-                .into(),
+            column![
+                header,
+                pinned,
+                middle,
+                self.xtb_footer(&shown, view, inspector)
+            ]
+            .spacing(4)
+            .into(),
         )
     }
 
