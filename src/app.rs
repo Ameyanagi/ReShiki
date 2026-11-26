@@ -69,6 +69,7 @@ mod import;
 mod inline_text;
 mod inspector;
 mod inspector_pages;
+mod ir_figure;
 mod joining;
 mod keyboard_drawing;
 mod label_refresh;
@@ -250,6 +251,7 @@ pub enum Message {
     Arc(arcs::Action),
     Graphics(graphics::Action),
     Tlc(tlc::Action),
+    IrFigure(ir_figure::Action),
     /// Figure panels and lasting layouts.
     Figure(figure_panels::Action),
     /// Catalytic cycles.
@@ -1024,6 +1026,7 @@ impl App {
         self.sync_figure();
         self.sync_cycle();
         self.sync_tlc();
+        self.sync_ir_figure();
     }
     /// What every recorded change of the drawing needs, whether an edit made
     /// it or Undo or Redo restored it. Results for the previous revision are

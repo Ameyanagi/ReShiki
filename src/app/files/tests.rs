@@ -742,6 +742,42 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
 }
 
 #[test]
+fn keeping_chemdraw_warns_about_ir_figure_settings() {
+    use reshiki::graphics::{Graphic, GraphicKind, IrFigure, Journal};
+
+    let mut doc = Document::default();
+    let mut curve = Graphic::dragged(
+        1,
+        GraphicKind::Line,
+        Point::default(),
+        Point::new(100., 0.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    curve.ir = Some(Box::new(IrFigure::with_defaults(
+        "water".into(),
+        "GFN2-xTB".into(),
+        vec![[1590., 1.]],
+        Journal::Acs,
+    )));
+    doc.graphics.push(curve);
+    for format in ["cdxml", "cdx"] {
+        assert_eq!(
+            keep_format_text(format, Default::default(), &doc),
+            format!(
+                "Keep as {} loses IR figure settings. Save as ReShiki leaves the ChemDraw file unchanged.",
+                format.to_uppercase()
+            )
+        );
+    }
+    assert_eq!(
+        keep_format_text("mol", Default::default(), &doc),
+        "MOL keeps the structure only."
+    );
+}
+
+#[test]
 fn keeping_cdxml_keeps_panels_and_purpose_for_reshiki() {
     use reshiki::formats::ChemdrawLoss;
     let unchanged = "Save as ReShiki leaves the ChemDraw file unchanged.";

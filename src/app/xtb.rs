@@ -27,13 +27,12 @@ mod results;
 mod run;
 mod state;
 mod tone;
-mod vibrations;
+pub(crate) mod vibrations;
 mod view;
 
 #[cfg(test)]
 pub(super) use results::{Evaluation, View};
 pub(crate) use state::Task as CalcTask;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use vibrations::Action as VibrationsAction;
 
 /// The Predict tab's two pages.
