@@ -269,6 +269,14 @@ mod app {
         }))
     }
 
+    impl App {
+        pub(in crate::app) fn xtb_searched_water() -> (Self, u64) {
+            let (mut app, oxygen) = water(CalcTask::Conformers);
+            search(&mut app, found(false));
+            (app, oxygen)
+        }
+    }
+
     #[test]
     fn a_search_shows_progress_then_ranks_previews_overlays_and_uses_conformers() {
         let (mut app, _) = water(CalcTask::Conformers);

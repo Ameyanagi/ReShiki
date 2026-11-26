@@ -5,19 +5,22 @@ use super::{
     App, Message,
     help::{Placement, modal},
     workspace::{control, muted_text},
+    xtb::Source,
 };
 use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{Space, column, container, rich_text, row, scrollable, span, text};
 use iced::{Alignment, Border, Color, Element, Font, Length, Task};
-use reshiki::models3d::{Display, ForceField};
+use reshiki::models3d::Display;
 use reshiki::qc_input::{self, Geometry, Job, Output, Program, Settings, Template};
-use reshiki::qcdata::Frame;
+use reshiki::qcdata::{Frame, FrameHash};
 use std::path::PathBuf;
 
 const ACCENT: Color = Color::from_rgb8(47, 122, 95);
 const WARNING: Color = Color::from_rgb8(161, 98, 7);
 const ERROR: Color = Color::from_rgb8(185, 28, 28);
 const METHOD: &str = "qc-export-method";
+const GEOMETRY_CHANGED: &str =
+    "That xTB geometry is no longer available. Choose a geometry to export.";
 static NEXT_DIALOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +43,7 @@ pub enum Action {
     Program(Program),
     Job(Job),
     Template(Choice),
+    Source(SourceChoice),
     Field(Field, String),
     /// Show the name field for a new template.
     NameTemplate,
@@ -66,6 +70,16 @@ impl std::fmt::Display for Choice {
     }
 }
 
+/// A geometry in the menu, shown by its provenance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SourceChoice(usize, String, Option<FrameHash>);
+
+impl std::fmt::Display for SourceChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.1)
+    }
+}
+
 /// The open dialog. Numbers stay as typed so a half-typed field is not
 /// rewritten; they are read when the file is written.
 pub(super) struct Dialog {
@@ -79,16 +93,21 @@ pub(super) struct Dialog {
     template: Template,
     method: String,
     basis: String,
+    replaced_basis: Option<(String, &'static str)>,
     charge: String,
     multiplicity: String,
     cores: String,
     memory: String,
     title: String,
+    title_edited: bool,
+    source: usize,
+    source_frame: Option<FrameHash>,
     extra: String,
     irc_points: String,
     /// The new template's name while it is being typed.
     template_name: Option<String>,
     message: String,
+    saved: bool,
 }
 
 pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
@@ -117,14 +136,6 @@ fn stem(name: &str) -> String {
         "molecule".into()
     } else {
         stem.into()
-    }
-}
-
-fn force_field(force_field: ForceField) -> &'static str {
-    match force_field {
-        ForceField::Mmff94 => "MMFF94",
-        ForceField::Mmff94s => "MMFF94s",
-        ForceField::Uff => "UFF",
     }
 }
 
@@ -157,6 +168,7 @@ impl Dialog {
     fn apply(&mut self, template: Template) {
         self.method = template.method.clone();
         self.basis = template.basis.clone();
+        self.replaced_basis = None;
         self.job = template.job;
         self.cores = template.cores.to_string();
         self.memory = template.memory_gb.to_string();
@@ -172,9 +184,38 @@ impl Dialog {
             Field::Multiplicity => &mut self.multiplicity,
             Field::Cores => &mut self.cores,
             Field::Memory => &mut self.memory,
-            Field::Title => &mut self.title,
+            Field::Title => {
+                self.title_edited = true;
+                &mut self.title
+            }
             Field::Extra => &mut self.extra,
             Field::IrcPoints => &mut self.irc_points,
+        }
+    }
+
+    fn selected_source<'a>(&self, sources: &'a [Source]) -> Option<(usize, &'a Source)> {
+        // A run can finish while the dialog is open and move a geometry in the list.
+        let Some(frame) = self.source_frame else {
+            return sources.first().map(|source| (0, source));
+        };
+        let matches = |source: &Source| source.frame.as_ref().is_some_and(|f| f.hash() == frame);
+        if let Some(source) = sources.get(self.source).filter(|source| matches(source)) {
+            Some((self.source, source))
+        } else {
+            sources
+                .iter()
+                .enumerate()
+                .find(|(_, source)| matches(source))
+        }
+    }
+
+    fn title(&self, source: Option<&Source>) -> String {
+        if self.title_edited {
+            self.title.clone()
+        } else if let Some(source) = source.filter(|source| !source.short.is_empty()) {
+            format!("{}, {} (ReShiki)", self.name, source.short)
+        } else {
+            self.name.clone()
         }
     }
 
@@ -215,17 +256,22 @@ impl Dialog {
     }
 
     fn file_name(&self) -> String {
-        format!("{}.{}", stem(&self.name), self.program.extension())
+        format!("{}.{}", self.file_stem(), self.program.extension())
+    }
+
+    fn file_stem(&self) -> String {
+        let suffix = match self.program {
+            Program::Orca => "-orca",
+            Program::Gamess => "-gamess",
+            Program::Gaussian | Program::Xyz => "",
+        };
+        format!("{}{suffix}", stem(&self.name))
     }
 }
 
 /// What the molecule's 3D model gives the dialog.
 enum Model {
-    Ready {
-        frame: Frame,
-        label: String,
-        stale: bool,
-    },
+    Ready { frame: Frame, stale: bool },
     Generating,
     Missing,
     Unsupported(String),
@@ -294,13 +340,17 @@ impl App {
         let mut dialog = Dialog {
             id: NEXT_DIALOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             atoms,
-            title: name.clone(),
+            title: String::new(),
+            title_edited: false,
+            source: 0,
+            source_frame: None,
             name,
             program: Program::Gaussian,
             job: Job::OptFreq,
             template: default.clone(),
             method: String::new(),
             basis: String::new(),
+            replaced_basis: None,
             charge: charge.to_string(),
             multiplicity: (unpaired + 1).to_string(),
             cores: String::new(),
@@ -309,6 +359,7 @@ impl App {
             irc_points: "30".into(),
             template_name: None,
             message: String::new(),
+            saved: false,
         };
         dialog.apply(default);
         self.qc_export = Some(dialog);
@@ -323,35 +374,31 @@ impl App {
         }
         if let Action::Saved(id, result) = action {
             // A receipt for an earlier dialog only reports in the status bar.
-            let ours = self
-                .qc_export
-                .as_ref()
-                .is_some_and(|dialog| dialog.id == id);
+            let dialog = self.qc_export.as_mut().filter(|dialog| dialog.id == id);
             match result {
-                Ok(None) => return Task::none(),
-                Err(error) if ours => {
-                    if let Some(dialog) = &mut self.qc_export {
-                        dialog.message = error;
-                    }
-                    return Task::none();
-                }
+                Ok(None) => {}
                 Ok(Some(path)) => {
-                    (self.status, self.error) = (format!("Saved {}", path.display()), false)
+                    if let Some(dialog) = dialog {
+                        let name = path.file_name().unwrap_or(path.as_os_str());
+                        dialog.message = format!(
+                            "Saved {} · choose another program or Close",
+                            name.to_string_lossy()
+                        );
+                        dialog.saved = true;
+                    }
+                    (self.status, self.error) = (format!("Saved {}", path.display()), false);
                 }
-                Err(error) => (self.status, self.error) = (error, true),
+                Err(error) => match dialog {
+                    Some(dialog) => dialog.message = error,
+                    None => (self.status, self.error) = (error, true),
+                },
             }
-            if !ours {
-                return Task::none();
-            }
-            self.qc_export = None;
-            return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
+            return Task::none();
         }
-        let output = self.qc_output();
         let [default, ..] = qc_input::builtin_templates();
         let Some(dialog) = &mut self.qc_export else {
             return Task::none();
         };
-        dialog.message.clear();
         match action {
             Action::Open | Action::Saved(..) => {}
             Action::Close => {
@@ -359,7 +406,16 @@ impl App {
                 return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
             }
             Action::Program(program) => {
+                if dialog.program != program {
+                    dialog.message.clear();
+                }
                 dialog.program = program;
+                if program != Program::Gamess
+                    && let Some((old, substitute)) = dialog.replaced_basis.take()
+                    && dialog.basis == substitute
+                {
+                    dialog.basis = old;
+                }
                 if let Some(only) = dialog.template.only.filter(|&only| only != program) {
                     dialog.message = format!(
                         "{} is for {} only; switched to {}.",
@@ -377,10 +433,31 @@ impl App {
                     );
                     dialog.job = Job::TransitionState;
                 }
+                if program == Program::Gamess
+                    && let Some(substitute) = qc_input::nearest_gamess_basis(&dialog.basis)
+                {
+                    let old = std::mem::replace(&mut dialog.basis, substitute.into());
+                    if !dialog.message.is_empty() {
+                        dialog.message.push(' ');
+                    }
+                    let reason = if old.trim().is_empty() {
+                        "No basis was specified for GAMESS".into()
+                    } else {
+                        format!("{} is not built into GAMESS", old.trim())
+                    };
+                    dialog
+                        .message
+                        .push_str(&format!("{reason}; using {substitute}."));
+                    dialog.replaced_basis = Some((old, substitute));
+                }
             }
             Action::Job(job) => dialog.job = job,
             Action::Template(choice) => {
                 dialog.apply(choice.0);
+            }
+            Action::Source(SourceChoice(index, _, frame)) => {
+                dialog.source = index;
+                dialog.source_frame = frame;
             }
             Action::Field(field, value) => *dialog.field(field) = value,
             Action::NameTemplate => {
@@ -442,22 +519,34 @@ impl App {
                 self.tab.selected = dialog.atoms.clone();
                 return self.models3d_action(super::models3d::Action::Update);
             }
-            Action::Copy => match output {
-                Ok(output) => {
-                    dialog.message = "Copied the file text".into();
-                    return iced::clipboard::write(output.main.text);
+            Action::Copy | Action::Save => {
+                let (program, id) = (dialog.program, dialog.id);
+                let (message, task) = match self.qc_output() {
+                    Ok(output) if matches!(action, Action::Save) => {
+                        return save(output, program, id);
+                    }
+                    Ok(output) => (
+                        "Copied the file text".into(),
+                        iced::clipboard::write(output.main.text),
+                    ),
+                    Err(error) => (error, Task::none()),
+                };
+                if let Some(dialog) = &mut self.qc_export {
+                    dialog.message = message;
                 }
-                Err(error) => dialog.message = error,
-            },
-            Action::Save => match output {
-                Ok(output) => return save(output, dialog.program, dialog.id),
-                Err(error) => dialog.message = error,
-            },
+                return task;
+            }
         }
         Task::none()
     }
 
-    fn qc_model(&self, dialog: &Dialog) -> Model {
+    fn qc_model(&self, dialog: &Dialog, source: Option<&Source>) -> Model {
+        if let Some(frame) = source.and_then(|source| source.frame.as_ref()) {
+            return Model::Ready {
+                frame: frame.clone(),
+                stale: false,
+            };
+        }
         let doc = &self.tab.doc;
         let Some((index, model)) = doc
             .models
@@ -495,28 +584,17 @@ impl App {
                     .unwrap_or(0)
             })
             .collect();
-        let settings = dialog.settings().ok();
         let frame = Frame {
             numbers,
             positions_angstrom: points.iter().map(|(_, xyz)| xyz.map(f64::from)).collect(),
             isotopes,
             masses_amu: vec![],
-            charge: settings.as_ref().map_or(0, |s| s.charge),
-            multiplicity: settings.as_ref().map_or(1, |s| s.multiplicity),
+            charge: 0,
+            multiplicity: 1,
             drawing_atoms,
-        };
-        let label = if model.is_file_derived() {
-            format!("Current 3D model · {} atoms · from the file", points.len())
-        } else {
-            format!(
-                "Current 3D model · {} atoms · {}",
-                points.len(),
-                force_field(model.force_field)
-            )
         };
         Model::Ready {
             frame,
-            label,
             stale: self.model_stale(index),
         }
     }
@@ -524,8 +602,15 @@ impl App {
     /// The files the dialog would write, or why it cannot.
     fn qc_output(&self) -> Result<Output, String> {
         let dialog = self.qc_export.as_ref().ok_or_else(String::new)?;
-        let settings = dialog.settings()?;
-        let frame = match self.qc_model(dialog) {
+        let sources = self.xtb_geometry_sources(&dialog.atoms);
+        let (_, source) = dialog.selected_source(&sources).ok_or(GEOMETRY_CHANGED)?;
+        Self::qc_output_for(dialog, source, self.qc_model(dialog, Some(source)))
+    }
+
+    fn qc_output_for(dialog: &Dialog, source: &Source, model: Model) -> Result<Output, String> {
+        let mut settings = dialog.settings()?;
+        settings.title = dialog.title(Some(source));
+        let mut frame = match model {
             Model::Ready { stale: true, .. } => {
                 return Err(
                     "The drawing changed since this 3D model was made: update the model first."
@@ -535,6 +620,8 @@ impl App {
             Model::Ready { frame, .. } => frame,
             _ => return Err("The molecule needs a 3D model first.".into()),
         };
+        frame.charge = settings.charge;
+        frame.multiplicity = settings.multiplicity;
         let geometry = Geometry {
             frame: &frame,
             reactant: None,
@@ -542,7 +629,7 @@ impl App {
             result: None,
         };
         let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
-        qc_input::write(&settings, &geometry, &stem(&dialog.name), &generator)
+        qc_input::write(&settings, &geometry, &dialog.file_stem(), &generator)
             .map_err(|error| error.to_string())
     }
 
@@ -706,10 +793,62 @@ impl App {
         };
         let irc = dialog.job == Job::Irc && !xyz;
 
-        let model = self.qc_model(dialog);
+        let sources = self.xtb_geometry_sources(&dialog.atoms);
+        let selected = dialog.selected_source(&sources);
+        let source = selected.map(|(_, source)| source);
+        let title = dialog.title(source);
+        let model = self.qc_model(dialog, source);
+        let geometry_picker = (sources.len() > 1 || selected.is_none()).then(|| {
+            let model_count = self
+                .tab
+                .doc
+                .models
+                .iter()
+                .find(|model| dialog.atoms.iter().any(|&id| model.contains(id)))
+                .map(|model| model.atoms.len() + model.hydrogens.len());
+            let choices: Vec<_> = sources
+                .iter()
+                .enumerate()
+                .map(|(index, source)| {
+                    let count = source
+                        .frame
+                        .as_ref()
+                        .map(|frame| frame.numbers.len())
+                        .or(model_count);
+                    let label = match count {
+                        Some(count) => format!("{} · {count} atoms", source.label),
+                        None => source.label.clone(),
+                    };
+                    SourceChoice(index, label, source.frame.as_ref().map(Frame::hash))
+                })
+                .collect();
+            let current = selected.and_then(|(index, _)| choices.get(index)).cloned();
+            reshiki::accessibility::select(
+                "qc-export-geometry",
+                "Geometry",
+                choices.clone(),
+                current
+                    .as_ref()
+                    .map_or_else(String::new, ToString::to_string),
+                move |choice| send(Action::Source(choice)),
+                crate::appearance::close_on_escape(
+                    crate::appearance::pick_list(choices, current, move |choice| {
+                        send(Action::Source(choice))
+                    })
+                    .placeholder("Choose a geometry")
+                    .width(Length::Fill)
+                    .text_size(11)
+                    .padding([6, 8]),
+                ),
+            )
+        });
+        let choosing_geometry = geometry_picker.is_some();
         let geometry: Element<'_, Message> = match &model {
-            Model::Ready { label, stale, .. } => {
-                let mut lines = column![text(label.clone()).size(12)].spacing(2);
+            Model::Ready { frame, stale } => {
+                let mut lines = column![source.filter(|_| !choosing_geometry).map(|source| {
+                    text(format!("{} · {} atoms", source.label, frame.numbers.len())).size(12)
+                })]
+                .spacing(2);
                 if *stale {
                     lines = lines.push(
                         reshiki::accessibility::button(
@@ -731,7 +870,7 @@ impl App {
             }
             Model::Generating => text("Making the 3D model…").size(12).into(),
             Model::Missing => row![
-                text("No 3D model yet.").size(12).width(Length::Fill),
+                (!choosing_geometry).then(|| text("No 3D model yet.").size(12).width(Length::Fill)),
                 reshiki::accessibility::button(
                     "qc-export-generate",
                     "Generate 3D model",
@@ -824,13 +963,7 @@ impl App {
                 &dialog.irc_points,
                 true
             )),
-            input(
-                "qc-export-title",
-                "Title",
-                Field::Title,
-                &dialog.title,
-                true
-            ),
+            input("qc-export-title", "Title", Field::Title, &title, true),
             input(
                 "qc-export-extra",
                 "Extra keywords",
@@ -838,13 +971,22 @@ impl App {
                 &dialog.extra,
                 !xyz
             ),
-            column![text("Geometry").size(11).style(muted_text), geometry].spacing(3),
+            column![
+                text("Geometry").size(11).style(muted_text),
+                geometry_picker,
+                geometry
+            ]
+            .spacing(3),
         ]
         .spacing(10)
         .width(330);
 
         // Preview
-        let output = self.qc_output();
+        let output = if let Some(source) = source {
+            Self::qc_output_for(dialog, source, model)
+        } else {
+            Err(GEOMETRY_CHANGED.into())
+        };
         let file_name = output
             .as_ref()
             .map_or_else(|_| dialog.file_name(), |output| output.main.name.clone());
@@ -927,12 +1069,13 @@ impl App {
             1 => format!("Save {file_name} + 1 file…"),
             n => format!("Save {file_name} + {n} files…"),
         };
+        let cancel = if dialog.saved { "Close" } else { "Cancel" };
         let footer = row![
             text(dialog.message.clone())
                 .size(12)
                 .style(muted_text)
                 .width(Length::Fill),
-            reshiki::accessibility::button("qc-export-cancel", "Cancel", text("Cancel").size(12))
+            reshiki::accessibility::button("qc-export-cancel", cancel, text(cancel).size(12))
                 .padding([7, 12])
                 .style(control(false))
                 .on_press(send(Action::Close)),

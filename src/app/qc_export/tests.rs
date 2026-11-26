@@ -77,6 +77,7 @@ fn opens_without_a_model_and_writes_once_the_model_is_generated() {
     assert_eq!(app.tab.doc.models[0].display, Display::Both);
     let text = preview(&app).unwrap();
     assert!(text.contains("#p B3LYP/Def2SVP EmpiricalDispersion=GD3BJ Opt Freq"));
+    assert!(text.contains(", MMFF94s force-field model (ReShiki)"));
     assert!(text.contains("\n0 1\n"));
     // Three drawn atoms and the one generated hydrogen.
     let atom_lines = text
@@ -134,16 +135,21 @@ fn programs_jobs_and_bases_follow_the_writers() {
     finish_model(&mut app);
 
     send(&mut app, Action::Program(Program::Gamess));
+    let dialog = app.qc_export.as_ref().unwrap();
+    assert_eq!(dialog.basis, "6-31G(d)");
     assert_eq!(
-        preview(&app),
-        Err("GAMESS exports use built-in bases only: 6-31G(d), 6-31G or STO-3G.".into())
+        dialog.message,
+        "def2-SVP is not built into GAMESS; using 6-31G(d)."
     );
-    send(&mut app, Action::Field(Field::Basis, "6-31G(d)".into()));
     assert!(
         preview(&app)
             .unwrap()
             .contains("GBASIS=N31 NGAUSS=6 NDFUNC=1")
     );
+    send(&mut app, Action::Job(Job::Optimize));
+    assert!(app.qc_export.as_ref().unwrap().message.contains("def2-SVP"));
+    send(&mut app, Action::Program(Program::Gaussian));
+    assert_eq!(app.qc_export.as_ref().unwrap().basis, "def2-SVP");
 
     send(&mut app, Action::Program(Program::Orca));
     send(&mut app, Action::Job(Job::Irc));
@@ -154,6 +160,10 @@ fn programs_jobs_and_bases_follow_the_writers() {
 
     send(&mut app, Action::Field(Field::Cores, "x".into()));
     assert_eq!(preview(&app), Err("Cores must be a whole number.".into()));
+
+    send(&mut app, Action::Field(Field::Basis, "STO-3G".into()));
+    send(&mut app, Action::Program(Program::Orca));
+    assert_eq!(app.qc_export.as_ref().unwrap().basis, "STO-3G");
 }
 
 #[test]
@@ -229,6 +239,78 @@ fn file_stems_keep_names_readable() {
 }
 
 #[test]
+fn each_program_has_its_own_default_file_name() {
+    let (mut app, _) = ethanol();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Generate);
+    finish_model(&mut app);
+    app.qc_export.as_mut().unwrap().name = "ethanol".into();
+    for (program, name) in [
+        (Program::Gaussian, "ethanol.gjf"),
+        (Program::Orca, "ethanol-orca.inp"),
+        (Program::Gamess, "ethanol-gamess.inp"),
+        (Program::Xyz, "ethanol.xyz"),
+    ] {
+        send(&mut app, Action::Program(program));
+        assert_eq!(app.qc_export.as_ref().unwrap().file_name(), name);
+        assert_eq!(app.qc_output().unwrap().main.name, name);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_conformer_changes_the_written_geometry_and_only_the_automatic_title() {
+    let (mut app, oxygen) = App::xtb_searched_water();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Program(Program::Xyz));
+    let first = preview(&app).unwrap();
+    assert!(
+        first
+            .lines()
+            .nth(1)
+            .unwrap()
+            .ends_with(", GFN2-xTB conformer 1 (ReShiki)")
+    );
+
+    let sources = app.xtb_geometry_sources(&[oxygen]);
+    let choose = |i: usize| {
+        let source = &sources[i];
+        Action::Source(SourceChoice(
+            i,
+            source.label.clone(),
+            source.frame.as_ref().map(Frame::hash),
+        ))
+    };
+    send(&mut app, choose(1));
+    let second = preview(&app).unwrap();
+    assert!(
+        second
+            .lines()
+            .nth(1)
+            .unwrap()
+            .ends_with(", GFN2-xTB conformer 2 (ReShiki)")
+    );
+    assert_eq!(
+        qc_input::parse_xyz(&second).unwrap().positions_angstrom,
+        sources[1].frame.as_ref().unwrap().positions_angstrom
+    );
+    assert_ne!(first.lines().nth(3), second.lines().nth(3));
+
+    send(
+        &mut app,
+        Action::Field(Field::Title, "DFT follow-up".into()),
+    );
+    send(&mut app, choose(0));
+    let custom = preview(&app).unwrap();
+    assert_eq!(custom.lines().nth(1), Some("DFT follow-up"));
+    assert_eq!(custom.lines().nth(3), first.lines().nth(3));
+
+    send(&mut app, choose(1));
+    app.tab.doc.atoms[0].charge = -1;
+    assert_eq!(preview(&app), Err(GEOMETRY_CHANGED.into()));
+}
+
+#[test]
 fn xyz_ignores_the_fields_it_disables() {
     let (mut app, _) = ethanol();
     send(&mut app, Action::Open);
@@ -297,9 +379,12 @@ fn charge_follows_the_drawing_after_the_model_was_made() {
         .find(|a| a.id == atoms[2])
         .unwrap();
     oxygen.charge = -1;
+    app.tab.revision += 1;
     app.tab.selected = vec![atoms[0]];
     send(&mut app, Action::Open);
     assert_eq!(app.qc_export.as_ref().unwrap().charge, "-1");
+    send(&mut app, Action::Update);
+    finish_model(&mut app);
     assert!(preview(&app).unwrap().contains("\n-1 1\n"));
 }
 
@@ -348,8 +433,15 @@ fn an_earlier_dialogs_save_receipt_leaves_the_open_dialog_alone() {
         &mut app,
         Action::Saved(current, Ok(Some("/tmp/x.gjf".into()))),
     );
-    assert!(app.qc_export.is_none());
+    let dialog = app.qc_export.as_ref().unwrap();
+    assert!(dialog.saved);
+    assert_eq!(
+        dialog.message,
+        "Saved x.gjf · choose another program or Close"
+    );
     assert_eq!(app.status, "Saved /tmp/x.gjf");
+    send(&mut app, Action::Close);
+    assert!(app.qc_export.is_none());
 }
 
 #[test]
