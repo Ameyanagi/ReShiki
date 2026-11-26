@@ -244,6 +244,7 @@ impl App {
     /// bottom and expanded, or in the inspector's xTB page.
     fn xtb_orbitals_visible(&self) -> bool {
         self.xtb_palette_visible()
+            && self.xtb_failed().is_none()
             && self.tab.xtb.palette.view == View::Orbitals
             && if self.xtb.dock.inspector {
                 self.inspector_open
