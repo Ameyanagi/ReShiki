@@ -713,6 +713,7 @@ impl App {
         self.sync_pictures();
         self.sync_arc();
         self.sync_tlc();
+        self.sync_ir_figure();
         // Read generic inputs from the first graphic those inputs can edit.
         // Keep dedicated selection synchronization when no ordinary graphic is selected.
         let style_source = self.selected_styled_graphics().next().map(|g| g.id);

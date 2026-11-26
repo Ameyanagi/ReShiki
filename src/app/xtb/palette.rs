@@ -35,6 +35,7 @@ pub(crate) enum Action {
     CopyTable,
     Export,
     Exported(Result<Option<std::path::PathBuf>, String>),
+    IrExported(Result<Option<std::path::PathBuf>, String>),
     CopyLog,
     Labels(bool),
     Recalculate,
@@ -515,6 +516,17 @@ impl App {
                 Ok(None) => {}
                 Err(error) => {
                     self.status = error;
+                    self.error = true;
+                }
+            },
+            Action::IrExported(result) => match result {
+                Ok(Some(path)) => {
+                    self.status = format!("Exported the IR spectrum\n{}", path.display());
+                    self.error = false;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    self.status = format!("Could not export the IR spectrum\n{error}");
                     self.error = true;
                 }
             },
