@@ -1097,3 +1097,104 @@ fn isotope_labels_give_explicit_analysis_masses() {
         .is_none()
     );
 }
+
+#[test]
+fn history_names_xtb_results_and_the_restored_model() {
+    for (task, what) in [
+        (CalcTask::Optimize, "geometry optimization"),
+        (CalcTask::OptFreq, "optimization + frequencies"),
+        (CalcTask::Energy, "energy"),
+        (CalcTask::Frequencies, "frequencies"),
+    ] {
+        let (mut app, _) = water(task);
+        let end = if task.optimizes() { &MOVED } else { &START };
+        let mut report = if task.frequencies() {
+            optfreq(&START, end)
+        } else {
+            optimization(&START, end)
+        };
+        if !task.optimizes() {
+            report.steps = 0;
+            report.path.clear();
+            report.energies = vec![report.energy];
+        }
+        event(&mut app, Event::Done(Ok(Arc::new(report))));
+        assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Done { .. })));
+        let result = app.tab.doc.science.results[0].result.clone();
+
+        let _ = app.update(Message::Undo);
+        assert_eq!(
+            app.status,
+            format!("Undid xTB {what} · 3D model back to the MMFF94s force-field model")
+        );
+        assert!(app.tab.doc.science.results.is_empty());
+
+        let _ = app.update(Message::Redo);
+        let source = if task.optimizes() {
+            "GFN2-xTB optimized"
+        } else {
+            "MMFF94s force-field model"
+        };
+        assert_eq!(
+            app.status,
+            format!("Redid xTB {what} · 3D model is the {source}")
+        );
+        assert!(Arc::ptr_eq(&result, &app.tab.doc.science.results[0].result));
+    }
+
+    let (mut app, _) = App::xtb_searched_water();
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.status,
+        "Undid xTB conformer search · 3D model back to the MMFF94s force-field model"
+    );
+    let _ = app.update(Message::Redo);
+    assert_eq!(
+        app.status,
+        "Redid xTB conformer search · 3D model is the GFN2-xTB conformer 1"
+    );
+}
+
+#[test]
+fn history_names_attached_geometry_changes_and_leaves_view_edits_generic() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    let result = app.tab.doc.science.results[0].result.clone();
+    send(&mut app, Action::Palette(palette::Action::Step(0)));
+    send(&mut app, Action::Palette(palette::Action::UseStep));
+    assert_eq!(model(&app.tab.doc), f32s(&START));
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.status,
+        "Undid the 3D model change · now the GFN2-xTB optimized"
+    );
+    assert_eq!(model(&app.tab.doc), f32s(&MOVED));
+    let _ = app.update(Message::Redo);
+    assert_eq!(
+        app.status,
+        "Redid the 3D model change · now the GFN2-xTB step 0"
+    );
+    assert!(Arc::ptr_eq(&result, &app.tab.doc.science.results[0].result));
+
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].rotation = [0., 1., 0., 0.];
+    app.changed(before);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "History restored");
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "History restored");
+}
+
+#[test]
+fn history_omits_the_model_clause_when_the_result_has_no_model() {
+    let (mut app, _) = water(CalcTask::Energy);
+    app.tab.doc.models.clear();
+    event(&mut app, optimized(&START, &START));
+    assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Done { .. })));
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "Undid xTB energy");
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "Redid xTB energy");
+}

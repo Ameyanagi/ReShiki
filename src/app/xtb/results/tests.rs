@@ -111,6 +111,140 @@ fn info(gap: f64) -> RunInfo {
     }
 }
 
+fn with_frequencies(mut result: CalcResult) -> CalcResult {
+    result.vibrations = Some(qcdata::Vibrations {
+        frequencies_cm1: vec![1590.13, 3468.58, 3480.11],
+        ir_intensities_km_mol: vec![],
+        modes: vec![],
+        reduced_masses_amu: vec![],
+        masses_amu: vec![],
+    });
+    result.thermo = Some(qcdata::Thermo {
+        temperature_k: 298.15,
+        pressure_pa: 101325.,
+        zero_point_energy_hartree: 0.019453,
+        enthalpy_correction_hartree: 0.023230,
+        entropy_hartree_per_k: 0.00007198,
+        gibbs_correction_hartree: 0.001769,
+        heat_capacity_hartree_per_k: None,
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: 20.,
+        symmetry_number: 2,
+        point_group: None,
+    });
+    result
+}
+
+#[test]
+fn the_headline_names_the_outcome_medium_and_electronic_state() {
+    let mut result = optimized(false);
+    let mut output = frame(&END);
+    assert_eq!(
+        headline(&result, &output),
+        "Converged in 2 steps · GFN2-xTB · in water (ALPB) · neutral singlet"
+    );
+    result.trajectory.as_mut().unwrap().energies_hartree.pop();
+    assert!(headline(&result, &output).starts_with("Converged in 1 step ·"));
+    result.status = Status::NotConverged {
+        reason: "step limit".into(),
+    };
+    assert!(headline(&result, &output).starts_with("Not converged after 1 step ·"));
+    result.status = Status::Converged;
+    result = with_frequencies(result);
+    assert!(headline(&result, &output).starts_with("Converged in 1 step + frequencies ·"));
+    result.task = Task::Hessian;
+    assert!(headline(&result, &output).starts_with("Frequencies ·"));
+    result.task = Task::Conformers;
+    assert!(headline(&result, &output).starts_with("2 conformers kept ·"));
+    result.task = Task::Energy;
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.solvent = None;
+    for (charge, multiplicity, state) in [
+        (1, 2, "cation doublet"),
+        (-1, 3, "anion triplet"),
+        (2, 4, "dication quartet"),
+        (-2, 5, "dianion quintet"),
+        (3, 6, "charge +3 multiplicity 6"),
+        (-3, 1, "charge −3 singlet"),
+    ] {
+        output.charge = charge;
+        output.multiplicity = multiplicity;
+        assert_eq!(
+            headline(&result, &output),
+            format!("Single-point energy · GFN2-xTB · gas phase · {state}")
+        );
+    }
+}
+
+#[test]
+fn methods_text_describes_a_gas_phase_optimization() {
+    let mut result = optimized(false);
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.solvent = None;
+    settings.convergence = Some(Convergence::Normal);
+    assert_eq!(
+        methods_text(&result, &frame(&END)),
+        concat!(
+            "Geometries were optimized with GFN2-xTB [Bannwarth2019GFN2] as implemented in ReShiki ",
+            env!("CARGO_PKG_VERSION"),
+            " [ReShiki] (axtb 0.2.0 [Axtb]) in the gas phase with normal convergence ",
+            "[Wang2016TRIC; Baker1996DLC; Lindh1995Hessian; Banerjee1985PRFO].",
+        )
+    );
+}
+
+#[test]
+fn methods_text_describes_solvation_and_frequencies() {
+    let mut result = with_frequencies(optimized(false));
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.contains("in water using ALPB [Ehlert2021ALPB] with tight convergence"));
+    assert!(text.contains("Harmonic frequencies and quasi-RRHO thermochemistry at 298.15 K [Grimme2012QRRHO; FernandezRamos2007Symmetry]"));
+    result.task = Task::Hessian;
+    result.thermo.as_mut().unwrap().temperature_k = 310.;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.starts_with("Harmonic frequencies and quasi-RRHO thermochemistry at 310.00 K"));
+    assert!(text.contains("were calculated with GFN2-xTB"));
+    assert!(!text.contains("Wang2016TRIC"));
+}
+
+#[test]
+fn methods_text_describes_gxtb_conventions_and_electronic_temperature() {
+    let mut result = optimized(false);
+    result.task = Task::Energy;
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.method = qcdata::XtbMethod::GXtb;
+    settings.conventions = XtbConventions::Xtb68;
+    settings.electronic_temperature_k = Some(550.);
+    settings.solvent = None;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.starts_with("Energies were computed with g-xTB [Froitzheim2025gxTB]"));
+    assert!(text.ends_with("using xtb 6.8 compatible conventions [Bannwarth2021Xtb], at an electronic temperature of 550 K."));
+}
+
+#[test]
+fn methods_text_cites_embedding_minimization_and_clustering_for_conformers() {
+    let mut result = optimized(false);
+    result.task = Task::Conformers;
+    result.provenance.method =
+        Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank".into());
+    let text = methods_text(&result, &frame(&END));
+    for phrase in [
+        "Conformers were generated with ETKDG [Riniker2015ETKDG; Wang2020ETKDGv3]",
+        "MMFF94s [Halgren1999MMFF94s]",
+        "clustered by heavy-atom RMSD [Butina1999Clustering]",
+        "Conformer energies were computed with GFN2-xTB [Bannwarth2019GFN2]",
+    ] {
+        assert!(text.contains(phrase), "{text}");
+    }
+}
+
 #[test]
 fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
     let result = optimized(true);
@@ -238,6 +372,24 @@ fn stored_properties_show_without_run_information() {
     let result = with_properties(optimized(false));
     let (input, output) = (frame(&START), frame(&END));
     let rows = summary_rows(&result, &input, &output, None);
+    assert_eq!(
+        key_numbers(&result, None),
+        [
+            ("Energy", "−5.070176 Eh".into()),
+            ("Gap", "14.01 eV".into()),
+            ("Dipole", "2.16 D".into()),
+        ]
+    );
+    assert!(
+        summary_grid_rows(&result, &input, &output)
+            .iter()
+            .all(|(label, _)| {
+                !matches!(
+                    label.as_str(),
+                    "Total energy" | "HOMO–LUMO gap" | "Dipole" | "Run time"
+                )
+            })
+    );
     let row = |name: &str| {
         rows.iter()
             .find(|(label, _)| *label == name)

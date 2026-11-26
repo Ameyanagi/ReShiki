@@ -17,6 +17,7 @@ use state::{Progress, Settings};
 use std::sync::{Arc, Weak};
 
 mod conformers;
+mod history;
 pub(super) mod orbitals;
 pub(super) use conformers::superposed;
 pub(super) mod palette;
