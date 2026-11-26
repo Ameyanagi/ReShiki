@@ -1001,7 +1001,24 @@ reported TS with the same atomic masses and cutoff of −50 cm⁻¹. Exit 0
 requires a converged saddle refinement, exactly one imaginary mode in each
 check, and IRC branches whose relaxed ends match the two endpoints. A failed
 worker check or a count disagreement appears in the table and JSON report
-and exits 1. Progress appears on stderr.
+and exits 1. Progress appears on stderr. Set `RESHIKI_TS_TRACE` to `1` or
+lowercase `true` to enable detailed tracing. All other values disable it.
+The NEB trace gives the peak energy across all images and the active climbing
+image's energy (`pending` before climbing starts). Each P-RFO trial logs the
+measured-to-predicted energy and squared-force ratios alongside the decision.
+The trace also gives projected gradients, followed curvatures, mode overlaps,
+trust radii and stopping reasons.
+
+Refinement allows 10 kcal/mol of headroom by default. Library callers can set
+`TsOptions::saddle_headroom_kcal`. The reference is the higher of the climbing
+image and the midpoint accepted for a restart. A midpoint above the initial
+ceiling is eligible when both images on its link have lower energies.
+The restart shares the original accepted-step limit. Rejected trial checks,
+force-only steps, stale-model refreshes and restart Hessians share a budget of
+eight extra Hessian builds. The engine can also verify one final provisional
+candidate. The JSON report records the
+stopping reason in `saddle.reason` and optional SCF failures in
+`saddle.diagnostics`.
 
 `path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
 from the reactant side through the TS to the product side. When refinement
