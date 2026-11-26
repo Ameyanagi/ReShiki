@@ -23,6 +23,9 @@ use std::{
 #[derive(Debug, Clone)]
 pub(crate) struct Job {
     pub optimize: bool,
+    pub frequencies: bool,
+    /// Analysis masses (u) for isotope-labelled molecules; standard masses otherwise.
+    pub masses: Option<Vec<f64>>,
     pub numbers: Vec<u8>,
     pub positions: Vec<[f64; 3]>,
     pub charge: i32,
@@ -51,6 +54,8 @@ pub(crate) enum Event {
         energies: Vec<f64>,
         positions: Vec<[f64; 3]>,
     },
+    /// The final Hessian evaluation is starting.
+    Hessian,
     /// Elapsed time goes on while the worker computes: every 250 ms.
     Tick,
     /// The last event of a job.
@@ -133,14 +138,14 @@ pub(super) fn run(
         .engine
         .ok_or_else(|| worker_failure(&Error::Unavailable))?;
     let open = Open {
-        numbers: job.numbers,
-        positions: job.positions,
+        numbers: job.numbers.clone(),
+        positions: job.positions.clone(),
         units: Units::Angstrom,
         charge: job.charge,
         uhf: Some(job.uhf),
         method: job.method,
         conventions: job.conventions,
-        solvent: job.solvent,
+        solvent: job.solvent.clone(),
         scf: job.scf.clone(),
         gfnff: job.topology.clone().map(|positions| protocol::GfnFfOpen {
             reference_positions: Some(positions),
@@ -175,17 +180,7 @@ pub(super) fn run(
     let outcome = if job.optimize {
         let xyz = open.positions.as_flattened();
         let positions: Vec<_> = xyz.iter().map(|x| x / ANGSTROM_PER_BOHR).collect();
-        let level = if job.tight {
-            Level::Tight
-        } else {
-            Level::Normal
-        };
-        let options = Options {
-            level,
-            fixed_atoms: job.fixed,
-            tight_final: false,
-            ..Options::default()
-        };
+        let options = options(&job);
         let mut xtb = Xtb {
             session: &mut session,
             cancel,
@@ -195,6 +190,8 @@ pub(super) fn run(
         let mut batch = Batch::default();
         let outcome = optimize(&mut xtb, &open.numbers, &positions, &options, |step| {
             let positions = angstroms(step.positions);
+            // The Tight recheck reports the same step with a new energy.
+            path.truncate(step.index * step.positions.len());
             path.extend_from_slice(positions.as_flattened());
             let event = batch.push(step.index, step.energy, positions, Instant::now());
             if event.is_some_and(|event| tx.unbounded_send(event).is_err()) {
@@ -220,20 +217,11 @@ pub(super) fn run(
         None
     };
     let final_xyz = outcome.as_ref().map(|outcome| outcome.positions.as_slice());
-    let electronic = job.method.xtb_method().capabilities().orbitals;
     // One evaluation gives the stored energy, gradient and properties.
-    let final_request = Compute {
-        positions: final_xyz.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
-        units: Units::Bohr,
-        gradient: outcome.is_some(),
-        bond_orders: electronic,
-        orbitals: if electronic {
-            OrbitalOutput::Levels
-        } else {
-            OrbitalOutput::None
-        },
-        ..Compute::default()
-    };
+    let final_request = final_request(&job, final_xyz);
+    if job.frequencies && tx.unbounded_send(Event::Hessian).is_err() {
+        return Err(canceled());
+    }
     let computed = session
         .compute(&final_request, cancel)
         .map_err(|error| worker_failure(&error))?;
@@ -262,6 +250,43 @@ pub(super) fn run(
         path,
         evaluations,
     })
+}
+
+fn options(job: &Job) -> Options {
+    Options {
+        level: if job.tight || job.frequencies {
+            Level::Tight
+        } else {
+            Level::Normal
+        },
+        fixed_atoms: job.fixed.clone(),
+        tight_final: job.frequencies,
+        ..Options::default()
+    }
+}
+
+fn final_request(job: &Job, positions: Option<&[f64]>) -> Compute {
+    let electronic = job.method.xtb_method().capabilities().orbitals;
+    Compute {
+        positions: positions.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
+        units: Units::Bohr,
+        gradient: positions.is_some(),
+        hessian: job.frequencies.then(|| HessianRequest {
+            masses_amu: job.masses.clone(),
+            // The worker's point-group symmetry ignores isotopes, so explicit
+            // masses need a symmetry number: 1, as substitution usually lowers it.
+            thermo: protocol::ThermoRequest {
+                symmetry_number: job.masses.is_some().then_some(1),
+                ..Default::default()
+            },
+        }),
+        bond_orders: electronic,
+        orbitals: if electronic {
+            OrbitalOutput::Levels
+        } else {
+            OrbitalOutput::None
+        },
+    }
 }
 
 fn angstroms(positions: &[f64]) -> Vec<[f64; 3]> {
@@ -400,6 +425,7 @@ impl Batch {
         if self.energies.is_empty() {
             self.first = index;
         }
+        self.energies.truncate(index - self.first);
         self.energies.push(energy);
         self.positions = positions;
         let elapsed = self.sent_at.map(|sent| now.duration_since(sent));
@@ -454,6 +480,83 @@ pub(crate) fn example_computed(energy: f64, gap_ev: f64) -> Computed {
 mod tests {
     use super::*;
 
+    fn job() -> Job {
+        Job {
+            optimize: true,
+            frequencies: false,
+            masses: None,
+            numbers: vec![8, 1, 1],
+            positions: vec![[0.; 3]; 3],
+            charge: 0,
+            uhf: 0,
+            method: Method::Gfn2,
+            conventions: Conventions::Axtb,
+            scf: ScfSettings::default(),
+            solvent: None,
+            threads: 1,
+            fixed: vec![0],
+            tight: false,
+            topology: None,
+        }
+    }
+
+    #[test]
+    fn final_frequency_request_keeps_electronic_properties() {
+        let positions = [0., 1., 2., 3., 4., 5.];
+        let mut job = job();
+        job.frequencies = true;
+        for method in [Method::Gfn2, Method::Gxtb, Method::Gfnff] {
+            job.method = method;
+            let request = final_request(&job, Some(&positions));
+            assert_eq!(request.positions, Some(vec![[0., 1., 2.], [3., 4., 5.]]));
+            assert_eq!(request.units, Units::Bohr);
+            assert!(request.gradient);
+            assert!(request.hessian.is_some());
+            let electronic = method != Method::Gfnff;
+            assert_eq!(request.bond_orders, electronic);
+            assert_eq!(
+                request.orbitals,
+                if electronic {
+                    OrbitalOutput::Levels
+                } else {
+                    OrbitalOutput::None
+                }
+            );
+        }
+        job.optimize = false;
+        let request = final_request(&job, None);
+        assert!(request.positions.is_none());
+        assert!(!request.gradient);
+        assert!(request.hessian.is_some());
+
+        job.frequencies = false;
+        let request = final_request(&job, None);
+        assert!(request.positions.is_none());
+        assert!(!request.gradient);
+        assert!(request.hessian.is_none());
+    }
+
+    #[test]
+    fn frequencies_require_tight_optimization_and_final_recheck() {
+        let mut job = job();
+        let normal = options(&job);
+        assert_eq!(normal.level, Level::Normal);
+        assert!(!normal.tight_final);
+        assert_eq!(normal.fixed_atoms, job.fixed);
+
+        job.frequencies = true;
+        let frequencies = options(&job);
+        assert_eq!(frequencies.level, Level::Tight);
+        assert!(frequencies.tight_final);
+        assert_eq!(frequencies.fixed_atoms, job.fixed);
+
+        job.frequencies = false;
+        job.tight = true;
+        let tight = options(&job);
+        assert_eq!(tight.level, Level::Tight);
+        assert!(!tight.tight_final);
+    }
+
     #[test]
     fn batches_accepted_steps_and_flushes_the_remainder() {
         let mut batch = Batch::default();
@@ -467,9 +570,10 @@ mod tests {
             Some(Event::Steps { first: 0, .. })
         ));
         assert!(push(1, -2., 99).is_none());
+        assert!(push(1, -2.1, 99).is_none());
         assert!(
             matches!(push(2, -3., 100), Some(Event::Steps { first: 1, energies, positions })
-            if energies == [-2., -3.] && positions == [[-3., 0., 0.]])
+            if energies == [-2.1, -3.] && positions == [[-3., 0., 0.]])
         );
         assert!(push(3, -4., 100).is_none());
         assert!(
