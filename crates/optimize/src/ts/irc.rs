@@ -388,8 +388,9 @@ pub(super) fn branches(
                 })
             }
         })?;
-        end.positions =
-            mapping::superpose(&endpoints[0].positions, &end.positions, search.masses_amu);
+        // Fit the relaxed end to the last descent point (all in the TS frame), so
+        // an exported IRC trajectory does not jump at its ends.
+        end.positions = mapping::superpose(&last.positions, &end.positions, search.masses_amu);
         let energies = std::iter::once(ts.energy)
             .chain(path.iter().map(|point| point.energy))
             .chain(std::iter::once(end.energy))
