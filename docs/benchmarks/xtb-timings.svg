@@ -179,5 +179,5 @@
 <text x="197" y="368" fill="#0b0b0b">g-xTB</text>
 <rect x="290" y="358" width="12" height="12" rx="2" fill="#1baf7a"/>
 <text x="307" y="368" fill="#0b0b0b">GFN-FF</text>
-<text x="1110" y="368" text-anchor="end" fill="#52514e" font-size="11">Log scales. Each time includes about 60 ms to start the calculation. Ferrocene and UF6 are in the tables.</text>
+<text x="1110" y="368" text-anchor="end" fill="#52514e" font-size="11">Log scales. Below about 0.1 s the time is mostly starting the calculation. Ferrocene and UF6 are in the tables.</text>
 </svg>
