@@ -255,6 +255,111 @@ fn triangle_inputs(
     Ok(report)
 }
 
+fn saved_triangle_band() -> Vec<Minimum> {
+    let potential = Triangle::default();
+    [1.1, 1.4, 1.7, 2.0, 2.3]
+        .into_iter()
+        .map(|r| {
+            let positions = triangle(r).to_vec();
+            let energy = potential.derivatives(&positions, &mut [0.; 9], &mut [0.; 81]);
+            Minimum { positions, energy }
+        })
+        .collect()
+}
+
+#[test]
+fn saved_band_refines_directly_and_verifies_both_irc_destinations() {
+    let path = saved_triangle_band();
+    let options = TsOptions {
+        images: path.len(),
+        ..Default::default()
+    };
+    let search = Search {
+        numbers: &[1; 3],
+        masses_amu: &[1., 2., 4.],
+        reactant: &path[0].positions,
+        product: &path[path.len() - 1].positions,
+        options: &options,
+    };
+    for neb_converged in [false, true] {
+        let mut potential = Triangle {
+            analytic: true,
+            ..Default::default()
+        };
+        let mut stages = Vec::new();
+        let report = refine_from_band(&mut potential, &search, &path, neb_converged, |event| {
+            if let Event::Stage(stage) = event {
+                stages.push(stage);
+            }
+            ControlFlow::Continue(())
+        })
+        .unwrap();
+        assert_eq!(stages, [Stage::Saddle, Stage::Frequencies, Stage::Irc]);
+        assert_eq!(report.path, path);
+        assert_eq!(report.climbing_image, 2);
+        assert_eq!(report.neb_converged, neb_converged);
+        assert!(report.saddle_converged && report.connects);
+        assert_eq!(report.imaginary, 1);
+        assert!((report.ts.energy - 0.6_f64.powi(4) / 4.).abs() < 1e-8);
+        let reached = report.irc.unwrap().map(|branch| branch.reached);
+        assert!(reached.contains(&Reached::Reactant));
+        assert!(reached.contains(&Reached::Product));
+        assert_eq!(report.evaluations, potential.evaluations);
+        assert_eq!(report.hessians, potential.hessians);
+    }
+}
+
+#[test]
+fn saved_band_validation_and_initial_cancellation_do_not_evaluate_the_potential() {
+    let path = saved_triangle_band();
+    let options = TsOptions {
+        images: path.len(),
+        ..Default::default()
+    };
+    let search = Search {
+        numbers: &[1; 3],
+        masses_amu: &[1., 2., 4.],
+        reactant: &path[0].positions,
+        product: &path[path.len() - 1].positions,
+        options: &options,
+    };
+    let mut invalid = Vec::new();
+    invalid.push(path[..path.len() - 1].to_vec());
+    let mut nonfinite = path.clone();
+    nonfinite[2].energy = f64::NAN;
+    invalid.push(nonfinite);
+    let mut incomplete = path.clone();
+    incomplete[2].positions.pop();
+    invalid.push(incomplete);
+    let mut nonfinite = path.clone();
+    nonfinite[2].positions[0] = f64::INFINITY;
+    invalid.push(nonfinite);
+    let mut coincident = path.clone();
+    coincident[2].positions[..3].copy_from_slice(&path[2].positions[3..6]);
+    invalid.push(coincident);
+    let mut wrong_endpoint = path.clone();
+    wrong_endpoint[0].positions = triangle(1.2).to_vec();
+    invalid.push(wrong_endpoint);
+    let mut potential = Triangle::default();
+    for invalid in invalid {
+        assert!(matches!(
+            refine_from_band(&mut potential, &search, &invalid, false, |_| {
+                panic!("invalid saved band emitted progress")
+            }),
+            Err(TsError::Invalid(_))
+        ));
+    }
+    assert_eq!(
+        refine_from_band(&mut potential, &search, &path, false, |event| {
+            assert!(matches!(event, Event::Stage(Stage::Saddle)));
+            ControlFlow::Break(())
+        }),
+        Err(TsError::Cancelled)
+    );
+    assert_eq!(potential.evaluations, 0);
+    assert_eq!(potential.hessians, 0);
+}
+
 #[test]
 fn molecular_barrier_irc_and_parallel_images() {
     let options = TsOptions::default();

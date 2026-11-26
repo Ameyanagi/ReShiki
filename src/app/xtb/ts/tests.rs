@@ -200,6 +200,8 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
     let extras = Extras {
         endpoint_energies_hartree: [-5., -5.02],
         endpoint_thermo: None,
+        neb_converged: true,
+        reached_positions_angstrom: vec![],
         image_positions: [&reactant, &transition, &product]
             .map(|frame| frame.positions_angstrom.clone())
             .to_vec(),
@@ -683,6 +685,128 @@ fn stale_result_keeps_its_saved_title_and_export_name() {
 }
 
 #[test]
+fn stepper_keeps_stage_times_across_interpolation_and_frequency_events() {
+    let (mut app, _) = start();
+    let live = app.tab.xtb.run.as_mut().unwrap().ts.as_mut().unwrap();
+    let start = live.stage_started;
+    let ms = Duration::from_millis;
+    let states = |live: &Live, now| {
+        live.steps(start + ms(now))
+            .map(|(_, state)| state)
+            .collect::<Vec<_>>()
+    };
+    use StepState::{Current, Done, Todo};
+
+    assert_eq!(states(live, 350), [Current(ms(350)), Todo, Todo, Todo]);
+    live.request.free_energy = true;
+    live.advance(Stage::Endpoints, start + ms(700));
+    live.advance(Stage::Idpp, start + ms(800));
+    live.advance(Stage::Neb, start + ms(950));
+    assert_eq!(
+        states(live, 3100),
+        [Done(Some(ms(800))), Current(ms(2300)), Todo, Todo, Todo]
+    );
+    live.advance(Stage::Saddle, start + ms(3100));
+    live.advance(Stage::Saddle, start + ms(3700));
+    live.advance(Stage::Irc, start + ms(3900));
+    live.advance(Stage::Thermochemistry, start + ms(4400));
+    assert_eq!(
+        states(live, 4700),
+        [
+            Done(Some(ms(800))),
+            Done(Some(ms(2300))),
+            Done(Some(ms(800))),
+            Done(Some(ms(500))),
+            Current(ms(300))
+        ]
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
+async fn running_reaction_path_replaces_molecule_summary_then_shows_the_final_profile() {
+    let ui = card::tests::ViewHarness::new().await;
+    use crate::app::xtb::tests::{START, event, water};
+    let (mut app, _) = water(state::Task::Energy);
+    event(
+        &mut app,
+        run::Event::Done(Ok(Arc::new(run::Report {
+            engine: run::example_engine(),
+            computed: run::example_computed(-5.07, 0.1),
+            energy: -5.07,
+            converged: true,
+            positions: START.to_vec(),
+            steps: 0,
+            optimizers: vec![],
+            energies: vec![-5.07],
+            path: vec![],
+            evaluations: vec![],
+        }))),
+    );
+    assert_eq!(app.tab.xtb.palette.view, results::View::Summary);
+    let arrow = append_reaction(&mut app.tab.doc, "Allyl vinyl ether");
+    select(&mut app, arrow);
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
+    let inspect = |app: &App| {
+        let snapshot = ui.inspect(app.xtb_bottom_palette().unwrap());
+        assert!(
+            snapshot
+                .texts
+                .iter()
+                .any(|text| text.contains("Allyl vinyl ether"))
+        );
+        assert!(
+            snapshot
+                .semantics
+                .nodes
+                .iter()
+                .any(|node| node.id == "xtb-results-path" && node.checked == Some(true))
+        );
+        snapshot
+    };
+    let snapshot = inspect(&app);
+    assert!(snapshot.texts.iter().any(|text| text == "Finding a path…"));
+    assert!(app.xtb_shown().is_none());
+    finish_model(&mut app);
+    let serial = app.tab.xtb.run.as_ref().unwrap().serial;
+    for (iteration, energies) in [(0, vec![-5., -4.93, -5.01]), (1, vec![-5., -4.92, -5.02])] {
+        send(
+            &mut app,
+            XtbAction::TsEvent(
+                serial,
+                Event::Neb {
+                    iteration,
+                    energies: energies.clone(),
+                },
+            ),
+        );
+        assert_eq!(app.xtb_live_ts().unwrap().energies, energies);
+    }
+    let snapshot = inspect(&app);
+    assert!(
+        snapshot
+            .semantics
+            .nodes
+            .iter()
+            .any(|node| node.id == "xtb-ts-path-profile"
+                && node.name == "Live reaction path energy profile · 3 images")
+    );
+    complete(&mut app);
+    let snapshot = inspect(&app);
+    assert!(
+        snapshot
+            .semantics
+            .nodes
+            .iter()
+            .any(|node| node.id == "xtb-ts-path-profile" && node.name.contains("TS‡ 26.5"))
+    );
+    assert_eq!(
+        path_energies(&app.xtb_shown().unwrap().stored.result),
+        [-5., -4.9, -5.02]
+    );
+}
+
+#[test]
 fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
@@ -701,12 +825,15 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     );
     send(
         &mut app,
-        XtbAction::TsEvent(serial, Event::Neb { iteration: 120 }),
+        XtbAction::TsEvent(
+            serial,
+            Event::Neb {
+                iteration: 120,
+                energies: vec![-5., -4.96, -5.02],
+            },
+        ),
     );
-    assert!(
-        app.status
-            .contains("✓ Building endpoints · Finding a path · Refining the transition state · Checking the reaction path")
-    );
+    assert_eq!(app.status, "xTB · Finding a path · iteration 120");
     send(
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(report))),
@@ -798,7 +925,10 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     send(&mut reopened, XtbAction::Ts(Action::Image(1)));
     assert_eq!(reopened.xtb_step(), Some(1));
     assert!(reopened.xtb_step_preview().is_none());
-    send(&mut reopened, XtbAction::Ts(Action::Rerun));
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::Retry(arrow, Retry::FinerPath)),
+    );
     assert!(
         reopened.ts_review_open(),
         "reruns always require a fresh review"
@@ -861,6 +991,164 @@ async fn failed_irc_reports_failure_and_opens_the_saved_candidate() {
     assert_eq!(shown.stored.result.energy_hartree, energy);
 }
 
+#[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
+async fn failure_card_primary_label_and_message_follow_the_reason() {
+    let ui = card::tests::ViewHarness::new().await.at_width(330.);
+    for (reason, modes, label) in [
+        (view::IRC_RETURNS_TO_REACTANT, 1, "Check the atom map"),
+        (
+            "expected one imaginary frequency below -50 cm-1, found 2",
+            2,
+            "Refine from the highest point",
+        ),
+        (
+            "IRC reaches the reactant and a different minimum",
+            1,
+            "Show where it leads",
+        ),
+        (
+            "saddle refinement did not converge",
+            1,
+            "Try again with a finer path",
+        ),
+        (
+            "IRC failed: endpoint step limit",
+            1,
+            "Try again with a finer path",
+        ),
+    ] {
+        let (mut app, arrow) = start();
+        finish_model(&mut app);
+        let run = app.tab.xtb.run.as_ref().unwrap();
+        let serial = run.serial;
+        let mut report = example_report(run.launch.as_ref().unwrap());
+        let failed = Arc::get_mut(&mut report).unwrap();
+        failed.extras.connects = false;
+        failed.extras.num_imaginary = modes;
+        failed.result.status = Status::NotConverged {
+            reason: reason.into(),
+        };
+        send(
+            &mut app,
+            XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+        );
+        let card = || app.xtb_reaction_card(arrow);
+        let snapshot = ui.inspect(card());
+        assert!(snapshot.texts.iter().any(|text| text == label), "{reason}");
+        assert!(
+            snapshot
+                .texts
+                .iter()
+                .any(|text| text == "Show what was found"),
+            "{reason}"
+        );
+        let action = ui.activate(card(), "xtb-ts-rerun").unwrap();
+        let target = match (label, action) {
+            ("Check the atom map", Message::Xtb(XtbAction::Ts(Action::ReviewMap(id))))
+            | (
+                "Refine from the highest point",
+                Message::Xtb(XtbAction::Ts(Action::Retry(id, Retry::RefineHighest))),
+            )
+            | ("Show where it leads", Message::Xtb(XtbAction::Ts(Action::ShowWhere(id))))
+            | (
+                "Try again with a finer path",
+                Message::Xtb(XtbAction::Ts(Action::Retry(id, Retry::FinerPath))),
+            ) => id,
+            (_, action) => panic!("{label} dispatched {action:?}"),
+        };
+        assert_eq!(target, arrow);
+        assert!(matches!(
+            ui.activate(card(), "xtb-ts-card-path"),
+            Some(Message::Xtb(XtbAction::Ts(Action::Card(
+                card::Action::ShowPath
+            ))))
+        ));
+    }
+}
+
+#[test]
+fn show_where_previews_the_reached_geometry_even_after_reopening() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let mut report = example_report(run.launch.as_ref().unwrap());
+    let failed = Arc::get_mut(&mut report).unwrap();
+    failed.extras.connects = false;
+    failed.result.status = Status::NotConverged {
+        reason: "IRC reaches the reactant and a different minimum".into(),
+    };
+    let mut reached = failed.frames[2].positions_angstrom.clone();
+    reached[0][2] += 0.25;
+    failed.extras.reached_positions_angstrom = reached.clone();
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    let file = app.tab.doc.file_json().unwrap();
+    let mut reopened = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    for app in [&mut app, &mut reopened] {
+        let original = model(&app.tab.doc);
+        send(app, XtbAction::Ts(Action::ShowWhere(arrow)));
+        assert_eq!(app.tab.xtb.palette.view, results::View::Path);
+        assert!(app.xtb_reached_endpoint_selected());
+        assert_eq!(
+            model(app.display_document())[0],
+            reached[0].map(|x| x as f32)
+        );
+        assert_eq!(model(&app.tab.doc), original);
+        send(app, XtbAction::Palette(palette::Action::StepBack));
+        assert_eq!(model(app.display_document()), original);
+    }
+}
+
+#[test]
+fn refine_highest_resumes_current_band_and_reopened_result_uses_a_finer_path() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let mut report = example_report(run.launch.as_ref().unwrap());
+    let failed = Arc::get_mut(&mut report).unwrap();
+    let energies = vec![-5., -4.99, -4.93, -4.96, -5.02];
+    failed.result.trajectory.as_mut().unwrap().energies_hartree = energies.clone();
+    let images = &mut failed.extras.image_positions;
+    images.insert(1, images[0].clone());
+    images.insert(3, images[2].clone());
+    failed.extras.connects = false;
+    failed.extras.num_imaginary = 2;
+    failed.result.status = Status::NotConverged {
+        reason: "expected one imaginary frequency below -50 cm-1, found 2".into(),
+    };
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    let file = app.tab.doc.file_json().unwrap();
+    let mut reopened = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    for app in [&mut app, &mut reopened] {
+        send(
+            app,
+            XtbAction::Ts(Action::Retry(arrow, Retry::RefineHighest)),
+        );
+        assert!(app.ts_review_open());
+        send(
+            app,
+            XtbAction::Ts(Action::ReviewSheet(review::Action::Accept)),
+        );
+    }
+    assert_eq!(app.xtb_live_ts().unwrap().energies, energies);
+    let run = reopened.tab.xtb.run.as_ref().unwrap();
+    assert!(matches!(
+        reopened.xtb_ts_retry_path(
+            &run.ts.as_ref().unwrap().request,
+            run.launch.as_ref().unwrap()
+        ),
+        job::SearchPath::Finer(20)
+    ));
+}
+
 #[test]
 fn every_rerun_requires_review_even_after_an_earlier_review_was_accepted() {
     let (mut app, arrow) = start();
@@ -874,7 +1162,10 @@ fn every_rerun_requires_review_even_after_an_earlier_review_was_accepted() {
     );
 
     for _ in 0..2 {
-        send(&mut app, XtbAction::Ts(Action::Rerun));
+        send(
+            &mut app,
+            XtbAction::Ts(Action::Retry(arrow, Retry::FinerPath)),
+        );
         assert!(app.ts_review_open());
         assert!(!app.xtb_running());
         send(
@@ -929,7 +1220,10 @@ fn reopened_endpoint_charge_makes_the_result_stale_and_requires_review() {
     assert!(ts_plan::plan(&reopened.tab.doc, arrow).is_err());
     assert!(reopened.xtb_shown().unwrap().stale);
 
-    send(&mut reopened, XtbAction::Ts(Action::Rerun));
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::Retry(arrow, Retry::FinerPath)),
+    );
     assert!(reopened.ts_review_open());
     assert!(!reopened.xtb_running());
     send(
@@ -1263,7 +1557,10 @@ fn reopened_light_and_full_paths_become_stale_after_an_opposite_side_map_edit() 
             search.mapping.formed[0].each_ref().map(|atom| atom.number),
             [1, 6]
         );
-        send(&mut reopened, XtbAction::Ts(Action::Rerun));
+        send(
+            &mut reopened,
+            XtbAction::Ts(Action::Retry(arrow, Retry::FinerPath)),
+        );
         assert!(!reopened.xtb_running(), "a stale reaction cannot be rerun");
     }
 }

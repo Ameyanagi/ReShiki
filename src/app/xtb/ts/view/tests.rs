@@ -9,6 +9,21 @@ fn reopened_and_stale_profiles_explain_why_the_model_does_not_preview() {
 }
 
 #[test]
+fn live_path_chart_uses_the_saved_chart_axes_without_point_labels() {
+    let chart = PathChart::live(&[-5., -4.97, -5.01], EnergyUnit::KjPerMol);
+    let next = PathChart::live(&[-5., -4.95, -5.02], EnergyUnit::KjPerMol);
+    assert_eq!(chart.axis_title(), next.axis_title());
+    assert_eq!(next.axis_title(), "ΔE from reactants (kJ/mol)");
+    assert_eq!(next.deltas[0], 0.);
+    assert!(next.deltas[1] > chart.deltas[1]);
+    assert!(next.deltas[2] < chart.deltas[2]);
+    assert!(!next.interactive);
+    assert_eq!(next.endpoint_marker(0), None);
+    assert_eq!(next.endpoint_marker(2), None);
+    assert_eq!(next.refined_ts_marker(), None);
+}
+
+#[test]
 fn profile_selection_keeps_search_details_out_of_the_readout() {
     let energies = [0., 1., 3., 2., -1.];
     assert_eq!(climbing_image(&energies, None), 2);
@@ -36,6 +51,7 @@ fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
         climbing: 2,
         interactive: true,
         stale: false,
+        live: false,
         unit: EnergyUnit::KcalPerMol,
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(420., 190.));
@@ -57,6 +73,7 @@ fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
         climbing: 1,
         interactive: true,
         stale: false,
+        live: false,
         unit: EnergyUnit::KcalPerMol,
     };
     assert_eq!(chart.refined_ts_marker().unwrap().1, "TS‡ 26.5");
@@ -306,6 +323,7 @@ mod presentation_tests {
             free_energy: true,
             endpoint_energies_hartree: Some([-5., -5. + -8.2 / KCAL_PER_HARTREE]),
             endpoint_thermo: Some([Some(correction(0.01)), Some(correction(0.02))]),
+            reached_positions_angstrom: vec![],
             saddle_converged: true,
             imaginary: 1,
             imaginary_cm1: Some(-387.),

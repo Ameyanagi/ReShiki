@@ -1,5 +1,5 @@
 //! Predict controls and results for a single selected reaction arrow.
-use super::{Action as TsAction, review, view};
+use super::{Action as TsAction, Live, StepState, review, view};
 use crate::app::workspace::{
     accessible_checkbox, accessible_command, horizontal_line, hover_hint, muted_text,
 };
@@ -72,7 +72,6 @@ pub(crate) enum Action {
     Barrier,
     FreeEnergy,
     ShowPath,
-    FinerPath,
     Export,
     Animate,
 }
@@ -628,23 +627,32 @@ impl App {
             Action::FreeEnergy => {
                 self.tab.xtb.ts_card.free_energy = !self.tab.xtb.ts_card.free_energy;
             }
-            Action::FinerPath => return self.xtb_review_rerun(arrow),
             Action::Export => return self.xtb_ts_export_arrow(arrow),
-            Action::Animate | Action::ShowPath => {
+            Action::ShowPath => {
+                if !self.xtb_show_reaction_path(arrow) {
+                    return self.xtb_palette(super::super::palette::Action::Show);
+                }
+            }
+            Action::Animate => {
                 let ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
                     return Task::none();
                 };
-                let result = Arc::clone(result);
-                if matches!(action, Action::Animate) {
-                    return self.xtb_ts_animate(result);
-                }
-                self.xtb_show_result(&result);
-                self.tab.xtb.palette.view = xtb::results::View::Path;
-                self.tab.xtb.palette.collapsed = false;
-                self.xtb_vibrations_sync();
+                return self.xtb_ts_animate(Arc::clone(result));
             }
         }
         Task::none()
+    }
+
+    pub(super) fn xtb_show_reaction_path(&mut self, arrow: u64) -> bool {
+        let ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
+            return false;
+        };
+        let result = Arc::clone(result);
+        self.xtb_show_result(&result);
+        self.tab.xtb.palette.view = xtb::results::View::Path;
+        self.tab.xtb.palette.collapsed = false;
+        self.xtb_vibrations_sync();
+        true
     }
 
     pub(in crate::app::xtb) fn xtb_reaction_card(&self, arrow: u64) -> Element<'_, Message> {
@@ -688,6 +696,9 @@ impl App {
             && !self.tab.xtb.energy_state.in_progress()
             && !self.tab.busy
             && !self.ts_review_open();
+        let live = self
+            .xtb_live_ts()
+            .filter(|live| live.request.arrow == arrow);
         let matched = plan.is_ok()
             || result.zip(search).is_some_and(|(result, search)| {
                 search.mapping.automatic && !self.xtb_ts_search_stale(result)
@@ -780,7 +791,10 @@ impl App {
                     if detail.is_empty() { reason } else { detail },
                     Tone::Muted,
                 ))
-                .push(finer_path(idle && xtb::available()));
+                .push(
+                    xtb::available()
+                        .then(|| failure_actions(view::Recovery::FinerPath, arrow, idle)),
+                );
             if let Some(result) = result {
                 content = content.push(line(xtb::results::previous_result(result), Tone::Muted));
             }
@@ -789,7 +803,7 @@ impl App {
                 content = content
                     .push(line("No reliable transition state found.", Tone::Warning))
                     .push(line(reason.clone(), Tone::Muted))
-                    .push(finer_path(idle && xtb::available()));
+                    .push(xtb::available().then(|| failure_actions(view.recovery, arrow, idle)));
                 if let Some(highest) = view.highest_path_kcal {
                     content = content.push(line(
                         format!(
@@ -831,32 +845,30 @@ impl App {
             );
         }
         if let Some(result) = result {
-            let mut actions = row![
-                accessible_command(
-                    "xtb-ts-card-path",
-                    "Show the reaction path",
-                    if unreliable {
-                        "Show what was found"
-                    } else {
-                        "Show path"
-                    }
-                )
-                .style(crate::appearance::secondary)
-                .on_press(send(Action::ShowPath)),
-            ]
-            .spacing(5);
+            let mut actions = row![].spacing(5);
             if !unreliable {
-                actions = actions.push(
-                    accessible_command(
-                        "xtb-ts-card-animate",
-                        "Animate the transition state's imaginary mode",
-                        "Animate TS",
+                actions = actions
+                    .push(
+                        accessible_command(
+                            "xtb-ts-card-path",
+                            "Show the reaction path",
+                            "Show path",
+                        )
+                        .style(crate::appearance::secondary)
+                        .on_press(send(Action::ShowPath)),
                     )
-                    .style(crate::appearance::secondary)
-                    .on_press_maybe(
-                        (idle && imaginary_mode(result).is_some()).then(|| send(Action::Animate)),
-                    ),
-                );
+                    .push(
+                        accessible_command(
+                            "xtb-ts-card-animate",
+                            "Animate the transition state's imaginary mode",
+                            "Animate TS",
+                        )
+                        .style(crate::appearance::secondary)
+                        .on_press_maybe(
+                            (idle && imaginary_mode(result).is_some())
+                                .then(|| send(Action::Animate)),
+                        ),
+                    );
             }
             content = content.push(
                 actions
@@ -919,20 +931,24 @@ impl App {
             );
         }
 
-        if let Some(live) = self
-            .tab
-            .xtb
-            .run
-            .as_ref()
-            .and_then(|run| run.ts.as_ref())
-            .filter(|live| live.request.arrow == arrow)
-        {
+        if let Some(live) = live {
+            let small = live.small_reaction();
             content = content
-                .push(line(live.line(), Tone::Muted))
+                .push(stepper(live))
                 .push(progress_bar(0.0..=1.0, live.fraction().unwrap_or(0.)).girth(3))
                 .push(
-                    accessible_command("xtb-ts-cancel", "Cancel transition-state search", "Cancel")
+                    row![
+                        column![]
+                            .push(small.then(|| line("usually 4–10 s", Tone::Muted)))
+                            .width(Length::Fill),
+                        accessible_command(
+                            "xtb-ts-cancel",
+                            "Cancel transition-state search",
+                            "Cancel"
+                        )
                         .on_press(Message::Xtb(XtbAction::Cancel)),
+                    ]
+                    .align_y(iced::Alignment::Center),
                 );
         } else if self.xtb_automatic_mapping_pending(arrow) {
             content = content.push(line("Matching atoms…", Tone::Muted)).push(
@@ -975,8 +991,11 @@ impl App {
                         state.barrier,
                         Action::Barrier
                     ),
-                    container(line("about 5–10 s for small molecules", Tone::Muted))
-                        .padding([0, 19]),
+                    live.is_none().then(|| container(line(
+                        "about 5–10 s for small molecules",
+                        Tone::Muted
+                    ),)
+                    .padding([0, 19])),
                 ]
                 .spacing(1),
             );
@@ -1018,6 +1037,43 @@ impl App {
         );
         crate::app::inspector::card(container(content).padding(10).width(Length::Fill))
     }
+}
+
+fn stepper(live: &Live) -> Element<'static, Message> {
+    column(
+        live.steps(iced::time::Instant::now())
+            .map(|(label, state)| {
+                let (marker, label, elapsed) = match state {
+                    StepState::Done(elapsed) => (toned_text("✓", Tone::Good), text(label), elapsed),
+                    StepState::Current(elapsed) => (
+                        text("●"),
+                        text(live.line()).font(iced::Font {
+                            weight: iced::font::Weight::Bold,
+                            ..iced::Font::DEFAULT
+                        }),
+                        Some(elapsed),
+                    ),
+                    StepState::Todo => (
+                        toned_text("○", Tone::Muted),
+                        toned_text(label, Tone::Muted),
+                        None,
+                    ),
+                };
+                row![
+                    marker.size(12).width(16),
+                    label.size(12).width(Length::Fill),
+                    elapsed.map(|duration| line(
+                        format!("{:.1} s", duration.as_secs_f64()),
+                        Tone::Muted
+                    )),
+                ]
+                .spacing(4)
+                .align_y(iced::Alignment::Center)
+                .into()
+            }),
+    )
+    .spacing(4)
+    .into()
 }
 
 fn energy_number(
@@ -1144,12 +1200,21 @@ fn nonempty(value: &str) -> Option<&str> {
     (!value.trim().is_empty()).then_some(value)
 }
 
-fn finer_path(enabled: bool) -> Element<'static, Message> {
-    let label = "Try again with a finer path";
-    accessible_command("xtb-ts-rerun", label, label)
+fn failure_actions(recovery: view::Recovery, arrow: u64, idle: bool) -> Element<'static, Message> {
+    row![
+        recovery.button("xtb-ts-rerun", Some(arrow), idle),
+        accessible_command(
+            "xtb-ts-card-path",
+            "Show what was found",
+            "Show what was found"
+        )
         .style(crate::appearance::secondary)
-        .on_press_maybe(enabled.then(|| send(Action::FinerPath)))
-        .into()
+        .on_press(send(Action::ShowPath)),
+    ]
+    .spacing(5)
+    .wrap()
+    .vertical_spacing(5)
+    .into()
 }
 
 #[cfg(test)]

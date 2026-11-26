@@ -1,7 +1,7 @@
 //! A desktop transition-state search using thread-affine, isolated xTB workers.
 
 use super::view::THERMO_IMAGINARY_CM1;
-use super::{Extras, Stage};
+use super::{Extras, Retry, Stage};
 use crate::app::xtb::{
     results::{Evaluation, RunInfo},
     state::{Failure, symbol},
@@ -21,16 +21,29 @@ use reshiki_xtb_worker::{
     client::{Cancel, Limits},
     protocol::{Computed, Conventions, Engine, Method, Open, Units},
 };
-use std::{collections::BTreeSet, ops::ControlFlow, sync::Arc, time::Instant};
+use std::{
+    collections::BTreeSet,
+    ops::ControlFlow,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 const THERMO_TEMPERATURE_K: f64 = 298.15;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
     Stage(Stage),
-    Neb { iteration: usize },
-    Saddle { step: usize },
-    Irc { forward: bool, step: usize },
+    Neb {
+        iteration: usize,
+        energies: Vec<f64>,
+    },
+    Saddle {
+        step: usize,
+    },
+    Irc {
+        forward: bool,
+        step: usize,
+    },
     Done(Result<Arc<Report>, Failure>),
 }
 
@@ -43,11 +56,20 @@ pub(crate) struct Report {
     pub(super) info: RunInfo,
 }
 
+pub(super) enum SearchPath {
+    New(usize),
+    Finer(usize),
+    Saved {
+        points: Vec<ts::Minimum>,
+        converged: bool,
+    },
+}
+
 pub(super) fn start(
     launch: Launch,
     plan: TsPlan,
     drawn_bonds: Vec<(u64, u64)>,
-    images: usize,
+    path: SearchPath,
     free_energy: bool,
     cancel: Cancel,
 ) -> impl Stream<Item = Event> + Send + 'static {
@@ -60,7 +82,7 @@ pub(super) fn start(
                 &launch,
                 &plan,
                 &drawn_bonds,
-                images,
+                path,
                 free_energy,
                 &cancel,
                 &events,
@@ -79,14 +101,31 @@ fn run(
     launch: &Launch,
     plan: &TsPlan,
     drawn_bonds: &[(u64, u64)],
-    images: usize,
+    path: SearchPath,
     free_energy: bool,
     cancel: &Cancel,
     tx: &mpsc::UnboundedSender<Event>,
 ) -> Result<Report, Failure> {
     let started = Instant::now();
-    let mut trace = SearchTrace::default();
-    trace.enter("Building endpoints");
+    let images = match &path {
+        SearchPath::New(images) | SearchPath::Finer(images) => *images,
+        SearchPath::Saved { points, .. } => points.len(),
+    };
+    let retry = match &path {
+        SearchPath::New(_) => None,
+        SearchPath::Finer(_) => Some(Retry::FinerPath),
+        SearchPath::Saved { .. } => Some(Retry::RefineHighest),
+    };
+    let mut trace = SearchTrace {
+        retry,
+        ..Default::default()
+    };
+    let refining = retry == Some(Retry::RefineHighest);
+    trace.enter(if refining {
+        "Preparing refinement"
+    } else {
+        "Building endpoints"
+    });
     if !(5..=24).contains(&images) {
         return Err(Failure::Other(
             "A transition-state search needs 5 to 24 images".into(),
@@ -112,10 +151,14 @@ fn run(
         threads: 1,
         heap_bytes: limits.heap_bytes,
     };
-    let count = worker_count(
-        images,
-        std::thread::available_parallelism().map_or(1, usize::from),
-    );
+    let count = if refining {
+        1
+    } else {
+        worker_count(
+            images,
+            std::thread::available_parallelism().map_or(1, usize::from),
+        )
+    };
     let mut workers = Vec::with_capacity(count);
     let mut engine = None;
     for _ in 0..count {
@@ -129,54 +172,19 @@ fn run(
     let first = workers
         .first_mut()
         .ok_or_else(|| Failure::Other("No xTB worker".into()))?;
-    send(tx, cancel, Event::Stage(Stage::Endpoints))?;
-    let (start, folded) = ts::prepare_reactive_start(
-        first,
-        &open.numbers,
-        &bohr(&launch.frame.positions_angstrom),
-        &changes.form,
-        &changes.break_,
-        |_, _| control(cancel, tx),
-    )
-    .map_err(failed)?;
-    let (other, matched) = ts::build_endpoint(
-        first,
-        &open.numbers,
-        &start,
-        &changes.form,
-        &changes.break_,
-        |_, _| control(cancel, tx),
-    )
-    .map_err(failed)?;
-    if !matched {
-        let name = if plan.start == Side::Reactant {
-            "product"
-        } else {
-            "reactant"
-        };
-        return Err(Failure::Other(format!(
-            "The constructed {name} does not match the requested bond changes"
-        )));
-    }
-    check_cancel(cancel)?;
-    let (reactant, product) = match plan.start {
-        Side::Reactant => (start, other.positions),
-        Side::Product => (other.positions, start),
+    let (reactant, product) = match &path {
+        SearchPath::Saved { points, .. } => {
+            let [reactant, .., product] = points.as_slice() else {
+                return Err(Failure::Other("The saved path needs both endpoints".into()));
+            };
+            (reactant.positions.clone(), product.positions.clone())
+        }
+        _ => endpoints(launch, plan.start, &changes, first, cancel, tx, &mut trace)?,
     };
     let options = ts::TsOptions {
         images,
         ..ts::TsOptions::default()
     };
-    trace.reactive_start = folded.map(|fold| {
-        let distances = fold.distance_description(|i| {
-            format!(
-                "{}{}",
-                open.numbers.get(i).copied().map_or("?", symbol),
-                i + 1
-            )
-        });
-        format!("{distances} ({:+} kcal/mol)", fold.energy_change_kcal)
-    });
     let search = ts::Search {
         numbers: &open.numbers,
         masses_amu: &masses,
@@ -184,20 +192,22 @@ fn run(
         product: &product,
         options: &options,
     };
-    let report = ts::search_with_cancel(
-        &mut workers,
-        &search,
-        |event| {
-            trace.observe(event);
-            if let Some(event) = progress(event)
-                && send(tx, cancel, event).is_err()
-            {
-                return ControlFlow::Break(());
-            }
-            control(cancel, tx)
-        },
-        || control(cancel, tx),
-    )
+    let mut last_band = None;
+    let observe = |event: ts::Event<'_>| {
+        trace.observe(event);
+        if let Some(event) = progress(event, &mut last_band, Instant::now)
+            && send(tx, cancel, event).is_err()
+        {
+            return ControlFlow::Break(());
+        }
+        control(cancel, tx)
+    };
+    let report = match path {
+        SearchPath::Saved { points, converged } => {
+            ts::refine_from_band(first, &search, &points, converged, observe)
+        }
+        _ => ts::search_with_cancel(&mut workers, &search, observe, || control(cancel, tx)),
+    }
     .map_err(failed)?;
     check_cancel(cancel)?;
     trace.enter("Worker check");
@@ -260,6 +270,58 @@ fn run(
             trace,
         },
     )
+}
+
+fn endpoints(
+    launch: &Launch,
+    side: Side,
+    changes: &Changes,
+    worker: &mut Worker,
+    cancel: &Cancel,
+    tx: &mpsc::UnboundedSender<Event>,
+    trace: &mut SearchTrace,
+) -> Result<(Vec<f64>, Vec<f64>), Failure> {
+    let numbers = &launch.frame.numbers;
+    let (start, folded) = ts::prepare_reactive_start(
+        worker,
+        numbers,
+        &bohr(&launch.frame.positions_angstrom),
+        &changes.form,
+        &changes.break_,
+        |_, _| control(cancel, tx),
+    )
+    .map_err(failed)?;
+    let (other, matched) = ts::build_endpoint(
+        worker,
+        numbers,
+        &start,
+        &changes.form,
+        &changes.break_,
+        |_, _| control(cancel, tx),
+    )
+    .map_err(failed)?;
+    if !matched {
+        let name = if side == Side::Reactant {
+            "product"
+        } else {
+            "reactant"
+        };
+        return Err(Failure::Other(format!(
+            "The constructed {name} does not match the requested bond changes"
+        )));
+    }
+    check_cancel(cancel)?;
+    let (reactant, product) = match side {
+        Side::Reactant => (start, other.positions),
+        Side::Product => (other.positions, start),
+    };
+    trace.reactive_start = folded.map(|fold| {
+        let distances = fold.distance_description(|i| {
+            format!("{}{}", numbers.get(i).copied().map_or("?", symbol), i + 1)
+        });
+        format!("{distances} ({:+} kcal/mol)", fold.energy_change_kcal)
+    });
+    Ok((reactant, product))
 }
 
 fn worker_count(images: usize, parallelism: usize) -> usize {
@@ -535,6 +597,7 @@ fn thermochemistry(
 /// Search counters and wall times are independent of the visible progress text.
 #[derive(Default)]
 struct SearchTrace {
+    retry: Option<Retry>,
     reactive_start: Option<String>,
     neb_iterations: Option<usize>,
     saddle_steps: Option<usize>,
@@ -701,6 +764,8 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .iter()
             .map(|point| angstroms(&point.positions))
             .collect(),
+        neb_converged: report.neb_converged,
+        reached_positions_angstrom: reached_endpoint(&report),
         irc_energies: report.irc.as_ref().map_or_else(
             || [Vec::new(), Vec::new()],
             |branches| branches.each_ref().map(|branch| branch.energies.clone()),
@@ -724,6 +789,24 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     })
 }
 
+fn reached_endpoint(report: &TsReport) -> Vec<[f64; 3]> {
+    use ts::Reached::{Other, Product};
+
+    let Some(branches) = report.irc.as_ref().filter(|_| !report.connects) else {
+        return Vec::new();
+    };
+    branches
+        .iter()
+        .find(|branch| branch.reached == Other)
+        .or_else(|| {
+            branches
+                .iter()
+                .all(|branch| branch.reached == Product)
+                .then(|| &branches[0])
+        })
+        .map_or_else(Vec::new, |branch| angstroms(&branch.end.positions))
+}
+
 fn diagnostics(
     report: &TsReport,
     worker_frequencies: &[f64],
@@ -737,8 +820,17 @@ fn diagnostics(
             "not converged"
         }
     };
+    let refining = trace.retry == Some(Retry::RefineHighest);
     let mut rows = vec![
-        ("Method".into(), "IDPP → CI-NEB → P-RFO → IRC".into()),
+        (
+            "Method".into(),
+            if refining {
+                "Saved path → P-RFO → IRC"
+            } else {
+                "IDPP → CI-NEB → P-RFO → IRC"
+            }
+            .into(),
+        ),
         (
             "Images".into(),
             format!(
@@ -751,10 +843,14 @@ fn diagnostics(
             "NEB".into(),
             format!(
                 "{} · {}",
-                trace.neb_iterations.map_or_else(
-                    || "iterations unavailable".into(),
-                    |n| format!("{n} iterations")
-                ),
+                if refining {
+                    "reused the saved path".into()
+                } else {
+                    trace.neb_iterations.map_or_else(
+                        || "iterations unavailable".into(),
+                        |n| format!("{n} iterations"),
+                    )
+                },
                 convergence(report.neb_converged)
             ),
         ),
@@ -770,6 +866,17 @@ fn diagnostics(
             ),
         ),
     ];
+    if let Some(retry) = trace.retry {
+        rows.push((
+            "Retry".into(),
+            match retry {
+                Retry::RefineHighest => {
+                    "Refined from the highest interior point of the saved path".into()
+                }
+                Retry::FinerPath => format!("New search with {} path points", report.path.len()),
+            },
+        ));
+    }
     if let Some(detail) = &trace.reactive_start {
         rows.push(("Folded the starting conformer".into(), detail.clone()));
     }
@@ -928,7 +1035,7 @@ fn failure_reason(report: &TsReport, worker_frequencies: &[f64]) -> Option<Strin
                 .as_ref()
                 .map(|branches| branches.each_ref().map(|b| b.reached))
             {
-                Some([Reactant, Reactant]) => "IRC reaches the reactant on both sides",
+                Some([Reactant, Reactant]) => super::view::IRC_RETURNS_TO_REACTANT,
                 Some([Product, Product]) => "IRC reaches the product on both sides",
                 Some([Reactant, Other] | [Other, Reactant]) => {
                     "IRC reaches the reactant and a different minimum"
@@ -946,7 +1053,11 @@ fn failure_reason(report: &TsReport, worker_frequencies: &[f64]) -> Option<Strin
     }
 }
 
-fn progress(event: ts::Event<'_>) -> Option<Event> {
+fn progress(
+    event: ts::Event<'_>,
+    last_band: &mut Option<Instant>,
+    clock: impl FnOnce() -> Instant,
+) -> Option<Event> {
     Some(match event {
         ts::Event::Stage(stage) => Event::Stage(match stage {
             ts::Stage::Endpoints => Stage::Endpoints,
@@ -955,7 +1066,21 @@ fn progress(event: ts::Event<'_>) -> Option<Event> {
             ts::Stage::Saddle | ts::Stage::Frequencies => Stage::Saddle,
             ts::Stage::Irc => Stage::Irc,
         }),
-        ts::Event::Neb { iteration, .. } => Event::Neb { iteration },
+        ts::Event::Neb {
+            iteration,
+            energies,
+            ..
+        } => {
+            let now = clock();
+            if last_band.is_some_and(|last| now.duration_since(last) < Duration::from_millis(250)) {
+                return None;
+            }
+            *last_band = Some(now);
+            Event::Neb {
+                iteration,
+                energies: energies.to_vec(),
+            }
+        }
         ts::Event::Saddle { step, .. } => Event::Saddle { step },
         ts::Event::Irc { forward, step, .. } => Event::Irc { forward, step },
         ts::Event::Endpoint { .. } | ts::Event::SaddleTrial { .. } | ts::Event::SaddleStatus(_) => {
@@ -964,7 +1089,7 @@ fn progress(event: ts::Event<'_>) -> Option<Event> {
     })
 }
 
-fn bohr(positions: &[[f64; 3]]) -> Vec<f64> {
+pub(super) fn bohr(positions: &[[f64; 3]]) -> Vec<f64> {
     positions
         .as_flattened()
         .iter()

@@ -598,6 +598,34 @@ fn irc_failure_names_the_reached_endpoints() {
 }
 
 #[test]
+fn live_band_events_copy_energies_at_most_four_times_per_second() {
+    let mut last_band = None;
+    let start = Instant::now();
+    let mut send_band = |iteration, millis, energies| {
+        progress(
+            ts::Event::Neb {
+                iteration,
+                energies,
+                max_force: 0.1,
+                climbing: None,
+            },
+            &mut last_band,
+            || start + Duration::from_millis(millis),
+        )
+    };
+    assert!(matches!(
+        send_band(0, 0, &[-5., -4.9, -5.]),
+        Some(Event::Neb { iteration: 0, .. })
+    ));
+    assert!(send_band(1, 249, &[-5., -4.91, -5.]).is_none());
+    assert!(
+        matches!(send_band(2, 250, &[-5., -4.92, -5.]), Some(Event::Neb {
+        iteration: 2, energies
+    }) if energies == [-5., -4.92, -5.])
+    );
+}
+
+#[test]
 fn cancellation_and_dropped_receiver_stop_progress() {
     let cancel = Cancel::default();
     let (tx, rx) = mpsc::unbounded();

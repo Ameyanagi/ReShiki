@@ -3,7 +3,7 @@ use super::super::{
     Action as XtbAction, CalcTask, Page, available,
     tone::{Tone, line},
 };
-use super::{Action as TsAction, energy::Species};
+use super::{Action as TsAction, Retry, energy::Species};
 use crate::app::reaction_mapping::{Preview, calculate, with_roles};
 use crate::app::{App, InspectorTab, Message};
 use crate::canvas::{BondChangeKind, BondChangeMark};
@@ -214,7 +214,7 @@ pub(in crate::app::xtb) struct Dialog {
     at: (u64, u64),
     arrow: u64,
     mode: Mode,
-    rerun: bool,
+    retry: Option<Retry>,
     explicit: bool,
     energy_fallback: bool,
     inferred: bool,
@@ -329,7 +329,7 @@ impl Dialog {
     }
 
     fn images(&self) -> Result<usize, String> {
-        if self.rerun {
+        if self.retry.is_some() {
             return Ok(20);
         }
         self.path_points
@@ -499,7 +499,7 @@ impl App {
             Mode::Energy
         };
         let energy_fallback = choices.barrier && (choices.reaction_energy || choices.free_energy);
-        self.xtb_review_open_inner(mode, Some(arrow), false, false, energy_fallback)
+        self.xtb_review_open_inner(mode, Some(arrow), false, None, energy_fallback)
     }
 
     pub(in crate::app) fn xtb_review_target(&self) -> Option<u64> {
@@ -555,15 +555,15 @@ impl App {
     }
 
     pub(super) fn xtb_review_open(&mut self, mode: Mode, arrow: Option<u64>) -> Task<Message> {
-        self.xtb_review_open_inner(mode, arrow, false, false, false)
+        self.xtb_review_open_inner(mode, arrow, false, None, false)
     }
 
     pub(super) fn xtb_review_show(&mut self, mode: Mode, arrow: Option<u64>) -> Task<Message> {
-        self.xtb_review_open_inner(mode, arrow, true, false, false)
+        self.xtb_review_open_inner(mode, arrow, true, None, false)
     }
 
-    pub(super) fn xtb_review_rerun(&mut self, arrow: u64) -> Task<Message> {
-        self.xtb_review_open_inner(Mode::TransitionState, Some(arrow), true, true, false)
+    pub(super) fn xtb_review_retry(&mut self, arrow: u64, retry: Retry) -> Task<Message> {
+        self.xtb_review_open_inner(Mode::TransitionState, Some(arrow), true, Some(retry), false)
     }
 
     fn xtb_review_open_inner(
@@ -571,7 +571,7 @@ impl App {
         mut mode: Mode,
         arrow: Option<u64>,
         explicit: bool,
-        rerun: bool,
+        retry: Option<Retry>,
         energy_fallback: bool,
     ) -> Task<Message> {
         if self
@@ -666,7 +666,7 @@ impl App {
             at: self.review_stamp(),
             arrow,
             mode,
-            rerun,
+            retry,
             explicit,
             energy_fallback,
             task,
@@ -850,9 +850,9 @@ impl App {
                     arrow,
                     plan,
                     images,
-                    start.charge,
-                    unpaired,
+                    (start.charge, unpaired),
                     dialog.free_energy,
+                    dialog.retry,
                 )
             }
             Mode::Energy => {

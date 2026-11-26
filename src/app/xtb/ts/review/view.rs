@@ -148,7 +148,7 @@ impl App {
                 );
             }
         }
-        if dialog.mode == Mode::TransitionState && !dialog.rerun {
+        if dialog.mode == Mode::TransitionState && dialog.retry.is_none() {
             content = content.push(
                 accessible_command(
                     "ts.review.advanced",
