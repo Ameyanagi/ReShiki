@@ -248,7 +248,8 @@ impl Failed {
         if retry && let Some(n) = self.scf_iteration_limit() {
             return (
                 format!(
-                    "The electronic structure (SCF) did not converge within {n} iterations, the Max SCF iterations you set."
+                    "The electronic structure (SCF) did not converge within {n} iteration{}, the Max SCF iterations you set.",
+                    if n == 1 { "" } else { "s" }
                 ),
                 detail,
             );
