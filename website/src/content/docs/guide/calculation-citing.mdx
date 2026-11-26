@@ -1,0 +1,34 @@
+---
+title: How to cite
+description: What to cite when you publish results from ReShiki's xTB calculations.
+---
+
+:::caution[Not released yet]
+xTB calculations are on the `xtb/next` branch and not in a released version of ReShiki yet.
+:::
+
+If ReShiki's calculations helped your work, please cite ReShiki, the axtb engine and the method you ran. Some features add a few papers; the table below lists the minimum. Every reference, with its DOI and what ReShiki uses it for, is on the [references page](https://github.com/Ameyanagi/ReShiki/blob/main/docs/references/xtb.md), and all entries are in one BibTeX file, [xtb.bib](https://github.com/Ameyanagi/ReShiki/blob/main/docs/references/xtb.bib).
+
+## Always
+
+- **ReShiki**, the release you used: [github.com/Ameyanagi/ReShiki](https://github.com/Ameyanagi/ReShiki)
+- **axtb**, the xTB engine inside ReShiki: [github.com/atomsforhumanity/axtb](https://github.com/atomsforhumanity/axtb). Cite it for results ReShiki calculated; for files opened from ORCA, Gaussian and other programs, cite that program instead.
+- **The method:**
+  - GFN2-xTB: C. Bannwarth, S. Ehlert, S. Grimme, _J. Chem. Theory Comput._ **15**, 1652 (2019), [doi:10.1021/acs.jctc.8b01176](https://doi.org/10.1021/acs.jctc.8b01176)
+  - GFN-FF: S. Spicher, S. Grimme, _Angew. Chem. Int. Ed._ **59**, 15665 (2020), [doi:10.1002/anie.202004239](https://doi.org/10.1002/anie.202004239); for lanthanides and actinides also T. Rose, M. Bursch, J.-M. Mewes, S. Grimme, _Inorg. Chem._ **63**, 19364 (2024), [doi:10.1021/acs.inorgchem.4c03215](https://doi.org/10.1021/acs.inorgchem.4c03215)
+  - g-xTB: T. Froitzheim, M. Müller, A. Hansen, S. Grimme, ChemRxiv preprint (2025), [doi:10.26434/chemrxiv-2025-bjxvt](https://doi.org/10.26434/chemrxiv-2025-bjxvt)
+
+## By feature
+
+| You used                                              | Also cite                                                                                                                                                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Implicit solvent                                      | Ehlert et al. 2021 (ALPB/GBSA)                                                                                                                                                                                     |
+| Optimize                                              | Wang & Song 2016 (TRIC), Baker et al. 1996 (delocalized coordinates), Lindh et al. 1995 (model Hessian), Banerjee et al. 1985 (RFO)                                                                                |
+| Conformer search                                      | Riniker & Landrum 2015 and Wang et al. 2020 (ETKDG), Butina 1999, and what minimized the starts: MMFF94s by default, or MMFF94, UFF, GFN-FF or GFN2-xTB if you chose it                                            |
+| Frequencies and thermochemistry                       | Grimme 2012 (quasi-RRHO), Fernández-Ramos et al. 2007 (symmetry numbers)                                                                                                                                           |
+| IR spectrum, orbital energies                         | nothing beyond the method                                                                                                                                                                                          |
+| Orbital surfaces in a figure (in progress)            | Lorensen & Cline 1987, Taubin 1995, Garland & Heckbert 1997 (Schneider 1990 for vector outlines)                                                                                                                   |
+| Transition states (in progress)                       | Smidstrup et al. 2014 (IDPP), Henkelman et al. 2000 (CI-NEB) and Henkelman & Jónsson 2000 (tangent), Bitzek et al. 2006 (FIRE), Banerjee et al. 1985 and Baker 1986 (P-RFO), Bofill 1994, Page & McIver 1988 (IRC) |
+| Results opened from ORCA, Gaussian and other programs | the program that produced the file                                                                                                                                                                                 |
+
+The BibTeX keys (for example `Henkelman2000CINEB`) are the same in the file and in ReShiki's source code, so you can find where each method is implemented.
