@@ -71,9 +71,10 @@ pub enum Update {
     /// \[Powell1978Damping\] \[Nocedal2006Numerical\].
     DampedBfgs,
     /// Blend SR1 and BFGS for minimization (Farkas & Schlegel, JCP 111, 10806, 1999)
-    /// \[Farkas1999Update\].
+    /// \[Farkas1999Update\]. Not Bofill's SR1/PSB update, which only the
+    /// transition-state search uses.
     /// The model may become indefinite, in which case RFO uses the lowest augmented root.
-    Bofill,
+    FarkasSchlegel,
 }
 
 /// Extrapolate from up to five accepted points in a single model frame so errors,
@@ -181,7 +182,7 @@ pub struct Options {
     /// Starting RFO Hessian. Defaults to the Lindh model. A GFN2 Hessian seed
     /// cost more to compute than it saved in gradient evaluations.
     pub initial_hessian: InitialHessian,
-    /// RFO Hessian update. Defaults to BFGS. Bofill saved a few calls on the
+    /// RFO Hessian update. Defaults to BFGS. The SR1/BFGS blend saved a few calls on the
     /// GFN2 benchmark but took longer overall.
     pub update: Update,
     /// DIIS-family trial steps in the active RFO coordinates. Off by default,

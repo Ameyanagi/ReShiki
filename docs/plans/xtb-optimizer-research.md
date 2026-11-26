@@ -83,7 +83,8 @@ measured Hessian/gradient time ratio.
   few pairs and re-apply them on a refreshed model Hessian. Related to our ANC rebuild,
   which carries curvature over.
 
-**We try:** `Update::{Bfgs, DampedBfgs, Bofill}`.
+**We try:** `Update::{Bfgs, DampedBfgs, FarkasSchlegel}` (the blend was named `Bofill` in the
+benchmark runs below).
 
 ### 2.4 Step control and acceleration
 
@@ -134,7 +135,7 @@ as secondary potentials:
 
 1. Baseline: #1415 ANC-RFO, Cartesian L-BFGS, `xtb --opt normal` (official 6.8.0).
 2. One knob at a time against the baseline: Hessian start (Lindh / GFN-FF / GFN2 for small N),
-   coordinates (ANC / TRIC), update (BFGS / damped / Bofill), acceleration (GDIIS / GEDIIS),
+   coordinates (ANC / TRIC), update (BFGS / damped / SR1–BFGS blend), acceleration (GDIIS / GEDIIS),
    adaptive SCF accuracy, GFN-FF pre-optimization, SCF restart on/off.
 3. Combine the winners; check failures and same-minimum rate; pick the default.
 
@@ -177,7 +178,7 @@ Recorded after each round: its predictions, proposals, and which won or lost.
   3,982 calls on the 154 starts and ANC's ratio is 1.34× instead of 1.57×.
 - Rejected trials are only 2.5 % of ANC evaluations; SCF restart halves the SCF iterations
   (34k vs 70k); `tight_final` costs exactly one call per start; adaptive accuracy saves 3 %
-  of SCF iterations but adds 316 evaluations (loses); GDIIS/GEDIIS/Bofill/damped BFGS: no
+  of SCF iterations but adds 316 evaluations (loses); GDIIS/GEDIIS/SR1–BFGS blend/damped BFGS: no
   general win (GDIIS's floppy "gain" was PEG5 stopping 6 mEh higher); the GFN2 Hessian start
   saves 390 evaluations at a cost of 1,523 gradient equivalents (loses); the GFN-FF Hessian
   start helps ions/radicals and hurts metals (net neutral).
@@ -199,7 +200,7 @@ Recorded after each round: its predictions, proposals, and which won or lost.
 - Wall time with Internal: 25.0 s optimizer overhead vs 16.1 s potential time (ANC: 3.2 s vs
   41.0 s). Halving the overhead saves 30 % of total time.
 - Replaying the traces with an energy-and-gradient stop (two consecutive passes, Tight
-  recheck kept) gives 0.78× xtb; Bofill gives a small extra gain (0.927 → 0.912); GEDIIS,
+  recheck kept) gives 0.78× xtb; the SR1/BFGS blend gives a small extra gain (0.927 → 0.912); GEDIIS,
   contacts, H-bond primitives: no measurable gain. The predicted SCF benefit of
   extrapolating the wavefunction guess is ≤ 7 % of wall time; deferred.
 
@@ -207,7 +208,7 @@ Recorded after each round: its predictions, proposals, and which won or lost.
 
 - Recommends shipping Internal + Lindh seed + BFGS + Standard convergence + Tight recheck:
   143/154 endpoints within 1 µEh of the tight reference, against 113/154 with the
-  energy-and-gradient stop (which saves 560 evaluations and 4.8 s of 17.4 s). Bofill saves
+  energy-and-gradient stop (which saves 560 evaluations and 4.8 s of 17.4 s). The SR1/BFGS blend saves
   33 evaluations but costs more optimizer time than it saves.
 - A middle-ground stop (Standard OR two passes with |g| < 3e-4 and |ΔE| ≤ 5e-7) keeps all 143
   energy passes in a replay but retains only 39 % of the saving; not pursued further.
@@ -259,7 +260,7 @@ gradient equivalents measured by time):
 | GFN2 Hessian below 20 atoms                                       | 2,818 → 2,919 + 467                     | lost                                                                                          |
 | GFN-FF pre-optimization                                           | 17.4 s → 23.2 s                         | lost                                                                                          |
 | Adaptive SCF accuracy (Coarse early)                              | ANC 6,689 → 7,005                       | lost                                                                                          |
-| Bofill SR1/BFGS update                                            | 2,818 → 2,785                           | tie (more optimizer time)                                                                     |
+| Farkas–Schlegel SR1/BFGS update                                   | 2,818 → 2,785                           | tie (more optimizer time)                                                                     |
 | Damped BFGS                                                       | ANC 6,689 → 6,676                       | tie                                                                                           |
 | GDIIS / GEDIIS                                                    | ANC 6,689 → 6,789 / 6,609; TRIC → 2,835 | tie or lost                                                                                   |
 | Per-atom trust radius                                             | TRIC 2,818 → 3,576; ANC 6,689 → 6,677   | lost                                                                                          |

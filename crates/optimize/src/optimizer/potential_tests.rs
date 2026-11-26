@@ -213,7 +213,7 @@ fn optimizer_variants() -> impl Iterator<Item = (Method, Update, Acceleration)> 
         [Method::AncRfo, Method::Internal]
             .into_iter()
             .flat_map(|method| {
-                [Update::Bfgs, Update::DampedBfgs, Update::Bofill]
+                [Update::Bfgs, Update::DampedBfgs, Update::FarkasSchlegel]
                     .into_iter()
                     .flat_map(move |update| {
                         [
