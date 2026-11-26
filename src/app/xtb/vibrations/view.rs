@@ -532,6 +532,8 @@ pub(super) struct SpectrumData {
     peaks: Vec<[f64; 2]>,
     high: f64,
     low: f64,
+    shape: BandShape,
+    fwhm: f64,
     y: YAxis,
     settings_error: Option<&'static str>,
     has_ir: bool,
@@ -577,6 +579,8 @@ impl SpectrumData {
             peaks: vec![],
             high,
             low,
+            shape,
+            fwhm,
             y: settings.y,
             settings_error: if range.is_none() {
                 Some(RANGE_ERROR)
@@ -745,7 +749,7 @@ fn spectrum_ticks(high: f64, low: f64) -> Vec<f64> {
 }
 
 /// The broadened IR spectrum, wavenumber decreasing to the right; a click
-/// picks the nearest mode.
+/// picks the mode contributing most to the band.
 struct Spectrum {
     data: Arc<SpectrumData>,
     left: f32,
@@ -812,10 +816,30 @@ impl canvas::Program<Message> for Spectrum {
             return None;
         };
         let point = cursor.position_in(bounds)?;
+        let plot = self.plot(bounds);
+        if plot.width <= 0. {
+            return None;
+        }
+        let frequency = self.data.high
+            - f64::from((point.x - plot.x) / plot.width) * (self.data.high - self.data.low);
+        // The normalization is shared by every band. Logs keep distant
+        // Gaussian tails comparable when their profiles would underflow.
+        let log_contribution = |&(_, center, intensity): &(usize, f64, f64)| {
+            let offset = (frequency - center) / self.data.fwhm;
+            intensity.ln()
+                - match self.data.shape {
+                    BandShape::Lorentzian => (4. * offset * offset).ln_1p(),
+                    BandShape::Gaussian => 4. * std::f64::consts::LN_2 * offset * offset,
+                }
+        };
         let (index, _, _) = self.data.pickable_sticks().min_by(|a, b| {
-            (self.x(a.1, bounds) - point.x)
-                .abs()
-                .total_cmp(&(self.x(b.1, bounds) - point.x).abs())
+            log_contribution(b)
+                .total_cmp(&log_contribution(a))
+                .then_with(|| {
+                    (self.x(a.1, bounds) - point.x)
+                        .abs()
+                        .total_cmp(&(self.x(b.1, bounds) - point.x).abs())
+                })
                 .then_with(|| b.2.total_cmp(&a.2))
         })?;
         Some(canvas::Action::publish(send(Action::Mode(*index))).and_capture())
@@ -1075,6 +1099,69 @@ mod tests {
                 });
             assert_eq!(selected, expected);
         }
+    }
+
+    #[test]
+    fn clicking_a_broadened_band_selects_a_strong_contributor() {
+        let mut result = spectrum_result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.frequencies_cm1 = vec![1500., 1504., 1508.];
+        vibrations.ir_intensities_km_mol = vec![100., 0.01, 100.];
+        let result = Arc::new(result);
+        for shape in [BandShape::Lorentzian, BandShape::Gaussian] {
+            for fwhm in [5., 20., 60.] {
+                let settings = State {
+                    shape,
+                    fwhm,
+                    ..State::default()
+                };
+                let spectrum = Spectrum::new(&result, &settings, 1);
+                assert!(matches!(picked_mode(&spectrum, 1504.), Some(0 | 2)));
+            }
+        }
+    }
+
+    #[test]
+    fn distant_clicks_use_current_shape_and_width() {
+        let mut result = spectrum_result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.frequencies_cm1 = vec![1500., 1501.];
+        vibrations.ir_intensities_km_mol = vec![1., 1e12];
+        let result = Arc::new(result);
+        // Both Gaussian profiles underflow at this distance in linear space.
+        for (shape, fwhm, expected) in [
+            (BandShape::Gaussian, 20., 1),
+            (BandShape::Gaussian, 5., 0),
+            (BandShape::Lorentzian, 5., 1),
+        ] {
+            let settings = State {
+                shape,
+                fwhm,
+                ..State::default()
+            };
+            let spectrum = Spectrum::new(&result, &settings, 0);
+            assert_eq!(picked_mode(&spectrum, 400.), Some(expected));
+        }
+    }
+
+    fn picked_mode(spectrum: &Spectrum, frequency: f64) -> Option<usize> {
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(480., CHART_HEIGHT));
+        let cursor = mouse::Cursor::Available(Point::new(spectrum.x(frequency, bounds), 50.));
+        canvas::Program::update(
+            spectrum,
+            &mut (),
+            &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        )
+        .map(|action| {
+            let (Some(Message::Xtb(XtbAction::Vibrations(Action::Mode(mode)))), _, _) =
+                action.into_inner()
+            else {
+                panic!("a spectrum click selects its mode");
+            };
+            mode
+        })
     }
 
     #[test]
