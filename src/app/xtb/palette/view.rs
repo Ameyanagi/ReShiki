@@ -244,7 +244,7 @@ impl App {
                 .into()
         };
         let retry = self.xtb_can_retry(failed);
-        let actions = match &failed.failure {
+        let actions = match failed.failure.reason() {
             state::Failure::Scf(_)
                 if retry
                     && failed
@@ -259,7 +259,7 @@ impl App {
                     XtbAction::Retry,
                 )]
             }
-            state::Failure::Crashed(_) => {
+            state::Failure::Crashed { .. } => {
                 let mut actions = vec![];
                 if retry {
                     actions.push(button(
