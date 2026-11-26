@@ -217,7 +217,8 @@ def energy(
     the energy and gradient in water. Request orbital energies and occupations
     with ``orbitals=True`` or bond orders with ``bond_orders=True``.
     ``unpaired`` sets the number of unpaired electrons in the engine's valence
-    space and defaults to the multiplicity minus one.
+    space and defaults to the multiplicity minus one. For lanthanides, pass
+    ``unpaired=result.unpaired`` to follow-up calls to keep the same valence spin.
     """
     request = {
         "operation": "energy",
@@ -268,7 +269,8 @@ def optimize(
     first atom fixed. Indices start at zero. The default limit is 500 steps.
     A calculation that reaches the limit returns with ``converged=False``.
     ``unpaired`` sets the number of unpaired electrons in the engine's valence
-    space and defaults to the multiplicity minus one.
+    space and defaults to the multiplicity minus one. For lanthanides, pass
+    ``unpaired=result.unpaired`` to follow-up calls to keep the same valence spin.
     """
     request = {
         "operation": "optimize",
@@ -314,6 +316,7 @@ def frequencies(
     *,
     temperature: float = 298.15,
     pressure: float = 101325.0,
+    symmetry_number: int | None = None,
     method: str = "gfn2",
     charge: int | None = None,
     multiplicity: int | None = None,
@@ -331,11 +334,25 @@ def frequencies(
     Use an optimized geometry, for example ``frequencies(optimize(water).geometry)``.
     Specify the thermochemistry temperature in kelvin and pressure in pascals.
     Frequencies are in cm⁻¹, with imaginary modes reported as negative values.
-    For isotope-labeled geometries, thermochemistry uses a symmetry number of 1.
+    By default the engine chooses the rotational symmetry number from the geometry.
+    The engine's symmetry ignores isotopes, so a geometry with isotopes needs an
+    explicit ``symmetry_number``: for example 2 for D₂O and 1 for HDO.
     ``unpaired`` sets the number of unpaired electrons in the engine's valence
-    space and defaults to the multiplicity minus one.
+    space and defaults to the multiplicity minus one. For lanthanides, pass
+    ``unpaired=result.unpaired`` to follow-up calls to keep the same valence spin.
     """
-    request = {"operation": "frequencies", "temperature": temperature, "pressure": pressure}
+    if symmetry_number is None and geometry.isotopes is not None and geometry.isotopes.any():
+        raise ReShikiError(
+            "Pass symmetry_number for a geometry with isotopes (for example 2 for D2O, 1 for HDO); "
+            "automatic symmetry ignores isotopes.",
+            "invalid_arguments",
+        )
+    request = {
+        "operation": "frequencies",
+        "temperature": temperature,
+        "pressure": pressure,
+        "symmetry_number": symmetry_number,
+    }
     return _result_from_data(
         _calculate(
             request,
@@ -380,7 +397,8 @@ def conformers(
     Pass a ``Molecule`` or molecular structure text or bytes accepted by
     ``reshiki.parse``. The energy ``window`` is in kcal/mol. With a force-field
     minimizer, xTB re-ranks cluster representatives using ``method``.
-    ``threads=None`` uses the app's Auto setting.
+    ``threads`` sets the maximum number of concurrent xTB jobs, from 1 to 8.
+    Each job uses one engine thread. ``threads=None`` uses the app's Auto setting.
 
     .. code-block:: python
 
@@ -409,12 +427,14 @@ def conformers(
         "accuracy": accuracy,
         "max_iterations": max_iterations,
         "conventions": conventions,
-        "threads": 0 if threads is None else threads,
+        "threads": threads,
     }
     try:
-        data = json.loads(
-            _native.xtb_conformers(path, drawing._data, json.dumps(options, allow_nan=False))
-        )
+        request_json = json.dumps(options, allow_nan=False)
+    except ValueError as error:
+        raise ReShikiError(f"Invalid conformer settings: {error}", "invalid_arguments") from error
+    try:
+        data = json.loads(_native.xtb_conformers(path, drawing._data, request_json))
     except ReShikiError as error:
         if error.code == "invalid_arguments":
             raise

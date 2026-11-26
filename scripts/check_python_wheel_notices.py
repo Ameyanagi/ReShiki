@@ -2,6 +2,7 @@
 
 import argparse
 import glob
+import json
 import re
 import zipfile
 from email.parser import BytesParser
@@ -96,6 +97,25 @@ def verify_wheel(wheel, licenses=None, *, xtb=False):
                 raise ValueError(f"Missing License-File declaration: {name}")
             if archive.read(prefix + name) != content:
                 raise ValueError(f"License file has differing bytes: {name}")
+        # The SBOM maturin writes lists the Rust crates compiled into the wheel.
+        sbom_paths = [name for name in archive.namelist() if name.endswith(".cyclonedx.json")]
+        if not sbom_paths:
+            raise ValueError("The wheel has no Rust SBOM")
+        components = []
+        for name in sbom_paths:
+            sbom = json.loads(archive.read(name))
+            if not isinstance(sbom, dict) or not isinstance(sbom.get("components"), list):
+                raise ValueError(f"The wheel has no Rust SBOM components list: {name}")
+            components.extend(sbom["components"])
+        engine = {
+            component["name"]
+            for component in components
+            if component.get("name", "").startswith("axtb")
+        }
+        if xtb and "axtb-driver" not in engine:
+            raise ValueError("The reshiki-xtb wheel's SBOM does not list the axtb engine")
+        if not xtb and engine:
+            raise ValueError(f"The base reshiki wheel contains the xTB engine: {sorted(engine)}")
 
 
 def main():

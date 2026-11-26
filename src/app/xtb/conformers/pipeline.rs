@@ -49,9 +49,7 @@ pub(crate) fn start(search: Search, cancel: Cancel) -> impl Stream<Item = Event>
                             let _ = worker_tx.unbounded_send(Event::Phase(phase));
                         })
                     }))
-                    .unwrap_or_else(|_| {
-                        Err(Failure::Crashed("Conformer search thread panicked".into()))
-                    });
+                    .unwrap_or_else(|_| Err(Failure::crashed("Conformer search thread panicked")));
                     drop(stop_ticks);
                     let _ = ticker.join();
                     result

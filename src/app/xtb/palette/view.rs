@@ -247,7 +247,7 @@ impl App {
                     XtbAction::Retry,
                 )]
             }
-            state::Failure::Crashed(_) => {
+            state::Failure::Crashed { .. } => {
                 let mut actions = vec![];
                 if retry {
                     actions.push(button(

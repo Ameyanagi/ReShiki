@@ -2,11 +2,6 @@
 //! used by the browser. Python owns the public objects and integrations.
 #![forbid(unsafe_code)]
 
-const _: () = assert!(
-    !reshiki_xtb_worker::INCLUDED,
-    "the base reshiki wheel must never enable the xTB engine"
-);
-
 mod bitmap_budget;
 mod drawing;
 mod qc;
@@ -297,6 +292,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(render_many, module)?)?;
     module.add_function(wrap_pyfunction!(qc::qc_elements, module)?)?;
     module.add_function(wrap_pyfunction!(qc::qc_read, module)?)?;
+    module.add_function(wrap_pyfunction!(qc::qc_read_xyz_geometry, module)?)?;
     module.add_function(wrap_pyfunction!(qc::qc_write_input, module)?)?;
     module.add_function(wrap_pyfunction!(xtb::xtb_engine, module)?)?;
     module.add_function(wrap_pyfunction!(xtb::xtb_calculate, module)?)?;

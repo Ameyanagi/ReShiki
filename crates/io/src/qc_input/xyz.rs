@@ -1,9 +1,10 @@
 //! XYZ files, one frame or a trajectory.
 use std::fmt::Write;
 
-use reshiki_model::chemistry::ELEMENTS;
-
-use crate::qcdata::{MAX_FRAME_ATOMS, Trajectory};
+use crate::{
+    qcdata::{MAX_FRAME_ATOMS, Trajectory},
+    qcread::xyz_species,
+};
 
 use super::{
     Error, Frame, Program, XyzColumns, check_atoms, clean_title, single_line, write_atoms,
@@ -56,6 +57,7 @@ pub fn parse_xyz(text: &str) -> Result<Frame, String> {
     let columns = XyzColumns::from_comment(comment)
         .ok_or("XYZ Properties needs species:S:1 and pos:R:3 columns.")?;
     let mut numbers = Vec::with_capacity(atoms);
+    let mut isotopes = Vec::with_capacity(atoms);
     let mut positions_angstrom = Vec::with_capacity(atoms);
     for atom in 0..atoms {
         let invalid = || {
@@ -70,11 +72,7 @@ pub fn parse_xyz(text: &str) -> Result<Frame, String> {
             .split_whitespace()
             .collect();
         let symbol = *fields.get(columns.species).ok_or_else(invalid)?;
-        let number = ELEMENTS
-            .iter()
-            .position(|element| element.symbol == symbol && element.symbol != "*")
-            .and_then(|number| u8::try_from(number).ok())
-            .ok_or_else(invalid)?;
+        let (number, isotope) = xyz_species(symbol).ok_or_else(invalid)?;
         let mut position = [0.0; 3];
         for (offset, coordinate) in position.iter_mut().enumerate() {
             *coordinate = fields
@@ -84,12 +82,16 @@ pub fn parse_xyz(text: &str) -> Result<Frame, String> {
                 .ok_or_else(invalid)?;
         }
         numbers.push(number);
+        isotopes.push(isotope);
         positions_angstrom.push(position);
+    }
+    if isotopes.iter().all(|&isotope| isotope == 0) {
+        isotopes.clear();
     }
     Ok(Frame {
         numbers,
         positions_angstrom,
-        isotopes: Vec::new(),
+        isotopes,
         masses_amu: Vec::new(),
         charge: 0,
         multiplicity: 1,

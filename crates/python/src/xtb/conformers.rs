@@ -7,7 +7,9 @@ use reshiki_io::geometry;
 use reshiki_model::{document::Document, molecule_names, science};
 use reshiki_xtb_jobs::{
     Failure, XTB_NEAR_DEGENERATE,
-    conformers::{self, Config, Diversity, KCAL_PER_HARTREE, Minimizer, Search},
+    conformers::{
+        self, Config, Diversity, KCAL_PER_HARTREE, MAX_CONCURRENT_JOBS, Minimizer, Search,
+    },
     scf,
 };
 use reshiki_xtb_worker::{client::Cancel, protocol::Method};
@@ -24,6 +26,7 @@ struct Request {
     representatives: usize,
     per_cluster: u8,
     charge: Option<i32>,
+    threads: Option<u32>,
     #[serde(flatten)]
     settings: WorkerSettings,
 }
@@ -79,8 +82,13 @@ pub fn xtb_conformers(
         Minimizer::Gfn2 => Method::Gfn2,
         _ => method,
     };
-    if request.settings.threads > 64 {
-        return Err(crate::invalid(py)("Threads must be at most 64".into()));
+    if request
+        .threads
+        .is_some_and(|threads| !(1..=MAX_CONCURRENT_JOBS).contains(&threads))
+    {
+        return Err(crate::invalid(py)(format!(
+            "Threads must be from 1 to {MAX_CONCURRENT_JOBS}"
+        )));
     }
     if method != Method::Gfnff {
         let invalid = |message: &str| crate::invalid(py)(message.into());
@@ -127,10 +135,12 @@ impl Request {
         let client = geometry::Client::new(executable.clone(), geometry::Limits::default())
             .map_err(|error| SearchError::Failed(error.to_string()))?;
         let launch = match science::launch(&doc, atom, charge, multiplicity) {
-            Err(science::ScienceError::NoModel) => {
+            Err(science::ScienceError::NoModel | science::ScienceError::StaleModel) => {
                 config
                     .check_atoms(ids.len())
                     .map_err(|failure| SearchError::Invalid(failure.to_string()))?;
+                doc.models
+                    .retain(|model| !ids.iter().any(|&id| model.contains(id)));
                 let model = conformers::generate_model(&doc, &ids, &client, cancel)?;
                 doc.models.push(model);
                 reshiki_model::models3d::require_version(&mut doc);
@@ -143,8 +153,8 @@ impl Request {
             .check_atoms(launch.frame.numbers.len())
             .map_err(|failure| SearchError::Invalid(failure.to_string()))?;
         let geometry = GeometryData::from_frame(&launch.frame, "");
-        let mut job = self.settings.job(&geometry, uhf, method);
-        job.threads = reshiki_xtb_jobs::threads(job.threads);
+        let threads = reshiki_xtb_jobs::threads(self.threads.unwrap_or_default());
+        let mut job = self.settings.job(&geometry, uhf, method, threads);
         if method == Method::Gfnff {
             job.scf = Default::default();
             job.solvent = None;
@@ -175,7 +185,7 @@ impl Request {
                     "geometry": GeometryData::from_frame(&conformer.frame, ""),
                     "energy": conformer.energy,
                     "delta": conformer.delta_kcal,
-                    "start_delta": force_field.then(|| {
+                    "start_delta": force_field.then_some({
                         (entry.start_energy_hartree - start_minimum) * KCAL_PER_HARTREE
                     }),
                     "population": conformer.percent / 100.0,

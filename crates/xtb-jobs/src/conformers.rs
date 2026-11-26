@@ -20,6 +20,8 @@ pub const MAX_GFN2_START_ATOMS: usize = 120;
 pub const KCAL_PER_HARTREE: f64 = 627.509_474_063;
 /// Representatives xTB re-ranks at most.
 pub const MAX_REPRESENTATIVES: usize = 60;
+/// xTB jobs a search may run concurrently.
+pub const MAX_CONCURRENT_JOBS: u32 = 8;
 
 /// What relaxes the ETKDG starts before clustering.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -66,7 +66,7 @@ fn thermo_data(thermo: Option<&Thermo>, energy: Option<f64>) -> Value {
 
 fn base_data(geometry: &GeometryData, method: &str, program: Option<&str>) -> Value {
     json!({
-        "geometry": geometry, "method": method, "program": program,
+        "geometry": geometry, "method": method, "program": program, "unpaired": null,
         "energy": null, "gradient": null, "hessian": null, "charges": null,
         "dipole": null, "bond_orders": null, "orbital_energies": null,
         "occupations": null, "beta_orbital_energies": null, "beta_occupations": null,
@@ -109,12 +109,20 @@ fn orbital_gap(orbitals: &Orbitals, frame: &Frame) -> Option<f64> {
     let mut homo: Option<f64> = None;
     let mut lumo: Option<f64> = None;
     let mut channel = |energies: &[f64], occupations: &[f64], count: usize, capacity: f64| {
-        // A smeared spectrum still has a frontier if its population agrees with
-        // the electron count for this spin.
+        // Smearing preserves the electron count and occupations decrease as energy rises.
+        const OCCUPATION_TOLERANCE: f64 = 1e-6;
         if occupations.is_empty()
-            || (occupations.iter().sum::<f64>() - count as f64 * capacity).abs() > 1e-6
+            || (occupations.iter().sum::<f64>() - count as f64 * capacity).abs()
+                > OCCUPATION_TOLERANCE
         {
             return None;
+        }
+        let mut minimum = f64::INFINITY;
+        for &occupation in occupations {
+            if occupation - minimum > OCCUPATION_TOLERANCE {
+                return None;
+            }
+            minimum = minimum.min(occupation);
         }
         let (occupied, virtuals) = energies.split_at_checked(count)?;
         if let Some(&energy) = occupied.last() {
@@ -207,6 +215,7 @@ pub(crate) fn computed_data(
     program: &str,
 ) -> Value {
     let mut data = base_data(geometry, method, Some(program));
+    data["unpaired"] = json!(result.settings.uhf);
     data["energy"] = json!(result.energy);
     data["gradient"] = json!(result.gradient);
     data["hessian"] = json!(nonempty(&result.hessian));
@@ -277,6 +286,15 @@ pub(crate) fn qc_read(py: Python<'_>, name: &str, data: Vec<u8>) -> PyResult<Str
     py.detach(|| {
         let file = qcread::read(name, &data).map_err(|e| e.to_string())?;
         serde_json::to_string(&file_data(&file)).map_err(|e| e.to_string())
+    })
+    .map_err(crate::failed(py))
+}
+
+#[pyfunction]
+pub(crate) fn qc_read_xyz_geometry(py: Python<'_>, text: &str) -> PyResult<String> {
+    py.detach(|| {
+        let (frame, title) = qcread::read_xyz_geometry(text).map_err(|e| e.to_string())?;
+        serde_json::to_string(&GeometryData::from_frame(&frame, title)).map_err(|e| e.to_string())
     })
     .map_err(crate::failed(py))
 }

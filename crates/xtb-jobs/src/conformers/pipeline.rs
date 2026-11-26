@@ -477,7 +477,7 @@ fn optimize_all(
     }
     on_event(phase(0, total));
     // The card's Threads setting is how many xTB workers run at once.
-    let workers = (template.threads.max(1) as usize).min(8).min(total);
+    let workers = (template.threads.clamp(1, super::MAX_CONCURRENT_JOBS) as usize).min(total);
     let next = AtomicUsize::new(0);
     thread::scope(|scope| {
         let (completed_tx, completed) = sync_channel::channel();
@@ -641,19 +641,19 @@ fn conformer_failure(error: conformers::Error) -> Failure {
 }
 
 fn geometry_failure(error: geometry::Error) -> Failure {
-    match error {
-        geometry::Error::Exit { code, .. } => Failure::Crashed(match code {
+    let summary = match &error {
+        geometry::Error::Exit { code, .. } => match code {
             Some(code) => format!("Geometry worker exited with code {code}"),
             None => "Geometry worker stopped unexpectedly".into(),
-        }),
-        geometry::Error::Timeout => {
-            Failure::Crashed("Geometry worker reached its request deadline".into())
-        }
-        geometry::Error::Protocol(_) => Failure::Crashed("Geometry worker protocol error".into()),
-        geometry::Error::Io(_) => {
-            Failure::Crashed("Could not communicate with the geometry worker".into())
-        }
-        error => Failure::Other(error.to_string()),
+        },
+        geometry::Error::Timeout => "Geometry worker reached its request deadline".into(),
+        geometry::Error::Protocol(_) => "Geometry worker protocol error".into(),
+        geometry::Error::Io(_) => "Could not communicate with the geometry worker".into(),
+        error => return Failure::Other(error.to_string()),
+    };
+    Failure::Crashed {
+        summary,
+        details: Some(error.to_string()),
     }
 }
 
@@ -814,7 +814,7 @@ mod tests {
             matches!(select_finished(vec![(1, Err(failure.clone())), (0, Err(canceled()))], true), Err(error) if error == canceled())
         );
         assert!(
-            matches!(select_finished(vec![(1, Err(failure.clone())), (0, Err(Failure::Crashed("worker stopped".into())))], false), Err(error) if error == failure)
+            matches!(select_finished(vec![(1, Err(failure.clone())), (0, Err(Failure::crashed("worker stopped")))], false), Err(error) if error == failure)
         );
     }
 }

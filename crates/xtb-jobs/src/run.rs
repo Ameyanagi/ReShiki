@@ -263,14 +263,13 @@ fn final_request(job: &Job, positions: Option<&[f64]>) -> Compute {
         gradient: properties.gradient,
         hessian: job.frequencies.then(|| HessianRequest {
             masses_amu: job.masses.clone(),
-            // The worker's point-group symmetry ignores isotopes, so explicit
-            // masses need a symmetry number: 1, as substitution usually lowers it.
+            // Keep the desktop default for isotope substitutions when the caller
+            // did not supply a symmetry number.
             thermo: protocol::ThermoRequest {
                 symmetry_number: job
-                    .masses
-                    .is_some()
-                    .then_some(1)
-                    .or(job.thermo.symmetry_number),
+                    .thermo
+                    .symmetry_number
+                    .or_else(|| job.masses.is_some().then_some(1)),
                 ..job.thermo.clone()
             },
         }),
@@ -353,43 +352,46 @@ fn eval_error(error: Error) -> EvalError {
 }
 
 fn worker_failure(error: &Error) -> Failure {
-    match error {
+    let summary = match error {
         Error::Engine {
             kind: ErrorKind::Scf,
             message,
-        } => Failure::Scf(message.clone()),
+        } => return Failure::Scf(message.clone()),
         Error::Engine {
             kind: ErrorKind::UnsupportedElement,
             message,
-        } => message
-            .trim_end()
-            .rsplit_once("Z=")
-            .and_then(|(_, number)| number.parse::<u8>().ok())
-            .map_or_else(
-                || Failure::Other(message.clone()),
-                |z| Failure::Element {
-                    z,
-                    // g-xTB in solvent also runs GFN2-xTB.
-                    by: Method::ALL
-                        .into_iter()
-                        .map(Method::xtb_method)
-                        .find(|method| message.starts_with(method.label())),
-                },
-            ),
+        } => {
+            return message
+                .trim_end()
+                .rsplit_once("Z=")
+                .and_then(|(_, number)| number.parse::<u8>().ok())
+                .map_or_else(
+                    || Failure::Other(message.clone()),
+                    |z| Failure::Element {
+                        z,
+                        // g-xTB in solvent also runs GFN2-xTB.
+                        by: Method::ALL
+                            .into_iter()
+                            .map(Method::xtb_method)
+                            .find(|method| message.starts_with(method.label())),
+                    },
+                );
+        }
         Error::Engine {
             kind: ErrorKind::Limit,
             message,
         }
-        | Error::Limit(message) => Failure::Other(message.clone()),
-        Error::Exited { status, .. } => {
-            Failure::Crashed(format!("xTB worker exited with {status}"))
-        }
-        // Fixed texts: Copy details never carries the worker's own words.
-        Error::Protocol(_) => Failure::Crashed("xTB worker protocol error".into()),
-        Error::Timeout => Failure::Crashed("xTB worker reached its request deadline".into()),
-        Error::Spawn(_) => Failure::Crashed("could not start the xTB worker".into()),
-        Error::Cancelled => canceled(),
-        error => Failure::Other(error.to_string()),
+        | Error::Limit(message) => return Failure::Other(message.clone()),
+        Error::Exited { status, .. } => format!("xTB worker exited with {status}"),
+        Error::Protocol(_) => "xTB worker protocol error".into(),
+        Error::Timeout => "xTB worker reached its request deadline".into(),
+        Error::Spawn(_) => "could not start the xTB worker".into(),
+        Error::Cancelled => return canceled(),
+        error => return Failure::Other(error.to_string()),
+    };
+    Failure::Crashed {
+        summary,
+        details: Some(error.to_string()),
     }
 }
 
@@ -578,6 +580,53 @@ mod tests {
         assert_eq!(hessian.thermo.temperature_k, Some(310.0));
         assert_eq!(hessian.thermo.pressure_pa, Some(101_000.0));
         assert_eq!(hessian.thermo.symmetry_number, Some(1));
+
+        job.thermo.symmetry_number = Some(2);
+        let hessian = final_request(&job, None).hessian.unwrap();
+        assert_eq!(hessian.thermo.symmetry_number, Some(2));
+    }
+
+    #[test]
+    fn worker_failures_keep_spawn_and_protocol_diagnostics() {
+        let cases = [
+            (
+                Error::Spawn(std::io::Error::from(std::io::ErrorKind::NotFound)),
+                "could not start the xTB worker",
+            ),
+            (
+                Error::Protocol("reply ID did not match".into()),
+                "xTB worker protocol error",
+            ),
+        ];
+        for (error, summary) in cases {
+            let failure = worker_failure(&error);
+            assert_eq!(failure.to_string(), summary);
+            assert!(matches!(
+                failure,
+                Failure::Crashed { details: Some(details), .. } if details == error.to_string()
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unexpected_worker_exit_keeps_stderr() {
+        use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
+
+        let status = ExitStatus::from_raw(1 << 8);
+        let failure = worker_failure(&Error::Exited {
+            status,
+            stderr: "worker stderr".into(),
+        });
+        assert_eq!(
+            failure.to_string(),
+            format!("xTB worker exited with {status}")
+        );
+        assert!(matches!(
+            failure,
+            Failure::Crashed { details: Some(details), .. }
+                if details == format!("xTB worker exited with {status}: worker stderr")
+        ));
     }
 
     #[test]

@@ -33,7 +33,6 @@ struct WorkerSettings {
     electronic_temperature: Option<f64>,
     accuracy: Option<f64>,
     max_iterations: Option<u32>,
-    threads: u32,
 }
 
 impl WorkerSettings {
@@ -49,7 +48,7 @@ impl WorkerSettings {
         }
     }
 
-    fn job(self, geometry: &GeometryData, uhf: u32, method: Method) -> Job {
+    fn job(self, geometry: &GeometryData, uhf: u32, method: Method, threads: u32) -> Job {
         Job {
             optimize: false,
             frequencies: false,
@@ -72,7 +71,7 @@ impl WorkerSettings {
                 state: Default::default(),
                 correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
             }),
-            threads: self.threads,
+            threads,
             fixed: vec![],
             tight: false,
             topology: None,
@@ -86,6 +85,7 @@ impl WorkerSettings {
 #[derive(Deserialize)]
 struct Calculation {
     geometry: GeometryData,
+    threads: u32,
     #[serde(flatten)]
     settings: WorkerSettings,
     request: Request,
@@ -114,6 +114,7 @@ enum Request {
     Frequencies {
         temperature: f64,
         pressure: f64,
+        symmetry_number: Option<u32>,
     },
 }
 
@@ -139,7 +140,9 @@ pub fn xtb_calculate(py: Python<'_>, executable: PathBuf, request_json: &str) ->
         .unpaired
         .or_else(|| geometry.multiplicity.checked_sub(1))
         .ok_or_else(|| crate::failed(py)("xTB input: Multiplicity must be positive".into()))?;
-    let mut job = calculation.settings.job(&geometry, uhf, method);
+    let mut job = calculation
+        .settings
+        .job(&geometry, uhf, method, calculation.threads);
     match calculation.request {
         Request::Energy {
             gradient,
@@ -159,12 +162,14 @@ pub fn xtb_calculate(py: Python<'_>, executable: PathBuf, request_json: &str) ->
         Request::Frequencies {
             temperature,
             pressure,
+            symmetry_number,
         } => {
             job.frequencies = true;
             job.masses = isotope_masses(&geometry.to_frame());
             job.thermo = ThermoRequest {
                 temperature_k: Some(temperature),
                 pressure_pa: Some(pressure),
+                symmetry_number,
                 ..Default::default()
             };
             job.properties = Some(Properties {
@@ -224,6 +229,13 @@ fn optimization_data(report: &Report, geometry: &GeometryData) -> Value {
 }
 
 fn failure_message(failure: &Failure) -> String {
+    if let Failure::Crashed {
+        details: Some(details),
+        ..
+    } = failure
+    {
+        return details.clone();
+    }
     let message = failure.to_string();
     if matches!(failure, Failure::Spin { .. })
         || message.contains("same parity as the valence electron count")

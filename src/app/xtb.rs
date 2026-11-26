@@ -271,7 +271,9 @@ impl Failed {
         }
         let reason = match &self.failure {
             state::Failure::Scf(message)
-            | state::Failure::Crashed(message)
+            | state::Failure::Crashed {
+                summary: message, ..
+            }
             | state::Failure::Other(message) => message.clone(),
             _ => self.explain().0,
         };
