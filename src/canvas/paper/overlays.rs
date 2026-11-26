@@ -1390,11 +1390,10 @@ fn result_label_direction(doc: &Document, atom: &Atom) -> Vector {
     };
     let mut start = last;
     let mut widest = first + std::f32::consts::TAU - last;
-    for pair in angles.windows(2) {
-        let gap = pair[1] - pair[0];
-        if gap > widest {
-            start = pair[0];
-            widest = gap;
+    for (&before, &after) in angles.iter().zip(angles.iter().skip(1)) {
+        if after - before > widest {
+            start = before;
+            widest = after - before;
         }
     }
     let (sin, cos) = (start + widest / 2.).sin_cos();
