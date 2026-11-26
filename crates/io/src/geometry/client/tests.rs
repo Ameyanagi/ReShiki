@@ -272,6 +272,18 @@ async fn relaxed_operations_forward_mode_and_return_bounded_approximation_notes(
         assert!(captured.operation.relaxed);
         assert_eq!(captured.operation.operation, operation);
     }
+    // MMFF cannot type every molecule; generation alone may answer in UFF.
+    let generated = client
+        .generate(&prepared, ForceField::Mmff94s)
+        .await
+        .unwrap();
+    assert_eq!(generated.force_field, ForceField::Uff);
+    assert!(matches!(
+        client
+            .relax(&prepared, &conformer, ForceField::Mmff94s, &[], 1)
+            .await,
+        Err(Error::Protocol(_))
+    ));
     let mut oversized = response;
     oversized.result.as_mut().unwrap().approximations = vec!["x".repeat(8193)];
     std::fs::write(

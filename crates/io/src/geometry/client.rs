@@ -171,6 +171,8 @@ impl Client {
             .validate_capacity(capacity)
             .map_err(Error::Invalid)?;
         let field = operation.field;
+        // Generation falls back to UFF when MMFF cannot type the molecule.
+        let generating = operation.operation == reshiki_geometry::Operation::Generate;
         let iterations = operation.max_iterations;
         let evaluating = matches!(operation.operation, reshiki_geometry::Operation::Evaluate);
         let fixed = operation
@@ -231,6 +233,7 @@ impl Client {
         }
         let response = response.result.map_err(Error::Invalid)?;
         if response.field != field
+            && !(generating && response.field == reshiki_geometry::ForceField::UFF)
             || !response.energy.is_finite()
             || !response.initial_energy.is_finite()
             || response.diagnostics.len() > 100

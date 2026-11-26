@@ -1,0 +1,98 @@
+{
+  "relaxed": true,
+  "atoms": [
+    {
+      "atomic_number": 9,
+      "isotope": 0,
+      "charge": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "radical": 0,
+      "chiral_tag": 0
+    },
+    {
+      "atomic_number": 92,
+      "isotope": 0,
+      "charge": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "radical": 0,
+      "chiral_tag": 0
+    },
+    {
+      "atomic_number": 9,
+      "isotope": 0,
+      "charge": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "radical": 0,
+      "chiral_tag": 0
+    },
+    {
+      "atomic_number": 9,
+      "isotope": 0,
+      "charge": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "radical": 0,
+      "chiral_tag": 0
+    },
+    {
+      "atomic_number": 9,
+      "isotope": 0,
+      "charge": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "radical": 0,
+      "chiral_tag": 0
+    },
+    {
+      "atomic_number": 9,
+      "isotope": 0,
+      "charge": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "radical": 0,
+      "chiral_tag": 0
+    },
+    {
+      "atomic_number": 9,
+      "isotope": 0,
+      "charge": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "radical": 0,
+      "chiral_tag": 0
+    }
+  ],
+  "bonds": [
+    { "a": 0, "b": 1, "order": 1, "aromatic": false, "stereo": 0, "stereo_atoms": null },
+    { "a": 1, "b": 2, "order": 1, "aromatic": false, "stereo": 0, "stereo_atoms": null },
+    { "a": 1, "b": 3, "order": 1, "aromatic": false, "stereo": 0, "stereo_atoms": null },
+    { "a": 1, "b": 4, "order": 1, "aromatic": false, "stereo": 0, "stereo_atoms": null },
+    { "a": 1, "b": 5, "order": 1, "aromatic": false, "stereo": 0, "stereo_atoms": null },
+    { "a": 1, "b": 6, "order": 1, "aromatic": false, "stereo": 0, "stereo_atoms": null }
+  ],
+  "field": "MMFF94s",
+  "operation": "Generate",
+  "coordinates": [
+    [-1.2990380695887975, -0.75, 0.0],
+    [0.0, 0.0, 0.0],
+    [-2.220446049250313e-16, -1.5, 0.0],
+    [1.2990380695887975, -0.75, 0.0],
+    [0.0, 1.5, 0.0],
+    [1.2990380695887975, 0.75, 0.0],
+    [-1.2990380695887975, 0.75, 0.0]
+  ],
+  "fixed_atoms": [],
+  "conformers": 8,
+  "seed": 5395275,
+  "max_iterations": 500
+}

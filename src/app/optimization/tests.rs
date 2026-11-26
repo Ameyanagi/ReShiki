@@ -1392,3 +1392,25 @@ async fn properties_preview_controls_fit_scroll_and_keep_canvas_toolbar_height()
         assert!(app.tab.optimization.is_some());
     }
 }
+
+#[test]
+fn a_generation_answered_in_uff_keeps_the_session_on_uff() {
+    // MMFF cannot type O=O, so the worker answers MMFF94s generation in UFF.
+    let (mut app, _, _, _) = drawing();
+    let _ = app.optimization_action(Action::Begin);
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.field, ForceField::Mmff94s);
+    let key = session.flight.as_ref().unwrap().key;
+    let mut computed = result(session);
+    computed.force_field = ForceField::Uff;
+    computed.approximations =
+        vec!["UFF used: MMFF94s parameters are unavailable for this molecule".into()];
+    let _ = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(computed))));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.field, ForceField::Uff);
+    assert_eq!(
+        session.field_note.as_deref(),
+        Some("UFF used: MMFF94s parameters are unavailable for this molecule"),
+        "MMFF stays offered after it failed"
+    );
+}

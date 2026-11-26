@@ -233,6 +233,9 @@ pub(super) struct Session {
     mode: Mode,
     strict_error: Option<String>,
     approximations: Vec<String>,
+    /// Why generation answered in UFF: MMFF could not type the molecule.
+    /// It disables MMFF for the session, across mode switches.
+    field_note: Option<String>,
     energy: Option<f64>,
     iterations: u64,
     converged: bool,
@@ -701,6 +704,7 @@ impl App {
                 field: ForceField::Mmff94s,
                 mode: Mode::Strict,
                 approximations: vec![],
+                field_note: None,
                 energy: None,
                 iterations: 0,
                 converged: false,
@@ -805,6 +809,13 @@ impl App {
                 .saturating_add(u64::from(result.iterations));
             session.converged = result.converged;
             if flight.work == Work::Generate {
+                if result.force_field != flight.field {
+                    // Worded as the worker's note, which it then replaces.
+                    session.field_note = Some(format!(
+                        "{} used: {} parameters are unavailable for this molecule",
+                        result.force_field, flight.field
+                    ));
+                }
                 session.approximations = result.approximations.clone();
                 session.initialization = result.diagnostics.iter().rev().find_map(|diagnostic| {
                     if diagnostic.starts_with("initialization=existing-3d") {
@@ -1172,7 +1183,7 @@ impl App {
             || phase.to_owned(),
             |initialization| format!("{phase} · {initialization}"),
         );
-        let mmff = session.prepared.mmff_available();
+        let mmff = session.prepared.mmff_available() && session.field_note.is_none();
         let field = |id, name, label, field| {
             let available = mmff || field == ForceField::Uff;
             preview_control(
@@ -1185,7 +1196,7 @@ impl App {
                 if available {
                     "Choose the force field used to relax this molecule"
                 } else {
-                    "MMFF has no parameters for metals; Relaxed mode uses UFF"
+                    "MMFF has no parameters for this molecule; it uses UFF"
                 },
             )
         };
@@ -1281,7 +1292,12 @@ impl App {
                 .prepared
                 .skipped_checks()
                 .iter()
-                .chain(&session.approximations)
+                .chain(
+                    session
+                        .approximations
+                        .iter()
+                        .filter(|note| Some(*note) != session.field_note.as_ref()),
+                )
                 .fold(column![].spacing(2), |notes, note| {
                     notes.push(
                         text(format!("· {note}"))
@@ -1298,6 +1314,13 @@ impl App {
                     notes
                 ]
                 .spacing(3),
+            );
+        }
+        if let Some(note) = &session.field_note {
+            panel = panel.push(
+                text(format!("· {note}"))
+                    .size(11)
+                    .style(super::workspace::muted_text),
             );
         }
         if session.phase == Phase::Preparing {

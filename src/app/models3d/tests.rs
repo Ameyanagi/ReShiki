@@ -1775,3 +1775,82 @@ fn nacl_repeats_choose_a_clear_view_and_keep_an_explicit_direction() {
     assert!(!legacy.models[0].manual_along);
     assert_eq!(legacy.file_version(), reopened.file_version());
 }
+
+/// One centre atom with `ligands` drawn around it, selected.
+fn star(centre: &str, ligand: &str, ligands: usize, order: u8) -> App {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let doc = &mut app.tab.doc;
+    let centre = doc.add_atom(centre, Point::default());
+    for i in 0..ligands {
+        let turn = std::f32::consts::TAU * i as f32 / ligands as f32;
+        let atom = doc.add_atom(ligand, Point::new(42. * turn.cos(), 42. * turn.sin()));
+        doc.add_bond(centre, atom, order, "plain");
+    }
+    app.tab.selected = vec![centre];
+    app
+}
+
+/// Answer the generation in flight in `field`, as the worker does.
+fn answer(app: &mut App, field: ForceField) {
+    let job = app.tab.model_job.as_ref().expect("a generation in flight");
+    let n = job.prepared.ids().len();
+    let optimized = Optimized {
+        conformer: Conformer {
+            positions: (0..n)
+                .map(|i| Point3 {
+                    x: i as f64 * 1.4,
+                    y: (i % 2) as f64 * 0.8,
+                    z: i as f64 * 0.1,
+                })
+                .collect(),
+            original_atom_count: n,
+            hydrogen_parents: vec![],
+        },
+        initial_energy: 1.,
+        energy: 1.,
+        gradient: None,
+        converged: true,
+        iterations: 1,
+        force_field: field,
+        diagnostics: vec![],
+        approximations: vec![],
+    };
+    let key = job.key;
+    let _ = app.update(Message::Models3d(Action::Generated(
+        key,
+        Ok(Arc::new(optimized)),
+    )));
+}
+
+#[test]
+fn a_molecule_strict_checks_refuse_gets_an_approximate_model_with_the_reason() {
+    // Strict checks refuse uranium; the 3D view used to stop there.
+    let mut app = star("U", "F", 6, 1);
+    show(&mut app, Display::ThreeD);
+    assert!(!app.error, "{}", app.status);
+    let job = app.tab.model_job.as_ref().expect("an approximate model");
+    assert_eq!(job.prepared.mode(), reshiki::geometry::Mode::Relaxed);
+    answer(&mut app, ForceField::Uff);
+    assert!(!app.error);
+    assert_eq!(app.tab.doc.models.len(), 1);
+    assert_eq!(
+        app.status,
+        "Shown as 3D model · Approximate UFF geometry with relaxed checks (strict: \
+         3D geometry does not support elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I)"
+    );
+}
+
+#[test]
+fn a_model_built_in_uff_because_mmff_has_no_types_says_so() {
+    let mut app = star("O", "O", 1, 2);
+    show(&mut app, Display::ThreeD);
+    let job = app.tab.model_job.as_ref().expect("a strict model");
+    assert_eq!(job.prepared.mode(), reshiki::geometry::Mode::Strict);
+    answer(&mut app, ForceField::Uff);
+    assert_eq!(app.tab.doc.models[0].force_field, models3d::ForceField::Uff);
+    assert_eq!(
+        app.status,
+        "Shown as 3D model · UFF used: no MMFF94s parameters for this molecule"
+    );
+}
