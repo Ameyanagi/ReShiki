@@ -642,14 +642,7 @@ fn baseline(doc: &Document, ids: &[u64]) -> String {
 /// with the chemistry of `expected`.
 fn freshness(doc: &Document, atoms: &[Option<u64>], expected: &str) -> Freshness {
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let whole = ids.first().is_some_and(|first| {
-        let set: HashSet<u64> = ids.iter().copied().collect();
-        let component: HashSet<u64> = crate::molecule_names::component(doc, *first)
-            .into_iter()
-            .collect();
-        component == set
-    });
-    if whole && baseline(doc, &ids) == expected {
+    if !ids.is_empty() && closed(doc, &ids) && baseline(doc, &ids) == expected {
         Freshness::Current
     } else {
         Freshness::Stale
@@ -690,6 +683,19 @@ fn atomic_number(symbol: &str) -> Option<u8> {
         .iter()
         .position(|e| *e == symbol)
         .and_then(|i| u8::try_from(i + 1).ok())
+}
+
+/// Whether `ids` are whole molecules: every atom bonded to one of them is
+/// one of them. A calculation is for one molecule, a file's result can be
+/// for a complex of several.
+fn closed(doc: &Document, ids: &[u64]) -> bool {
+    let set: HashSet<u64> = ids.iter().copied().collect();
+    ids.iter().all(|&id| {
+        doc.atom(id).is_some()
+            && crate::molecule_names::component(doc, id)
+                .into_iter()
+                .all(|atom| set.contains(&atom))
+    })
 }
 
 fn model_baseline(
@@ -940,8 +946,16 @@ pub fn import(
     if !matches {
         return Err(ScienceError::ModelMismatch);
     }
-    let first = atoms.iter().flatten().next().ok_or(ScienceError::Gone)?;
-    let baseline = model_baseline(doc, *first, &atoms)?;
+    let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
+    if ids.is_empty() {
+        return Err(ScienceError::Gone);
+    }
+    // The model may hold a complex of several molecules (a dimer, an ion
+    // pair): its result belongs to all of them.
+    if !closed(doc, &ids) {
+        return Err(ScienceError::Fragments);
+    }
+    let baseline = baseline(doc, &ids);
     let frame = if let Some(input) = result.input_frame.filter(|hash| *hash != result.frame) {
         let input_frame = if let Some(index) = frames.iter().position(|frame| frame.hash() == input)
         {

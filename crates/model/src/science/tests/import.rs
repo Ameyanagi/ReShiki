@@ -94,3 +94,60 @@ fn import_rejects_element_and_position_mismatches_without_changing_the_document(
         assert_eq!(doc, before);
     }
 }
+
+#[test]
+fn import_keeps_the_result_of_a_complex_of_several_molecules() {
+    // One file, one model, two waters: a dimer's result is for both.
+    let mut doc = Document::default();
+    let oxygens = [
+        doc.add_atom("O", Point::new(0., 0.)),
+        doc.add_atom("O", Point::new(60., 0.)),
+    ];
+    let atoms = vec![
+        Placed {
+            id: oxygens[0],
+            xyz: [0., 0., 0.],
+        },
+        Placed {
+            id: oxygens[1],
+            xyz: [2.9, 0., 0.],
+        },
+    ];
+    let hydrogen = |parent, xyz| Hydrogen { parent, xyz };
+    let hydrogens = vec![
+        hydrogen(oxygens[0], [0.95, 0.2, 0.]),
+        hydrogen(oxygens[0], [-0.3, 0.9, 0.]),
+        hydrogen(oxygens[1], [3.2, 0.9, 0.]),
+        hydrogen(oxygens[1], [3.2, -0.9, 0.]),
+    ];
+    doc.models
+        .push(Model3d::new(&doc, atoms, hydrogens, ForceField::Mmff94s));
+    crate::models3d::require_version(&mut doc);
+    let model = &doc.models[0];
+    let frame = Frame {
+        numbers: vec![8, 8, 1, 1, 1, 1],
+        positions_angstrom: model
+            .atoms
+            .iter()
+            .map(|a| a.xyz)
+            .chain(model.hydrogens.iter().map(|h| h.xyz))
+            .map(|p| p.map(f64::from))
+            .collect(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let calculation = imported(result(&frame, Task::Energy, true));
+    let attached = import(&mut doc, 0, frame, vec![], calculation).unwrap();
+    assert_eq!(attached.freshness, Freshness::Current);
+    for oxygen in oxygens {
+        assert_eq!(results_for(&doc, oxygen).len(), 1);
+    }
+    // A third molecule bonded to one of them makes the complex another one.
+    let carbon = doc.add_atom("C", Point::new(0., 40.));
+    doc.add_bond(oxygens[0], carbon, 1, "plain");
+    let link = doc.science.attachment(attached.attachment).unwrap();
+    assert_eq!(link.freshness(&doc), Freshness::Stale);
+}
