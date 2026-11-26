@@ -1,4 +1,6 @@
 //! Screen-affine hidden-surface clipping and merged, nested shading regions.
+//!
+//! Full references: docs/references/xtb.md.
 // Numeric loops index the mesh and parallel arrays under Input's contract.
 #![allow(clippy::indexing_slicing)]
 
@@ -575,6 +577,7 @@ fn edge_distance(p: [f64; 2], q: [f64; 2], v: [f64; 2]) -> f64 {
     (q[1] - p[1]) * (v[0] - p[0]) - (q[0] - p[0]) * (v[1] - p[1])
 }
 
+// Sutherland–Hodgman half-plane clipping [Sutherland1974Clipping], keeping both halves.
 // Both halves use the very same intersection vertex.
 fn split_polygon(polygon: Polygon, distance: impl Fn([f64; 2]) -> f64) -> (Polygon, Polygon) {
     if polygon.iter().all(|&v| distance(v) <= 0.) {
@@ -1237,7 +1240,7 @@ fn along(a: [f64; 2], b: [f64; 2], t: f64) -> [f64; 2] {
     [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]
 }
 
-// Cyrus–Beck clipping of a segment to a counterclockwise convex contour.
+// Cyrus–Beck clipping of a segment to a counterclockwise convex contour [Cyrus1978Clipping].
 pub(super) fn segment_interval(
     a: [f64; 2],
     b: [f64; 2],
@@ -1268,6 +1271,7 @@ pub(super) fn segment_interval(
     Some((low.max(0.), high.min(1.)))
 }
 
+// Douglas–Peucker simplification [Douglas1973Simplification].
 fn simplify_open(points: &[[f64; 2]], tolerance: f64) -> Vec<[f64; 2]> {
     if points.len() <= 2 || tolerance <= 0. {
         return points.to_vec();

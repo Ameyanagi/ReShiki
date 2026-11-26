@@ -2,6 +2,9 @@
 //! digitized-curve fitting (Graphics Gems, 1990).
 //! Fits use drawing units. Smooth joins share a derivative on the cubic unit interval.
 //! The topology guard samples each cubic in 32 steps and may return the source polygon.
+//!
+//! Schneider, in Graphics Gems, 612 (1990) \[Schneider1990CurveFit\]. Full references:
+//! docs/references/xtb.md.
 
 // Knot, span and edge indices stay within the cleaned polyline they were built from.
 #![allow(clippy::indexing_slicing)]

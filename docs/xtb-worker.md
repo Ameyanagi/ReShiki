@@ -7,7 +7,8 @@ settings), evaluated at one geometry after another so that each SCF can start
 from the previous wavefunction. Licensing and packaging are in
 [xTB licensing](xtb-licensing.md); the scientific data types, the canonical
 atomic-orbital contract and the method × task table are in
-[the quantum chemistry data design](plans/xtb-data.md) (`reshiki-qcdata`).
+[the quantum chemistry data design](plans/xtb-data.md) (`reshiki-qcdata`). The methods'
+papers and what to cite are in [References for xTB features](references/xtb.md).
 
 Protocol version 2 covers GFN2-xTB, GFN-FF and g-xTB 2.0.1: energies,
 gradients, charges, multipole moments, bond orders, orbitals with their basis,

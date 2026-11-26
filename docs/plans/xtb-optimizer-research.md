@@ -288,6 +288,9 @@ evaluations (0.89× xtb `--gfnff --opt`).
 
 ## References
 
+The verified references for the shipped optimizer, with BibTeX keys, are in
+[References for xTB features](../references/xtb.md).
+
 - J. Baker, J. Comput. Chem. 14, 1085 (1993). doi:10.1002/jcc.540140910
 - J. Baker, A. Kessi, B. Delley, J. Chem. Phys. 105, 192 (1996). doi:10.1063/1.471864
 - V. Bakken, T. Helgaker, J. Chem. Phys. 117, 9160 (2002). doi:10.1063/1.1515483

@@ -1,0 +1,960 @@
+% References for the methods and algorithms used by ReShiki's xTB features.
+% See docs/references/xtb.md for what each entry is used for and where.
+% DOI entries were checked against Crossref on 2026-11-26 (RDKit's DOI against DataCite).
+% UTF-8 with @software entries: use BibLaTeX with Biber.
+
+% ---- Calculation methods ----
+
+@article{Bannwarth2019GFN2,
+  author = {Bannwarth, Christoph and Ehlert, Sebastian and Grimme, Stefan},
+  title = {{GFN2-xTB—An Accurate and Broadly Parametrized Self-Consistent Tight-Binding Quantum Chemical Method with Multipole Electrostatics and Density-Dependent Dispersion Contributions}},
+  journal = {Journal of Chemical Theory and Computation},
+  volume = {15},
+  number = {3},
+  pages = {1652--1671},
+  year = {2019},
+  doi = {10.1021/acs.jctc.8b01176},
+}
+
+@article{Spicher2020GFNFF,
+  author = {Spicher, Sebastian and Grimme, Stefan},
+  title = {{Robust Atomistic Modeling of Materials, Organometallic, and Biochemical Systems}},
+  journal = {Angewandte Chemie International Edition},
+  volume = {59},
+  number = {36},
+  pages = {15665--15673},
+  year = {2020},
+  doi = {10.1002/anie.202004239},
+}
+
+@misc{Froitzheim2025gxTB,
+  author = {Froitzheim, Thomas and Müller, Marcel and Hansen, Andreas and Grimme, Stefan},
+  title = {{g-xTB: A General-Purpose Extended Tight-Binding Electronic Structure Method For the Elements H to Lr (Z=1–103)}},
+  year = {2025},
+  howpublished = {ChemRxiv},
+  note = {Preprint},
+  doi = {10.26434/chemrxiv-2025-bjxvt},
+}
+
+@article{Bannwarth2021Xtb,
+  author = {Bannwarth, Christoph and Caldeweyher, Eike and Ehlert, Sebastian and Hansen, Andreas and Pracht, Philipp and Seibert, Jakob and Spicher, Sebastian and Grimme, Stefan},
+  title = {{Extended tight-binding quantum chemistry methods}},
+  journal = {WIREs Computational Molecular Science},
+  volume = {11},
+  number = {2},
+  pages = {e1493},
+  year = {2021},
+  note = {Published online 2020},
+  doi = {10.1002/wcms.1493},
+}
+
+@article{Rose2024GFNFFLnAn,
+  author = {Rose, Thomas and Bursch, Markus and Mewes, Jan-Michael and Grimme, Stefan},
+  title = {{Fast and Robust Modeling of Lanthanide and Actinide Complexes, Biomolecules, and Molecular Crystals with the Extended GFN-FF Model}},
+  journal = {Inorganic Chemistry},
+  volume = {63},
+  number = {41},
+  pages = {19364--19374},
+  year = {2024},
+  doi = {10.1021/acs.inorgchem.4c03215},
+}
+
+@article{Caldeweyher2017D4,
+  author = {Caldeweyher, Eike and Bannwarth, Christoph and Grimme, Stefan},
+  title = {{Extension of the D3 dispersion coefficient model}},
+  journal = {The Journal of Chemical Physics},
+  volume = {147},
+  number = {3},
+  pages = {034112},
+  year = {2017},
+  doi = {10.1063/1.4993215},
+}
+
+@article{Caldeweyher2019D4,
+  author = {Caldeweyher, Eike and Ehlert, Sebastian and Hansen, Andreas and Neugebauer, Hagen and Spicher, Sebastian and Bannwarth, Christoph and Grimme, Stefan},
+  title = {{A generally applicable atomic-charge dependent London dispersion correction}},
+  journal = {The Journal of Chemical Physics},
+  volume = {150},
+  number = {15},
+  pages = {154122},
+  year = {2019},
+  doi = {10.1063/1.5090222},
+}
+
+@article{Johnson1988Broyden,
+  author = {Johnson, D. D.},
+  title = {{Modified Broyden’s method for accelerating convergence in self-consistent calculations}},
+  journal = {Physical Review B},
+  volume = {38},
+  number = {18},
+  pages = {12807--12813},
+  year = {1988},
+  doi = {10.1103/PhysRevB.38.12807},
+}
+
+@article{Pulay1980DIIS,
+  author = {Pulay, Péter},
+  title = {{Convergence acceleration of iterative sequences. The case of SCF iteration}},
+  journal = {Chemical Physics Letters},
+  volume = {73},
+  number = {2},
+  pages = {393--398},
+  year = {1980},
+  doi = {10.1016/0009-2614(80)80396-4},
+}
+
+% ---- Solvation ----
+
+@article{Ehlert2021ALPB,
+  author = {Ehlert, Sebastian and Stahn, Marcel and Spicher, Sebastian and Grimme, Stefan},
+  title = {{Robust and Efficient Implicit Solvation Model for Fast Semiempirical Methods}},
+  journal = {Journal of Chemical Theory and Computation},
+  volume = {17},
+  number = {7},
+  pages = {4250--4261},
+  year = {2021},
+  doi = {10.1021/acs.jctc.1c00471},
+}
+
+@article{Lange2012ALPBKernel,
+  author = {Lange, Adrian W. and Herbert, John M.},
+  title = {{Improving Generalized Born Models by Exploiting Connections to Polarizable Continuum Models. I. An Improved Effective Coulomb Operator}},
+  journal = {Journal of Chemical Theory and Computation},
+  volume = {8},
+  number = {6},
+  pages = {1999--2011},
+  year = {2012},
+  doi = {10.1021/ct300111m},
+}
+
+@article{Sigalov2006ALPB,
+  author = {Sigalov, Grigori and Fenley, Andrew and Onufriev, Alexey},
+  title = {{Analytical electrostatics for biomolecules: Beyond the generalized Born approximation}},
+  journal = {The Journal of Chemical Physics},
+  volume = {124},
+  number = {12},
+  pages = {124902},
+  year = {2006},
+  doi = {10.1063/1.2177251},
+}
+
+@article{Still1990GBSA,
+  author = {Still, W. Clark and Tempczyk, Anna and Hawley, Ronald C. and Hendrickson, Thomas},
+  title = {{Semianalytical treatment of solvation for molecular mechanics and dynamics}},
+  journal = {Journal of the American Chemical Society},
+  volume = {112},
+  number = {16},
+  pages = {6127--6129},
+  year = {1990},
+  doi = {10.1021/ja00172a038},
+}
+
+% ---- Charges and bond orders ----
+
+@article{Mulliken1955Population,
+  author = {Mulliken, R. S.},
+  title = {{Electronic Population Analysis on LCAO–MO Molecular Wave Functions. I}},
+  journal = {The Journal of Chemical Physics},
+  volume = {23},
+  number = {10},
+  pages = {1833--1840},
+  year = {1955},
+  doi = {10.1063/1.1740588},
+}
+
+@article{Lowdin1950Orthogonality,
+  author = {Löwdin, Per-Olov},
+  title = {{On the Non-Orthogonality Problem Connected with the Use of Atomic Wave Functions in the Theory of Molecules and Crystals}},
+  journal = {The Journal of Chemical Physics},
+  volume = {18},
+  number = {3},
+  pages = {365--375},
+  year = {1950},
+  doi = {10.1063/1.1747632},
+}
+
+@article{Hirshfeld1977Charges,
+  author = {Hirshfeld, F. L.},
+  title = {{Bonded-atom fragments for describing molecular charge densities}},
+  journal = {Theoretica Chimica Acta},
+  volume = {44},
+  number = {2},
+  pages = {129--138},
+  year = {1977},
+  doi = {10.1007/BF00549096},
+}
+
+@article{Marenich2012CM5,
+  author = {Marenich, Aleksandr V. and Jerome, Steven V. and Cramer, Christopher J. and Truhlar, Donald G.},
+  title = {{Charge Model 5: An Extension of Hirshfeld Population Analysis for the Accurate Description of Molecular Interactions in Gaseous and Condensed Phases}},
+  journal = {Journal of Chemical Theory and Computation},
+  volume = {8},
+  number = {2},
+  pages = {527--541},
+  year = {2012},
+  doi = {10.1021/ct200866d},
+}
+
+@article{Wiberg1968BondOrder,
+  author = {Wiberg, K.B.},
+  title = {{Application of the Pople-Santry-Segal CNDO method to the cyclopropylcarbinyl and cyclobutyl cation and to bicyclobutane}},
+  journal = {Tetrahedron},
+  volume = {24},
+  number = {3},
+  pages = {1083--1096},
+  year = {1968},
+  doi = {10.1016/0040-4020(68)88057-3},
+}
+
+@article{Mayer1983BondOrder,
+  author = {Mayer, I.},
+  title = {{Charge, bond order and valence in the AB initio SCF theory}},
+  journal = {Chemical Physics Letters},
+  volume = {97},
+  number = {3},
+  pages = {270--274},
+  year = {1983},
+  doi = {10.1016/0009-2614(83)80005-0},
+}
+
+% ---- Optimization ----
+
+@article{Wang2016TRIC,
+  author = {Wang, Lee-Ping and Song, Chenchen},
+  title = {{Geometry optimization made simple with translation and rotation coordinates}},
+  journal = {The Journal of Chemical Physics},
+  volume = {144},
+  number = {21},
+  pages = {214108},
+  year = {2016},
+  doi = {10.1063/1.4952956},
+}
+
+@article{Baker1996DLC,
+  author = {Baker, Jon and Kessi, Alain and Delley, Bernard},
+  title = {{The generation and use of delocalized internal coordinates in geometry optimization}},
+  journal = {The Journal of Chemical Physics},
+  volume = {105},
+  number = {1},
+  pages = {192--212},
+  year = {1996},
+  doi = {10.1063/1.471864},
+}
+
+@article{Bakken2002Coordinates,
+  author = {Bakken, Vebjørn and Helgaker, Trygve},
+  title = {{The efficient optimization of molecular geometries using redundant internal coordinates}},
+  journal = {The Journal of Chemical Physics},
+  volume = {117},
+  number = {20},
+  pages = {9160--9174},
+  year = {2002},
+  doi = {10.1063/1.1515483},
+}
+
+@article{Peng1996Redundant,
+  author = {Peng, Chunyang and Ayala, Philippe Y. and Schlegel, H. Bernhard and Frisch, Michael J.},
+  title = {{Using redundant internal coordinates to optimize equilibrium geometries and transition states}},
+  journal = {Journal of Computational Chemistry},
+  volume = {17},
+  number = {1},
+  pages = {49--56},
+  year = {1996},
+  doi = {10.1002/(SICI)1096-987X(19960115)17:1<49::AID-JCC5>3.0.CO;2-0},
+}
+
+@article{Pulay1992BackTransform,
+  author = {Pulay, P. and Fogarasi, G.},
+  title = {{Geometry optimization in redundant internal coordinates}},
+  journal = {The Journal of Chemical Physics},
+  volume = {96},
+  number = {4},
+  pages = {2856--2860},
+  year = {1992},
+  doi = {10.1063/1.462844},
+}
+
+@article{Lindh1995Hessian,
+  author = {Lindh, Roland and Bernhardsson, Anders and Karlström, Gunnar and Malmqvist, Per-Åke},
+  title = {{On the use of a Hessian model function in molecular geometry optimizations}},
+  journal = {Chemical Physics Letters},
+  volume = {241},
+  number = {4},
+  pages = {423--428},
+  year = {1995},
+  doi = {10.1016/0009-2614(95)00646-L},
+}
+
+@article{Packwood2016Contacts,
+  author = {Packwood, David and Kermode, James and Mones, Letif and Bernstein, Noam and Woolley, John and Gould, Nicholas and Ortner, Christoph and Csányi, Gábor},
+  title = {{A universal preconditioner for simulating condensed phase materials}},
+  journal = {The Journal of Chemical Physics},
+  volume = {144},
+  number = {16},
+  pages = {164109},
+  year = {2016},
+  doi = {10.1063/1.4947024},
+}
+
+@article{Pyykko2009Radii,
+  author = {Pyykkö, Pekka and Atsumi, Michiko},
+  title = {{Molecular Single-Bond Covalent Radii for Elements 1–118}},
+  journal = {Chemistry – A European Journal},
+  volume = {15},
+  number = {1},
+  pages = {186--197},
+  year = {2009},
+  doi = {10.1002/chem.200800987},
+}
+
+@article{Pyykko2009Double,
+  author = {Pyykkö, Pekka and Atsumi, Michiko},
+  title = {{Molecular Double-Bond Covalent Radii for Elements Li–E112}},
+  journal = {Chemistry – A European Journal},
+  volume = {15},
+  number = {46},
+  pages = {12770--12779},
+  year = {2009},
+  doi = {10.1002/chem.200901472},
+}
+
+@article{Mantina2009Radii,
+  author = {Mantina, Manjeera and Chamberlin, Adam C. and Valero, Rosendo and Cramer, Christopher J. and Truhlar, Donald G.},
+  title = {{Consistent van der Waals Radii for the Whole Main Group}},
+  journal = {The Journal of Physical Chemistry A},
+  volume = {113},
+  number = {19},
+  pages = {5806--5812},
+  year = {2009},
+  doi = {10.1021/jp8111556},
+}
+
+@article{Banerjee1985PRFO,
+  author = {Banerjee, Ajit and Adams, Noah and Simons, Jack and Shepard, Ron},
+  title = {{Search for stationary points on surfaces}},
+  journal = {The Journal of Physical Chemistry},
+  volume = {89},
+  number = {1},
+  pages = {52--57},
+  year = {1985},
+  doi = {10.1021/j100247a015},
+}
+
+@article{Baker1986PRFO,
+  author = {Baker, Jon},
+  title = {{An algorithm for the location of transition states}},
+  journal = {Journal of Computational Chemistry},
+  volume = {7},
+  number = {4},
+  pages = {385--395},
+  year = {1986},
+  doi = {10.1002/jcc.540070402},
+}
+
+@article{Grimme2017ANCopt,
+  author = {Grimme, Stefan and Bannwarth, Christoph and Shushkov, Philip},
+  title = {{A Robust and Accurate Tight-Binding Quantum Chemical Method for Structures, Vibrational Frequencies, and Noncovalent Interactions of Large Molecular Systems Parametrized for All spd-Block Elements (Z = 1–86)}},
+  journal = {Journal of Chemical Theory and Computation},
+  volume = {13},
+  number = {5},
+  pages = {1989--2009},
+  year = {2017},
+  doi = {10.1021/acs.jctc.7b00118},
+}
+
+@article{Davidson1975Eigen,
+  author = {Davidson, Ernest R.},
+  title = {{The iterative calculation of a few of the lowest eigenvalues and corresponding eigenvectors of large real-symmetric matrices}},
+  journal = {Journal of Computational Physics},
+  volume = {17},
+  number = {1},
+  pages = {87--94},
+  year = {1975},
+  doi = {10.1016/0021-9991(75)90065-0},
+}
+
+@article{Farkas1999Update,
+  author = {Farkas, Ödön and Schlegel, H. Bernhard},
+  title = {{Methods for optimizing large molecules. II. Quadratic search}},
+  journal = {The Journal of Chemical Physics},
+  volume = {111},
+  number = {24},
+  pages = {10806--10814},
+  year = {1999},
+  doi = {10.1063/1.480484},
+}
+
+@article{Bofill1994Update,
+  author = {Bofill, Josep Maria},
+  title = {{Updated Hessian matrix and the restricted step method for locating transition structures}},
+  journal = {Journal of Computational Chemistry},
+  volume = {15},
+  number = {1},
+  pages = {1--11},
+  year = {1994},
+  doi = {10.1002/jcc.540150102},
+}
+
+@incollection{Powell1978Damping,
+  author = {Powell, M. J. D.},
+  title = {{A fast algorithm for nonlinearly constrained optimization calculations}},
+  booktitle = {Numerical Analysis},
+  pages = {144--157},
+  year = {1978},
+  publisher = {Springer Berlin Heidelberg},
+  isbn = {9783540085386},
+  editor = {Watson, G. A.},
+  series = {Lecture Notes in Mathematics},
+  doi = {10.1007/BFb0067703},
+}
+
+@article{Csaszar1984GDIIS,
+  author = {Császár, Pál and Pulay, Péter},
+  title = {{Geometry optimization by direct inversion in the iterative subspace}},
+  journal = {Journal of Molecular Structure},
+  volume = {114},
+  pages = {31--34},
+  year = {1984},
+  doi = {10.1016/S0022-2860(84)87198-7},
+}
+
+@article{Farkas2002GDIIS,
+  author = {Farkas, Ödön and Schlegel, H. Bernhard},
+  title = {{Methods for optimizing large molecules. Part III. An improved algorithm for geometry optimization using direct inversion in the iterative subspace (GDIIS)}},
+  journal = {Physical Chemistry Chemical Physics},
+  volume = {4},
+  number = {1},
+  pages = {11--15},
+  year = {2002},
+  doi = {10.1039/B108658H},
+}
+
+@article{Li2006GEDIIS,
+  author = {Li, Xiaosong and Frisch, Michael J.},
+  title = {{Energy-Represented Direct Inversion in the Iterative Subspace within a Hybrid Geometry Optimization Method}},
+  journal = {Journal of Chemical Theory and Computation},
+  volume = {2},
+  number = {3},
+  pages = {835--839},
+  year = {2006},
+  doi = {10.1021/ct050275a},
+}
+
+@article{Liu1989LBFGS,
+  author = {Liu, Dong C. and Nocedal, Jorge},
+  title = {{On the limited memory BFGS method for large scale optimization}},
+  journal = {Mathematical Programming},
+  volume = {45},
+  number = {1-3},
+  pages = {503--528},
+  year = {1989},
+  doi = {10.1007/BF01589116},
+}
+
+@article{Armijo1966LineSearch,
+  author = {Armijo, Larry},
+  title = {{Minimization of functions having Lipschitz continuous first partial derivatives}},
+  journal = {Pacific Journal of Mathematics},
+  volume = {16},
+  number = {1},
+  pages = {1--3},
+  year = {1966},
+  doi = {10.2140/pjm.1966.16.1},
+}
+
+@book{Nocedal2006Numerical,
+  author = {Nocedal, Jorge and Wright, Stephen J.},
+  title = {{Numerical Optimization}},
+  series = {Springer Series in Operations Research and Financial Engineering},
+  year = {2006},
+  publisher = {Springer New York},
+  isbn = {9780387303031},
+  edition = {2nd},
+  doi = {10.1007/978-0-387-40065-5},
+}
+
+@article{Horn1987Quaternion,
+  author = {Horn, Berthold K. P.},
+  title = {{Closed-form solution of absolute orientation using unit quaternions}},
+  journal = {Journal of the Optical Society of America A},
+  volume = {4},
+  number = {4},
+  pages = {629--642},
+  year = {1987},
+  doi = {10.1364/JOSAA.4.000629},
+}
+
+@phdthesis{SanzGarcia2016Thesis,
+  author = {Sanz García, Juan},
+  title = {{Theoretical Study of New Nitrosyl Ruthenium Complexes: Mechanisms of Photoisomerization and Photorelease of NO}},
+  school = {Université de Toulouse},
+  year = {2016},
+  doi = {10.70675/9b2808d6z1282z4702zbe8cz2edf56ef312c},
+  note = {HAL tel-01402497},
+}
+
+% ---- Conformer search and 3D geometry ----
+
+@article{Butina1999Clustering,
+  author = {Butina, Darko},
+  title = {{Unsupervised Data Base Clustering Based on Daylight's Fingerprint and Tanimoto Similarity: A Fast and Automated Way To Cluster Small and Large Data Sets}},
+  journal = {Journal of Chemical Information and Computer Sciences},
+  volume = {39},
+  number = {4},
+  pages = {747--750},
+  year = {1999},
+  doi = {10.1021/ci9803381},
+}
+
+@article{Riniker2015ETKDG,
+  author = {Riniker, Sereina and Landrum, Gregory A.},
+  title = {{Better Informed Distance Geometry: Using What We Know To Improve Conformation Generation}},
+  journal = {Journal of Chemical Information and Modeling},
+  volume = {55},
+  number = {12},
+  pages = {2562--2574},
+  year = {2015},
+  doi = {10.1021/acs.jcim.5b00654},
+}
+
+@article{Wang2020ETKDGv3,
+  author = {Wang, Shuzhe and Witek, Jagna and Landrum, Gregory A. and Riniker, Sereina},
+  title = {{Improving Conformer Generation for Small Rings and Macrocycles Based on Distance Geometry and Experimental Torsional-Angle Preferences}},
+  journal = {Journal of Chemical Information and Modeling},
+  volume = {60},
+  number = {4},
+  pages = {2044--2058},
+  year = {2020},
+  doi = {10.1021/acs.jcim.0c00025},
+}
+
+@article{Halgren1996MMFF,
+  author = {Halgren, Thomas A.},
+  title = {{Merck molecular force field. I. Basis, form, scope, parameterization, and performance of MMFF94}},
+  journal = {Journal of Computational Chemistry},
+  volume = {17},
+  number = {5-6},
+  pages = {490--519},
+  year = {1996},
+  doi = {10.1002/(SICI)1096-987X(199604)17:5/6<490::AID-JCC1>3.0.CO;2-P},
+}
+
+@article{Halgren1999MMFF94s,
+  author = {Halgren, Thomas A.},
+  title = {{MMFF VI. MMFF94s option for energy minimization studies}},
+  journal = {Journal of Computational Chemistry},
+  volume = {20},
+  number = {7},
+  pages = {720--729},
+  year = {1999},
+  doi = {10.1002/(SICI)1096-987X(199905)20:7<720::AID-JCC7>3.0.CO;2-X},
+}
+
+@article{Rappe1992UFF,
+  author = {Rappé, A. K. and Casewit, C. J. and Colwell, K. S. and Goddard, III, W. A. and Skiff, W. M.},
+  title = {{UFF, a full periodic table force field for molecular mechanics and molecular dynamics simulations}},
+  journal = {Journal of the American Chemical Society},
+  volume = {114},
+  number = {25},
+  pages = {10024--10035},
+  year = {1992},
+  doi = {10.1021/ja00051a040},
+}
+
+@article{Tosco2014MMFF,
+  author = {Tosco, Paolo and Stiefl, Nikolaus and Landrum, Gregory},
+  title = {{Bringing the MMFF force field to the RDKit: implementation and validation}},
+  journal = {Journal of Cheminformatics},
+  volume = {6},
+  number = {1},
+  pages = {37},
+  year = {2014},
+  doi = {10.1186/s13321-014-0037-3},
+}
+
+% ---- Frequencies and thermochemistry ----
+
+@article{Grimme2012QRRHO,
+  author = {Grimme, Stefan},
+  title = {{Supramolecular Binding Thermodynamics by Dispersion-Corrected Density Functional Theory}},
+  journal = {Chemistry – A European Journal},
+  volume = {18},
+  number = {32},
+  pages = {9955--9964},
+  year = {2012},
+  doi = {10.1002/chem.201200497},
+}
+
+@article{FernandezRamos2007Symmetry,
+  author = {Fernández-Ramos, Antonio and Ellingson, Benjamin A. and Meana-Pañeda, Rubén and Marques, Jorge M. C. and Truhlar, Donald G.},
+  title = {{Symmetry numbers and chemical reaction rates}},
+  journal = {Theoretical Chemistry Accounts},
+  volume = {118},
+  number = {4},
+  pages = {813--826},
+  year = {2007},
+  doi = {10.1007/s00214-007-0328-0},
+}
+
+@article{Eckart1935Conditions,
+  author = {Eckart, Carl},
+  title = {{Some Studies Concerning Rotating Axes and Polyatomic Molecules}},
+  journal = {Physical Review},
+  volume = {47},
+  number = {7},
+  pages = {552--558},
+  year = {1935},
+  doi = {10.1103/PhysRev.47.552},
+}
+
+@article{Miller1980Eckart,
+  author = {Miller, William H. and Handy, Nicholas C. and Adams, John E.},
+  title = {{Reaction path Hamiltonian for polyatomic molecules}},
+  journal = {The Journal of Chemical Physics},
+  volume = {72},
+  number = {1},
+  pages = {99--112},
+  year = {1980},
+  doi = {10.1063/1.438959},
+}
+
+% ---- Orbital surfaces ----
+
+@article{Lorensen1987MarchingCubes,
+  author = {Lorensen, William E. and Cline, Harvey E.},
+  title = {{Marching cubes: A high resolution 3D surface construction algorithm}},
+  journal = {ACM SIGGRAPH Computer Graphics},
+  volume = {21},
+  number = {4},
+  pages = {163--169},
+  year = {1987},
+  doi = {10.1145/37402.37422},
+}
+
+@inproceedings{Taubin1995Smoothing,
+  author = {Taubin, Gabriel},
+  title = {{A signal processing approach to fair surface design}},
+  booktitle = {Proceedings of the 22nd annual conference on Computer graphics and interactive techniques - SIGGRAPH '95},
+  pages = {351--358},
+  year = {1995},
+  publisher = {ACM Press},
+  doi = {10.1145/218380.218473},
+}
+
+@inproceedings{Garland1997Simplification,
+  author = {Garland, Michael and Heckbert, Paul S.},
+  title = {{Surface simplification using quadric error metrics}},
+  booktitle = {Proceedings of the 24th annual conference on Computer graphics and interactive techniques - SIGGRAPH '97},
+  pages = {209--216},
+  year = {1997},
+  publisher = {ACM Press},
+  doi = {10.1145/258734.258849},
+}
+
+@article{Cyrus1978Clipping,
+  author = {Cyrus, Mike and Beck, Jay},
+  title = {{Generalized two- and three-dimensional clipping}},
+  journal = {Computers \& Graphics},
+  volume = {3},
+  number = {1},
+  pages = {23--28},
+  year = {1978},
+  doi = {10.1016/0097-8493(78)90021-3},
+}
+
+@article{Sutherland1974Clipping,
+  author = {Sutherland, Ivan E. and Hodgman, Gary W.},
+  title = {{Reentrant polygon clipping}},
+  journal = {Communications of the ACM},
+  volume = {17},
+  number = {1},
+  pages = {32--42},
+  year = {1974},
+  doi = {10.1145/360767.360802},
+}
+
+@article{Douglas1973Simplification,
+  author = {Douglas, David H. and Peucker, Thomas K.},
+  title = {{Algorithms for the reduction of the number of points required to represent a digitized line or its caricature}},
+  journal = {Cartographica},
+  volume = {10},
+  number = {2},
+  pages = {112--122},
+  year = {1973},
+  doi = {10.3138/FM57-6770-U75U-7727},
+}
+
+@incollection{Schneider1990CurveFit,
+  author = {Schneider, Philip J.},
+  title = {{An algorithm for automatically fitting digitized curves}},
+  booktitle = {Graphics Gems},
+  pages = {612--626},
+  year = {1990},
+  publisher = {Elsevier},
+  isbn = {9780080507538},
+  doi = {10.1016/B978-0-08-050753-8.50132-7},
+}
+
+% ---- Transition states ----
+
+@article{Smidstrup2014IDPP,
+  author = {Smidstrup, Søren and Pedersen, Andreas and Stokbro, Kurt and Jónsson, Hannes},
+  title = {{Improved initial guess for minimum energy path calculations}},
+  journal = {The Journal of Chemical Physics},
+  volume = {140},
+  number = {21},
+  pages = {214106},
+  year = {2014},
+  doi = {10.1063/1.4878664},
+}
+
+@article{Henkelman2000CINEB,
+  author = {Henkelman, Graeme and Uberuaga, Blas P. and Jónsson, Hannes},
+  title = {{A climbing image nudged elastic band method for finding saddle points and minimum energy paths}},
+  journal = {The Journal of Chemical Physics},
+  volume = {113},
+  number = {22},
+  pages = {9901--9904},
+  year = {2000},
+  doi = {10.1063/1.1329672},
+}
+
+@article{Henkelman2000Tangent,
+  author = {Henkelman, Graeme and Jónsson, Hannes},
+  title = {{Improved tangent estimate in the nudged elastic band method for finding minimum energy paths and saddle points}},
+  journal = {The Journal of Chemical Physics},
+  volume = {113},
+  number = {22},
+  pages = {9978--9985},
+  year = {2000},
+  doi = {10.1063/1.1323224},
+}
+
+@article{Bitzek2006FIRE,
+  author = {Bitzek, Erik and Koskinen, Pekka and Gähler, Franz and Moseler, Michael and Gumbsch, Peter},
+  title = {{Structural Relaxation Made Simple}},
+  journal = {Physical Review Letters},
+  volume = {97},
+  number = {17},
+  pages = {170201},
+  year = {2006},
+  doi = {10.1103/PhysRevLett.97.170201},
+}
+
+@article{PageMcIver1988IRC,
+  author = {Page, Michael and McIver, Jr., James W.},
+  title = {{On evaluating the reaction path Hamiltonian}},
+  journal = {The Journal of Chemical Physics},
+  volume = {88},
+  number = {2},
+  pages = {922--935},
+  year = {1988},
+  doi = {10.1063/1.454172},
+}
+
+@article{Kuhn1955Hungarian,
+  author = {Kuhn, H. W.},
+  title = {{The Hungarian method for the assignment problem}},
+  journal = {Naval Research Logistics Quarterly},
+  volume = {2},
+  number = {1-2},
+  pages = {83--97},
+  year = {1955},
+  doi = {10.1002/nav.3800020109},
+}
+
+@article{Munkres1957Assignment,
+  author = {Munkres, James},
+  title = {{Algorithms for the Assignment and Transportation Problems}},
+  journal = {Journal of the Society for Industrial and Applied Mathematics},
+  volume = {5},
+  number = {1},
+  pages = {32--38},
+  year = {1957},
+  doi = {10.1137/0105003},
+}
+
+@article{Muller1979Surface,
+  author = {Müller, Klaus and Brown, Leo D.},
+  title = {{Location of saddle points and minimum energy paths by a constrained simplex optimization procedure}},
+  journal = {Theoretica Chimica Acta},
+  volume = {53},
+  number = {1},
+  pages = {75--93},
+  year = {1979},
+  doi = {10.1007/BF00547608},
+}
+
+% ---- Units and constants ----
+
+@article{Mohr2025CODATA,
+  author = {Mohr, Peter J. and Newell, David B. and Taylor, Barry N. and Tiesinga, Eite},
+  title = {{CODATA recommended values of the fundamental physical constants: 2022}},
+  journal = {Reviews of Modern Physics},
+  volume = {97},
+  number = {2},
+  pages = {025002},
+  year = {2025},
+  doi = {10.1103/RevModPhys.97.025002},
+}
+
+% ---- File formats and readers ----
+
+@article{Schaftenaar2000Molden,
+  author = {Schaftenaar, G. and Noordik, J.H.},
+  title = {{Molden: a pre- and post-processing program for molecular and electronic structures}},
+  journal = {Journal of Computer-Aided Molecular Design},
+  volume = {14},
+  number = {2},
+  pages = {123--134},
+  year = {2000},
+  doi = {10.1023/A:1008193805436},
+}
+
+@article{OBoyle2008cclib,
+  author = {O'Boyle, Noel M. and Tenderholt, Adam L. and Langner, Karol M.},
+  title = {{cclib: A library for package-independent computational chemistry algorithms}},
+  journal = {Journal of Computational Chemistry},
+  volume = {29},
+  number = {5},
+  pages = {839--845},
+  year = {2008},
+  doi = {10.1002/jcc.20823},
+}
+
+@article{Sun2020PySCF,
+  author = {Sun, Qiming and Zhang, Xing and Banerjee, Samragni and Bao, Peng and Barbry, Marc and Blunt, Nick S. and Bogdanov, Nikolay A. and Booth, George H. and Chen, Jia and Cui, Zhi-Hao and Eriksen, Janus J. and Gao, Yang and Guo, Sheng and Hermann, Jan and Hermes, Matthew R. and Koh, Kevin and Koval, Peter and Lehtola, Susi and Li, Zhendong and Liu, Junzi and Mardirossian, Narbe and McClain, James D. and Motta, Mario and Mussard, Bastien and Pham, Hung Q. and Pulkin, Artem and Purwanto, Wirawan and Robinson, Paul J. and Ronca, Enrico and Sayfutyarova, Elvira R. and Scheurer, Maximilian and Schurkus, Henry F. and Smith, James E. T. and Sun, Chong and Sun, Shi-Ning and Upadhyay, Shiv and Wagner, Lucas K. and Wang, Xiao and White, Alec and Whitfield, James Daniel and Williamson, Mark J. and Wouters, Sebastian and Yang, Jun and Yu, Jason M. and Zhu, Tianyu and Berkelbach, Timothy C. and Sharma, Sandeep and Sokolov, Alexander Yu. and Chan, Garnet Kin-Lic},
+  title = {{Recent developments in the PySCF program package}},
+  journal = {The Journal of Chemical Physics},
+  volume = {153},
+  number = {2},
+  pages = {024109},
+  year = {2020},
+  doi = {10.1063/5.0006074},
+}
+
+@article{Neese2025ORCA6,
+  author = {Neese, Frank},
+  title = {{Software Update: The ORCA Program System—Version 6.0}},
+  journal = {WIREs Computational Molecular Science},
+  volume = {15},
+  number = {2},
+  pages = {e70019},
+  year = {2025},
+  doi = {10.1002/wcms.70019},
+}
+
+% ---- Books without a Crossref record for the cited edition (ISBN checked on Open Library) ----
+
+@book{Golub2013Matrix,
+  author = {Golub, Gene H. and Van Loan, Charles F.},
+  title = {{Matrix Computations}},
+  edition = {4th},
+  publisher = {Johns Hopkins University Press},
+  year = {2013},
+  isbn = {9781421407944},
+  doi = {10.56021/9781421407944},
+}
+
+@book{Wilson1955Vibrations,
+  author = {Wilson, Jr., E. Bright and Decius, J. C. and Cross, Paul C.},
+  title = {{Molecular Vibrations: The Theory of Infrared and Raman Vibrational Spectra}},
+  publisher = {McGraw-Hill},
+  year = {1955},
+  note = {Dover reprint 1980, ISBN 9780486639413},
+}
+
+@book{Fletcher1987Practical,
+  author = {Fletcher, R.},
+  title = {{Practical Methods of Optimization}},
+  edition = {2nd},
+  publisher = {Wiley},
+  year = {1987},
+  isbn = {9780471915478},
+  doi = {10.1002/9781118723203},
+  note = {DOI is the Wiley online edition (2000)},
+}
+
+% ---- Software ----
+
+@software{ReShiki,
+  author = {{ReShiki contributors}},
+  title = {{ReShiki}},
+  url = {https://github.com/Ameyanagi/ReShiki},
+  license = {MIT OR Apache-2.0},
+  note = {Cite the release you used},
+}
+
+@software{Axtb,
+  author = {Hicks, Colton},
+  title = {{axtb: extended tight binding, rebuilt}},
+  url = {https://github.com/atomsforhumanity/axtb},
+  version = {0.2.0},
+  license = {LGPL-3.0-or-later},
+  note = {ReShiki links the fork https://github.com/Ameyanagi/axtb at the revision in AXTB\_REV (crates/xtb-worker/src/lib.rs)},
+}
+
+@software{XtbProgram,
+  author = {{Grimme group}},
+  title = {{xtb: semiempirical extended tight-binding program package}},
+  url = {https://github.com/grimme-lab/xtb},
+  license = {LGPL-3.0-or-later},
+  note = {Reference program for axtb's "xtb 6.8 compatible" conventions; cite Bannwarth2021Xtb},
+}
+
+@software{Tblite,
+  author = {{tblite developers}},
+  title = {{tblite: light-weight tight-binding framework}},
+  url = {https://github.com/tblite/tblite},
+  license = {LGPL-3.0-or-later},
+}
+
+@software{RDKit,
+  author = {Landrum, Greg and others},
+  title = {{RDKit: Open-source cheminformatics}},
+  url = {https://www.rdkit.org},
+  doi = {10.5281/zenodo.591637},
+  note = {Zenodo concept DOI (DataCite); COSMolKit's parameter tables come from RDKit 2026.03.1 and ReShiki compares against RDKit 2026.03.6},
+}
+
+@software{COSMolKit,
+  title = {{COSMolKit}},
+  url = {https://github.com/Ameyanagi/COSMolKit},
+  version = {0.5.0},
+  note = {Fork of https://github.com/cosmol-studio/COSMolKit at revision 501f7b234031ba4d87461e14d0947c77a7d1a631},
+}
+
+% ---- Format specifications ----
+
+@misc{MoldenFormat,
+  title = {{Molden Format}},
+  howpublished = {\url{https://www.theochem.ru.nl/molden/molden_format.html}},
+}
+
+@manual{GaussianFchk,
+  organization = {{Gaussian, Inc.}},
+  title = {{Gaussian 09 User's Reference: Interfacing to Gaussian (formatted checkpoint files)}},
+  url = {https://gaussian.com/interfacing/},
+}
+
+@article{Kolsbjerg2016AutoNEB,
+  author = {Kolsbjerg, Esben L. and Groves, Michael N. and Hammer, Bjørk},
+  title = {{An automated nudged elastic band method}},
+  journal = {The Journal of Chemical Physics},
+  volume = {145},
+  number = {9},
+  pages = {094107},
+  year = {2016},
+  doi = {10.1063/1.4961868},
+}
+
+@article{McIver1972TS,
+  author = {McIver, James W., Jr. and Komornicki, Andrew},
+  title = {{Structure of transition states in organic reactions. General theory and an application to the cyclobutene-butadiene isomerization using a semiempirical molecular orbital method}},
+  journal = {Journal of the American Chemical Society},
+  volume = {94},
+  number = {8},
+  pages = {2625--2633},
+  year = {1972},
+  doi = {10.1021/ja00763a011},
+}
