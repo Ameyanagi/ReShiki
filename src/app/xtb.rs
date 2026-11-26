@@ -34,7 +34,7 @@ pub(crate) mod vibrations;
 mod view;
 
 #[cfg(test)]
-pub(super) use results::{Evaluation, View, method_line, title as results_title};
+pub(super) use results::{Evaluation, View, headline, method_line, title as results_title};
 pub(crate) use state::Task as CalcTask;
 pub(super) use state::formula;
 pub(crate) use vibrations::Action as VibrationsAction;

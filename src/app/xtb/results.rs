@@ -177,21 +177,15 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
     };
     let (method, medium) = match &result.settings {
         Settings::Xtb(settings) => (
-            settings.method.label(),
+            settings.method.label().to_owned(),
             if settings.solvent.is_some() {
                 format!("in {}", solvent(result))
             } else {
                 "gas phase".into()
             },
         ),
-        Settings::Imported { .. } => (
-            result
-                .provenance
-                .method
-                .as_deref()
-                .unwrap_or(&result.provenance.program),
-            solvent(result),
-        ),
+        // The program, level and file the numbers come from.
+        Settings::Imported { .. } => (method_line(result, frame), String::new()),
     };
     let charge = match frame.charge {
         0 => "neutral".into(),
@@ -209,7 +203,11 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
         5 => "quintet".into(),
         n => format!("multiplicity {n}"),
     };
-    format!("{outcome} · {method} · {medium} · {charge} {spin}")
+    if medium.is_empty() {
+        format!("{outcome} · {method} · {charge} {spin}")
+    } else {
+        format!("{outcome} · {method} · {medium} · {charge} {spin}")
+    }
 }
 
 /// When the calculation finished, in the user's time zone.
