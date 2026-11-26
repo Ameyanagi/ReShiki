@@ -382,6 +382,37 @@ fn figure_result_and_pinning_follow_the_model_across_paste() {
 }
 
 #[test]
+fn a_repeated_calculation_leaves_a_placed_figure_on_its_pinned_result() {
+    use crate::models3d::surface::{Figure, OrbitalRef};
+
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Energy, true);
+    let basis = full.orbitals.as_ref().unwrap().basis.clone().unwrap();
+    let n_ao = basis.shells.iter().map(Shell::n_functions).sum();
+    doc.models[0].surface = Some(Figure {
+        orbital: OrbitalRef {
+            result: result_key(&full),
+            spin: Spin::Alpha,
+            index: 3,
+        },
+        iso: 0.05,
+        look: Default::default(),
+        snapshot: None,
+    });
+    add_result(&mut doc, &start, full.light(&[]));
+    pin_orbital(&mut doc, 0, Spin::Alpha, 3, &basis, &vec![0.5; n_ao]).unwrap();
+    // Recalculate: same frame and settings, so the same key, no rows.
+    add_result(&mut doc, &start, full.light(&[]));
+    assert_eq!(doc.science.results.len(), 2);
+    let (index, _) = figure_result(&doc, &doc.models[0]).unwrap();
+    assert_eq!(index, 0, "the figure keeps the result holding its row");
+    // Without a pinned row anywhere, the newest result is used.
+    doc.models[0].surface.as_mut().unwrap().orbital.index = 4;
+    assert_eq!(figure_result(&doc, &doc.models[0]).unwrap().0, 1);
+}
+
+#[test]
 fn pin_orbital_inserts_sorted_rows_and_keeps_the_result_key() {
     let (mut doc, oxygen) = water();
     let start = launch(&doc, oxygen, 0, 1).unwrap();
