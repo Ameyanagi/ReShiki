@@ -1,6 +1,11 @@
 //! Geometry-only Rust solver. Calculations never replace the editor graph.
 //! Coordinates are in angstroms, energies in kcal/mol, and gradients in
 //! kcal/mol/angstrom. Call this synchronous API only in the disposable worker.
+//!
+//! COSMolKit \[COSMolKit\] supplies ETKDGv3 (Riniker & Landrum 2015; Wang et al. 2020)
+//! \[Riniker2015ETKDG\] \[Wang2020ETKDGv3\], MMFF94 and MMFF94s (Halgren 1996, 1999)
+//! \[Halgren1996MMFF\] \[Halgren1999MMFF94s\] and UFF (Rappé et al. 1992) \[Rappe1992UFF\].
+//! Full references: docs/references/xtb.md.
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
