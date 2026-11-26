@@ -1,6 +1,8 @@
 //! Scheme review through the same messages as the row, menu and palette.
 use super::*;
-use crate::app::xtb::ts::card::tests::{claisen, diels_alder};
+use crate::app::xtb::ts::card::tests::claisen;
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+use crate::app::xtb::ts::card::tests::{diels_alder, hydrogen_transfer};
 use reshiki::document::{Arrow, Point};
 use reshiki::reactions::{Participant, Reaction};
 
@@ -447,7 +449,7 @@ fn edit_map_hands_off_the_inferred_proposal_without_editing_the_drawing() {
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
 fn complete_map_with_moving_hydrogen_requires_the_sheet() {
-    let (doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
+    let (doc, arrow) = hydrogen_transfer();
     let mut app = app(doc, arrow);
     open(&mut app, Mode::TransitionState);
     assert!(!app.xtb_running());
@@ -465,8 +467,33 @@ fn complete_map_with_moving_hydrogen_requires_the_sheet() {
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
+fn proton_transfer_with_barrier_off_reviews_and_runs_reaction_energy() {
+    let (doc, arrow) = hydrogen_transfer();
+    let mut app = app(doc, arrow);
+    app.tab.xtb.ts_card.barrier = false;
+    app.tab.xtb.ts_card.reaction_energy = true;
+    let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+    assert!(app.ts_review_visible());
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(dialog.changes.as_ref().unwrap().action, "transfer hydrogen");
+    assert_eq!(
+        dialog.changes.as_ref().unwrap().hydrogens,
+        ["H from C2 to O3 (least motion)"]
+    );
+    assert_eq!(dialog.heading(), "Calculate reaction energy");
+    assert_eq!(dialog.run_label(), "Calculate reaction energy");
+
+    let _ = app.update(send(Action::Accept));
+    assert!(!app.ts_review_open());
+    let run = app.tab.xtb.run.as_ref().expect("reaction energy starts");
+    assert!(run.ts.is_none());
+    assert_eq!(run.config.task, CalcTask::Optimize);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
 fn a_sure_proposal_with_moving_hydrogen_still_waits_for_review() {
-    let (mut doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
+    let (mut doc, arrow) = hydrogen_transfer();
     for atom in &mut doc.atoms {
         if atom.map_num == 1 {
             atom.map_num = 0;
@@ -547,7 +574,7 @@ fn mapper_ties_and_unfinished_searches_require_review_before_applying() {
         assert!(dialog.needs_review());
         assert!(dialog.validate().is_ok());
         assert_eq!(dialog.subtitle().starts_with("Several atom maps fit"), tied);
-        assert!(dialog.preview.is_some());
+        assert!(dialog.pictures.is_some());
         let changes = dialog.changes.as_ref().unwrap();
         assert!(!changes.marks.is_empty());
         assert_eq!(
@@ -577,22 +604,38 @@ fn review_picture_and_run_action_describe_the_same_bonds() {
     }
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
-fn product_side_picture_keeps_the_caption_and_marks_in_arrow_direction() {
+fn diels_alder_review_crosses_product_bonds_and_draws_reactant_arcs() {
     let (doc, arrow) = diels_alder();
-    let plan = ts_plan::plan_for_review(&doc, arrow).unwrap();
-    assert_eq!(plan.start, Side::Product);
-    let changes = Changes::from_plan(&doc, &plan);
+    let mut app = app(doc, arrow);
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(dialog.plan.as_ref().unwrap().start, Side::Product);
+    let changes = dialog.changes.as_ref().unwrap();
     assert_eq!(changes.bonds, "forms C1–C6, C4–C5");
     assert_eq!(changes.action, "form C1–C6, C4–C5");
-    assert_eq!(changes.marks.len(), 2);
-    assert!(matches!(changes.marks[0].kind, BondChangeKind::Form));
-    assert!(
-        changes.marks[0]
-            .atoms
+    let [start, other] = dialog.pictures.as_ref().unwrap();
+    assert_eq!(start.label, "Products (search start)");
+    assert_eq!(other.label, "Reactants");
+    let doc = &app.tab.doc;
+    let pairs = |picture: &Picture, kind| {
+        picture
+            .marks
             .iter()
-            .all(|id| plan.start_atoms.contains(id))
-    );
+            .map(|mark| {
+                assert_eq!(mark.kind, kind);
+                let [a, b] = mark.atoms;
+                assert_eq!(
+                    doc.bond_between(a, b).is_some(),
+                    kind == BondChangeKind::Break
+                );
+                mark.atoms.map(|id| doc.atom(id).unwrap().map_num)
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(pairs(start, BondChangeKind::Break), [[1, 6], [4, 5]]);
+    assert_eq!(pairs(other, BondChangeKind::Form), [[1, 6], [4, 5]]);
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
@@ -683,6 +726,8 @@ async fn review_shows_the_proposal_and_reveals_settings_only_when_opened() {
     for expected in [
         "Which bonds change?",
         "Check the bonds that change.",
+        "Reactants (search start)",
+        "Products",
         "forms C1–C6 · breaks O3–C4",
         "All species neutral, no unpaired electrons",
         "Run: form C1–C6, break O3–C4",

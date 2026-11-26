@@ -19,7 +19,10 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use std::{borrow::Cow, collections::BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 
 mod species;
 mod view;
@@ -174,6 +177,36 @@ impl Changes {
             },
         )
     }
+
+    fn marks_for_side(&self, doc: &Document, side: Side, atoms: &[u64]) -> Vec<BondChangeMark> {
+        let by_map: BTreeMap<_, _> = atoms
+            .iter()
+            .filter_map(|id| doc.atom(*id))
+            .filter(|atom| atom.map_num != 0)
+            .map(|atom| (atom.map_num, atom.id))
+            .collect();
+        let matched = |id| by_map.get(&doc.atom(id)?.map_num).copied();
+        self.marks
+            .iter()
+            .filter_map(|mark| {
+                Some(BondChangeMark {
+                    kind: match (side, mark.kind) {
+                        (Side::Reactant, kind) => kind,
+                        (Side::Product, BondChangeKind::Form) => BondChangeKind::Break,
+                        (Side::Product, BondChangeKind::Break) => BondChangeKind::Form,
+                    },
+                    atoms: [matched(mark.atoms[0])?, matched(mark.atoms[1])?],
+                    ..*mark
+                })
+            })
+            .collect()
+    }
+}
+
+struct Picture {
+    label: &'static str,
+    preview: Preview,
+    marks: Vec<BondChangeMark>,
 }
 
 pub(in crate::app::xtb) struct Dialog {
@@ -195,12 +228,19 @@ pub(in crate::app::xtb) struct Dialog {
     task: CalcTask,
     free_energy: bool,
     mapping: Mapping,
-    preview: Option<Preview>,
+    pictures: Option<[Picture; 2]>,
     changes: Result<Changes, TsPlanError>,
     plan: Result<TsPlan, TsPlanError>,
 }
 
 impl Dialog {
+    fn heading(&self) -> &'static str {
+        match self.mode {
+            Mode::Energy => "Calculate reaction energy",
+            Mode::TransitionState => "Which bonds change?",
+        }
+    }
+
     fn subtitle(&self) -> &'static str {
         if self
             .mapping
@@ -208,15 +248,19 @@ impl Dialog {
             .is_some_and(|proposal| proposal.multiple_best)
         {
             "Several atom maps fit this drawing. Check the proposal, or draw the atom map."
+        } else if self.mode == Mode::Energy {
+            "Review the atom correspondence and species charges."
         } else {
             "Check the bonds that change."
         }
     }
 
     fn run_label(&self) -> String {
+        if self.mode == Mode::Energy {
+            return self.heading().into();
+        }
         match &self.changes {
             Ok(changes) if !changes.action.is_empty() => format!("Run: {}", changes.action),
-            _ if self.mode == Mode::Energy => "Run reaction energy".into(),
             _ => "Run transition-state search".into(),
         }
     }
@@ -247,25 +291,41 @@ impl Dialog {
         format!("{charge}, {spin}")
     }
 
-    fn picture(&self, source: &Document) -> Preview {
-        let atoms = self
+    fn pictures(&self, source: &Document) -> Option<[Picture; 2]> {
+        let reaction = reactions::preview(source, self.arrow).ok()?;
+        let start = self
             .plan
             .as_ref()
             .ok()
             .filter(|_| self.mode == Mode::TransitionState)
-            .map(|plan| plan.start_atoms.clone())
-            .unwrap_or_else(|| {
-                reactions::preview(source, self.arrow)
-                    .map(|reaction| {
-                        reaction
-                            .reactants
-                            .iter()
-                            .flat_map(|participant| participant.atoms.iter().copied())
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            });
-        Preview::for_atoms(source, &atoms)
+            .map(|plan| plan.start);
+        let sides = match start {
+            Some(Side::Product) => [Side::Product, Side::Reactant],
+            _ => [Side::Reactant, Side::Product],
+        };
+        Some(sides.map(|side| {
+            let participants = match side {
+                Side::Reactant => &reaction.reactants,
+                Side::Product => &reaction.products,
+            };
+            let atoms: Vec<_> = participants
+                .iter()
+                .flat_map(|participant| participant.atoms.iter().copied())
+                .collect();
+            Picture {
+                label: match (side, start == Some(side)) {
+                    (Side::Reactant, true) => "Reactants (search start)",
+                    (Side::Product, true) => "Products (search start)",
+                    (Side::Reactant, false) => "Reactants",
+                    (Side::Product, false) => "Products",
+                },
+                preview: Preview::for_atoms(source, &atoms),
+                marks: self.changes.as_ref().map_or_else(
+                    |_| Vec::new(),
+                    |changes| changes.marks_for_side(source, side, &atoms),
+                ),
+            }
+        }))
     }
 
     fn images(&self) -> Result<usize, String> {
@@ -291,7 +351,7 @@ impl Dialog {
             .ok()
             .filter(|_| self.mode == Mode::TransitionState);
         self.changes = Changes::read(&source, self.arrow, plan);
-        self.preview = Some(self.picture(&source));
+        self.pictures = self.pictures(&source);
     }
 
     fn can_run(&self, species: &[Species]) -> Result<(), String> {
@@ -624,7 +684,7 @@ impl App {
             target_stereo_note: (mode == Mode::TransitionState)
                 .then(|| self.xtb_target_stereo_note(&reaction, shape))
                 .flatten(),
-            preview: None,
+            pictures: None,
         };
         let finding = matches!(dialog.mapping, Mapping::Finding);
         // Every entry route reveals the same reaction card while a detached
@@ -632,7 +692,7 @@ impl App {
         if !dialog.needs_review() {
             return self.xtb_review_run(dialog);
         }
-        dialog.preview = Some(dialog.picture(&source));
+        dialog.pictures = dialog.pictures(&source);
         let map_task = finding.then(|| {
             Task::perform(calculate(source.into_owned(), arrow), move |result| {
                 send(Action::Ready(id, result))

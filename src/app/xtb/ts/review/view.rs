@@ -1,4 +1,4 @@
-//! Ask for the bond changes first; uncommon calculation settings stay folded.
+//! Review both reaction sides while keeping uncommon calculation settings folded.
 use super::{Action, Mapping, Mode, Tone, line, send, species};
 use crate::app::help::{Placement, modal};
 use crate::app::workspace::accessible_command;
@@ -19,23 +19,28 @@ impl App {
         }
         let current = dialog.at == self.review_stamp();
         let mut content = column![
-            text("Which bonds change?").size(21),
+            text(dialog.heading()).size(21),
             line(dialog.subtitle(), Tone::Muted),
         ]
         .spacing(12);
         let changes = dialog.changes.as_ref().ok();
-        let marks = changes.map_or(&[][..], |changes| changes.marks.as_slice());
-        if let Some(thumbnail) = dialog
-            .preview
-            .as_ref()
-            .and_then(|preview| preview.marked_thumbnail(marks, 160))
-        {
+        if let Some(pictures) = &dialog.pictures {
+            let mut sides = row![].spacing(8);
+            for picture in pictures {
+                if let Some(thumbnail) = picture.preview.marked_thumbnail(&picture.marks, 160) {
+                    sides = sides.push(
+                        column![text(picture.label).size(13), thumbnail]
+                            .spacing(4)
+                            .width(Length::FillPortion(1)),
+                    );
+                }
+            }
             let label = match dialog.mapping {
                 Mapping::Proposed(_) => "Proposed changes",
                 Mapping::Finding => "Matching atoms…",
                 _ => "Drawn atom map",
             };
-            let mut picture = column![thumbnail, text(label).size(13)].spacing(6);
+            let mut picture = column![sides, text(label).size(13)].spacing(6);
             if let Some(changes) = changes
                 && !changes.bonds.is_empty()
             {

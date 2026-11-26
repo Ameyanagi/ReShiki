@@ -33,6 +33,18 @@ pub(crate) struct BondChangeMark {
     pub highlighted: bool,
 }
 
+const MAX_FORMING_ARC_HEIGHT: f32 = 24.;
+const HIGHLIGHTED_MARK_WIDTH: f32 = 3.5;
+
+impl BondChangeMark {
+    pub(in crate::canvas) const FORMING_ARC_MARGIN: f32 =
+        MAX_FORMING_ARC_HEIGHT + HIGHLIGHTED_MARK_WIDTH * 0.5;
+
+    pub(in crate::canvas) fn forming_arc_height(distance: f32) -> f32 {
+        (distance * 0.18).clamp(6., MAX_FORMING_ARC_HEIGHT)
+    }
+}
+
 pub(crate) fn draw_bond_changes(
     frame: &mut layered::Frame<'_>,
     doc: &Document,
@@ -55,7 +67,11 @@ pub(crate) fn draw_bond_changes(
         let delta = to - from;
         let mid = from + delta * 0.5;
         let mut stroke = Stroke::default()
-            .with_width(if mark.highlighted { 3.5 } else { 2. })
+            .with_width(if mark.highlighted {
+                HIGHLIGHTED_MARK_WIDTH
+            } else {
+                2.
+            })
             .with_line_cap(canvas::LineCap::Round);
         let path = match mark.kind {
             BondChangeKind::Form => {
@@ -84,7 +100,8 @@ pub(crate) fn draw_bond_changes(
                 let flip = toward_drawing > 0.01
                     || (toward_drawing.abs() <= 0.01
                         && (normal.y > 0. || (normal.y == 0. && normal.x > 0.)));
-                let bend = (distance * 0.36).clamp(12., 48.);
+                // A quadratic arc peaks halfway from its chord to the control point.
+                let bend = BondChangeMark::forming_arc_height(distance) * 2.;
                 let control = mid + normal * if flip { -bend } else { bend };
                 stroke = stroke.with_color(color(Hue::Green));
                 stroke.line_dash.segments = &[4., 4.];

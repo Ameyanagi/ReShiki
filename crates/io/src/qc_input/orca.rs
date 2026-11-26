@@ -109,16 +109,21 @@ pub(super) fn write(
     }
     let _ = writeln!(text, "%maxcore {}", maxcore(settings));
 
-    let companion_stem: String = stem
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
+    let has_companions = endpoints.is_some()
+        || (matches!(settings.job, Job::TransitionState | Job::Irc)
+            && geometry.hessian().is_some());
+    if has_companions
+        && stem
+            .chars()
+            .any(|c| c.is_control() || matches!(c, '"' | '/' | '\\'))
+    {
+        return Err(Error::Invalid(
+            "ORCA companion file names cannot contain quotes, path separators or control characters."
+                .into(),
+        ));
+    }
+    // Keep the selected stem verbatim: lossy substitutions can merge two jobs.
+    let companion_stem = stem;
     let mut files = Vec::new();
     let frame = geometry.frame;
     if matches!(settings.job, Job::TransitionState | Job::Irc) {

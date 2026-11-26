@@ -321,6 +321,33 @@ fn visible_reaction_names_arrive_from_the_caption_queue_without_editing_the_draw
     );
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn reaction_names_wait_for_the_review_sheet_to_close() {
+    let (doc, arrow) = hydrogen_transfer();
+    let mut app = app(doc, arrow);
+    app.tab.selected.clear();
+    app.inspector_open = false;
+    let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Review(
+        review::Mode::Energy,
+        None,
+    ))));
+    assert!(app.ts_review_visible(), "{}", app.status);
+    assert_eq!(app.xtb_reaction_card_arrow(), Some(arrow));
+    assert!(app.xtb_reaction_name_request().is_none());
+    assert!(app.tab.naming.caption_pending.is_none());
+    assert_eq!(app.start_caption_names().units(), 0);
+
+    let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::ReviewSheet(
+        review::Action::Cancel,
+    ))));
+    assert!(!app.ts_review_visible());
+    assert!(
+        app.tab.naming.caption_pending.is_some(),
+        "closing the review resumes the visible card's naming queue"
+    );
+}
+
 #[test]
 fn identical_reaction_species_reuse_one_caption_name() {
     use crate::app::naming::{Outcome, test_support::record};
