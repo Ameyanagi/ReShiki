@@ -5,6 +5,7 @@ pub use crate::Failure;
 use reshiki_optimize::{
     ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
 };
+use reshiki_qcdata::XtbMethod;
 use reshiki_xtb_worker::{
     client::{Cancel, Error, Limits, Session},
     protocol::{
@@ -46,6 +47,14 @@ pub struct Job {
     /// Override the final electronic properties, which otherwise follow the method.
     pub properties: Option<Properties>,
     pub thermo: protocol::ThermoRequest,
+}
+
+pub fn worker_method(method: XtbMethod) -> Method {
+    match method {
+        XtbMethod::Gfn2Xtb => Method::Gfn2,
+        XtbMethod::GfnFf => Method::Gfnff,
+        XtbMethod::GXtb => Method::Gxtb,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -108,10 +117,14 @@ pub fn run(
 ) -> Result<Report, Failure> {
     let limits = Limits::default();
     let (mut session, hello) =
-        Session::start(executable, limits, cancel).map_err(|error| worker_failure(&error))?;
+        Session::start(executable, limits, cancel).map_err(worker_failure)?;
     let engine = hello
         .engine
-        .ok_or_else(|| worker_failure(&Error::Unavailable))?;
+        .ok_or_else(|| worker_failure(Error::Unavailable))?;
+    let solvent = job.solvent.clone().map(|mut solvent| {
+        solvent.correction = crate::method::solvent_correction(job.method.xtb_method());
+        solvent
+    });
     let open = Open {
         numbers: job.numbers.clone(),
         positions: job.positions.clone(),
@@ -120,7 +133,7 @@ pub fn run(
         uhf: Some(job.uhf),
         method: job.method,
         conventions: job.conventions,
-        solvent: job.solvent.clone(),
+        solvent,
         scf: job.scf.clone(),
         gfnff: job.topology.clone().map(|positions| protocol::GfnFfOpen {
             reference_positions: Some(positions),
@@ -142,12 +155,19 @@ pub fn run(
                 session.close(cancel)?;
                 Ok::<_, Error>(opened.uhf)
             };
-            return Err(match probe() {
+            let reason = match probe() {
                 Ok(valence) if valence % 2 != job.uhf % 2 => Failure::Spin { valence },
-                _ => Failure::Other(message),
-            });
+                _ => Failure::Other(message.clone()),
+            };
+            return Err(with_worker_error(
+                Error::Engine {
+                    kind: ErrorKind::Input,
+                    message,
+                },
+                reason,
+            ));
         }
-        Err(error) => return Err(worker_failure(&error)),
+        Err(error) => return Err(worker_failure(error)),
     }
 
     let mut path = Vec::new();
@@ -182,7 +202,9 @@ pub fn run(
         }
         match outcome.status {
             Status::Converged | Status::MaxSteps => {}
-            Status::ScfFailure(message) => return Err(Failure::Scf(message)),
+            Status::ScfFailure(message) => {
+                return Err(xtb.failure.unwrap_or(Failure::Scf(message)));
+            }
             Status::Failed(message) => return Err(xtb.failure.unwrap_or(Failure::Other(message))),
             Status::Cancelled => return Err(canceled()),
         }
@@ -201,7 +223,7 @@ pub fn run(
     }
     let computed = session
         .compute(&final_request, cancel)
-        .map_err(|error| worker_failure(&error))?;
+        .map_err(worker_failure)?;
     // The result is complete; a worker that fails to exit cleanly is reaped.
     let _ = session.close(cancel);
     evaluations.push(Evaluation::from(&computed));
@@ -309,8 +331,9 @@ impl Potential for Xtb<'_> {
             .session
             .compute(&request, self.cancel)
             .map_err(|error| {
-                self.failure = Some(worker_failure(&error));
-                eval_error(error)
+                let evaluation = eval_error(&error);
+                self.failure = Some(worker_failure(error));
+                evaluation
             })?;
         self.failure = None;
         self.evaluations.push(Evaluation::from(&computed));
@@ -335,23 +358,35 @@ impl Potential for Xtb<'_> {
             self.session
                 .compute(&request, self.cancel)
                 .map(|computed| out.copy_from_slice(&computed.hessian))
-                .map_err(eval_error),
+                .map_err(|error| eval_error(&error)),
         )
     }
 }
 
-fn eval_error(error: Error) -> EvalError {
+fn eval_error(error: &Error) -> EvalError {
     match error {
         Error::Cancelled => EvalError::Cancelled,
         Error::Engine {
             kind: ErrorKind::Scf,
             message,
-        } => EvalError::Scf(message),
+        } => EvalError::Scf(message.clone()),
         error => EvalError::Failed(error.to_string()),
     }
 }
 
-fn worker_failure(error: &Error) -> Failure {
+fn with_worker_error(error: Error, reason: Failure) -> Failure {
+    Failure::Worker {
+        error: error.into(),
+        reason: Box::new(reason),
+    }
+}
+
+fn worker_failure(error: Error) -> Failure {
+    let reason = worker_failure_reason(&error);
+    with_worker_error(error, reason)
+}
+
+fn worker_failure_reason(error: &Error) -> Failure {
     let summary = match error {
         Error::Engine {
             kind: ErrorKind::Scf,
@@ -389,10 +424,7 @@ fn worker_failure(error: &Error) -> Failure {
         Error::Cancelled => return canceled(),
         error => return Failure::Other(error.to_string()),
     };
-    Failure::Crashed {
-        summary,
-        details: Some(error.to_string()),
-    }
+    Failure::crashed(summary)
 }
 
 fn canceled() -> Failure {
@@ -599,11 +631,12 @@ mod tests {
             ),
         ];
         for (error, summary) in cases {
-            let failure = worker_failure(&error);
+            let diagnostic = error.to_string();
+            let failure = worker_failure(error);
             assert_eq!(failure.to_string(), summary);
             assert!(matches!(
                 failure,
-                Failure::Crashed { details: Some(details), .. } if details == error.to_string()
+                Failure::Worker { error, .. } if error.to_string() == diagnostic
             ));
         }
     }
@@ -614,7 +647,7 @@ mod tests {
         use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
 
         let status = ExitStatus::from_raw(1 << 8);
-        let failure = worker_failure(&Error::Exited {
+        let failure = worker_failure(Error::Exited {
             status,
             stderr: "worker stderr".into(),
         });
@@ -624,9 +657,22 @@ mod tests {
         );
         assert!(matches!(
             failure,
-            Failure::Crashed { details: Some(details), .. }
-                if details == format!("xTB worker exited with {status}: worker stderr")
+            Failure::Worker { error, .. }
+                if error.to_string() == format!("xTB worker exited with {status}: worker stderr")
         ));
+    }
+
+    #[test]
+    fn hessian_limit_keeps_the_client_error_and_card_reason() {
+        let message = format!(
+            "expected at most {} Hessian atoms",
+            protocol::MAX_HESSIAN_ATOMS
+        );
+        let failure = worker_failure(Error::Limit(message.clone()));
+        assert_eq!(failure.to_string(), message);
+        assert!(matches!(failure, Failure::Worker { error, .. }
+            if matches!(error.as_ref(), Error::Limit(detail) if detail == &message)
+                && error.to_string() == format!("xTB resource limit: {message}")));
     }
 
     #[test]

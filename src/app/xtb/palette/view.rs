@@ -232,7 +232,7 @@ impl App {
                 .into()
         };
         let retry = self.xtb_can_retry(failed);
-        let actions = match &failed.failure {
+        let actions = match failed.failure.reason() {
             state::Failure::Scf(_)
                 if retry
                     && failed

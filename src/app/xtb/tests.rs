@@ -249,7 +249,7 @@ fn frequencies_reject_a_target_above_the_hessian_limit() {
     });
     assert!(matches!(
         &app.tab.xtb.outcome,
-        Some(Outcome::Failed(failed)) if failed.failure == state::Failure::TooMany { count: 201, limit: 200 }
+        Some(Outcome::Failed(failed)) if matches!(failed.failure, state::Failure::TooMany { count: 201, limit: 200 })
     ));
     assert!(!app.xtb_running());
 }
@@ -429,8 +429,10 @@ fn an_scf_failure_retains_the_request_for_retry() {
         .clone();
     app.xtb.settings.task = CalcTask::Energy;
 
-    let failure = state::Failure::Scf("250 iterations".into());
-    event(&mut app, Event::Done(Err(failure.clone())));
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf("250 iterations".into()))),
+    );
     assert!(!app.xtb_running());
     let Some(Outcome::Failed(failed)) = &app.tab.xtb.outcome else {
         panic!("expected an SCF failure");
@@ -438,7 +440,9 @@ fn an_scf_failure_retains_the_request_for_retry() {
     let Some(request) = &failed.request else {
         panic!("the failure keeps its request");
     };
-    assert_eq!(failed.failure, failure);
+    assert!(
+        matches!(failed.failure.reason(), state::Failure::Scf(message) if message == "250 iterations")
+    );
     assert_eq!(request.atoms, [o]);
     assert_eq!(request.config, config);
     assert!(!request.keep_full);

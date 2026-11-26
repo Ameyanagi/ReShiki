@@ -6,13 +6,12 @@ pub use conformers::xtb_conformers;
 use crate::qc::{GeometryData, computed_data};
 use pyo3::prelude::*;
 use reshiki_model::science::isotope_masses;
+use reshiki_qcdata::XtbMethod;
+use reshiki_xtb_jobs::method;
 use reshiki_xtb_jobs::run::{self, Failure, Job, Properties, Report};
 use reshiki_xtb_worker::{
     client::{Cancel, Error, Limits, Session},
-    protocol::{
-        Conventions, Method, OrbitalOutput, ScfSettings, Solvent, SolventCorrection, SolventModel,
-        ThermoRequest,
-    },
+    protocol::{Conventions, ErrorKind, OrbitalOutput, ScfSettings, SolventModel, ThermoRequest},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -36,19 +35,19 @@ struct WorkerSettings {
 }
 
 impl WorkerSettings {
-    fn method(&self) -> Result<Method, String> {
+    fn method(&self) -> Result<XtbMethod, String> {
         let method = &self.method;
         match method.to_ascii_lowercase().as_str() {
-            "gfn2" | "gfn2-xtb" => Ok(Method::Gfn2),
-            "gfnff" | "gfn-ff" => Ok(Method::Gfnff),
-            "gxtb" | "g-xtb" => Ok(Method::Gxtb),
+            "gfn2" | "gfn2-xtb" => Ok(XtbMethod::Gfn2Xtb),
+            "gfnff" | "gfn-ff" => Ok(XtbMethod::GfnFf),
+            "gxtb" | "g-xtb" => Ok(XtbMethod::GXtb),
             _ => Err(format!(
                 "Unknown xTB method {method:?}. Use gfn2, gfnff or gxtb."
             )),
         }
     }
 
-    fn job(self, geometry: &GeometryData, uhf: u32, method: Method, threads: u32) -> Job {
+    fn job(self, geometry: &GeometryData, uhf: u32, method: XtbMethod, threads: u32) -> Job {
         Job {
             optimize: false,
             frequencies: false,
@@ -57,7 +56,7 @@ impl WorkerSettings {
             positions: geometry.positions.clone(),
             charge: geometry.charge,
             uhf,
-            method,
+            method: run::worker_method(method),
             conventions: self.conventions,
             scf: ScfSettings {
                 accuracy: self.accuracy,
@@ -65,12 +64,10 @@ impl WorkerSettings {
                 max_iterations: self.max_iterations,
                 ..Default::default()
             },
-            solvent: self.solvent.map(|name| Solvent {
-                model: self.solvent_model,
-                name: name.to_lowercase(),
-                state: Default::default(),
-                correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-            }),
+            solvent: self
+                .solvent
+                .as_deref()
+                .map(|name| method::solvent(self.solvent_model, name)),
             threads,
             fixed: vec![],
             tight: false,
@@ -229,20 +226,22 @@ fn optimization_data(report: &Report, geometry: &GeometryData) -> Value {
 }
 
 fn failure_message(failure: &Failure) -> String {
-    if let Failure::Crashed {
-        details: Some(details),
-        ..
-    } = failure
-    {
-        return details.clone();
+    match failure {
+        Failure::Worker { error, .. } => match error.as_ref() {
+            Error::Engine {
+                kind: ErrorKind::Input,
+                message,
+            } if message.contains("same parity as the valence electron count") => {
+                format!("{error}. Pass unpaired= with the number of unpaired valence electrons.")
+            }
+            _ => error.to_string(),
+        },
+        Failure::Crashed {
+            details: Some(details),
+            ..
+        } => details.clone(),
+        _ => failure.to_string(),
     }
-    let message = failure.to_string();
-    if matches!(failure, Failure::Spin { .. })
-        || message.contains("same parity as the valence electron count")
-    {
-        return format!("{message}. Pass unpaired= with the number of unpaired valence electrons.");
-    }
-    message
 }
 
 fn run_interruptibly<T: Send + 'static>(

@@ -4,7 +4,9 @@ use crate::Failure;
 use reshiki_qcdata::{MAX_HESSIAN_ATOMS, XtbMethod};
 
 mod export;
-pub use export::{RankedConformer, populations, ranked_trajectory, xyz};
+pub use export::{RankedConformer, ranked_trajectory, xyz};
+mod rows;
+pub use rows::{RowStatistics, populations, trajectory_rows};
 #[cfg(not(target_arch = "wasm32"))]
 mod pipeline;
 #[cfg(not(target_arch = "wasm32"))]
@@ -60,6 +62,11 @@ impl Minimizer {
             Self::Gfn2 => Some(XtbMethod::Gfn2Xtb),
             _ => None,
         }
+    }
+
+    /// An xTB minimizer sets the method for the whole search.
+    pub fn effective_method(self, reranker: XtbMethod) -> XtbMethod {
+        self.xtb().unwrap_or(reranker)
     }
 }
 
