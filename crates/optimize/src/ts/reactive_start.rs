@@ -32,8 +32,15 @@ impl ReactiveStart {
     /// Format the accepted change using caller-supplied atom labels, for example
     /// `C1···C6 4.72 → 3.05 Å (+2.1 kcal/mol)`.
     pub fn description(&self, label: impl Fn(usize) -> String) -> String {
-        let distances = self
-            .pairs
+        format!(
+            "{} ({:+.1} kcal/mol)",
+            self.distance_description(label),
+            self.energy_change_kcal
+        )
+    }
+
+    pub fn distance_description(&self, label: impl Fn(usize) -> String) -> String {
+        self.pairs
             .iter()
             .zip(&self.before_angstrom)
             .zip(&self.after_angstrom)
@@ -41,8 +48,7 @@ impl ReactiveStart {
                 format!("{}···{} {before:.2} → {after:.2} Å", label(a), label(b))
             })
             .collect::<Vec<_>>()
-            .join(", ");
-        format!("{distances} ({:+.1} kcal/mol)", self.energy_change_kcal)
+            .join(", ")
     }
 }
 

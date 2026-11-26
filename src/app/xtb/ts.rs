@@ -136,7 +136,7 @@ struct Extras {
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     endpoint_energies_hartree: [f64; 2],
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
-    endpoint_thermo: Option<[reshiki::qcdata::Thermo; 2]>,
+    endpoint_thermo: Option<[Option<reshiki::qcdata::Thermo>; 2]>,
     image_positions: Vec<Vec<[f64; 3]>>,
     saddle_converged: bool,
     num_imaginary: usize,
@@ -270,6 +270,20 @@ impl App {
             Some(session) => session.stale(doc, search, (self.tab.file_epoch, self.tab.revision)),
             None => saved_search_stale(doc, search),
         }
+    }
+
+    pub(super) fn xtb_ts_reference(
+        &self,
+        result: &Arc<CalcResult>,
+        arrow: Option<u64>,
+    ) -> Option<&'static str> {
+        let complex = saved_search(result)
+            .and_then(|search| search.context.as_ref()?.endpoint_complex)
+            .or_else(|| {
+                let arrow = arrow.filter(|_| !self.xtb_ts_search_stale(result))?;
+                Some(self.xtb_reaction_label(arrow).has_multiple_species())
+            });
+        (complex == Some(true)).then_some(view::OPTIMIZED_COMPLEX)
     }
 
     pub(super) fn xtb_saved_reaction_title(
@@ -453,6 +467,7 @@ impl App {
             product_chemistry: endpoint_chemistry(&self.tab.doc, reaction, Role::Product),
             title: label.title(),
             reactant: label.first_reactant().unwrap_or("Reaction").to_owned(),
+            endpoint_complex: Some(plan.shape != (1, 1)),
         };
         self.xtb_begin(super::Request {
             atoms: plan.start_atoms.clone(),

@@ -245,6 +245,7 @@ mod presentation_tests {
             let tsv = crate::app::xtb::results::tsv(&shown.method(), &rows);
             assert!(tsv.contains(&format!("TS‡ ΔE\t{saddle} {title}")));
             assert!(tsv.contains(&format!("P ΔE\t{product} {title}")));
+            assert!(tsv.contains("Total energy\t−4.957770 Eh"));
             assert!(!tsv.contains("kcal/mol"));
             assert!(
                 saved
@@ -262,7 +263,7 @@ mod presentation_tests {
         };
         assert!((reaction_energy_kcal(&result).unwrap() + 8.2).abs() < 1e-10);
         assert!(
-            path_rows(&result, None, EnergyUnit::KjPerMol)
+            path_rows(&result, None, EnergyUnit::KjPerMol, None)
                 .iter()
                 .all(|(label, _)| !label.contains("TS‡"))
         );
@@ -275,9 +276,8 @@ mod presentation_tests {
         assert_eq!(reaction_energy_kcal(&result), None);
     }
 
-    #[test]
-    fn saved_gibbs_values_need_matching_conditions_and_a_verified_barrier() {
-        use reshiki::qcdata::{Thermo, TransitionStateMapping, TransitionStateRun};
+    fn result_with_gibbs() -> CalcResult {
+        use reshiki::qcdata::{RunSummary, Thermo, TransitionStateMapping, TransitionStateRun};
 
         let mut result = result();
         let correction = |gibbs_correction_hartree| Thermo {
@@ -295,12 +295,17 @@ mod presentation_tests {
             point_group: None,
         };
         result.thermo = Some(correction(0.03));
-        result.run.as_mut().unwrap().transition_state = Some(Box::new(TransitionStateRun {
+        let frame = frame();
+        result.endpoints = Some(Endpoints {
+            reactant: frame.hash(),
+            product: frame.hash(),
+        });
+        let search = TransitionStateRun {
             arrow: None,
             context: None,
             free_energy: true,
             endpoint_energies_hartree: Some([-5., -5. + -8.2 / KCAL_PER_HARTREE]),
-            endpoint_thermo: Some([correction(0.01), correction(0.02)]),
+            endpoint_thermo: Some([Some(correction(0.01)), Some(correction(0.02))]),
             saddle_converged: true,
             imaginary: 1,
             imaginary_cm1: Some(-387.),
@@ -312,7 +317,21 @@ mod presentation_tests {
                 automatic: true,
             },
             diagnostics: vec![],
-        }));
+        };
+        result.run = Some(RunSummary {
+            seconds: 1.,
+            scf_iterations: vec![],
+            finished: None,
+            search: None,
+            transition_state: Some(Box::new(search)),
+        });
+        result.validate(&frame).unwrap();
+        result
+    }
+
+    #[test]
+    fn saved_gibbs_values_need_matching_conditions_and_a_verified_barrier() {
+        let mut result = result_with_gibbs();
         assert!(
             (barrier_gibbs_kcal(&result).unwrap() - (26.5 + 0.02 * KCAL_PER_HARTREE)).abs() < 1e-10
         );
@@ -320,7 +339,7 @@ mod presentation_tests {
             (reaction_gibbs_kcal(&result).unwrap() - (-8.2 + 0.01 * KCAL_PER_HARTREE)).abs()
                 < 1e-10
         );
-        let rows = path_rows(&result, None, EnergyUnit::KjPerMol);
+        let rows = path_rows(&result, None, EnergyUnit::KjPerMol, None);
         assert!(rows.contains(&("TS‡ ΔG (298.15 K)".into(), "163.4 kJ/mol".into())));
         assert!(rows.contains(&("P ΔG (298.15 K)".into(), "−8.1 kJ/mol".into())));
 
@@ -333,6 +352,98 @@ mod presentation_tests {
         };
         assert_eq!(barrier_gibbs_kcal(&result), None);
         assert!(reaction_gibbs_kcal(&result).is_some());
+    }
+
+    #[test]
+    fn second_small_imaginary_mode_suppresses_only_the_gibbs_barrier() {
+        let mut result = result_with_gibbs();
+        result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-450., -35.];
+        assert!(presentation(&result, None).reliable());
+        assert_eq!(barrier_gibbs_kcal(&result), None);
+        assert_eq!(
+            barrier_gibbs_unavailable(&result).as_deref(),
+            Some("ΔG‡ not reported: a second small imaginary mode (35i cm⁻¹)")
+        );
+        assert!(reaction_gibbs_kcal(&result).is_some());
+    }
+
+    #[test]
+    fn forward_gibbs_barrier_survives_a_saved_product_frequency_failure() {
+        let mut result = result_with_gibbs();
+        let expected = barrier_gibbs_kcal(&result).unwrap();
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.endpoint_thermo.as_mut().unwrap()[1] = None;
+        search.diagnostics.push((
+            "Product thermochemistry".into(),
+            "Free energy unavailable: endpoint worker timed out".into(),
+        ));
+
+        let light = result.light(&[]);
+        let decoded: CalcResult =
+            serde_json::from_str(&serde_json::to_string(&light).unwrap()).unwrap();
+        decoded.validate(&frame()).unwrap();
+        assert_eq!(barrier_gibbs_kcal(&decoded), Some(expected));
+        assert_eq!(reaction_gibbs_kcal(&decoded), None);
+        assert_eq!(
+            reaction_gibbs_unavailable(&decoded).as_deref(),
+            Some(
+                "Reaction ΔG not reported: product frequency analysis failed (endpoint worker timed out)"
+            )
+        );
+    }
+
+    #[test]
+    fn path_copy_labels_the_optimized_complex_reference() {
+        let mut result = result_with_gibbs();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .context = Some(reshiki::qcdata::TransitionStateContext {
+            reactant_chemistry: "ab".repeat(32),
+            product_chemistry: "cd".repeat(32),
+            title: "A + B → C".into(),
+            reactant: "A".into(),
+            endpoint_complex: Some(true),
+        });
+        let app = path_app(result);
+        let rows = app.xtb_shown().unwrap().rows(Some(EnergyUnit::default()));
+        assert!(rows.contains(&("P ΔE (optimized complex)".into(), "−8.2 kcal/mol".into())));
+    }
+
+    #[test]
+    fn folded_start_log_uses_the_selected_energy_unit() {
+        let mut result = result_with_gibbs();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics
+            .push((
+                "Folded the starting conformer".into(),
+                "C1···C6 4.72 → 3.05 Å (-1.8 kcal/mol)".into(),
+            ));
+        for (unit, energy) in [
+            (EnergyUnit::KcalPerMol, "−1.8 kcal/mol"),
+            (EnergyUnit::KjPerMol, "−7.5 kJ/mol"),
+            (EnergyUnit::Ev, "−0.08 eV"),
+        ] {
+            assert!(search_log(&result, None, unit).contains(&format!(
+                "Folded the starting conformer: C1···C6 4.72 → 3.05 Å ({energy})"
+            )));
+        }
     }
 
     #[tokio::test]
@@ -542,7 +653,7 @@ mod presentation_tests {
     #[test]
     fn saved_search_log_has_a_technical_block_without_inventing_missing_counters() {
         let result = result();
-        let log = search_log(&result, None);
+        let log = search_log(&result, None, EnergyUnit::default());
         assert!(log.starts_with("Transition-state search\n"));
         for label in [
             "Method:",

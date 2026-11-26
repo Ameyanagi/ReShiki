@@ -219,7 +219,7 @@ impl App {
             View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Path => self.xtb_ts_path(&shown, inspector),
-            View::Log => log(&shown, &shown.method()),
+            View::Log => log(&shown, &shown.method(), self.appearance.energy_unit),
         };
         content = content.push(container(body).padding([6, 0]));
         let middle: Element<'_, Message> = if inspector {
@@ -848,7 +848,7 @@ fn key_tiles<'a>(
 
 /// Label and value rows: two columns at the bottom, one in the inspector.
 fn summary<'a>(shown: &Shown<'a>, inspector: bool, previous: bool) -> Element<'a, Message> {
-    let rows = results::summary_grid_rows(&shown.stored.result, shown.input, shown.frame, None);
+    let rows = results::summary_grid_rows(&shown.stored.result, shown.input, shown.frame);
     let label_width = if inspector { 104. } else { LABEL_WIDTH };
     let column_of = |rows: &[(String, String)]| {
         Column::with_children(rows.iter().map(|(label, content)| {
@@ -922,13 +922,18 @@ fn tables<'a>(shown: &Shown<'a>) -> Option<Element<'a, Message>> {
     Some(both.into())
 }
 
-fn log<'a>(shown: &Shown<'a>, method: &str) -> Element<'a, Message> {
+fn log<'a>(
+    shown: &Shown<'a>,
+    method: &str,
+    unit: super::super::EnergyUnit,
+) -> Element<'a, Message> {
     let log = results::log_with_ts(
         &shown.stored.result,
         shown.frame,
         shown.info,
         method,
         shown.ts,
+        unit,
     );
     text(log)
         .size(11)

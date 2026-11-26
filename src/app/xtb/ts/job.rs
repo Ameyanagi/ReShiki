@@ -1,5 +1,6 @@
 //! A desktop transition-state search using thread-affine, isolated xTB workers.
 
+use super::view::THERMO_IMAGINARY_CM1;
 use super::{Extras, Stage};
 use crate::app::xtb::{
     results::{Evaluation, RunInfo},
@@ -23,7 +24,6 @@ use reshiki_xtb_worker::{
 use std::{collections::BTreeSet, ops::ControlFlow, sync::Arc, time::Instant};
 
 const THERMO_TEMPERATURE_K: f64 = 298.15;
-const THERMO_IMAGINARY_CM1: f64 = 20.;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
@@ -168,13 +168,14 @@ fn run(
         ..ts::TsOptions::default()
     };
     trace.reactive_start = folded.map(|fold| {
-        fold.description(|i| {
+        let distances = fold.distance_description(|i| {
             format!(
                 "{}{}",
                 open.numbers.get(i).copied().map_or("?", symbol),
                 i + 1
             )
-        })
+        });
+        format!("{distances} ({:+} kcal/mol)", fold.energy_change_kcal)
     });
     let search = ts::Search {
         numbers: &open.numbers,
@@ -442,7 +443,7 @@ struct Completion {
 }
 
 struct EndpointThermo {
-    corrections: Option<[qcdata::Thermo; 2]>,
+    corrections: [Option<qcdata::Thermo>; 2],
     diagnostics: Vec<(String, String)>,
 }
 
@@ -454,9 +455,12 @@ fn endpoint_thermochemistry(
     masses: &[f64],
     mut analyze: impl FnMut(&[f64], &[f64]) -> Result<Computed, ts::TsError>,
 ) -> Result<EndpointThermo, ts::TsError> {
-    let mut corrections = Vec::with_capacity(2);
+    let mut corrections = [None, None];
     let mut diagnostics = Vec::with_capacity(2);
-    for (name, endpoint) in [("Reactant", &report.reactant), ("Product", &report.product)] {
+    for ((name, endpoint), slot) in [("Reactant", &report.reactant), ("Product", &report.product)]
+        .into_iter()
+        .zip(&mut corrections)
+    {
         let correction = analyze(&endpoint.positions, masses).and_then(|computed| {
             let vibrations = computed.vibrations.ok_or_else(|| {
                 ts::TsError::Failed("The xTB worker returned no vibrational analysis".into())
@@ -479,7 +483,7 @@ fn endpoint_thermochemistry(
         });
         match correction {
             Ok(correction) => {
-                corrections.push(correction);
+                *slot = Some(correction);
                 diagnostics.push((
                     format!("{name} thermochemistry"),
                     "298.15 K · 101325 Pa · quasi-RRHO".into(),
@@ -493,7 +497,7 @@ fn endpoint_thermochemistry(
         }
     }
     Ok(EndpointThermo {
-        corrections: corrections.try_into().ok(),
+        corrections,
         diagnostics,
     })
 }
@@ -629,14 +633,17 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     // Reuse the existing TS frequency analysis; endpoint corrections and this
     // correction share the same temperature, isotope and symmetry policy.
     result.thermo = endpoint_thermo.as_ref().and_then(|_| {
-        result.vibrations.as_ref().map(|vibrations| {
-            thermochemistry(
-                &transition,
-                &transition.positions_angstrom,
-                &masses,
-                &vibrations.frequencies_cm1,
-            )
-        })
+        let vibrations = result.vibrations.as_ref()?;
+        super::view::extra_thermo_imaginary(&vibrations.frequencies_cm1)
+            .is_none()
+            .then(|| {
+                thermochemistry(
+                    &transition,
+                    &transition.positions_angstrom,
+                    &masses,
+                    &vibrations.frequencies_cm1,
+                )
+            })
     });
     result.input_frame = Some(launch.frame.hash());
     result.endpoints = Some(qcdata::Endpoints {
@@ -677,7 +684,11 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     let mut diagnostic_rows = diagnostics(&report, &worker_frequencies, &result, &trace);
     let endpoint_corrections = endpoint_thermo.and_then(|analysis| {
         diagnostic_rows.extend(analysis.diagnostics);
-        analysis.corrections
+        analysis
+            .corrections
+            .iter()
+            .any(Option::is_some)
+            .then_some(analysis.corrections)
     });
     let extras = Extras {
         endpoint_energies_hartree: [report.reactant.energy, report.product.energy],

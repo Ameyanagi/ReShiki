@@ -38,6 +38,7 @@ struct Batch {
     species: Vec<Species>,
     task: CalcTask,
     snapshot: String,
+    barrier_refusal: Option<String>,
     next: usize,
     reused: usize,
     inputs: Vec<Input>,
@@ -50,6 +51,7 @@ struct Summary {
     species: Vec<Species>,
     task: CalcTask,
     snapshot: String,
+    barrier_refusal: Option<String>,
     reused: usize,
     inputs: Vec<Input>,
     preceding_ts: Vec<Weak<CalcResult>>,
@@ -434,6 +436,7 @@ impl App {
         arrow: u64,
         species: Vec<Species>,
         task: CalcTask,
+        barrier_refusal: Option<String>,
     ) -> Task<Message> {
         if !xtb::available() || !self.xtb_can_start() {
             return Task::none();
@@ -454,6 +457,7 @@ impl App {
             species,
             task,
             snapshot,
+            barrier_refusal,
             next: 0,
             reused: 0,
             inputs: Vec::new(),
@@ -508,6 +512,7 @@ impl App {
                     species: batch.species,
                     task: batch.task,
                     snapshot: batch.snapshot,
+                    barrier_refusal: batch.barrier_refusal,
                     reused: batch.reused,
                     inputs: batch.inputs,
                     preceding_ts,
@@ -598,34 +603,38 @@ impl App {
         self.xtb_reaction_energy_next()
     }
 
-    pub(super) fn xtb_energy_totals(
+    pub(super) fn xtb_energy_result(
         &self,
         arrow: u64,
         newer_ts: Option<&Arc<CalcResult>>,
-    ) -> Option<Totals> {
-        let summary = self
-            .tab
-            .xtb
-            .energy_state
+    ) -> (Option<Totals>, Option<&str>) {
+        let state = &self.tab.xtb.energy_state;
+        let summary = state
             .summaries
             .iter()
-            .find(|s| s.arrow == arrow)?;
-        if newer_ts.is_some_and(|result| {
-            !summary
-                .preceding_ts
-                .iter()
-                .any(|previous| xtb::is(previous, result))
-        }) || snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
-            != Some(&summary.snapshot)
-        {
-            return None;
-        }
-        input_totals(
-            &self.tab.doc,
-            &summary.species,
-            &summary.inputs,
-            summary.task,
-        )
+            .find(|summary| summary.arrow == arrow)
+            .filter(|summary| {
+                newer_ts.is_none_or(|result| {
+                    summary
+                        .preceding_ts
+                        .iter()
+                        .any(|previous| xtb::is(previous, result))
+                }) && snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
+                    == Some(&summary.snapshot)
+            });
+        let totals = summary.and_then(|summary| {
+            input_totals(
+                &self.tab.doc,
+                &summary.species,
+                &summary.inputs,
+                summary.task,
+            )
+        });
+        let refusal = match state.batch.as_ref().filter(|batch| batch.arrow == arrow) {
+            Some(batch) => batch.barrier_refusal.as_deref(),
+            None => summary.and_then(|summary| summary.barrier_refusal.as_deref()),
+        };
+        (totals, refusal)
     }
 
     pub(super) fn xtb_energy_has_summary(&self, arrow: u64) -> bool {
@@ -638,7 +647,8 @@ impl App {
     }
 
     pub(in crate::app::xtb) fn xtb_energy_status(&self, arrow: u64) -> Option<String> {
-        self.xtb_energy_totals(arrow, None)
+        self.xtb_energy_result(arrow, None)
+            .0
             .map(|totals| totals.line(self.appearance.energy_unit))
     }
 
@@ -678,7 +688,7 @@ impl App {
             body = body.push(line(reason, Tone::Warning));
         }
         if let Some(summary) = summary {
-            if !showing_batch && self.xtb_energy_totals(arrow, None).is_none() {
+            if !showing_batch && self.xtb_energy_result(arrow, None).0.is_none() {
                 body = body.push(line(
                     "The reaction or a species result changed; calculate again for current energies.",
                     Tone::Warning,

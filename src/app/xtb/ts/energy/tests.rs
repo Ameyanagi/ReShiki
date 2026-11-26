@@ -285,7 +285,7 @@ mod execution {
         let a = app.tab.doc.add_atom("O", Point::default());
         let b = app.tab.doc.add_atom("O", Point::new(100., 50.));
         let (arrow, species) = reaction(&mut app, a, b);
-        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize, None);
         assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [a]);
         model(&mut app);
         event(&mut app, optimized(&START, &MOVED));
@@ -322,7 +322,7 @@ mod execution {
             "{}",
             app.status
         );
-        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
         assert!(app.tab.xtb.run.is_none(), "both current results are reused");
         assert_eq!(app.tab.doc.science.results.len(), 2);
         assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
@@ -336,7 +336,7 @@ mod execution {
         let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
         let (arrow, species) = reaction(&mut app, a, b);
         assert!(reusable(&app.tab.doc, &species[0], CalcTask::Optimize).is_some());
-        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
         assert_eq!(app.tab.xtb.energy_state.batch.as_ref().unwrap().reused, 1);
         assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [b]);
         send(&mut app, xtb::Action::Cancel);
@@ -382,7 +382,7 @@ mod execution {
         let (arrow, mut species) = reaction(&mut app, water, alkene[0]);
         species[1].atoms = alkene.to_vec();
         app.tab.doc.reactions[0].products[0].atoms = alkene.to_vec();
-        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize, None);
         model(&mut app);
         let reviewed = snapshot(&app.tab.doc, arrow, &species).unwrap();
         // Stored stereo fields stay unchanged; E/Z is perceived from drawing geometry.
@@ -422,12 +422,12 @@ mod execution {
         let a = app.tab.doc.add_atom("O", Point::default());
         let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
         let (arrow, species) = reaction(&mut app, a, b);
-        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize, None);
         model(&mut app);
         event(&mut app, optimized(&START, &MOVED));
         model(&mut app);
         event(&mut app, optimized(&START, &MOVED));
-        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize, None);
         assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
         let original_total = summary_totals(&app).unwrap();
         assert!(
@@ -507,7 +507,7 @@ mod execution {
         let a = app.tab.doc.add_atom("O", Point::default());
         let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
         let (arrow, species) = reaction(&mut app, a, b);
-        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
         model(&mut app);
         app.tab.xtb.run.as_mut().unwrap().keep_full = true;
         event(&mut app, optimized(&START, &MOVED));
@@ -587,7 +587,7 @@ mod execution {
         let a = app.tab.doc.add_atom("O", Point::default());
         let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
         let (arrow, species) = reaction(&mut app, a, b);
-        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize);
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
         model(&mut app);
         app.tab.doc.reactions[0].products[0].coefficient = 2;
         event(&mut app, optimized(&START, &MOVED));

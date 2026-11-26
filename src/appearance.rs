@@ -1,6 +1,7 @@
 //! Interface preferences and defaults for new drawings. Existing drawings keep their page colors.
 use iced::advanced::{Clipboard, Layout, Shell, layout, overlay, renderer, widget};
 use iced::{Color, Theme};
+use reshiki::qcdata::{HARTREE_TO_EV, KCAL_PER_HARTREE};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +28,7 @@ impl EnergyUnit {
         match self {
             Self::KcalPerMol => energy,
             Self::KjPerMol => energy * 4.184,
-            Self::Ev => energy / 23.0605,
+            Self::Ev => energy / KCAL_PER_HARTREE * HARTREE_TO_EV,
         }
     }
 

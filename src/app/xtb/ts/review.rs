@@ -183,6 +183,7 @@ pub(in crate::app::xtb) struct Dialog {
     mode: Mode,
     rerun: bool,
     explicit: bool,
+    energy_fallback: bool,
     inferred: bool,
     unmapped_isotope_hydrogen: bool,
     ignored: Option<String>,
@@ -281,6 +282,9 @@ impl Dialog {
 
     fn refresh(&mut self, source: Document) {
         self.plan = ts_plan::plan_for_review(&source, self.arrow);
+        if self.energy_fallback && barrier_refusal(&self.plan).is_some() {
+            self.mode = Mode::Energy;
+        }
         let plan = self
             .plan
             .as_ref()
@@ -315,6 +319,9 @@ impl Dialog {
     }
 
     fn needs_review(&self) -> bool {
+        if self.energy_fallback && self.mode == Mode::Energy {
+            return self.validate().is_err();
+        }
         self.explicit
             || self.unmapped_isotope_hydrogen
             || match &self.mapping {
@@ -359,6 +366,17 @@ fn send(action: Action) -> Message {
 pub(super) fn scheme_plan(doc: &Document, arrow: u64) -> Result<TsPlan, TsPlanError> {
     let source = with_roles(doc, arrow).map_err(|_| TsPlanError::NotReaction)?;
     ts_plan::plan(&source, arrow)
+}
+
+pub(super) fn barrier_refusal(plan: &Result<TsPlan, TsPlanError>) -> Option<String> {
+    let error = plan.as_ref().err()?;
+    match error {
+        TsPlanError::NotReaction
+        | TsPlanError::Unmapped { .. }
+        | TsPlanError::UnmappedHydrogen
+        | TsPlanError::UnmappedIsotopeHydrogen => None,
+        _ => Some(error.to_string()),
+    }
 }
 
 pub(super) fn species_formula(doc: &Document, atoms: &[u64]) -> Option<String> {
@@ -414,12 +432,14 @@ impl App {
         if !self.xtb_can_calculate_reaction(arrow) {
             return Task::none();
         }
-        let mode = if self.tab.xtb.ts_card.barrier && self.xtb_reaction_supports_barrier(arrow) {
+        let choices = &self.tab.xtb.ts_card;
+        let mode = if choices.barrier {
             Mode::TransitionState
         } else {
             Mode::Energy
         };
-        self.xtb_review_open(mode, Some(arrow))
+        let energy_fallback = choices.barrier && (choices.reaction_energy || choices.free_energy);
+        self.xtb_review_open_inner(mode, Some(arrow), false, false, energy_fallback)
     }
 
     pub(in crate::app) fn xtb_review_target(&self) -> Option<u64> {
@@ -475,23 +495,24 @@ impl App {
     }
 
     pub(super) fn xtb_review_open(&mut self, mode: Mode, arrow: Option<u64>) -> Task<Message> {
-        self.xtb_review_open_inner(mode, arrow, false, false)
+        self.xtb_review_open_inner(mode, arrow, false, false, false)
     }
 
     pub(super) fn xtb_review_show(&mut self, mode: Mode, arrow: Option<u64>) -> Task<Message> {
-        self.xtb_review_open_inner(mode, arrow, true, false)
+        self.xtb_review_open_inner(mode, arrow, true, false, false)
     }
 
     pub(super) fn xtb_review_rerun(&mut self, arrow: u64) -> Task<Message> {
-        self.xtb_review_open_inner(Mode::TransitionState, Some(arrow), true, true)
+        self.xtb_review_open_inner(Mode::TransitionState, Some(arrow), true, true, false)
     }
 
     fn xtb_review_open_inner(
         &mut self,
-        mode: Mode,
+        mut mode: Mode,
         arrow: Option<u64>,
         explicit: bool,
         rerun: bool,
+        energy_fallback: bool,
     ) -> Task<Message> {
         if self
             .tab
@@ -525,6 +546,9 @@ impl App {
             Err(error) => return self.review_error(error),
         };
         let plan = ts_plan::plan_for_review(&source, arrow);
+        if energy_fallback && barrier_refusal(&plan).is_some() {
+            mode = Mode::Energy;
+        }
         if !explicit
             && mode == Mode::TransitionState
             && let Err(
@@ -545,9 +569,12 @@ impl App {
             arrow,
             plan.as_ref().ok().filter(|_| mode == Mode::TransitionState),
         );
+        let fallback = energy_fallback && mode == Mode::Energy;
         let unmapped_isotope_hydrogen =
-            matches!(changes, Err(TsPlanError::UnmappedIsotopeHydrogen));
-        let mapping = if mode == Mode::TransitionState && !matches!(shape, (1, 1 | 2) | (2, 1)) {
+            !fallback && matches!(changes, Err(TsPlanError::UnmappedIsotopeHydrogen));
+        let mapping = if fallback {
+            Mapping::Drawing
+        } else if mode == Mode::TransitionState && !matches!(shape, (1, 1 | 2) | (2, 1)) {
             Mapping::Failed(SHAPE_NOTE.into())
         } else if reaction
             .reactants
@@ -581,6 +608,7 @@ impl App {
             mode,
             rerun,
             explicit,
+            energy_fallback,
             task,
             free_energy,
             inputs,
@@ -650,7 +678,11 @@ impl App {
                 dialog.mapping = match result {
                     Ok((candidate, proposal)) => {
                         dialog.refresh(candidate);
-                        Mapping::Proposed(proposal)
+                        if dialog.energy_fallback && dialog.mode == Mode::Energy {
+                            Mapping::Drawing
+                        } else {
+                            Mapping::Proposed(proposal)
+                        }
                     }
                     Err(error) => Mapping::Failed(error),
                 };
@@ -763,7 +795,13 @@ impl App {
                     dialog.free_energy,
                 )
             }
-            Mode::Energy => self.xtb_reaction_energy_begin(arrow, species, dialog.task),
+            Mode::Energy => {
+                let refusal = dialog
+                    .energy_fallback
+                    .then(|| barrier_refusal(&dialog.plan))
+                    .flatten();
+                self.xtb_reaction_energy_begin(arrow, species, dialog.task, refusal)
+            }
         }
     }
 }

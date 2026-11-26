@@ -15,6 +15,7 @@ pub(in crate::app) struct Source {
     pub(in crate::app) frame: Arc<Frame>,
     stem: String,
     result: Arc<CalcResult>,
+    reference: Option<&'static str>,
     reactant: Option<Arc<Frame>>,
     product: Option<Arc<Frame>>,
 }
@@ -26,6 +27,7 @@ impl Source {
         name: String,
         first_reactant: &str,
         formula: Option<&str>,
+        reference: Option<&'static str>,
     ) -> Option<Self> {
         let endpoints = result.endpoints;
         let frame = science.frame(&result.frame)?.clone();
@@ -43,6 +45,7 @@ impl Source {
             frame,
             stem,
             result: result.clone(),
+            reference,
             reactant,
             product: endpoints
                 .and_then(|endpoints| science.frame(&endpoints.product))
@@ -87,22 +90,48 @@ impl Source {
         generator: &str,
         unit: EnergyUnit,
     ) -> Result<Output, String> {
+        // GAMESS also writes the title as an 80-column comment prefixed with "! ".
+        const GAMESS_TITLE_BYTES: usize = 78;
         let mut settings = settings.clone();
+        let gamess = settings.program == qc_input::Program::Gamess;
         let mut energies = Vec::new();
-        if let Some(barrier) = super::view::presentation(&self.result, None).barrier_line(unit) {
+        let barrier = super::view::presentation(&self.result, None).barrier_line(unit);
+        let include_reaction = !gamess || barrier.is_none();
+        if let Some(barrier) = barrier {
             energies.push(barrier);
         }
-        if let Some(delta) = super::view::reaction_energy_kcal(&self.result) {
+        if include_reaction && let Some(delta) = super::view::reaction_energy_kcal(&self.result) {
             energies.push(format!("ΔE {}", unit.format(delta)));
         }
         if let Some(delta) = super::view::barrier_gibbs_kcal(&self.result) {
-            energies.push(format!("ΔG‡ (298.15 K) {}", unit.format(delta)));
+            energies.push(format!("ΔG‡ {}", unit.format(delta)));
         }
-        if let Some(delta) = super::view::reaction_gibbs_kcal(&self.result) {
-            energies.push(format!("ΔG (298.15 K) {}", unit.format(delta)));
+        if !gamess && let Some(delta) = super::view::reaction_gibbs_kcal(&self.result) {
+            energies.push(format!("ΔG {}", unit.format(delta)));
         }
         if !energies.is_empty() {
-            settings.title = format!("{} · {}", settings.title, energies.join(" · "));
+            if let Some(reference) = self.reference {
+                energies.push(reference.into());
+            }
+            let separator = " · ";
+            let annotation = energies.join(separator);
+            if gamess {
+                let budget = GAMESS_TITLE_BYTES.saturating_sub(annotation.len() + separator.len());
+                settings
+                    .title
+                    .truncate(settings.title.floor_char_boundary(budget));
+            }
+            let title = settings.title.trim_end();
+            settings.title = if title.is_empty() {
+                annotation
+            } else {
+                format!("{title}{separator}{annotation}")
+            };
+        }
+        if gamess {
+            settings
+                .title
+                .truncate(settings.title.floor_char_boundary(GAMESS_TITLE_BYTES));
         }
         qc_input::write(
             &settings,
@@ -191,6 +220,7 @@ impl App {
 
     fn xtb_ts_export_source(&self, result: &Arc<CalcResult>, arrow: Option<u64>) -> Option<Source> {
         let doc = &self.tab.doc;
+        let reference = self.xtb_ts_reference(result, arrow);
         if let Some(context) =
             super::saved_search(result).and_then(|search| search.context.as_ref())
         {
@@ -208,6 +238,7 @@ impl App {
                 label
                     .as_ref()
                     .and_then(|label| label.first_reactant_formula()),
+                reference,
             );
         }
         let frame = doc.science.frame(&result.frame)?;
@@ -234,10 +265,11 @@ impl App {
                 label.title(),
                 &reactant,
                 label.first_reactant_formula(),
+                reference,
             )
         } else {
             let name = fallback();
-            Source::from_result(result, &doc.science, name.clone(), &name, None)
+            Source::from_result(result, &doc.science, name.clone(), &name, None, reference)
         }
     }
 }

@@ -188,6 +188,7 @@ pub(super) struct Shown<'a> {
     pub arrow: Option<u64>,
     pub info: Option<&'a RunInfo>,
     pub ts: Option<&'a ts::Session>,
+    pub ts_reference: Option<&'static str>,
 }
 
 impl Shown<'_> {
@@ -197,9 +198,14 @@ impl Shown<'_> {
 
     pub(super) fn rows(&self, unit: Option<super::EnergyUnit>) -> Vec<(String, String)> {
         let result = &self.stored.result;
-        let mut rows = results::summary_rows(result, self.input, self.frame, self.info, unit);
+        let mut rows = results::summary_rows(result, self.input, self.frame, self.info);
         if let Some(unit) = unit {
-            rows.extend(ts::view::path_rows(result, self.ts, unit));
+            rows.extend(ts::view::path_rows(
+                result,
+                self.ts,
+                unit,
+                self.ts_reference,
+            ));
         }
         rows
     }
@@ -338,6 +344,7 @@ impl App {
             arrow,
             info: self.tab.xtb.info(&stored.result),
             ts,
+            ts_reference: self.xtb_ts_reference(&stored.result, arrow),
         })
     }
 
@@ -793,6 +800,7 @@ impl App {
                         shown.info,
                         &method,
                         shown.ts,
+                        self.appearance.energy_unit,
                     );
                     self.xtb_set_palette_status(StatusKind::Palette, "Copied the xTB log", false);
                     return iced::clipboard::write(log);

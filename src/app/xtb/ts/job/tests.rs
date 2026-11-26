@@ -370,14 +370,10 @@ fn free_energy_uses_optimized_endpoints_and_reuses_the_existing_ts_analysis() {
         calls[1],
         (done.report.product.positions.clone(), done.masses.clone())
     );
-    assert!(
-        analysis
-            .corrections
-            .as_ref()
-            .unwrap()
-            .iter()
-            .all(|thermo| { thermo.temperature_k == 298.15 && thermo.pressure_pa == 101_325. })
-    );
+    assert!(analysis.corrections.iter().all(|slot| {
+        let thermo = slot.as_ref().unwrap();
+        thermo.temperature_k == 298.15 && thermo.pressure_pa == 101_325.
+    }));
     done.endpoint_thermo = Some(analysis);
     let report = complete(&launch, done).unwrap();
     assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
@@ -396,28 +392,27 @@ fn free_energy_uses_optimized_endpoints_and_reuses_the_existing_ts_analysis() {
 
 #[test]
 fn endpoint_frequency_failures_retain_electronic_energies_and_do_not_stop_the_other_end() {
-    let (launch, mut done) = completion();
-    let mut calls = 0;
-    let analysis = endpoint_thermochemistry(&launch.frame, &done.report, &done.masses, |_, _| {
-        calls += 1;
-        if calls == 1 {
-            Err(ts::TsError::Failed("endpoint worker timed out".into()))
-        } else {
-            Ok(endpoint_computed())
-        }
-    })
-    .unwrap();
-    assert_eq!(calls, 2);
-    assert!(analysis.corrections.is_none());
-    assert!(analysis.diagnostics[0].1.contains("timed out"));
-    done.endpoint_thermo = Some(analysis);
-    let report = complete(&launch, done).unwrap();
-    assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
-    assert!(report.extras.endpoint_thermo.is_none());
-    assert_eq!(report.result.status, qcdata::Status::Converged);
-    assert!(report.extras.diagnostics.iter().any(|(label, value)| {
-        label == "Reactant thermochemistry" && value.contains("unavailable")
-    }));
+    for failed in 0..2 {
+        let (launch, mut done) = completion();
+        let mut endpoints = [Ok(endpoint_computed()), Ok(endpoint_computed())];
+        endpoints[failed] = Err(ts::TsError::Failed("endpoint worker timed out".into()));
+        let mut endpoints = endpoints.into_iter();
+        let analysis =
+            endpoint_thermochemistry(&launch.frame, &done.report, &done.masses, |_, _| {
+                endpoints.next().unwrap()
+            })
+            .unwrap();
+        assert!(endpoints.next().is_none());
+        assert!(analysis.diagnostics[failed].1.contains("timed out"));
+        done.endpoint_thermo = Some(analysis);
+        let report = complete(&launch, done).unwrap();
+        assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
+        let corrections = report.extras.endpoint_thermo.unwrap();
+        assert!(corrections[failed].is_none());
+        assert!(corrections[1 - failed].is_some());
+        assert!(report.result.thermo.is_some());
+        assert_eq!(report.result.status, qcdata::Status::Converged);
+    }
 }
 
 #[test]
@@ -429,7 +424,7 @@ fn endpoint_free_energy_rejects_significant_imaginary_modes_and_propagates_cance
         Ok(computed)
     })
     .unwrap();
-    assert!(analysis.corrections.is_none());
+    assert_eq!(analysis.corrections, [None, None]);
     assert!(
         analysis
             .diagnostics
