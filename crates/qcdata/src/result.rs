@@ -1,4 +1,6 @@
 //! Calculation results, settings, provenance, and the saved (light) form.
+//!
+//! Full references: docs/references/xtb.md.
 
 use std::{
     borrow::Cow,
@@ -157,21 +159,22 @@ pub struct AtomicCharges {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChargeScheme {
-    /// Mulliken populations.
+    /// Mulliken populations \[Mulliken1955Population\].
     Mulliken,
-    /// Electronegativity equilibration.
+    /// Electronegativity equilibration, as in GFN-FF \[Spicher2020GFNFF\].
     Eeq,
-    /// Charge Model 5.
+    /// Charge Model 5 \[Marenich2012CM5\].
     Cm5,
-    /// Hirshfeld partitioning.
+    /// Hirshfeld partitioning \[Hirshfeld1977Charges\].
     Hirshfeld,
-    /// Löwdin populations.
+    /// Löwdin populations \[Lowdin1950Orthogonality\].
     Loewdin,
     /// A producer-supplied scheme name.
     Other(String),
 }
 
-/// Wiberg–Mayer bond order for one unordered atom pair.
+/// Wiberg–Mayer bond order for one unordered atom pair \[Wiberg1968BondOrder\]
+/// \[Mayer1983BondOrder\].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BondOrder {
@@ -368,9 +371,10 @@ pub struct Solvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SolventModel {
-    /// Analytical linearized Poisson–Boltzmann model.
+    /// Analytical linearized Poisson–Boltzmann model (Ehlert et al. 2021)
+    /// \[Ehlert2021ALPB\].
     Alpb,
-    /// Generalized Born surface area model.
+    /// Generalized Born surface area model (Ehlert et al. 2021) \[Ehlert2021ALPB\].
     Gbsa,
 }
 

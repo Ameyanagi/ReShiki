@@ -22,6 +22,8 @@ rdkit-reference = [
 wayland-qa = ["reshiki-linux/wayland-qa"]
 # Off by default. Only macOS and Linux releases enable it. Library crates never enable it.
 xtb = ["reshiki-xtb-worker/engine"]
+# Developer-only: `reshiki --conformer-bench` times the app's conformer search (docs/benchmarks/xtb-timings.md).
+conformer-bench = ["xtb"]
 
 [workspace]
 members = [

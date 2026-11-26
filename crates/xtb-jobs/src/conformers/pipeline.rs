@@ -99,6 +99,11 @@ impl Search {
             executable,
         })
     }
+
+    /// The prepared drawing component used to sample conformer starts.
+    pub fn prepared(&self) -> &Prepared {
+        &self.prepared
+    }
 }
 
 #[derive(Clone, Debug)]

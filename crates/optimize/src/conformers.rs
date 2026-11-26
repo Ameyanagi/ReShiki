@@ -8,6 +8,7 @@ mod topology;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use alignment::horn_rotation;
 pub use alignment::{rmsd, superpose};
 pub use clustering::{Clustering, Start, cluster};
 pub use ranking::{Candidate, Ranked, boltzmann_weights, rank, trajectory};

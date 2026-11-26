@@ -17,6 +17,7 @@ Commands:
   export-input  Write a quantum-chemistry input from an XYZ structure
   name          Print the systematic name of a structure
   calc          Print an xTB calculation as one JSON line
+  ts            Search for a transition state with GFN2-xTB
   pieces        Check or render equipment piece files
   info          Print versions, limits and formats as one JSON line
   tools         Print the agent tool catalog as one JSON line
@@ -24,7 +25,7 @@ Commands:
   skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
   help          Show this help, or a command's help: reshiki --cli help <command>
 
-Options are allowed once each except calc's --scf-retry; -- ends the options.
+Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -36,7 +37,7 @@ Examples:
   reshiki --cli compose proposal.json -o scheme.svg
 
 Output:
-  stdout carries only the result: the file, one JSON line, or one receipt
+  stdout carries only the result: a file, a text report, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.
   Warnings and errors go to stderr.
 
@@ -265,15 +266,21 @@ Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
                                   [--job JOB] [--template N|--method M --basis B]
                                   [--charge C] [--multiplicity M] [--cores N]
                                   [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--reactant R.xyz] [--product P.xyz] [--hessian H.hess]
                                   [--out PATH]
 
-Writes input for another program from the first frame of INPUT.xyz (Å);
-stdout without --out. An existing companion file stops the export.
-Warnings go to stderr.
+Writes input for another program from the first frame of INPUT.xyz (Å).
+Without --out, the input goes to stdout. With --out, the main file is
+replaced and new companions go beside it. An existing companion file
+stops the export. Warnings go to stderr.
+
+Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts. They must
+list the same elements as INPUT.xyz in the same order. Corresponding atoms
+must have the same index in every structure.
 
 Options:
   --program PROGRAM   gaussian, orca, gamess or xyz. Required.
-  --job JOB           single-point, optimize, opt-freq, transition-state or irc.
+  --job JOB           single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts.
   --template N        Built-in template, 1 to 3.
   --method M          Method, given with --basis.
   --basis B           Basis; empty for an ORCA composite method.
@@ -283,12 +290,18 @@ Options:
   --memory-gb G       Total memory in GB (16).
   --title T           Title (the input file name).
   --extra TEXT        More keywords, or GAMESS groups.
-  --out PATH          Main file, replaced if it exists; companions go beside it.
+  --reactant R.xyz    First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
+  --product P.xyz     First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
+  --hessian H.hess    ORCA Cartesian Hessian. Requires --program orca with --job ts or irc.
+  --out PATH          Main file. Required for ORCA neb-ts or when using --hessian.
 
 Templates:
   1  B3LYP-D3BJ/def2-SVP opt+freq
   2  r2SCAN-3c opt+freq (ORCA only)
   3  HF/6-31G(d) single point
+
+Example:
+  reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz
 ```
 
 ## reshiki --cli name
@@ -356,6 +369,43 @@ Options:
 
 Use calculate for the compact calculation summary.
 See docs/xtb-worker.md (Command line)
+```
+
+## reshiki --cli ts
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]
+
+Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.
+Supply two atom-mapped XYZ files or one XYZ file with the bond changes.
+Each structure must have 2 to 120 atoms. With two files, atom order
+defines the map. --remap-hydrogens requires two files and keeps heavy atoms
+mapped by order.
+
+Options:
+  --reactant R.xyz             Read the reactant from the first XYZ frame in angstroms.
+  --product P.xyz              Read the product from the first XYZ frame in angstroms.
+  --form I-J                   Form a bond from reactant to product (1-based atom numbers, repeatable).
+  --break I-J                  Break a bond from reactant to product (1-based atom numbers, repeatable).
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --images N                   Use 5 to 24 NEB images including endpoints (default 15).
+  --workers N                  Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).
+  --remap-hydrogens            Reassign product hydrogens by least motion and list changed heavy-atom neighbors.
+  --keep-endpoints             Skip relaxation of the search endpoints.
+  --out-dir DIR                Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.
+  --json FILE                  Write a JSON report.
+
+Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both
+checks, and IRC branches whose relaxed ends match both endpoints. Progress
+and the hydrogen mapping review go to stderr.
+
+Examples:
+  reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+  reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
 ```
 
 ## reshiki --cli pieces

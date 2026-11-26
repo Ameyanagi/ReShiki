@@ -3,7 +3,7 @@ use crate::{
     typography::{TextFormat, TextStyle},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Point {
@@ -404,7 +404,7 @@ pub const CALCULATIONS: u32 = 42;
 /// | 39 | Names in property captions: a name line and custom names. |
 /// | 40 | Property-caption decimal places and compound-number metadata; drawing styles, object purpose, color by origin, panels and lasting layouts, arrow bodies, callout leaders, condition icons, cycles and equipment. |
 /// | 41 | Custom compression-tube routes with editable circular bends. |
-/// | 42 | Calculation frames and results linked to molecules. |
+/// | 42 | Calculation frames and results linked to molecules; orbital surfaces placed on 3D models. |
 pub const VERSION: u32 = CALCULATIONS;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
@@ -681,16 +681,36 @@ impl Document {
     /// Calculation results take their saved form here, so every stored
     /// copy saves only what the file policy keeps.
     pub fn current(&self) -> Self {
-        Self {
+        let mut saved = Self {
             version: self.file_version(),
-            science: self.science.saved(),
+            science: self.science.saved_with_pins(&self.orbital_pins()),
             ..self.clone()
+        };
+        for model in &mut saved.models {
+            crate::models3d::refresh_surface_snapshot(self, model);
         }
+        saved
+    }
+
+    /// Orbital rows needed by the drawing, grouped by result key.
+    pub fn orbital_pins(&self) -> HashMap<String, Vec<(reshiki_qcdata::Spin, u32)>> {
+        let mut pins: HashMap<_, Vec<_>> = HashMap::new();
+        for figure in self
+            .models
+            .iter()
+            .filter_map(|model| model.surface.as_ref())
+        {
+            let orbital = &figure.orbital;
+            pins.entry(orbital.result.clone())
+                .or_default()
+                .push((orbital.spin, orbital.index));
+        }
+        pins
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
         use crate::graphics::{GraphicKind, LinePattern};
-        if !self.science.is_empty() {
+        if !self.science.is_empty() || self.models.iter().any(|model| model.surface.is_some()) {
             CALCULATIONS
         } else if self.graphics.iter().any(|g| {
             g.piece
@@ -1570,6 +1590,13 @@ fn frame_bytes(doc: &Document) -> usize {
                         + g.elements.iter().map(String::len).sum::<usize>()
                         + bytes(&g.bonds[..])
                         + bytes(&g.sources[..])
+                })
+                + m.surface.as_ref().map_or(0, |figure| {
+                    figure.orbital.result.len()
+                        + figure
+                            .snapshot
+                            .as_ref()
+                            .map_or(0, |s| s.view.len() + s.shapes.len())
                 })
         })
         .sum();

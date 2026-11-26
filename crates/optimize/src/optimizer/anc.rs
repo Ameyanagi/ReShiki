@@ -1,4 +1,7 @@
 //! Approximate normal coordinates, rational-function steps and Hessian updates.
+//!
+//! As in xtb's ANCopt (Grimme et al. 2017) \[Grimme2017ANCopt\]. Full references:
+//! docs/references/xtb.md.
 
 mod davidson;
 mod diis;
@@ -21,7 +24,7 @@ pub(super) struct Anc {
     hessian: Vec<f64>,
     nfree: usize,
     curvature_floor: f64,
-    // Bofill can lose positive definiteness, invalidating Davidson's unique
+    // The SR1/BFGS blend can lose positive definiteness, invalidating Davidson's unique
     // negative-root certificate. Keep the fast solve while it is guaranteed.
     positive_definite: bool,
     pub built_at: usize,
@@ -163,7 +166,7 @@ impl Anc {
         } else {
             matrix.dense_lowest_eigenvector()
         }?;
-        // Banerjee et al., J. Phys. Chem. 89, 52 (1985). Scaling the last
+        // Banerjee et al., J. Phys. Chem. 89, 52 (1985) [Banerjee1985PRFO]. Scaling the last
         // coordinate to one makes the last eigen-equation g·s = λ < 0.
         super::rfo::eigenvector_step(&v, g)
     }
@@ -530,16 +533,16 @@ mod tests {
     }
 
     #[test]
-    fn bofill_uses_the_absolute_cosine_minimization_blend() {
+    fn farkas_schlegel_uses_the_absolute_cosine_minimization_blend() {
         let mut anc = identity_anc(vec![2., 0., 0., 3.]);
-        anc.update(&[1., 0.], &[3., 1.], Update::Bofill);
+        anc.update(&[1., 0.], &[3., 1.], Update::FarkasSchlegel);
         // r=(1,1), phi=1/sqrt(2). Both updates give first column (3,1),
         // while SR1 adds one to H_11 and BFGS adds one third.
         close(&anc.hessian, &[3., 1., 1., 10. / 3. + 2_f64.sqrt() / 3.]);
         assert!(anc.positive_definite);
 
         let mut negative = identity_anc(vec![2., 0., 0., 3.]);
-        negative.update(&[1., 0.], &[-1., 1.], Update::Bofill);
+        negative.update(&[1., 0.], &[-1., 1.], Update::FarkasSchlegel);
         close(&negative.hessian[..2], &[-1., 1.]);
         assert!(!negative.positive_definite);
         assert!(symmetric_eigen(negative.hessian.clone(), 2).unwrap().0[0] < 0.);
@@ -548,20 +551,20 @@ mod tests {
     }
 
     #[test]
-    fn bofill_uses_the_defined_component_and_skips_zero_secants() {
+    fn farkas_schlegel_uses_the_defined_component_and_skips_zero_secants() {
         let mut anc = identity_anc(vec![2., 0., 0., 3.]);
         // r·s = 0 makes SR1 undefined; ordinary BFGS remains usable.
-        anc.update(&[1., 0.], &[2., 1.], Update::Bofill);
+        anc.update(&[1., 0.], &[2., 1.], Update::FarkasSchlegel);
         close(&anc.hessian, &[2., 1., 1., 3.5]);
         let before = anc.hessian.clone();
-        anc.update(&[0., 0.], &[1., 2.], Update::Bofill);
+        anc.update(&[0., 0.], &[1., 2.], Update::FarkasSchlegel);
         assert_eq!(anc.hessian, before);
-        anc.update(&[1., 0.], &[2., 1.], Update::Bofill);
+        anc.update(&[1., 0.], &[2., 1.], Update::FarkasSchlegel);
         assert_eq!(anc.hessian, before);
 
         let mut sr1 = identity_anc(vec![2., 0., 0., 3.]);
         // y·s = 0 makes BFGS undefined; full SR1 still gives H_new s=y.
-        sr1.update(&[1., 0.], &[0., 1.], Update::Bofill);
+        sr1.update(&[1., 0.], &[0., 1.], Update::FarkasSchlegel);
         close(&sr1.hessian, &[0., 1., 1., 2.5]);
         assert!(!sr1.positive_definite);
     }

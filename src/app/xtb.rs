@@ -19,6 +19,7 @@ use state::{FailureDetails, Progress, Settings};
 use std::sync::{Arc, Weak};
 
 mod conformers;
+pub(super) mod orbitals;
 pub(super) use conformers::superposed;
 pub(super) mod palette;
 mod results;
@@ -72,6 +73,7 @@ pub(crate) enum Action {
     ApplyAnyway,
     Discard,
     Palette(palette::Action),
+    Orbitals(orbitals::Action),
     /// The card's Conformers fields and the Conformers tab.
     Conformers(conformers::Action),
     Vibrations(vibrations::Action),
@@ -121,6 +123,7 @@ pub(crate) struct State {
     pub(super) outcome: Option<Outcome>,
     serial: u64,
     pub(super) palette: palette::Palette,
+    pub(super) orbitals: orbitals::Orbitals,
     pub(super) vibrations: vibrations::State,
     /// What this session knows about stored results' runs, by result.
     infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
@@ -402,6 +405,7 @@ impl App {
             Action::Conformers(action) => return self.xtb_conformers(action),
             #[cfg(not(target_arch = "wasm32"))]
             Action::Search(serial, event) => self.xtb_search_event(serial, event),
+            Action::Orbitals(action) => return self.xtb_orbitals(action),
             setting => {
                 let target = self.xtb_key();
                 let settings = &mut self.xtb.settings;
@@ -466,7 +470,8 @@ impl App {
         let Some(run) = self.tab.xtb.run.as_ref() else {
             return self
                 .xtb_step_preview()
-                .or_else(|| self.xtb_vibration_preview());
+                .or_else(|| self.xtb_vibration_preview())
+                .or_else(|| self.xtb_orbital_preview());
         };
         (run.revision == (self.tab.file_epoch, self.tab.revision))
             .then_some(run.preview.as_deref())
