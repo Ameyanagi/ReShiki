@@ -1,4 +1,5 @@
 //! The Vibrations tab on a water Opt + freq result answered by hand.
+use super::super::run::Report;
 use super::super::tests::{MOVED, START, event, f32s, model, optfreq, send, water};
 use super::super::{Action as XtbAction, CalcTask, Outcome, palette, results::View, run};
 use super::*;
@@ -12,11 +13,15 @@ fn vibrations(app: &mut App, action: Action) {
 
 /// Water after Opt + freq, with the Vibrations tab open.
 fn opened() -> App {
+    opened_with(|_| {})
+}
+
+fn opened_with(edit: impl FnOnce(&mut Report)) -> App {
     let (mut app, _) = water(CalcTask::OptFreq);
-    event(
-        &mut app,
-        run::Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))),
-    );
+    let mut report = optfreq(&START, &MOVED);
+    edit(&mut report);
+    event(&mut app, run::Event::Done(Ok(Arc::new(report))));
+    app.tab.xtb.vibrations.playing = true;
     send(
         &mut app,
         XtbAction::Palette(palette::Action::View(View::Vibrations)),
@@ -30,7 +35,7 @@ fn shown(app: &App) -> Vec<[f32; 3]> {
 }
 
 #[test]
-fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
+fn opening_is_paused_then_play_animates_without_touching_the_document() {
     let mut app = opened();
     let frames = app
         .tab
@@ -41,7 +46,11 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
         .map(|a| a.frames.len());
     assert_eq!(frames, Some(FRAMES), "{}", app.status);
     // Phase 0 is the equilibrium geometry.
+    assert_eq!(app.status, "Mode 1 · 1590 cm⁻¹ · O–H stretch · paused");
+    assert!(!app.tab.xtb.vibrations.playing);
+    vibrations(&mut app, Action::Tick);
     assert_eq!(shown(&app), f32s(&MOVED));
+    vibrations(&mut app, Action::Play(true));
     vibrations(&mut app, Action::Tick);
     vibrations(&mut app, Action::Tick);
     let moved = shown(&app);
@@ -56,7 +65,7 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
         f32s(&MOVED),
         "the document never moves"
     );
-    assert!(app.status.starts_with("Mode 1 · 1590 cm⁻¹ · animating"));
+    assert_eq!(app.status, "Mode 1 · 1590 cm⁻¹ · O–H stretch · animating");
 
     vibrations(&mut app, Action::Play(false));
     assert!(app.status.contains("paused"));
@@ -68,12 +77,85 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
     );
     assert!(app.tab.xtb.vibrations.animation.is_none());
     assert_eq!(shown(&app), f32s(&MOVED));
+    assert!(app.status.is_empty());
+}
+
+#[test]
+fn opening_picks_imaginary_then_strongest_then_highest_and_pauses() {
+    for (frequencies, intensities, selected) in [
+        ([-212., -40., 1800.], vec![0., 1., 411.], 0),
+        ([40., 1756., 1788.], vec![1., 471., 411.], 1),
+        ([40., 1756., 1788.], vec![1., 411., 411.], 2),
+        ([40., 1756., 1788.], vec![], 2),
+    ] {
+        let app = opened_with(|report| {
+            let data = report.computed.vibrations.as_mut().unwrap();
+            data.frequencies_cm1 = frequencies.to_vec();
+            data.ir_intensities_km_mol = (!intensities.is_empty()).then_some(intensities);
+        });
+        assert_eq!(app.tab.xtb.vibrations.mode, selected, "{frequencies:?}");
+        assert!(!app.tab.xtb.vibrations.playing);
+    }
+}
+
+#[test]
+fn the_list_sorts_only_real_modes_and_uses_frequency_without_intensities() {
+    let mut data = reshiki::qcdata::Vibrations {
+        frequencies_cm1: vec![-212., -40., 20., 40., 1756., 1788.],
+        ir_intensities_km_mol: vec![1., 999., 0., 411., 471., 411.],
+        modes: vec![],
+        reduced_masses_amu: vec![],
+        masses_amu: vec![],
+    };
+    assert_eq!(mode_list::order(&data, Sort::Intensity), [0, 1, 4, 5, 3, 2]);
+    assert_eq!(
+        mode_list::order(&data, Sort::Wavenumber),
+        [0, 1, 5, 4, 3, 2]
+    );
+    data.ir_intensities_km_mol.clear();
+    assert_eq!(mode_list::order(&data, Sort::Intensity), [0, 1, 5, 4, 3, 2]);
+}
+
+#[test]
+fn reopening_keeps_the_mode_play_state_sort_and_cached_names() {
+    let mut app = opened();
+    let names = app.xtb_motion_names(&app.xtb_shown().unwrap()).unwrap();
+    vibrations(&mut app, Action::Sort(Sort::Wavenumber));
+    vibrations(&mut app, Action::Mode(2));
+    vibrations(&mut app, Action::Play(true));
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Summary)),
+    );
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Vibrations)),
+    );
+    assert_eq!(app.tab.xtb.vibrations.mode, 2);
+    assert!(app.tab.xtb.vibrations.playing);
+    assert_eq!(app.tab.xtb.vibrations.sort, Sort::Wavenumber);
+    assert!(Arc::ptr_eq(
+        &names,
+        &app.xtb_motion_names(&app.xtb_shown().unwrap()).unwrap(),
+    ));
+}
+
+#[test]
+fn leaving_vibrations_preserves_other_status_text() {
+    let mut app = opened();
+    app.status = "Saved the drawing".into();
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Summary)),
+    );
+    assert_eq!(app.status, "Saved the drawing");
 }
 
 #[test]
 fn another_mode_or_amplitude_rebuilds_the_frames() {
     let mut app = opened();
     vibrations(&mut app, Action::Mode(2));
+    vibrations(&mut app, Action::Play(true));
     for _ in 0..6 {
         vibrations(&mut app, Action::Tick);
     }
@@ -94,6 +176,7 @@ fn another_mode_or_amplitude_rebuilds_the_frames() {
 fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     let mut app = opened();
     models3d::set_display(&mut app.tab.doc, 0, Display::TwoD);
+    vibrations(&mut app, Action::Play(true));
     vibrations(&mut app, Action::Arrows(true));
     assert_eq!(
         app.display_document().graphics.len(),
@@ -424,6 +507,10 @@ async fn spectrum_exports_use_publication_for_svg_and_pdf() {
         assert!(standalone.atoms.is_empty() && standalone.models.is_empty());
         assert_eq!(standalone.groups.len(), 1);
         assert!(standalone.annotations.iter().any(|a| a.text == "1590"));
+        let name = format!("water-ir.{format}");
+        let path = std::path::Path::new("/saved/calculations").join(&name);
+        let _ = app.update(export.completed(Ok(Some(path))));
+        assert_eq!(app.status, format!("Exported {name}"));
     }
     assert_eq!(app.tab.doc, before);
 }
@@ -682,6 +769,9 @@ fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
     assert!(app.xtb_modes(&light).is_some());
     assert!(app.tab.xtb.vibrations.animation.is_some());
+    assert!(!app.tab.xtb.vibrations.playing);
+    let names = app.xtb_motion_names(&app.xtb_shown().unwrap()).unwrap();
+    assert_eq!(names[0], "O–H stretch");
     assert!(app.status.contains("differ by up to 2.0 cm⁻¹"));
 }
 
