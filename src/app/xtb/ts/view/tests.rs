@@ -17,8 +17,14 @@ fn profile_selection_keeps_search_details_out_of_the_readout() {
     assert_eq!(climbing_image(&energies, Some(usize::MAX)), 2);
     assert_eq!(climbing_image(&[0., 3., 3., 0.], None), 1);
     assert_eq!(climbing_image(&[], None), 0);
-    assert_eq!(selection_label(26.5), "ΔE 26.5 kcal/mol");
-    assert_eq!(selection_label(-8.2), "ΔE −8.2 kcal/mol");
+    assert_eq!(
+        selection_label(26.5, EnergyUnit::KcalPerMol),
+        "ΔE 26.5 kcal/mol"
+    );
+    assert_eq!(
+        selection_label(-8.2, EnergyUnit::KcalPerMol),
+        "ΔE −8.2 kcal/mol"
+    );
 }
 
 #[test]
@@ -30,6 +36,7 @@ fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
         climbing: 2,
         interactive: true,
         stale: false,
+        unit: EnergyUnit::KcalPerMol,
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(420., 190.));
     assert_eq!(chart.nearest(chart.x(0, bounds), bounds), Some(0));
@@ -50,9 +57,10 @@ fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
         climbing: 1,
         interactive: true,
         stale: false,
+        unit: EnergyUnit::KcalPerMol,
     };
     assert_eq!(chart.refined_ts_marker().unwrap().1, "TS‡ 26.5");
-    assert!(selection_label(chart.deltas[1]).ends_with("ΔE 30.2 kcal/mol"));
+    assert!(selection_label(chart.deltas[1], chart.unit).ends_with("ΔE 30.2 kcal/mol"));
     assert_eq!(chart.energy_bounds(), (chart.deltas[2], chart.deltas[1]));
 
     let higher_saddle = PathChart {
@@ -104,6 +112,13 @@ fn changed_bonds_use_saved_endpoints_and_lengths_use_ts_coordinates() {
     );
     assert!((bond_length(&ts, [1, 2]).unwrap() - 2.1).abs() < 1e-12);
     assert_eq!(bond_length(&ts, [1, 99]), None);
+    assert_eq!(
+        bond_geometry_rows(&reactant, &ts, &product, &[]),
+        vec![
+            ["Forming C2···O3", "2.50", "2.10", "1.40"].map(str::to_owned),
+            ["Breaking C1···C2", "1.50", "2.00", "3.00"].map(str::to_owned),
+        ]
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -197,6 +212,127 @@ mod presentation_tests {
             .iter()
             .find(|node| node.id == "xtb-ts-path-profile")
             .expect("the production Path view must expose its chart")
+    }
+
+    #[test]
+    fn path_output_uses_the_app_energy_unit_setting() {
+        let mut app = path_app(result());
+        let _ = app.update(send(Action::Image(1)));
+        for (unit, title, saddle, selected, product) in [
+            (EnergyUnit::KjPerMol, "kJ/mol", "110.9", "126.4", "−34.3"),
+            (EnergyUnit::Ev, "eV", "1.15", "1.31", "−0.36"),
+        ] {
+            app.appearance.energy_unit = unit;
+            let shown = app.xtb_shown().expect("saved Path result");
+            let saved = presentation(&shown.stored.result, shown.ts);
+            let chart = app.xtb_ts_path_chart(&shown, saved.refined_kcal);
+            assert_eq!(chart.axis_title(), format!("ΔE from reactants ({title})"));
+            assert_eq!(
+                chart.refined_ts_marker().unwrap().1,
+                format!("TS‡ {saddle}")
+            );
+            assert_eq!(chart.endpoint_marker(2).unwrap(), format!("P {product}"));
+            assert!(
+                chart
+                    .accessible_name()
+                    .contains(&format!("Selected ΔE {selected} {title}"))
+            );
+            assert_eq!(
+                selection_label(chart.deltas[1], chart.unit),
+                format!("ΔE {selected} {title}")
+            );
+            let rows = shown.rows(Some(app.appearance.energy_unit));
+            let tsv = crate::app::xtb::results::tsv(&shown.method(), &rows);
+            assert!(tsv.contains(&format!("TS‡ ΔE\t{saddle} {title}")));
+            assert!(tsv.contains(&format!("P ΔE\t{product} {title}")));
+            assert!(!tsv.contains("kcal/mol"));
+            assert!(
+                saved
+                    .status_line(unit)
+                    .ends_with(&format!("ΔE‡ {saddle} {title}"))
+            );
+        }
+    }
+
+    #[test]
+    fn old_saved_path_keeps_optimized_reaction_energy_even_if_saddle_verification_failed() {
+        let mut result = result();
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert!((reaction_energy_kcal(&result).unwrap() + 8.2).abs() < 1e-10);
+        assert!(
+            path_rows(&result, None, EnergyUnit::KjPerMol)
+                .iter()
+                .all(|(label, _)| !label.contains("TS‡"))
+        );
+        result
+            .trajectory
+            .as_mut()
+            .unwrap()
+            .energies_hartree
+            .truncate(1);
+        assert_eq!(reaction_energy_kcal(&result), None);
+    }
+
+    #[test]
+    fn saved_gibbs_values_need_matching_conditions_and_a_verified_barrier() {
+        use reshiki::qcdata::{Thermo, TransitionStateMapping, TransitionStateRun};
+
+        let mut result = result();
+        let correction = |gibbs_correction_hartree| Thermo {
+            temperature_k: 298.15,
+            pressure_pa: 101_325.,
+            zero_point_energy_hartree: 0.,
+            enthalpy_correction_hartree: gibbs_correction_hartree,
+            entropy_hartree_per_k: 0.,
+            gibbs_correction_hartree,
+            heat_capacity_hartree_per_k: None,
+            frequency_scale: 1.,
+            rotor_cutoff_cm1: 50.,
+            imaginary_cutoff_cm1: 20.,
+            symmetry_number: 1,
+            point_group: None,
+        };
+        result.thermo = Some(correction(0.03));
+        result.run.as_mut().unwrap().transition_state = Some(Box::new(TransitionStateRun {
+            arrow: None,
+            context: None,
+            free_energy: true,
+            endpoint_energies_hartree: Some([-5., -5. + -8.2 / KCAL_PER_HARTREE]),
+            endpoint_thermo: Some([correction(0.01), correction(0.02)]),
+            saddle_converged: true,
+            imaginary: 1,
+            imaginary_cm1: Some(-387.),
+            climbing_image: 1,
+            mapping: TransitionStateMapping {
+                formed: vec![],
+                broken: vec![],
+                hydrogen_moves: vec![],
+                automatic: true,
+            },
+            diagnostics: vec![],
+        }));
+        assert!(
+            (barrier_gibbs_kcal(&result).unwrap() - (26.5 + 0.02 * KCAL_PER_HARTREE)).abs() < 1e-10
+        );
+        assert!(
+            (reaction_gibbs_kcal(&result).unwrap() - (-8.2 + 0.01 * KCAL_PER_HARTREE)).abs()
+                < 1e-10
+        );
+        let rows = path_rows(&result, None, EnergyUnit::KjPerMol);
+        assert!(rows.contains(&("TS‡ ΔG (298.15 K)".into(), "163.4 kJ/mol".into())));
+        assert!(rows.contains(&("P ΔG (298.15 K)".into(), "−8.1 kJ/mol".into())));
+
+        result.thermo.as_mut().unwrap().temperature_k = 300.;
+        assert_eq!(barrier_gibbs_kcal(&result), None);
+        assert!(reaction_gibbs_kcal(&result).is_some());
+        result.thermo.as_mut().unwrap().temperature_k = 298.15;
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert_eq!(barrier_gibbs_kcal(&result), None);
+        assert!(reaction_gibbs_kcal(&result).is_some());
     }
 
     #[tokio::test]
@@ -309,7 +445,7 @@ mod presentation_tests {
         assert!(presentation.reliable());
         assert!((presentation.refined_kcal.unwrap() - 26.5).abs() < 1e-10);
         assert!((presentation.highest_path_kcal.unwrap() - 30.2).abs() < 1e-10);
-        let status = presentation.status_line();
+        let status = presentation.status_line(EnergyUnit::KcalPerMol);
         assert_eq!(status.matches("26.5").count(), 1);
         assert!(!status.contains("30.2"));
         assert!(presentation.verification.contains("387i cm⁻¹"));
@@ -328,7 +464,11 @@ mod presentation_tests {
             let presentation = presentation(&result, None);
             assert!(!presentation.reliable());
             assert_eq!(presentation.refined_kcal, None);
-            assert!(!presentation.status_line().contains("kcal/mol"));
+            assert!(
+                !presentation
+                    .status_line(EnergyUnit::KcalPerMol)
+                    .contains("kcal/mol")
+            );
         }
         let mut result = result();
         result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-120., -60.];
@@ -362,7 +502,12 @@ mod presentation_tests {
             };
             let presentation = presentation(&result, None);
             assert!(!presentation.reliable(), "{reason}");
-            assert!(!presentation.status_line().contains("26.5"), "{reason}");
+            assert!(
+                !presentation
+                    .status_line(EnergyUnit::KcalPerMol)
+                    .contains("26.5"),
+                "{reason}"
+            );
         }
         for (reason, explanation) in [
             (
@@ -388,7 +533,7 @@ mod presentation_tests {
                 ))
             );
             assert_eq!(
-                presentation.status_line(),
+                presentation.status_line(EnergyUnit::KcalPerMol),
                 "No reliable transition state found."
             );
         }

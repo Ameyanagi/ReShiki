@@ -8,6 +8,7 @@
 // The browser editor shows only a note: runs, previews and results are desktop-only.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_variables))]
 use super::{App, Message};
+use crate::appearance::EnergyUnit;
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
@@ -686,6 +687,11 @@ impl App {
     }
 
     fn xtb_entry(&mut self, entry: Entry) -> Task<Message> {
+        if matches!(entry, Entry::Rerun)
+            && let Some(arrow) = self.xtb_selected_reaction()
+        {
+            return self.xtb_ts_action(ts::Action::Calculate(arrow));
+        }
         if !available() || !self.xtb_can_start() {
             return Task::none();
         }
@@ -1105,6 +1111,7 @@ impl App {
         forced: bool,
         ts: Option<Rc<ts::Session>>,
     ) {
+        let reaction_arrow = ts.as_ref().map(|session| session.arrow);
         let mut doc = self.tab.doc.clone();
         let attached = match science::attach(
             &mut doc,
@@ -1219,6 +1226,11 @@ impl App {
         }
         self.status = if applied {
             format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
+        } else if let Some(arrow) = reaction_arrow {
+            let status = pending.line.clone();
+            self.tab.xtb.ts_card.status =
+                Some((arrow, ts::card::Status::TransitionState, status.clone()));
+            status
         } else {
             format!("xTB · {}", pending.line)
         };

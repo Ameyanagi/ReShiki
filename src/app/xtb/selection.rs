@@ -1,4 +1,8 @@
 //! Guidance when the drawing does not identify one molecule to calculate.
+use super::ts::{
+    card::{ArrowResult, Status},
+    view,
+};
 use super::{App, available};
 use reshiki::molecule_names::component;
 use std::collections::HashSet;
@@ -54,6 +58,7 @@ impl App {
 
     /// Retire the hint once the drawing identifies a molecule.
     pub(in crate::app) fn xtb_clear_selection_hint(&mut self) {
+        self.xtb_refresh_reaction_status();
         let Some(hint) = &self.tab.xtb.selection_hint else {
             return;
         };
@@ -61,6 +66,39 @@ impl App {
             self.tab.xtb.selection_hint = None;
         } else if self.xtb_target().is_some() {
             self.tab.xtb.selection_hint = None;
+            self.status.clear();
+            self.error = false;
+        }
+    }
+
+    fn xtb_refresh_reaction_status(&mut self) {
+        let Some((arrow, kind, previous)) = self.tab.xtb.ts_card.status.take() else {
+            return;
+        };
+        if previous != self.status {
+            return;
+        }
+        let updated = if self.xtb_selected_reaction() != Some(arrow) {
+            None
+        } else {
+            match kind {
+                Status::TransitionState => match self.xtb_ts_card_result(arrow) {
+                    ArrowResult::Found(result) => {
+                        let session = self.tab.xtb.ts_sessions.get(result).map(AsRef::as_ref);
+                        Some(
+                            view::presentation(result, session)
+                                .status_line(self.appearance.energy_unit),
+                        )
+                    }
+                    _ => None,
+                },
+                Status::ReactionEnergy => self.xtb_energy_status(arrow),
+            }
+        };
+        if let Some(status) = updated {
+            self.tab.xtb.ts_card.status = Some((arrow, kind, status.clone()));
+            self.status = status;
+        } else {
             self.status.clear();
             self.error = false;
         }

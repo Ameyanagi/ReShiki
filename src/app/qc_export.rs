@@ -746,15 +746,25 @@ impl App {
         let dialog = self.qc_export.as_ref().ok_or_else(String::new)?;
         let sources = self.qc_sources(dialog);
         let (_, source) = dialog.selected_source(&sources).ok_or(GEOMETRY_CHANGED)?;
-        Self::qc_output_for(dialog, source, self.qc_model(dialog, Some(source)))
+        Self::qc_output_for(
+            dialog,
+            source,
+            self.qc_model(dialog, Some(source)),
+            self.appearance.energy_unit,
+        )
     }
 
-    fn qc_output_for(dialog: &Dialog, source: &Source, model: Model) -> Result<Output, String> {
+    fn qc_output_for(
+        dialog: &Dialog,
+        source: &Source,
+        model: Model,
+        unit: crate::appearance::EnergyUnit,
+    ) -> Result<Output, String> {
         let settings = dialog.settings(Some(source))?;
         let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
         let stem = dialog.file_stem();
         if let Some(ts) = &dialog.ts_source {
-            return ts.output(&settings, &stem, &generator);
+            return ts.output(&settings, &stem, &generator, unit);
         }
         let mut frame = match model {
             Model::Ready { stale: true, .. } => {
@@ -1113,7 +1123,7 @@ impl App {
 
         // Preview
         let output = if let Some(source) = source {
-            Self::qc_output_for(dialog, source, model)
+            Self::qc_output_for(dialog, source, model, self.appearance.energy_unit)
         } else {
             Err(GEOMETRY_CHANGED.into())
         };

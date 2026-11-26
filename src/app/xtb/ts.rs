@@ -31,10 +31,10 @@ pub(super) use job::Event;
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Card(card::Action),
+    Calculate(u64),
     Review(review::Mode, Option<u64>),
     ReviewMap(u64),
     ReviewSheet(review::Action),
-    EnergyTask(state::Task),
     Image(usize),
     Rerun,
     Export,
@@ -43,6 +43,7 @@ pub(crate) enum Action {
 #[derive(Clone)]
 pub(super) struct Request {
     pub arrow: u64,
+    pub free_energy: bool,
     bonds: card::BondChanges,
     pub context: TransitionStateContext,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -63,6 +64,7 @@ pub(crate) enum Stage {
     Neb,
     Saddle,
     Irc,
+    Thermochemistry,
 }
 
 pub(super) struct Live {
@@ -95,7 +97,10 @@ impl Live {
             (Stage::Neb, "Finding a path"),
             (Stage::Saddle, "Refining the transition state"),
             (Stage::Irc, "Checking the reaction path"),
+            (Stage::Thermochemistry, "Calculating free energy"),
         ]
+        .into_iter()
+        .filter(|(stage, _)| *stage != Stage::Thermochemistry || self.request.free_energy)
         .map(|(stage, label)| {
             if self.stage > stage {
                 format!("✓ {label}")
@@ -103,6 +108,7 @@ impl Live {
                 label.to_owned()
             }
         })
+        .collect::<Vec<_>>()
         .join(" · ")
     }
 
@@ -118,6 +124,7 @@ impl Live {
                 let branch = if self.forward { 0.8 } else { 0.9 };
                 branch + 0.1 * part(self.step, Self::IRC_LIMIT)
             }
+            Stage::Thermochemistry => return None,
         })
     }
 }
@@ -126,6 +133,10 @@ impl Live {
 /// the energies and the three structures needed by the Path tab and export.
 #[derive(Clone, Debug)]
 struct Extras {
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    endpoint_energies_hartree: [f64; 2],
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    endpoint_thermo: Option<[reshiki::qcdata::Thermo; 2]>,
     image_positions: Vec<Vec<[f64; 3]>>,
     saddle_converged: bool,
     num_imaginary: usize,
@@ -366,15 +377,12 @@ impl App {
     pub(super) fn xtb_ts_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Card(action) => self.xtb_ts_card_action(action),
+            Action::Calculate(arrow) => self.xtb_calculate_reaction(arrow),
             Action::Review(mode, arrow) => self.xtb_review_open(mode, arrow),
             Action::ReviewMap(arrow) => {
                 self.xtb_review_show(review::Mode::TransitionState, Some(arrow))
             }
             Action::ReviewSheet(action) => self.xtb_review_action(action),
-            Action::EnergyTask(task) => {
-                self.xtb_reaction_energy_task(task);
-                Task::none()
-            }
             Action::Image(index) => {
                 if self
                     .xtb_shown()
@@ -407,6 +415,7 @@ impl App {
         images: usize,
         charge: i32,
         unpaired: u32,
+        free_energy: bool,
     ) -> Task<Message> {
         #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
         let _ = images;
@@ -453,6 +462,7 @@ impl App {
             search: None,
             ts: Some(Request {
                 arrow,
+                free_energy,
                 bonds,
                 context,
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -476,7 +486,12 @@ impl App {
         let Some(live) = &run.ts else {
             return Task::none();
         };
-        let Request { plan, images, .. } = live.request.clone();
+        let Request {
+            plan,
+            images,
+            free_energy,
+            ..
+        } = live.request.clone();
         // Hydrogen interactions (order 0) are not covalent bonds.
         let drawn_bonds: Vec<_> = self
             .tab
@@ -497,7 +512,7 @@ impl App {
         run.started = iced::time::Instant::now();
         let serial = run.serial;
         let events = iced::futures::StreamExt::flatten(iced::futures::stream::once(async move {
-            job::start(launch, plan, drawn_bonds, images, cancel)
+            job::start(launch, plan, drawn_bonds, images, free_energy, cancel)
         }));
         let (task, handle) = Task::run(events, move |event| {
             Message::Xtb(XtbAction::TsEvent(serial, event))
@@ -557,6 +572,9 @@ impl App {
                     }
                     summary.transition_state = Some(Box::new(TransitionStateRun {
                         arrow: Some(request.arrow),
+                        free_energy: request.free_energy,
+                        endpoint_energies_hartree: Some(extras.endpoint_energies_hartree),
+                        endpoint_thermo: extras.endpoint_thermo.clone(),
                         saddle_converged: extras.saddle_converged,
                         imaginary: extras.num_imaginary,
                         imaginary_cm1: extras.engine_imaginary,
@@ -571,7 +589,8 @@ impl App {
                     arrow: request.arrow,
                     freshness: Cell::new(None),
                 });
-                let line = view::presentation(&result, Some(&session)).status_line();
+                let line = view::presentation(&result, Some(&session))
+                    .status_line(self.appearance.energy_unit);
                 let pending = super::Pending {
                     pushed: false,
                     accepted: None,

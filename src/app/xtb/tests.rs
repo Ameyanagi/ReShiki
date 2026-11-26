@@ -227,7 +227,7 @@ fn optfreq_stores_the_vibrations_and_applies_geometry_as_one_undo_step() {
         results::View::available(result),
         [View::Summary, View::Vibrations, View::Steps, View::Log]
     );
-    let rows = shown.rows();
+    let rows = shown.rows(None);
     let row = |name: &str| {
         rows.iter()
             .find(|(label, _)| label == name)
@@ -817,7 +817,7 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
     let result = reopened.tab.doc.science.results[0].result.clone();
     let shown = reopened.xtb_shown().expect("the palette shows the result");
     assert!(shown.info.is_none());
-    let rows = shown.rows();
+    let rows = shown.rows(None);
     let row = |name: &str| {
         rows.iter()
             .find(|(label, _)| *label == name)
@@ -944,7 +944,7 @@ fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
     );
     let run = result.run.as_ref().expect("saved run summary");
     assert!(run.seconds >= 1.);
-    assert!(shown.rows().contains(&(
+    assert!(shown.rows(None).contains(&(
         "Run time".into(),
         format!("{:.1} s · 3 SCF calculations", run.seconds),
     )));
@@ -960,7 +960,7 @@ fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
             local.format("%-d %b %Y %H:%M")
         )
     );
-    let table = results::tsv(&method, &shown.rows());
+    let table = results::tsv(&method, &shown.rows(None));
     assert!(table.starts_with(&format!("# {method}\nQuantity\tValue\n")));
     assert!(!table.contains(" · optimizer "));
     let log = results::log(result, shown.frame, shown.info, &method);
@@ -1025,7 +1025,7 @@ fn a_reopened_legacy_optimization_recalculates_with_defaults() {
         method,
         "GFN2-xTB · axtb 0.2.0 · gas phase · charge 0 · multiplicity 1"
     );
-    let table = results::tsv(&method, &shown.rows());
+    let table = results::tsv(&method, &shown.rows(None));
     assert!(table.starts_with(&format!("# {method}\nQuantity\tValue\n")));
     assert!(!table.contains(" · optimizer "));
     let log = results::log(result, shown.frame, shown.info, &method);

@@ -35,18 +35,6 @@ fn species(product: bool, coefficient: u32) -> Species {
     }
 }
 
-#[test]
-fn energy_task_choice_uses_the_calculate_fallback_until_a_choice_is_remembered() {
-    let mut state = State::default();
-    assert_eq!(state.task(CalcTask::OptFreq), CalcTask::OptFreq);
-    assert_eq!(state.task(CalcTask::Optimize), CalcTask::Optimize);
-    assert_eq!(state.task(CalcTask::Energy), CalcTask::Optimize);
-    state.task = Some(CalcTask::Optimize);
-    assert_eq!(state.task(CalcTask::OptFreq), CalcTask::Optimize);
-    state.task = Some(CalcTask::OptFreq);
-    assert_eq!(state.task(CalcTask::Energy), CalcTask::OptFreq);
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn totals_use_products_minus_reactants_and_each_coefficient() {
@@ -63,7 +51,10 @@ fn totals_use_products_minus_reactants_and_each_coefficient() {
     .unwrap();
     assert!((total.energy - (-0.05 * KCAL_PER_HARTREE)).abs() < 1e-10);
     assert_eq!(total.gibbs, None);
-    assert!(total.line().starts_with("ΔE -31.38 kcal/mol"));
+    assert_eq!(
+        total.line(EnergyUnit::default()),
+        "Reaction energy · ΔE −31.4 kcal/mol"
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -90,7 +81,6 @@ fn gibbs_includes_the_same_weighted_electronic_energies_and_thermal_corrections(
     let total = totals(values, CalcTask::OptFreq).unwrap();
     assert!((total.energy - -0.1 * KCAL_PER_HARTREE).abs() < 1e-10);
     assert!((total.gibbs.unwrap() - -0.11 * KCAL_PER_HARTREE).abs() < 1e-10);
-    assert!(total.line().contains("ΔG (298.15 K)"));
     b.thermo = None;
     assert!(totals([(&a_species, &a), (&b_species, &b)], CalcTask::OptFreq).is_none());
 }
@@ -328,7 +318,7 @@ mod execution {
         assert!(app.tab.xtb.run.is_none());
         assert!(app.tab.xtb.energy_state.batch.is_none());
         assert!(
-            app.status.contains("Reaction energy · ΔE +0.00 kcal/mol"),
+            app.status.contains("Reaction energy · ΔE 0.0 kcal/mol"),
             "{}",
             app.status
         );
@@ -441,7 +431,8 @@ mod execution {
         assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
         let original_total = summary_totals(&app).unwrap();
         assert!(
-            app.status.contains(&original_total.line()),
+            app.status
+                .contains(&original_total.line(EnergyUnit::default())),
             "{}",
             app.status
         );
@@ -534,11 +525,11 @@ mod execution {
         assert!(app.tab.xtb.energy_state.batch.is_none());
         let expected = summary_totals(&app).unwrap();
         assert!((expected.energy + 0.1 * KCAL_PER_HARTREE).abs() < 1e-10);
-        let line = expected.line();
+        let shown = EnergyUnit::default().number(expected.energy);
         assert!(
-            ui.inspect(app.xtb_reaction_energy_section(arrow))
+            ui.inspect(app.xtb_reaction_card(arrow))
                 .texts
-                .contains(&line)
+                .contains(&shown)
         );
         let full: Vec<_> = app
             .tab
@@ -571,17 +562,20 @@ mod execution {
         }
         assert_eq!(summary_totals(&app), Some(expected));
         assert!(
-            ui.inspect(app.xtb_reaction_energy_section(arrow))
+            ui.inspect(app.xtb_reaction_card(arrow))
                 .texts
-                .contains(&line)
+                .contains(&shown)
         );
         for action in [Message::Undo, Message::Redo] {
             let _ = app.update(action);
-            assert_eq!(summary_totals(&app).unwrap().line(), line);
+            assert_eq!(
+                EnergyUnit::default().number(summary_totals(&app).unwrap().energy),
+                shown
+            );
             assert!(
-                ui.inspect(app.xtb_reaction_energy_section(arrow))
+                ui.inspect(app.xtb_reaction_card(arrow))
                     .texts
-                    .contains(&line)
+                    .contains(&shown)
             );
         }
     }

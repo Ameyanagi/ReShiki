@@ -294,6 +294,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Query(..)
                 | Action::NewCanvas(..)
                 | Action::DrawingUnit(..)
+                | Action::EnergyUnit(..)
                 | Action::CopyBackground(..)
                 | Action::ExportBackground(..)
                 | Action::Custom(..)

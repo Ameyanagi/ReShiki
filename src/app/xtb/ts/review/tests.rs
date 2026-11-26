@@ -71,6 +71,182 @@ fn species_title_formula_uses_plain_digits_and_the_requested_atoms() {
     );
 }
 
+#[test]
+fn barrier_support_uses_inferred_or_current_roles_without_requiring_an_atom_map() {
+    let (doc, arrow) = drawn_claisen();
+    let mut app = app(doc, arrow);
+    assert!(app.xtb_reaction_supports_barrier(arrow));
+    assert!(app.tab.doc.reactions.is_empty());
+    app.tab.doc.reactions.push(Reaction::new(arrow));
+    assert!(!app.xtb_reaction_supports_barrier(arrow));
+}
+
+#[test]
+fn barrier_support_counts_molecular_species_and_rejects_coefficients() {
+    let (mut doc, arrow) = ions(false);
+    let left: Vec<_> = doc.reactions[0]
+        .reactants
+        .iter()
+        .flat_map(|participant| participant.atoms.iter().copied())
+        .collect();
+    doc.add_bond(left[0], left[1], 1, "plain");
+    doc.reactions[0].reactants = vec![Participant {
+        atoms: left,
+        coefficient: 1,
+    }];
+    let right = doc.reactions[0]
+        .products
+        .iter()
+        .flat_map(|participant| participant.atoms.iter().copied())
+        .collect();
+    doc.reactions[0].products = vec![Participant {
+        atoms: right,
+        coefficient: 1,
+    }];
+    let mut app = app(doc, arrow);
+    assert_eq!(
+        species::shape(&app.tab.doc, &app.tab.doc.reactions[0]),
+        Ok((1, 2))
+    );
+    assert!(app.xtb_reaction_supports_barrier(arrow));
+    let reaction = &mut app.tab.doc.reactions[0];
+    std::mem::swap(&mut reaction.reactants, &mut reaction.products);
+    assert!(app.xtb_reaction_supports_barrier(arrow));
+    app.tab.doc.reactions[0].reactants[0].coefficient = 2;
+    assert!(!app.xtb_reaction_supports_barrier(arrow));
+    app.tab.doc.reactions[0].reactants[0].coefficient = 1;
+    let extra = app.tab.doc.add_atom("O", Point::new(-30., 0.));
+    app.tab.doc.reactions[0].reactants[0].atoms.push(extra);
+    assert!(!app.xtb_reaction_supports_barrier(arrow));
+}
+
+#[test]
+fn reviewed_unpaired_electrons_convert_to_internal_multiplicity_and_check_parity() {
+    let (doc, _) = ions(false);
+    let (mut inputs, _) = species::inputs(&doc, &doc.reactions[0]).unwrap();
+    assert!(inputs.iter().all(|input| input.unpaired == "0"));
+    inputs[0].unpaired = "2".into();
+    assert_eq!(species::validate(&inputs).unwrap()[0].multiplicity, 3);
+    inputs[0].unpaired = "1".into();
+    assert!(
+        species::validate(&inputs).is_err(),
+        "electron parity still applies"
+    );
+    for invalid in ["-1", "0.5", "4294967295"] {
+        inputs[0].unpaired = invalid.into();
+        assert!(
+            species::validate(&inputs)
+                .unwrap_err()
+                .contains("nonnegative whole-number")
+        );
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn unified_calculate_and_rerun_shortcut_follow_the_same_output_choices() {
+    for shortcut in [false, true] {
+        for (barrier, energy, free, transition_state) in [
+            (true, true, false, true),
+            (true, false, false, true),
+            (false, true, false, false),
+            (false, false, true, false),
+            (true, false, true, true),
+        ] {
+            let (doc, arrow) = claisen();
+            let mut app = app(doc, arrow);
+            app.tab.xtb.ts_card.barrier = barrier;
+            app.tab.xtb.ts_card.reaction_energy = energy;
+            app.tab.xtb.ts_card.free_energy = free;
+            assert!(app.xtb_can_calculate_reaction(arrow));
+            let action = if shortcut {
+                XtbAction::Entry(super::super::super::Entry::Rerun)
+            } else {
+                XtbAction::Ts(TsAction::Calculate(arrow))
+            };
+            let _ = app.update(Message::Xtb(action));
+            let run = app
+                .tab
+                .xtb
+                .run
+                .as_ref()
+                .expect("the chosen calculation starts");
+            assert_eq!(run.ts.is_some(), transition_state);
+            if let Some(ts) = &run.ts {
+                assert_eq!(ts.request.free_energy, free);
+            } else {
+                assert_eq!(
+                    run.config.task,
+                    if free {
+                        CalcTask::OptFreq
+                    } else {
+                        CalcTask::Optimize
+                    }
+                );
+            }
+            assert!(!app.xtb_can_calculate_reaction(arrow));
+        }
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn unsupported_barrier_falls_back_to_energy_and_no_effective_output_blocks_calculate() {
+    let (mut doc, arrow) = ions(false);
+    for atom in &mut doc.atoms {
+        atom.element = if atom.map_num == 1 { "O" } else { "C" }.into();
+        atom.charge = 0;
+    }
+    for (energy, free) in [(false, false), (true, false), (false, true)] {
+        let mut app = app(doc.clone(), arrow);
+        app.tab.xtb.ts_card.reaction_energy = energy;
+        app.tab.xtb.ts_card.free_energy = free;
+        assert!(!app.xtb_reaction_supports_barrier(arrow));
+        assert_eq!(app.xtb_can_calculate_reaction(arrow), energy || free);
+        let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+        assert_eq!(app.xtb_running(), energy || free);
+        if let Some(run) = &app.tab.xtb.run {
+            assert!(run.ts.is_none());
+            assert_eq!(
+                run.config.task,
+                if free {
+                    CalcTask::OptFreq
+                } else {
+                    CalcTask::Optimize
+                }
+            );
+        }
+    }
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    app.tab.xtb.ts_card.reaction_energy = false;
+    app.tab.xtb.ts_card.barrier = false;
+    assert!(!app.xtb_can_calculate_reaction(arrow));
+    let _ = app.update(Message::Xtb(XtbAction::Entry(
+        super::super::super::Entry::Rerun,
+    )));
+    assert!(!app.xtb_running());
+    assert!(!app.ts_review_open());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn free_energy_choice_is_kept_while_a_review_waits() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    app.tab.xtb.ts_card.free_energy = true;
+    let _ = app.xtb_review_show(Mode::Energy, Some(arrow));
+    assert!(!app.xtb_can_calculate_reaction(arrow));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(dialog.task, CalcTask::OptFreq);
+    app.tab.xtb.ts_card.free_energy = false;
+    let _ = app.update(send(Action::Accept));
+    assert_eq!(
+        app.tab.xtb.run.as_ref().unwrap().config.task,
+        CalcTask::OptFreq
+    );
+}
+
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 fn finish_mapping(app: &mut App) {
     finish_mapping_with(app, |_| {});
@@ -390,7 +566,7 @@ fn cancelling_silent_mapping_discards_a_late_proposal() {
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
-fn reviewed_charges_set_the_run_state_and_incompatible_multiplicities_block_it() {
+fn reviewed_charges_set_the_run_state_and_incompatible_unpaired_counts_block_it() {
     let (doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
     let mut app = app(doc, arrow);
     open(&mut app, Mode::TransitionState);
@@ -406,7 +582,7 @@ fn reviewed_charges_set_the_run_state_and_incompatible_multiplicities_block_it()
             .contains("charge +2")
     );
     let _ = app.update(send(Action::Charge(1, "-2".into())));
-    let _ = app.update(send(Action::Multiplicity(1, "3".into())));
+    let _ = app.update(send(Action::Unpaired(1, "2".into())));
     assert!(
         app.tab
             .xtb
@@ -417,7 +593,7 @@ fn reviewed_charges_set_the_run_state_and_incompatible_multiplicities_block_it()
             .unwrap_err()
             .contains("cannot share one spin state")
     );
-    let _ = app.update(send(Action::Multiplicity(1, "1".into())));
+    let _ = app.update(send(Action::Unpaired(1, "0".into())));
     let _ = app.update(send(Action::Accept));
     assert_eq!(app.tab.xtb.run.as_ref().unwrap().config.charge, -2);
     assert!(app.tab.doc.atoms.iter().all(|atom| atom.charge == 0));

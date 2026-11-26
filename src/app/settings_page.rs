@@ -5,7 +5,7 @@ use super::{
     help::{Placement, modal},
     workspace::{accessible_checkbox, control, horizontal_line, muted_text},
 };
-use crate::appearance::{Background, ChemDrawFormat, Dpi, Settings};
+use crate::appearance::{Background, ChemDrawFormat, Dpi, EnergyUnit, Settings};
 use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{
     Space, canvas, column, container, image, row, scrollable, stack, text, tooltip,
@@ -35,16 +35,18 @@ pub enum Section {
     Drawing,
     CopyExport,
     Names,
+    Calculations,
     Assistant,
     Updates,
 }
 
 impl Section {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Appearance,
         Self::Drawing,
         Self::CopyExport,
         Self::Names,
+        Self::Calculations,
         Self::Assistant,
         Self::Updates,
     ];
@@ -60,6 +62,7 @@ impl Section {
             Self::Drawing => "Drawing",
             Self::CopyExport => "Copy & export",
             Self::Names => "Names & checks",
+            Self::Calculations => "Calculations",
             Self::Assistant => "Assistant",
             Self::Updates => "Updates",
         }
@@ -73,6 +76,7 @@ impl Section {
                 "Pictures and ChemDraw files that Copy, Copy image, Copy as and file export write."
             }
             Self::Names => "Chemical names, molecular weight and Check drawing.",
+            Self::Calculations => "Units in calculation results.",
             Self::Assistant => "The model, and how its edits reach the drawing.",
             Self::Updates => "How ReShiki finds new versions.",
         }
@@ -88,6 +92,7 @@ pub enum Action {
     Query(String),
     NewCanvas(CanvasTheme),
     DrawingUnit(Unit),
+    EnergyUnit(EnergyUnit),
     CopyBackground(Background),
     ExportBackground(Background),
     /// Copy pictures on this saved color, as Custom.
@@ -277,6 +282,7 @@ fn restored(section: Section, a: &Settings) -> Settings {
             a.iupac_style_notes = d.iupac_style_notes;
             a.write_unknown_stereo = d.write_unknown_stereo;
         }
+        Section::Calculations => a.energy_unit = d.energy_unit,
         Section::Assistant | Section::Updates => {}
     }
     a
@@ -376,6 +382,10 @@ impl App {
                 self.appearance.drawing_style_unit = unit;
                 self.save_preference(Section::Drawing, "dimension unit");
                 self.sync_drawing_style_unit();
+            }
+            Action::EnergyUnit(unit) => {
+                self.appearance.energy_unit = unit;
+                self.save_preference(Section::Calculations, "energy unit");
             }
             Action::CopyBackground(background) => {
                 self.appearance.copy_background = background;
@@ -812,6 +822,19 @@ impl App {
                         ),
                     ),
                 ],
+            )],
+            Section::Calculations => vec![(
+                None,
+                vec![Item::choice(
+                    "Energy unit",
+                    "Reaction energies, paths and exports.",
+                    choices(
+                        "settings-energy-unit",
+                        &EnergyUnit::ALL.map(|unit| (unit, unit.label().to_owned())),
+                        a.energy_unit,
+                        |unit| Message::Settings(Action::EnergyUnit(unit)),
+                    ),
+                )],
             )],
             Section::CopyExport => vec![
                 (

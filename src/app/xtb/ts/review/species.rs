@@ -12,7 +12,7 @@ type Counts = BTreeMap<(u8, u16), i64>;
 pub(super) struct Input {
     pub label: String,
     pub charge: String,
-    pub multiplicity: String,
+    pub unpaired: String,
     counts: Counts,
     species: Species,
 }
@@ -109,7 +109,7 @@ fn side(doc: &Document, participants: &[Participant], product: bool) -> Result<V
             inputs.push(Input {
                 label: format!("{role} {} · {label}", inputs.len() + 1),
                 charge: charge.to_string(),
-                multiplicity: multiplicity.to_string(),
+                unpaired: multiplicity.saturating_sub(1).to_string(),
                 counts,
                 species: Species {
                     atoms,
@@ -133,6 +133,24 @@ pub(super) fn inputs(
     let shape = (left.len(), right.len());
     left.extend(right);
     Ok((left, shape))
+}
+
+/// Match the planner's molecular shape without requiring a map or preparing
+/// chemistry. One role participant can contain several disconnected species.
+pub(super) fn shape(doc: &Document, reaction: &Reaction) -> Result<(usize, usize), ()> {
+    let count = |participants: &[Participant]| {
+        let ids: Vec<_> = participants
+            .iter()
+            .flat_map(|participant| participant.atoms.iter().copied())
+            .collect();
+        let selected: HashSet<_> = ids.iter().copied().collect();
+        let molecules = reactions::molecules(doc, &ids);
+        (reactions::whole_molecules(doc, &selected)
+            && molecules.iter().map(Vec::len).sum::<usize>() == ids.len())
+        .then_some(molecules.len())
+        .ok_or(())
+    };
+    Ok((count(&reaction.reactants)?, count(&reaction.products)?))
 }
 
 pub(super) fn ignored(doc: &Document, reaction: &Reaction) -> Option<String> {
@@ -211,12 +229,17 @@ pub(super) fn validate(inputs: &[Input]) -> Result<Vec<Species>, String> {
     }
     for (input, item) in inputs.iter().zip(&mut species) {
         item.multiplicity = input
-            .multiplicity
+            .unpaired
             .trim()
             .parse::<u32>()
             .ok()
-            .filter(|n| *n > 0)
-            .ok_or_else(|| format!("{} needs a positive whole-number multiplicity", input.label))?;
+            .and_then(|unpaired| unpaired.checked_add(1))
+            .ok_or_else(|| {
+                format!(
+                    "{} needs a nonnegative whole-number count of unpaired electrons",
+                    input.label
+                )
+            })?;
         let protons = input
             .counts
             .iter()
@@ -247,7 +270,7 @@ pub(super) fn ts_state(species: &[Species], start: Side) -> Result<&Species, Str
     let maximum = first + second;
     if !(first.abs_diff(second)..=maximum).contains(&spin) || !(maximum - spin).is_multiple_of(2) {
         return Err(
-            "The reviewed multiplicities cannot share one spin state along the reaction path"
+            "The reviewed unpaired electron counts cannot share one spin state along the reaction path"
                 .into(),
         );
     }
