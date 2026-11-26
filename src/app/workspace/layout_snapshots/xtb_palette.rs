@@ -160,8 +160,8 @@ async fn bottom_results_palette_stays_within_40_percent_of_the_window() {
                     );
                     assert!(dock.y >= 0. && dock.y + dock.height <= size.height + 0.1);
                     assert!(body.height >= 60.);
-                    if size.height == 900. && view != View::Orbitals {
-                        assert_eq!(body.height, 150., "{view:?}: {bounds:?}");
+                    if size.height == 900. {
+                        assert_eq!(dock.height, 360., "{view:?}: {bounds:?}");
                     }
                     if let Some(output) = &output
                         && !stale

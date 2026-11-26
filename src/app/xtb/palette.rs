@@ -578,9 +578,11 @@ impl App {
                 };
                 if matches!(action, Action::CopyMethods) {
                     let text = results::methods_text(&shown.stored.result, shown.frame);
-                    self.status =
-                        "Copied the methods text (BibTeX keys from ReShiki's xtb.bib)".into();
-                    self.error = false;
+                    self.xtb_set_palette_status(
+                        StatusKind::Palette,
+                        "Copied the methods text (BibTeX keys from ReShiki's xtb.bib)",
+                        false,
+                    );
                     return iced::clipboard::write(text);
                 }
                 let method = shown.method();
