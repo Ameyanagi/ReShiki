@@ -756,6 +756,101 @@ pub fn drawn_state(doc: &Document, atom: u64) -> (i32, u32) {
     })
 }
 
+/// Masses (u) for a frame with isotope labels: labelled atoms take their
+/// isotope's mass, the others the standard atomic weight; `None` without labels.
+pub fn isotope_masses(frame: &Frame) -> Option<Vec<f64>> {
+    use crate::chemistry::{ELEMENTS, ISOTOPES};
+    if frame.isotopes.iter().all(|&isotope| isotope == 0) {
+        return None;
+    }
+    Some(
+        frame
+            .numbers
+            .iter()
+            .enumerate()
+            .map(
+                |(index, &z)| match frame.isotopes.get(index).copied().unwrap_or(0) {
+                    0 => ELEMENTS
+                        .get(usize::from(z))
+                        .map_or(0., |element| element.average_mass_amu()),
+                    isotope => ISOTOPES
+                        .binary_search_by_key(&(z, isotope), |&(n, i, _)| (n, i))
+                        .ok()
+                        .and_then(|found| ISOTOPES.get(found))
+                        .map_or(f64::from(isotope), |&(_, _, mass)| mass),
+                },
+            )
+            .collect(),
+    )
+}
+
+/// For each frame atom the 3D model added (a hydrogen the drawing does not
+/// show), the drawing atom it is bonded to.
+pub fn hydrogen_parents(doc: &Document, launch: &Launch) -> Option<Vec<Option<u64>>> {
+    let first = launch.atoms.iter().flatten().next()?;
+    let model = doc.models.iter().find(|m| m.linked_atoms.contains(first))?;
+    let sources = model.geometry_sources();
+    let heavy = model.atoms.len();
+    let mut parents = vec![None; heavy];
+    for hydrogen in &model.hydrogens {
+        // Generated models index their parents; imported ones use drawing IDs.
+        let parent = if model.generated.is_some() {
+            *sources.get(usize::try_from(hydrogen.parent).ok()?)?
+        } else {
+            Some(hydrogen.parent)
+        };
+        parents.push(Some(parent?));
+    }
+    (parents.len() == launch.atoms.len()).then_some(parents)
+}
+
+/// Drawing bonds in frame order, with each model hydrogen joined to its nearest linked atom.
+pub fn frame_bonds(
+    doc: &Document,
+    atoms: &[Option<u64>],
+    positions: &[[f64; 3]],
+) -> Vec<(usize, usize, u8)> {
+    let linked: HashMap<_, _> = atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(index, id)| id.map(|id| (id, index)))
+        .collect();
+    let mut bonds: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter_map(|bond| {
+            let (&a, &b) = (linked.get(&bond.a)?, linked.get(&bond.b)?);
+            (a != b).then_some((a.min(b), a.max(b), bond.order))
+        })
+        .collect();
+
+    let located_atoms = atoms.iter().zip(positions).enumerate();
+    let linked_positions: Vec<_> = located_atoms
+        .clone()
+        .filter_map(|(index, (id, position))| id.is_some().then_some((index, position)))
+        .collect();
+    for (hydrogen, (_, position)) in located_atoms.filter(|(_, (id, _))| id.is_none()) {
+        let nearest = linked_positions
+            .iter()
+            .map(|&(index, candidate)| {
+                let squared_distance = position
+                    .iter()
+                    .zip(candidate)
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f64>();
+                (index, squared_distance)
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((neighbor, _)) = nearest {
+            bonds.push((hydrogen.min(neighbor), hydrogen.max(neighbor), 1));
+        }
+    }
+
+    bonds.sort_by_key(|&(a, b, _)| (a, b));
+    bonds.dedup_by_key(|bond| (bond.0, bond.1));
+    bonds
+}
+
 /// The calculation input for the molecule of `atom`: its 3D model's
 /// geometry in model order, then the model's added hydrogens. A model that
 /// still shows a frame stored for this molecule exactly (an applied

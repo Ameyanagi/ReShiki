@@ -840,6 +840,7 @@ fn ensemble(
         labels: kept.iter().map(|&(_, i, step)| label(i, step)).collect(),
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     };
     let source = &file.file;
     let result = CalcResult {

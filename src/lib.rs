@@ -76,5 +76,4 @@ pub mod xtb_agent;
 #[doc(hidden)]
 pub mod xtb_pool;
 
-/// Warning shown by the xTB calculation interfaces for a small electronic gap.
-pub const XTB_NEAR_DEGENERATE: &str = "Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.";
+pub use reshiki_xtb_jobs::XTB_NEAR_DEGENERATE;

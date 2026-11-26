@@ -7,6 +7,9 @@ From 0.14.0, each ReShiki release publishes abi3 wheels
 with the app's version for macOS, Windows and Linux on x64 and ARM64; see
 [Releasing](releasing.md#configure-pypi-publishing).
 
+Ctrl+C cancels an xTB calculation running on the main thread, while a
+calculation started in another thread runs to completion.
+
 ## Draw and analyze
 
 ```python
@@ -138,6 +141,53 @@ is not in the drawing, a ppm that is not a finite number, a label longer than
 32 characters or `decimals` outside 0 to 4 raises `ReShikiError` with code
 `invalid_arguments`, and nothing is written. No caption is added; cite
 `credit` with a published labelled figure.
+
+## Search conformers with xTB
+
+Install the optional xTB worker with `pip install "reshiki[xtb]"`. Pass
+`xtb.conformers()` a `reshiki.Molecule` or molecular input accepted by
+`reshiki.parse()`, such as a SMILES string. The search uses the same ETKDG
+sampling, symmetry-aware Butina clustering and xTB optimization as the
+desktop app. If the input lacks a 3D model, ReShiki builds one first, with
+the force field of the chosen minimizer (MMFF94s for GFN-FF and GFN2-xTB).
+
+```python
+from pathlib import Path
+from reshiki import xtb
+
+search = xtb.conformers("CCCC")
+print(search.method)
+for conformer in search.conformers:
+    print(conformer.rank, conformer.delta, conformer.population)
+Path("butane.xyz").write_text(search.to_xyz(), encoding="utf-8")
+```
+
+The defaults generate 100 starts with MMFF94s, cluster at the normal
+0.75 Å cutoff and optimize up to 20 representatives with GFN2-xTB. Choose
+`starts` from 1–300, `window` from 0.1–100 kcal/mol above the lowest
+minimized start, and `diversity="fine"`, `"normal"` or `"coarse"`.
+The force-field minimizers are `"mmff94s"`, `"mmff94"` and `"uff"`.
+For these, `representatives` ranges from 1–60, and `per_cluster` is 1
+or 3. Choosing `minimizer="gfnff"` or `"gfn2"` optimizes every start
+with that method and keeps the lowest member per cluster. The search
+accepts up to 200 atoms including hydrogens, or up to 120 when GFN2-xTB
+minimizes every start. `threads=None` uses the app's Auto setting.
+
+The frozen `ConformerSearch` holds up to 32 conformers in ascending energy
+order, matching the app's saved ensemble.
+Each row contains a `qc.Geometry`, energy in hartree, `delta` and
+`start_delta` in kcal/mol, Boltzmann `population` at 298.15 K, `rmsd` to
+rank 1 in ångströms, and `cluster_size`. The start-energy difference
+is relative to the lowest force-field start in the returned ensemble and
+is `None` when xTB minimizes the starts.
+`stereo` shows whether the drawing's stereochemistry holds when the
+check is available. `best` is the full `Optimization` of rank 1,
+including the accepted trajectory. The search also returns counts for
+valid minimized starts, clusters, successful representatives and
+planned representatives, along with the method description and notes.
+`to_xyz()` returns the same multi-frame format as the app's Export XYZ.
+Ctrl+C on the main thread raises `KeyboardInterrupt` and discards the
+search results.
 
 ## Inputs and outputs
 
@@ -372,7 +422,7 @@ From the repository root, with Rust and uv installed:
 uv run --no-project --python 3.12.15 python scripts/license_notices.py
 uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
 uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py 'artifacts/python/*.whl'
-uv sync --project crates/python --all-extras --no-install-project
+uv sync --project crates/python --extra excel --extra pandas --no-install-project
 uv run --project crates/python --no-sync --with ./artifacts/python/*.whl --with rdkit pytest crates/python/tests
 uv run --project crates/python --no-sync ruff check crates/python/python crates/python/tests
 uv run --project crates/python --no-sync ruff format --check crates/python/python crates/python/tests

@@ -593,7 +593,11 @@ impl App {
                 }
                 Message::CopyAsPrepared(..)
                 | Message::CopyAsWritten(..)
+                | Message::IrFigure(super::ir_figure::Action::CaptionCopied(..))
                 | Message::Equipment(super::equipment::Action::PartsListCopied { .. })
+                | Message::Xtb(super::xtb::Action::Vibrations(
+                    super::xtb::VibrationsAction::CaptionCopied(..),
+                ))
                 | Message::InspectorAction(super::inspector::Action::IdentityCopied(..)) => {
                     self.copy_as_busy = false;
                     Task::none()

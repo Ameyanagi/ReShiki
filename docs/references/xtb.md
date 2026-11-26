@@ -32,7 +32,7 @@ files, cite ReShiki and that program and method instead of axtb. Then add:
 | Frequencies and thermochemistry                                    | Grimme2012QRRHO, FernandezRamos2007Symmetry                                                                                                                                                 |
 | IR spectrum                                                        | nothing beyond the method                                                                                                                                                                   |
 | Orbital energies and coefficients                                  | nothing beyond the method                                                                                                                                                                   |
-| Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes (and Doi & Koide 1991, see the verification notes), Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                     |
+| Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes, Doi1991MarchingTetrahedra (unverified), Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                                |
 | Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Bitzek2006FIRE, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC, Kolsbjerg2016AutoNEB, McIver1972TS       |
 | Results read from another program's files                          | ReShiki and that program (for ORCA 6, Neese2025ORCA6)                                                                                                                                       |
 
@@ -241,7 +241,8 @@ Orbital coefficients and the basis come from axtb (`crates/xtb-worker/src/ao.rs`
 - **Lorensen1987MarchingCubes**: Lorensen & Cline, ACM SIGGRAPH Comput. Graph. 21, 163
   (1987), doi:10.1145/37402.37422. Isosurface extraction (`surface/mesh.rs`). ReShiki uses
   the marching-tetrahedra variant, cutting each cube into six tetrahedra, usually credited
-  to Doi & Koide (1991; see [Verification notes](#verification-notes)).
+  to **Doi1991MarchingTetrahedra**: Doi & Koide, IEICE Trans. Inf. Syst. E74-D, 214 (1991),
+  not verified (see [Verification notes](#verification-notes)).
 - **Taubin1995Smoothing**: Taubin, Proc. SIGGRAPH '95, 351 (1995),
   doi:10.1145/218380.218473. Smoothing without shrinkage (`surface/mesh.rs`).
 - **Garland1997Simplification**: Garland & Heckbert, Proc. SIGGRAPH '97, 209 (1997),
@@ -346,7 +347,8 @@ Readers in `crates/io/src/qcread/`.
 - Marching tetrahedra: A. Doi & A. Koide, "An Efficient Method of Triangulating Equi-Valued
   Surfaces by Using Tetrahedral Cells", IEICE Trans. Inf. Syst. E74-D, 214–224 (1991), as a
   reviewer reported it. It has no Crossref record and the IEICE page refused our automated
-  fetch, so it is not in xtb.bib; the cube split is cited through Lorensen1987MarchingCubes.
+  fetch, so its xtb.bib entry (Doi1991MarchingTetrahedra) carries these fields unverified,
+  says so in its note, and has no DOI.
 - Software entries and the Molden and Gaussian format pages have no DOI (except RDKit's
   DataCite DOI); their URLs were checked to respond.
 - Froitzheim2025gxTB is a preprint; Crossref lists no journal version yet.

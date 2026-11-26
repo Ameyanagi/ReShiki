@@ -1,6 +1,6 @@
 ---
 title: Gaussian, ORCA and GAMESS files
-description: Write input files for Gaussian, ORCA and GAMESS from a 3D model, and open their outputs.
+description: Write input files for Gaussian, ORCA and GAMESS from a 3D model, and open Gaussian, ORCA, Molden and fchk outputs.
 ---
 
 import Screenshot from "../../../components/Screenshot.astro";
@@ -38,7 +38,7 @@ ReShiki writes a text input for another program from the molecule's 3D model. No
 | Transition state     | `Opt=(TS,CalcFC,NoEigenTest) Freq` | `OptTS Freq` (`OptTS NumFreq` for methods without analytic frequencies, such as MP2 or DLPNO) | `RUNTYP=SADPOINT` |
 | IRC                  | yes                                | yes                                                                                           | —                 |
 
-The transition-state inputs start from the 3D model as the guess, and ORCA computes its own first Hessian. QST2, QST3 and NEB-TS are listed but greyed: they need the reactant and product of a [transition-state search](/guide/calculation-transition-states/), which is in progress, as is reading the xTB Hessian into ORCA from a `.hess` file.
+The transition-state inputs start from the 3D model as the guess, and ORCA computes its own first Hessian. In the app, QST2, QST3 and NEB-TS are listed but greyed: they need the reactant and product of a [transition-state search](/guide/calculation-transition-states/), which runs from the command line for now. There, `reshiki --cli export-input` writes them, and reads the xTB Hessian into ORCA from a `.hess` file.
 
 GAMESS runs one task per job and uses its built-in basis sets: `6-31G(d)` (or `6-31G*`), `6-31G` and `STO-3G`. Other bases, such as the template's `def2-SVP`, are refused and **Copy** and **Save** stay off; choose one of these after switching to GAMESS.
 
@@ -57,14 +57,12 @@ GAMESS runs one task per job and uses its built-in basis sets: `6-31G(d)` (or `6
 
 For a Gaussian or ORCA output, ReShiki opens the final geometry of the last job that has a geometry and ended normally, as a 3D model in a new, unsaved drawing named after the file. If there is none, it opens the last job that has a geometry, even a failed or cut-off one. The status bar names the job, its method and how it ended, for example `Final geometry of job 3 of 3: Frequencies · RB3LYP/6-31G, Normal termination`, so you can tell which one you got.
 
-<Screenshot
-  src="/manual/qc-open-log.webp"
-  alt="ReShiki after opening the Gaussian output CH2O_CO2.log: a CO2 3D model in a new tab, and the status bar reading Document opened · Final geometry of job 3 of 3: Frequencies · RB3LYP/6-31G, Normal termination · Results can't be shown yet."
-/>
+Opening a Gaussian, ORCA, Molden or fchk file attaches its results to the molecule and opens the results palette, titled **Calculation results** with the file's program and method, with whatever the file supplies: energies, frequencies, orbitals. For a job cut off after its last result, the model shows that result's geometry. If the results cannot be attached, the status bar says `Results can't be shown yet`. Orbital shapes need a Molden or fchk file; see [Molecular orbitals](/guide/calculation-orbitals/#orbitals-from-other-programs).
 
-:::note[In progress]
-Opening a Gaussian, ORCA, Molden or fchk file shows the geometry only for now (`Results can't be shown yet`). Showing the file's energies, frequencies and orbitals in the results palette, and choosing among several jobs, comes with the next steps of the calculation work.
-:::
+<Screenshot
+  src="/manual/qc-open-molden.webp"
+  alt="A PySCF formaldehyde Molden file opened in ReShiki: the 3D model with its HOMO drawn, and the Calculation results palette showing PySCF · imported · charge 0 · multiplicity 1 with the Orbitals tab open."
+/>
 
 ## Open a file with several frames
 

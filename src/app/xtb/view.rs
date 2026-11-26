@@ -152,8 +152,7 @@ impl App {
         }))
         .spacing(4);
         let electronic = state::electronic(settings.method);
-        let solvent_ok =
-            settings.method.capabilities().solvent != reshiki::qcdata::SolventSupport::None;
+        let solvent_ok = reshiki_xtb_jobs::method::supports_solvent(settings.method);
 
         // Charge and spin, prefilled from the drawing, with the live check.
         let drawn = first.map_or((0, 0), |atom| {

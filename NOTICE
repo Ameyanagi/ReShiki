@@ -63,8 +63,9 @@ attribution records identify source locations before the split; current
 naming sources and provenance live in the external nazuchem repository at the
 pin above.
 
-Builds with the Cargo feature `xtb` (the macOS and Linux desktop releases)
-link axtb, an LGPL-3.0-or-later implementation of the xTB methods, from the
+Desktop builds with the Cargo feature `xtb` (the macOS and Linux releases)
+and the `reshiki-xtb` Python package link axtb, an LGPL-3.0-or-later
+implementation of the xTB methods, from the
 fork https://github.com/Ameyanagi/axtb at the revision in licenses/axtb/SOURCE.
 axtb's NOTICE there records the upstream projects it reproduces, including
 the g-xTB authors' permission for its g-xTB parts. Each such release also
