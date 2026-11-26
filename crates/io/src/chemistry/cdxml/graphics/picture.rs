@@ -112,6 +112,7 @@ impl Reader<'_, '_> {
             }),
             panel: None,
             tlc: None,
+            ir: None,
         })
     }
 }

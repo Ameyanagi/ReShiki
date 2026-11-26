@@ -1542,6 +1542,18 @@ fn frame_bytes(doc: &Document) -> usize {
         })
         .sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let ir: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.ir.as_deref())
+        .map(|figure| {
+            size_of::<crate::graphics::IrFigure>()
+                + figure.name.len()
+                + figure.method.len()
+                + bytes(&figure.bands[..])
+                + bytes(&figure.hidden_labels[..])
+        })
+        .sum();
     let tables: usize = doc
         .graphics
         .iter()
@@ -1595,6 +1607,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + objects * OWNED
         + text
         + paths
+        + ir
         + tables
         + tlc
         + nodes

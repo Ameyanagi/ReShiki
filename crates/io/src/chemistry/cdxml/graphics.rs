@@ -145,6 +145,8 @@ pub struct NativeGraphic {
     pub panel: Option<Box<Graphic>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tlc: Option<Box<crate::graphics::TlcPlate>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ir: Option<Box<crate::graphics::IrFigure>>,
 }
 impl NativeGraphic {
     /// This is the JSON->Value->Document numeric boundary: direct f64->f32.
@@ -199,6 +201,7 @@ impl NativeGraphic {
             panel: None,
             table: None,
             tlc: self.tlc,
+            ir: self.ir,
         };
         graphic.validate().map_err(Error::Document)?;
         Ok(graphic)
@@ -514,6 +517,7 @@ impl Reader<'_, '_> {
             picture_source: None,
             panel: None,
             tlc: None,
+            ir: None,
         })
     }
     /// A panel ReShiki wrote, in place of the group of its parts. Its frame
@@ -539,6 +543,7 @@ impl Reader<'_, '_> {
             picture_source: None,
             panel: Some(Box::new(panel)),
             tlc: None,
+            ir: None,
         })
     }
 }

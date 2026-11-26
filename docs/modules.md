@@ -123,6 +123,8 @@ explains how the crates and modules fit together.
 - `src/app/inspector/context.rs`: Properties follows the selection; an idle canvas shows drawing settings, while a drawing tool shows the same defaults as its context row.
 - `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
 - `src/app/inspector_pages.rs`: Chemical names and Assistant are pages within the ordinary inspector tabs.
+- `src/app/ir_figure.rs`: Properties for an infrared figure placed as a group of drawing objects.
+- `src/app/ir_figure/view.rs`: Properties for a placed IR figure, with explicit numeric drafts.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
@@ -845,6 +847,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
 - `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
 - `crates/model/src/graphics/heads.rs`
+- `crates/model/src/graphics/ir_figure.rs`: Stored parameters for a placed, editable infrared spectrum figure.
 - `crates/model/src/graphics/panel.rs`: Figure panels, rectangles with a tint, rounded corners, titles and dividers.
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`

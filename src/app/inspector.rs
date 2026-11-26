@@ -1123,6 +1123,9 @@ impl App {
         {
             body = body.push(card(container(self.tlc_panel()).padding(12)));
         }
+        if let Some(ir) = self.ir_figure_card() {
+            body = body.push(card(container(ir).padding(12)));
+        }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
         // A selected panel's title and appearance precede what it holds.

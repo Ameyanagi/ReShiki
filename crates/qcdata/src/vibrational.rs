@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
 use crate::Thermo;
@@ -184,9 +185,11 @@ pub fn thermochemistry(input: &ThermoInput<'_>) -> Thermo {
 }
 
 /// Area-normalized line shape used to broaden infrared transitions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BandShape {
     /// Lorentzian profile, whose half width at half maximum is `fwhm / 2`.
+    #[default]
     Lorentzian,
     /// Gaussian profile with the specified full width at half maximum.
     Gaussian,

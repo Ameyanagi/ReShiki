@@ -3,8 +3,9 @@ use super::super::tests::{MOVED, START, event, f32s, model, optfreq, send, water
 use super::super::{Action as XtbAction, CalcTask, Outcome, palette, results::View, run};
 use super::*;
 use crate::app::Message;
-use reshiki::graphics::GraphicKind;
+use reshiki::graphics::{Columns, Frame, GraphicKind};
 use reshiki::models3d::{self, Display};
+use reshiki::typography::Script;
 
 fn vibrations(app: &mut App, action: Action) {
     send(app, XtbAction::Vibrations(action));
@@ -123,7 +124,10 @@ fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
 fn placing_the_spectrum_selects_one_group_and_undo_removes_it() {
     let mut app = opened();
     let before = app.tab.doc.clone();
-    let bond = before.drawing_style.bond_length_world;
+    let settings = &app.tab.xtb.vibrations;
+    assert_eq!(settings.y, YAxis::Transmittance);
+    assert_eq!(settings.range(), Some((4000., 400.)));
+    assert_eq!((settings.fwhm, settings.scale.as_str()), (20., "1.000"));
 
     vibrations(&mut app, Action::PlaceSpectrum);
     let doc = &app.tab.doc;
@@ -142,38 +146,21 @@ fn placing_the_spectrum_selects_one_group_and_undo_removes_it() {
     assert_eq!(group.members, object_ids);
     let (curve, lines) = doc.graphics.split_first().unwrap();
     assert_eq!(curve.kind, GraphicKind::Path);
-    assert!((900..=908).contains(&curve.path.len()));
-    assert_eq!(curve.style.width_pt, doc.drawing_style.line_width_pt);
-    assert!(lines.iter().all(|g| g.kind == GraphicKind::Line));
-    let points: Vec<_> = curve
-        .commands()
-        .iter()
-        .flat_map(|command| command.points())
-        .collect();
-    let width = points.last().unwrap().x - points[0].x;
-    assert!((width - super::figure::PLOT_WIDTH_BONDS * bond).abs() < 1e-3);
-    assert!(points.windows(2).all(|pair| pair[0].x <= pair[1].x));
-    let tick_labels: Vec<_> = doc
-        .annotations
-        .iter()
-        .filter(|a| a.text.parse::<u32>().is_ok() && a.position.y > lines[0].origin.y)
-        .collect();
-    assert_eq!(
-        tick_labels
-            .iter()
-            .map(|a| a.text.as_str())
-            .collect::<Vec<_>>(),
-        ["4000", "3000", "2000", "1000"]
-    );
+    let ir = curve.ir.as_ref().unwrap();
+    assert_eq!(ir.y, YAxis::Transmittance);
+    assert_eq!((ir.from, ir.to, ir.fwhm, ir.scale), (4000., 400., 20., 1.));
+    assert_eq!(ir.method, "GFN2-xTB");
+    assert_eq!(curve.style.width_pt, ir.journal.metrics().3);
     assert!(
-        tick_labels
-            .windows(2)
-            .all(|pair| pair[0].position.x < pair[1].position.x)
+        lines
+            .iter()
+            .all(|g| g.kind == GraphicKind::Line && g.ir.is_none())
     );
     assert!(doc.annotations.iter().any(|a| a.text == "1590"));
-    assert_eq!(
-        doc.annotations[0].text,
-        "GFN2-xTB · scale 1.00 · FWHM 15 cm⁻¹ · Lorentzian"
+    assert!(
+        doc.annotations
+            .iter()
+            .all(|a| !a.text.starts_with("GFN2-xTB"))
     );
     assert_eq!(app.status, "Placed the IR spectrum · ⌘Z undoes");
     vibrations(&mut app, Action::Tick);
@@ -209,7 +196,8 @@ fn the_spectrum_clears_a_2d_component_extended_after_calculation() {
     vibrations(&mut app, Action::PlaceSpectrum);
     assert!(!app.error, "{}", app.status);
     let (lo, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
-    assert!((lo.x - expected_x).abs() < 1e-3);
+    // The outer box starts at the gap; the title sits inside its margin.
+    assert!((expected_x..expected_x + app.tab.doc.drawing_style.world(6.)).contains(&lo.x));
 }
 
 #[test]
@@ -232,138 +220,424 @@ fn the_spectrum_clears_the_shown_3d_model_frame_throughout_animation() {
     vibrations(&mut app, Action::PlaceSpectrum);
     assert!(!app.error, "{}", app.status);
     let (lo, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
-    assert!((lo.x - farthest_x - bond).abs() < 1e-3);
+    let expected_x = farthest_x + bond;
+    assert!((expected_x..expected_x + app.tab.doc.drawing_style.world(6.)).contains(&lo.x));
+}
+
+fn acetic_acid() -> IrFigure {
+    IrFigure::with_defaults(
+        "acetic acid".into(),
+        "GFN2-xTB".into(),
+        vec![
+            [3448., 0.065],
+            [3082., 0.014],
+            [3036., 0.012],
+            [2975., 0.006],
+            [1803., 1.],
+            [1436., 0.07],
+            [1381., 0.11],
+            [1243., 0.36],
+            [1159., 0.42],
+            [1002., 0.11],
+            [905., 0.012],
+            [657., 0.37],
+            [592., 0.10],
+            [556., 0.035],
+            [418., 0.012],
+        ],
+        Journal::Acs,
+    )
 }
 
 #[test]
-fn the_editable_figure_keeps_the_palette_peaks_and_is_deterministic() {
+fn paper_figure_axes_and_ticks() {
+    let doc = Document::default();
+    let at = Point::new(13., 42.);
+    let mut ir = acetic_acid();
+    for columns in [Columns::One, Columns::Two] {
+        ir.columns = columns;
+        ir.minor_ticks = true;
+        let figure = figure::spectrum(&doc, &ir, at);
+        let bottom = &figure.graphics[1];
+        let ticks: Vec<_> = figure
+            .annotations
+            .iter()
+            .filter(|a| a.position.y > bottom.origin.y && a.text.parse::<u32>().is_ok())
+            .collect();
+        assert_eq!(
+            ticks.iter().map(|a| a.text.as_str()).collect::<Vec<_>>(),
+            [
+                "4000", "3500", "3000", "2500", "2000", "1500", "1000", "500"
+            ]
+        );
+        assert!(
+            ticks
+                .windows(2)
+                .all(|pair| pair[0].bounds().1.x < pair[1].bounds().0.x)
+        );
+        let curve = figure.graphics[0].commands();
+        let left = curve.first().unwrap().points()[0].x;
+        let right = curve.last().unwrap().points()[0].x;
+        assert!((ticks[0].centre().x - left).abs() < 1e-3);
+        assert!((right - left - bottom.axis_x.x).abs() < 1e-3);
+        assert!(
+            curve
+                .windows(2)
+                .all(|pair| pair[0].points()[0].x <= pair[1].points()[0].x)
+        );
+        let title = figure
+            .annotations
+            .iter()
+            .find(|a| a.text.starts_with("Wavenumber"))
+            .unwrap();
+        let [span] = title.format.spans.as_slice() else {
+            panic!("expected a superscript")
+        };
+        assert_eq!(span.style.script, Script::Superscript);
+        assert_eq!(&title.text[span.start..span.end], "−1");
+
+        ir.minor_ticks = false;
+        let major_only = super::figure::spectrum(&doc, &ir, at);
+        assert_eq!(figure.graphics.len() - major_only.graphics.len(), 29);
+    }
+}
+
+#[test]
+fn ordinary_exports_fit_the_journal_dimensions() {
+    let mut ir = acetic_acid();
+    for columns in [Columns::One, Columns::Two] {
+        ir.columns = columns;
+        let (width, height) = columns.size_pt();
+        for y in [YAxis::Transmittance, YAxis::Absorbance] {
+            ir.y = y;
+            for frame in [Frame::Box, Frame::Axes, Frame::Baseline] {
+                ir.frame = frame;
+                for vertical in [false, true] {
+                    ir.vertical_labels = vertical;
+                    let mut doc = Document::default();
+                    figure::spectrum(&doc, &ir, Point::new(13., 42.)).add_to(&mut doc);
+                    let svg = reshiki::export::figure(&doc, "svg").unwrap();
+                    let xml = roxmltree::Document::parse(std::str::from_utf8(&svg.bytes).unwrap())
+                        .unwrap();
+                    let dimension = |attr| {
+                        xml.root_element()
+                            .attribute(attr)
+                            .unwrap()
+                            .trim_end_matches("pt")
+                            .parse::<f32>()
+                            .unwrap()
+                    };
+                    let (w, h) = (dimension("width"), dimension("height"));
+                    let case = format!("{columns:?} {y:?} {frame:?} vertical={vertical}");
+                    println!("{case}: {w:.3} × {h:.3} pt");
+                    assert!(
+                        (w - width).abs() <= 1. && (h - height).abs() <= 1.,
+                        "{case}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn strongest_band_reaches_twenty_percent_or_unit_absorbance() {
+    let doc = Document::default();
+    let mut ir = acetic_acid();
+    for (y, gridline) in [(YAxis::Transmittance, "20"), (YAxis::Absorbance, "1.0")] {
+        ir.y = y;
+        let figure = figure::spectrum(&doc, &ir, Point::default());
+        let base = figure.graphics[1].origin.y;
+        let height = base - figure.graphics[2].origin.y;
+        let strongest = figure.graphics[0]
+            .commands()
+            .iter()
+            .flat_map(|c| c.points())
+            .map(|p| p.y)
+            .reduce(if y == YAxis::Transmittance {
+                f32::max
+            } else {
+                f32::min
+            })
+            .unwrap();
+        let tick = figure
+            .annotations
+            .iter()
+            .find(|a| a.text == gridline)
+            .unwrap();
+        assert!((strongest - tick.centre().y).abs() < height * 1e-3);
+        if y == YAxis::Transmittance {
+            let top = figure.graphics[2].origin.y;
+            let baseline = figure
+                .annotations
+                .iter()
+                .find(|a| a.text == "100")
+                .unwrap()
+                .centre()
+                .y;
+            assert!(((baseline - top) / height - 5. / 105.).abs() < 1e-3);
+        }
+    }
+}
+
+#[test]
+fn peak_labels_clear_labels_leaders_and_curve() {
+    let doc = Document::default();
+    let at = Point::new(13., 42.);
+    let mut ir = acetic_acid();
+    let pad = doc.drawing_style.world(1.);
+    for (columns, y, vertical) in [Columns::One, Columns::Two]
+        .into_iter()
+        .flat_map(|columns| {
+            [YAxis::Transmittance, YAxis::Absorbance]
+                .into_iter()
+                .flat_map(move |y| [false, true].map(|vertical| (columns, y, vertical)))
+        })
+    {
+        ir.columns = columns;
+        ir.y = y;
+        ir.vertical_labels = vertical;
+        let case = format!("{columns:?} {y:?} vertical={vertical}");
+        let chart = figure::spectrum(&doc, &ir, at);
+        assert_eq!(chart, figure::spectrum(&doc, &ir, at));
+        let mut peaks = chart.labelled_peaks.clone();
+        peaks.sort_unstable();
+        assert_eq!(peaks, [657, 1002, 1159, 1243, 1381, 1803], "{case}");
+        let labels = &chart.annotations[chart.annotations.len() - chart.labelled_peaks.len()..];
+        let leaders = &chart.graphics[chart.graphics.len() - labels.len()..];
+        if columns == Columns::One {
+            assert!(leaders.iter().any(|leader| leader.axis_x.x != 0.), "{case}");
+        }
+        let curve = chart.graphics[0].commands();
+        for (i, label) in labels.iter().enumerate() {
+            assert_eq!(label.angle, if vertical { -90. } else { 0. });
+            let (lo, hi) = label.bounds();
+            let (lo, hi) = (lo.offset(-pad, -pad), hi.offset(pad, pad));
+            assert!(
+                labels[..i].iter().all(|other| {
+                    let (a, b) = other.bounds();
+                    hi.x < a.x || hi.y < a.y || lo.x > b.x || lo.y > b.y
+                }),
+                "{case}: {} hits another label",
+                label.text
+            );
+            assert!(
+                leaders.iter().all(|leader| {
+                    let a = leader.origin;
+                    let b = a.offset(leader.axis_x.x, leader.axis_x.y);
+                    !figure::hits_box(a, b, lo, hi)
+                }),
+                "{case}: {} hits a leader",
+                label.text
+            );
+            assert!(
+                curve
+                    .windows(2)
+                    .all(|s| { !figure::hits_box(s[0].points()[0], s[1].points()[0], lo, hi) }),
+                "{case}: {} hits the curve",
+                label.text
+            );
+            let a = leaders[i].origin;
+            let b = a.offset(leaders[i].axis_x.x, leaders[i].axis_x.y);
+            assert!((b.x - label.centre().x).abs() < 1e-3, "{case}");
+            assert!(
+                leaders[..i].iter().all(|other| {
+                    let c = other.origin;
+                    let d = c.offset(other.axis_x.x, other.axis_x.y);
+                    !figure::segments_cross(a, b, c, d)
+                }),
+                "{case}: leader for {} hits another leader",
+                label.text
+            );
+            let clear_start = a.lerp(b, doc.drawing_style.world(0.7) / a.distance(b));
+            assert!(
+                curve.windows(2).all(|s| {
+                    !figure::segments_cross(clear_start, b, s[0].points()[0], s[1].points()[0])
+                }),
+                "{case}: leader for {} hits the curve",
+                label.text
+            );
+            let axis_text = &chart.annotations[..chart.annotations.len() - labels.len()];
+            assert!(
+                axis_text.iter().all(|other| {
+                    let (a, b) = other.bounds();
+                    hi.x < a.x || hi.y < a.y || lo.x > b.x || lo.y > b.y
+                }),
+                "{case}: {} hits axis text",
+                label.text
+            );
+            let axes = &chart.graphics[1..chart.graphics.len() - leaders.len()];
+            assert!(
+                axes.iter().enumerate().all(|(i, axis)| {
+                    let a = axis.origin;
+                    let b = a.offset(axis.axis_x.x, axis.axis_x.y);
+                    let inset = if i < 4 { 0. } else { pad };
+                    !figure::hits_box(a, b, lo.offset(inset, inset), hi.offset(-inset, -inset))
+                }),
+                "{case}: {} hits an axis",
+                label.text
+            );
+        }
+    }
+}
+
+#[test]
+fn hidden_peaks_are_not_replaced_and_method_text_fits_one_line() {
+    use reshiki::typography::layout;
+
+    let doc = Document::default();
+    let mut ir = acetic_acid();
+    ir.labels = 1;
+    ir.hidden_labels.push(1803);
+    ir.vertical_labels = true;
+    ir.frame = Frame::Baseline;
+    ir.method_line = true;
+    let build = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default());
+    let edited = build(&ir);
+    assert!(edited.labelled_peaks.is_empty());
+    assert!(
+        edited
+            .annotations
+            .iter()
+            .all(|a| a.text != "Transmittance (%)" && a.text != "1803")
+    );
+    assert_eq!(
+        edited.annotations[0].text,
+        "GFN2-xTB · Lorentzian · FWHM 20 cm−1 · scale 1.000"
+    );
+    let method = &edited.annotations[0];
+    let [span] = method.format.spans.as_slice() else {
+        panic!("expected a superscript")
+    };
+    assert_eq!(span.style.script, Script::Superscript);
+    assert_eq!(&method.text[span.start..span.end], "−1");
+    ir.method = format!("{}\nsecond line", "W".repeat(70));
+    for frame in [Frame::Box, Frame::Axes, Frame::Baseline] {
+        ir.frame = frame;
+        let chart = build(&ir);
+        let method = &chart.annotations[0];
+        assert!(method.text.contains('…'));
+        assert!(!method.text.contains('\n'));
+        assert!(!method.text.contains("second line"));
+        let plot = &chart.graphics[1];
+        assert!(method.bounds().1.x <= plot.origin.x + plot.axis_x.x);
+        let height = layout(&method.text, &method.format).height;
+        assert_eq!(method.size().1, height);
+        let plain = build(&IrFigure {
+            method_line: false,
+            ..ir.clone()
+        });
+        for (with, without) in chart.graphics[0].path.iter().zip(&plain.graphics[0].path) {
+            let delta = with.points()[0].y - without.points()[0].y;
+            assert!((0. ..=height + 1e-3).contains(&delta));
+        }
+    }
+    ir.bands = vec![[3000., 1.]];
+    ir.hidden_labels.clear();
+    ir.y = YAxis::Absorbance;
+    assert_eq!(build(&ir).labelled_peaks, [3000]);
+}
+
+#[tokio::test]
+async fn placement_and_caption_use_the_palette_settings() {
+    let mut app = opened();
+    app.tab.path = Some("water.rsk".into());
+    let unscaled = app
+        .xtb_shown()
+        .unwrap()
+        .stored
+        .result
+        .vibrations
+        .as_ref()
+        .unwrap()
+        .frequencies_cm1[0];
+    for action in [
+        Action::Y(YAxis::Absorbance),
+        Action::From("3900".into()),
+        Action::To("600".into()),
+        Action::Shape(BandShape::Gaussian),
+        Action::Fwhm(25.),
+        Action::Scale("0.960".into()),
+    ] {
+        vibrations(&mut app, action);
+    }
+    use iced::futures::StreamExt;
+    let caption = app.xtb_copy_caption_with(|contents| async move {
+        assert_eq!(
+            contents,
+            "Calculated IR spectrum of water (GFN2-xTB, Gaussian broadening, FWHM 25 cm⁻¹, frequencies scaled by 0.960)."
+        );
+        Ok(())
+    });
+    let mut stream = iced_runtime::task::into_stream(caption).unwrap();
+    assert_eq!(app.status, "Copying the IR caption…");
+    assert!(app.copy_as_busy);
+    let Some(iced_runtime::Action::Output(message)) = stream.next().await else {
+        panic!("expected a clipboard receipt")
+    };
+    let _ = app.update(message);
+    assert_eq!(app.status, "Copied the IR caption");
+    assert!(!app.error && !app.copy_as_busy);
+
+    vibrations(&mut app, Action::PlaceSpectrum);
+    let ir = app.tab.doc.graphics[0].ir.as_ref().unwrap();
+    assert_eq!(ir.y, YAxis::Absorbance);
+    assert_eq!(ir.shape, BandShape::Gaussian);
+    assert_eq!(
+        (ir.from, ir.to, ir.fwhm, ir.scale),
+        (3900., 600., 25., 0.96)
+    );
+    assert_eq!(ir.bands[0][0], unscaled);
+}
+
+#[tokio::test]
+async fn caption_copy_reports_failure_only_after_the_clipboard_receipt() {
+    use iced::futures::{FutureExt, StreamExt};
+
+    let mut app = opened();
+    let (send, receive) = tokio::sync::oneshot::channel();
+    let copy = app.xtb_copy_caption_with(|_| async move { receive.await.unwrap() });
+    let mut stream = iced_runtime::task::into_stream(copy).unwrap();
+    assert!(stream.next().now_or_never().is_none());
+    assert_eq!(app.status, "Copying the IR caption…");
+    send.send(Err("The browser did not allow clipboard access".into()))
+        .unwrap();
+    let Some(iced_runtime::Action::Output(message)) = stream.next().await else {
+        panic!("expected a failed clipboard receipt")
+    };
+    let _ = app.update(message);
+    assert!(app.error && !app.copy_as_busy);
+    assert_eq!(
+        app.status,
+        "Could not copy the IR caption\nThe browser did not allow clipboard access"
+    );
+}
+
+#[test]
+fn placement_keeps_only_the_most_intense_3000_bands() {
     let mut app = opened();
     let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
-    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = vec![127.68, 14.05, 10.];
+    let bands = result.vibrations.as_mut().unwrap();
+    bands.frequencies_cm1 = vec![1500.; 3002];
+    bands.ir_intensities_km_mol = (1..=3002).map(f64::from).collect();
     let result = Arc::new(result);
     app.tab.doc.science.results.first_mut().unwrap().result = result.clone();
     app.tab.xtb.palette.show(&result);
 
-    let settings = &mut app.tab.xtb.vibrations;
-    settings.scale = "1.104".into();
-    settings.shape = BandShape::Gaussian;
-    settings.fwhm = 5.;
-    let data = view::SpectrumData::cached(&result, settings);
-    let doc = &app.tab.doc;
-    let at = Point::new(13., 42.);
-    let build = || figure::spectrum(doc, &data, "GFN2-xTB", at);
-    let figure = build();
-    assert_eq!(figure, build());
-    assert_eq!(
-        figure.annotations[0].text,
-        "GFN2-xTB · scale 1.104 · FWHM 5 cm⁻¹ · Gaussian"
-    );
-
-    let curve = &figure.graphics[0];
-    let points: Vec<_> = curve
-        .commands()
+    vibrations(&mut app, Action::PlaceSpectrum);
+    let ir = app
+        .tab
+        .doc
+        .graphics
         .iter()
-        .flat_map(|command| command.points())
-        .collect();
-    let bond = doc.drawing_style.bond_length_world;
-    let base = figure.graphics[1].origin.y;
-    let top = data
-        .curve
-        .iter()
-        .chain(&data.peaks)
-        .map(|p| p[1])
-        .fold(0., f64::max);
-    let [weaker, stronger, bend] = data.peaks.as_slice() else {
-        panic!("expected three separated maxima");
-    };
-    assert!(weaker[1] < stronger[1]);
-    for &[wavenumber, intensity] in &data.peaks {
-        let peak_x = points[0].x + data.x(wavenumber) * super::figure::PLOT_WIDTH_BONDS * bond;
-        let peak_y = base - (intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond;
-        assert!(
-            points
-                .iter()
-                .any(|p| p.distance(Point::new(peak_x, peak_y)) < 1e-3)
-        );
-    }
-    for &[wavenumber, intensity] in [stronger, bend] {
-        let peak_x = points[0].x + data.x(wavenumber) * super::figure::PLOT_WIDTH_BONDS * bond;
-        let peak_y = base - (intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond;
-        let text = format!("{wavenumber:.0}");
-        assert!(figure.annotations.iter().any(|a| {
-            a.text == text && (a.centre().x - peak_x).abs() < 1e-3 && a.position.y < peak_y
-        }));
-    }
-    let skipped = format!("{:.0}", weaker[0]);
-    assert!(figure.annotations.iter().all(|a| a.text != skipped));
-}
-
-#[test]
-fn the_ninth_band_keeps_its_sampled_height_without_a_label() {
-    let app = opened();
-    let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
-    let bands = result.vibrations.as_mut().unwrap();
-    bands.frequencies_cm1 = [750, 650, 550, 449, 300, 250, 200, 150, 100]
-        .map(|index| 4000. - 3600. * (f64::from(index) / 899.))
-        .into();
-    bands.ir_intensities_km_mol = vec![100., 100., 100., 99., 100., 100., 100., 100., 100.];
-    let settings = State {
-        shape: BandShape::Gaussian,
-        fwhm: 5.,
-        ..State::default()
-    };
-    let data = view::SpectrumData::cached(&Arc::new(result), &settings);
-    let [frequency, intensity] = data.curve[449];
-    let top = data.curve.iter().map(|p| p[1]).fold(0., f64::max);
-    assert!((intensity / top - 0.99).abs() < 1e-8);
-    let label = format!("{frequency:.0}");
-    assert_eq!(data.peaks.len(), 8);
-    assert!(data.peaks.iter().all(|p| format!("{:.0}", p[0]) != label));
-
-    let doc = &app.tab.doc;
-    let figure = figure::spectrum(doc, &data, "GFN2-xTB", Point::default());
-    let axis = &figure.graphics[1];
-    let bond = doc.drawing_style.bond_length_world;
-    let apex = axis.origin.offset(
-        data.x(frequency) * super::figure::PLOT_WIDTH_BONDS * bond,
-        -(intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond,
-    );
-    assert!(figure.graphics[0].commands().iter().any(|command| {
-        command
-            .points()
+        .find_map(|g| g.ir.as_deref())
+        .unwrap();
+    assert_eq!(ir.bands.len(), 3000);
+    assert!(
+        ir.bands
             .iter()
-            .any(|point| point.distance(apex) < 1e-3)
-    }));
-    assert!(figure.annotations.iter().all(|a| a.text != label));
-}
-
-#[test]
-fn wide_spectrum_tick_labels_have_clearance_and_keep_the_minor_ticks() {
-    let app = opened();
-    let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
-    result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![1590., 3469., 9900.];
-    let data = view::SpectrumData::cached(&Arc::new(result), &State::default());
-    let doc = &app.tab.doc;
-    let figure = figure::spectrum(doc, &data, "GFN2-xTB", Point::default());
-    let axis = &figure.graphics[1];
-    let ticks = &figure.graphics[2..];
-    assert_eq!(ticks.len(), 20);
-    let step = super::figure::PLOT_WIDTH_BONDS * doc.drawing_style.bond_length_world * 500. / 9600.;
-    assert!(
-        ticks
-            .windows(2)
-            .all(|pair| (pair[1].origin.x - pair[0].origin.x - step).abs() < 1e-3)
-    );
-    let labels: Vec<_> = figure
-        .annotations
-        .iter()
-        .filter(|a| a.position.y > axis.origin.y && a.text.parse::<u32>().is_ok())
-        .collect();
-    assert!(labels.len() > 1);
-    assert!(
-        labels
-            .windows(2)
-            .all(|pair| pair[0].bounds().1.x < pair[1].bounds().0.x)
+            .map(|band| band[1])
+            .eq((3..=3002).rev().map(f64::from))
     );
 }
 
@@ -372,7 +646,6 @@ fn spectrum_actions_are_inert_when_the_spectrum_cannot_be_plotted() {
     for modify in [
         (|v: &mut reshiki::qcdata::Vibrations| v.ir_intensities_km_mol.clear()) as fn(&mut _),
         |v| v.ir_intensities_km_mol.fill(0.),
-        |v| *v.frequencies_cm1.first_mut().unwrap() = 20_000.,
     ] {
         let mut app = opened();
         let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
@@ -387,6 +660,18 @@ fn spectrum_actions_are_inert_when_the_spectrum_cannot_be_plotted() {
             assert_eq!(export.units(), 0);
         }
         assert_eq!(app.tab.doc, before);
+    }
+    for invalid in [Action::To("3900".into()), Action::Scale("2".into())] {
+        let mut app = opened();
+        vibrations(&mut app, invalid);
+        vibrations(&mut app, Action::PlaceSpectrum);
+        assert!(app.tab.doc.graphics.is_empty());
+        assert_eq!(
+            app.xtb_vibrations_action(Action::ExportSpectrum("svg"))
+                .units(),
+            0
+        );
+        assert_eq!(app.xtb_vibrations_action(Action::CopyCaption).units(), 0);
     }
 }
 
@@ -407,11 +692,21 @@ async fn spectrum_exports_use_publication_for_svg_and_pdf() {
             panic!("Expected a prepared {format} spectrum export");
         };
         assert_eq!(export.name, format!("water IR spectrum.{format}"));
-        assert!(matches!(export.kind, Kind::Xtb));
+        assert!(matches!(export.kind, Kind::Ir));
         if format == "svg" {
             let svg = std::str::from_utf8(&export.bytes).unwrap();
             assert!(svg.starts_with("<svg") || svg.starts_with("<?xml"));
             let xml = roxmltree::Document::parse(svg).unwrap();
+            for (attr, expected) in [("width", 234.), ("height", 150.)] {
+                let points = xml
+                    .root_element()
+                    .attribute(attr)
+                    .unwrap()
+                    .trim_end_matches("pt")
+                    .parse::<f32>()
+                    .unwrap();
+                assert!((points - expected).abs() <= 1., "{attr}: {points}");
+            }
             assert_eq!(
                 xml.descendants().any(|node| node.has_tag_name("text")),
                 live_text
@@ -419,10 +714,25 @@ async fn spectrum_exports_use_publication_for_svg_and_pdf() {
             assert!(xml.descendants().any(|node| node.has_tag_name("path")));
         } else {
             assert!(export.bytes.starts_with(b"%PDF"));
+            let pdf = String::from_utf8_lossy(&export.bytes);
+            let media_box = pdf
+                .split_once("/MediaBox [")
+                .unwrap()
+                .1
+                .split_once(']')
+                .unwrap()
+                .0;
+            let size: Vec<f32> = media_box
+                .split_whitespace()
+                .map(|v| v.parse().unwrap())
+                .collect();
+            assert!((size[2] - 234.).abs() <= 1.);
+            assert!((size[3] - 150.).abs() <= 1.);
         }
         let standalone = reshiki::payload::read(&export.bytes).unwrap().unwrap();
         assert!(standalone.atoms.is_empty() && standalone.models.is_empty());
         assert_eq!(standalone.groups.len(), 1);
+        assert_eq!(standalone.graphics[0].ir.as_ref().unwrap().name, "water");
         assert!(standalone.annotations.iter().any(|a| a.text == "1590"));
     }
     assert_eq!(app.tab.doc, before);

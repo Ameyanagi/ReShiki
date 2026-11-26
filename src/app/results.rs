@@ -704,6 +704,7 @@ fn completion(message: &Message) -> Option<Completion> {
         }
         Message::CopyAsPrepared(..)
         | Message::CopyAsWritten(..)
+        | Message::IrFigure(super::ir_figure::Action::CaptionCopied(..))
         | Message::ClipboardWritten { .. }
         | Message::ClipboardRead { .. } => Some(Completion::Clipboard),
         Message::Pasted(..) => Some(Completion::Pasted),
@@ -761,8 +762,14 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Cancel
                 | Action::ApplyAnyway
                 | Action::Discard => None,
-                Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
+                Action::Palette(
+                    super::xtb::palette::Action::Exported(..)
+                    | super::xtb::palette::Action::IrExported(..),
+                ) => Some(Completion::Xtb),
                 Action::Conformers(..) | Action::Palette(..) => None,
+                Action::Vibrations(super::xtb::VibrationsAction::CaptionCopied(..)) => {
+                    Some(Completion::Clipboard)
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 Action::Vibrations(super::xtb::VibrationsAction::Recomputed(..)) => {
                     Some(Completion::Xtb)
@@ -775,7 +782,7 @@ fn completion(message: &Message) -> Option<Completion> {
             super::figure_export::Kind::Figure => Completion::FigureExport,
             super::figure_export::Kind::Structure => Completion::Export,
             super::figure_export::Kind::Nmr => Completion::Nmr,
-            super::figure_export::Kind::Xtb => Completion::Xtb,
+            super::figure_export::Kind::Xtb | super::figure_export::Kind::Ir => Completion::Xtb,
         }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,
@@ -826,6 +833,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Arc(..)
         | Message::Graphics(..)
         | Message::Tlc(..)
+        | Message::IrFigure(..)
         | Message::Figure(..)
         | Message::Cycle(..)
         | Message::Table(..)
