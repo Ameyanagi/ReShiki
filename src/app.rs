@@ -84,6 +84,8 @@ mod tlc;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 mod add_panel;
+mod energy_plot;
+mod frames_import;
 #[cfg(test)]
 mod hover_qa;
 mod models3d;
@@ -266,6 +268,8 @@ pub enum Message {
     Settings(settings_page::Action),
     /// Export input for Gaussian, ORCA or GAMESS.
     QcExport(qc_export::Action),
+    /// The "Choose what to import" sheet for a file of several frames.
+    FramesImport(frames_import::Action),
     /// Predict → xTB: the Calculate card and its runs.
     Xtb(xtb::Action),
     Help(help::Action),
@@ -553,6 +557,9 @@ pub struct App {
     help_open: bool,
     settings: settings_page::State,
     qc_export: Option<qc_export::Dialog>,
+    frames_import: Option<frames_import::Dialog>,
+    /// Files of several frames opened together, asked about in turn.
+    frames_queue: std::collections::VecDeque<(std::path::PathBuf, frames_import::File)>,
     xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
@@ -689,6 +696,8 @@ impl App {
             help_open: false,
             settings: settings_page::State::default(),
             qc_export: None,
+            frames_import: None,
+            frames_queue: Default::default(),
             xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
@@ -785,6 +794,7 @@ impl App {
             self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
+            self.xtb_subscription(),
             self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
@@ -1186,10 +1196,21 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
+        let vibration_context = |app: &Self| {
+            (app.xtb_vibrations_visible() && app.tab.xtb.run.is_none()).then_some((
+                app.tab.id,
+                app.tab.file_epoch,
+                app.tab.revision,
+            ))
+        };
+        let vibrations = vibration_context(self);
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
+        if vibrations != vibration_context(self) {
+            task = Task::batch([task, tagged(self.xtb_vibrations_resume(), self.tab.id)]);
+        }
         // The canvas forgets the pointer when a context menu closes
         // (canvas::reset_menu_pointer), so the hovered atom or bond goes too:
         // a key pressed later acts on what the pointer touches next, never on
@@ -1545,6 +1566,7 @@ impl App {
             || self.help_open
             || self.settings.open
             || self.qc_export.is_some()
+            || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
@@ -1559,9 +1581,9 @@ impl App {
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
                     self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_qc_export(self.with_commands(
+                        self.with_qc_export(self.with_frames_import(self.with_commands(
                             self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
-                        )),
+                        ))),
                     ))),
                 ))),
                 if self.prompt.is_some() {
@@ -1579,6 +1601,8 @@ impl App {
                     Some(settings_page::modal_key)
                 } else if self.qc_export.is_some() {
                     Some(qc_export::modal_key)
+                } else if self.frames_import.is_some() {
+                    Some(frames_import::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {
@@ -1788,14 +1812,18 @@ fn export_file(
     stem: Option<String>,
     details: Vec<String>,
 ) -> Task<Message> {
-    figure_export::Prepared::new(
-        contents.into_bytes(),
-        format,
-        stem,
-        details,
-        figure_export::Kind::Structure,
-    )
-    .start()
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    // The engine gives a CDX file as base64.
+    let bytes = if format == "cdx" {
+        match STANDARD.decode(&contents) {
+            Ok(bytes) => bytes,
+            Err(_) => return Task::done(Message::Exported(Err("Invalid binary drawing".into()))),
+        }
+    } else {
+        contents.into_bytes()
+    };
+    figure_export::Prepared::new(bytes, format, stem, details, figure_export::Kind::Structure)
+        .start()
 }
 fn export_format_label(format: &str) -> String {
     match format {

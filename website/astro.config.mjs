@@ -80,6 +80,7 @@ const engineeringNotes = {
   Exchange: [
     "clipboard",
     "clipboard-compatibility",
+    "eln",
     "haworth-interchange",
     "pictures",
     "figure-export",
@@ -251,6 +252,7 @@ export default defineConfig({
             { label: "Journal drawing presets", slug: "developer/journal-drawing-presets" },
             { label: "Color palettes", slug: "guide/color-palettes" },
             { label: "Save and share", slug: "guide/sharing" },
+            { label: "Use drawings in an ELN", slug: "developer/eln" },
             { label: "Keep drawings on GitHub", slug: "developer/github" },
             { label: "Acknowledging ReShiki", slug: "guide/acknowledgments" },
           ],

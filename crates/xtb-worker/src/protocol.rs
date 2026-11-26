@@ -251,6 +251,9 @@ impl ScfSettings {
             max_iterations: self.max_iterations,
             scf_retries: self.retries.clone(),
             gfnff,
+            threads: None,
+            convergence: Default::default(),
+            fixed_atoms: vec![],
         }
     }
 }
@@ -617,7 +620,7 @@ pub struct Hello {
     pub max_hessian_atoms: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Engine {
     pub name: String,
@@ -759,6 +762,7 @@ impl Computed {
             self.settings.solvent.clone(),
             gfnff,
         );
+        settings.threads = Some(self.settings.threads);
         // A converged retry rung (outside the solvent composite, whose parts
         // climb their own ladders) is what produced the result: save it, not
         // the ladder, so recomputing reproduces these numbers.
@@ -811,10 +815,14 @@ impl Computed {
                 reduced_masses_amu: v.reduced_masses_amu.clone(),
                 masses_amu: v.masses_amu.clone(),
             }),
-            thermo: self.thermo.clone(),
+            thermo: self.thermo.as_ref().map(|thermo| Thermo {
+                point_group: self.vibrations.as_ref().and_then(|v| v.point_group.clone()),
+                ..thermo.clone()
+            }),
             trajectory: None,
             keep_full: false,
             omitted_bytes: None,
+            run: None,
         };
         result.validate(frame)?;
         Ok(result)

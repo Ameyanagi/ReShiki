@@ -1641,5 +1641,18 @@
         "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/0beb2d01293b8a9be5f94d65fd86cc6239cc163b/LICENSE"
       }
     ]
+  },
+  "wayland-protocols-misc@0.3.12": {
+    "license": "MIT",
+    "repository": "https://github.com/KDE/plasma-wayland-protocols",
+    "revision": "3d8327f5c8727702c5b14730c32d70b30e2ae106",
+    "authors": ["Elinor Berger <elinor@safaradeg.net>"],
+    "files": [
+      {
+        "path": "texts/plasma-wayland-protocols-LGPL-2.1-or-later-1ccf09bf2f59.txt",
+        "sha256": "1ccf09bf2f598308df4bed9cd8e9657dc5cd0973d2800318f2e241486e2edf3f",
+        "source": "https://raw.githubusercontent.com/KDE/plasma-wayland-protocols/3d8327f5c8727702c5b14730c32d70b30e2ae106/LICENSES/LGPL-2.1-or-later.txt"
+      }
+    ]
   }
 }

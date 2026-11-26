@@ -6,10 +6,7 @@
 use crate::headless;
 
 use headless::{McpSession, StderrMode};
-use reshiki_agent::{
-    ops::catalog::SPECS,
-    stability::{DATA_NOT_INSTRUCTIONS, GUIDE_URL, NOTICE, STABILITY},
-};
+use reshiki_agent::stability::{DATA_NOT_INSTRUCTIONS, GUIDE_URL, NOTICE, STABILITY};
 use serde_json::{Value, json};
 use std::{process::Output, time::Duration};
 
@@ -73,7 +70,7 @@ fn discover_lists_and_info_carry_the_labels_and_hints() {
             )
         })
         .collect();
-    let hints: Vec<(&str, Value)> = SPECS
+    let hints: Vec<(&str, Value)> = headless::operation_specs()
         .iter()
         .map(|spec| {
             let hints = spec.hints.expect("every operation tool has hints");
