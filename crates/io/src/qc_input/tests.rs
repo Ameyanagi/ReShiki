@@ -12,6 +12,43 @@ mod validation;
 
 const GENERATOR: &str = "ReShiki 0.17.1";
 
+#[test]
+fn parse_xyz_keeps_only_the_first_frame_and_respects_extended_columns() {
+    let frame = parse_xyz(
+        "2\nProperties=charge:R:1:pos:R:3:species:S:1\n0.2 1 -2 3 O\n-0.2 4 5 -6 H\n\ninvalid next frame",
+    )
+    .unwrap();
+    assert_eq!(frame.numbers, [8, 1]);
+    assert_eq!(
+        frame.positions_angstrom,
+        [[1.0, -2.0, 3.0], [4.0, 5.0, -6.0]]
+    );
+    assert_eq!((frame.charge, frame.multiplicity), (0, 1));
+    assert_eq!(parse_xyz("1\nname\nH 0 0 0\n").unwrap().numbers, [1]);
+}
+
+#[test]
+fn parse_xyz_rejects_invalid_first_frames() {
+    for (input, message) in [
+        (
+            "water",
+            "The XYZ input needs an atom count on the first line.",
+        ),
+        ("1\n", "The XYZ input needs a comment line."),
+        ("10001\n", "The XYZ input exceeds 10000 atoms."),
+        (
+            "1\nProperties=species:S:1\nH",
+            "XYZ Properties needs species:S:1 and pos:R:3 columns.",
+        ),
+        (
+            "1\n\nH NaN 0 0\n",
+            "Invalid XYZ atom 1: expected an element and finite x y z coordinates.",
+        ),
+    ] {
+        assert_eq!(parse_xyz(input).unwrap_err(), message);
+    }
+}
+
 fn water() -> Frame {
     Frame {
         numbers: vec![8, 1, 1],
@@ -99,6 +136,7 @@ fn result(frame: &Frame) -> CalcResult {
         trajectory: None,
         keep_full: false,
         omitted_bytes: None,
+        run: None,
     }
 }
 

@@ -320,8 +320,7 @@ async fn actual_chemdraw_reaction_imports_complete_graph_and_both_arrows() -> an
             assert!((arrow.end.x - arrow.start.x - 84.).abs() < 0.03);
             assert!((arrow.end.y - arrow.start.y).abs() < 0.0001);
         }
-        // The codec retains scheme references. The existing native scene
-        // importer does not restore external reaction roles; do not infer them.
+        // ChemDraw saved this capture without any scheme or step records.
         assert!(doc.reactions.is_empty());
     }
     Ok(())

@@ -166,7 +166,7 @@ Choose one arrow in the reaction inspector to export it. Export controls remain 
 
 Coefficients greater than one export as repeated chemical participants. Repeated mapped participants need distinct atom maps; the exporter rejects duplicate map numbers on one side. Query atoms, enhanced stereo groups, hydrogen interactions, partial and quadruple bonds are not supported by this reaction-exchange workflow and produce an error rather than a flattened structure. The expanded export is limited to 10,000 atoms.
 
-Molecular MOL/SMILES/InChI and current CDXML/CDX drawing exchange do not retain these reaction roles. The native clipboard representation preserves them when pasting a complete reaction into ReShiki. Save `.rsk` alongside an exchange file to retain the full scheme.
+CDXML and CDX files keep reaction roles the way ChemDraw does: each arrow with a reaction becomes a reaction step that lists its reactants, products, plus signs, reagents and conditions above and below the arrow, and atom maps. An arrow without roles set by hand gets the roles **Preview reaction** shows. Opening a CDXML or CDX file turns the steps ReShiki can represent back into reaction roles. Coefficients, and reactions on arrows that ChemDraw gets as shapes, are not kept; export says so. Molecular MOL/SMILES/InChI do not retain reaction roles. The native clipboard representation preserves them when pasting a complete reaction into ReShiki. Save `.rsk` alongside an exchange file to retain the full scheme.
 
 ## Atom mapping and label placement
 

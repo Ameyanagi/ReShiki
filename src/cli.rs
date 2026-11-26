@@ -5,7 +5,7 @@
 //! `ToolHost::call`, the operation layer `reshiki --mcp` serves, so both
 //! share the same import, analyze, render, compose and export semantics.
 //! `calc` is a CLI-only exception: it calls the isolated xTB worker directly
-//! and has no MCP tool.
+//! and prints its raw result. `calculate` prints the tool's compact summary.
 //!
 //! # Output contract
 //!
@@ -32,6 +32,8 @@
 mod analyze;
 mod args;
 mod calc;
+#[cfg(feature = "xtb")]
+mod calculate;
 mod commands;
 mod compose;
 mod convert;
@@ -42,6 +44,7 @@ mod mcp_usage;
 mod name;
 mod pieces;
 mod predict_nmr;
+mod read_output;
 mod reference;
 mod render;
 mod skill;
@@ -174,6 +177,19 @@ async fn run_command(
                 return Ok(FAILURE);
             }
         }
+        Command::Calculate(command) => {
+            #[cfg(feature = "xtb")]
+            {
+                calculate::run(command, out, err).await
+            }
+            #[cfg(not(feature = "xtb"))]
+            {
+                let _ = command;
+                let _ = writeln!(err, "reshiki: xTB is not included in this build");
+                return Ok(FAILURE);
+            }
+        }
+        Command::ReadOutput(command) => read_output::run(command, out, err).await,
         Command::Convert(convert) => convert::run(convert, out, err, terminal).await,
         Command::Render(render) => render::run(render, out, err, terminal).await,
         Command::Compose(compose) => compose::run(compose, out, err, terminal).await,

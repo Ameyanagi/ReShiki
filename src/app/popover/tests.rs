@@ -17,11 +17,12 @@ use iced_runtime::{UserInterface, user_interface::Cache};
 use reshiki::accessibility::{Collect, FocusControl, Node, Snapshot};
 use reshiki::document::Point;
 
-const IDS: [&str; 4] = [
+const IDS: [&str; 5] = [
     "chemical-format-mol",
     "chemical-format-smiles",
     "chemical-format-inchi",
     "chemical-format-cdxml",
+    "chemical-format-cdx",
 ];
 
 struct Ui {
@@ -233,7 +234,7 @@ async fn chemical_export_choices_fit_without_shrinking_and_keep_keyboard_actions
             }
         }
         let first = find(&popup, IDS[0]).bounds;
-        let last = find(&popup, IDS[3]).bounds;
+        let last = find(&popup, IDS[IDS.len() - 1]).bounds;
         let popup_height = last.y + last.height - first.y + 10.;
         if anchor.y + anchor.height + GAP + popup_height + MARGIN <= size.height {
             close(first.y, anchor.y + anchor.height + GAP + 5.);
@@ -252,14 +253,14 @@ async fn chemical_export_choices_fit_without_shrinking_and_keep_keyboard_actions
         assert!(matches!(
             messages.as_slice(),
             [Message::InspectorAction(Action::Chemical(
-                ChemicalFormat::Cdxml
+                ChemicalFormat::Cdx
             ))]
         ));
         apply(&mut app, messages);
         assert!(!app.tab.inspector_ui.menu_open());
         let closed = ui.snapshot(&app);
         let restored = find(&closed, "export-chemical-format");
-        assert!(restored.name.contains("CDXML"));
+        assert!(restored.name.contains("CDX drawing"));
         assert!(restored.focused, "the original opener keeps its focus");
         close(restored.bounds.y, anchor.y);
         assert!(

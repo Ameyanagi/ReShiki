@@ -48,6 +48,7 @@ fn defaults_are_the_documented_values() {
     assert_eq!(budgets.concurrency, 2);
     assert_eq!(budgets.queue, 8);
     assert_eq!(budgets.op_deadline, Duration::from_secs(120));
+    assert_eq!(budgets.calc_deadline, Duration::from_secs(1800));
     assert_eq!(budgets.idle_ttl, Duration::from_secs(3600));
     assert_eq!(budgets.idempotency_receipts, 32);
     assert_eq!(budgets.max_idempotency_key_bytes, 128);
@@ -96,12 +97,16 @@ fn validate_rejects_inconsistent_budgets() {
     let timing = "op_deadline and idle_ttl must be positive";
     let import = "Import limits must fit within max_request_bytes";
     let render = "The default render size must be within the render limits";
-    let cases: [(Change, &str); 14] = [
+    let cases: [(Change, &str); 15] = [
         (|b| b.max_session_weight = 0, session),
         (|b| b.max_session_picture_bytes = 0, session),
         (|b| b.export_png_pixels = 0, session),
         (|b| b.op_deadline = Duration::ZERO, timing),
         (|b| b.idle_ttl = Duration::ZERO, timing),
+        (
+            |b| b.calc_deadline = Duration::ZERO,
+            "calc_deadline must be positive",
+        ),
         (|b| b.max_text_bytes = b.max_request_bytes + 1, import),
         (|b| b.max_cdx_base64 = b.max_request_bytes + 1, import),
         (|b| b.render.min_side = 0, render),

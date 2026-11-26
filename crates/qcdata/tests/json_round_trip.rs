@@ -1,8 +1,9 @@
 use reshiki_qcdata::{
-    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Endpoints, Error, Frame,
-    MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance, ScfRetry, Settings, Shell,
-    SolvationState, Solvent, SolventCorrection, SolventModel, Source, Spin, Status, Task, Thermo,
-    Trajectory, Vibrations, XtbConventions, XtbMethod, XtbSettings,
+    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Convergence, Endpoints,
+    Error, Frame, MAX_RUN_EVALUATIONS, MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance,
+    RunSummary, ScfRetry, Settings, Shell, SolvationState, Solvent, SolventCorrection,
+    SolventModel, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbConventions,
+    XtbMethod, XtbSettings,
 };
 
 fn assert_compact(expected: &[f64], decoded: &mut [f64], quantized: bool) {
@@ -173,10 +174,12 @@ fn imported() -> (Frame, CalcResult) {
             rotor_cutoff_cm1: 100.0,
             imaginary_cutoff_cm1: -25.0,
             symmetry_number: 1,
+            point_group: None,
         }),
         trajectory: Some(trajectory),
         keep_full: true,
         omitted_bytes: Some(12_345),
+        run: None,
     };
     (frame, result)
 }
@@ -274,6 +277,9 @@ fn calculated_result_round_trips_with_solvent_settings() {
             max_iterations: None,
         }],
         gfnff: None,
+        threads: Some(4),
+        convergence: Some(Convergence::Tight),
+        fixed_atoms: vec![0, 2],
     });
     calculated.provenance.program = "ReShiki".into();
     calculated.provenance.method = Some(XtbMethod::GXtb.label().into());
@@ -283,17 +289,47 @@ fn calculated_result_round_trips_with_solvent_settings() {
     };
     calculated.keep_full = false;
     calculated.omitted_bytes = None;
+    calculated.run = Some(RunSummary {
+        seconds: 12.5,
+        scf_iterations: vec![7, 5, 4],
+        finished: Some("2026-11-26T05:03:00Z".into()),
+    });
+    calculated.validate(&frame).unwrap();
     let value = serde_json::to_value(&calculated).unwrap();
     let xtb = &value["settings"]["xtb"];
     assert_eq!(xtb["conventions"], "xtb-6.8");
+    assert_eq!(xtb["threads"], 4);
+    assert_eq!(xtb["convergence"], "tight");
+    assert_eq!(xtb["fixed_atoms"], serde_json::json!([0, 2]));
     assert_eq!(xtb["solvent"]["model"], "gbsa");
     assert_eq!(
         xtb["scf_retries"],
         serde_json::json!([{ "electronic_temperature_k": 1000.0 }])
     );
-    let decoded: CalcResult = serde_json::from_value(value.clone()).unwrap();
+    let mut decoded: CalcResult = serde_json::from_value(value.clone()).unwrap();
     decoded.validate(&frame).unwrap();
+    let vibrations = calculated.vibrations.as_ref().unwrap();
+    let decoded_vibrations = decoded.vibrations.as_mut().unwrap();
+    assert_compact(
+        &vibrations.reduced_masses_amu,
+        &mut decoded_vibrations.reduced_masses_amu,
+        false,
+    );
+    assert_compact(
+        &vibrations.masses_amu,
+        &mut decoded_vibrations.masses_amu,
+        false,
+    );
     assert_eq!(decoded, calculated);
+    let light = calculated.for_file(0, &[]);
+    light.validate(&frame).unwrap();
+    assert_eq!(light.settings, calculated.settings);
+    assert_eq!(light.run, calculated.run);
+    let saved: CalcResult =
+        serde_json::from_slice(&serde_json::to_vec_pretty(&light).unwrap()).unwrap();
+    saved.validate(&frame).unwrap();
+    assert_eq!(saved.settings, calculated.settings);
+    assert_eq!(saved.run, calculated.run);
     for (parent, key) in [
         (&value, "gradient_hartree_per_bohr"),
         (&value, "hessian_hartree_per_bohr2"),
@@ -303,12 +339,25 @@ fn calculated_result_round_trips_with_solvent_settings() {
         (&value["orbitals"]["alpha"], "rows"),
         (&value["orbitals"]["alpha"], "coefficients"),
         (&value["vibrations"], "modes"),
-        (&value["vibrations"], "reduced_masses_amu"),
-        (&value["vibrations"], "masses_amu"),
         (&value["trajectory"], "positions_angstrom"),
     ] {
         assert!(parent.get(key).is_none(), "{key} should be omitted");
     }
+}
+
+#[test]
+fn thermochemistry_point_group_is_optional_and_preserves_the_engine_label() {
+    let (_, mut result) = imported();
+    let value = serde_json::to_value(&result).unwrap();
+    assert!(value["thermo"].get("point_group").is_none());
+    let decoded: CalcResult = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.thermo.unwrap().point_group, None);
+
+    result.thermo.as_mut().unwrap().point_group = Some("Cinfv".into());
+    let value = serde_json::to_value(&result).unwrap();
+    assert_eq!(value["thermo"]["point_group"], "Cinfv");
+    let decoded: CalcResult = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.thermo, result.thermo);
 }
 
 #[test]
@@ -331,10 +380,73 @@ fn minimal_result_deserializes_from_only_required_fields() {
     )
     .unwrap();
     result.validate(&frame).unwrap();
+    let Settings::Xtb(settings) = &result.settings else {
+        panic!("expected xTB settings");
+    };
+    assert_eq!(settings.threads, None);
+    assert_eq!(settings.convergence, None);
+    assert!(settings.fixed_atoms.is_empty());
+    assert_eq!(result.run, None);
     assert_eq!(
         serde_json::to_value(result).unwrap(),
         serde_json::from_str::<serde_json::Value>(json).unwrap()
     );
+}
+
+#[test]
+fn calculated_result_rejects_invalid_run_settings_and_summary() {
+    let (frame, mut result) = imported();
+    result.settings = Settings::Xtb(XtbSettings {
+        method: XtbMethod::Gfn2Xtb,
+        conventions: Default::default(),
+        solvent: None,
+        electronic_temperature_k: None,
+        accuracy: None,
+        max_iterations: None,
+        scf_retries: vec![],
+        gfnff: None,
+        threads: Some(4),
+        convergence: Some(Convergence::Tight),
+        fixed_atoms: vec![0, 2],
+    });
+    result.provenance.source = Source::Calculated {
+        engine_revision: "fixture".into(),
+    };
+    result.validate(&frame).unwrap();
+    for fixed_atoms in [vec![2, 1], vec![0, 0], vec![frame.numbers.len() as u32]] {
+        let Settings::Xtb(settings) = &mut result.settings else {
+            unreachable!();
+        };
+        settings.fixed_atoms = fixed_atoms;
+        assert!(result.validate(&frame).is_err());
+    }
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!();
+    };
+    settings.fixed_atoms.clear();
+    settings.threads = Some(0);
+    assert!(result.validate(&frame).is_err());
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!();
+    };
+    settings.threads = Some(4);
+    for seconds in [f64::NAN, f64::INFINITY, -1.0] {
+        result.run = Some(RunSummary {
+            seconds,
+            scf_iterations: vec![],
+            finished: None,
+        });
+        assert!(result.validate(&frame).is_err());
+    }
+    result.run = Some(RunSummary {
+        seconds: 0.0,
+        scf_iterations: vec![0; MAX_RUN_EVALUATIONS + 1],
+        finished: None,
+    });
+    assert!(matches!(
+        result.validate(&frame),
+        Err(Error::TooLarge { .. })
+    ));
 }
 
 #[test]
@@ -542,6 +654,9 @@ fn xtb_settings_require_calculated_provenance_with_revision() {
         max_iterations: None,
         scf_retries: vec![],
         gfnff: None,
+        threads: None,
+        convergence: Default::default(),
+        fixed_atoms: vec![],
     });
     assert!(result.validate(&frame).is_err());
     result.provenance.source = Source::Calculated {

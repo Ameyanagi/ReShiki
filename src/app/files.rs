@@ -64,7 +64,7 @@ pub(super) fn keep_format_text(
                 _ => lost.push(format!("{count} {many}")),
             }
         }
-        if !doc.reactions.is_empty() {
+        if reshiki::exchange::drawing::has_unwritten_reactions(doc) {
             lost.push("reaction roles".into());
         }
         if reshiki::arrow_anchors::export_notice(doc).is_some()
@@ -413,6 +413,8 @@ pub enum Prepared {
     },
     /// An SD file's records, read.
     Records(Box<super::import::Batch>),
+    /// Several frames of one molecule: the import sheet asks which.
+    Frames(Box<super::frames_import::File>),
     #[cfg(target_arch = "wasm32")]
     Browser {
         handle: wasm_bindgen::JsValue,
@@ -483,6 +485,8 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         ))
     } else if is_qc_file(path, &extension) {
         prepare_qc(path, &contents)
+    } else if let Some(file) = super::frames_import::detect(path, &contents) {
+        Ok(Prepared::Frames(Box::new(file)))
     } else {
         // An SD file's records are read next, in `records`. Its extension
         // comes first, as for Insert: POSCAR is told by its name.
@@ -577,7 +581,7 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
 
 /// Every record of an SD file, read as Insert reads them, before the file
 /// is reported: files then still open in the order they were chosen.
-async fn records(
+pub(super) async fn records(
     path: &std::path::Path,
     prepared: Result<Prepared, String>,
 ) -> Result<Prepared, String> {
@@ -672,7 +676,7 @@ pub(super) fn open_picked(
                             // Neither a picture nor an SD file stays the tab's file.
                             if !matches!(
                                 &prepared,
-                                Prepared::Picture(..) | Prepared::Records(..)
+                                Prepared::Picture(..) | Prepared::Records(..) | Prepared::Frames(..)
                             ) =>
                         {
                             let mut duplicate = None;
@@ -958,6 +962,17 @@ impl super::App {
                 #[cfg(not(target_arch = "wasm32"))]
                 if placed < total {
                     self.github.amber = Some(self.status.clone());
+                }
+            }
+            Ok(Prepared::Frames(file)) => {
+                // One sheet at a time: files opened together wait their turn.
+                let name = super::import::name(&path);
+                if self.frames_import.is_some() || !self.frames_queue.is_empty() {
+                    self.frames_queue.push_back((path, *file));
+                } else {
+                    self.frames_import = Some(super::frames_import::Dialog::new(path, *file));
+                    self.status = format!("{name} has several frames: choose which to open");
+                    self.error = false;
                 }
             }
             Ok(Prepared::Import {
@@ -1425,6 +1440,16 @@ impl super::App {
     ) {
         match result {
             Ok(Some(saved)) => {
+                // The other ChemDraw format served this one file.
+                let chemical = self.tab.inspector_ui.chemical;
+                if chemical.chemdraw()
+                    && saved
+                        .path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case(chemical.code()))
+                {
+                    self.tab.inspector_ui.chemical = self.appearance.chemdraw_format.into();
+                }
                 self.status =
                     export_status(&saved.path, &saved.details, cfg!(target_arch = "wasm32"));
                 self.error = false;

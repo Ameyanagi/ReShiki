@@ -381,6 +381,43 @@ fn water_hessian_crosses_binary_chunks_and_converts_to_a_valid_calc_result() {
 
 #[cfg(feature = "xtb")]
 #[test]
+fn xtb_agent_calculates_water_energy_and_frequencies() {
+    let dir = tempfile::tempdir().expect("CLI folder");
+    let xyz = fixtures().join("water.xyz");
+    let output = headless::run_cli(
+        dir.path(),
+        &[
+            "calculate",
+            "--task",
+            "frequencies",
+            "--threads",
+            "1",
+            xyz.to_str().unwrap(),
+        ],
+        b"",
+        Duration::from_secs(120),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("calculate JSON");
+    let value = &json["value"];
+    let energy = value["energy_hartree"].as_f64().expect("water energy");
+    assert!((energy + 5.0702).abs() < 0.0001, "water energy: {energy}");
+    assert_eq!(value["method"], "gfn2");
+    assert_eq!(
+        value["frequencies"]["frequencies_cm1"]
+            .as_array()
+            .expect("frequencies")
+            .len(),
+        3
+    );
+}
+
+#[cfg(feature = "xtb")]
+#[test]
 fn ferrocene_all_orbitals_have_canonical_basis_rows_and_cli_arrays() {
     let open = molecule("ferrocene");
     let frame = frame(&open);
@@ -1569,6 +1606,7 @@ mod protocol_v2 {
                 rotor_cutoff_cm1: 100.0,
                 imaginary_cutoff_cm1: 20.0,
                 symmetry_number: 2,
+                point_group: None,
             });
             result.hessian = (0..9)
                 .flat_map(|row| (0..9).map(move |col| f64::from(row + col) / 13.0))

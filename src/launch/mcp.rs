@@ -268,11 +268,12 @@ pub(crate) fn mcp(args: Vec<OsString>) -> ! {
         }
     };
     let limits = Limits::from_budgets(&budgets);
-    let host = Arc::new(
-        HeadlessHost::new(CURRENT_VERSION, budgets)
-            .with_grants(Arc::new(grants))
-            .with_naming(Arc::new(reshiki::naming::AgentNaming)),
-    );
+    let host = HeadlessHost::new(CURRENT_VERSION, budgets)
+        .with_grants(Arc::new(grants))
+        .with_naming(Arc::new(reshiki::naming::AgentNaming));
+    #[cfg(feature = "xtb")]
+    let host = host.with_calculations(Arc::new(reshiki::xtb_agent::AgentCalculations));
+    let host = Arc::new(host);
     let result = runtime.block_on(server::serve(
         Arc::clone(&host),
         Principal::local(),
