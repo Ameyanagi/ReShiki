@@ -56,7 +56,7 @@ async fn import_calculation(app: &mut App) {
 
 #[tokio::test]
 async fn gaussian_job_rows_choose_the_molecule_and_its_results() {
-    use crate::app::xtb::{View, method_line, results_title};
+    use crate::app::xtb::{View, headline, method_line, results_title};
     use reshiki::models3d::Display;
 
     let (mut app, _) = App::new();
@@ -133,6 +133,11 @@ async fn gaussian_job_rows_choose_the_molecule_and_its_results() {
     assert_eq!(
         method_line(&stored.result, frame),
         "Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log"
+    );
+    // The headline names the program and file too, never just "imported".
+    assert_eq!(
+        headline(&stored.result, frame),
+        "Frequencies · Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log · neutral singlet"
     );
     assert_eq!(
         results_title(Some(&stored.result)),
