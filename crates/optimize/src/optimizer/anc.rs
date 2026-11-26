@@ -1,4 +1,7 @@
 //! Approximate normal coordinates, rational-function steps and Hessian updates.
+//!
+//! As in xtb's ANCopt (Grimme et al. 2017) \[Grimme2017ANCopt\]. Full references:
+//! docs/references/xtb.md.
 
 mod davidson;
 mod diis;
@@ -163,7 +166,7 @@ impl Anc {
         } else {
             matrix.dense_lowest_eigenvector()
         }?;
-        // Banerjee et al., J. Phys. Chem. 89, 52 (1985). Scaling the last
+        // Banerjee et al., J. Phys. Chem. 89, 52 (1985) [Banerjee1985PRFO]. Scaling the last
         // coordinate to one makes the last eigen-equation g·s = λ < 0.
         super::rfo::eigenvector_step(&v, g)
     }
