@@ -75,7 +75,9 @@ impl App {
         let cache = &self.tab.xtb.palette.ensemble.table;
         let fresh = {
             let table = cache.borrow();
-            table.revision == revision && crate::app::xtb::is(&table.result, &shown.stored.result)
+            table.revision == revision
+                && table.attachment == shown.stored.attachment
+                && crate::app::xtb::is(&table.result, &shown.stored.result)
         };
         if !fresh {
             let rows = super::rows(
@@ -87,6 +89,7 @@ impl App {
             let stereo_note = self.xtb_conformer_stereo_note(shown, &rows);
             *cache.borrow_mut() = Table {
                 result: Arc::downgrade(&shown.stored.result),
+                attachment: shown.stored.attachment,
                 revision,
                 rows,
                 stereo_note,

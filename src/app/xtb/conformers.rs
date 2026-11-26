@@ -262,6 +262,8 @@ pub(crate) struct Ensemble {
 #[derive(Default)]
 pub(crate) struct Table {
     result: std::sync::Weak<CalcResult>,
+    /// Copies of a molecule share a result but not their attachment.
+    attachment: u64,
     revision: (u64, u64),
     pub rows: Vec<Row>,
     pub stereo_note: Option<String>,

@@ -1123,6 +1123,26 @@ mod app {
     }
 
     #[test]
+    fn a_copy_sharing_the_result_gets_its_own_table() {
+        let (mut app, oxygen) = water(CalcTask::Conformers);
+        search(&mut app, found(false));
+        app.xtb_show_result(&app.tab.doc.science.results[0].result.clone());
+        let copied = crate::app::xtb::tests::duplicate_molecule(&mut app);
+        let mut attachments = vec![];
+        for selection in [copied, vec![oxygen]] {
+            app.tab.selected = selection;
+            let shown = app.xtb_shown().unwrap();
+            // Same result and revision: only the attachment tells the tables apart.
+            assert_eq!(
+                app.xtb_conformer_table(&shown).attachment,
+                shown.stored.attachment
+            );
+            attachments.push(shown.stored.attachment);
+        }
+        assert_ne!(attachments[0], attachments[1]);
+    }
+
+    #[test]
     fn export_uses_the_results_caption_then_saved_stem_then_hill_formula() {
         use super::Format;
         use std::path::PathBuf;
