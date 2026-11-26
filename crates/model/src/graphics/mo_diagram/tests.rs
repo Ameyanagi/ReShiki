@@ -224,7 +224,7 @@ fn open_shell_rows_keep_the_gap_and_both_columns_in_energy_order() {
 }
 
 #[test]
-fn degenerate_levels_across_spins_share_a_row() {
+fn nearby_spin_groups_share_a_row_without_merging_alpha_groups() {
     let mo = MoDiagram::new(
         1,
         "old".into(),
@@ -235,12 +235,53 @@ fn degenerate_levels_across_spins_share_a_row() {
     );
     let layout = Layout::new(&mo, &style::DEFAULT);
     let beta_row = group_y(&layout.columns, (1, 1)).unwrap();
-    assert_eq!(group_y(&layout.columns, (0, 1)), Some(beta_row));
     assert_eq!(group_y(&layout.columns, (0, 2)), Some(beta_row));
     let alpha = &layout.columns[0];
     let group = alpha.groups.iter().find(|g| g.y == beta_row).unwrap();
+    assert_eq!(group.levels, 2..=2);
     let bars: Vec<_> = alpha.bars(group, layout.font.size()).collect();
-    assert!(matches!(bars.as_slice(), [(1, _, right), (2, left, _)] if right < left));
+    assert!(matches!(bars.as_slice(), [(2, _, _)]));
+    let homo = group_y(&layout.columns, (0, 1)).unwrap();
+    assert!(beta_row < homo);
+    assert!(layout.lines.iter().any(|line| {
+        matches!(line.as_slice(), [_, start, end, _] if start.y == homo && end.y == beta_row)
+    }));
+}
+
+#[test]
+fn beta_without_occupations_does_not_collapse_the_alpha_gap() {
+    let mo = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![
+            column(Spin::Alpha, "α", &[-5.008, -5.000], 1),
+            Column {
+                occupied: None,
+                ..column(Spin::Beta, "β", &[-5.004], 0)
+            },
+        ],
+    );
+    let layout = Layout::new(&mo, &style::DEFAULT);
+    let homo = group_y(&layout.columns, (0, 0)).unwrap();
+    let lumo = group_y(&layout.columns, (0, 1)).unwrap();
+    let beta = group_y(&layout.columns, (1, 0)).unwrap();
+    assert!(lumo < homo);
+    assert!(beta == lumo || beta == homo);
+    assert!(layout.lines.iter().any(|line| {
+        matches!(line.as_slice(), [_, start, end, _] if start.y == homo && end.y == lumo)
+    }));
+    assert!(
+        layout
+            .labels
+            .iter()
+            .any(|label| label.text == "gap 0.01 eV")
+    );
+    assert!(
+        !layout
+            .labels
+            .iter()
+            .any(|label| label.text.contains("fold"))
+    );
 }
 
 #[test]

@@ -912,7 +912,23 @@ impl Writer<'_> {
                 self.tree.set(parent, crate::exchange::PANEL, record)?;
                 object = Some(parent);
             }
-            for label in &mo_labels {
+            for mut label in mo_labels {
+                let supported = label.format.style.size_pt.clamp(4., 144.);
+                if supported != label.format.style.size_pt {
+                    // Generated MO text is placed by its left edge's midpoint.
+                    // Keep that point on its row when the supported font size
+                    // changes its box, including for a turned diagram.
+                    let (width, height) = label.size();
+                    let centre = label.position.offset(width / 2., height / 2.);
+                    let left = label
+                        .position
+                        .offset(0., height / 2.)
+                        .turned(centre, label.angle);
+                    label.format.style.size_pt = supported;
+                    let (width, height) = label.size();
+                    let centre = left.offset(width / 2., 0.).turned(left, label.angle);
+                    label.position = centre.offset(-width / 2., -height / 2.);
+                }
                 let layout = crate::typography::layout(&label.text, &label.format);
                 let scale = crate::style::DEFAULT.points_per_world();
                 let measured = TextMetrics {
@@ -920,7 +936,7 @@ impl Writer<'_> {
                     height: layout.height * scale,
                     baseline: crate::style::text_ascent(&label.format.style) * scale,
                 };
-                let text = self.annotation(label, Some(&measured))?;
+                let text = self.annotation(&label, Some(&measured))?;
                 self.tree.set(text, "Z", z.to_string())?;
                 self.tree.attach(parent, text)?;
                 object = Some(parent);

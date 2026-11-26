@@ -265,8 +265,12 @@ pub fn view_signature(doc: &Document, model: &Model3d) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+pub(crate) fn supports_style(style: Style) -> bool {
+    !matches!(style, Style::Wireframe | Style::Ellipsoids)
+}
+
 fn supported(model: &Model3d) -> bool {
-    model.cell.is_none() && !matches!(model.style, Style::Wireframe | Style::Ellipsoids)
+    model.cell.is_none() && supports_style(model.style)
 }
 
 /// Whether this figure's molecule and displayed geometry still match its result.

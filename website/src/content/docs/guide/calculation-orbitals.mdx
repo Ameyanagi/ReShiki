@@ -69,6 +69,29 @@ A placed orbital is a vector figure. It turns with the model, hides correctly be
 
 The file keeps what the figure needs, so it reopens with the same orbital and the same signs, even in builds without xTB and in `reshiki --cli convert`. A figure is drawn only while its result belongs to the molecule and the model shows that result's geometry; after an edit or on an earlier optimization step it is hidden.
 
+## MO diagram
+
+**Place MO diagram** (in the Orbitals tab, or ⌘K) puts the molecule's orbital energy diagram in the drawing as one object, beside the molecule and clear of other objects. It shows:
+
+- an energy axis in eV;
+- the levels from HOMO−2 to LUMO+2 as bars, with degenerate levels side by side;
+- electrons as ↑↓ on occupied levels;
+- each level's name and energy, and the HOMO–LUMO gap;
+- small orbital pictures of the HOMO and LUMO beside their levels.
+
+An open shell gets α and β columns.
+
+<Screenshot
+  src="/manual/xtb-mo-diagram.webp"
+  alt="MO_DIAGRAM_ALT"
+/>
+
+- **Pictures:** select the diagram, then click a level to add or remove its picture. With a level chosen in the Orbitals tab, **Add to MO diagram** and **Remove from MO diagram** do the same.
+- **Range:** with the diagram selected, the inspector's MO diagram card sets how many levels show below the HOMO and above the LUMO.
+- **Linked:** a new calculation of the same molecule updates the levels and pictures in place, and Undo takes back the calculation and the update together. The diagram's size and the pictures you chose are kept. **Unlink** keeps the diagram as it is.
+
+Placing, every change and removing are each one Undo step. The diagram is saved with the file. It is printed and exported to PDF, SVG and PNG with the drawing. Copied together with its molecule, it keeps its pictures. Copied alone, it keeps its levels but not its pictures, and is no longer linked. ChemDraw files get its lines and labels, without the pictures.
+
 ## Orbitals from other programs
 
 Opening a Molden or Gaussian fchk file attaches its results to the molecule and opens the palette, titled **Calculation results** with the file's program and method. The Orbitals tab then works as above. Orbitals from these files cannot be recomputed, so the file's coefficients are used directly. When a file's basis uses conventions ReShiki does not support yet (for example Cartesian d shells in fchk), it brings the levels without shapes and the import warnings say why. Gaussian logs and ORCA outputs bring orbital energies but no shapes.
