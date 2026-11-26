@@ -18,7 +18,7 @@ In **Predict → xTB**, choose the task:
 - **Opt + freq** optimizes the molecule with Tight convergence, then calculates the frequencies at the optimized geometry. Use this for a new structure.
 - **Frequencies** calculates them at the current 3D model, for a structure that is already optimized.
 
-Then click **Run**. The results open in the **Vibrations** tab of the results palette.
+Then click **Run**. The results palette opens on **Summary**; choose its **Vibrations** tab.
 
 ## Read the Vibrations tab
 
@@ -44,7 +44,7 @@ Then click **Run**. The results open in the **Vibrations** tab of the results pa
 
 ## Thermochemistry
 
-Open **Thermochemistry** in the Vibrations tab for the zero-point vibrational energy (ZPVE), enthalpy, entropy, Gibbs free energy and heat capacity, with the point group and symmetry number. ReShiki uses the quasi-RRHO treatment that xtb uses by default: low modes below 50 cm⁻¹ are treated as free rotors. Enter another temperature or pressure to recompute them without a new calculation.
+Open **Thermochemistry** in the Vibrations tab for the zero-point vibrational energy (ZPVE), enthalpy, entropy, Gibbs free energy and heat capacity, with the point group and symmetry number. ReShiki uses the quasi-RRHO treatment that xtb uses by default: low-frequency modes blend toward free rotors, with the crossover at 50 cm⁻¹. Enter another temperature or pressure to recompute them without a new calculation.
 
 ## Imaginary frequencies
 
@@ -52,7 +52,7 @@ One or more imaginary frequencies mean the structure is not a minimum. **Push al
 
 ## File size
 
-The file keeps the frequencies, IR intensities and thermochemistry. The normal-mode vectors are not saved: ReShiki recomputes them when you open the Vibrations tab, and shows them only if the recomputed frequencies match the saved ones. In a build without the xTB engine, the modes cannot be shown.
+The file keeps the frequencies, IR intensities and thermochemistry. By default the normal-mode vectors are not saved: ReShiki recomputes them when you open the Vibrations tab, and shows them only if the recomputed frequencies match the saved ones, so a build without the xTB engine cannot show them. **Keep full results in this file** saves the vectors too.
 
 ## How good the numbers are
 

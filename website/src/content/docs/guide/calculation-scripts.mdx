@@ -18,7 +18,7 @@ reshiki --cli calculate --task opt+freq --solvent water water.xyz
 reshiki --cli calculate --method gxtb --task frequencies water.xyz
 ```
 
-`--task` is `energy` (default), `optimize`, `frequencies` or `opt+freq`; `--method` is `gfn2` (default), `gxtb` or `gfnff`. Set the charge with `--charge`, unpaired electrons with `--uhf`, an ALPB solvent with `--solvent`, held atoms with `--fix`. The result has the energy (hartree), gap, dipole, charges, the optimization with the final XYZ, frequencies, IR intensities, the number of imaginary modes, and the zero-point correction, H and G at 298.15 K.
+`--task` is `energy` (default), `optimize`, `frequencies` or `opt+freq`; `--method` is `gfn2` (default), `gxtb` or `gfnff`. Set the charge with `--charge`, unpaired electrons with `--uhf`, an ALPB solvent with `--solvent`, held atoms with `--fix`. The result has the energy (hartree), gap, dipole and charges; optimizations add the final XYZ, and frequency tasks add the frequencies, IR intensities, the number of imaginary modes, and the zero-point correction, H and G at 298.15 K.
 
 Two more commands handle files from other programs:
 
@@ -38,7 +38,7 @@ xTB: included (axtb 0.2.0, LGPL-3.0-or-later, source https://github.com/Ameyanag
 
 ## AI agents (MCP)
 
-The MCP server (`reshiki --mcp`) offers the same three tools, `calculate`, `export_input` and `read_output`, so an agent can optimize a structure, read its frequencies, write a DFT input and read the log back. `calculate` is listed only by builds that include xTB; it reports progress at each optimization step and stops the calculation when the agent cancels. Calculations may run for up to 30 minutes. See [Connect AI agents](/guide/agents/) and the [tool reference](/developer/agent-reference/).
+The MCP server (`reshiki --mcp`) offers the same three tools, `calculate`, `export_input` and `read_output`, so an agent can optimize a structure, read its frequencies, get a DFT input as text and read the program's log back. `calculate` is listed only by builds that include xTB; it reports progress at each optimization step when the client asks for progress, and stops the calculation when the agent cancels. Calculations may run for up to 30 minutes. See [Connect AI agents](/guide/agents/) and the [tool reference](/developer/agent-reference/).
 
 ## Python
 
