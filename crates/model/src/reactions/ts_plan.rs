@@ -24,6 +24,8 @@ pub struct TsPlan {
     pub start_atoms: Vec<u64>,
     /// Map numbers in use, sorted.
     pub mapped: Vec<u32>,
+    /// Start-side drawing IDs of all mapped hydrogens, in map order.
+    pub mapped_hydrogens: Vec<u64>,
     /// Bonds formed in the search direction, by start-side drawing atom IDs.
     pub form: Vec<(u64, u64)>,
     /// Bonds broken in the search direction, by start-side drawing atom IDs.
@@ -137,6 +139,12 @@ pub fn plan(doc: &Document, arrow: u64) -> Result<TsPlan, TsPlanError> {
         start,
         start_atoms,
         mapped: from.atoms.keys().copied().collect(),
+        mapped_hydrogens: from
+            .atoms
+            .values()
+            .filter(|a| a.drawing.element == "H")
+            .map(|a| a.drawing.id)
+            .collect(),
         form,
         break_,
         hydrogen_moves,
@@ -206,6 +214,7 @@ fn side_drawing(doc: &Document, ids: &[u64]) -> Result<Document, TsPlanError> {
 struct MappedAtom<'a> {
     drawing: &'a Atom,
     hydrogens: usize,
+    has_unmapped_isotope_h: bool,
 }
 
 struct MappedSide<'a> {
@@ -243,6 +252,7 @@ impl<'a> MappedSide<'a> {
             let atom = MappedAtom {
                 drawing,
                 hydrogens: hydrogens.len(),
+                has_unmapped_isotope_h: hydrogens.iter().any(|&isotope| isotope != 0),
             };
             if atoms.insert(map, atom).is_some() {
                 return Err(TsPlanError::Mismatch(format!(
@@ -293,7 +303,14 @@ fn hydrogen_moves(
     for (&map, atom) in &from.atoms {
         let next = to.atom(map)?.hydrogens;
         match atom.hydrogens.cmp(&next) {
-            std::cmp::Ordering::Greater => donors.push((atom.drawing, atom.hydrogens - next)),
+            std::cmp::Ordering::Greater => {
+                if atom.has_unmapped_isotope_h {
+                    return Err(TsPlanError::Unsupported(
+                        "Map isotope-labelled hydrogens before searching".into(),
+                    ));
+                }
+                donors.push((atom.drawing, atom.hydrogens - next));
+            }
             std::cmp::Ordering::Less => acceptors.push((atom.drawing, next - atom.hydrogens)),
             std::cmp::Ordering::Equal => {}
         }

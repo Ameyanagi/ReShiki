@@ -922,10 +922,12 @@ impl App {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
             if let Some(ts) = ts {
                 self.tab.xtb.ts_sessions.remember(&result, ts);
-                self.xtb.dock.collapsed = false;
-                if self.xtb.dock.inspector {
-                    self.xtb.page = Page::Xtb;
-                    let _ = self.show_inspector_tab(super::InspectorTab::Predict);
+                if self.tabs.temporary_depth == 0 {
+                    self.xtb.dock.collapsed = false;
+                    if self.xtb.dock.inspector {
+                        self.xtb.page = Page::Xtb;
+                        let _ = self.show_inspector_tab(super::InspectorTab::Predict);
+                    }
                 }
             }
             self.tab.xtb.palette.show(&result);

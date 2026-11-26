@@ -87,6 +87,7 @@ fn claisen_starts_on_reactants_and_ignores_order_changes_and_agents() {
             start: Side::Reactant,
             start_atoms: left.values().copied().collect(),
             mapped: vec![1, 2, 3, 4, 5, 6],
+            mapped_hydrogens: vec![],
             form: vec![(left[&1], left[&6])],
             break_: vec![(left[&3], left[&4])],
             hydrogen_moves: vec![],
@@ -196,9 +197,34 @@ fn mapped_drawn_hydrogen_changes_are_bonds() {
     let result = plan(&doc, arrow).unwrap();
     assert_eq!(result.atoms, 10);
     assert_eq!(result.mapped, [1, 2, 3, 4, 5]);
+    assert_eq!(result.mapped_hydrogens, [left[&5]]);
     assert_eq!(result.form, [(left[&3], left[&5])]);
     assert_eq!(result.break_, [(left[&1], left[&5])]);
     assert!(result.hydrogen_moves.is_empty());
+}
+
+#[test]
+fn inferred_transfer_requires_mapping_an_isotope_labelled_donor_hydrogen() {
+    let (mut doc, arrow, left, right) = tautomer(true);
+    for id in [left[&5], right[&5]] {
+        let atom = doc.atom_mut(id).unwrap();
+        atom.isotope = 2;
+        atom.map_num = 0;
+    }
+    assert_eq!(
+        plan(&doc, arrow),
+        Err(TsPlanError::Unsupported(
+            "Map isotope-labelled hydrogens before searching".into()
+        ))
+    );
+    for id in [left[&5], right[&5]] {
+        doc.atom_mut(id).unwrap().map_num = 5;
+    }
+    let plan = plan(&doc, arrow).unwrap();
+    assert!(plan.hydrogen_moves.is_empty());
+    assert_eq!(plan.mapped_hydrogens, [left[&5]]);
+    assert_eq!(plan.break_, [(left[&1], left[&5])]);
+    assert_eq!(plan.form, [(left[&3], left[&5])]);
 }
 
 #[test]

@@ -88,7 +88,7 @@ fn run(
     }
     check_cancel(cancel)?;
     let changes = changes(launch, plan)?;
-    let masses = engine_masses(&launch.frame.numbers)?;
+    let masses = engine_masses(&launch.frame)?;
     let limits = Limits::default();
     let executable = std::env::current_exe().map_err(|error| Failure::Other(error.to_string()))?;
     let open = Open {
@@ -159,23 +159,26 @@ fn run(
         product: &product,
         options: &options,
     };
-    let report = ts::search(&mut workers, &search, |event| {
-        if let Some(event) = progress(event)
-            && send(tx, cancel, event).is_err()
-        {
-            return ControlFlow::Break(());
-        }
-        control(cancel, tx)
-    })
+    let report = ts::search_with_cancel(
+        &mut workers,
+        &search,
+        |event| {
+            if let Some(event) = progress(event)
+                && send(tx, cancel, event).is_err()
+            {
+                return ControlFlow::Break(());
+            }
+            control(cancel, tx)
+        },
+        || control(cancel, tx),
+    )
     .map_err(failed)?;
     check_cancel(cancel)?;
     let checked = workers
         .first_mut()
         .ok_or_else(|| Failure::Other("No xTB worker".into()))?
         .checked_hessian(&report.ts.positions, &masses)
-        .map_err(|error| {
-            Failure::Other(format!("worker check failed: {}", ts::TsError::from(error)))
-        })?;
+        .map_err(ts::TsError::from);
     check_cancel(cancel)?;
     let evaluations = workers
         .iter()
@@ -205,11 +208,28 @@ fn worker_count(images: usize, parallelism: usize) -> usize {
     4.min(parallelism).min(images.saturating_sub(2))
 }
 
-fn engine_masses(numbers: &[u8]) -> Result<Vec<f64>, Failure> {
-    numbers
+fn engine_masses(frame: &Frame) -> Result<Vec<f64>, Failure> {
+    use reshiki::chemistry::{ELEMENTS, ISOTOPES};
+
+    if !frame.masses_amu.is_empty() {
+        return Ok(frame.masses_amu.clone());
+    }
+    frame
+        .numbers
         .iter()
-        .map(|&z| {
-            reshiki::chemistry::ELEMENTS
+        .zip(frame.isotopes.iter().copied().chain(std::iter::repeat(0)))
+        .map(|(&z, isotope)| {
+            if isotope != 0 {
+                // Use the nuclide table and the mass-number fallback used for
+                // labelled atoms in the drawing's molecular properties.
+                let mass = ISOTOPES
+                    .binary_search_by_key(&(z, isotope), |&(z, isotope, _)| (z, isotope))
+                    .ok()
+                    .and_then(|index| ISOTOPES.get(index))
+                    .map_or(f64::from(isotope), |&(_, _, mass)| mass);
+                return Ok(mass);
+            }
+            ELEMENTS
                 .get(usize::from(z))
                 .map(|element| element.average_mass_amu())
                 .ok_or_else(|| Failure::Other(format!("Unknown element Z={z}")))
@@ -271,14 +291,17 @@ fn changes(launch: &Launch, plan: &TsPlan) -> Result<Changes, Failure> {
     let mut form = pairs(&plan.form)?;
     let mut break_ = pairs(&plan.break_)?;
     let bonds = ts::bonds(&frame.numbers, &bohr(&frame.positions_angstrom)).map_err(failed)?;
-    // An explicitly mapped hydrogen already has a prescribed change. Do not
-    // reuse it to fill a separate move inferred from heavy-atom H counts.
+    // Mapped hydrogens have a prescribed identity even when their bonds stay
+    // the same. Reserve them along with every H used in an explicit change.
     let mut used: BTreeSet<_> = form
         .iter()
         .chain(&break_)
         .flat_map(|&(a, b)| [a, b])
         .filter(|&i| frame.numbers.get(i) == Some(&1))
         .collect();
+    for &id in &plan.mapped_hydrogens {
+        used.insert(index(id)?);
+    }
     for &(donor, acceptor) in &plan.hydrogen_moves {
         let (donor, acceptor) = (index(donor)?, index(acceptor)?);
         let target = frame
@@ -321,7 +344,7 @@ fn pair(a: usize, b: usize) -> (usize, usize) {
 
 struct Completion {
     report: TsReport,
-    checked: Computed,
+    checked: Result<Computed, ts::TsError>,
     engine: Engine,
     changes: Changes,
     evaluations: Vec<Evaluation>,
@@ -347,23 +370,45 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     let transition = frame(&report.ts.positions);
     let reactant = frame(&report.reactant.positions);
     let product = frame(&report.product.positions);
-    let worker_frequencies = checked
-        .vibrations
-        .as_ref()
-        .map(|v| v.frequencies_cm1.clone())
-        .ok_or_else(|| Failure::Other("The xTB worker returned no vibrational analysis".into()))?;
-    // Conversion validates a Hessian result immediately; endpoints are supplied
-    // below before validating the completed transition-state result.
-    let mut result = checked
-        .to_calc_result(&transition, qcdata::Task::Hessian, &engine, None)
-        .map_err(|error| Failure::Other(error.to_string()))?;
+    let checked = checked.and_then(|computed| {
+        let frequencies = computed
+            .vibrations
+            .as_ref()
+            .map(|v| v.frequencies_cm1.clone())
+            .ok_or_else(|| {
+                ts::TsError::Failed("The xTB worker returned no vibrational analysis".into())
+            })?;
+        let result = computed
+            .to_calc_result(&transition, qcdata::Task::Hessian, &engine, None)
+            .map_err(|error| ts::TsError::Failed(error.to_string()))?;
+        Ok((result, frequencies, computed))
+    });
+    let mut info = RunInfo {
+        evaluations,
+        ..RunInfo::default()
+    };
+    let (mut result, worker_frequencies, reason) = match checked {
+        Ok((result, frequencies, computed)) => {
+            info.gap_ev = computed.homo_lumo_gap_ev;
+            info.near_degenerate = computed.near_degenerate;
+            info.numerics = computed.numerics;
+            let reason = failure_reason(&report, &frequencies);
+            (result, frequencies, reason)
+        }
+        Err(ts::TsError::Cancelled) => return Err(failed(ts::TsError::Cancelled)),
+        Err(error) => (
+            engine_candidate(&transition, &report, &engine),
+            Vec::new(),
+            Some(format!("worker check failed: {error}")),
+        ),
+    };
     result.task = qcdata::Task::TransitionState;
     result.input_frame = Some(launch.frame.hash());
     result.endpoints = Some(qcdata::Endpoints {
         reactant: reactant.hash(),
         product: product.hash(),
     });
-    result.status = match failure_reason(&report, &worker_frequencies) {
+    result.status = match reason {
         Some(reason) => qcdata::Status::NotConverged { reason },
         None => qcdata::Status::Converged,
     };
@@ -391,7 +436,8 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     });
     result.run = Some(qcdata::RunSummary {
         seconds,
-        scf_iterations: evaluations
+        scf_iterations: info
+            .evaluations
             .iter()
             .map(|e| e.scf_iterations as u32)
             .collect(),
@@ -421,18 +467,65 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .copied()
             .filter(|&f| f < -ts::IMAGINARY_CM1),
     };
-    let info = RunInfo {
-        gap_ev: checked.homo_lumo_gap_ev,
-        near_degenerate: checked.near_degenerate,
-        evaluations,
-        numerics: checked.numerics,
-    };
     Ok(Report {
         frames: vec![transition, reactant, product],
         result,
         extras,
         info,
     })
+}
+
+fn engine_candidate(frame: &Frame, report: &TsReport, engine: &Engine) -> CalcResult {
+    let method = Method::Gfn2.xtb_method();
+    CalcResult {
+        frame: frame.hash(),
+        input_frame: None,
+        task: qcdata::Task::TransitionState,
+        endpoints: None,
+        settings: qcdata::Settings::Xtb(qcdata::XtbSettings {
+            method,
+            conventions: Conventions::Axtb,
+            solvent: None,
+            electronic_temperature_k: None,
+            accuracy: None,
+            max_iterations: None,
+            scf_retries: Vec::new(),
+            gfnff: None,
+            threads: Some(1),
+            convergence: None,
+            fixed_atoms: Vec::new(),
+        }),
+        provenance: qcdata::Provenance {
+            program: "axtb".into(),
+            program_version: Some(engine.version.clone()),
+            method: Some(method.label().into()),
+            basis: None,
+            source: qcdata::Source::Calculated {
+                engine_revision: engine.rev.clone(),
+            },
+        },
+        status: qcdata::Status::Converged,
+        energy_hartree: Some(report.ts.energy),
+        energy_terms: Default::default(),
+        gradient_hartree_per_bohr: Vec::new(),
+        hessian_hartree_per_bohr2: report.hessian.clone(),
+        charges: Vec::new(),
+        dipole_e_bohr: None,
+        bond_orders: Vec::new(),
+        orbitals: None,
+        vibrations: Some(qcdata::Vibrations {
+            frequencies_cm1: report.frequencies_cm1.clone(),
+            ir_intensities_km_mol: Vec::new(),
+            modes: Vec::new(),
+            reduced_masses_amu: Vec::new(),
+            masses_amu: frame.masses_amu.clone(),
+        }),
+        thermo: None,
+        trajectory: None,
+        keep_full: false,
+        omitted_bytes: None,
+        run: None,
+    }
 }
 
 /// Keep the same acceptance rule and diagnostic order as the CLI.

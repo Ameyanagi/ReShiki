@@ -7,7 +7,7 @@ use crate::app::{App, Message};
 use iced::widget::{Space, column, container, progress_bar, row, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
-use reshiki::reactions::ts_plan::{self, TsPlan, TsPlanError};
+use reshiki::reactions::ts_plan::{self, Side, TsPlan, TsPlanError};
 
 const TITLE: &str = "Transition state (xTB)";
 const FIND: &str = "Find transition state (xTB)…";
@@ -148,6 +148,12 @@ struct Summary {
 }
 
 fn summary(doc: &Document, plan: &TsPlan) -> Summary {
+    // The plan runs away from the connected side. Keep the review in the
+    // reaction arrow's direction even when a 2→1 search starts on product.
+    let (forming, breaking) = match plan.start {
+        Side::Reactant => (&plan.form, &plan.break_),
+        Side::Product => (&plan.break_, &plan.form),
+    };
     let heavy = plan
         .start_atoms
         .iter()
@@ -168,14 +174,18 @@ fn summary(doc: &Document, plan: &TsPlan) -> Summary {
         atom_map: format!("Atom map: {heavy} of {heavy} heavy atoms"),
         bonds: format!(
             "Bonds formed: {} · broken: {}",
-            pairs(&plan.form),
-            pairs(&plan.break_)
+            pairs(forming),
+            pairs(breaking)
         ),
         hydrogens: if plan.hydrogen_moves.is_empty() {
             vec!["Hydrogens that move: none".into()]
         } else {
             std::iter::once("Hydrogens that move:".into())
                 .chain(plan.hydrogen_moves.iter().map(|&(from, to)| {
+                    let (from, to) = match plan.start {
+                        Side::Reactant => (from, to),
+                        Side::Product => (to, from),
+                    };
                     format!(
                         "H from {} to {} (least motion)",
                         atom_label(doc, from),
