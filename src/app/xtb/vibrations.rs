@@ -73,6 +73,8 @@ pub(crate) struct State {
     pub playing: bool,
     sort: Sort,
     opened: Weak<CalcResult>,
+    /// Last choices for other results, without keeping discarded results alive.
+    selections: Vec<Selection>,
     /// Largest atomic excursion of the animation, Å.
     pub amplitude: f32,
     pub speed: f32,
@@ -102,6 +104,7 @@ impl Default for State {
             playing: false,
             sort: Sort::default(),
             opened: Weak::new(),
+            selections: Vec::new(),
             amplitude: 0.3,
             speed: 1.,
             arrows: false,
@@ -125,6 +128,12 @@ impl Default for State {
 struct MotionNames {
     result: Weak<CalcResult>,
     names: Arc<[String]>,
+}
+
+struct Selection {
+    result: Weak<CalcResult>,
+    mode: usize,
+    playing: bool,
 }
 
 struct Recompute {
@@ -398,7 +407,7 @@ impl App {
                     && self.inspector_tab == InspectorTab::Predict
                     && self.xtb.page == Page::Xtb
             } else {
-                !self.xtb.dock.collapsed
+                !palette.collapsed
             }
     }
 
@@ -610,26 +619,44 @@ impl App {
     }
 
     fn xtb_vibrations_select_on_open(&mut self) {
-        if !self.xtb_vibrations_visible() {
-            return;
-        }
         let Some(shown) = self.xtb_shown() else {
             return;
         };
-        let result = &shown.stored.result;
-        if is(&self.tab.xtb.vibrations.opened, result) {
+        let result = shown.stored.result.clone();
+        if is(&self.tab.xtb.vibrations.opened, &result) {
             return;
         }
-        let Some(mode) = result.vibrations.as_ref().and_then(|vibrations| {
-            mode_list::order(vibrations, Sort::Intensity)
-                .first()
-                .copied()
-        }) else {
-            return;
+        let settings = &mut self.tab.xtb.vibrations;
+        settings
+            .selections
+            .retain(|entry| entry.result.strong_count() > 0);
+        let (mode, playing) = if let Some(index) = settings
+            .selections
+            .iter()
+            .position(|entry| is(&entry.result, &result))
+        {
+            let selected = settings.selections.swap_remove(index);
+            (selected.mode, selected.playing)
+        } else {
+            let Some(mode) = result.vibrations.as_ref().and_then(|vibrations| {
+                mode_list::order(vibrations, Sort::Intensity)
+                    .first()
+                    .copied()
+            }) else {
+                return;
+            };
+            (mode, false)
         };
-        self.tab.xtb.vibrations.opened = Arc::downgrade(result);
-        self.tab.xtb.vibrations.mode = mode;
-        self.tab.xtb.vibrations.playing = false;
+        let previous = std::mem::replace(&mut settings.opened, Arc::downgrade(&result));
+        if previous.strong_count() > 0 {
+            settings.selections.push(Selection {
+                result: previous,
+                mode: settings.mode,
+                playing: settings.playing,
+            });
+        }
+        settings.mode = mode;
+        settings.playing = playing;
     }
 
     fn xtb_reveal_mode(&self) -> Task<Message> {
@@ -643,27 +670,41 @@ impl App {
         Task::none()
     }
 
-    /// Open on the first imaginary mode or strongest band and recover missing modes.
-    pub(super) fn xtb_vibrations_opened(&mut self) -> Task<Message> {
-        if let Some(result) = self.xtb_shown().map(|shown| shown.stored.result.clone()) {
-            self.tab
-                .xtb
-                .vibrations
-                .problem
-                .take_if(|(weak, _)| is(weak, &result));
+    /// Explicitly choosing the tab retries a previous mode-recovery problem.
+    /// The app's visibility transition handles selection, status and reveal.
+    pub(super) fn xtb_vibrations_opened(&mut self, was_visible: bool) -> Task<Message> {
+        let Some(result) = self.xtb_shown().map(|shown| shown.stored.result.clone()) else {
+            return Task::none();
+        };
+        let retry = self
+            .tab
+            .xtb
+            .vibrations
+            .problem
+            .take_if(|(weak, _)| is(weak, &result))
+            .is_some();
+        if retry && was_visible {
+            self.xtb_vibrations_resume(true)
+        } else {
+            Task::none()
         }
-        let task = self.xtb_vibrations_resume();
-        self.xtb_vibrations_status();
-        task
     }
 
-    pub(in crate::app) fn xtb_vibrations_resume(&mut self) -> Task<Message> {
+    pub(in crate::app) fn xtb_vibrations_resume(&mut self, first_visible: bool) -> Task<Message> {
+        if !self.xtb_vibrations_visible() {
+            self.xtb_vibrations_leave();
+            self.xtb_clear_palette_status(Some(StatusKind::Mode));
+            return Task::none();
+        }
         self.xtb_vibrations_select_on_open();
         self.xtb_vibrations_sync();
-        if !self.xtb_vibrations_visible() {
-            self.xtb_clear_palette_status(Some(StatusKind::Mode));
+        let task = self.xtb_recompute_modes();
+        if first_visible {
+            self.xtb_vibrations_status();
+            Task::batch([task, self.xtb_reveal_mode()])
+        } else {
+            task
         }
-        Task::batch([self.xtb_recompute_modes(), self.xtb_reveal_mode()])
     }
 
     /// Recompute the shown result's normal modes with its stored settings,

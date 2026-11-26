@@ -17,15 +17,20 @@ fn opened() -> App {
 }
 
 fn opened_with(edit: impl FnOnce(&mut Report)) -> App {
-    let (mut app, _) = water(CalcTask::OptFreq);
-    let mut report = optfreq(&START, &MOVED);
-    edit(&mut report);
-    event(&mut app, run::Event::Done(Ok(Arc::new(report))));
+    let mut app = completed_with(edit);
     app.tab.xtb.vibrations.playing = true;
     send(
         &mut app,
         XtbAction::Palette(palette::Action::View(View::Vibrations)),
     );
+    app
+}
+
+fn completed_with(edit: impl FnOnce(&mut Report)) -> App {
+    let (mut app, _) = water(CalcTask::OptFreq);
+    let mut report = optfreq(&START, &MOVED);
+    edit(&mut report);
+    event(&mut app, run::Event::Done(Ok(Arc::new(report))));
     app
 }
 
@@ -138,6 +143,184 @@ fn reopening_keeps_the_mode_play_state_sort_and_cached_names() {
         &names,
         &app.xtb_motion_names(&app.xtb_shown().unwrap()).unwrap(),
     ));
+}
+
+#[test]
+fn returning_to_each_result_restores_its_mode_and_play_state() {
+    let mut app = opened();
+    let first = app.xtb_shown().unwrap().stored.result.clone();
+    let mut second_stored = app.xtb_shown().unwrap().stored.clone();
+    let mut second = (*first).clone();
+    second.vibrations.as_mut().unwrap().ir_intensities_km_mol = vec![1., 100., 10.];
+    let second = Arc::new(second);
+    second_stored.result = second.clone();
+    app.tab.doc.science.results.push(second_stored);
+
+    vibrations(&mut app, Action::Mode(2));
+    vibrations(&mut app, Action::Play(true));
+    app.xtb_show_result(&second);
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Vibrations)),
+    );
+    assert_eq!(
+        app.tab.xtb.vibrations.mode, 1,
+        "a new result picks its strongest band"
+    );
+    assert!(
+        !app.tab.xtb.vibrations.playing,
+        "a new result starts paused"
+    );
+    vibrations(&mut app, Action::Mode(0));
+
+    for (result, mode, playing) in [(&first, 2, true), (&second, 0, false), (&first, 2, true)] {
+        app.xtb_show_result(result);
+        send(
+            &mut app,
+            XtbAction::Palette(palette::Action::View(View::Vibrations)),
+        );
+        assert_eq!(app.tab.xtb.vibrations.mode, mode);
+        assert_eq!(app.tab.xtb.vibrations.playing, playing);
+        assert_eq!(app.tab.xtb.vibrations.selections.len(), 1);
+    }
+
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Summary)),
+    );
+    let discarded = Arc::downgrade(&second);
+    app.tab
+        .doc
+        .science
+        .results
+        .retain(|stored| !Arc::ptr_eq(&stored.result, &second));
+    drop(second);
+    assert!(
+        discarded.upgrade().is_none(),
+        "the selection memory only holds weak references"
+    );
+    let mut third = app.xtb_shown().unwrap().stored.clone();
+    third.result = Arc::new((*first).clone());
+    let result = third.result.clone();
+    app.tab.doc.science.results.push(third);
+    app.xtb_show_result(&result);
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Vibrations)),
+    );
+    assert_eq!(
+        app.tab.xtb.vibrations.selections.len(),
+        1,
+        "discarded results are pruned"
+    );
+}
+
+/// Count reveals aimed at a mode row, without building a renderer.
+async fn mode_reveals(task: Task<Message>, mode: usize) -> usize {
+    use iced::advanced::widget::{Id, operation};
+    use iced::futures::StreamExt;
+
+    struct Focus;
+    impl operation::Focusable for Focus {
+        fn is_focused(&self) -> bool {
+            false
+        }
+        fn focus(&mut self) {}
+        fn unfocus(&mut self) {}
+    }
+
+    let id = Id::from(format!("xtb-mode-{}", mode + 1));
+    let mut reveals = 0;
+    if let Some(mut stream) = iced_runtime::task::into_stream(task) {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Widget(mut operation) = action {
+                operation.focusable(Some(&id), iced::Rectangle::default(), &mut Focus);
+                if matches!(operation.finish(), operation::Outcome::Chain(_)) {
+                    reveals += 1;
+                }
+            }
+        }
+    }
+    reveals
+}
+
+#[tokio::test]
+async fn first_visibility_selects_reveals_and_reports_the_mode_once() {
+    for route in ["view", "expand", "inspector"] {
+        let mut app = completed_with(|report| {
+            report
+                .computed
+                .vibrations
+                .as_mut()
+                .unwrap()
+                .ir_intensities_km_mol = Some(vec![1., 10., 100.]);
+        });
+        let collapsed = route != "view";
+        app.tab.xtb.palette.collapsed = collapsed;
+        app.tab.xtb.vibrations.playing = true;
+        let opening = app.update(Message::Xtb(XtbAction::Palette(palette::Action::View(
+            View::Vibrations,
+        ))));
+        if collapsed {
+            assert_eq!(mode_reveals(opening, 2).await, 0, "{route}");
+            assert!(app.tab.xtb.vibrations.opened.upgrade().is_none(), "{route}");
+            let action = if route == "expand" {
+                palette::Action::Collapse
+            } else {
+                palette::Action::Dock
+            };
+            let task = app.update(Message::Xtb(XtbAction::Palette(action)));
+            assert_eq!(mode_reveals(task, 2).await, 1, "{route}");
+        } else {
+            assert_eq!(mode_reveals(opening, 2).await, 1, "{route}");
+        }
+        assert!(app.xtb_vibrations_visible(), "{route}");
+        assert_eq!(app.tab.xtb.vibrations.mode, 2, "{route}");
+        assert!(!app.tab.xtb.vibrations.playing, "{route}");
+        assert!(
+            app.status.starts_with("Mode 3 · 3480 cm⁻¹"),
+            "{route}: {}",
+            app.status
+        );
+        assert!(app.status.ends_with("paused"), "{route}: {}", app.status);
+
+        app.status = "Saved the drawing".into();
+        let repeated = app.update(Message::Xtb(XtbAction::Palette(palette::Action::View(
+            View::Vibrations,
+        ))));
+        assert_eq!(mode_reveals(repeated, 2).await, 0, "{route}");
+        assert_eq!(app.status, "Saved the drawing", "{route}");
+    }
+}
+
+#[tokio::test]
+async fn editing_a_visible_result_keeps_the_edit_status_and_scroll_position() {
+    let mut app = opened();
+    let revision = app.tab.revision;
+    let task = app.update(Message::Xtb(XtbAction::Vibrations(Action::PlaceSpectrum)));
+    assert_ne!(app.tab.revision, revision);
+    assert_eq!(mode_reveals(task, 0).await, 0);
+    assert_eq!(app.status, "Placed the IR spectrum · ⌘Z undoes");
+}
+
+#[tokio::test]
+async fn a_failed_rerun_shows_recovery_without_revealing_the_previous_mode() {
+    for collapsed in [false, true] {
+        let mut app = opened();
+        if collapsed {
+            send(&mut app, XtbAction::Palette(palette::Action::Collapse));
+        }
+        send(&mut app, XtbAction::Run);
+        let serial = app.tab.xtb.run.as_ref().unwrap().serial;
+        let failure = super::super::Failure::Crashed("worker exited".into());
+        let task = app.update(Message::Xtb(XtbAction::Event(
+            serial,
+            run::Event::Done(Err(failure)),
+        )));
+        assert!(app.xtb_vibrations_visible());
+        assert!(app.error && app.status.starts_with("xTB calculation failed"));
+        assert_eq!(mode_reveals(task, 0).await, 0);
+    }
 }
 
 #[test]

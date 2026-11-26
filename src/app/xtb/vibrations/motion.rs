@@ -8,10 +8,22 @@ use std::f64::consts::{PI, TAU};
 const STEP: f64 = 1e-4;
 const MIN_LENGTH: f64 = 1e-10;
 const MAX_BEND: f64 = 175. * PI / 180.;
+const MAX_TORSIONS: usize = 20_000;
+const BEND_FORCE: f64 = 0.7;
+const OUT_OF_PLANE_FORCE: f64 = 0.3;
+const TORSION_FORCE: f64 = 0.1;
 
 /// One description per complete Cartesian mode (3N values, in frame order).
-/// An empty bond-order list uses distance-based connectivity. Each description
-/// names the coordinate with the largest |B · u| / |B|, after normalizing u.
+/// An empty bond-order list uses distance-based connectivity with a conservative
+/// terminal-carbonyl estimate. Each description names the coordinate with the
+/// largest E = k(B · u)^2 for unit Cartesian u.
+///
+/// Cartesian positions and stretch coordinates are in Å; angular coordinates
+/// are in radians, so their unnormalized Wilson rows are in rad/Å. The heuristic
+/// force constants are in mdyn/Å for stretches and mdyn Å/rad² for angles,
+/// making every score a curvature in mdyn/Å along the unit Cartesian direction.
+/// These local scores describe motion; they are not a potential-energy analysis
+/// of the full molecular force field.
 pub(super) fn describe(frame: &Frame, bond_orders: &[BondOrder], modes: &[f64]) -> Vec<String> {
     let width = frame.numbers.len() * 3;
     if width == 0 {
@@ -40,17 +52,7 @@ pub(super) fn describe(frame: &Frame, bond_orders: &[BondOrder], modes: &[f64]) 
             let mut label = "";
             let mut largest = 0.;
             for coordinate in &coordinates {
-                let score = coordinate
-                    .row
-                    .iter()
-                    .map(|(atom, row)| {
-                        row.iter()
-                            .enumerate()
-                            .map(|(axis, b)| b * unit[3 * atom + axis])
-                            .sum::<f64>()
-                    })
-                    .sum::<f64>()
-                    .abs();
+                let score = coordinate.score(&unit);
                 if score > largest {
                     largest = score;
                     label = &coordinate.label;
@@ -61,33 +63,50 @@ pub(super) fn describe(frame: &Frame, bond_orders: &[BondOrder], modes: &[f64]) 
         .collect()
 }
 
+type WilsonRow = Vec<(usize, [f64; 3])>;
+
 struct Coordinate {
     label: String,
-    /// Sparse Wilson B row, normalized once before comparing modes.
-    row: Vec<(usize, [f64; 3])>,
+    /// Sparse Wilson B row, retaining dq/dx rather than normalizing its length.
+    row: WilsonRow,
+    force: f64,
 }
 
 impl Coordinate {
-    fn new(label: String, mut row: Vec<(usize, [f64; 3])>) -> Option<Self> {
+    fn new(label: String, row: WilsonRow, force: f64) -> Option<Self> {
         let norm = row.iter().map(|(_, b)| dot(*b, *b)).sum::<f64>().sqrt();
         if !norm.is_finite() || norm <= MIN_LENGTH {
             return None;
         }
-        for (_, b) in &mut row {
-            *b = b.map(|x| x / norm);
-        }
-        Some(Self { label, row })
+        Some(Self { label, row, force })
+    }
+
+    fn score(&self, unit_mode: &[f64]) -> f64 {
+        let projection = self
+            .row
+            .iter()
+            .map(|(atom, row)| {
+                row.iter()
+                    .enumerate()
+                    .map(|(axis, b)| b * unit_mode[3 * atom + axis])
+                    .sum::<f64>()
+            })
+            .sum::<f64>();
+        self.force * projection.powi(2)
     }
 }
 
 fn coordinates(frame: &Frame, orders: &[BondOrder]) -> Vec<Coordinate> {
     let numbers = &frame.numbers;
     let positions = &frame.positions_angstrom;
-    let edges = edges(frame, orders);
+    let mut edges = edges(frame, orders);
     let mut neighbors = vec![Vec::new(); numbers.len()];
     for &(a, b) in edges.keys() {
         neighbors[a].push(b);
         neighbors[b].push(a);
+    }
+    if orders.is_empty() {
+        infer_carbonyls(frame, &neighbors, &mut edges);
     }
     let mut coordinates = Vec::new();
     for (&(a, b), &order) in &edges {
@@ -109,9 +128,18 @@ fn coordinates(frame: &Frame, orders: &[BondOrder]) -> Vec<Coordinate> {
             };
             format!("{a}{bond}{b} stretch")
         };
-        if let Some(coordinate) =
-            Coordinate::new(label, vec![(a, direction), (b, direction.map(|x| -x))])
-        {
+        // X–H stretching is stiffer than a heavy-atom single bond. For other
+        // stretches the (possibly fractional) bond order scales the stiffness.
+        let force = if numbers[a] == 1 || numbers[b] == 1 {
+            5.
+        } else {
+            4.5 * order.max(1.)
+        };
+        if let Some(coordinate) = Coordinate::new(
+            label,
+            vec![(a, direction), (b, direction.map(|x| -x))],
+            force,
+        ) {
             coordinates.push(coordinate);
         }
     }
@@ -119,24 +147,62 @@ fn coordinates(frame: &Frame, orders: &[BondOrder]) -> Vec<Coordinate> {
         for (i, &a) in ends.iter().enumerate() {
             for &c in &ends[i + 1..] {
                 let points = [positions[a], positions[b], positions[c]];
-                if !usable_bend(&points) {
+                let Some(bend) = angle(&points).filter(|&bend| bend > MIN_LENGTH) else {
                     continue;
-                }
+                };
+                let linear = bend > MAX_BEND;
                 // A path avoiding the centre puts all three on the same cycle,
                 // including fused rings without combining two spiro rings.
-                let label = if connected(&neighbors, a, c, Some(b), None) {
+                let label = if !linear && connected(&neighbors, a, c, Some(b), None) {
                     "ring deformation".into()
                 } else {
                     let (a, c) = pair(numbers[a], numbers[c]);
                     format!("{a}–{}–{c} bend", super::state::symbol(numbers[b]))
                 };
-                if let Some(coordinate) = finite_difference([a, b, c], points, angle, false)
-                    .and_then(|row| Coordinate::new(label, row))
+                if linear {
+                    // The usual acos angle has no unique gradient at 180°.
+                    // Its two transverse angular components remain regular.
+                    if let Some(rows) = linear_bends([a, b, c], &points) {
+                        for row in rows {
+                            if let Some(coordinate) =
+                                Coordinate::new(label.clone(), row, BEND_FORCE)
+                            {
+                                coordinates.push(coordinate);
+                            }
+                        }
+                    }
+                } else if let Some(coordinate) = finite_difference([a, b, c], points, angle, false)
+                    .and_then(|row| Coordinate::new(label, row, BEND_FORCE))
                 {
                     coordinates.push(coordinate);
                 }
             }
         }
+        if ends.len() == 3 {
+            // One improper angle per trigonal centre. A terminal H makes the
+            // familiar X–H wag the named coordinate when one is available.
+            let mut ends = ends.clone();
+            ends.sort_by_key(|&a| (!(numbers[a] == 1 && neighbors[a].len() == 1), a));
+            let [a, c, d] = [ends[0], ends[1], ends[2]];
+            let center = super::state::symbol(numbers[b]);
+            let label = if numbers[a] == 1 && neighbors[a].len() == 1 {
+                format!("{center}–H out-of-plane bend")
+            } else {
+                format!("{center} out-of-plane bend")
+            };
+            let points = [positions[a], positions[b], positions[c], positions[d]];
+            if let Some(coordinate) = finite_difference([a, b, c, d], points, out_of_plane, false)
+                .and_then(|row| Coordinate::new(label, row, OUT_OF_PLANE_FORCE))
+            {
+                coordinates.push(coordinate);
+            }
+        }
+    }
+    if !torsions_within_budget(&neighbors, &edges) {
+        // Dense imported bond graphs can have far more torsion candidates than
+        // useful independent coordinates. Bound the candidate work in O(edges)
+        // before constructing any quadruplets or finite-difference rows.
+        return coordinates;
     }
     for &(b, c) in edges.keys() {
         for &a in &neighbors[b] {
@@ -156,7 +222,7 @@ fn coordinates(frame: &Frame, orders: &[BondOrder]) -> Vec<Coordinate> {
                 let (b_name, c_name) = pair(numbers[b], numbers[c]);
                 let label = format!("{b_name}–{c_name} torsion");
                 if let Some(coordinate) = finite_difference([a, b, c, d], points, torsion, true)
-                    .and_then(|row| Coordinate::new(label, row))
+                    .and_then(|row| Coordinate::new(label, row, TORSION_FORCE))
                 {
                     coordinates.push(coordinate);
                 }
@@ -164,6 +230,25 @@ fn coordinates(frame: &Frame, orders: &[BondOrder]) -> Vec<Coordinate> {
         }
     }
     coordinates
+}
+
+fn torsions_within_budget(neighbors: &[Vec<usize>], edges: &BTreeMap<(usize, usize), f64>) -> bool {
+    let mut candidates = 0_usize;
+    for &(b, c) in edges.keys() {
+        // This upper bound also counts triangle-closing choices (a == d),
+        // which are discarded during generation; no neighbor-pair enumeration
+        // is needed to decide whether the torsion work fits the budget.
+        candidates = candidates.saturating_add(
+            neighbors[b]
+                .len()
+                .saturating_sub(1)
+                .saturating_mul(neighbors[c].len().saturating_sub(1)),
+        );
+        if candidates > MAX_TORSIONS {
+            return false;
+        }
+    }
+    true
 }
 
 fn edges(frame: &Frame, orders: &[BondOrder]) -> BTreeMap<(usize, usize), f64> {
@@ -193,6 +278,44 @@ fn edges(frame: &Frame, orders: &[BondOrder]) -> BTreeMap<(usize, usize), f64> {
         }
     }
     edges
+}
+
+/// Many imported frequency files have no bond orders. Recognize an unambiguous
+/// short terminal C=O without running a general valence/bond-order search: one
+/// such O at a three-coordinate carbon, or two at a two-coordinate carbon (CO₂).
+/// The 1.30 Å cutoff excludes ordinary C–O single bonds; terminal oxygen and
+/// coordination checks also exclude alcohols, ethers and saturated carbon.
+/// Two short terminal O atoms at a three-coordinate carbon are ambiguous (as
+/// in a carboxylate), so neither is assigned an arbitrary localized double bond.
+fn infer_carbonyls(
+    frame: &Frame,
+    neighbors: &[Vec<usize>],
+    edges: &mut BTreeMap<(usize, usize), f64>,
+) {
+    for (carbon, ends) in neighbors.iter().enumerate() {
+        if frame.numbers[carbon] != 6 || !matches!(ends.len(), 2 | 3) {
+            continue;
+        }
+        let terminal_oxygens: Vec<_> = ends
+            .iter()
+            .copied()
+            .filter(|&oxygen| {
+                frame.numbers[oxygen] == 8
+                    && neighbors[oxygen].len() == 1
+                    && length(sub(
+                        frame.positions_angstrom[carbon],
+                        frame.positions_angstrom[oxygen],
+                    )) <= 1.30
+            })
+            .collect();
+        if (ends.len() == 3 && terminal_oxygens.len() == 1)
+            || (ends.len() == 2 && terminal_oxygens.len() == 2)
+        {
+            for oxygen in terminal_oxygens {
+                edges.insert((carbon.min(oxygen), carbon.max(oxygen)), 2.);
+            }
+        }
+    }
 }
 
 /// Connectivity with an atom or bond removed, for cycle membership.
@@ -265,7 +388,7 @@ fn finite_difference<const N: usize>(
     positions: [[f64; 3]; N],
     value: fn(&[[f64; 3]; N]) -> Option<f64>,
     periodic: bool,
-) -> Option<Vec<(usize, [f64; 3])>> {
+) -> Option<WilsonRow> {
     let mut row = Vec::with_capacity(N);
     for (atom, &index) in atoms.iter().enumerate() {
         let mut derivative = [0.; 3];
@@ -295,6 +418,40 @@ fn angle(points: &[[f64; 3]; 3]) -> Option<f64> {
     let a = unit(sub(points[0], points[1]))?;
     let b = unit(sub(points[2], points[1]))?;
     Some(dot(a, b).clamp(-1., 1.).acos())
+}
+
+/// Centre motion perpendicular to the endpoint axis, relative to interpolated
+/// endpoint motion. Scaling by 1/L_left + 1/L_right, with L the projected bond
+/// lengths, gives two orthogonal rad/Å rows with no axial response.
+fn linear_bends(atoms: [usize; 3], points: &[[f64; 3]; 3]) -> Option<[WilsonRow; 2]> {
+    let axis = unit(sub(points[2], points[0]))?;
+    let left_length = dot(sub(points[1], points[0]), axis);
+    let right_length = dot(sub(points[2], points[1]), axis);
+    if left_length <= MIN_LENGTH || right_length <= MIN_LENGTH {
+        return None;
+    }
+    // Cross with the least parallel Cartesian axis to avoid a small divisor.
+    let reference = if axis[0].abs() <= axis[1].abs() && axis[0].abs() <= axis[2].abs() {
+        [1., 0., 0.]
+    } else if axis[1].abs() <= axis[2].abs() {
+        [0., 1., 0.]
+    } else {
+        [0., 0., 1.]
+    };
+    let first = unit(cross(axis, reference))?;
+    Some([first, cross(axis, first)].map(|transverse| {
+        let left = transverse.map(|x| -x / left_length);
+        let right = transverse.map(|x| -x / right_length);
+        let center = transverse.map(|x| x * (left_length.recip() + right_length.recip()));
+        vec![(atoms[0], left), (atoms[1], center), (atoms[2], right)]
+    }))
+}
+
+/// Signed angle between the first bond and the plane of the other two bonds.
+fn out_of_plane(points: &[[f64; 3]; 4]) -> Option<f64> {
+    let bond = unit(sub(points[0], points[1]))?;
+    let normal = unit(cross(sub(points[2], points[1]), sub(points[3], points[1])))?;
+    Some(dot(bond, normal).clamp(-1., 1.).asin())
 }
 
 fn torsion(points: &[[f64; 3]; 4]) -> Option<f64> {
@@ -399,6 +556,43 @@ mod tests {
     }
 
     #[test]
+    fn imported_formaldehyde_and_carbon_dioxide_modes() {
+        let file = reshiki::qcread::read(
+            "CH2O_CO2.log",
+            include_bytes!("../../../../tests/fixtures/qc/pymatgen/CH2O_CO2.log"),
+        )
+        .unwrap();
+        let cases = [
+            (
+                0,
+                vec![
+                    "C–H out-of-plane bend",
+                    "O–C–H bend",
+                    "H–C–H bend",
+                    "C=O stretch",
+                    "C–H stretch",
+                    "C–H stretch",
+                ],
+            ),
+            (
+                2,
+                vec!["O–C–O bend", "O–C–O bend", "C=O stretch", "C=O stretch"],
+            ),
+        ];
+        for (job_index, expected) in cases {
+            let job = &file.jobs[job_index];
+            let frame = &job.steps[0].frame;
+            let result = job.result.as_ref().unwrap();
+            let vibrations = result.vibrations.as_ref().unwrap();
+            assert!(result.bond_orders.is_empty());
+            assert_eq!(
+                describe(frame, &result.bond_orders, &vibrations.modes),
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn benzene_fractional_orders_still_identify_ring_stretch() {
         let carbons: Vec<_> = (0..6)
             .map(|i| {
@@ -437,6 +631,51 @@ mod tests {
     }
 
     #[test]
+    fn carbonyl_fallback_preserves_single_bonds_and_reported_orders() {
+        let carbonyl = |frame: &Frame, orders: &[BondOrder]| {
+            coordinates(frame, orders)
+                .iter()
+                .any(|c| c.label == "C=O stretch")
+        };
+        let base = frame(
+            &[6, 8, 1, 1],
+            &[
+                [0.; 3],
+                [1.23, 0., 0.],
+                [-0.58, 0.94, 0.],
+                [-0.58, -0.94, 0.],
+            ],
+        );
+        assert!(carbonyl(&base, &[]));
+        assert!(!carbonyl(&base, &[order(0, 1, 1.)]));
+
+        let mut long_bond = base.clone();
+        long_bond.positions_angstrom[1][0] = 1.43;
+        assert!(!carbonyl(&long_bond, &[]));
+
+        let mut saturated_carbon = base.clone();
+        saturated_carbon.numbers.push(1);
+        saturated_carbon.positions_angstrom.push([0., 0., 1.05]);
+        assert!(!carbonyl(&saturated_carbon, &[]));
+
+        let mut protonated_oxygen = base;
+        protonated_oxygen.numbers.push(1);
+        protonated_oxygen.positions_angstrom.push([2.15, 0., 0.]);
+        assert!(!carbonyl(&protonated_oxygen, &[]));
+
+        let carboxylate = frame(
+            &[6, 8, 8, 6],
+            &[
+                [0.; 3],
+                [1.26, 0., 0.],
+                [-0.63, 1.091, 0.],
+                [-0.75, -1.299, 0.],
+            ],
+        );
+        assert!(!carbonyl(&carboxylate, &[]));
+    }
+
+    #[test]
     fn labels_are_scale_and_sign_invariant_and_unknown_modes_are_empty() {
         let frame = frame(&[8, 6], &[[0., 0., 0.], [1.2, 0., 0.]]);
         let mode = [1., 0., 0., -1., 0., 0.];
@@ -471,14 +710,100 @@ mod tests {
     }
 
     #[test]
-    fn linear_bends_and_torsions_are_skipped() {
+    fn linear_bends_have_two_transverse_components_and_skip_torsions() {
         let frame = frame(
             &[1, 6, 6, 1],
             &[[0., 0., 0.], [1., 0., 0.], [2., 0., 0.], [3., 0., 0.]],
         );
         let orders = [order(0, 1, 1.), order(1, 2, 1.), order(2, 3, 1.)];
         let coordinates = coordinates(&frame, &orders);
-        assert_eq!(coordinates.len(), 3);
-        assert!(coordinates.iter().all(|c| c.label.ends_with("stretch")));
+        assert_eq!(coordinates.len(), 7);
+        assert_eq!(
+            coordinates
+                .iter()
+                .filter(|c| c.label.ends_with("bend"))
+                .count(),
+            4
+        );
+        assert!(!coordinates.iter().any(|c| c.label.ends_with("torsion")));
+        for direction in [[0., 1., 0.], [0., 0., 1.]] {
+            let mode: Vec<_> = [[0.; 3], direction, [0.; 3], [0.; 3]]
+                .into_iter()
+                .flatten()
+                .collect();
+            assert!(describe(&frame, &orders, &mode)[0].ends_with("bend"));
+        }
+    }
+
+    #[test]
+    fn near_linear_bends_keep_angular_scale_for_different_bond_lengths() {
+        let points = [[-2., 0., 0.], [0.; 3], [2., 0., 0.]];
+        let rows = linear_bends([0, 1, 2], &points).unwrap();
+        assert!(dot(rows[0][0].1, rows[1][0].1).abs() < 1e-12);
+        for row in &rows {
+            assert!((length(row[0].1) - 0.5).abs() < 1e-12);
+            assert!((length(row[1].1) - 1.).abs() < 1e-12);
+            assert!((length(row[2].1) - 0.5).abs() < 1e-12);
+        }
+        let points = [[-0.8, 0., 0.], [0., 0.04, 0.], [1.7, 0., 0.]];
+        assert!(angle(&points).unwrap() > MAX_BEND);
+        let axis = unit(sub(points[2], points[0])).unwrap();
+        let rows = linear_bends([0, 1, 2], &points).unwrap();
+        for row in &rows {
+            // Every atom's axial displacement is independent of either bend,
+            // including unequal bond lengths at a slightly bent geometry.
+            assert!(row.iter().all(|(_, b)| dot(*b, axis).abs() < 1e-12));
+            assert!((length(row[1].1) - (1. / 0.8 + 1. / 1.7)).abs() < 1e-12);
+        }
+        let frame = frame(&[8, 6, 8], &points);
+        let coordinates = coordinates(&frame, &[order(0, 1, 2.), order(1, 2, 2.)]);
+        assert_eq!(
+            coordinates
+                .iter()
+                .filter(|c| c.label.ends_with("bend"))
+                .count(),
+            2
+        );
+        assert!(
+            coordinates
+                .iter()
+                .all(|c| c.row.iter().all(|(_, b)| b.iter().all(|x| x.is_finite())))
+        );
+    }
+
+    #[test]
+    fn out_of_plane_bend_uses_one_terminal_hydrogen_per_trigonal_center() {
+        // The heavy atom precedes the H in atom order: H still names the wag.
+        let frame = frame(
+            &[6, 8, 6, 1],
+            &[[0.; 3], [1., 0., 0.], [-0.5, 1., 0.], [-0.5, -1., 0.]],
+        );
+        let orders = [order(0, 1, 2.), order(0, 2, 1.), order(0, 3, 1.)];
+        let rows = coordinates(&frame, &orders);
+        let out_of_plane: Vec<_> = rows
+            .iter()
+            .filter(|c| c.label.contains("out-of-plane"))
+            .collect();
+        assert_eq!(out_of_plane.len(), 1);
+        assert_eq!(out_of_plane[0].label, "C–H out-of-plane bend");
+        assert_eq!(out_of_plane[0].row[0].0, 3);
+
+        let mut frame = frame;
+        frame.numbers[3] = 6;
+        assert!(
+            coordinates(&frame, &orders)
+                .iter()
+                .any(|c| c.label == "C out-of-plane bend")
+        );
+    }
+
+    #[test]
+    fn dense_bond_graph_skips_torsion_candidates_before_enumerating_them() {
+        let neighbors = vec![vec![0; 143], vec![0; 142]];
+        let edges = BTreeMap::from([((0, 1), 1.)]);
+        // 142 × 141 exceeds the 20,000-coordinate budget.
+        assert!(!torsions_within_budget(&neighbors, &edges));
+        let neighbors = vec![vec![0; 101], vec![0; 201]];
+        assert!(torsions_within_budget(&neighbors, &edges));
     }
 }

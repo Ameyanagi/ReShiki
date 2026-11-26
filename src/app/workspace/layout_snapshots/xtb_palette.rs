@@ -1,14 +1,14 @@
 //! The actual bottom dock, including chrome, at the minimum window size.
 use super::*;
-use crate::app::accessibility::Action as WindowAction;
-use crate::app::xtb::{Action, View, palette};
+use crate::app::xtb::{Action, Failure, RunEvent, View, palette};
 use iced::advanced::widget::{Id, Operation, operation::Scrollable};
 
 #[derive(Default, Debug)]
 struct Bounds {
     dock: Option<Rectangle>,
     body: Option<Rectangle>,
-    failure_details: bool,
+    failure_body: Option<(Rectangle, Rectangle)>,
+    recovery_actions: Vec<(String, Rectangle)>,
 }
 
 impl Operation for Bounds {
@@ -26,17 +26,21 @@ impl Operation for Bounds {
         &mut self,
         id: Option<&Id>,
         bounds: Rectangle,
-        _: Rectangle,
+        content: Rectangle,
         _: Vector,
         _: &mut dyn Scrollable,
     ) {
         if id == Some(&Id::from("xtb-results-body")) {
             self.body = Some(bounds);
+        } else if id == Some(&Id::from("xtb-failure-body")) {
+            self.failure_body = Some((bounds, content));
         }
     }
 
-    fn text(&mut self, _: Option<&Id>, _: Rectangle, text: &str) {
-        self.failure_details |= text.contains("deliberate renderer failure");
+    fn text(&mut self, _: Option<&Id>, bounds: Rectangle, text: &str) {
+        if matches!(text, "Retry at 1000 K" | "Run again" | "Copy details") {
+            self.recovery_actions.push((text.to_owned(), bounds));
+        }
     }
 }
 
@@ -64,15 +68,11 @@ fn act(app: &mut App, action: palette::Action) {
 }
 
 fn window(app: &mut App, size: Size) {
-    let id = iced::window::Id::unique();
-    let _ = app.accessibility_action(WindowAction::Window(
-        id,
-        iced::window::Event::Opened {
-            position: None,
-            size,
-        },
-    ));
-    let _ = app.accessibility_action(WindowAction::Geometry(id, size, 1.));
+    let event = iced::window::Event::Opened {
+        position: None,
+        size,
+    };
+    let _ = app.update(crate::app::window_size_event(&event).expect("logical window size message"));
 }
 
 fn fixture(app: &mut App, renderer: &iced::Renderer, size: Size) {
@@ -109,10 +109,11 @@ fn fixture(app: &mut App, renderer: &iced::Renderer, size: Size) {
 #[tokio::test]
 #[ignore = "Opt-in renderer bounds and snapshots; optional RESHIKI_XTB_PALETTE_QA_DIR"]
 async fn bottom_results_palette_stays_within_40_percent_of_the_window() {
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
         iced::Pixels(16.),
-        None,
+        backend.as_deref(),
     )
     .await
     .expect("Headless renderer");
@@ -128,8 +129,8 @@ async fn bottom_results_palette_stays_within_40_percent_of_the_window() {
             let (mut app, _) = App::new();
             app.appearance.mode = mode;
             fixture(&mut app, &renderer, size);
-            assert_eq!(app.xtb.dock.collapsed, size.height < 800.);
-            if app.xtb.dock.collapsed {
+            assert_eq!(app.tab.xtb.palette.collapsed, size.height < 800.);
+            if app.tab.xtb.palette.collapsed {
                 let bounds = measure(&app, &renderer, size);
                 assert!(bounds.body.is_none(), "collapsed: {bounds:?}");
                 act(&mut app, palette::Action::Collapse);
@@ -180,29 +181,40 @@ async fn bottom_results_palette_stays_within_40_percent_of_the_window() {
                     eprintln!("{name} {size:?} {view:?} stale {stale}: {bounds:?}");
                 }
             }
-            let (mut failure, _) = App::new();
-            failure.appearance.mode = mode;
-            window(&mut failure, size);
-            features::xtb_halocarbon(&mut failure);
-            failure.xtb_failed_answer("A deliberate renderer failure: ".repeat(80));
-            let bounds = measure_element(
-                failure.xtb_bottom_palette().expect("failure palette"),
-                &renderer,
-                size,
-            );
-            assert_eq!(bounds.failure_details, size.height >= 800.);
-            if failure.xtb.dock.collapsed {
-                act(&mut failure, palette::Action::Collapse);
+            for (failure, actions) in [
+                (
+                    Failure::Scf("SCF iteration limit reached. ".repeat(160)),
+                    &["Retry at 1000 K"][..],
+                ),
+                (
+                    Failure::Crashed("Worker exited".into()),
+                    &["Run again", "Copy details"][..],
+                ),
+            ] {
+                let (mut app, _) = App::new();
+                app.appearance.mode = mode;
+                window(&mut app, size);
+                features::xtb_halocarbon(&mut app);
+                app.tab.xtb.palette.collapsed = true;
+                app.xtb_answer(RunEvent::Done(Err(failure)));
+                let bounds = measure_element(
+                    app.xtb_bottom_palette().expect("failure palette"),
+                    &renderer,
+                    size,
+                );
+                let dock = bounds.dock.expect("bottom dock");
+                let (body, content) = bounds.failure_body.expect("expanded failure details");
+                assert!(dock.height <= size.height * 0.4 + 0.1);
+                assert!(body.is_within(&dock));
+                if actions.len() == 1 {
+                    assert!(content.height > body.height, "long SCF details scroll");
+                }
+                assert_eq!(bounds.recovery_actions.len(), actions.len());
+                for ((action, rect), expected) in bounds.recovery_actions.iter().zip(actions) {
+                    assert_eq!(action, expected);
+                    assert!(rect.is_within(&body), "{action}: {bounds:?}");
+                }
             }
-            let bounds = measure_element(
-                failure
-                    .xtb_bottom_palette()
-                    .expect("expanded failure palette"),
-                &renderer,
-                size,
-            );
-            assert!(bounds.failure_details);
-            assert!(bounds.dock.unwrap().height <= size.height * 0.4 + 0.1);
         }
     }
 }

@@ -46,7 +46,6 @@ pub(crate) enum Action {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Dock {
     pub inspector: bool,
-    pub collapsed: bool,
 }
 
 /// One document's palette.
@@ -57,6 +56,7 @@ pub(crate) struct Palette {
     /// index or an attachment ID.
     result: Vec<Weak<CalcResult>>,
     pub(super) open: bool,
+    pub(in crate::app) collapsed: bool,
     pub(super) view: View,
     pub(super) labels: bool,
     step: Option<Step>,
@@ -173,9 +173,7 @@ impl App {
     /// has a newer result than the one on display, or the palette is closed
     /// on results.
     pub(super) fn xtb_can_show(&self) -> bool {
-        if !self.tab.xtb.palette.open
-            && matches!(self.tab.xtb.outcome, Some(super::Outcome::Failed(_)))
-        {
+        if !self.tab.xtb.palette.open && self.tab.xtb.failed() {
             return true;
         }
         let visible = self.xtb_palette_visible();
@@ -350,10 +348,9 @@ impl App {
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
-                if matches!(self.tab.xtb.outcome, Some(super::Outcome::Failed(_))) {
+                if self.tab.xtb.failed() {
                     self.tab.xtb.palette.open = true;
-                    self.xtb.dock.collapsed = false;
-                    self.xtb_palette_opened();
+                    self.tab.xtb.palette.collapsed = false;
                 }
                 let newest = self.xtb_newest();
                 let shown = self.xtb_shown().map(|shown| shown.stored.result.clone());
@@ -366,7 +363,7 @@ impl App {
                 self.xtb_clear_palette_status(None);
                 self.xtb_end_preview();
             }
-            Action::Collapse => self.xtb.dock.collapsed = !self.xtb.dock.collapsed,
+            Action::Collapse => self.tab.xtb.palette.collapsed = !self.tab.xtb.palette.collapsed,
             Action::Dock => {
                 let old_width = self.inspector_width();
                 self.xtb.dock.inspector = !self.xtb.dock.inspector;

@@ -127,12 +127,6 @@ impl Default for State {
     }
 }
 
-impl State {
-    pub(super) fn viewport(&self) -> iced::Size {
-        self.viewport
-    }
-}
-
 #[cfg(any(target_os = "macos", windows, test))]
 fn enqueue_native(
     sender: &mpsc::Sender<Action>,
@@ -310,7 +304,6 @@ impl App {
                 {
                     self.accessibility.fitting = false;
                 }
-                self.xtb_palette_resized(size);
                 self.accessibility.viewport = size;
                 self.accessibility.scale = scale;
                 self.accessibility_refresh()
@@ -318,7 +311,6 @@ impl App {
             Action::Window(id, event) if self.accessibility.window == Some(id) => {
                 match event {
                     window::Event::Resized(size) => {
-                        self.xtb_palette_resized(size);
                         self.accessibility.viewport = size;
                     }
                     window::Event::Rescaled(scale) => {

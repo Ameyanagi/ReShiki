@@ -76,9 +76,7 @@ impl App {
                 .id("xtb-results-bottom")
                 .padding([10, 16])
                 .width(Length::Fill)
-                .max_height(
-                    self.accessibility.viewport().height * super::sizing::MAX_HEIGHT_FRACTION,
-                )
+                .max_height(self.window_size.height * super::sizing::MAX_HEIGHT_FRACTION)
                 .style(panel)
                 .into(),
         )
@@ -96,8 +94,8 @@ impl App {
         if !self.tab.xtb.palette.open {
             return None;
         }
-        let failure = self.xtb_failure_card();
-        let collapsed = self.xtb.dock.collapsed && !inspector;
+        let failure = self.xtb_failure_card(inspector);
+        let collapsed = self.tab.xtb.palette.collapsed && !inspector;
         let Some(shown) = self.xtb_shown() else {
             return failure.map(|card| {
                 let header = self.xtb_palette_header(vec![], View::Summary, inspector);
@@ -151,7 +149,7 @@ impl App {
         } else {
             scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(body_height(view, self.accessibility.viewport().height))
+                .height(body_height(view, self.window_size.height))
                 .into()
         };
         content = content.push(container(body).padding([6, 0]));
@@ -180,7 +178,7 @@ impl App {
             .into()
         }))
         .spacing(4);
-        let collapsed = self.xtb.dock.collapsed && !inspector;
+        let collapsed = self.tab.xtb.palette.collapsed && !inspector;
         // Results opened from other programs are not xTB's.
         let title = match self.xtb_shown().map(|s| &s.stored.result.settings) {
             Some(reshiki::qcdata::Settings::Imported { .. }) => "Calculation results",
@@ -232,7 +230,7 @@ impl App {
     }
 
     /// The last run's failure, with its one action (two after a crash).
-    fn xtb_failure_card(&self) -> Option<Element<'_, Message>> {
+    fn xtb_failure_card(&self, inspector: bool) -> Option<Element<'_, Message>> {
         let Some(super::super::Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
             return None;
         };
@@ -280,7 +278,18 @@ impl App {
             }
             _ => vec![],
         };
-        Some(alert(false, title, detail, actions))
+        let card = alert(false, title, detail, actions);
+        Some(if inspector {
+            card
+        } else {
+            container(
+                scrollable(card)
+                    .id("xtb-failure-body")
+                    .height(Length::Shrink),
+            )
+            .max_height(body_height(View::Summary, self.window_size.height))
+            .into()
+        })
     }
 
     /// Whether Recalculate can repeat the shown result with the card.
@@ -359,7 +368,7 @@ impl App {
         let chart_height = if inspector {
             140.
         } else {
-            body_height(View::Steps, self.accessibility.viewport().height).min(140.)
+            body_height(View::Steps, self.window_size.height).min(140.)
         };
         let chart = canvas(StepChart {
             energies: energies.clone(),
@@ -597,7 +606,11 @@ pub(in crate::app::xtb) fn alert<'a>(
     let content = row![icon, words.width(Length::Fill)]
         .push(row(actions).spacing(8))
         .spacing(10)
-        .align_y(Alignment::Center);
+        .align_y(if warning {
+            Alignment::Center
+        } else {
+            Alignment::Start
+        });
     let card = container(content)
         .padding([8, 10])
         .width(Length::Fill)

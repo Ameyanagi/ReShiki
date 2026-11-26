@@ -368,7 +368,6 @@ impl App {
     }
 
     fn enter_tab(&mut self) {
-        self.xtb_palette_opened();
         self.sync_drawing_panel_context();
         self.sync_drawing_style_unit();
         self.show_repeat_label_offset();
