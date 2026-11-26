@@ -733,7 +733,7 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Exported(..) | Message::QcExport(super::qc_export::Action::Saved(..)) => {
             Some(Completion::Export)
         }
-        Message::QcExport(_) => None,
+        Message::QcExport(_) | Message::FramesImport(_) => None,
         Message::Xtb(action) => {
             use super::xtb::Action;
             match action {
@@ -765,6 +765,11 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Discard => None,
                 Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
                 Action::Conformers(..) | Action::Palette(..) | Action::Ts(..) => None,
+                #[cfg(not(target_arch = "wasm32"))]
+                Action::Vibrations(super::xtb::VibrationsAction::Recomputed(..)) => {
+                    Some(Completion::Xtb)
+                }
+                Action::Vibrations(..) => None,
             }
         }
         Message::FigureExported(..) => Some(Completion::FigureExport),

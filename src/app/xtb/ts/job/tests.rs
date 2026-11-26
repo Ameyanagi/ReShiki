@@ -208,6 +208,7 @@ fn completion() -> (Launch, Completion) {
         serde_json::from_value(serde_json::json!({
             "conventions": "test",
             "frequencies_cm1": [-55.],
+            "ir_intensities_km_mol": [12.],
             "reduced_masses_amu": [1.],
             "force_constants_mdyn_per_angstrom": [1.],
             "masses_amu": masses,
@@ -215,6 +216,7 @@ fn completion() -> (Launch, Completion) {
         }))
         .unwrap(),
     );
+    checked.normal_modes = vec![0.5; 6];
     let done = Completion {
         report: ts_report(),
         checked: Ok(checked),
@@ -250,7 +252,10 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
         })
     );
     assert_eq!(result.hessian_hartree_per_bohr2, [0.5; 36]);
-    assert_eq!(result.vibrations.as_ref().unwrap().frequencies_cm1, [-60.]);
+    let vibrations = result.vibrations.as_ref().unwrap();
+    assert_eq!(vibrations.frequencies_cm1, [-55.]);
+    assert_eq!(vibrations.ir_intensities_km_mol, [12.]);
+    assert_eq!(vibrations.modes, [0.5; 6]);
     assert_eq!(report.extras.worker_frequencies, [-55.]);
     assert_eq!(report.extras.engine_imaginary, Some(-60.));
     assert_eq!(report.extras.image_positions.len(), 3);

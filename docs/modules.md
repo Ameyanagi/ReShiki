@@ -70,6 +70,7 @@ explains how the crates and modules fit together.
 - `src/app/document_tab.rs`: Per-document state.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
+- `src/app/energy_plot.rs`: A small energy diagram shared by the import sheet and the Conformers tab
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.
@@ -85,6 +86,7 @@ explains how the crates and modules fit together.
 - `src/app/file_shortcuts.rs`
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
+- `src/app/frames_import.rs`: Opening a file that holds several geometries of one molecule (a multi-frame XYZ such as a trajectory or a CREST ensemble, or an SD file of conformers)
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/github.rs`: GitHub in the editor
@@ -223,6 +225,9 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
 - `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
+- `src/app/xtb/vibrations.rs`: The Vibrations tab
+- `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
+- `src/app/xtb/vibrations/view.rs`: The Vibrations tab's widgets
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
 - `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.
@@ -1032,6 +1037,7 @@ explains how the crates and modules fit together.
 - `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
 - `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
 - `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
+- `crates/qcdata/src/vibrational.rs`
 
 ## reshiki-web
 

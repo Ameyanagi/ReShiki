@@ -120,9 +120,27 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
                 program_version.get_or_insert_with(|| version.trim().into());
             }
         }
+        // ReShiki's conformer export writes each record's energy and the
+        // calculated state (which a typed charge can set apart from the
+        // drawn formal charges) as data items.
+        let item = |name: &str| {
+            let mut data = record.split_at(molfile_end).1.lines();
+            data.find(|line| line.starts_with('>') && line.contains(&format!("<{name}>")))
+                .and_then(|_| data.next())
+                .map(str::trim)
+        };
+        let energy_hartree = item("ENERGY_HARTREE")
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|e| e.is_finite());
+        let charge = item("TOTAL_CHARGE")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(charge);
+        let multiplicity = item("MULTIPLICITY")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(multiplicity);
         steps.push(Step {
             frame: frame(&atoms, positions, charge, multiplicity)?,
-            energy_hartree: None,
+            energy_hartree,
             label: (!label.is_empty()).then(|| label.into()),
         });
     }

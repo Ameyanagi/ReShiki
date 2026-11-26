@@ -20,6 +20,10 @@ impl App {
         if let Message::Xtb(action @ super::xtb::Action::Cancel) = message {
             return Break(self.xtb_action(action));
         }
+        // The import sheet sits above every modal tool; it only opens a tab.
+        if let Message::FramesImport(action) = message {
+            return Break(self.frames_import_action(action));
+        }
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);
         }

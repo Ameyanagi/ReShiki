@@ -3,7 +3,7 @@ use super::*;
 use crate::app::xtb::{palette, results, run, tests::model};
 use reshiki::document::Document;
 use reshiki::geometry::Point3;
-use reshiki::qcdata::{Endpoints, Status, Trajectory};
+use reshiki::qcdata::{Endpoints, Status, Trajectory, Vibrations};
 use reshiki::science::Launch;
 
 fn send(app: &mut App, action: XtbAction) {
@@ -90,6 +90,13 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         reactant: reactant.hash(),
         product: product.hash(),
     });
+    result.vibrations = Some(Vibrations {
+        frequencies_cm1: vec![-387.],
+        ir_intensities_km_mol: vec![12.],
+        modes: vec![],
+        reduced_masses_amu: vec![],
+        masses_amu: vec![],
+    });
     result.trajectory = Some(Trajectory {
         numbers: reactant.numbers.clone(),
         isotopes: reactant.isotopes.clone(),
@@ -170,6 +177,7 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
         [
             results::View::Path,
             results::View::Summary,
+            results::View::Vibrations,
             results::View::Log,
         ]
     );
@@ -225,6 +233,37 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
             .images,
         20
     );
+}
+
+#[test]
+fn saved_ts_without_modes_uses_the_vibrations_recompute() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let report = example_report(run.launch.as_ref().unwrap());
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+
+    let file = app.tab.doc.file_json().unwrap();
+    let mut reopened = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    send(&mut reopened, XtbAction::Palette(palette::Action::Show));
+    let shown = reopened.xtb_shown().unwrap();
+    let result = Arc::clone(&shown.stored.result);
+    let atoms = shown.atoms.to_vec();
+    let frame = Arc::clone(shown.frame);
+    assert!(reopened.xtb_modes(&result).is_none());
+
+    let vibrations = XtbAction::Palette(palette::Action::View(results::View::Vibrations));
+    send(&mut reopened, vibrations.clone());
+    assert!(!reopened.tab.xtb.vibrations.recomputing(&result));
+
+    // As for other light results, recomputation requires the model at the result geometry.
+    reshiki::science::move_model(&mut reopened.tab.doc, &atoms, &frame).unwrap();
+    send(&mut reopened, vibrations);
+    assert!(reopened.tab.xtb.vibrations.recomputing(&result));
 }
 
 #[test]
