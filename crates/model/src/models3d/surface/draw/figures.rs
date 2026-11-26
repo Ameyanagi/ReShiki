@@ -376,6 +376,23 @@ fn panels_draw_small_models_with_captions_and_keep_their_snapshots() {
     // Under the model's frame, side by side, smaller, not overlapping.
     assert!(frames.iter().all(|(plo, _)| plo.y > hi.y));
     assert!(frames[0].1.x <= frames[1].0.x);
+    // Captions keep at least one and a half of their size between them.
+    let span = |caption: &Primitive| match caption {
+        Primitive::Text {
+            position,
+            text,
+            size,
+            style,
+            ..
+        } => (
+            position.x,
+            position.x + crate::style::styled_text_width(text, *size, style),
+            *size,
+        ),
+        _ => unreachable!("a caption is text"),
+    };
+    let ((_, end, size), (start, _, _)) = (span(&panels[0].1), span(&panels[1].1));
+    assert!(start - end >= size * 1.5 - 1e-3, "{end} {start}");
     assert!(frames[0].1.x - frames[0].0.x < hi.x - lo.x);
     // A click on a panel picks the molecule, as one on the frame does.
     let (plo, phi) = frames[1];
