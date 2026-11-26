@@ -242,16 +242,11 @@ impl App {
             Page::Calculate => {
                 use super::xtb::{Action, CalcTask, Entry};
                 let idle = !self.tab.busy && !self.xtb_running();
-                [
-                    (CalcTask::Energy, "Energy"),
-                    (CalcTask::Optimize, "Optimize"),
-                    (CalcTask::OptFreq, "Optimize + frequencies"),
-                    (CalcTask::Frequencies, "Frequencies"),
-                ]
-                .map(|(task, label)| {
-                    command(label, Message::Xtb(Action::Entry(Entry::Task(task))), idle)
-                })
-                .into()
+                CalcTask::ALL
+                    .map(|(task, label)| {
+                        command(label, Message::Xtb(Action::Entry(Entry::Task(task))), idle)
+                    })
+                    .into()
             }
             Page::Properties => self.property_entries(),
             Page::Purpose => reshiki::purpose::Purpose::ALL

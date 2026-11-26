@@ -252,6 +252,12 @@ pub struct Model3d {
     /// it is let go. A morph keeps full detail. Never saved.
     #[serde(skip)]
     pub turning: bool,
+    /// Other geometries of the same atoms drawn faint behind the model, such as
+    /// the kept conformers of a conformer search: each holds one position per
+    /// atom, then per added hydrogen, in the model's order. Set only on the
+    /// canvas's preview copy; never saved.
+    #[serde(skip)]
+    pub overlay: Vec<Vec<[f32; 3]>>,
 }
 fn one_cell() -> [u8; 3] {
     [1; 3]
@@ -274,6 +280,7 @@ fn copy_opacity() -> f32 {
 fn is_copy_opacity(opacity: &f32) -> bool {
     *opacity == copy_opacity()
 }
+const OVERLAY_OPACITY: f32 = 0.18;
 /// The most cells a crystal repeats along each axis.
 pub const MAX_REPEAT: u8 = 4;
 
@@ -639,6 +646,7 @@ impl Model3d {
             drawn: None,
             morph: None,
             turning: false,
+            overlay: vec![],
         };
         model.capture_generated(doc);
         model.fit(doc);
@@ -1200,6 +1208,37 @@ impl View<'_> {
             ),
             f,
         )
+    }
+    /// Add the conformers for painting after the model's own view is set up.
+    fn append_overlays(
+        &mut self,
+        doc: &Document,
+        model: &Model3d,
+        bonds: &mut Vec<(usize, usize)>,
+    ) -> Option<()> {
+        let originals = self.originals;
+        let mut geometries = model
+            .overlay
+            .iter()
+            .filter(|p| p.len() == originals)
+            .peekable();
+        if geometries.peek().is_none() {
+            return Some(());
+        }
+        let sticks = sticks(doc, model, &self.shown)?;
+        for geometry in geometries {
+            let start = self.rotated.len();
+            self.symbols.extend_from_within(..originals);
+            self.shown.extend_from_within(..originals);
+            self.ellipsoids.resize(start + originals, None);
+            self.rotated.extend(
+                geometry
+                    .iter()
+                    .map(|&p| rotate(model.rotation, sub(p, self.center))),
+            );
+            bonds.extend(sticks.iter().map(|&(a, b)| (start + a, start + b)));
+        }
+        Some(())
     }
     /// Unit direction from a point toward the viewer in the rotated frame.
     fn eye(&self, point: [f32; 3]) -> [f32; 3] {
@@ -3033,11 +3072,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         view.morph(doc, model, e);
         e
     });
-    let mut bonds = view.bonds.clone();
-    if model.style == Style::Ellipsoids {
-        bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
-    }
-    let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
+    let (reach, style) = (view.reach, model.style);
     let paper = doc.canvas_theme.background();
     let dark = doc.canvas_theme.is_dark();
     // On a dark canvas the card is the paper lightened a little.
@@ -3102,6 +3137,17 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             },
         });
     }
+    // For both the surface above and the cell below, only the model and its
+    // crystal copies can occlude ink.
+    let (behind, front) = model_cell_ink(doc, model, &view, float(backdrop));
+    let overlay_start = view.rotated.len();
+    let overlay = |i| i >= overlay_start;
+    let mut bonds = view.bonds.clone();
+    view.append_overlays(doc, model, &mut bonds)?;
+    if style == Style::Ellipsoids {
+        bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
+    }
+    let rotated = &view.rotated;
     enum Item {
         /// The half-bond from a point toward another.
         Bond(usize, usize),
@@ -3127,7 +3173,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     }
     let joints = if style == Style::Stick {
         let front = |s: usize, o, z| {
-            rotated.get(s).is_some_and(|ps| z > ps[2])
+            !overlay(s)
+                && rotated.get(s).is_some_and(|ps| z > ps[2])
                 && !((copy(s) || copy(o)) && (model.copy_opacity < 1. || grown < 1.))
                 && !fades(s)
                 && !fades(o)
@@ -3176,7 +3223,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             }
         }
         items.extend(view.symbols.iter().enumerate().filter_map(|(i, symbol)| {
-            if view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
+            if overlay(i) || view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
                 return None;
             }
             let z = rotated.get(i)?[2];
@@ -3194,15 +3241,16 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Atom(_) | Item::Label(_) | Item::Crossing(..) => None,
         })
         .collect();
-    // Overlapping balls show only what lies in front, with seams between.
+    // Overlapping model balls show only what lies in front, with seams between.
+    // Overlay balls are painted behind them without cutting their silhouettes.
     // Turning uses fewer chords; a morph keeps full detail to hide the
     // hydrogens growing out of their atoms.
     let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) {
         let atoms: Vec<usize> = items
             .iter()
             .filter_map(|(.., item)| match item {
-                Item::Atom(i) => Some(*i),
-                Item::Bond(..) | Item::Label(_) | Item::Crossing(..) => None,
+                Item::Atom(i) if !overlay(*i) => Some(*i),
+                _ => None,
             })
             .collect();
         view.contacts(&atoms, grown, model.turning)
@@ -3222,17 +3270,24 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         .collect();
     // The contour behind the Stick fills traces their outer edge.
     let mut rims: [Vec<Vec<Point>>; 4] = Default::default();
+    let mut overlay_rim = vec![];
+    let mut overlay_drawn = vec![];
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
         let (Item::Bond(i, _) | Item::Atom(i) | Item::Label(i) | Item::Crossing(i, _)) = item;
-        let fading = fades(i);
-        let ghost = match item {
-            Item::Bond(a, b) => copy(a) || copy(b),
-            _ => copy(i),
+        let (alpha, rim, drawn) = if overlay(i) {
+            (OVERLAY_OPACITY, &mut overlay_rim, &mut overlay_drawn)
+        } else {
+            let fading = fades(i);
+            let copied = match item {
+                Item::Bond(a, b) => copy(a) || copy(b),
+                _ => copy(i),
+            };
+            let alpha = if copied { model.copy_opacity } else { 1. }
+                * if fading || copied { grown } else { 1. };
+            let rim = rims.get_mut(usize::from(copied) * 2 + usize::from(fading))?;
+            (alpha, rim, &mut drawn)
         };
-        let alpha =
-            if ghost { model.copy_opacity } else { 1. } * if fading || ghost { grown } else { 1. };
-        let rim = rims.get_mut(usize::from(ghost) * 2 + usize::from(fading))?;
         let symbol = *view.symbols.get(i)?;
         let base = mix(
             float(*colors.get(symbol).unwrap_or(&GREY)),
@@ -3274,11 +3329,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 let p = *rotated.get(i)?;
                 let radius = model.style.atom_radius(symbol);
                 let under_ball = || {
-                    view.balls().any(|(j, q, r)| {
-                        j != i
-                            && q.distance(center) < r
-                            && rotated.get(j).is_some_and(|o| o[2] > p[2])
-                    })
+                    view.balls()
+                        .take_while(|(j, ..)| !overlay(*j))
+                        .any(|(j, q, r)| {
+                            j != i
+                                && q.distance(center) < r
+                                && rotated.get(j).is_some_and(|o| o[2] > p[2])
+                        })
                 };
                 if orbital
                     .as_ref()
@@ -3539,8 +3596,70 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             primitive
         }
     };
-    // The cell's hidden edges lie behind the model and its front edges,
-    // origin and labels in front; they fade in with the hydrogens.
+    let cell_fading = grown < 1.;
+    out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
+    let with_opacity = |(alpha, primitive)| {
+        if alpha < 1. {
+            Primitive::Opacity {
+                alpha,
+                primitive: Box::new(primitive),
+            }
+        } else {
+            primitive
+        }
+    };
+    let rim_outline = outline(line * 2.);
+    if let Some(outline) = rim_outline
+        && !overlay_rim.is_empty()
+    {
+        out.push(with_opacity((
+            OVERLAY_OPACITY,
+            Primitive::Contour {
+                polygons: overlay_rim,
+                outline,
+            },
+        )));
+    }
+    out.extend(overlay_drawn.into_iter().map(with_opacity));
+    if let Some(outline) = rim_outline {
+        for (polygons, alpha) in rims.into_iter().zip([
+            1.,
+            grown,
+            model.copy_opacity * grown,
+            model.copy_opacity * grown,
+        ]) {
+            if !polygons.is_empty() {
+                out.push(with_opacity((
+                    alpha,
+                    Primitive::Contour { polygons, outline },
+                )));
+            }
+        }
+    }
+    if let Some((_, orbital)) = orbital {
+        drawn.push((1., orbital));
+        drawn.extend(late);
+    }
+    out.extend(drawn.into_iter().map(with_opacity));
+    out.extend(front.into_iter().map(|p| fade_in(cell_fading, p)));
+    Some(())
+}
+
+/// The cell's hidden ink behind the model and its edges, origin and labels in front.
+fn model_cell_ink(
+    doc: &Document,
+    model: &Model3d,
+    view: &View,
+    backdrop: [f32; 3],
+) -> (Vec<Primitive>, Vec<Primitive>) {
+    let Some((cell, whole)) = model
+        .cell
+        .as_ref()
+        .filter(|_| !model.molecule_only)
+        .zip(model.whole_cell())
+    else {
+        return (vec![], vec![]);
+    };
     let ink = float(doc.canvas_theme.color([0; 3]));
     let place = |p| rotate(model.rotation, sub(p, view.center));
     let project = |q| view.project(q).0;
@@ -3551,63 +3670,17 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         width: (model.size / 220.).clamp(1., 3.),
         size: (model.size * 0.06).clamp(8., 60.),
         crowded: [false; 3],
-        occluders: (style == Style::SpaceFilling).then_some(&view),
+        occluders: (model.style == Style::SpaceFilling).then_some(view),
     };
-    let (behind, front) = model
-        .cell
-        .as_ref()
-        .filter(|_| !model.molecule_only)
-        .zip(model.whole_cell())
-        .map(|(cell, whole)| {
-            let (mut hidden, edges, marks) = cell_ink(&frame, &whole, ink, float(backdrop));
-            hidden.extend(seams(
-                &frame,
-                cell,
-                model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT))),
-                ink,
-                float(backdrop),
-            ));
-            (hidden, [edges, marks].concat())
-        })
-        .unwrap_or_default();
-    let cell_fading = grown < 1.;
-    out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
-    if let Some(outline) = outline(line * 2.) {
-        for (polygons, alpha) in rims.into_iter().zip([
-            1.,
-            grown,
-            model.copy_opacity * grown,
-            model.copy_opacity * grown,
-        ]) {
-            if !polygons.is_empty() {
-                let primitive = Primitive::Contour { polygons, outline };
-                out.push(if alpha < 1. {
-                    Primitive::Opacity {
-                        alpha,
-                        primitive: Box::new(primitive),
-                    }
-                } else {
-                    primitive
-                });
-            }
-        }
-    }
-    if let Some((_, orbital)) = orbital {
-        drawn.push((1., orbital));
-        drawn.extend(late);
-    }
-    out.extend(drawn.into_iter().map(|(alpha, p)| {
-        if alpha < 1. {
-            Primitive::Opacity {
-                alpha,
-                primitive: Box::new(p),
-            }
-        } else {
-            p
-        }
-    }));
-    out.extend(front.into_iter().map(|p| fade_in(cell_fading, p)));
-    Some(())
+    let (mut hidden, edges, marks) = cell_ink(&frame, &whole, ink, backdrop);
+    hidden.extend(seams(
+        &frame,
+        cell,
+        model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT))),
+        ink,
+        backdrop,
+    ));
+    (hidden, [edges, marks].concat())
 }
 
 /// Each bond leaving the cell as the point it starts from and the rotated

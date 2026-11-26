@@ -586,5 +586,8 @@ fn recalculate_reads_the_settings_the_result_stored() {
     );
     let mut conformers = result;
     conformers.task = Task::Conformers;
-    assert_eq!(config(&conformers, &frame, &[], 3), None);
+    assert_eq!(
+        config(&conformers, &frame, &[], 3).unwrap().task,
+        CardTask::Conformers
+    );
 }
