@@ -129,7 +129,7 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
     transition.positions_angstrom[0][2] += 0.5;
     let mut product = reactant.clone();
     product.positions_angstrom[0][2] += 1.;
-    let mut result = run::example_computed(-4.9, 0.9)
+    let mut result = run::example_computed(-4.95777, 0.9)
         .to_calc_result(&transition, CalcTask::Energy, &run::example_engine(), None)
         .unwrap();
     result.task = CalcTask::TransitionState;
@@ -158,10 +158,22 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
     });
+    result.run = Some(reshiki::qcdata::RunSummary {
+        seconds: 2.,
+        scf_iterations: vec![9, 4],
+        finished: None,
+        transition_state: None,
+    });
     let extras = Extras {
         image_positions: [&reactant, &transition, &product]
             .map(|frame| frame.positions_angstrom.clone())
             .to_vec(),
+        saddle_converged: true,
+        num_imaginary: 1,
+        diagnostics: vec![
+            ("Method".into(), "IDPP → CI-NEB → P-RFO → IRC".into()),
+            ("NEB".into(), "120 iterations · converged".into()),
+        ],
         connects: true,
         climbing: 1,
         engine_imaginary: Some(-387.),
@@ -193,23 +205,11 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     );
     send(
         &mut app,
-        XtbAction::TsEvent(
-            serial,
-            Event::Neb {
-                iteration: 120,
-                max_force: 0.012,
-                climbing: Some(1),
-            },
-        ),
+        XtbAction::TsEvent(serial, Event::Neb { iteration: 120 }),
     );
     assert!(
         app.status
-            .contains("✓ Endpoints · ✓ IDPP · NEB 120/300 · TS refine · IRC")
-    );
-    assert!(
-        app.status.contains(
-            "Climbing-image NEB · iteration 120 of at most 300 · max force 0.012 Eh/bohr"
-        )
+            .contains("✓ Building endpoints · Finding a path · Refining the transition state · Checking the reaction path")
     );
     send(
         &mut app,
@@ -218,6 +218,8 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     assert!(!app.xtb_running());
     assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
     assert_eq!(app.tab.xtb.palette.view, results::View::Path);
+    assert!(app.status.contains("ΔE‡ 26.5 kcal/mol"), "{}", app.status);
+    assert!(!app.status.contains("62.8"), "{}", app.status);
     assert_eq!(model(&app.tab.doc), reactant);
     let shown = app.xtb_shown().unwrap();
     assert!(!shown.stale);
@@ -230,11 +232,8 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
             results::View::Log,
         ]
     );
-    assert!(
-        shown
-            .method()
-            .contains("GFN2-xTB · axtb 0.2.0 · IDPP → CI-NEB (3 images) → P-RFO → IRC · gas phase")
-    );
+    assert!(shown.method().contains("GFN2-xTB · axtb 0.2.0 · gas phase"));
+    assert!(!shown.method().contains("CI-NEB"));
     send(&mut app, XtbAction::Ts(Action::Image(1)));
     assert_eq!(app.xtb_step(), Some(1));
     assert_eq!(model(app.display_document())[0], selected);
@@ -263,7 +262,20 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     reopened.tab.selected = vec![arrow];
     send(&mut reopened, XtbAction::Palette(palette::Action::Show));
     assert_eq!(reopened.tab.xtb.palette.view, results::View::Path);
-    assert!(reopened.xtb_shown().unwrap().ts.is_none());
+    let shown = reopened.xtb_shown().unwrap();
+    assert!(shown.ts.is_none());
+    let search = saved_search(&shown.stored.result).unwrap();
+    assert_eq!(search.arrow, arrow);
+    assert_eq!(
+        search.mapping.formed[0].each_ref().map(|atom| atom.number),
+        [1, 6]
+    );
+    assert!(
+        view::search_log(&shown.stored.result, None).contains("NEB: 120 iterations · converged")
+    );
+    assert!(
+        view::search_log(&shown.stored.result, None).contains("Worker frequencies (cm⁻¹): -387.0")
+    );
     send(&mut reopened, XtbAction::Ts(Action::Image(1)));
     assert_eq!(reopened.xtb_step(), Some(1));
     assert!(reopened.xtb_step_preview().is_none());
@@ -568,7 +580,9 @@ fn reopened_ts_animate_does_not_guess_between_arrows_sharing_the_starting_molecu
     finish_model(&mut app);
     let run = app.tab.xtb.run.as_ref().unwrap();
     let serial = run.serial;
-    let report = example_report(run.launch.as_ref().unwrap());
+    let mut report = example_report(run.launch.as_ref().unwrap());
+    // Earlier files had no originating arrow recorded in the saved result.
+    Arc::make_mut(&mut report).result.run = None;
     send(
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(report))),
@@ -605,7 +619,10 @@ fn reopened_ts_animate_does_not_guess_between_arrows_sharing_the_starting_molecu
     assert!(reopened.xtb_shown().unwrap().ts.is_none());
     for candidate in [arrow, other] {
         reopened.tab.selected = vec![candidate];
-        assert!(reopened.xtb_ts_card(candidate).is_none());
+        assert!(matches!(
+            reopened.xtb_ts_card_result(candidate),
+            card::ArrowResult::Ambiguous
+        ));
         reopened.tab.xtb.palette.open = false;
         send(
             &mut reopened,
@@ -624,7 +641,10 @@ fn reopened_ts_animate_does_not_guess_between_arrows_sharing_the_starting_molecu
     reopened.tab.doc.arrows.retain(|arrow| arrow.id != other);
     reopened.changed(before);
     reopened.tab.selected = vec![arrow];
-    assert!(reopened.xtb_ts_card(arrow).is_some());
+    assert!(matches!(
+        reopened.xtb_ts_card_result(arrow),
+        card::ArrowResult::Found(_)
+    ));
     send(
         &mut reopened,
         XtbAction::Ts(Action::Card(card::Action::Animate)),
@@ -677,6 +697,14 @@ fn reopened_light_and_full_paths_become_stale_after_an_opposite_side_map_edit() 
             reopened.xtb_shown().unwrap().stale,
             "the reloaded result must see the changed product (keep_full={keep_full})"
         );
+        let card::ArrowResult::Found(result) = reopened.xtb_ts_card_result(arrow) else {
+            panic!("the edited map must not orphan the saved result");
+        };
+        let search = saved_search(result).unwrap();
+        assert_eq!(
+            search.mapping.formed[0].each_ref().map(|atom| atom.number),
+            [1, 6]
+        );
         send(&mut reopened, XtbAction::Ts(Action::Rerun));
         assert!(!reopened.xtb_running(), "a stale reaction cannot be rerun");
     }
@@ -686,11 +714,12 @@ fn reopened_light_and_full_paths_become_stale_after_an_opposite_side_map_edit() 
 fn path_image_previews_a_hydrogen_nearest_its_new_parent() {
     let (doc, arrow) = card::tests::hydrogen_transfer();
     let mut app = reaction_app(doc, arrow);
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    assert!(app.ts_review_visible());
     send(
         &mut app,
-        XtbAction::Ts(Action::Card(card::Action::Reviewed(true))),
+        XtbAction::Ts(Action::ReviewSheet(review::Action::Accept)),
     );
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
     let order = app.model_atoms();
     let index = |map| {
         order

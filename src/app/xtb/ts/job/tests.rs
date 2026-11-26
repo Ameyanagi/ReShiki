@@ -235,6 +235,7 @@ fn completion() -> (Launch, Completion) {
         }],
         masses,
         seconds: 0.25,
+        trace: SearchTrace::default(),
     };
     (launch, done)
 }
@@ -264,6 +265,8 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
     assert_eq!(report.extras.image_positions.len(), 3);
     assert_eq!(report.extras.irc_energies, [vec![-1., -3.], vec![-1., -2.]]);
     assert!(report.extras.connects);
+    assert!(report.extras.saddle_converged);
+    assert_eq!(report.extras.num_imaginary, 1);
     let trajectory = result.trajectory.as_ref().unwrap();
     assert_eq!(trajectory.energies_hartree, [-3., -1.1, -2.]);
     assert!(trajectory.positions_angstrom.is_empty());
@@ -272,6 +275,67 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
     assert!(!result.keep_full);
     assert_eq!(result.run.as_ref().unwrap().scf_iterations, [7]);
     result.validate(&report.frames[0]).unwrap();
+}
+
+#[test]
+fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
+    let (launch, mut done) = completion();
+    done.trace.neb_iterations = Some(34);
+    done.trace.saddle_steps = Some(7);
+    done.trace.times = vec![("CI-NEB".into(), 1.25), ("Worker check".into(), 0.5)];
+    done.report.saddle_diagnostics = vec!["candidate recovered after Hessian rebuild".into()];
+    let report = complete(&launch, done).unwrap();
+    let value = |label| {
+        report
+            .extras
+            .diagnostics
+            .iter()
+            .find(|(key, _)| key == label)
+            .map(|(_, value)| value.as_str())
+            .unwrap()
+    };
+    assert_eq!(value("Method"), "IDPP → CI-NEB → P-RFO → IRC");
+    assert_eq!(value("Images"), "3 · climbing image 2");
+    assert_eq!(value("NEB"), "34 iterations · converged");
+    assert_eq!(value("Saddle"), "7 steps · converged · stationary");
+    assert!(value("Worker check").contains("engine 1 imaginary mode(s); worker 1 · agree"));
+    assert!(value("IRC +mode").starts_with("reactant"));
+    assert!(value("IRC −mode").starts_with("product"));
+    assert_eq!(value("Evaluations"), "12");
+    assert_eq!(value("Hessians"), "2");
+    assert_eq!(value("Time · CI-NEB"), "1.25 s");
+    assert_eq!(value("Time · Worker check"), "0.50 s");
+    assert!(value("Saddle diagnostic 1").contains("Hessian rebuild"));
+}
+
+#[test]
+fn result_energy_is_the_refined_search_energy_for_every_presentation() {
+    let (launch, mut done) = completion();
+    done.report.ts.energy = -1.05;
+    let report = complete(&launch, done).unwrap();
+    assert_eq!(report.result.energy_hartree, Some(-1.05));
+    let presentation = super::super::view::presentation(&report.result, None);
+    assert!((presentation.refined_kcal.unwrap() - 1.95 * 627.509_474_063).abs() < 1e-8);
+}
+
+#[test]
+fn wrong_irc_endpoint_classes_never_present_a_headline_barrier() {
+    for reached in [
+        [Reached::Reactant; 2],
+        [Reached::Product; 2],
+        [Reached::Other, Reached::Product],
+        [Reached::Other; 2],
+    ] {
+        let (launch, mut done) = completion();
+        done.report.connects = false;
+        for (branch, reached) in done.report.irc.as_mut().unwrap().iter_mut().zip(reached) {
+            branch.reached = reached;
+        }
+        let report = complete(&launch, done).unwrap();
+        let presentation = super::super::view::presentation(&report.result, None);
+        assert!(!presentation.reliable());
+        assert!(!presentation.status_line().contains("kcal/mol"));
+    }
 }
 
 #[test]

@@ -699,8 +699,8 @@ impl App {
                 if let Some(run) = &mut self.tab.xtb.run {
                     run.model = Some(key);
                     run.started = iced::time::Instant::now();
+                    self.status = run.status();
                 }
-                self.status = "xTB · making the 3D model first (MMFF94s)".into();
                 self.error = false;
                 task
             }
@@ -1090,14 +1090,14 @@ impl Run {
     }
 
     fn status(&self) -> String {
+        if let Some(live) = &self.ts {
+            return format!("xTB · {}", live.line());
+        }
         if self.launch.is_none() {
             return "xTB · making the 3D model first (MMFF94s)".into();
         }
         if let Some(live) = &self.search {
             return format!("{} · {}", self.label, live.line(self.seconds()));
-        }
-        if let Some(live) = &self.ts {
-            return format!("{} · {}\n{}", self.label, live.line(), live.detail());
         }
         format!(
             "{} · {}",
@@ -1300,6 +1300,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
             .map(|evaluation| evaluation.scf_iterations as u32)
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+        transition_state: None,
     });
     let status = if report.converged {
         qcdata::Status::Converged

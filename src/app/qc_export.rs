@@ -251,7 +251,11 @@ impl Dialog {
     }
 
     fn file_name(&self) -> String {
-        format!("{}.{}", stem(&self.name), self.program.extension())
+        let stem = self
+            .source
+            .as_ref()
+            .map_or_else(|| stem(&self.name), |source| source.stem(self.job));
+        format!("{stem}.{}", self.program.extension())
     }
 }
 
@@ -554,7 +558,7 @@ impl App {
         let settings = dialog.settings()?;
         let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
         if let Some(source) = &dialog.source {
-            return source.output(&settings, &stem(&dialog.name), &generator);
+            return source.output(&settings, &source.stem(dialog.job), &generator);
         }
         let frame = match self.qc_model(dialog) {
             Model::Ready { stale: true, .. } => {

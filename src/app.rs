@@ -1569,7 +1569,7 @@ impl App {
             || self.help_open
             || self.settings.open
             || self.qc_export.is_some()
-            || self.ts_review_open()
+            || self.ts_review_visible()
             || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
@@ -1607,7 +1607,7 @@ impl App {
                     Some(settings_page::modal_key)
                 } else if self.qc_export.is_some() {
                     Some(qc_export::modal_key)
-                } else if self.ts_review_open() {
+                } else if self.ts_review_visible() {
                     Some(xtb::ts::review::modal_key)
                 } else if self.frames_import.is_some() {
                     Some(frames_import::modal_key)

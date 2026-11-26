@@ -689,6 +689,21 @@ impl App {
             .then_some(record)
     }
 
+    /// Reuse a generated name for the same molecule in a reaction label.
+    pub(super) fn xtb_existing_molecule_name(&self, atoms: &[u64]) -> Option<&str> {
+        if self.tab.naming.structure_atoms != atoms {
+            return None;
+        }
+        let mut identity = naming::selected_identity(&self.tab.doc, atoms).ok()?;
+        identity.write_unknown_stereo = self.appearance.write_unknown_stereo;
+        let record = self.named_identity(atoms, &identity)?;
+        record
+            .synonyms
+            .first()
+            .map(|alias| alias.name.as_str())
+            .or(record.systematic_name.as_deref())
+    }
+
     pub(super) fn named_identity_warnings(
         &self,
         atoms: &[u64],

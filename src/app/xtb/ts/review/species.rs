@@ -77,6 +77,10 @@ fn formula(counts: &Counts) -> String {
         .collect()
 }
 
+pub(super) fn species_formula(doc: &Document, atoms: &[u64]) -> Option<String> {
+    counts(doc, atoms).ok().map(|counts| formula(&counts))
+}
+
 fn side(doc: &Document, participants: &[Participant], product: bool) -> Result<Vec<Input>, String> {
     let mut inputs = Vec::new();
     let mut seen = HashSet::new();

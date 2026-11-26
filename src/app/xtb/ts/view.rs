@@ -1,6 +1,6 @@
 //! Transition-state path profile and the saved saddle's details.
-use super::Action;
-use crate::app::workspace::{accessible_command, control, muted_text, panel};
+use super::{Action, Session};
+use crate::app::workspace::{accessible_command, control, panel};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
 use crate::app::xtb::tone::{Tone, line};
 use crate::app::xtb::{Action as XtbAction, state};
@@ -11,19 +11,232 @@ use reshiki::qcdata::{CalcResult, Frame, Status};
 
 const KCAL_PER_HARTREE: f64 = 627.509_474_063;
 const IMAGINARY_CM1: f64 = 50.;
-const RELOAD_NOTE: &str = "Path images are recomputed when the search runs again";
+const RELOAD_NOTE: &str = "Run the search again to inspect structures along the saved path.";
+
+/// One interpretation of the saved result, shared by the card, Path and status.
+/// A candidate's energy is never exposed as a barrier before these checks pass.
+#[derive(Debug, PartialEq)]
+pub(in crate::app::xtb) struct Presentation {
+    pub refined_kcal: Option<f64>,
+    pub reason: Option<String>,
+    pub warning: Option<String>,
+    pub highest_path_kcal: Option<f64>,
+    pub verification: String,
+}
+
+impl Presentation {
+    pub fn reliable(&self) -> bool {
+        self.refined_kcal.is_some()
+    }
+
+    #[cfg(any(test, all(not(target_arch = "wasm32"), feature = "xtb")))]
+    pub fn status_line(&self) -> String {
+        match self.barrier_line() {
+            Some(barrier) => format!("Transition state · {barrier} · {}", self.verification),
+            None => format!(
+                "No reliable transition state found. {}",
+                self.reason
+                    .as_deref()
+                    .unwrap_or("The search needs another attempt.")
+            ),
+        }
+    }
+
+    pub fn barrier_line(&self) -> Option<String> {
+        self.refined_kcal
+            .map(|value| format!("ΔE‡ {} kcal/mol", state::signed(value, 1)))
+    }
+}
+
+fn reported_reason(result: &CalcResult) -> Option<&str> {
+    match &result.status {
+        Status::NotConverged { reason } | Status::Failed { reason } => Some(reason),
+        Status::Converged => None,
+    }
+}
+
+fn wrong_endpoints(reason: &str) -> bool {
+    reason.starts_with("IRC reaches ") || reason.starts_with("IRC did not connect ")
+}
+
+fn readable_reason(reason: &str) -> String {
+    if reason == "saddle refinement did not converge" {
+        "The transition-state refinement did not converge.".into()
+    } else if reason.contains("on both sides") {
+        reason.replacen("IRC reaches", "The reaction path reaches", 1) + "."
+    } else if wrong_endpoints(reason) {
+        reason.replacen("IRC", "The reaction path", 1) + "."
+    } else if reason.starts_with("engine/worker imaginary frequency counts disagree") {
+        "The two frequency checks disagree about the number of imaginary frequencies.".into()
+    } else if let Some(reason) = reason.strip_prefix("worker check failed: ") {
+        format!("The independent frequency check failed: {reason}.")
+    } else if let Some(reason) = reason.strip_prefix("IRC failed: ") {
+        format!("The reaction path could not be checked: {reason}.")
+    } else {
+        reason.to_owned()
+    }
+}
+
+pub(in crate::app::xtb) fn presentation(
+    result: &CalcResult,
+    session: Option<&Session>,
+) -> Presentation {
+    let saved = super::saved_search(result);
+    let frequencies = result.vibrations.as_ref().map(|v| &v.frequencies_cm1);
+    let saved_count =
+        frequencies.map(|frequencies| frequencies.iter().filter(|&&f| f < -IMAGINARY_CM1).count());
+    let count = saved
+        .map(|search| search.imaginary)
+        .or_else(|| session.map(|s| s.extras.num_imaginary))
+        .or(saved_count);
+    let reported = reported_reason(result);
+    // A saved warning proves convergence only when the search reached IRC:
+    // the engine starts IRC solely after convergence and one imaginary mode.
+    let saddle_converged = saved
+        .map(|search| search.saddle_converged)
+        .or_else(|| session.map(|s| s.extras.saddle_converged))
+        .unwrap_or_else(|| {
+            matches!(result.status, Status::Converged)
+                || reported.is_some_and(|reason| reason.starts_with("IRC failed: "))
+        });
+    let accepted_status = matches!(result.status, Status::Converged)
+        || matches!(&result.status, Status::NotConverged { reason } if reason.starts_with("IRC failed: "));
+    let reliable = super::is_ts(result)
+        && saddle_converged
+        && count == Some(1)
+        && accepted_status
+        && !reported.is_some_and(wrong_endpoints);
+    let energies = super::path_energies(result);
+    let (deltas, candidate) = relative_energies(energies, result.energy_hartree);
+    let refined_kcal = candidate.filter(|value| reliable && value.is_finite());
+    let reason = if refined_kcal.is_some() {
+        None
+    } else if let Some(count) = count.filter(|&count| count != 1) {
+        Some(match count {
+            0 => "The search ended at a point with no significant imaginary frequency.".into(),
+            2 => "The search ended at a point with two imaginary frequencies.".into(),
+            count => format!("The search ended at a point with {count} imaginary frequencies."),
+        })
+    } else if let Some(reason) = reported {
+        Some(readable_reason(reason))
+    } else if !saddle_converged {
+        Some("The transition-state refinement did not converge.".into())
+    } else {
+        Some(
+            "The saved result does not contain enough information to verify a transition state."
+                .into(),
+        )
+    };
+    let frequency = saved
+        .and_then(|search| search.imaginary_cm1)
+        .or_else(|| session.and_then(|s| s.extras.engine_imaginary))
+        .or_else(|| frequencies.and_then(|f| f.iter().copied().find(|&f| f < -IMAGINARY_CM1)));
+    let frequency_check = match (count, frequency) {
+        (Some(1), Some(frequency)) => {
+            format!("One imaginary frequency {:.0}i cm⁻¹", frequency.abs())
+        }
+        (Some(1), None) => "One imaginary frequency".into(),
+        _ => "Transition state not verified".into(),
+    };
+    let connects = session.map_or(matches!(result.status, Status::Converged), |s| {
+        s.extras.connects
+    });
+    let verification = if connects {
+        format!("{frequency_check} · connects reactant and product ✓")
+    } else if reliable {
+        format!("{frequency_check} · reaction path not verified")
+    } else {
+        frequency_check
+    };
+    Presentation {
+        refined_kcal,
+        reason,
+        warning: reliable.then(|| reported.map(readable_reason)).flatten(),
+        highest_path_kcal: deltas
+            .into_iter()
+            .filter(|value| value.is_finite())
+            .reduce(f64::max),
+        verification,
+    }
+}
+
+/// Technical search detail belongs in Log, including after the file is reopened.
+pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Session>) -> String {
+    if !super::is_ts(result) {
+        return String::new();
+    }
+    let mut rows = super::saved_search(result).map_or_else(
+        || {
+            session.map_or_else(
+                || {
+                    vec![
+                ("Method".into(), "IDPP → CI-NEB → P-RFO → IRC".into()),
+                (
+                    "Images".into(),
+                    super::path_energies(result).len().to_string(),
+                ),
+                (
+                    "NEB iterations / convergence".into(),
+                    "not saved with this result".into(),
+                ),
+                (
+                    "Saddle steps / reason".into(),
+                    reported_reason(result)
+                        .unwrap_or("converged; detailed steps not saved")
+                        .into(),
+                ),
+                (
+                    "Worker check".into(),
+                    result.vibrations.as_ref().map_or_else(
+                        || "not saved".into(),
+                        |v| {
+                            format!(
+                                "{} significant imaginary mode(s) in saved frequency analysis",
+                                v.frequencies_cm1
+                                    .iter()
+                                    .filter(|&&f| f < -IMAGINARY_CM1)
+                                    .count()
+                            )
+                        },
+                    ),
+                ),
+                (
+                    "IRC branches".into(),
+                    if matches!(result.status, Status::Converged) {
+                        "reactant and product; branch details not saved"
+                    } else {
+                        "branch details not saved"
+                    }
+                    .into(),
+                ),
+                (
+                    "Evaluations".into(),
+                    result.run.as_ref().map_or_else(
+                        || "not saved".into(),
+                        |run| format!("{} worker evaluations recorded", run.scf_iterations.len()),
+                    ),
+                ),
+                ("Hessians".into(), "count not saved with this result".into()),
+            ]
+                },
+                |session| session.extras.diagnostics.clone(),
+            )
+        },
+        |search| search.diagnostics.clone(),
+    );
+    if let Some(run) = &result.run {
+        rows.push(("Total time".into(), format!("{:.2} s", run.seconds)));
+    }
+    let mut lines = vec!["Transition-state search".into()];
+    lines.extend(
+        rows.into_iter()
+            .map(|(label, value)| format!("{label}: {value}")),
+    );
+    lines.join("\n")
+}
 
 fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Ts(action))
-}
-
-/// Keep a previous selection only while it indexes this profile. The climbing
-/// image is the default, including after a different result replaces the path.
-fn selection(count: usize, selected: Option<usize>, climbing: usize) -> Option<usize> {
-    selected
-        .filter(|&index| index < count)
-        .or_else(|| (climbing < count).then_some(climbing))
-        .or_else(|| (count > 0).then_some(0))
 }
 
 fn climbing_image(energies: &[f64], remembered: Option<usize>) -> usize {
@@ -45,27 +258,14 @@ fn profile_note(positions: bool, stale: bool) -> Option<&'static str> {
     if !positions {
         Some(RELOAD_NOTE)
     } else if stale {
-        Some("The drawing changed; select an image to inspect its saved energy.")
+        Some("The drawing changed; select a path point to inspect its saved energy.")
     } else {
         None
     }
 }
 
-fn selection_label(index: usize, count: usize, climbing: usize, delta: f64) -> String {
-    let role = if index == climbing {
-        "climbing image"
-    } else if index == 0 {
-        "reactant"
-    } else if index + 1 == count {
-        "product"
-    } else {
-        "path image"
-    };
-    format!(
-        "Image {} of {count} · {role} · ΔE {} kcal/mol",
-        index + 1,
-        state::signed(delta, 1)
-    )
+fn selection_label(delta: f64) -> String {
+    format!("ΔE {} kcal/mol", state::signed(delta, 1))
 }
 
 fn relative_energies(energies: &[f64], saddle: Option<f64>) -> (Vec<f64>, Option<f64>) {
@@ -87,10 +287,16 @@ impl App {
     ) -> Element<'a, Message> {
         let result = &shown.stored.result;
         let energies = super::path_energies(result);
-        let climbing = climbing_image(energies, shown.ts.map(|s| s.extras.climbing));
+        let climbing = climbing_image(
+            energies,
+            super::saved_search(result)
+                .map(|search| search.climbing_image)
+                .or_else(|| shown.ts.map(|s| s.extras.climbing)),
+        );
         let selected = self.xtb_step().filter(|&index| index < energies.len());
-        let current = selection(energies.len(), selected, climbing);
-        let (deltas, refined_delta) = relative_energies(energies, result.energy_hartree);
+        let presentation = presentation(result, shown.ts);
+        let (deltas, _) = relative_energies(energies, None);
+        let refined_delta = presentation.refined_kcal;
         let positions = shown.ts.is_some_and(|session| {
             session.extras.image_positions.len() == energies.len()
                 && session
@@ -103,7 +309,7 @@ impl App {
         let chart = canvas(PathChart {
             deltas: deltas.clone(),
             refined_delta,
-            selected: current,
+            selected,
             climbing,
             interactive,
             stale: shown.stale,
@@ -111,21 +317,27 @@ impl App {
         .width(Length::Fill)
         .height(190);
         let mut profile = column![chart].spacing(6);
-        if let Some((index, delta)) =
-            current.and_then(|index| deltas.get(index).map(|&delta| (index, delta)))
-        {
-            profile = profile
-                .push(text(selection_label(index, energies.len(), climbing, delta)).size(12));
+        if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
+            profile = profile.push(text(selection_label(delta)).size(12));
+        }
+        if !deltas.is_empty() {
             // The buttons also make every canvas point keyboard accessible.
             let images = row(deltas.iter().enumerate().map(|(index, &delta)| {
                 reshiki::accessibility::button(
                     format!("xtb-ts-image-{index}"),
-                    selection_label(index, energies.len(), climbing, delta),
-                    text((index + 1).to_string()).size(11),
+                    selection_label(delta),
+                    text(if index == 0 {
+                        "R"
+                    } else if index + 1 == deltas.len() {
+                        "P"
+                    } else {
+                        "•"
+                    })
+                    .size(11),
                 )
                 .padding([3, 6])
-                .checked(index == current.unwrap_or(climbing))
-                .style(control(index == current.unwrap_or(climbing)))
+                .checked(selected == Some(index))
+                .style(control(selected == Some(index)))
                 .on_press_maybe(interactive.then(|| send(Action::Image(index))))
                 .into()
             }))
@@ -151,84 +363,37 @@ impl App {
             profile = profile.push(line(note, Tone::Muted));
         }
 
-        let title = if energies.is_empty() {
-            "Transition state".into()
-        } else {
-            format!(
-                "Transition state · image {} of {}",
-                climbing + 1,
-                energies.len()
-            )
-        };
-        let mut details = column![text(title).size(14)].spacing(7);
-        if let (Some(forward), Some(ts), Some(&product)) =
-            (refined_delta, result.energy_hartree, energies.last())
-        {
-            details = details.push(
-                row![
-                    barrier("ΔE‡ forward", forward),
-                    barrier("ΔE‡ back", (ts - product) * KCAL_PER_HARTREE),
-                ]
-                .spacing(22)
-                .wrap(),
-            );
+        let mut details = column![
+            text(if presentation.reliable() {
+                "Transition state"
+            } else {
+                "No reliable transition state found."
+            })
+            .size(14)
+        ]
+        .spacing(7);
+        if let Some(reason) = &presentation.reason {
+            details = details.push(line(reason.clone(), Tone::Warning));
         }
-        let imaginary = shown.ts.map_or_else(
-            || imaginary_frequency(result),
-            |session| session.extras.engine_imaginary,
-        );
-        details = details.push(match imaginary {
-            Some(frequency) => row![
-                line(
-                    format!(
-                        "Imaginary frequency {}i cm⁻¹",
-                        state::signed(-frequency.abs(), 0)
-                    ),
-                    Tone::Good,
-                ),
+        if presentation.reliable() {
+            details = details.push(line(presentation.verification.clone(), Tone::Good));
+        }
+        if let Some(warning) = &presentation.warning {
+            details = details.push(line(warning.clone(), Tone::Warning));
+        }
+        if super::card::imaginary_mode(result).is_some() {
+            details = details.push(
                 accessible_command(
                     "xtb-ts-animate",
-                    "Animate the transition state's imaginary mode",
-                    "Animate",
+                    "Animate the saved imaginary mode",
+                    "Animate imaginary mode",
                 )
-                .on_press_maybe(
-                    (interactive && super::card::imaginary_mode(result).is_some()).then(|| {
-                        Message::Xtb(XtbAction::Vibrations(
-                            crate::app::xtb::vibrations::Action::AnimateImaginary,
-                        ))
-                    }),
-                ),
-            ]
-            .spacing(8)
-            .align_y(iced::Alignment::Center)
-            .into(),
-            None if shown.ts.is_some() => {
-                line("No significant engine imaginary frequency.", Tone::Warning)
-            }
-            None => line("No significant imaginary frequency.", Tone::Warning),
-        });
-        if let Some(session) = shown.ts {
-            let frequencies = &session.extras.worker_frequencies;
-            if !frequencies.is_empty() {
-                let imaginary: Vec<_> = frequencies
-                    .iter()
-                    .copied()
-                    .filter(|&frequency| frequency < -IMAGINARY_CM1)
-                    .collect();
-                let values = imaginary
-                    .iter()
-                    .map(|&frequency| format!("{}i", state::signed(frequency, 0)))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                details = details.push(line(
-                    if values.is_empty() {
-                        "Worker check: no significant imaginary frequency".into()
-                    } else {
-                        format!("Worker check: {values} cm⁻¹")
-                    },
-                    Tone::Muted,
-                ));
-            }
+                .on_press_maybe(interactive.then(|| {
+                    Message::Xtb(XtbAction::Vibrations(
+                        crate::app::xtb::vibrations::Action::AnimateImaginary,
+                    ))
+                })),
+            );
         }
         let maps: Vec<_> = shown
             .atoms
@@ -256,65 +421,16 @@ impl App {
                 );
             }
         }
-        let connects = shown
-            .ts
-            .map_or(matches!(result.status, Status::Converged), |s| {
-                s.extras.connects
-            });
-        if connects {
-            details = details.push(line("✓ IRC connects reactant and product", Tone::Good));
-            if let Status::NotConverged { reason } = &result.status {
-                details = details.push(line(reason.clone(), Tone::Warning));
-            }
-        } else {
-            let reason = match &result.status {
-                Status::NotConverged { reason } | Status::Failed { reason }
-                    if reason.ends_with("on both sides") =>
-                {
-                    format!(
-                        "{reason}. This saddle belongs to another reaction. Check the map or search with more images."
-                    )
-                }
-                Status::NotConverged { reason } | Status::Failed { reason } => reason.clone(),
-                Status::Converged => {
-                    "IRC did not connect the intended reactant and product.".into()
-                }
-            };
+        if !presentation.reliable() {
             details = details.push(
-                container(
-                    column![
-                        line(reason, Tone::Warning),
-                        reshiki::accessibility::button(
-                            "xtb-ts-rerun-20",
-                            "Search with 20 images",
-                            text("Search with 20 images").size(12),
-                        )
-                        .padding([5, 9])
-                        .style(control(false))
-                        .on_press_maybe(self.xtb_ts_can_rerun(shown).then(|| send(Action::Rerun))),
-                    ]
-                    .spacing(7),
+                reshiki::accessibility::button(
+                    "xtb-ts-rerun-20",
+                    "Try again with a finer path",
+                    text("Try again with a finer path").size(12),
                 )
-                .padding(10)
-                .width(Length::Fill)
-                .style(|theme: &Theme| container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.1,
-                            ..theme.palette().warning
-                        }
-                        .into(),
-                    ),
-                    border: iced::Border {
-                        color: Color {
-                            a: 0.5,
-                            ..theme.palette().warning
-                        },
-                        width: 1.,
-                        radius: 6.into(),
-                    },
-                    ..Default::default()
-                }),
+                .padding([5, 9])
+                .style(control(false))
+                .on_press_maybe(self.xtb_ts_can_rerun(shown).then(|| send(Action::Rerun))),
             );
         }
         details = details.push(line(
@@ -323,7 +439,7 @@ impl App {
         ));
         details = details.push(
             reshiki::accessibility::button(
-                "xtb-ts-export-input",
+                "xtb-ts-path-export-input",
                 "Export TS input",
                 text("Export TS input…").size(12),
             )
@@ -362,19 +478,6 @@ impl App {
         };
         changed_bonds(reactant, product)
     }
-}
-
-fn barrier<'a>(label: &'static str, value: f64) -> Element<'a, Message> {
-    column![
-        text(label).size(11).style(muted_text),
-        text(format!("{} kcal/mol", state::signed(value, 1))).size(15),
-    ]
-    .spacing(2)
-    .into()
-}
-
-fn imaginary_frequency(result: &CalcResult) -> Option<f64> {
-    super::card::imaginary_mode(result).map(|(_, frequency)| frequency)
 }
 
 fn bond_label(frame: &Frame, [a, b]: [usize; 2], maps: &[Option<u32>]) -> String {
@@ -439,10 +542,10 @@ fn changed_bonds(_: &Frame, _: &Frame) -> Vec<(&'static str, [usize; 2])> {
     vec![]
 }
 
-/// Reactant-relative energy against the NEB image index.
+/// Reactant-relative energy along the reaction coordinate.
 struct PathChart {
     deltas: Vec<f64>,
-    /// The optimized saddle can differ from its climbing NEB image.
+    /// Only a verified refined saddle receives a TS marker.
     refined_delta: Option<f64>,
     selected: Option<usize>,
     climbing: usize,
@@ -536,7 +639,7 @@ impl canvas::Program<Message> for PathChart {
             reshiki::color_contrast::TEXT_TARGET,
         );
         frame.fill_text(canvas::Text {
-            content: "ΔE (kcal/mol, reactant = 0)".into(),
+            content: "ΔE from reactants (kcal/mol)".into(),
             position: Point::new(Self::LEFT, 3.),
             color: muted,
             size: 10.into(),
@@ -556,16 +659,6 @@ impl canvas::Program<Message> for PathChart {
                 &canvas::Path::line(start, Point::new(bounds.width - Self::RIGHT, start.y)),
                 canvas::Stroke::default().with_color(grid).with_width(1.),
             );
-        }
-        for energy in [hi, lo] {
-            frame.fill_text(canvas::Text {
-                content: state::signed(energy, 1),
-                position: Point::new(Self::LEFT - 7., y(energy) - 6.),
-                color: muted,
-                size: 10.into(),
-                align_x: iced::alignment::Horizontal::Right.into(),
-                ..Default::default()
-            });
         }
         let points: Vec<_> = self
             .deltas
@@ -599,7 +692,7 @@ impl canvas::Program<Message> for PathChart {
             }),
             canvas::Stroke::default().with_color(ink).with_width(1.5),
         );
-        for (index, (&point, &delta)) in points.iter().zip(&self.deltas).enumerate() {
+        for (index, &point) in points.iter().enumerate() {
             let selected = self.selected == Some(index);
             if selected {
                 frame.stroke(
@@ -612,9 +705,9 @@ impl canvas::Program<Message> for PathChart {
                 ink,
             );
             let label = if index == 0 {
-                Some("R 0.0".into())
+                Some("R".into())
             } else if index + 1 == self.deltas.len() {
-                Some(format!("P {}", state::signed(delta, 1)))
+                Some("P".into())
             } else {
                 None
             };
@@ -654,7 +747,7 @@ impl canvas::Program<Message> for PathChart {
             });
         }
         frame.fill_text(canvas::Text {
-            content: "NEB image index".into(),
+            content: "Reaction coordinate".into(),
             position: Point::new(
                 (Self::LEFT + bounds.width - Self::RIGHT) / 2.,
                 bounds.height - 13.,

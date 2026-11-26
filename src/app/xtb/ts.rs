@@ -5,7 +5,7 @@ use super::{is, state};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
-use reshiki::qcdata::{CalcResult, Frame, Task as CalcTask};
+use reshiki::qcdata::{CalcResult, Frame, Task as CalcTask, TransitionStateRun};
 use reshiki::reactions::ts_plan::{self, TsPlan};
 use reshiki::science::ScienceError;
 use std::cell::Cell;
@@ -18,7 +18,7 @@ pub(in crate::app) mod export;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod job;
 pub(in crate::app) mod review;
-mod view;
+pub(super) mod view;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 pub(super) use job::Event;
@@ -27,6 +27,7 @@ pub(super) use job::Event;
 pub(crate) enum Action {
     Card(card::Action),
     Review(review::Mode, Option<u64>),
+    ReviewMap(u64),
     ReviewSheet(review::Action),
     EnergyTask(state::Task),
     Image(usize),
@@ -37,8 +38,10 @@ pub(crate) enum Action {
 #[derive(Clone)]
 pub(super) struct Request {
     pub arrow: u64,
+    bonds: card::BondChanges,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     plan: TsPlan,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     pub images: usize,
 }
 
@@ -60,8 +63,6 @@ pub(super) struct Live {
     pub request: Request,
     stage: Stage,
     iteration: Option<usize>,
-    max_force: f64,
-    climbing: Option<usize>,
     step: Option<usize>,
     forward: bool,
 }
@@ -77,8 +78,6 @@ impl Live {
             request,
             stage: Stage::Endpoints,
             iteration: None,
-            max_force: 0.0,
-            climbing: None,
             step: None,
             forward: true,
         }
@@ -86,62 +85,19 @@ impl Live {
 
     pub fn line(&self) -> String {
         [
-            (Stage::Endpoints, "Endpoints".to_owned()),
-            (Stage::Idpp, "IDPP".to_owned()),
-            (
-                Stage::Neb,
-                self.iteration
-                    .filter(|_| self.stage == Stage::Neb)
-                    .map_or_else(
-                        || "NEB".into(),
-                        |iteration| format!("NEB {iteration}/{}", Self::NEB_LIMIT),
-                    ),
-            ),
-            (Stage::Saddle, "TS refine".to_owned()),
-            (Stage::Irc, "IRC".to_owned()),
+            (Stage::Endpoints, "Building endpoints"),
+            (Stage::Neb, "Finding a path"),
+            (Stage::Saddle, "Refining the transition state"),
+            (Stage::Irc, "Checking the reaction path"),
         ]
         .map(|(stage, label)| {
             if self.stage > stage {
                 format!("✓ {label}")
             } else {
-                label
+                label.to_owned()
             }
         })
         .join(" · ")
-    }
-
-    pub fn detail(&self) -> String {
-        match self.stage {
-            Stage::Endpoints => "Building and optimizing both endpoints".into(),
-            Stage::Idpp => "Interpolating the path with IDPP".into(),
-            Stage::Neb => {
-                let label = if self.climbing.is_some() {
-                    "Climbing-image NEB"
-                } else {
-                    "NEB"
-                };
-                self.iteration.map_or_else(
-                    || format!("{label} · {} images", self.request.images),
-                    |iteration| {
-                        format!(
-                            "{label} · iteration {iteration} of at most {} · max force {:.3} Eh/bohr",
-                            Self::NEB_LIMIT, self.max_force
-                        )
-                    },
-                )
-            }
-            Stage::Saddle => self.step.map_or_else(
-                || "Refining the saddle with P-RFO".into(),
-                |step| format!("P-RFO · step {step}"),
-            ),
-            Stage::Irc => self.step.map_or_else(
-                || "Checking both IRC branches".into(),
-                |step| {
-                    let branch = if self.forward { "forward" } else { "reverse" };
-                    format!("IRC · {branch} branch · step {step}")
-                },
-            ),
-        }
     }
 
     pub fn fraction(&self) -> Option<f32> {
@@ -165,6 +121,9 @@ impl Live {
 #[derive(Clone, Debug)]
 struct Extras {
     image_positions: Vec<Vec<[f64; 3]>>,
+    saddle_converged: bool,
+    num_imaginary: usize,
+    diagnostics: Vec<(String, String)>,
     // Keep the search diagnostics in the session. The card uses the saved
     // endpoint bond graphs for its distances, including after reopening.
     #[allow(dead_code)]
@@ -174,6 +133,7 @@ struct Extras {
     forming: Vec<[usize; 2]>,
     #[allow(dead_code)]
     breaking: Vec<[usize; 2]>,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     worker_frequencies: Vec<f64>,
     climbing: usize,
     engine_imaginary: Option<f64>,
@@ -224,6 +184,19 @@ impl Sessions {
 
 pub(super) fn is_ts(result: &CalcResult) -> bool {
     result.task == CalcTask::TransitionState
+}
+
+pub(super) fn saved_search(result: &CalcResult) -> Option<&TransitionStateRun> {
+    result.run.as_ref()?.transition_state.as_deref()
+}
+
+pub(super) fn saved_search_stale(doc: &Document, search: &TransitionStateRun) -> bool {
+    let Ok(plan) = ts_plan::plan_for_review(doc, search.arrow) else {
+        return true;
+    };
+    let mut drawn = card::BondChanges::from_plan(doc, &plan).0;
+    drawn.automatic = search.mapping.automatic;
+    drawn != search.mapping
 }
 
 pub(super) fn path_energies(result: &CalcResult) -> &[f64] {
@@ -319,6 +292,9 @@ impl App {
         match action {
             Action::Card(action) => self.xtb_ts_card_action(action),
             Action::Review(mode, arrow) => self.xtb_review_open(mode, arrow),
+            Action::ReviewMap(arrow) => {
+                self.xtb_review_show(review::Mode::TransitionState, Some(arrow))
+            }
             Action::ReviewSheet(action) => self.xtb_review_action(action),
             Action::EnergyTask(task) => {
                 self.xtb_reaction_energy_task(task);
@@ -350,6 +326,9 @@ impl App {
         if let Some(session) = shown.ts {
             return Some(session.arrow);
         }
+        if let Some(search) = saved_search(&shown.stored.result) {
+            return Some(search.arrow);
+        }
         // The file links the result to the starting molecule. Only infer an
         // arrow after reopening when that molecule identifies a single plan.
         unique_matching_plan(&self.tab.doc, shown.atoms).map(|(arrow, _)| arrow)
@@ -377,6 +356,8 @@ impl App {
         charge: i32,
         unpaired: u32,
     ) -> Task<Message> {
+        #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
+        let _ = images;
         if !super::available() || !self.xtb_can_start() {
             return Task::none();
         }
@@ -396,6 +377,12 @@ impl App {
             tight: false,
             fixed: vec![],
         };
+        let mut bonds = card::BondChanges::from_plan(&self.tab.doc, &plan);
+        bonds.0.automatic = self
+            .tab
+            .xtb
+            .ts_card
+            .automatic_map((self.tab.file_epoch, arrow), &plan);
         self.xtb_begin(super::Request {
             atoms: plan.start_atoms.clone(),
             config,
@@ -404,8 +391,10 @@ impl App {
             search: None,
             ts: Some(Request {
                 arrow,
+                bonds,
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
                 plan,
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
                 images,
             }),
         })
@@ -458,15 +447,7 @@ impl App {
                     live.step = None;
                 }
             }
-            Event::Neb {
-                iteration,
-                max_force,
-                climbing,
-            } => {
-                live.iteration = Some(iteration);
-                live.max_force = max_force;
-                live.climbing = climbing;
-            }
+            Event::Neb { iteration } => live.iteration = Some(iteration),
             Event::Saddle { step } => live.step = Some(step),
             Event::Irc { forward, step } => {
                 live.forward = forward;
@@ -484,15 +465,36 @@ impl App {
                     info,
                 } = Arc::unwrap_or_clone(report);
                 result.keep_full = run.keep_full;
-                let line = match &result.status {
-                    reshiki::qcdata::Status::Converged => {
-                        "Transition state · IRC connects reactant and product".into()
+                if let Some(summary) = &mut result.run {
+                    let mut diagnostics = extras.diagnostics.clone();
+                    if !extras.worker_frequencies.is_empty() {
+                        diagnostics.push((
+                            "Worker frequencies (cm⁻¹)".into(),
+                            extras
+                                .worker_frequencies
+                                .iter()
+                                .map(|value| format!("{value:.1}"))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        ));
                     }
-                    reshiki::qcdata::Status::NotConverged { reason }
-                    | reshiki::qcdata::Status::Failed { reason } => {
-                        format!("Transition state candidate · {reason}")
-                    }
-                };
+                    summary.transition_state = Some(Box::new(TransitionStateRun {
+                        arrow: request.arrow,
+                        saddle_converged: extras.saddle_converged,
+                        imaginary: extras.num_imaginary,
+                        imaginary_cm1: extras.engine_imaginary,
+                        climbing_image: extras.climbing,
+                        mapping: request.bonds.0,
+                        diagnostics,
+                    }));
+                }
+                let session = Rc::new(Session {
+                    extras,
+                    arrow: request.arrow,
+                    plan: request.plan,
+                    freshness: Cell::new(None),
+                });
+                let line = view::presentation(&result, Some(&session)).status_line();
                 let pending = super::Pending {
                     pushed: false,
                     accepted: None,
@@ -503,12 +505,6 @@ impl App {
                     notes: vec![],
                     info,
                 };
-                let session = Rc::new(Session {
-                    extras,
-                    arrow: request.arrow,
-                    plan: request.plan,
-                    freshness: Cell::new(None),
-                });
                 self.tab.xtb.run = None;
                 self.xtb_store_with_session(pending, false, Some(session));
                 return;

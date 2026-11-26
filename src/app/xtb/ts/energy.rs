@@ -5,7 +5,7 @@ use crate::app::workspace::accessible_command;
 use crate::app::xtb::tone::{Tone, line};
 use crate::app::xtb::{self, CalcTask, Outcome, Request, state};
 use crate::app::{App, Message};
-use iced::widget::{Space, column, container, row, text};
+use iced::widget::{column, row, text};
 use iced::{Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
@@ -566,20 +566,16 @@ impl App {
         self.xtb_reaction_energy_next()
     }
 
-    pub(in crate::app) fn xtb_reaction_energy_card(&self, arrow: u64) -> Element<'_, Message> {
-        if !xtb::available() {
-            return Space::new().height(0).into();
-        }
+    pub(super) fn xtb_reaction_energy_section(&self, arrow: u64) -> Element<'_, Message> {
         let state = &self.tab.xtb.energy_state;
         let mut body = column![text("Reaction energy").size(13)].spacing(7);
         let batch = state.batch.as_ref().filter(|b| b.arrow == arrow);
         if let Some(batch) = batch {
             body = body.push(line(state.progress().unwrap_or_default(), Tone::Muted));
-            if batch.review {
-                body = body.push(line(
-                    "Review the optimized geometry in Calculate to continue.",
-                    Tone::Warning,
-                ));
+            if batch.review
+                && let Some(outcome @ Outcome::Review(_)) = &self.tab.xtb.outcome
+            {
+                body = body.push(xtb::view::outcome_view(outcome, true));
             }
             body = body.push(
                 accessible_command(
@@ -625,13 +621,12 @@ impl App {
             } else if let Some((_, reason)) = state.stopped.as_ref().filter(|(at, _)| *at == arrow)
             {
                 body = body.push(line(reason.clone(), Tone::Warning));
-            } else {
-                body = body.push(line(
-                    "Optimize each reactant and product with GFN2-xTB.",
-                    Tone::Muted,
-                ));
             }
-            let idle = self.tab.xtb.run.is_none() && state.batch.is_none() && !self.tab.busy;
+            let idle = xtb::available()
+                && self.tab.xtb.run.is_none()
+                && state.batch.is_none()
+                && !self.tab.busy
+                && !self.ts_review_open();
             let task = state.task(self.xtb.settings.task);
             body = body.push(
                 row([
@@ -656,19 +651,16 @@ impl App {
                 accessible_command(
                     "xtb-reaction-energy-review",
                     "Calculate reaction energy",
-                    "Calculate…",
+                    "Calculate",
                 )
+                .style(crate::appearance::primary)
                 .width(Length::Fill)
                 .on_press_maybe(idle.then_some(Message::Xtb(xtb::Action::Ts(
                     super::Action::Review(super::review::Mode::Energy, Some(arrow)),
                 )))),
             );
         }
-        body = body.push(line(
-            "Σ products − Σ reactants, weighted by coefficients",
-            Tone::Muted,
-        ));
-        crate::app::inspector::card(container(body).padding(10))
+        body.width(Length::Fill).into()
     }
 }
 

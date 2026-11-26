@@ -498,19 +498,6 @@ impl App {
         } else {
             super::workspace::section(&heading).into()
         };
-        let header = match self.selected_arrows().next().filter(|_| roles) {
-            Some(arrow) => {
-                let mut cards = column![header]
-                    .extend(self.xtb_ts_card(arrow.id))
-                    .push(self.xtb_reaction_energy_card(arrow.id))
-                    .spacing(8);
-                if let Some(ignored) = self.xtb_scheme_ignored(arrow.id) {
-                    cards = cards.push(ignored);
-                }
-                cards.into()
-            }
-            None => header,
-        };
         let mut panel = column![
             header,
             canvas(crate::canvas::ArrowPreview {

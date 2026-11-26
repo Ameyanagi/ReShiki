@@ -45,6 +45,26 @@ pub(super) struct Preview {
     theme: Option<Box<reshiki::theme_files::ThemeFile>>,
 }
 
+/// Keep the map numbers in a review and a reaction card in the same colours.
+pub(super) fn map_label_color(number: u32) -> reshiki::palette::Color {
+    use reshiki::palette::{Color, Hue, Row};
+    let index = number.saturating_sub(1) as usize % Hue::ALL.len();
+    Color::Palette(
+        Hue::ALL.get(index).copied().unwrap_or(Hue::Blue),
+        Row::Strong,
+    )
+}
+
+fn pair_label(doc: &Document, proposal: &Proposal, a: u64, b: u64) -> String {
+    let atom = |id| {
+        let element = doc.atom(id).map_or("?", |atom| atom.element.as_str());
+        let number = proposal.number(id).unwrap_or_default();
+        format!("{element}{number}")
+    };
+    let number = proposal.number(a).unwrap_or_default();
+    format!("Map {number} · {} → {}", atom(a), atom(b))
+}
+
 impl Preview {
     fn new(key: (u64, u64), proposal: &Proposal, doc: &Document) -> Self {
         let mut preview = Self::empty(key, doc, proposal.current(doc));
@@ -53,12 +73,9 @@ impl Preview {
     }
 
     pub(super) fn for_reaction(mut doc: Document, arrow: u64) -> Self {
-        use reshiki::palette::{Color, Hue, Row};
         for atom in &mut doc.atoms {
             if atom.map_num != 0 {
-                let index = (atom.map_num as usize - 1) % Hue::ALL.len();
-                let hue = Hue::ALL.get(index).copied().unwrap_or(Hue::Blue);
-                atom.display.mapping.style.color = Color::Palette(hue, Row::Strong);
+                atom.display.mapping.style.color = map_label_color(atom.map_num);
             }
         }
         let mut preview = Self::empty((0, 0), &doc, true);
@@ -741,7 +758,7 @@ impl App {
         let certainty = if !proposal.complete {
             "Budget reached · optimality and uniqueness unknown"
         } else if proposal.multiple_best {
-            "Several mappings tie under the graph score"
+            "Several mappings tie"
         } else {
             "One best mapping under the graph score"
         };
@@ -790,13 +807,9 @@ impl App {
             .spacing(4)
             .align_y(Alignment::Center),
         );
-        let atom = |id: u64| {
-            let element = self.tab.doc.atom(id).map_or("?", |a| a.element.as_str());
-            format!("{element} #{id}")
-        };
+        let source = self.mapping_source();
         for (index, (a, b)) in proposal.pairs.iter().enumerate() {
-            let number = proposal.number(*a).unwrap_or_default();
-            let label = format!("Map {number} · {} → {}", atom(*a), atom(*b));
+            let label = pair_label(source.as_deref().unwrap_or(&self.tab.doc), proposal, *a, *b);
             body = body.push(
                 accessible_command(format!("mapping.review.{index}"), label.clone(), label)
                     .on_press_maybe(current.then_some(Message::Mapping(Action::ReviewPair(index)))),
