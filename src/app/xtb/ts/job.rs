@@ -3,7 +3,7 @@
 use super::{Extras, Stage};
 use crate::app::xtb::{
     results::{Evaluation, RunInfo},
-    state::Failure,
+    state::{Failure, symbol},
 };
 use iced::futures::{Stream, channel::mpsc};
 use reshiki::{
@@ -114,7 +114,15 @@ fn run(
         .first_mut()
         .ok_or_else(|| Failure::Other("No xTB worker".into()))?;
     send(tx, cancel, Event::Stage(Stage::Endpoints))?;
-    let start = bohr(&launch.frame.positions_angstrom);
+    let (start, folded) = ts::prepare_reactive_start(
+        first,
+        &open.numbers,
+        &bohr(&launch.frame.positions_angstrom),
+        &changes.form,
+        &changes.break_,
+        |_, _| control(cancel, tx),
+    )
+    .map_err(failed)?;
     let (other, matched) = ts::build_endpoint(
         first,
         &open.numbers,
@@ -141,8 +149,20 @@ fn run(
     };
     let options = ts::TsOptions {
         images,
+        // Both the accepted fold and the constructed endpoint have already
+        // converged without restraints. Keep the exact barrier reference.
+        optimize_endpoints: folded.is_none(),
         ..ts::TsOptions::default()
     };
+    trace.reactive_start = folded.map(|fold| {
+        fold.description(|i| {
+            format!(
+                "{}{}",
+                open.numbers.get(i).copied().map_or("?", symbol),
+                i + 1
+            )
+        })
+    });
     let search = ts::Search {
         numbers: &open.numbers,
         masses_amu: &masses,
@@ -351,6 +371,7 @@ struct Completion {
 /// Search counters and wall times are independent of the visible progress text.
 #[derive(Default)]
 struct SearchTrace {
+    reactive_start: Option<String>,
     neb_iterations: Option<usize>,
     saddle_steps: Option<usize>,
     current: Option<(&'static str, Instant)>,
@@ -556,6 +577,9 @@ fn diagnostics(
             ),
         ),
     ];
+    if let Some(detail) = &trace.reactive_start {
+        rows.push(("Folded the starting conformer".into(), detail.clone()));
+    }
     let worker = worker_frequencies
         .iter()
         .filter(|&&f| f < -ts::IMAGINARY_CM1)

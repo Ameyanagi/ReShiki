@@ -67,7 +67,7 @@ mod report {
     use super::*;
     use crate::cli::{args::Ts, host::CliError, io};
     use reshiki_io::{qc_input::write_orca_hess, qcdata::Frame};
-    use reshiki_optimize::ts::{IMAGINARY_CM1, SaddleReason, TsReport};
+    use reshiki_optimize::ts::{IMAGINARY_CM1, ReactiveStart, SaddleReason, TsReport};
     use reshiki_xtb_worker::protocol::Engine;
     use serde_json::json;
     use std::{
@@ -162,6 +162,7 @@ mod report {
         pub evaluations: usize,
         pub seconds: f64,
         pub moving_hydrogens: Vec<MovingHydrogen>,
+        pub reactive_start: Option<ReactiveStart>,
     }
 
     fn imaginary(frequencies: &[f64]) -> usize {
@@ -461,6 +462,12 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 "hessians": report.hessians + 1,
                 "seconds": self.seconds,
                 "moving_hydrogens": self.moving_hydrogens,
+                "reactive_start": self.reactive_start.as_ref().map(|fold| json!({
+                    "pairs": fold.pairs.iter().map(|&(a, b)| [a + 1, b + 1]).collect::<Vec<_>>(),
+                    "before_angstrom": fold.before_angstrom,
+                    "after_angstrom": fold.after_angstrom,
+                    "energy_change_kcal": fold.energy_change_kcal,
+                })),
             })
         }
     }

@@ -7,9 +7,9 @@ its key in brackets, for example `(Wang & Song 2016) [Wang2016TRIC]` (written `\
 Rust doc comments so rustdoc does not treat it as a link); the key is the BibTeX key in
 [xtb.bib](xtb.bib).
 
-Every entry with a DOI was checked against its Crossref record on 26 November 2026
-(authors, title, journal, volume, first page or article number, year); RDKit's DOI is
-registered with DataCite and was checked there. Books without a Crossref record for the
+DOI metadata was checked against Crossref records on 26 November 2026
+(authors, title, journal, volume, first page or article number, year), with the publisher
+as the source for Young2021autodE and DataCite for RDKit. Books without a Crossref record for the
 cited edition were checked by ISBN on Open Library, the thesis on HAL; software and format
 specifications are cited by URL. [Verification notes](#verification-notes) lists what could not
 be checked.
@@ -261,6 +261,7 @@ Orbital coefficients and the basis come from axtb (`crates/xtb-worker/src/ao.rs`
 The transition-state engine (`crates/optimize/src/ts/`, GFN2-xTB only; on the
 `xtb/w2-ts-engine` branch until it merges). Keys match its code comments.
 
+- **Young2021autodE** motivates preparing a pre-reaction conformer for single-structure searches. [Young et al., Angew. Chem. Int. Ed. 60, 4266–4274 (2021)](https://doi.org/10.1002/anie.202011941).
 - **Smidstrup2014IDPP**: Smidstrup, Pedersen, Stokbro & Jónsson, J. Chem. Phys. 140, 214106
   (2014), doi:10.1063/1.4878664. Image-dependent pair potential path guess (`ts/idpp.rs`).
 - **Henkelman2000CINEB**: Henkelman, Uberuaga & Jónsson, J. Chem. Phys. 113, 9901 (2000),

@@ -1022,6 +1022,7 @@ explains how the crates and modules fit together.
 - `crates/optimize/src/ts/mapping.rs`: Proper rigid fits (Horn, J.
 - `crates/optimize/src/ts/modes.rs`: Eckart translation/rotation projection and harmonic normal modes.
 - `crates/optimize/src/ts/neb.rs`: Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J.
+- `crates/optimize/src/ts/reactive_start.rs`: Graph-preserving preparation of a reactive starting conformer.
 - `crates/optimize/src/ts/saddle.rs`: Partitioned rational-function saddle refinement.
 - `crates/optimize/src/ts/saddle_regressions.rs`: Analytic counterexamples for trust-model recovery and force-only acceptance.
 
