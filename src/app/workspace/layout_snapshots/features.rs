@@ -988,7 +988,7 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 45] = [
 ];
 
 /// CHFClBr with F wedged and its 3D model, in Predict → xTB, optimizing.
-fn xtb_halocarbon(app: &mut App) -> Vec<[f64; 3]> {
+pub(super) fn xtb_halocarbon(app: &mut App) -> Vec<[f64; 3]> {
     use crate::app::xtb::{Action, Page};
     let doc = &mut app.tab.doc;
     let c = doc.add_atom("C", World::default());
@@ -1058,7 +1058,7 @@ fn xtb_stereo(app: &mut App, _: &Driver<'_>) {
 }
 
 /// A finished three-step optimization (example energies): the results palette.
-fn xtb_results(app: &mut App, _: &Driver<'_>) {
+pub(super) fn xtb_results(app: &mut App, _: &Driver<'_>) {
     use crate::app::xtb::{Action, palette};
     let start = xtb_halocarbon(app);
     let middle: Vec<[f64; 3]> = start.iter().map(|&[x, y, z]| [x * 1.02, y, z]).collect();
