@@ -159,6 +159,7 @@ pub(in crate::app::xtb) struct Dialog {
     inferred: bool,
     unmapped_isotope_hydrogen: bool,
     ignored: Option<String>,
+    target_stereo_note: Option<&'static str>,
     inputs: Vec<species::Input>,
     path_points: String,
     task: CalcTask,
@@ -438,6 +439,9 @@ impl App {
             inferred: matches!(source, Cow::Owned(_)),
             unmapped_isotope_hydrogen,
             ignored: species::ignored(&source, &reaction),
+            target_stereo_note: (mode == Mode::TransitionState)
+                .then(|| self.xtb_target_stereo_note(&reaction, shape))
+                .flatten(),
             preview: None,
         };
         let finding = matches!(dialog.mapping, Mapping::Finding);
@@ -635,6 +639,9 @@ impl App {
         }
         if let Some(ignored) = &dialog.ignored {
             content = content.push(line(ignored, Tone::Muted));
+        }
+        if let Some(note) = dialog.target_stereo_note {
+            content = content.push(line(note, Tone::Muted));
         }
         if dialog.unmapped_isotope_hydrogen {
             content = content.push(line(

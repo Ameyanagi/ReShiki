@@ -491,7 +491,11 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     finish_model(&mut app);
     let run = app.tab.xtb.run.as_ref().unwrap();
     let serial = run.serial;
-    let report = example_report(run.launch.as_ref().unwrap());
+    let mut report = example_report(run.launch.as_ref().unwrap());
+    Arc::get_mut(&mut report).unwrap().extras.diagnostics.push((
+        "IRC +mode".into(),
+        "reactant · downhill trace not converged · 10 points".into(),
+    ));
     let reactant = model(&app.tab.doc);
     let selected = report.frames[0].positions_angstrom[0].map(|x| x as f32);
     send(
@@ -518,6 +522,12 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     assert_eq!(model(&app.tab.doc), reactant);
     let shown = app.xtb_shown().unwrap();
     assert!(!shown.stale);
+    assert_eq!(
+        view::presentation(&shown.stored.result, shown.ts)
+            .warning
+            .as_deref(),
+        Some("Reaction-path descent ended before gradient convergence.")
+    );
     assert_eq!(
         results::View::available(&shown.stored.result),
         [
@@ -559,6 +569,12 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     assert_eq!(reopened.tab.xtb.palette.view, results::View::Path);
     let shown = reopened.xtb_shown().unwrap();
     assert!(shown.ts.is_none());
+    let presentation = view::presentation(&shown.stored.result, None);
+    assert!(presentation.reliable());
+    assert_eq!(
+        presentation.warning.as_deref(),
+        Some("Reaction-path descent ended before gradient convergence.")
+    );
     let search = saved_search(&shown.stored.result).unwrap();
     assert_eq!(search.arrow, Some(arrow));
     assert!(search.context.is_some());
@@ -600,6 +616,41 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
             .images,
         20
     );
+}
+
+#[tokio::test]
+async fn failed_irc_reports_failure_and_opens_the_saved_candidate() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let mut report = example_report(run.launch.as_ref().unwrap());
+    let failed = Arc::get_mut(&mut report).unwrap();
+    failed.extras.connects = false;
+    failed.result.status = Status::NotConverged {
+        reason: "IRC failed: endpoint minimization reached its step limit".into(),
+    };
+    let energy = failed.result.energy_hartree;
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    assert_eq!(app.status, "xTB · No reliable transition state found.");
+
+    let ui = card::tests::ViewHarness::new().await;
+    let texts = ui.inspect(app.xtb_reaction_card(arrow)).texts;
+    assert!(texts.iter().any(|text| {
+        text == "The reaction-path check could not finish: the endpoint optimization reached its step limit."
+    }));
+    assert!(texts.iter().any(|text| text == "Show what was found"));
+    assert!(texts.iter().all(|text| !text.contains("ΔE‡")));
+    let action = ui
+        .activate(app.xtb_reaction_card(arrow), "xtb-ts-card-path")
+        .unwrap();
+    let _ = app.update(action);
+    let shown = app.xtb_shown().unwrap();
+    assert_eq!(app.tab.xtb.palette.view, results::View::Path);
+    assert_eq!(shown.stored.result.energy_hartree, energy);
 }
 
 #[test]

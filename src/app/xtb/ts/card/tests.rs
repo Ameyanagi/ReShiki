@@ -299,6 +299,69 @@ fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
     assert!(bonds.0.broken.is_empty());
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[tokio::test]
+async fn drawn_product_stereo_adds_one_note_to_the_card_and_review() {
+    let (mut doc, arrow) = claisen();
+    let mut product_bond = (0, 0);
+    for product in [false, true] {
+        let side = if product {
+            &doc.reactions[0].products[0]
+        } else {
+            &doc.reactions[0].reactants[0]
+        };
+        let mapped = |number| {
+            side.atoms
+                .iter()
+                .copied()
+                .find(|&id| doc.atom(id).unwrap().map_num == number)
+                .unwrap()
+        };
+        let (center, next, far) = (mapped(1), mapped(2), mapped(6));
+        let origin = doc.atom(center).unwrap().position;
+        let fluorine = doc.add_atom("F", origin.offset(0., -28.));
+        doc.atom_mut(fluorine).unwrap().map_num = 7;
+        doc.add_bond(center, fluorine, 1, "plain");
+        if product {
+            doc.atom_mut(next).unwrap().position = origin.offset(-24., 14.);
+            doc.atom_mut(far).unwrap().position = origin.offset(24., 14.);
+            doc.reactions[0].products[0].atoms.push(fluorine);
+            product_bond = (center, fluorine);
+        } else {
+            doc.reactions[0].reactants[0].atoms.push(fluorine);
+        }
+    }
+    let ui = ViewHarness::new().await;
+    let mut app = app(doc, arrow);
+    let note = "Stereochemistry of the drawn product is not checked; compare it with the result.";
+    for expected in [0, 1] {
+        if expected == 1 {
+            let before = app.tab.doc.clone();
+            app.tab
+                .doc
+                .bonds
+                .iter_mut()
+                .find(|bond| (bond.a, bond.b) == product_bond)
+                .unwrap()
+                .display = "wedge".into();
+            app.changed(before);
+        }
+        let card = ui.inspect(app.xtb_reaction_card(arrow));
+        assert_eq!(
+            card.texts.iter().filter(|text| *text == note).count(),
+            expected
+        );
+        let _ = app.xtb_review_show(review::Mode::TransitionState, Some(arrow));
+        assert!(app.ts_review_visible(), "{}", app.status);
+        let sheet = ui.inspect(app.with_ts_review(text("").into()));
+        assert_eq!(
+            sheet.texts.iter().filter(|text| *text == note).count(),
+            expected
+        );
+        let _ = app.xtb_review_action(review::Action::Cancel);
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::test]
 async fn predict_view_switches_reaction_controls_with_the_selected_chemistry_arrow() {

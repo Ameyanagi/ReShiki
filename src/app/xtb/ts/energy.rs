@@ -10,7 +10,7 @@ use iced::{Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
 use reshiki::science::{self, Freshness};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 const KCAL_PER_HARTREE: f64 = 627.509_474_063;
 const TEMPERATURE_K: f64 = 298.15;
@@ -61,6 +61,7 @@ struct Summary {
 struct Input {
     attachment: u64,
     result: Arc<CalcResult>,
+    previous: Vec<Weak<CalcResult>>,
 }
 
 impl Input {
@@ -68,7 +69,16 @@ impl Input {
         Self {
             attachment: view.stored.attachment,
             result: Arc::clone(&view.stored.result),
+            previous: Vec::new(),
         }
+    }
+
+    fn matches(&self, result: &Arc<CalcResult>) -> bool {
+        Arc::ptr_eq(&self.result, result)
+            || self
+                .previous
+                .iter()
+                .any(|previous| xtb::is(previous, result))
     }
 }
 
@@ -328,7 +338,7 @@ fn input_totals(
     if inputs.len() != species.len()
         || !inputs.iter().all(|input| {
             science.results.iter().any(|stored| {
-                stored.attachment == input.attachment && Arc::ptr_eq(&stored.result, &input.result)
+                stored.attachment == input.attachment && input.matches(&stored.result)
             }) && science.frame(&input.result.frame).is_some()
                 && science
                     .attachment(input.attachment)
@@ -346,6 +356,32 @@ fn input_totals(
 }
 
 impl State {
+    /// Follow light or pinned copies while keeping Undo's original identity.
+    pub(in crate::app::xtb) fn follow_result(
+        &mut self,
+        old: &science::Stored,
+        new: &science::Stored,
+    ) {
+        let inputs = self
+            .batch
+            .iter_mut()
+            .flat_map(|batch| &mut batch.inputs)
+            .chain(
+                self.summaries
+                    .iter_mut()
+                    .flat_map(|summary| &mut summary.inputs),
+            );
+        for input in inputs {
+            if input.attachment == old.attachment && input.matches(&old.result) {
+                input
+                    .previous
+                    .retain(|previous| previous.strong_count() > 0);
+                input.previous.push(Arc::downgrade(&input.result));
+                input.result = Arc::clone(&new.result);
+            }
+        }
+    }
+
     pub(in crate::app::xtb) fn task(&self, fallback: CalcTask) -> CalcTask {
         self.task.unwrap_or(if fallback == CalcTask::OptFreq {
             CalcTask::OptFreq

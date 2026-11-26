@@ -939,6 +939,7 @@ impl App {
             if let Some(ts) = self.tab.xtb.ts_sessions.get(&old.result).cloned() {
                 self.tab.xtb.ts_sessions.remember(&new.result, ts);
             }
+            self.tab.xtb.energy_state.follow_result(old, new);
             let shown = &mut self.tab.xtb.palette.result;
             if shown.iter().any(|weak| is(weak, &old.result)) {
                 shown.push(Arc::downgrade(&new.result));
