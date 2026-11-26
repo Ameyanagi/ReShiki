@@ -100,11 +100,16 @@ fn key(app: &App) -> String {
     science::result_key(&app.tab.doc.science.results[0].result)
 }
 
+/// The worker's answer, as a build with the engine gets it.
+fn computed(app: &mut App) {
+    let key = key(app);
+    act(app, Action::Computed(key, Ok(Arc::new(worker_orbitals()))));
+}
+
 /// The worker's answer and the mesh of every figure on the canvas, built
 /// here on the test thread.
 fn answer(app: &mut App) {
-    let key = key(app);
-    act(app, Action::Computed(key, Ok(Arc::new(worker_orbitals()))));
+    computed(app);
     let doc = app.display_document().clone();
     for model in &doc.models {
         let Some(figure) = &model.surface else {
@@ -138,6 +143,7 @@ fn has_surface(doc: &Document) -> bool {
 #[test]
 fn the_tab_previews_the_homo_without_changing_the_drawing() {
     let mut app = tab();
+    computed(&mut app);
     let target = app.xtb_orbital_target().expect("an orbital target");
     assert_eq!(target.problem, None);
     let choice = app.xtb_orbital_choice(&target);
