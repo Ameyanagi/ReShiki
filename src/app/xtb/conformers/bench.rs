@@ -269,7 +269,8 @@ fn benchmark(args: Args) -> Result<Value, String> {
         // Without re-ranking (xTB minimized every start) this also holds the final ranking.
         "clustering_seconds": phases.first_reranking.unwrap_or(done) - clustering,
         "rerank_seconds": phases.first_reranking.zip(phases.last_reranking).map(|(first, last)| last - first),
-        "ranking_seconds": phases.last_reranking.map(|last| done - last),
+        // Everything after the last re-ranked representative: ranking, deduplication, ending the workers.
+        "post_rerank_seconds": phases.last_reranking.map(|last| done - last),
         "search_seconds": found.seconds,
         "starts": found.starts,
         "clusters": found.clusters,
