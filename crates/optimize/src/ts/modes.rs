@@ -1,9 +1,9 @@
 //! Eckart translation/rotation projection and harmonic normal modes.
 //!
-//! The mass-weighted rigid subspace follows Wilson, Decius & Cross,
-//! *Molecular Vibrations* (1955), and Miller, Handy & Adams, J. Chem. Phys.
-//! 72, 99 (1980). Diagonalizing its orthogonal complement retains physical
-//! zero-curvature modes.
+//! The mass-weighted rigid subspace follows Wilson, Decius & Cross, *Molecular Vibrations* (1955)
+//! [Wilson1955Vibrations], and Miller, Handy & Adams, J. Chem. Phys. 72, 99 (1980)
+//! [Miller1980Eckart]. Diagonalizing its orthogonal complement retains physical zero-curvature
+//! modes.
 
 use crate::linalg::{dot, norm, projected_eigen};
 
