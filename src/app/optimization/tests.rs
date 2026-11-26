@@ -1410,7 +1410,7 @@ fn a_generation_answered_in_uff_keeps_the_session_on_uff() {
     assert_eq!(session.field, ForceField::Uff);
     assert_eq!(
         session.field_note.as_deref(),
-        Some("UFF used: no MMFF94s parameters for this molecule"),
+        Some("UFF used: MMFF94s parameters are unavailable for this molecule"),
         "MMFF stays offered after it failed"
     );
 }

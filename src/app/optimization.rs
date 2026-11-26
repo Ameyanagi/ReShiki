@@ -810,8 +810,9 @@ impl App {
             session.converged = result.converged;
             if flight.work == Work::Generate {
                 if result.force_field != flight.field {
+                    // Worded as the worker's note, which it then replaces.
                     session.field_note = Some(format!(
-                        "{} used: no {} parameters for this molecule",
+                        "{} used: {} parameters are unavailable for this molecule",
                         result.force_field, flight.field
                     ));
                 }
@@ -1291,7 +1292,12 @@ impl App {
                 .prepared
                 .skipped_checks()
                 .iter()
-                .chain(&session.approximations)
+                .chain(
+                    session
+                        .approximations
+                        .iter()
+                        .filter(|note| Some(*note) != session.field_note.as_ref()),
+                )
                 .fold(column![].spacing(2), |notes, note| {
                     notes.push(
                         text(format!("· {note}"))
@@ -1310,11 +1316,7 @@ impl App {
                 .spacing(3),
             );
         }
-        if let Some(note) = session
-            .field_note
-            .as_ref()
-            .filter(|_| session.mode == Mode::Strict)
-        {
+        if let Some(note) = &session.field_note {
             panel = panel.push(
                 text(format!("· {note}"))
                     .size(11)
