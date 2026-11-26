@@ -142,6 +142,22 @@ impl MoDiagram {
         (layout.width, layout.height)
     }
 
+    /// The smallest range that also shows this level, within the stepper limits.
+    pub fn range_for_picture(&self, column: u8, index: usize) -> Option<(u8, u8)> {
+        let c = self.columns.get(usize::from(column))?;
+        if shown_levels(c, self.below, self.above).contains(&index) {
+            return Some((self.below, self.above));
+        }
+        if !shown_levels(c, 8, 8).contains(&index) {
+            return None;
+        }
+        let occupied = c.occupied?;
+        let group = c.group(index);
+        let below = occupied.saturating_sub(1).saturating_sub(*group.end());
+        let above = group.start().saturating_sub(occupied);
+        Some((self.below.max(below as u8), self.above.max(above as u8)))
+    }
+
     /// Hit a level bar or label using the default drawing style.
     pub fn level_at(&self, g: &Graphic, p: Point) -> Option<(u8, usize)> {
         self.level_at_with_style(g, p, &style::DEFAULT)
@@ -186,7 +202,12 @@ impl MoDiagram {
     }
 
     pub(crate) fn picture_model(&self, doc: &Document, index: usize) -> Option<Model3d> {
-        let mut small = models3d::panel_model(self.model(doc)?, &self.pictures.get(index)?.figure);
+        self.orbital_model(doc, &self.pictures.get(index)?.figure)
+    }
+
+    /// The model that draws a picture of this orbital in the diagram.
+    pub fn orbital_model(&self, doc: &Document, figure: &Figure) -> Option<Model3d> {
+        let mut small = models3d::panel_model(self.model(doc)?, figure);
         small.display = models3d::Display::ThreeD;
         small.morph = None;
         Some(small)
