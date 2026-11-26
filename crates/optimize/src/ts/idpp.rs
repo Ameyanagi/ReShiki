@@ -1,5 +1,5 @@
 //! Image-dependent pair-potential interpolation: Smidstrup, Pedersen, Stokbro
-//! & Jónsson, J. Chem. Phys. 140, 214106 (2014), Eqs. (2)–(4). Every atom pair
+//! & Jónsson, J. Chem. Phys. 140, 214106 (2014) [Smidstrup2014IDPP], Eqs. (2)–(4). Every atom pair
 //! has a linearly interpolated target distance and weight w(d)=d^-4. A cheap
 //! NEB/FIRE relaxation acts on this analytic objective without Potential calls.
 
