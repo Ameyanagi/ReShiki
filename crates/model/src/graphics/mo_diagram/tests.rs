@@ -1,6 +1,7 @@
 use super::*;
 use crate::document::CALCULATIONS;
 use crate::models3d::surface::{OrbitalRef, Snapshot};
+use reshiki_qcdata::Spin;
 
 fn column(spin: Spin, label: &str, energies: &[f64], occupied: usize) -> Column {
     Column {
@@ -39,20 +40,23 @@ fn placed(mo: MoDiagram, style: &DrawingStyle) -> Graphic {
     )
 }
 
-fn picture(result: &str, spin: Spin, index: u32) -> Figure {
-    Figure {
-        orbital: OrbitalRef {
-            result: result.into(),
-            spin,
-            index,
+fn picture(result: &str, column: u8, spin: Spin, index: u32) -> MoPicture {
+    MoPicture {
+        column,
+        figure: Figure {
+            orbital: OrbitalRef {
+                result: result.into(),
+                spin,
+                index,
+            },
+            iso: 0.07,
+            look: Default::default(),
+            snapshot: Some(Snapshot {
+                view: "before".into(),
+                reach: 1.,
+                shapes: "old".into(),
+            }),
         },
-        iso: 0.07,
-        look: Default::default(),
-        snapshot: Some(Snapshot {
-            view: "before".into(),
-            reach: 1.,
-            shapes: "old".into(),
-        }),
     }
 }
 
@@ -180,18 +184,15 @@ fn level_at_identifies_a_rotated_bar_and_label() {
     let group = &c.groups[2];
     let (_, left, right) = c.bars(group, layout.font.size()).next().unwrap();
     let point = layout.world(&g, Point::new((left + right) / 2., group.y));
-    assert_eq!(
-        mo.level_at_with_style(&g, point, &style),
-        Some((Spin::Alpha, 1))
-    );
+    assert_eq!(mo.level_at_with_style(&g, point, &style), Some((0, 1)));
     let label = layout
         .labels
         .iter()
-        .find(|l| l.orbital == Some((Spin::Alpha, 2)))
+        .find(|l| l.orbital == Some((0, 2)))
         .unwrap();
     assert_eq!(
         mo.level_at_with_style(&g, layout.annotation(&g, label).centre(), &style),
-        Some((Spin::Alpha, 2))
+        Some((0, 2))
     );
     let blank = layout.world(&g, Point::new(1., 1.));
     assert!(g.hit(blank, 0.));
@@ -210,12 +211,12 @@ fn relink_keeps_frontier_choices_range_and_look() {
     mo.above = 6;
     mo.linked = false;
     mo.pictures = vec![
-        picture("old", Spin::Alpha, 1),
-        picture("old", Spin::Alpha, 3),
-        picture("old", Spin::Alpha, 5),
+        picture("old", 0, Spin::Alpha, 1),
+        picture("old", 0, Spin::Alpha, 3),
+        picture("old", 0, Spin::Alpha, 5),
     ];
-    mo.pictures[0].look.opacity = 70;
-    let appearance = mo.pictures[0].look;
+    mo.pictures[0].figure.look.opacity = 70;
+    let appearance = mo.pictures[0].figure.look;
     let next = vec![column(
         Spin::Alpha,
         "",
@@ -229,39 +230,57 @@ fn relink_keeps_frontier_choices_range_and_look() {
     assert_eq!(
         mo.pictures
             .iter()
-            .map(|p| p.orbital.index)
+            .map(|p| p.figure.orbital.index)
             .collect::<Vec<_>>(),
         vec![2, 4]
     );
-    assert_eq!(mo.pictures[0].look, appearance);
-    assert_eq!(mo.pictures[0].iso, 0.07);
+    assert_eq!(mo.pictures[0].figure.look, appearance);
+    assert_eq!(mo.pictures[0].figure.iso, 0.07);
     assert!(
         mo.pictures
             .iter()
-            .all(|p| p.snapshot.is_none() && p.orbital.result == "new")
+            .all(|p| p.figure.snapshot.is_none() && p.figure.orbital.result == "new")
     );
 }
 
 #[test]
-fn relink_follows_the_beta_column_when_its_rows_become_shared() {
+fn shared_rows_hit_and_relink_by_column() {
     let mut mo = MoDiagram::new(
         1,
         "old".into(),
         vec![
             column(Spin::Alpha, "α", &[-12., -10., -8.], 2),
-            column(Spin::Beta, "β", &[-13., -9., -4.], 1),
+            column(Spin::Alpha, "β", &[-12., -10., -8.], 1),
         ],
     );
-    mo.pictures = vec![picture("old", Spin::Beta, 1)];
+    mo.pictures = vec![
+        picture("old", 0, Spin::Alpha, 1),
+        picture("old", 1, Spin::Alpha, 1),
+    ];
+    let g = placed(mo.clone(), &style::DEFAULT);
+    let layout = Layout::new(&mo, &style::DEFAULT);
+    for c in &layout.columns {
+        let group = c.groups.iter().find(|g| g.levels.contains(&1)).unwrap();
+        let (_, left, right) = c.bars(group, layout.font.size()).next().unwrap();
+        let point = layout.world(&g, Point::new((left + right) / 2., group.y));
+        assert_eq!(mo.level_at(&g, point), Some((c.index, 1)));
+        let slot = &layout.pictures[usize::from(c.index)];
+        assert!(slot.connector.x > c.left && slot.centre.x > slot.connector.x);
+        assert_eq!(slot.centre.y, group.y);
+    }
+    assert!(layout.pictures[0].centre.x < layout.columns[1].left);
     mo.relink(
-        "shared".into(),
+        "new".into(),
         vec![
-            column(Spin::Alpha, "α", &[-14., -12., -10., -8.], 3),
-            column(Spin::Alpha, "β", &[-14., -12., -10., -8.], 2),
+            column(Spin::Beta, "β", &[-14., -12., -10., -8.], 2),
+            column(Spin::Alpha, "α", &[-14., -12., -10., -8.], 2),
         ],
     );
-    assert_eq!(mo.pictures[0].orbital.spin, Spin::Alpha);
-    assert_eq!(mo.pictures[0].orbital.index, 2);
+    assert_eq!(mo.pictures[0].column, 1);
+    assert_eq!(mo.pictures[0].figure.orbital.index, 1);
+    assert_eq!(mo.pictures[1].column, 0);
+    assert_eq!(mo.pictures[1].figure.orbital.spin, Spin::Beta);
+    assert_eq!(mo.pictures[1].figure.orbital.index, 2);
 }
 
 #[test]
@@ -273,15 +292,17 @@ fn native_version_and_validation_cover_mo_diagram_data() {
     };
     assert_eq!(doc.file_version(), CALCULATIONS);
     assert!(doc.validate().is_ok());
-    let variants: [fn(&mut MoDiagram); 8] = [
+    let variants: [fn(&mut MoDiagram); 10] = [
         |mo| mo.columns.clear(),
         |mo| mo.columns[0].energies_ev[0] = f64::INFINITY,
         |mo| mo.columns[0].energies_ev.resize(4097, 0.),
         |mo| mo.columns[0].occupations.push(1.),
         |mo| mo.below = 9,
         |mo| mo.result = "x".repeat(65),
-        |mo| mo.pictures = vec![picture("old", Spin::Alpha, 0); 17],
-        |mo| mo.pictures = vec![picture("old", Spin::Beta, 2)],
+        |mo| mo.pictures = vec![picture("old", 0, Spin::Alpha, 0); 17],
+        |mo| mo.pictures = vec![picture("old", 0, Spin::Beta, 2)],
+        |mo| mo.pictures = vec![picture("old", 1, Spin::Alpha, 2)],
+        |mo| mo.pictures = vec![picture("old", 0, Spin::Alpha, 6)],
     ];
     for perturb in variants {
         let mut invalid = g.clone();

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    graphics::{Graphic, MoDiagram},
+    graphics::{Graphic, MoDiagram, MoPicture},
     models3d::surface::{Figure, OrbitalRef},
     orbital_levels::Column,
 };
@@ -21,15 +21,18 @@ fn diagram() -> Document {
             occupied: Some(2),
         }],
     );
-    mo.pictures.push(Figure {
-        orbital: OrbitalRef {
-            result,
-            spin: Spin::Alpha,
-            index: 1,
+    mo.pictures.push(MoPicture {
+        column: 0,
+        figure: Figure {
+            orbital: OrbitalRef {
+                result,
+                spin: Spin::Alpha,
+                index: 1,
+            },
+            iso: 0.05,
+            look: Default::default(),
+            snapshot: None,
         },
-        iso: 0.05,
-        look: Default::default(),
-        snapshot: None,
     });
     let id = doc.next_id();
     doc.graphics.push(Graphic::mo_diagram(

@@ -1186,6 +1186,20 @@ impl App {
                     false
                 }
             };
+        if let Some(orbitals) = &pending.result.orbitals {
+            let columns = reshiki::orbital_levels::columns(orbitals);
+            if !columns.is_empty() {
+                let key = science::result_key(&pending.result);
+                for mo in doc.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
+                    if mo.linked
+                        && mo.molecule.is_some()
+                        && pending.launch.atoms.contains(&mo.molecule)
+                    {
+                        mo.relink(key.clone(), columns.clone());
+                    }
+                }
+            }
+        }
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if self.error {

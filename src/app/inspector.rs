@@ -1,5 +1,11 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{control, hover_hint, keyed_command, muted_text, panel_action};
+use super::workspace::{
+    accessible_command, control, hover_hint, keyed_command, muted_text, panel_action, section,
+};
+use super::xtb::{
+    self,
+    orbitals::{self, DiagramEdit},
+};
 use super::{App, InspectorTab, Message};
 use crate::appearance::ChemDrawFormat;
 use crate::canvas::Tool;
@@ -1118,6 +1124,9 @@ impl App {
         }
         if let Some(ir) = self.ir_figure_card() {
             body = body.push(card(container(ir).padding(12)));
+        }
+        if let Some(mo) = self.mo_diagram_card() {
+            body = body.push(card(container(mo).padding(12)));
         }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
@@ -2888,6 +2897,81 @@ impl App {
         }
         Task::none()
     }
+    fn mo_diagram_card(&self) -> Option<Element<'_, Message>> {
+        let [id] = self.tab.selected.as_slice() else {
+            return None;
+        };
+        let id = *id;
+        let mo = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .find(|g| g.id == id)?
+            .mo
+            .as_deref()?;
+        let send = move |edit| {
+            Message::Xtb(xtb::Action::Orbitals(orbitals::Action::EditDiagram(
+                id, edit,
+            )))
+        };
+        let stepper = |label, ids: [&'static str; 2], value: u8, edit: fn(u8) -> DiagramEdit| {
+            row![
+                text(label).size(11).width(Length::Fill),
+                accessible_command(ids[0], format!("Fewer {label}"), "−")
+                    .padding([3, 8])
+                    .on_press_maybe((value > 0).then(|| send(edit(value - 1)))),
+                text(value.to_string()).size(12).width(20).center(),
+                accessible_command(ids[1], format!("More {label}"), "+")
+                    .padding([3, 8])
+                    .on_press_maybe((value < 8).then(|| send(edit(value + 1)))),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+        };
+        let link = if mo.linked {
+            row![
+                text("Linked to the calculation")
+                    .size(11)
+                    .width(Length::Fill),
+                accessible_command("mo-diagram-unlink", "Unlink", "Unlink")
+                    .on_press(send(DiagramEdit::Unlink)),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+        } else {
+            row![text("Not linked: reruns leave it unchanged").size(11)]
+        };
+        Some(
+            column![
+                section("MO diagram"),
+                stepper(
+                    "Levels below HOMO",
+                    ["mo-diagram-below-less", "mo-diagram-below-more"],
+                    mo.below,
+                    DiagramEdit::Below
+                ),
+                stepper(
+                    "Levels above LUMO",
+                    ["mo-diagram-above-less", "mo-diagram-above-more"],
+                    mo.above,
+                    DiagramEdit::Above
+                ),
+                link,
+                accessible_command(
+                    "mo-diagram-remove-pictures",
+                    "Remove pictures",
+                    "Remove pictures"
+                )
+                .on_press_maybe(
+                    (!mo.pictures.is_empty()).then(|| send(DiagramEdit::RemovePictures))
+                ),
+            ]
+            .spacing(8)
+            .into(),
+        )
+    }
+
     /// Returns the Import tab's focus task. `None` lets update_inner's
     /// inspector reveal apply.
     pub(super) fn show_inspector_tab(&mut self, tab: InspectorTab) -> Option<Task<Message>> {

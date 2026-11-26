@@ -707,7 +707,7 @@ impl Document {
                 self.graphics
                     .iter()
                     .filter_map(|g| g.mo.as_deref())
-                    .flat_map(|mo| &mo.pictures),
+                    .flat_map(|mo| mo.pictures.iter().map(|p| &p.figure)),
             )
     }
 
@@ -1603,7 +1603,10 @@ fn frame_bytes(doc: &Document) -> usize {
                     })
                     .sum::<usize>()
                 + bytes(mo.pictures.as_slice())
-                + mo.pictures.iter().map(figure_bytes).sum::<usize>()
+                + mo.pictures
+                    .iter()
+                    .map(|p| figure_bytes(&p.figure))
+                    .sum::<usize>()
         })
         .sum();
     let ir: usize = doc

@@ -114,6 +114,10 @@ impl App {
                 self.status = "Arrow source canceled".into();
                 return;
             }
+            Edit::MoLevelClick(id, column, index) => {
+                self.xtb_mo_level_click(id, column, index);
+                return;
+            }
             Edit::ContextMenu {
                 position,
                 at,
@@ -191,7 +195,10 @@ impl App {
         }
         match edit {
             // These edits are handled by the leading match, before preview gates.
-            Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
+            Edit::ContextMenu { .. }
+            | Edit::ArrowTarget(..)
+            | Edit::CancelArrowSource
+            | Edit::MoLevelClick(..) => return,
             Edit::Touch(_)
             | Edit::Release(..)
             | Edit::Hover(_)

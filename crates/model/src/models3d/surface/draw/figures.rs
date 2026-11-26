@@ -1,7 +1,7 @@
 use super::*;
 use crate::canvas_theme::CanvasTheme;
 use crate::document::CALCULATIONS;
-use crate::graphics::{Graphic, GraphicStyle, MoDiagram};
+use crate::graphics::{Graphic, GraphicStyle, MoDiagram, MoPicture};
 use crate::models3d::{
     Labels, balls_and_sticks, frame, primitives,
     surface::{Figure, OrbitalRef, Snapshot, snapshot},
@@ -109,12 +109,15 @@ fn mo_diagram_document() -> Document {
     let figure = doc.models[0].surface.take().unwrap();
     let mut mo = MoDiagram::new(atom, science::result_key(&result), columns);
     mo.pictures = (0..2)
-        .map(|index| Figure {
-            orbital: OrbitalRef {
-                index,
-                ..figure.orbital.clone()
+        .map(|index| MoPicture {
+            column: 0,
+            figure: Figure {
+                orbital: OrbitalRef {
+                    index,
+                    ..figure.orbital.clone()
+                },
+                ..figure.clone()
             },
-            ..figure.clone()
         })
         .collect();
     let (width, height) = mo.natural_size(&doc.drawing_style);
@@ -137,8 +140,7 @@ fn mo_surfaces(doc: &Document) -> usize {
 }
 
 fn register_mo_picture(doc: &Document, index: usize) {
-    let figure = &doc.graphics[0].mo.as_ref().unwrap().pictures[index];
-    let small = crate::models3d::panel_model(&doc.models[0], figure);
+    let small = doc.graphics[0].mo_picture_models(doc).nth(index).unwrap();
     register(key(doc, &small).unwrap(), two_lobes());
 }
 
@@ -167,10 +169,11 @@ fn mo_diagram_pictures_draw_live_and_saved_after_reopening() {
 
     let saved = doc.current();
     let pictures = &saved.graphics[0].mo.as_ref().unwrap().pictures;
-    assert!(pictures[0].snapshot.is_some());
-    assert!(pictures[1].snapshot.is_none());
+    assert!(pictures[0].figure.snapshot.is_some());
+    assert!(pictures[1].figure.snapshot.is_none());
     assert!(
         doc.graphics[0].mo.as_ref().unwrap().pictures[0]
+            .figure
             .snapshot
             .is_none()
     );
@@ -205,7 +208,7 @@ fn mo_diagram_pictures_draw_live_and_saved_after_reopening() {
 fn mo_diagram_current_refreshes_each_picture_in_its_own_slot() {
     let _guard = lock_registry();
     let mut doc = mo_diagram_document();
-    let stale = &mut doc.graphics[0].mo.as_mut().unwrap().pictures[0];
+    let stale = &mut doc.graphics[0].mo.as_mut().unwrap().pictures[0].figure;
     stale.orbital.result = "stale".into();
     stale.snapshot = Some(Snapshot {
         view: "stale".into(),
@@ -218,11 +221,12 @@ fn mo_diagram_current_refreshes_each_picture_in_its_own_slot() {
 
     let saved = doc.current();
     let pictures = &saved.graphics[0].mo.as_ref().unwrap().pictures;
-    assert_eq!(pictures[0], original);
-    assert_eq!(pictures[1].orbital.index, 1);
-    assert!(pictures[1].snapshot.is_some());
+    assert_eq!(pictures[0].figure, original);
+    assert_eq!(pictures[1].figure.orbital.index, 1);
+    assert!(pictures[1].figure.snapshot.is_some());
     assert!(
         doc.graphics[0].mo.as_ref().unwrap().pictures[1]
+            .figure
             .snapshot
             .is_none()
     );

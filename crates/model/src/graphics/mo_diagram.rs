@@ -1,7 +1,6 @@
 //! A placed molecular orbital diagram and its vector layout.
 use std::ops::RangeInclusive;
 
-use reshiki_qcdata::Spin;
 use serde::{Deserialize, Serialize};
 
 use super::{BracketSides, Graphic, GraphicKind, GraphicStyle, LinePattern, PathCommand};
@@ -28,7 +27,15 @@ pub struct MoDiagram {
     /// Levels included below the HOMO and above the LUMO, respectively.
     pub below: u8,
     pub above: u8,
-    pub pictures: Vec<Figure>,
+    pub pictures: Vec<MoPicture>,
+}
+
+/// A picture belongs to a displayed column, even when both columns share rows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MoPicture {
+    pub column: u8,
+    pub figure: Figure,
 }
 
 impl MoDiagram {
@@ -61,10 +68,11 @@ impl MoDiagram {
         }
         if self.pictures.len() > 16
             || self.pictures.iter().any(|p| {
-                p.orbital.result.chars().count() > 64
-                    || !self.columns.iter().any(|c| {
-                        c.spin == p.orbital.spin
-                            && c.energies_ev.get(p.orbital.index as usize).is_some()
+                let orbital = &p.figure.orbital;
+                orbital.result.chars().count() > 64
+                    || !self.columns.get(usize::from(p.column)).is_some_and(|c| {
+                        c.spin == orbital.spin
+                            && c.energies_ev.get(orbital.index as usize).is_some()
                     })
             })
         {
@@ -76,17 +84,15 @@ impl MoDiagram {
     /// Retain the chosen frontier levels and their appearance on a new result.
     pub fn relink(&mut self, result: String, columns: Vec<Column>) {
         self.pictures.retain_mut(|picture| {
-            let index = picture.orbital.index as usize;
-            let Some(old) = self
-                .columns
-                .iter()
-                .find(|c| c.spin == picture.orbital.spin && c.energies_ev.get(index).is_some())
-            else {
+            let figure = &mut picture.figure;
+            let index = figure.orbital.index as usize;
+            let Some(old) = self.columns.get(usize::from(picture.column)) else {
                 return false;
             };
-            let Some(new) = columns
+            let Some((column, new)) = columns
                 .iter()
-                .find(|c| c.label == old.label && (c.spin == old.spin || !old.label.is_empty()))
+                .enumerate()
+                .find(|(_, c)| c.label == old.label)
             else {
                 return false;
             };
@@ -99,10 +105,11 @@ impl MoDiagram {
             let Some(index) = index.filter(|&i| i < new.energies_ev.len()) else {
                 return false;
             };
-            picture.orbital.result.clone_from(&result);
-            picture.orbital.index = index as u32;
-            picture.orbital.spin = new.spin;
-            picture.snapshot = None;
+            picture.column = column as u8;
+            figure.orbital.result.clone_from(&result);
+            figure.orbital.index = index as u32;
+            figure.orbital.spin = new.spin;
+            figure.snapshot = None;
             true
         });
         self.result = result;
@@ -115,7 +122,7 @@ impl MoDiagram {
     }
 
     /// Hit a level bar or label using the default drawing style.
-    pub fn level_at(&self, g: &Graphic, p: Point) -> Option<(Spin, usize)> {
+    pub fn level_at(&self, g: &Graphic, p: Point) -> Option<(u8, usize)> {
         self.level_at_with_style(g, p, &style::DEFAULT)
     }
 
@@ -125,7 +132,7 @@ impl MoDiagram {
         g: &Graphic,
         p: Point,
         doc_style: &DrawingStyle,
-    ) -> Option<(Spin, usize)> {
+    ) -> Option<(u8, usize)> {
         let det = g.frame_determinant();
         if !det.is_finite() || det == 0. {
             return None;
@@ -141,7 +148,7 @@ impl MoDiagram {
                 if (group.y - q.y).abs() <= layout.font.size() * 0.55 {
                     for (index, left, right) in c.bars(group, layout.font.size()) {
                         if (left..=right).contains(&q.x) {
-                            return Some((c.column.spin, index));
+                            return Some((c.index, index));
                         }
                     }
                 }
@@ -158,7 +165,7 @@ impl MoDiagram {
     }
 
     pub(crate) fn picture_model(&self, doc: &Document, index: usize) -> Option<Model3d> {
-        let mut small = models3d::panel_model(self.model(doc)?, self.pictures.get(index)?);
+        let mut small = models3d::panel_model(self.model(doc)?, &self.pictures.get(index)?.figure);
         small.display = models3d::Display::ThreeD;
         small.morph = None;
         Some(small)
@@ -171,7 +178,7 @@ impl MoDiagram {
             {
                 models3d::refresh_surface_snapshot(doc, &mut small);
                 if let Some((saved, picture)) = small.surface.zip(self.pictures.get_mut(index)) {
-                    picture.snapshot = saved.snapshot;
+                    picture.figure.snapshot = saved.snapshot;
                 }
             }
         }
@@ -248,6 +255,16 @@ impl Graphic {
             .as_deref()
             .map_or_else(Default::default, |mo| Layout::new(mo, style).ink(self))
     }
+
+    /// The same small orbital models that the diagram uses to draw its pictures.
+    pub fn mo_picture_models<'a>(
+        &'a self,
+        doc: &'a Document,
+    ) -> impl Iterator<Item = Model3d> + 'a {
+        self.mo.as_deref().into_iter().flat_map(move |mo| {
+            (0..mo.pictures.len()).filter_map(move |index| mo.picture_model(doc, index))
+        })
+    }
 }
 
 struct Group {
@@ -258,12 +275,14 @@ struct Group {
 }
 
 struct PlacedColumn<'a> {
+    index: u8,
     column: &'a Column,
     groups: Vec<Group>,
     left: f32,
     bar_space: f32,
     label_space: f32,
     beta: bool,
+    picture_x: f32,
 }
 
 impl PlacedColumn<'_> {
@@ -283,7 +302,7 @@ struct Label {
     text: String,
     left: Point,
     size: f32,
-    orbital: Option<(Spin, usize)>,
+    orbital: Option<(u8, usize)>,
 }
 
 struct PictureSlot {
@@ -335,12 +354,14 @@ impl<'a> Layout<'a> {
                     })
                     .fold(em, f32::max);
                 PlacedColumn {
+                    index: i as u8,
                     column,
                     groups,
                     left: 0.,
                     bar_space: em * (2.5 * slots + 0.22 * (slots - 1.)),
                     label_space,
                     beta: column.label == "β" || (column.label.is_empty() && i == 1),
+                    picture_x: 0.,
                 }
             })
             .collect();
@@ -365,26 +386,26 @@ impl<'a> Layout<'a> {
             .map(|((hi, he), (li, le))| (hi, li, format!("gap {} eV", signed(le - he))));
         let bracket = axis + em + gap.as_ref().map_or(0., |(_, _, text)| width_of(text, em));
         let mut width = bracket + em;
+        let picture_side = style.bond_length_world * 2.2;
+        let mut picture_count = 0;
         for c in &mut columns {
             c.left = width;
             width += c.bar_space + c.label_space + em * 1.6;
-        }
-        let picture_side = style.bond_length_world * 2.2;
-        let picture_count = mo
-            .pictures
-            .iter()
-            .filter(|p| {
-                columns.iter().any(|c| {
-                    c.column.spin == p.orbital.spin
+            let count = mo
+                .pictures
+                .iter()
+                .filter(|p| {
+                    p.column == c.index
                         && c.groups
                             .iter()
-                            .any(|g| g.levels.contains(&(p.orbital.index as usize)))
+                            .any(|g| g.levels.contains(&(p.figure.orbital.index as usize)))
                 })
-            })
-            .count();
-        let picture_x = width + picture_side / 2.;
-        if picture_count > 0 {
-            width += picture_side + em;
+                .count();
+            if count > 0 {
+                c.picture_x = width + picture_side / 2.;
+                width += picture_side + em;
+                picture_count = picture_count.max(count);
+            }
         }
 
         let spacing = em * 1.45;
@@ -447,7 +468,9 @@ impl<'a> Layout<'a> {
         }
 
         let mut pictures = vec![];
+        let step = picture_side + em * 0.25;
         for c in &columns {
+            let first = pictures.len();
             if !closed {
                 let header = if c.beta { "β" } else { "α" };
                 label(header.into(), c.left, em, em, None);
@@ -457,45 +480,33 @@ impl<'a> Layout<'a> {
                 let label_x = right + em * 0.35;
                 let mut label_end = label_x;
                 for (index, text) in &g.labels {
-                    label(
-                        text.clone(),
-                        label_end,
-                        g.y,
-                        em,
-                        Some((c.column.spin, *index)),
-                    );
+                    label(text.clone(), label_end, g.y, em, Some((c.index, *index)));
                     label_end += width_of(text, em) + em * 0.35;
                 }
                 for (index, p) in mo.pictures.iter().enumerate() {
-                    if p.orbital.spin == c.column.spin
-                        && g.levels.contains(&(p.orbital.index as usize))
-                        && !pictures
-                            .iter()
-                            .any(|slot: &PictureSlot| slot.index == index)
+                    if p.column == c.index && g.levels.contains(&(p.figure.orbital.index as usize))
                     {
                         pictures.push(PictureSlot {
                             index,
-                            centre: Point::new(picture_x, g.y),
+                            centre: Point::new(c.picture_x, g.y),
                             connector: Point::new(label_end + em * 0.28, g.y),
                             label_width: label_end - label_x,
                         });
                     }
                 }
             }
-        }
-        pictures.sort_by(|a, b| a.centre.y.total_cmp(&b.centre.y));
-        let count = pictures.len();
-        let step = picture_side + em * 0.25;
-        let mut previous = em * 0.5 + picture_side / 2. - step;
-        for (i, picture) in pictures.iter_mut().enumerate() {
-            picture.centre.y = spaced(
-                picture.centre.y,
-                previous,
-                step,
-                height - em * 0.5 - picture_side / 2.,
-                count - 1 - i,
-            );
-            previous = picture.centre.y;
+            let count = pictures.len() - first;
+            let mut previous = em * 0.5 + picture_side / 2. - step;
+            for (i, picture) in pictures.iter_mut().skip(first).enumerate() {
+                picture.centre.y = spaced(
+                    picture.centre.y,
+                    previous,
+                    step,
+                    height - em * 0.5 - picture_side / 2.,
+                    count - 1 - i,
+                );
+                previous = picture.centre.y;
+            }
         }
 
         Self {

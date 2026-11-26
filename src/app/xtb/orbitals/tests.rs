@@ -8,6 +8,7 @@ use super::super::{
 use super::*;
 use reshiki::qcdata::{BasisSet, Beta, OrbitalSet, Shell};
 use reshiki::scene::Primitive;
+use reshiki_xtb_worker::protocol::Method;
 
 fn act(app: &mut App, action: Action) {
     let _ = app.update(send(action));
@@ -74,10 +75,19 @@ fn worker_orbitals() -> qcdata::Orbitals {
 /// open.
 fn tab() -> App {
     let (mut app, _) = water(CalcTask::Energy);
-    let mut computed = run::example_computed(-5.070176, 14.01);
-    computed.orbitals = Some(levels());
+    finish_energy(&mut app, Method::Gfn2, -5.070176, levels());
+    let _ = app.update(Message::Xtb(XtbAction::Palette(
+        super::super::palette::Action::View(View::Orbitals),
+    )));
+    app
+}
+
+fn finish_energy(app: &mut App, method: Method, energy: f64, orbitals: qcdata::Orbitals) {
+    let mut computed = run::example_computed(energy, 14.01);
+    computed.method = method;
+    computed.orbitals = Some(orbitals);
     event(
-        &mut app,
+        app,
         Event::Done(Ok(Arc::new(Report {
             engine: run::example_engine(),
             energy: computed.energy,
@@ -86,15 +96,11 @@ fn tab() -> App {
             positions: START.to_vec(),
             steps: 0,
             optimizers: vec![],
-            energies: vec![-5.070176],
+            energies: vec![energy],
             path: vec![],
             evaluations: vec![],
         }))),
     );
-    let _ = app.update(Message::Xtb(XtbAction::Palette(
-        super::super::palette::Action::View(View::Orbitals),
-    )));
-    app
 }
 
 fn key(app: &App) -> String {
@@ -434,4 +440,339 @@ fn the_frontier_figure_places_homo_and_lumo_under_the_molecule() {
     assert!(target.frontier);
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.models[0].panels.is_empty());
+}
+
+#[test]
+fn placing_an_mo_diagram_selects_it_with_both_frontier_rows_in_one_edit() {
+    let mut app = tab();
+    computed(&mut app);
+    act(&mut app, Action::Preset(0.07));
+    act(&mut app, Action::Look(LookChoice::Mesh));
+    let before = app.tab.doc.clone();
+    let atoms = before.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
+    let (lo, hi) = reshiki::scene::selection_bounds(&before, &atoms).unwrap();
+    let frames = app.tab.history.frames();
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    assert!(!app.error, "{}", app.status);
+    let [graphic] = app.tab.doc.graphics.as_slice() else {
+        panic!("one graphic")
+    };
+    assert_eq!(app.tab.selected, [graphic.id]);
+    assert_eq!(
+        graphic.origin.x,
+        hi.x + before.drawing_style.bond_length_world
+    );
+    assert_eq!(graphic.origin.y, lo.y);
+    let mo = graphic.mo.as_deref().unwrap();
+    assert!(mo.linked);
+    assert_eq!(mo.result, key(&app));
+    assert_eq!(
+        (graphic.axis_x.x, graphic.axis_y.y),
+        mo.natural_size(&before.drawing_style)
+    );
+    assert_eq!(
+        mo.pictures
+            .iter()
+            .map(|p| (p.column, p.figure.orbital.index))
+            .collect::<Vec<_>>(),
+        [(0, 3), (0, 4)]
+    );
+    assert!(
+        mo.pictures
+            .iter()
+            .all(|p| p.figure.iso == 0.07 && p.figure.look.mesh)
+    );
+    let stored = app.tab.doc.science.results[0]
+        .result
+        .orbitals
+        .as_ref()
+        .unwrap();
+    assert_eq!(stored.alpha.rows, [3, 4]);
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn mo_diagram_placement_clears_the_model_panels_and_other_ink() {
+    use reshiki::document::Point;
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind};
+
+    let mut app = tab();
+    computed(&mut app);
+    act(&mut app, Action::PlaceFrontier);
+    let doc = &mut app.tab.doc;
+    let atoms = doc.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
+    let (lo, hi) = reshiki::scene::selection_bounds(doc, &atoms).unwrap();
+    let gap = doc.drawing_style.bond_length_world;
+    let start = Point::new(hi.x + gap, lo.y);
+    let obstacle = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        obstacle,
+        GraphicKind::Rectangle,
+        start,
+        Point::new(start.x + gap, hi.y + 2. * gap),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    ));
+    let (_, bottom) = reshiki::scene::selection_bounds(doc, &doc.all_ids()).unwrap();
+    app.set_selection(vec![obstacle]);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: true,
+        },
+    );
+    assert_eq!(app.status, "Run a calculation with orbitals first");
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    assert_eq!(
+        app.tab.doc.graphics[1].origin,
+        Point::new(lo.x, bottom.y + gap)
+    );
+}
+
+#[test]
+fn mo_diagram_picture_toggles_from_the_tab_and_canvas_without_editing_the_main_surface() {
+    let mut app = tab();
+    computed(&mut app);
+    act(&mut app, Action::Place);
+    let main = app.tab.doc.models[0].surface.clone();
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let id = app.tab.selected[0];
+    let frames = app.tab.history.frames();
+    act(&mut app, Action::ToggleDiagramPicture(id, 0, 3));
+    assert_eq!(
+        app.tab.doc.graphics[0].mo.as_ref().unwrap().pictures.len(),
+        1
+    );
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::MoLevelClick(id, 0, 2)));
+    assert_eq!(
+        app.tab.doc.graphics[0].mo.as_ref().unwrap().pictures.len(),
+        2
+    );
+    assert_eq!(app.tab.doc.models[0].surface, main);
+    let target = app.xtb_orbital_target().unwrap();
+    assert_eq!(app.xtb_orbital_choice(&target).index, 2);
+    assert_eq!(app.tab.xtb.palette.view, View::Orbitals);
+    assert_eq!(app.tab.history.frames(), frames + 2);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc.graphics[0].mo.as_ref().unwrap().pictures.len(),
+        1
+    );
+}
+
+#[cfg(all(feature = "xtb", not(windows)))]
+#[test]
+fn an_empty_mo_diagram_waits_for_multiple_requested_rows_and_pins_each_on_arrival() {
+    let mut app = tab();
+    computed(&mut app);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let id = app.tab.selected[0];
+    act(
+        &mut app,
+        Action::EditDiagram(id, DiagramEdit::RemovePictures),
+    );
+    app.tab.xtb.orbitals.computed.clear();
+    let frames = app.tab.history.frames();
+    act(&mut app, Action::ToggleDiagramPicture(id, 0, 1));
+    act(&mut app, Action::ToggleDiagramPicture(id, 0, 2));
+    act(&mut app, Action::ToggleDiagramPicture(id, 0, 0));
+    act(&mut app, Action::ToggleDiagramPicture(id, 0, 0));
+    assert_eq!(app.tab.history.frames(), frames);
+    assert_eq!(app.tab.xtb.orbitals.pending_pictures.len(), 2);
+    assert!(app.tab.xtb.orbitals.computing.is_some());
+    computed(&mut app);
+    let mo = app.tab.doc.graphics[0].mo.as_ref().unwrap();
+    assert_eq!(
+        mo.pictures
+            .iter()
+            .map(|p| p.figure.orbital.index)
+            .collect::<Vec<_>>(),
+        [1, 2]
+    );
+    assert_eq!(app.tab.history.frames(), frames + 2);
+    assert!(app.tab.xtb.orbitals.pending_pictures.is_empty());
+    assert_eq!(
+        app.tab.doc.science.results[0]
+            .result
+            .orbitals
+            .as_ref()
+            .unwrap()
+            .alpha
+            .rows,
+        [1, 2, 3, 4]
+    );
+}
+
+#[test]
+fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
+    let mut app = tab();
+    computed(&mut app);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let atom = app.tab.doc.atoms[0].id;
+    app.set_selection(vec![atom]);
+    let before_copy = app.tab.doc.clone();
+    let mut unlinked = before_copy.graphics[0].clone();
+    unlinked.id = before_copy.next_id();
+    unlinked.mo.as_mut().unwrap().linked = false;
+    app.tab.doc.graphics.push(unlinked.clone());
+    app.changed(before_copy);
+    let before = app.tab.doc.clone();
+    let frames = app.tab.history.frames();
+    let old_key = key(&app);
+    app.xtb.settings.method = qcdata::XtbMethod::GXtb;
+    let _ = app.update(Message::Xtb(XtbAction::Run));
+    let mut new_levels = levels();
+    new_levels.alpha.energies_hartree[4] += 0.05;
+    finish_energy(&mut app, Method::Gxtb, -5.07, new_levels.clone());
+    assert!(!app.error, "{}", app.status);
+    let linked = app.tab.doc.graphics[0].mo.as_ref().unwrap();
+    assert_ne!(linked.result, old_key);
+    assert_eq!(
+        linked.result,
+        science::result_key(&app.tab.doc.science.results.last().unwrap().result)
+    );
+    assert_eq!(linked.columns, levels::columns(&new_levels));
+    assert!(
+        linked
+            .pictures
+            .iter()
+            .all(|p| p.figure.orbital.result == linked.result && p.figure.snapshot.is_none())
+    );
+    assert_eq!(app.tab.doc.graphics[1], unlinked);
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    let key = linked.result.clone();
+    act(
+        &mut app,
+        Action::Computed(key, Ok(Arc::new(worker_orbitals()))),
+    );
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn mo_diagram_range_and_unlink_are_undoable_and_keep_the_frame_scale() {
+    let mut app = tab();
+    computed(&mut app);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let id = app.tab.selected[0];
+    let before = app.tab.doc.clone();
+    let frame = &before.graphics[0];
+    let (w, h) = frame
+        .mo
+        .as_ref()
+        .unwrap()
+        .natural_size(&before.drawing_style);
+    let frames = app.tab.history.frames();
+    act(&mut app, Action::EditDiagram(id, DiagramEdit::Below(0)));
+    act(&mut app, Action::EditDiagram(id, DiagramEdit::Above(8)));
+    act(&mut app, Action::EditDiagram(id, DiagramEdit::Unlink));
+    let g = &app.tab.doc.graphics[0];
+    let mo = g.mo.as_ref().unwrap();
+    assert_eq!((mo.below, mo.above, mo.linked), (0, 8, false));
+    let (new_w, new_h) = mo.natural_size(&before.drawing_style);
+    assert_eq!(g.origin, frame.origin);
+    assert_eq!(
+        (g.axis_x.x / new_w, g.axis_y.y / new_h),
+        (frame.axis_x.x / w, frame.axis_y.y / h)
+    );
+    assert_eq!(app.tab.history.frames(), frames + 3);
+    for _ in 0..3 {
+        let _ = app.update(Message::Undo);
+    }
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn native_clipboard_paste_remaps_the_molecule_and_delete_removes_the_mo_diagram() {
+    let mut app = tab();
+    computed(&mut app);
+    act(&mut app, Action::Preset(0.061_234_5));
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let g = &app.tab.doc.graphics[0];
+    let small = g.mo_picture_models(&app.tab.doc).next().unwrap();
+    let view = surface::draw::view_signature(&app.tab.doc, &small);
+    let shapes =
+        surface::snapshot::encode(&Primitive::Surface { groups: vec![] }, Default::default())
+            .unwrap();
+    app.tab.doc.graphics[0].mo.as_mut().unwrap().pictures[0]
+        .figure
+        .snapshot = Some(surface::Snapshot {
+        view,
+        shapes,
+        reach: 1.,
+    });
+    let doc = &app.tab.doc;
+    let part = reshiki::clipboard::selection_or_drawing(doc, &doc.all_ids());
+    let part = Document::from_json(&part.file_json().unwrap()).unwrap();
+    let original = doc.graphics[0].mo.as_ref().unwrap();
+    let original_atom = original.molecule;
+    let pictures = original.pictures.clone();
+    app.tab.doc.canvas_theme = app.tab.doc.canvas_theme.toggled();
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(reshiki::clipboard::PasteOutcome::native(part)),
+    );
+    assert!(!app.error, "{}", app.status);
+    let pasted = &app.tab.doc.graphics[1];
+    let id = pasted.id;
+    let mo = pasted.mo.as_ref().unwrap();
+    assert_eq!(mo.pictures[1], pictures[1]);
+    assert_eq!(mo.pictures[0].figure.orbital, pictures[0].figure.orbital);
+    let saved = mo.pictures[0].figure.snapshot.as_ref().unwrap();
+    let source = pictures[0].figure.snapshot.as_ref().unwrap();
+    assert_eq!(saved.shapes, source.shapes);
+    assert_ne!(saved.view, source.view);
+    let small = pasted.mo_picture_models(&app.tab.doc).next().unwrap();
+    assert_eq!(
+        saved.view,
+        surface::draw::view_signature(&app.tab.doc, &small)
+    );
+    assert_ne!(mo.molecule, original_atom);
+    assert!(app.tab.selected.contains(&mo.molecule.unwrap()));
+    assert!(app.tab.selected.contains(&id));
+    app.set_selection(vec![id]);
+    let _ = app.update(Message::Delete);
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    assert_eq!(app.tab.doc.models.len(), 2);
 }
