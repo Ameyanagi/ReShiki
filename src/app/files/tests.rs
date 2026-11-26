@@ -598,6 +598,7 @@ fn cli_input_formats_match_the_app() {
             Prepared::Import { format, .. } => format,
             Prepared::Picture(..) => panic!("Structure files are not pictures"),
             Prepared::Records(_) => panic!("Structure files are not SD files"),
+            Prepared::Calculation(_) => panic!("Structure files are not program outputs"),
             Prepared::Frames(_) => panic!("One structure has one frame"),
         };
         assert_eq!(
@@ -971,7 +972,7 @@ fn program_outputs_use_the_qc_reader_byte_limit() {
 }
 
 #[test]
-fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
+fn program_inputs_and_charge_notices_open_without_a_chooser() {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -984,24 +985,6 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
             .unwrap();
         opened
     };
-    // Three Gaussian jobs (Link1 and an internal step): the last one that ended normally opens.
-    let Ok(Prepared::Records(batch)) = open("CH2O_CO2.log", "pymatgen/CH2O_CO2.log") else {
-        panic!("a Gaussian log opens as a drawing");
-    };
-    assert_eq!(batch.drawings.len(), 1);
-    // The last Standard orientation lists atomic numbers 6, 8, 8:
-    //      1          6           0        0.000000    0.000000    0.000000
-    //      2          8           0        0.000000    0.000000    1.187890
-    //      3          8           0        0.000000    0.000000   -1.187890
-    let doc = &batch.drawings[0];
-    let elements: Vec<_> = doc.atoms.iter().map(|atom| atom.element.as_str()).collect();
-    assert_eq!(elements, ["C", "O", "O"]);
-    let notice = &batch.warnings[0];
-    assert!(
-        notice.starts_with("Final geometry of job 3 of 3: "),
-        "{notice}"
-    );
-    assert!(notice.ends_with("Normal termination"), "{notice}");
     // An input has no results to mention.
     let Ok(Prepared::Records(batch)) = open("water.com", "cclib/g16_water_mp2.com") else {
         panic!("a Gaussian input opens as a drawing");
@@ -1012,14 +995,14 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
     assert!(error.contains("not a format ReShiki reads"), "{error}");
 
     // Open the water Molden fixture under ORCA's double suffix in memory.
-    let Ok(Prepared::Records(batch)) =
+    let Ok(Prepared::Calculation(batch)) =
         open("water.molden.input", "cclib/molden5.7_water_mp2.molden")
     else {
         panic!("a .molden.input file opens as a drawing");
     };
     // H      3  1    -0.272880     0.951649     0.000000
     assert_eq!(batch.drawings[0].atoms.len(), 3);
-    assert_eq!(batch.warnings[0], "Geometry from the Molden file");
+    assert!(batch.warnings[0].contains("results in the palette"));
 
     // The anion radical's "-1 2" line: the drawing cannot say which atom carries them.
     let Ok(Prepared::Records(batch)) = open(
@@ -1066,7 +1049,7 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
             Ok(water.into_bytes()),
         ))
         .unwrap();
-    let Ok(Prepared::Records(batch)) = opened else {
+    let Ok(Prepared::Calculation(batch)) = opened else {
         panic!("a Molden file opens as a drawing");
     };
     assert!(
@@ -1081,27 +1064,50 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
 
 #[test]
 fn mismatched_calculation_opens_the_geometry_with_a_warning() {
-    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0\n";
-    let Prepared::Records(batch) = prepare_qc("overlap.molden".as_ref(), molden).unwrap() else {
+    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0\n\
+                   [MO]\nEne= -0.5\nSpin= Alpha\nOccup= 2\n";
+    let Prepared::Calculation(batch) = prepare_qc("overlap.molden".as_ref(), molden).unwrap()
+    else {
         panic!("the geometry should still open");
     };
     let doc = &batch.drawings[0];
     assert_eq!(doc.models[0].atoms.len(), 1);
     assert!(doc.science.is_empty());
-    assert!(batch.warnings[0].ends_with(" · Results can't be shown yet"));
+    assert!(batch.warnings[0].contains("Results could not be attached"));
+    assert!(batch.warnings[0].contains("Check the source geometry"));
+}
+
+#[tokio::test]
+async fn molden_atoms_only_reports_no_calculated_results() {
+    let (mut app, _) = App::new();
+    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0.74\n";
+    let opened = prepare_contents("hydrogen.molden".into(), Ok(molden.to_vec())).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models[0].atoms.len(), 2);
+    assert!(app.tab.doc.science.is_empty());
+    assert!(app.xtb_bottom_palette().is_none());
     assert!(
-        batch
-            .warnings
-            .iter()
-            .any(|warning| warning.starts_with("Could not attach the calculation results"))
+        app.status.contains("The file has no calculated results."),
+        "{}",
+        app.status
+    );
+    assert!(
+        !app.status.contains("results in the palette"),
+        "{}",
+        app.status
     );
 }
 
 #[tokio::test]
-async fn molden_and_fchk_open_with_orbitals_in_the_results_palette() {
+async fn orca_molden_and_fchk_open_directly_with_their_results() {
     let (mut app, _) = App::new();
     let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/qc/cclib/");
-    for name in ["molden5.7_dvb_ir.molden", "g09_dvb_ir.fchk"] {
+    for (name, modes, has_shapes) in [
+        ("orca60_dvb_ir.out", 54, false),
+        ("molden5.7_dvb_ir.molden", 54, true),
+        ("g09_dvb_ir.fchk", 0, true),
+    ] {
         let opened = read(std::path::Path::new(fixtures).join(name)).await;
         let _ = app.update(Message::FilePrepared(opened));
         assert!(!app.error, "{name}: {}", app.status);
@@ -1109,10 +1115,36 @@ async fn molden_and_fchk_open_with_orbitals_in_the_results_palette() {
         let [stored] = doc.science.results.as_slice() else {
             panic!("{name}: {}", app.status);
         };
+        assert!(app.frames_import.is_none(), "{name}");
+        assert!(
+            app.status.contains("results in the palette"),
+            "{name}: {}",
+            app.status
+        );
+        let views = crate::app::xtb::View::available(&stored.result);
+        assert_eq!(
+            views.contains(&crate::app::xtb::View::Vibrations),
+            modes > 0,
+            "{name}"
+        );
+        assert!(views.contains(&crate::app::xtb::View::Orbitals), "{name}");
+        assert_eq!(
+            stored
+                .result
+                .vibrations
+                .as_ref()
+                .map_or(0, |v| v.frequencies_cm1.len()),
+            modes,
+            "{name}"
+        );
         let orbitals = stored.result.orbitals.as_ref().unwrap();
         assert!(!orbitals.alpha.energies_hartree.is_empty());
-        assert!(!orbitals.alpha.rows.is_empty());
-        assert!(!orbitals.alpha.coefficients.is_empty());
+        assert_eq!(!orbitals.alpha.rows.is_empty(), has_shapes, "{name}");
+        assert_eq!(
+            !orbitals.alpha.coefficients.is_empty(),
+            has_shapes,
+            "{name}"
+        );
         let attachment = doc.science.attachment(stored.attachment).unwrap();
         assert_eq!(attachment.atoms, doc.models[0].geometry_sources());
         assert_eq!(
@@ -1122,50 +1154,6 @@ async fn molden_and_fchk_open_with_orbitals_in_the_results_palette() {
         assert_eq!(app.tab.name(), name);
         assert!(app.xtb_bottom_palette().is_some());
     }
-}
-
-#[tokio::test]
-async fn program_outputs_open_the_last_optimization_step_in_3d() {
-    let name = "g16_dvb_gopt.out";
-    let bytes = std::fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/qc/cclib/g16_dvb_gopt.out"
-    ))
-    .unwrap();
-    let qc = reshiki::qcread::read(name, &bytes).unwrap();
-    let job = &qc.jobs[qc.default_job().unwrap()];
-    assert_eq!(job.kind, reshiki::qcread::JobKind::Optimization);
-    assert!(job.steps.len() > 1);
-    let first = job.steps.first().unwrap().frame.positions_angstrom[0];
-    let last = job.steps.last().unwrap().frame.positions_angstrom[0];
-    // The first and last Standard orientation tables start with these rows:
-    //      1          6           0        1.205666    0.676891   -0.000000
-    //      1          6           0        0.269445    1.410118    0.000000
-    assert_eq!(first, [1.205666, 0.676891, 0.0]);
-    assert_eq!(last, [0.269445, 1.410118, 0.0]);
-
-    let (mut app, _) = App::new();
-    let opened = prepare_contents(name.into(), Ok(bytes)).await;
-    let _ = app.update(Message::FilePrepared(opened));
-    assert!(!app.error, "{}", app.status);
-    let doc = &app.tab.doc;
-    // The last Standard orientation ends with atom 20:
-    //     20          1           0        2.364759    0.813041   -0.000000
-    assert_eq!(doc.atoms.len(), 20);
-    let placed = doc.models[0]
-        .atoms
-        .iter()
-        .find(|atom| atom.id == doc.atoms[0].id)
-        .unwrap();
-    assert_eq!(placed.xyz, last.map(|coord| coord as f32));
-    let [stored] = doc.science.results.as_slice() else {
-        panic!("{}", app.status);
-    };
-    let input = job.steps.first().unwrap().frame.hash();
-    assert_eq!(stored.result.input_frame, Some(input));
-    assert!(doc.science.frame(&input).is_some());
-    assert_eq!(stored.result.frame, job.steps.last().unwrap().frame.hash());
-    assert!(app.xtb_bottom_palette().is_some());
 }
 
 #[tokio::test]

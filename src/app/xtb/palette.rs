@@ -561,7 +561,10 @@ impl App {
             }
             Action::Step(index) => self.xtb_preview_step(index),
             Action::StepBack => {
-                self.xtb_end_preview();
+                if self.xtb_end_preview() {
+                    self.status = "Showing the 3D model".into();
+                    self.error = false;
+                }
             }
             Action::UseStep => self.xtb_use_step(false),
             Action::UseStepAnyway => self.xtb_use_step(true),
