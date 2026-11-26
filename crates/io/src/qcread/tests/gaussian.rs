@@ -119,6 +119,26 @@ fn g16_mp2_archive_and_step_energies() {
 }
 
 #[test]
+fn gaussian_archive_normalizes_blank_method_and_basis() {
+    let source = String::from_utf8(fixture(MP2)).unwrap();
+    for (fields, expected) in [
+        (r"\\   \", (None, None)),
+        (r"\ RMP2-FC \\", (Some("RMP2-FC"), None)),
+        (r"\   \ STO-3G \", (None, Some("STO-3G"))),
+    ] {
+        let text = source.replacen(r"\RMP2-FC\STO-3G\", fields, 1);
+        let file = read("water.log", text.as_bytes()).unwrap();
+        let job = &file.jobs[0];
+        assert_eq!((job.method.as_deref(), job.basis.as_deref()), expected);
+        let provenance = &job.result.as_ref().unwrap().provenance;
+        assert_eq!(
+            (provenance.method.as_deref(), provenance.basis.as_deref()),
+            expected
+        );
+    }
+}
+
+#[test]
 fn gaussian_normal_termination_title_does_not_split_the_job() {
     // Replace the fixture's "Water" title in memory. The job still ends at
     // "Normal termination of Gaussian 16 at Wed Apr  4 10:14:17 2018."

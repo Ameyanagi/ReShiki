@@ -208,6 +208,35 @@ async fn gaussian_optimization_opens_at_the_chosen_step() {
 }
 
 #[tokio::test]
+async fn geometry_only_molden_steps_open_without_calculation_results() {
+    let (mut app, _) = App::new();
+    let molden = b"[Molden Format]\n[GEOMETRIES] XYZ\n\
+                   2\nfirst\nH 0 0 0\nH 0 0 0.74\n\
+                   2\nlast\nH 0 0 0\nH 0 0 0.75\n";
+    for (choice, distance) in [(Choice::First, 0.74), (Choice::Last, 0.75)] {
+        let opened =
+            super::super::files::prepare_contents("hydrogen.molden".into(), Ok(molden.to_vec()))
+                .await;
+        let _ = app.update(Message::FilePrepared(opened));
+        let dialog = app.frames_import.as_ref().unwrap();
+        assert_eq!(dialog.file.steps().len(), 2);
+        assert_eq!(dialog.file.result_step_index(), None);
+
+        send(&mut app, Action::Choose(choice));
+        import_calculation(&mut app).await;
+        assert_eq!(model(&app), [[0., 0., 0.], [0., 0., distance]]);
+        assert!(app.tab.doc.science.is_empty());
+        assert!(app.xtb_bottom_palette().is_none());
+        assert!(
+            app.status.contains("The file has no calculated results."),
+            "{}",
+            app.status
+        );
+        assert!(!app.status.contains("Reopen and choose"), "{}", app.status);
+    }
+}
+
+#[tokio::test]
 async fn interrupted_gaussian_optimization_selects_and_previews_its_result_step() {
     let text = include_str!("../../../tests/fixtures/qc/cclib/g16_dvb_gopt.out");
     // Use the same cut before the fourth geometry's SCF as the Gaussian reader test.

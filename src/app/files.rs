@@ -546,6 +546,13 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
     prepare_qc_drawing(file, index, None, output)
 }
 
+pub(super) fn has_calculated_results(result: &reshiki::qcdata::CalcResult) -> bool {
+    result.energy_hartree.is_some()
+        || result.vibrations.is_some()
+        || result.orbitals.is_some()
+        || !result.charges.is_empty()
+}
+
 /// Open a job at its result's geometry, or open an explicitly picked step.
 pub(super) fn prepare_qc_drawing(
     file: reshiki::qcread::QcFile,
@@ -607,12 +614,8 @@ pub(super) fn prepare_qc_drawing(
     if add_2d {
         add_qc_structure(&mut drawing);
     }
-    if let Some(result) = job.result {
+    if let Some(result) = job.result.filter(has_calculated_results) {
         if frame.hash() == result.frame {
-            let has_results = result.energy_hartree.is_some()
-                || result.vibrations.is_some()
-                || result.orbitals.is_some()
-                || !result.charges.is_empty();
             let frames = result
                 .input_frame
                 .filter(|hash| *hash != result.frame)
@@ -621,11 +624,7 @@ pub(super) fn prepare_qc_drawing(
                 .into_iter()
                 .collect();
             match reshiki::science::import(&mut drawing, 0, frame, frames, result) {
-                Ok(_) if has_results => notice.push_str(" · results in the palette"),
-                Ok(_) if file.format == reshiki::qcread::Format::Molden => {
-                    notice.push_str(" · The file has no calculated results.");
-                }
-                Ok(_) => {}
+                Ok(_) => notice.push_str(" · results in the palette"),
                 Err(error) => notice.push_str(&format!(
                     " · Results could not be attached ({error}). Check the source geometry and open the file again."
                 )),
@@ -637,7 +636,7 @@ pub(super) fn prepare_qc_drawing(
             ));
         }
     } else if output {
-        notice.push_str(" · No results were read. Open a file with the completed calculation.");
+        notice.push_str(" · The file has no calculated results.");
     }
     if !omitted.is_empty() {
         notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
@@ -669,9 +668,14 @@ fn add_qc_structure(drawing: &mut reshiki::document::Document) {
     set_display(drawing, 0, Display::Both);
 }
 
+pub(super) fn nonblank(value: &str) -> Option<&str> {
+    let value = value.trim();
+    (!value.is_empty()).then_some(value)
+}
+
 /// The program as named in the import sheet and the result header.
 pub(super) fn program_label(program: &str, version: Option<&str>) -> String {
-    match version {
+    match version.and_then(nonblank) {
         Some(version) => {
             let release = if program == "Gaussian" {
                 version.split(" Revision ").next().unwrap_or(version)
@@ -1056,7 +1060,9 @@ impl super::App {
                 };
                 self.open_target(None);
                 self.show_opened(doc, None);
-                if let Some(stored) = self.tab.doc.science.results.last() {
+                if let Some(stored) = self.tab.doc.science.results.last()
+                    && (!calculation || has_calculated_results(&stored.result))
+                {
                     let result = stored.result.clone();
                     self.xtb_show_result(&result);
                 }

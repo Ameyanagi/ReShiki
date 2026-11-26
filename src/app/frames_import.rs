@@ -201,7 +201,11 @@ impl File {
         let [job] = self.file.jobs.as_slice() else {
             return None;
         };
-        result_step_index(&job.steps, job.result.as_ref()?)
+        let result = job
+            .result
+            .as_ref()
+            .filter(|result| super::files::has_calculated_results(result))?;
+        result_step_index(&job.steps, result)
     }
 
     fn subtitle(&self) -> String {

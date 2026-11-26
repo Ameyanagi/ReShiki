@@ -1064,7 +1064,8 @@ fn program_inputs_and_charge_notices_open_without_a_chooser() {
 
 #[test]
 fn mismatched_calculation_opens_the_geometry_with_a_warning() {
-    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0\n";
+    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0\n\
+                   [MO]\nEne= -0.5\nSpin= Alpha\nOccup= 2\n";
     let Prepared::Calculation(batch) = prepare_qc("overlap.molden".as_ref(), molden).unwrap()
     else {
         panic!("the geometry should still open");
@@ -1084,6 +1085,8 @@ async fn molden_atoms_only_reports_no_calculated_results() {
     let _ = app.update(Message::FilePrepared(opened));
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.doc.models[0].atoms.len(), 2);
+    assert!(app.tab.doc.science.is_empty());
+    assert!(app.xtb_bottom_palette().is_none());
     assert!(
         app.status.contains("The file has no calculated results."),
         "{}",

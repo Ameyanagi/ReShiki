@@ -5,6 +5,7 @@ use super::state::{
     Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, capitalized, formula, scientific, signed,
     symbol,
 };
+use crate::app::files::{nonblank, program_label};
 use reshiki::qcdata;
 use reshiki::qcdata::{
     Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Source, Status, Task,
@@ -97,14 +98,13 @@ pub(crate) struct RunInfo {
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
 pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
+    let method = provenance.method.as_deref().and_then(nonblank);
+    let program = program_label(&provenance.program, provenance.program_version.as_deref());
     if let Source::Imported { file_name, .. } = &provenance.source {
-        let program = crate::app::files::program_label(
-            &provenance.program,
-            provenance.program_version.as_deref(),
-        );
-        let level = match (&provenance.method, &provenance.basis) {
+        let basis = provenance.basis.as_deref().and_then(nonblank);
+        let level = match (method, basis) {
             (Some(method), Some(basis)) => Some(format!("{method}/{basis}")),
-            (Some(level), None) | (None, Some(level)) => Some(level.clone()),
+            (Some(level), None) | (None, Some(level)) => Some(level.to_owned()),
             (None, None) => None,
         };
         let from = format!("from {file_name}");
@@ -119,17 +119,12 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
             .join(" · ");
     }
     // Files from other programs may not name their method.
-    let mut parts: Vec<String> = provenance
-        .method
-        .as_deref()
+    let mut parts: Vec<String> = method
         .map(|method| method_without_optimizer(method).to_owned())
         .or_else(|| matches!(result.settings, Settings::Xtb(_)).then(|| "xTB".into()))
         .into_iter()
         .collect();
-    parts.push(match &provenance.program_version {
-        Some(version) => format!("{} {version}", provenance.program),
-        None => provenance.program.clone(),
-    });
+    parts.push(program);
     parts.push(solvent(result));
     if let Settings::Xtb(settings) = &result.settings {
         if settings.conventions == XtbConventions::Xtb68 {
@@ -165,6 +160,7 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
                 outcome
             }
         }
+        Task::Energy if matches!(result.settings, Settings::Imported { .. }) => "Energy".into(),
         Task::Energy => "Single-point energy".into(),
         Task::Gradient => "Energy gradient".into(),
         Task::Hessian => "Frequencies".into(),
