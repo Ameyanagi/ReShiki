@@ -857,6 +857,7 @@ impl App {
             config,
             keep_full: shown.stored.keep_full,
             start: Some(Start { positions, from }),
+            search: None,
         };
         self.xtb_begin(request)
     }

@@ -171,8 +171,9 @@ fn parameters(text: &mut String, schema: &Value) {
             .and_then(Value::as_array)
             .is_some_and(|names| names.iter().any(|value| value.as_str() == Some(name)));
         let nullable = branches(property)
-            .iter()
-            .any(|branch| string(branch, "type") == "null");
+            .into_iter()
+            .flat_map(types)
+            .any(|kind| kind == "null");
         let mut kind = code(&schema_type(property));
         if name == "proposal" {
             kind.push_str(" ([Proposal](#proposal))");
@@ -203,15 +204,24 @@ fn branches(schema: &Value) -> Vec<&Value> {
 fn schema_type(schema: &Value) -> String {
     branches(schema)
         .into_iter()
-        .map(|branch| {
-            let kind = string(branch, "type");
-            match branch.get("items") {
+        .flat_map(|branch| {
+            types(branch).map(move |kind| match branch.get("items") {
                 Some(items) if kind == "array" => format!("array<{}>", schema_type(items)),
                 _ => kind.to_owned(),
-            }
+            })
         })
         .collect::<Vec<_>>()
         .join(" or ")
+}
+
+fn types(schema: &Value) -> impl Iterator<Item = &str> {
+    let kind = schema.get("type");
+    kind.and_then(Value::as_str).into_iter().chain(
+        kind.and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str),
+    )
 }
 
 fn constraints(schema: &Value, prefix: &str) -> Vec<String> {
