@@ -1,6 +1,6 @@
 ---
 title: Gaussian, ORCA and GAMESS files
-description: Write input files for Gaussian, ORCA and GAMESS from a 3D model, and open their outputs.
+description: Write input files for Gaussian, ORCA and GAMESS from a 3D model, and open Gaussian, ORCA, Molden and fchk outputs.
 ---
 
 import Screenshot from "../../../components/Screenshot.astro";
@@ -57,7 +57,7 @@ GAMESS runs one task per job and uses its built-in basis sets: `6-31G(d)` (or `6
 
 For a Gaussian or ORCA output, ReShiki opens the final geometry of the last job that has a geometry and ended normally, as a 3D model in a new, unsaved drawing named after the file. If there is none, it opens the last job that has a geometry, even a failed or cut-off one. The status bar names the job, its method and how it ended, for example `Final geometry of job 3 of 3: Frequencies · RB3LYP/6-31G, Normal termination`, so you can tell which one you got.
 
-Opening a Gaussian, ORCA, Molden or fchk file attaches its results to the molecule and opens the results palette, titled **Calculation results** with the file's program and method: the energies, frequencies and orbitals of that job. Orbital shapes need a Molden or fchk file; see [Molecular orbitals](/guide/calculation-orbitals/#orbitals-from-other-programs).
+Opening a Gaussian, ORCA, Molden or fchk file attaches its results to the molecule and opens the results palette, titled **Calculation results** with the file's program and method, with whatever the file supplies: energies, frequencies, orbitals. For a job cut off after its last result, the model shows that result's geometry. If the results cannot be attached, the status bar says `Results can't be shown yet`. Orbital shapes need a Molden or fchk file; see [Molecular orbitals](/guide/calculation-orbitals/#orbitals-from-other-programs).
 
 <Screenshot
   src="/manual/qc-open-molden.webp"

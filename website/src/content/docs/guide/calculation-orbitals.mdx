@@ -22,19 +22,19 @@ Every GFN2-xTB and g-xTB run has orbitals (GFN-FF has none). After a [calculatio
 
 - The **level diagram** shows occupied levels with ↑↓, marks HOMO, LUMO and the gap, and puts degenerate levels side by side.
 - The **list** shows the levels around the gap with their energies in eV. Degenerate levels are marked, for example `HOMO · 2-fold`. **HOMO** and **LUMO** jump to the frontier orbitals.
-- Click a level to show that orbital on the molecule's 3D model. After you click one, ↑ and ↓ move through the levels.
+- Click a level to show that orbital on the molecule's 3D model. After you click one, ↑ and ↓ move through the levels while nothing on the canvas is selected.
 - Open shells show α and β columns, and a switch between them.
 
 <Screenshot
   src="/manual/xtb-orbitals-open-shell.webp"
-  alt="Triplet O2 (unpaired electrons 2, multiplicity 3). The Orbitals tab shows α and β columns in the level diagram, the α/β switch set to α, and the α HOMO, a 2-fold π* pair, drawn on the model."
+  alt="Triplet O2 (unpaired electrons 2, multiplicity 3). The Orbitals tab shows α and β columns in the level diagram, the α/β switch set to α, and one member of the 2-fold α π* HOMO pair drawn on the model."
 />
 
 For xTB results, ReShiki recomputes the orbital when you show it (about 0.1 s for small molecules), so files stay small. A surface usually appears within a second.
 
 ## Adjust the surface
 
-- **Isovalue**: 0.01 to 0.10 a.u. on the slider, with presets 0.02, 0.05 (default) and 0.10. If a lobe disappears, the tab says `No surface at this isovalue: lower it.`
+- **Isovalue**: 0.01 to 0.10 a.u. on the slider, with presets 0.02, 0.05 (default) and 0.10. If no surface is found, the tab says `No surface at this isovalue: lower it.`
 - **Look**: **Solid**, **Shaded**, **Outline** or **Mesh**, plus **Mesh lines**.
 - **Opacity**: 20 to 100 %.
 - **Phases**: the two lobe colours follow the canvas theme.
@@ -59,7 +59,7 @@ The file keeps what the figure needs, so it reopens with the same orbital and th
 
 ## Orbitals from other programs
 
-Opening a Molden or Gaussian fchk file attaches its results to the molecule and opens the palette, titled **Calculation results** with the file's program and method. The Orbitals tab then works as above. Orbitals from these files cannot be recomputed, so the file's coefficients are used directly. Gaussian logs and ORCA outputs bring orbital energies but no shapes.
+Opening a Molden or Gaussian fchk file attaches its results to the molecule and opens the palette, titled **Calculation results** with the file's program and method. The Orbitals tab then works as above. Orbitals from these files cannot be recomputed, so the file's coefficients are used directly. When a file's basis uses conventions ReShiki does not support yet (for example Cartesian d shells in fchk), it brings the levels without shapes and the import warnings say why. Gaussian logs and ORCA outputs bring orbital energies but no shapes.
 
 <Screenshot
   src="/manual/qc-open-molden.webp"
@@ -68,7 +68,7 @@ Opening a Molden or Gaussian fchk file attaches its results to the molecule and 
 
 ## File size
 
-Orbital coefficients and surfaces are not saved with xTB results; ReShiki recomputes them. A placed orbital saves its own coefficients and a drawing of its surface (up to about 300 KB). Imported results keep their orbitals while they take no more than 2 MB per molecule.
+By default, orbital coefficients and surfaces are not saved with xTB results; ReShiki recomputes them. A placed orbital saves its own coefficients and a drawing of its surface (up to about 300 KB). Imported results keep their orbitals while the imported data take no more than 2 MB per molecule. **Keep full results in this file** keeps everything.
 
 ## Limits
 

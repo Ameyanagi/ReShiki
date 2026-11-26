@@ -1,13 +1,13 @@
 ---
 title: xTB from Python
-description: Run xTB energies, optimizations, frequencies and conformer searches from Python, and read and write Gaussian, ORCA, Molden and fchk files.
+description: Run xTB energies, optimizations, frequencies and conformer searches from Python, read Gaussian, ORCA, Molden and fchk files, and write DFT inputs.
 ---
 
 :::caution[Not released yet]
-The Python calculation API is on the `xtb/next` branch. The `reshiki` and `reshiki-xtb` packages with it are not on PyPI yet; build them from source as described in [Python package](/developer/python/).
+The Python calculation API is on the `xtb/next` branch. The `reshiki` and `reshiki-xtb` packages with it are not on PyPI yet; [build them from source](#build-from-source).
 :::
 
-The `reshiki` package reads and writes quantum-chemistry files. Calculations need the separate `reshiki-xtb` package, which holds the xTB engine (its licence is LGPL-3.0-or-later, so it is kept out of `reshiki` itself). Once both are published, one command installs them:
+The `reshiki` package reads quantum-chemistry output files and writes DFT inputs. Calculations need the separate `reshiki-xtb` package, which holds the xTB engine (its licence is LGPL-3.0-or-later, so it is kept out of `reshiki` itself). Once both are published, one command installs them:
 
 ```sh
 pip install "reshiki[xtb]"
@@ -38,7 +38,7 @@ print(freq.frequencies, freq.thermo.free_energy)
 - `xtb.frequencies()` returns harmonic frequencies in cm⁻¹ (imaginary modes are negative), IR intensities, normal modes and the thermochemistry at `temperature` and `pressure`. For a geometry with isotope labels, pass `symmetry_number` yourself.
 - All three take `method` (`"gfn2"`, `"gxtb"` or `"gfnff"`), `charge`, `multiplicity` or `unpaired`, `solvent` with `solvent_model` (`"alpb"` or `"gbsa"`), SCF settings, `conventions` (`"axtb"` or `"xtb-6.8"`) and `threads`.
 
-Arrays are read-only NumPy arrays in the units the docstrings give. A failed calculation raises `xtb.XtbError`; a bad setting raises `reshiki.ReShikiError` with the code `invalid_arguments`. Ctrl+C stops a running calculation.
+Arrays are read-only NumPy arrays in the units the docstrings give. A failed calculation raises `xtb.XtbError`. Settings that ReShiki checks before starting the engine, such as an unknown method, raise `reshiki.ReShikiError` with the code `invalid_arguments`. Ctrl+C stops a calculation running on Python's main thread.
 
 ## Search conformers
 
@@ -63,10 +63,24 @@ Each `Conformer` has its geometry, energy, ΔE in kcal/mol (and ΔE of the force
 from reshiki import qc
 
 log = qc.read("CH2O.log")
-job = log.default_job()
+job = log.default_job
 print(job.result.energy, job.result.frequencies)
 
-qc.write_input("CH2O_opt.inp", job.geometry, job="opt-freq", method="B3LYP-D3BJ", basis="def2-SVP")
+qc.write_input("CH2O_opt.inp", job.geometry, program="orca", job="opt-freq")
 ```
 
-`qc.read()` reads the same Gaussian, ORCA, Molden and fchk files as the app and returns every job with its steps and result. `qc.write_input()` writes the same inputs as the app's [export dialog](/guide/calculation-files/), choosing the program from the file extension.
+`qc.read()` reads the same Gaussian, ORCA, Molden and fchk files as the app and returns every job with its steps and result. `qc.write_input()` writes the same Gaussian, ORCA, GAMESS and XYZ inputs as the app's [export dialog](/guide/calculation-files/). It infers the program from `.gjf`, `.com` and `.xyz`; for `.inp`, shared by ORCA and GAMESS, pass `program`.
+
+## Build from source
+
+Until the packages are on PyPI, build both wheels from a checkout of the `xtb/next` branch, on macOS or Linux with Rust and uv installed:
+
+```sh
+uv run --no-project python scripts/license_notices.py
+uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --release --locked --out dist
+uv run --no-project python scripts/license_notices.py --manifest-path crates/xtb-worker/Cargo.toml --features engine --destination crates/python-xtb/wheel-licenses
+(cd crates/python-xtb && uvx maturin@1.15.0 build --release --locked --out ../../dist)
+pip install dist/reshiki-*.whl dist/reshiki_xtb-*.whl numpy
+```
+
+The two wheels must come from the same checkout: `reshiki` accepts only the `reshiki-xtb` of its own version.
