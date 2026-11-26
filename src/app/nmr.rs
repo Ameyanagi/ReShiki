@@ -75,6 +75,31 @@ mod view;
 mod worker;
 
 impl App {
+    fn nmr_status(&mut self, status: impl Into<String>, error: bool) {
+        let status = status.into();
+        self.tab.nmr.last_status = Some(status.clone());
+        self.status = status;
+        self.error = error;
+    }
+
+    pub(super) fn nmr_xtb_page_shown(&self) -> bool {
+        super::xtb::available()
+            && self.inspector_open
+            && self.inspector_tab == InspectorTab::Predict
+            && self.xtb.page == super::xtb::Page::Xtb
+    }
+
+    /// A newly shown xTB page retires only a status NMR still owns.
+    pub(super) fn nmr_clear_status_if_xtb(&mut self) {
+        if self.nmr_xtb_page_shown()
+            && self.tab.nmr.last_status.as_deref() == Some(self.status.as_str())
+        {
+            self.status.clear();
+            self.error = false;
+            self.tab.nmr.last_status = None;
+        }
+    }
+
     /// A finished report that Copy and Export can use.
     pub(super) fn nmr_has_report(&self) -> bool {
         self.tab.nmr.job.result.is_some()
@@ -134,6 +159,7 @@ impl App {
     fn nmr_dock(&mut self) -> Task<Message> {
         self.tab.nmr.open = true;
         self.tab.nmr.dock.docked = true;
+        self.xtb.page = super::xtb::Page::Nmr;
         self.place_nmr_inspector(true);
         if self.tab.nmr.job.result.is_none() && self.tab.nmr.job.pending.is_none() {
             return self.nmr_predict(self.tab.nmr.job.nucleus, false);
@@ -176,6 +202,10 @@ impl App {
     }
 
     fn nmr_predict(&mut self, nucleus: Nucleus, keep_labels: bool) -> Task<Message> {
+        // An explicit NMR action selects NMR; restoring a dock does not.
+        if super::xtb::available() {
+            self.xtb.page = super::xtb::Page::Nmr;
+        }
         if !keep_labels {
             self.tab.nmr.labels.visible = false;
         }
@@ -201,14 +231,12 @@ impl App {
                         .any(|id| self.tab.doc.atom(*id).is_some()) =>
             {
                 self.tab.nmr.job.notice = None;
-                self.status = EMPTY_STATUS.into();
-                self.error = false;
+                self.nmr_status(EMPTY_STATUS, false);
                 return Task::none();
             }
             Err(error) => {
                 self.tab.nmr.job.notice = Some(error.clone());
-                self.status = error;
-                self.error = true;
+                self.nmr_status(error, true);
                 return Task::none();
             }
         };
@@ -221,11 +249,13 @@ impl App {
         };
         self.tab.nmr.job.pending = Some(key.clone());
         self.tab.nmr.job.notice = None;
-        self.status = format!(
-            "Predicting {} chemical shifts from local observed data…",
-            nucleus.label()
+        self.nmr_status(
+            format!(
+                "Predicting {} chemical shifts from local observed data…",
+                nucleus.label()
+            ),
+            false,
         );
-        self.error = false;
         Task::perform(worker::calculate(request, nucleus), move |result| {
             Message::Nmr(Action::Finished(key.clone(), result))
         })
@@ -248,20 +278,25 @@ impl App {
         match result {
             Ok(report) => {
                 let presentation = presentation::Presentation::new(&report, &self.tab.doc);
-                self.status = summary(
-                    report.nucleus,
-                    presentation.supported_count,
-                    report.rows.len(),
-                );
-                self.error = false;
+                if !self.nmr_xtb_page_shown() {
+                    self.nmr_status(
+                        summary(
+                            report.nucleus,
+                            presentation.supported_count,
+                            report.rows.len(),
+                        ),
+                        false,
+                    );
+                }
                 self.tab.nmr.job.result_epoch = Some(key.epoch);
                 self.tab.nmr.job.result = Some(report);
                 self.tab.nmr.job.presentation = Some(presentation);
             }
             Err(error) => {
                 self.tab.nmr.job.notice = Some(error.clone());
-                self.status = error;
-                self.error = true;
+                if !self.nmr_xtb_page_shown() {
+                    self.nmr_status(error, true);
+                }
             }
         }
         Task::none()
@@ -294,15 +329,16 @@ impl App {
                 None => status.push_str(" · not predicted"),
             }
             self.set_selection(selected);
-            self.status = status;
+            self.nmr_status(status, self.error);
         }
         Task::none()
     }
 
     fn nmr_copy(&mut self) -> Task<Message> {
         if let Some(report) = &self.tab.nmr.job.result {
-            self.status = COPIED_STATUS.into();
-            return iced::clipboard::write(engine::to_tsv(report));
+            let contents = engine::to_tsv(report);
+            self.nmr_status(COPIED_STATUS, self.error);
+            return iced::clipboard::write(contents);
         }
         Task::none()
     }
@@ -330,13 +366,14 @@ impl App {
     ) -> Task<Message> {
         match result {
             Ok(Some(path)) => {
-                self.status = format!("Exported predicted NMR shifts to {}", path.display());
-                self.error = false;
+                self.nmr_status(
+                    format!("Exported predicted NMR shifts to {}", path.display()),
+                    false,
+                );
             }
             Ok(None) => {}
             Err(error) => {
-                self.status = error;
-                self.error = true;
+                self.nmr_status(error, true);
             }
         }
         Task::none()
@@ -381,7 +418,9 @@ impl App {
     fn place_nmr_inspector(&mut self, dock: bool) {
         let old_width = self.inspector_width();
         if dock {
-            self.xtb.page = super::xtb::Page::Nmr;
+            if !super::xtb::available() {
+                self.xtb.page = super::xtb::Page::Nmr;
+            }
             if self.inspector_tab != InspectorTab::Predict {
                 self.tab.nmr.dock.dock_return = Some((self.inspector_open, self.inspector_tab));
             }

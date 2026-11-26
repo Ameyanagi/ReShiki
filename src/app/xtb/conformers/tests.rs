@@ -307,8 +307,10 @@ mod app {
     fn found(stopped: bool) -> Event {
         let mut computed = run::example_computed(-5.070176, 14.01);
         computed.gradient = Some(vec![[0.; 3]; 3]);
-        Event::Done(Ok(Found {
+        Event::Done(Ok(Box::new(Found {
             engine: run::example_engine(),
+            minimizer: crate::app::xtb::conformers::Minimizer::Mmff94s,
+            optimizers: vec![reshiki_optimize::Method::Internal],
             best: Arc::new(Report {
                 engine: run::example_engine(),
                 computed,
@@ -316,6 +318,7 @@ mod app {
                 converged: true,
                 positions: A.to_vec(),
                 steps: 4,
+                optimizers: vec![reshiki_optimize::Method::Internal],
                 energies: vec![-5.06, -5.070176],
                 path: vec![],
                 evaluations: vec![],
@@ -332,7 +335,7 @@ mod app {
             stopped,
             notes: vec![],
             seconds: 12.5,
-        }))
+        })))
     }
 
     impl App {
@@ -341,6 +344,32 @@ mod app {
             search(&mut app, found(false));
             (app, oxygen)
         }
+    }
+
+    #[test]
+    fn searches_save_the_effective_minimizer_and_optimizer_algorithms() {
+        let (mut app, _) = water(CalcTask::Conformers);
+        let Event::Done(Ok(mut found)) = found(false) else {
+            unreachable!()
+        };
+        found.minimizer = crate::app::xtb::conformers::Minimizer::Uff;
+        found.optimizers = vec![
+            reshiki_optimize::Method::Internal,
+            reshiki_optimize::Method::AncRfo,
+            reshiki_optimize::Method::Lbfgs,
+        ];
+        search(&mut app, Event::Done(Ok(found)));
+        let result = &app.tab.doc.science.results[0].result;
+        assert_eq!(
+            result.provenance.method.as_deref(),
+            Some(
+                "UFF ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer TRIC, ANC, L-BFGS"
+            )
+        );
+        assert_eq!(
+            crate::app::xtb::conformers::start_field(result),
+            Some("UFF")
+        );
     }
 
     #[test]
@@ -382,7 +411,7 @@ mod app {
         ));
         assert_eq!(
             stored.result.provenance.method.as_deref(),
-            Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank")
+            Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer TRIC")
         );
         // The lowest conformer is applied to the 3D model as one Undo step.
         assert_eq!(model(&app.tab.doc), f32s(&A));

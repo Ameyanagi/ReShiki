@@ -296,8 +296,7 @@ impl App {
             return Break(self.context_action(action));
         }
         if self.context_menu.is_some() && matches!(message, Message::Escape) {
-            self.context_menu = None;
-            return Break(Task::none());
+            return Break(self.context_action(super::context_menu::Action::Close));
         }
         if self.templates.add_menu_open && matches!(message, Message::Escape) {
             self.templates.add_menu_open = false;

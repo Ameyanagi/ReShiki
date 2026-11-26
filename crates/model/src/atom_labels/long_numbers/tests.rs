@@ -250,7 +250,15 @@ fn the_layout_is_deterministic_and_only_for_shift_labels() {
     ] {
         assert!(!is_shift_label(short), "{short}");
     }
-    for long in ["#19 · 3.36 ppm", "3.36 ppm", "3.36", "128.4", "-0.52"] {
+    for long in [
+        "#19 · 3.36 ppm",
+        "3.36 ppm",
+        "3.36",
+        "128.4",
+        "-0.52",
+        "+0.28",
+        "−0.56",
+    ] {
         assert!(is_shift_label(long), "{long}");
     }
 }

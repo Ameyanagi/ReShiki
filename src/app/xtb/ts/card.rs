@@ -342,12 +342,11 @@ impl App {
         let Some((mode, _)) = imaginary_mode(&result) else {
             return Task::none();
         };
+        let was_visible = self.xtb_vibrations_visible();
         self.xtb_show_result(&result);
         self.xtb_end_preview();
         self.tab.xtb.palette.view = crate::app::xtb::results::View::Vibrations;
-        self.tab.xtb.vibrations.mode = mode;
-        self.tab.xtb.vibrations.playing = true;
-        self.xtb.dock.collapsed = false;
+        self.tab.xtb.palette.collapsed = false;
         let shown = if self.xtb.dock.inspector {
             self.xtb.page = crate::app::xtb::Page::Xtb;
             self.show_inspector_tab(crate::app::InspectorTab::Predict)
@@ -355,7 +354,8 @@ impl App {
         } else {
             Task::none()
         };
-        Task::batch([shown, self.xtb_vibrations_opened()])
+        self.xtb_vibrations_play_mode(mode);
+        Task::batch([shown, self.xtb_vibrations_opened(was_visible)])
     }
 
     pub(in crate::app::xtb) fn xtb_ts_card_action(&mut self, action: Action) -> Task<Message> {
@@ -376,7 +376,7 @@ impl App {
                 }
                 self.xtb_show_result(&result);
                 self.tab.xtb.palette.view = xtb::results::View::Path;
-                self.xtb.dock.collapsed = false;
+                self.tab.xtb.palette.collapsed = false;
                 self.xtb_vibrations_sync();
                 Task::none()
             }

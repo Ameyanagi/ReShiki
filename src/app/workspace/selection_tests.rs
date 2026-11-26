@@ -171,8 +171,13 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
     // Keyboard drawing has no target atom or mark yet: nothing to mark or connect.
+    let model = if super::super::xtb::available() {
+        "3D model ▾"
+    } else {
+        "3D optimize…"
+    };
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(labels, ["3D optimize…"]);
+    assert_eq!(labels, [model]);
     assert!(app.context_commands().iter().all(|command| !matches!(
         command.message,
         Message::Copy(_) | Message::CopyImage | Message::CopyAs(_) | Message::Paste
@@ -182,11 +187,9 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     ));
     assert!(!app.keyboard_drawing_active());
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(labels, ["Keyboard drawing", "3D optimize…"]);
+    assert_eq!(labels, ["Keyboard drawing", model]);
     // Selection commands first, global ones last, so these fold first.
     app.tab.selected = app.tab.doc.all_ids();
-    // A selected molecule offers xTB in builds that can calculate.
-    let xtb = super::super::xtb::available().then_some("Optimize with GFN2-xTB");
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
     let expected: Vec<_> = [
         "Join",
@@ -196,8 +199,7 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
         "Group",
     ]
     .into_iter()
-    .chain(xtb)
-    .chain(["Keyboard drawing", "3D optimize…"])
+    .chain(["Keyboard drawing", model])
     .collect();
     assert_eq!(labels, expected);
     let _ = app.update(Message::Group);
@@ -211,8 +213,7 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
         "Ungroup",
     ]
     .into_iter()
-    .chain(xtb)
-    .chain(["Keyboard drawing", "3D optimize…"])
+    .chain(["Keyboard drawing", model])
     .collect();
     assert_eq!(labels, expected);
     assert!(

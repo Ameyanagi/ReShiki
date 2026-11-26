@@ -11,6 +11,7 @@ use std::path::Path;
 mod context_status;
 pub(super) mod features;
 mod property_continuity;
+mod xtb_palette;
 
 /// Lays out and updates the view once, optionally saving a screenshot; returns published messages.
 pub(in crate::app) fn pass(

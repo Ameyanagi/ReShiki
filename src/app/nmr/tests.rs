@@ -1388,6 +1388,203 @@ fn file_epoch_clears_nmr_pending_but_keeps_report_and_notice() {
 }
 
 #[test]
+fn predict_reopens_the_remembered_page_and_starts_nmr_only_on_nmr() {
+    use crate::app::xtb::{self, Page};
+
+    for page in [Page::Nmr, Page::Xtb] {
+        let mut app = ethyl_acetate();
+        let _ = app.update(Message::Xtb(xtb::Action::Page(page)));
+        let _ = app.update(Message::Inspector(InspectorTab::Properties));
+        let _ = app.update(Message::Inspector(InspectorTab::Predict));
+
+        assert!(app.inspector_open);
+        assert_eq!(app.inspector_tab, InspectorTab::Predict);
+        if page == Page::Xtb && xtb::available() {
+            assert_eq!(app.xtb.page, Page::Xtb);
+            assert!(app.tab.nmr.job.pending.is_none());
+            assert!(!app.tab.nmr.open);
+        } else {
+            assert_eq!(app.xtb.page, Page::Nmr);
+            assert!(app.tab.nmr.open && app.tab.nmr.dock.docked);
+            assert!(app.tab.nmr.job.pending.is_some());
+        }
+    }
+}
+
+#[test]
+fn document_dock_restoration_preserves_the_windows_predict_page() {
+    use crate::app::xtb::{self, Page};
+
+    for page in [Page::Nmr, Page::Xtb] {
+        let mut app = ethyl_acetate();
+        let _ = app.nmr_action(Action::Dock);
+        finish_prediction(&mut app);
+        let docked = app.tab.id;
+        let report = app.tab.nmr.job.result.clone().unwrap();
+        app.add_tab();
+        let _ = app.update(Message::Xtb(xtb::Action::Page(page)));
+        let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(docked)));
+
+        let expected = if xtb::available() { page } else { Page::Nmr };
+        assert_eq!(app.xtb.page, expected);
+        assert!(app.inspector_open && app.tab.nmr.dock.docked);
+        assert_eq!(app.inspector_tab, InspectorTab::Predict);
+        assert!(app.tab.nmr.job.pending.is_none());
+        assert!(Arc::ptr_eq(
+            app.tab.nmr.job.result.as_ref().unwrap(),
+            &report
+        ));
+    }
+}
+
+#[test]
+fn explicit_nmr_actions_select_nmr_from_xtb_when_available() {
+    use crate::app::xtb::{self, Page};
+
+    for action in [Action::Open, Action::Dock, Action::Predict(Nucleus::H1)] {
+        let mut app = ethyl_acetate();
+        app.xtb.page = Page::Xtb;
+        let expected = if xtb::available() || matches!(action, Action::Dock) {
+            Page::Nmr
+        } else {
+            Page::Xtb
+        };
+        let _ = app.nmr_action(action);
+        assert_eq!(app.xtb.page, expected);
+        assert!(app.tab.nmr.job.pending.is_some());
+    }
+}
+
+#[test]
+fn showing_xtb_clears_only_the_status_nmr_still_owns() {
+    use crate::app::xtb::{self, Page};
+
+    if !xtb::available() {
+        return;
+    }
+    for path in ["page", "predict", "toggle", "palette"] {
+        for unrelated in [false, true] {
+            let mut app = ethyl_acetate();
+            let _ = app.nmr_action(Action::Dock);
+            let key = app.tab.nmr.job.pending.clone().unwrap();
+            let _ = app.nmr_action(Action::Finished(key, Err(PREDICTION_ERROR.into())));
+            if unrelated {
+                app.status = STATUS_SENTINEL.into();
+            }
+            match path {
+                "page" => {
+                    let _ = app.update(Message::Xtb(xtb::Action::Page(Page::Xtb)));
+                }
+                "predict" => {
+                    let _ = app.update(Message::Inspector(InspectorTab::Properties));
+                    let _ = app.update(Message::Xtb(xtb::Action::Page(Page::Xtb)));
+                    let _ = app.update(Message::Inspector(InspectorTab::Predict));
+                }
+                "toggle" => {
+                    let _ = app.update(Message::ToggleInspector);
+                    let _ = app.update(Message::Xtb(xtb::Action::Page(Page::Xtb)));
+                    let _ = app.update(Message::ToggleInspector);
+                }
+                "palette" => {
+                    let _ = app.update(Message::Xtb(xtb::Action::Palette(
+                        xtb::palette::Action::Dock,
+                    )));
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(app.xtb.page, Page::Xtb, "{path}");
+            assert_eq!(
+                app.status,
+                if unrelated { STATUS_SENTINEL } else { "" },
+                "{path} / unrelated={unrelated}"
+            );
+            assert_eq!(app.error, unrelated, "{path}");
+            assert_eq!(app.tab.nmr.notice(), Some(PREDICTION_ERROR));
+        }
+    }
+}
+
+#[test]
+fn nmr_completion_on_xtb_keeps_the_status_and_updates_the_card() {
+    use crate::app::xtb::{self, Page};
+
+    for success in [false, true] {
+        let mut app = ethyl_acetate();
+        let report = predicted(&app.tab.doc, Nucleus::H1);
+        let _ = app.nmr_action(Action::Dock);
+        let key = app.tab.nmr.job.pending.clone().unwrap();
+        let _ = app.update(Message::Xtb(xtb::Action::Page(Page::Xtb)));
+        app.status = STATUS_SENTINEL.into();
+        app.error = true;
+        let result = if success {
+            Ok(Arc::clone(&report))
+        } else {
+            Err(PREDICTION_ERROR.into())
+        };
+        let _ = app.update(Message::Nmr(Action::Finished(key, result)));
+
+        assert!(app.tab.nmr.job.pending.is_none());
+        if xtb::available() {
+            assert_eq!(app.status, STATUS_SENTINEL);
+            assert!(app.error);
+        } else if success {
+            assert_eq!(app.status, "¹H NMR · 3 of 3 atoms predicted");
+            assert!(!app.error);
+        } else {
+            assert_eq!(app.status, PREDICTION_ERROR);
+            assert!(app.error);
+        }
+        if success {
+            assert!(Arc::ptr_eq(
+                app.tab.nmr.job.result.as_ref().unwrap(),
+                &report
+            ));
+            assert!(app.tab.nmr.job.presentation.is_some());
+            assert!(app.tab.nmr.notice().is_none());
+        } else {
+            assert!(app.tab.nmr.job.result.is_none());
+            assert_eq!(app.tab.nmr.notice(), Some(PREDICTION_ERROR));
+        }
+    }
+}
+
+#[test]
+fn background_nmr_completion_preserves_xtb_and_clears_its_parked_status_on_return() {
+    use crate::app::xtb::{self, Page};
+
+    if !xtb::available() {
+        return;
+    }
+    let mut app = ethyl_acetate();
+    let report = predicted(&app.tab.doc, Nucleus::H1);
+    let _ = app.nmr_action(Action::Dock);
+    let source = app.tab.id;
+    let key = app.tab.nmr.job.pending.clone().unwrap();
+    app.add_tab();
+    let _ = app.update(Message::Xtb(xtb::Action::Page(Page::Xtb)));
+    let _ = app.update(Message::Inspector(InspectorTab::Predict));
+    app.status = STATUS_SENTINEL.into();
+    app.error = true;
+    let _ = app.update(Message::Tab(
+        source,
+        Box::new(Message::Nmr(Action::Finished(key, Ok(Arc::clone(&report))))),
+    ));
+    assert_eq!(app.status, STATUS_SENTINEL);
+    assert!(app.error);
+    assert_eq!(app.xtb.page, Page::Xtb);
+
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(source)));
+    assert_eq!(app.xtb.page, Page::Xtb);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
+    assert!(app.status.is_empty());
+    assert!(!app.error);
+    assert!(Arc::ptr_eq(
+        app.tab.nmr.job.result.as_ref().unwrap(),
+        &report
+    ));
+}
+
+#[test]
 fn hybrid_docking_preserves_report_and_camera_and_restores_a_hidden_inspector() {
     let mut app = ethyl_acetate();
     app.inspector_open = false;
@@ -3191,6 +3388,21 @@ fn failed_export_status_text_pins_error_and_retains_notice() {
 }
 
 #[test]
+fn nmr_export_failures_are_visible_while_xtb_is_open() {
+    use crate::app::xtb::{self, Page};
+    if !xtb::available() {
+        return;
+    }
+    let mut app = ethyl_acetate();
+    let _ = app.update(Message::Nmr(Action::Open));
+    let _ = app.update(Message::Xtb(xtb::Action::Page(Page::Xtb)));
+    let _ = app.update(Message::Inspector(InspectorTab::Predict));
+    let _ = app.update(Message::Nmr(Action::Exported(Err(EXPORT_ERROR.into()))));
+    assert_eq!(app.status, EXPORT_ERROR);
+    assert!(app.error);
+}
+
+#[test]
 fn panel_description_pins_no_result_pending_and_notice_text() {
     let mut app = ethyl_acetate();
     assert_eq!(
@@ -3215,6 +3427,36 @@ fn panel_description_pins_no_result_pending_and_notice_text() {
             description_with_provenance(description)
         );
     }
+}
+
+#[test]
+fn explicit_xtb_settings_open_without_starting_nmr() {
+    use crate::app::{command_palette, context_menu, xtb};
+    if !xtb::available() {
+        return;
+    }
+    let check = |app: &App| {
+        assert!(app.inspector_open);
+        assert_eq!(app.inspector_tab, InspectorTab::Predict);
+        assert_eq!(app.xtb.page, xtb::Page::Xtb);
+        assert!(app.tab.nmr.job.pending.is_none());
+    };
+
+    let mut app = ethyl_acetate();
+    let _ = app.update(Message::ContextMenu(context_menu::Action::Open(
+        context_menu::Page::Model3d,
+        100.,
+    )));
+    let _ = app.update(Message::ContextMenu(context_menu::Action::Activate(0, 4)));
+    check(&app);
+
+    let mut app = ethyl_acetate();
+    let _ = app.update(Message::Commands(command_palette::Action::Open));
+    let _ = app.update(Message::Commands(command_palette::Action::Query(
+        "Calculate (xTB)…".into(),
+    )));
+    let _ = app.update(Message::Commands(command_palette::Action::Submit));
+    check(&app);
 }
 
 #[test]

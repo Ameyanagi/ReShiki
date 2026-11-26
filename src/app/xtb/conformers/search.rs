@@ -305,7 +305,14 @@ pub(super) fn pending_for(
         .map_err(|e| failed(&e))?;
     let trajectory = found.trajectory(&frame)?;
     let kept = trajectory.steps();
-    result.provenance.method = Some(search.describe(method));
+    let effective = super::Config {
+        minimizer: found.minimizer,
+        ..search.clone()
+    };
+    result.provenance.method = Some(crate::app::xtb::run::optimizer_provenance(
+        &effective.describe(method),
+        &found.optimizers,
+    ));
     result.input_frame = Some(launch.frame.hash());
     result.status = if found.stopped {
         qcdata::Status::NotConverged {

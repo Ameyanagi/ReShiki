@@ -753,7 +753,7 @@ pub struct MoleculeCanvas<'a> {
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
-    /// xTB "Show as labels": a result's value under its molecule.
+    /// On-screen xTB energy and partial charges.
     pub(crate) result_label: Option<ResultLabel>,
     /// Linked atoms of outdated models, for editing aids absent from exports.
     pub(crate) outdated_models: Vec<&'a [u64]>,
