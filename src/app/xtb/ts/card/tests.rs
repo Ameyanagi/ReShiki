@@ -301,6 +301,7 @@ fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn drawn_product_stereo_adds_one_note_to_the_card_and_review() {
     let (mut doc, arrow) = claisen();
     let mut product_bond = (0, 0);
@@ -364,6 +365,7 @@ async fn drawn_product_stereo_adds_one_note_to_the_card_and_review() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn predict_view_switches_reaction_controls_with_the_selected_chemistry_arrow() {
     let (doc, arrow) = claisen();
     let atom = doc.atoms[0].id;

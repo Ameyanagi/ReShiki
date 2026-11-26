@@ -200,6 +200,7 @@ mod presentation_tests {
     }
 
     #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
     async fn production_path_view_uses_the_refined_marker_and_activates_saved_images() {
         let ui = ViewHarness::new().await;
         let mut app = path_app(result());
@@ -260,6 +261,7 @@ mod presentation_tests {
     }
 
     #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
     async fn production_path_view_omits_the_marker_for_failed_verification() {
         let ui = ViewHarness::new().await;
         let mut failures = Vec::new();
