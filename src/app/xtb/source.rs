@@ -153,6 +153,20 @@ impl App {
                     sources.push(source);
                 }
             }
+            // The geometry the search started from, as the model had it then.
+            if let Some(start) = science.frame(&link.frame)
+                && !model_shows(doc, &link.atoms, &start.positions_angstrom)
+            {
+                sources.push(Source {
+                    label: "Start geometry before the conformer search".into(),
+                    short: "start geometry before the conformer search".into(),
+                    frame: Some(Frame {
+                        drawing_atoms: link.atoms.clone(),
+                        ..(**start).clone()
+                    }),
+                    model_state: None,
+                });
+            }
         }
         if let Some((result, link, method)) =
             geometries.find(|(result, link, _)| result.task == Task::Optimize && current(link))
@@ -262,7 +276,7 @@ mod tests {
     fn a_search_names_the_applied_conformer_and_offers_other_ranks() {
         let (app, oxygen) = App::xtb_searched_water();
         let sources = app.xtb_geometry_sources(&[oxygen]);
-        assert_eq!(sources.len(), 3);
+        assert_eq!(sources.len(), 4);
         assert!(
             sources[0]
                 .label
@@ -277,5 +291,13 @@ mod tests {
         let second = sources[1].frame.as_ref().unwrap();
         assert_eq!(second.numbers, [8, 1, 1]);
         assert_eq!(second.drawing_atoms, [Some(oxygen), None, None]);
+        let start = sources.last().unwrap();
+        assert_eq!(start.label, "Start geometry before the conformer search");
+        let start = start.frame.as_ref().unwrap();
+        assert_eq!(
+            start.positions_angstrom,
+            START.map(|xyz| xyz.map(|x| f64::from(x as f32)))
+        );
+        assert_eq!(start.drawing_atoms, [Some(oxygen), None, None]);
     }
 }
