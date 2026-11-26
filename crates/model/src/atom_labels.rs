@@ -536,14 +536,14 @@ pub fn shift_label_style(doc: &Document) -> TextStyle {
         ..number_style()
     }
 }
-/// Predicted-shift labels get their own placement: beside their atom when
-/// there is room, else with a leader line. They are the atom numbers that are
-/// a decimal shift (`1.28`, `128.4`) or end in ` ppm` (`1.28 ppm`,
+/// Predicted shifts and partial charges go beside their atom when there is
+/// room, else with a leader line. They are the atom numbers that are
+/// a decimal (`1.28`, `+0.28`, `−0.56`) or end in ` ppm` (`1.28 ppm`,
 /// `#3 · 1.28 ppm`). Every other number (`1`, `12a`, `#3`, `L (S)`, free
 /// text) keeps the indicator layout, so whole numbers do too.
 pub fn is_shift_label(text: &str) -> bool {
     let decimal = text.split_once('.').is_some_and(|(whole, part)| {
-        let whole = whole.strip_prefix('-').unwrap_or(whole);
+        let whole = whole.strip_prefix(['-', '+', '−']).unwrap_or(whole);
         [whole, part]
             .iter()
             .all(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))

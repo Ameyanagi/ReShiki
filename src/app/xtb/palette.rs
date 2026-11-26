@@ -5,8 +5,9 @@ use super::results::{self, RunInfo, View};
 use super::{Request, is, state};
 use crate::app::{App, Message};
 use iced::Task;
+use reshiki::atom_labels::{Number, shift_label_style};
 use reshiki::document::Document;
-use reshiki::qcdata::{CalcResult, Frame, Spin};
+use reshiki::qcdata::{CalcResult, ChargeScheme, Frame, Spin};
 use reshiki::science::{self, Freshness, Stored};
 use std::{
     cell::RefCell,
@@ -32,12 +33,14 @@ pub(crate) enum Action {
     UseStep,
     UseStepAnyway,
     KeepModel,
+    CopyMethods,
     CopyTable,
     Export,
     Exported(Result<Option<std::path::PathBuf>, String>),
     IrExported(Result<Option<std::path::PathBuf>, String>),
     CopyLog,
     Labels(bool),
+    PlaceCharges,
     Recalculate,
     RecalculateMolecule,
     KeepFull(bool),
@@ -145,6 +148,41 @@ impl Shown<'_> {
     fn repeatable(&self) -> bool {
         results::config(&self.stored.result, self.frame, self.atoms, 1).is_some()
     }
+
+    /// Only atoms present in the drawing can carry a preview or placed charge.
+    fn charge_labels(&self, doc: &Document, places: usize) -> Vec<(u64, String)> {
+        self.stored
+            .result
+            .charges
+            .first()
+            .map(|charges| {
+                self.atoms
+                    .iter()
+                    .zip(&charges.values)
+                    .filter_map(|(atom, q)| {
+                        let id = (*atom)?;
+                        doc.atom_visible(id)
+                            .then(|| (id, results::signed_charge(*q, places)))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+/// Placed charges are decimals signed with "+" or a real minus sign (U+2212).
+/// NMR shift labels are unsigned or use an ASCII hyphen ("-0.25"), and user
+/// text is anything else, so those are preserved.
+fn is_charge_label(text: &str) -> bool {
+    let Some(digits) = text.strip_prefix(['+', '−']) else {
+        return false;
+    };
+    let Some((whole, part)) = digits.split_once('.') else {
+        return false;
+    };
+    [whole, part]
+        .iter()
+        .all(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
 }
 
 impl App {
@@ -395,34 +433,83 @@ impl App {
         )
     }
 
-    /// The canvas label for "Show as labels": the energy under the molecule.
+    /// The on-screen charges and energy for the current result.
     pub(in crate::app) fn xtb_label(&self) -> Option<crate::canvas::ResultLabel> {
         if !self.tab.xtb.palette.labels || !self.tab.xtb.palette.open || self.xtb_failed().is_some()
         {
             return None;
         }
         let shown = self.xtb_shown().filter(|shown| !shown.stale)?;
-        let energy = shown.stored.result.energy_hartree?;
-        // Partial charges beside the drawn atoms (implicit hydrogens have none).
-        let atom_labels = shown
+        let text = shown
             .stored
             .result
-            .charges
-            .first()
-            .map(|charges| {
-                shown
-                    .atoms
-                    .iter()
-                    .zip(&charges.values)
-                    .filter_map(|(atom, q)| Some(((*atom)?, results::signed_charge(*q))))
-                    .collect()
-            })
-            .unwrap_or_default();
-        Some(crate::canvas::ResultLabel {
+            .energy_hartree
+            .map_or_else(String::new, |energy| {
+                format!("E {} Eh", state::signed(energy, 6))
+            });
+        // Partial charges beside the drawn atoms (implicit hydrogens have none).
+        let atom_labels = shown.charge_labels(&self.tab.doc, 3);
+        (!text.is_empty() || !atom_labels.is_empty()).then(|| crate::canvas::ResultLabel {
             atoms: shown.atoms.iter().flatten().copied().collect(),
-            text: format!("E {} Eh", state::signed(energy, 6)),
+            text,
             atom_labels,
         })
+    }
+
+    fn xtb_place_charges(&mut self) {
+        let Some(shown) = self.xtb_shown().filter(|shown| !shown.stale) else {
+            return;
+        };
+        let Some(charges) = shown.stored.result.charges.first() else {
+            return;
+        };
+        let scheme = match &charges.scheme {
+            ChargeScheme::Mulliken => "Mulliken",
+            ChargeScheme::Eeq => "EEQ",
+            ChargeScheme::Cm5 => "CM5",
+            ChargeScheme::Hirshfeld => "Hirshfeld",
+            ChargeScheme::Loewdin => "Löwdin",
+            ChargeScheme::Other(name) => name,
+        };
+        let mut labels = shown.charge_labels(&self.tab.doc, 2);
+        let style = shift_label_style(&self.tab.doc);
+        let visible = labels.len();
+        labels.retain(|(id, _)| {
+            self.tab.doc.atom(*id).is_some_and(|atom| {
+                atom.display.number.as_ref().is_none_or(|label| {
+                    label.style == style && label.offset.is_none() && is_charge_label(&label.text)
+                })
+            })
+        });
+        let n = labels.len();
+        let kept = visible - n;
+        let mut status = format!("Placed {n} {scheme} charges as atom labels · ⌘Z undoes");
+        if kept > 0 {
+            status.push_str(&if kept == 1 {
+                " · 1 atom kept its own label".to_owned()
+            } else {
+                format!(" · {kept} atoms kept their own labels")
+            });
+        }
+        let before = self.tab.doc.clone();
+        for (id, mut text) in labels {
+            if let Some(atom) = self.tab.doc.atom_mut(id) {
+                // The results table and preview omit a sign on rounded zero.
+                // Keep placed zero identifiable by the same signed-decimal
+                // rule as every other charge when the user refreshes it.
+                if text.starts_with('0') {
+                    text.insert(0, '+');
+                }
+                atom.display.number = Some(Number {
+                    text,
+                    style: style.clone(),
+                    offset: None,
+                });
+            }
+        }
+        self.changed(before);
+        self.status = status;
+        self.error = false;
     }
 
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
@@ -474,13 +561,20 @@ impl App {
                 self.status = "Step geometry not used".into();
                 self.error = false;
             }
-            Action::CopyTable | Action::Export | Action::CopyLog => {
+            Action::CopyMethods | Action::CopyTable | Action::Export | Action::CopyLog => {
                 if self.xtb_failed().is_some() {
                     return Task::none();
                 }
                 let Some(shown) = self.xtb_shown() else {
                     return Task::none();
                 };
+                if matches!(action, Action::CopyMethods) {
+                    let text = results::methods_text(&shown.stored.result, shown.frame);
+                    self.status =
+                        "Copied the methods text (BibTeX keys from ReShiki's xtb.bib)".into();
+                    self.error = false;
+                    return iced::clipboard::write(text);
+                }
                 let method = shown.method();
                 if matches!(action, Action::CopyLog) {
                     let log = results::log(&shown.stored.result, shown.frame, shown.info, &method);
@@ -532,6 +626,11 @@ impl App {
                 }
             },
             Action::Labels(on) => self.tab.xtb.palette.labels = on,
+            Action::PlaceCharges => {
+                if self.xtb_failed().is_none() {
+                    self.xtb_place_charges();
+                }
+            }
             Action::Recalculate => return self.xtb_recalculate(),
             Action::RecalculateMolecule => {
                 let result = self
