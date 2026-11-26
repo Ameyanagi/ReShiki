@@ -365,15 +365,15 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
     assert_eq!(report.extras.worker_frequencies, [-55.]);
     assert_eq!(report.extras.engine_imaginary, Some(-60.));
     assert_eq!(report.extras.image_positions.len(), 3);
+    let irc = report.extras.irc.as_ref().unwrap();
+    assert_eq!(irc.trajectory.energies_hartree, [-1.]);
     assert_eq!(
-        report
-            .extras
-            .irc
+        irc.relaxed_ends
             .as_ref()
             .unwrap()
-            .trajectory
-            .energies_hartree,
-        [-3., -1., -2.]
+            .each_ref()
+            .map(|end| end.energy_hartree),
+        [-3., -2.]
     );
     assert!(report.extras.connects);
     assert!(report.extras.saddle_converged);
@@ -381,7 +381,14 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
     assert!(report.extras.candidate.is_none());
     let trajectory = result.trajectory.as_ref().unwrap();
     assert_eq!(trajectory.energies_hartree, [-3., -1.1, -2.]);
-    assert!(trajectory.positions_angstrom.is_empty());
+    assert_eq!(
+        trajectory.frame(1).unwrap().positions_angstrom,
+        report.extras.image_positions[1]
+    );
+    let light = result.light(&[]);
+    let light_band = light.trajectory.as_ref().unwrap();
+    assert_eq!(light_band.energies_hartree, trajectory.energies_hartree);
+    assert!(light_band.positions_angstrom.is_empty());
     assert_eq!(result.provenance.method.as_deref(), Some("GFN2-xTB"));
     assert_eq!(result.status, qcdata::Status::Converged);
     assert!(!result.keep_full);
@@ -635,16 +642,8 @@ fn failed_worker_check_keeps_engine_candidate_and_cancellation_discards_it() {
             product: report.frames[2].hash(),
         })
     );
-    assert_eq!(
-        report
-            .extras
-            .irc
-            .as_ref()
-            .unwrap()
-            .trajectory
-            .energies_hartree,
-        [-3., -1., -2.]
-    );
+    let irc = report.extras.irc.as_ref().unwrap();
+    assert_eq!(irc.trajectory.energies_hartree, [-1.]);
     assert!(report.extras.worker_frequencies.is_empty());
     result.validate(&report.frames[0]).unwrap();
 
