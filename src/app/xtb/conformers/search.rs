@@ -206,7 +206,7 @@ impl App {
                 // result records that frame as its topology reference.
                 topology: (run.config.method == qcdata::XtbMethod::GfnFf)
                     .then(|| launch.frame.positions_angstrom.clone()),
-                ..crate::app::xtb::job(&run.config, &launch)
+                ..crate::app::xtb::job(&run.config, &launch.frame, vec![])
             },
         };
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
@@ -389,7 +389,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         found.starts,
         found.clusters,
         if found.clusters == 1 { "" } else { "s" },
-        state::summary(found.best.energy, computed.homo_lumo_gap_ev, None),
+        state::summary(found.best.energy, computed.homo_lumo_gap_ev, None, None),
     );
     let info = RunInfo {
         gap_ev: computed.homo_lumo_gap_ev,
@@ -398,6 +398,8 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         numerics: computed.numerics.clone(),
     };
     Ok(Pending {
+        pushed: false,
+        accepted: None,
         launch,
         frames: vec![frame],
         result,

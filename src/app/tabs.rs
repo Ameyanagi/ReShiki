@@ -342,6 +342,7 @@ impl App {
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
+        self.xtb_vibrations_leave();
         self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();
