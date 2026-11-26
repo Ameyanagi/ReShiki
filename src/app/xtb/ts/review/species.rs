@@ -151,7 +151,8 @@ pub(super) fn ignored(doc: &Document, reaction: &Reaction) -> Option<String> {
             .iter()
             .filter(|a| reaction.annotations.contains(&a.id))
             .map(|a| a.text.split_whitespace().collect::<Vec<_>>().join(" "))
-            .filter(|text| !text.is_empty()),
+            // A drawn plus between species is part of the scheme, not a condition.
+            .filter(|text| !text.is_empty() && text != "+"),
     );
     (!labels.is_empty())
         .then(|| format!("Ignored: reagents and conditions · {}", labels.join(" · ")))
