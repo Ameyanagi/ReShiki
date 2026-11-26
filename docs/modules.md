@@ -210,8 +210,9 @@ explains how the crates and modules fit together.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
 - `src/app/xtb.rs`: Predict → xTB
 - `src/app/xtb/conformers.rs`: Conformer search
+- `src/app/xtb/conformers/bench.rs`: Developer-only command for timing the desktop app's conformer search.
 - `src/app/xtb/conformers/export.rs`: Conformer ensembles as files
-- `src/app/xtb/conformers/pipeline.rs`: Desktop conformer sampling, clustering and xTB ranking.
+- `src/app/xtb/conformers/pipeline.rs`: Stream the shared conformer search's progress to the Calculate card.
 - `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
 - `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
 - `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
@@ -221,7 +222,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/palette.rs`: The xTB results palette
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
-- `src/app/xtb/run.rs`: One xTB job on its own thread
+- `src/app/xtb/run.rs`: Stream the shared xTB job's progress to the Calculate card.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
@@ -1027,8 +1028,11 @@ explains how the crates and modules fit together.
 - `crates/python/src/bitmap_budget.rs`: Process-wide admission for batch PNGs' raw RGBA storage, not total RSS.
 - `crates/python/src/drawing.rs`
 - `crates/python/src/lib.rs`: Thin Python bindings over the same headless import, export and analysis API used by the browser.
+- `crates/python/src/qc.rs`: Quantum chemistry files and the shared, full-precision Python result shape.
 - `crates/python/src/render.rs`
 - `crates/python/src/styles.rs`
+- `crates/python/src/xtb.rs`: Run the optional external worker without holding the Python GIL.
+- `crates/python/src/xtb/conformers.rs`: Adapt a Python molecule to the shared conformer search.
 
 ## reshiki-qcdata
 
@@ -1050,9 +1054,22 @@ explains how the crates and modules fit together.
 
 - `crates/web-worker/src/lib.rs`: The browser editor's Web Worker for heavy jobs, as a WebAssembly module of its own that `packages/editor/src/worker.js` runs.
 
+## reshiki-xtb-jobs
+
+- `crates/xtb-jobs/src/conformers.rs`: Conformer search settings and the desktop and Python pipeline.
+- `crates/xtb-jobs/src/conformers/export.rs`: Conformers in energy order, with thermal populations and XYZ labels.
+- `crates/xtb-jobs/src/conformers/pipeline.rs`: Conformer sampling, clustering and xTB ranking.
+- `crates/xtb-jobs/src/conformers/rows.rs`: Statistics of the retained, saved ensemble, in trajectory order.
+- `crates/xtb-jobs/src/failure.rs`
+- `crates/xtb-jobs/src/lib.rs`: Shared xTB calculations and conformer searches for desktop and Python clients.
+- `crates/xtb-jobs/src/method.rs`: Apply a method's capabilities to the options supplied by clients.
+- `crates/xtb-jobs/src/run.rs`: One xTB worker session driven by the optimizer.
+- `crates/xtb-jobs/src/scf.rs`: Bounds for the Calculate card's SCF overrides.
+
 ## reshiki-xtb-worker
 
 - `crates/xtb-worker/src/ao.rs`: Conversion from axtb's spherical AOs to qcdata's unit-norm canonical AOs.
+- `crates/xtb-worker/src/bin/reshiki-xtb-worker.rs`
 - `crates/xtb-worker/src/client.rs`: Persistent, synchronous supervision of one bounded xTB worker.
 - `crates/xtb-worker/src/engine.rs`: Warm-started calculations through the pinned axtb driver.
 - `crates/xtb-worker/src/lib.rs`: The xTB protocol, client and engine-backed worker.

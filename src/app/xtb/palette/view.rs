@@ -251,7 +251,7 @@ impl App {
                 .on_press(Message::Xtb(action))
                 .into()
         };
-        let actions = match &failed.failure {
+        let actions = match failed.failure.reason() {
             state::Failure::Scf(_) if retry => {
                 let mut actions = vec![];
                 if failed.scf_iteration_limit().is_some() {
@@ -276,7 +276,7 @@ impl App {
                 }
                 actions
             }
-            state::Failure::Crashed(_) => {
+            state::Failure::Crashed { .. } => {
                 let mut actions = vec![];
                 if retry {
                     actions.push(button(

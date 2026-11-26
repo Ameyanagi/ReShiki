@@ -7,7 +7,7 @@ use crate::app::xtb::{Action as XtbAction, Pending, results::RunInfo, state};
 use crate::app::{App, Message};
 use iced::Task;
 #[cfg(not(target_arch = "wasm32"))]
-use reshiki::qcdata;
+use reshiki::{document::Document, qcdata, science::Launch};
 use std::sync::Arc;
 
 impl App {
@@ -159,55 +159,22 @@ impl App {
         let Some(live) = run.search.as_ref() else {
             return Task::none();
         };
-        if count > super::MAX_ATOMS {
-            self.xtb_fail(state::Failure::TooMany {
-                count,
-                limit: super::MAX_ATOMS,
-            });
+        if let Err(failure) = live.config.check_atoms(count) {
+            self.xtb_fail(failure);
             return Task::none();
         }
-        if live.config.minimizer == super::Minimizer::Gfn2 && count > super::MAX_GFN2_START_ATOMS {
-            self.xtb_fail(state::Failure::Other(format!(
-                "GFN2-xTB minimizes every start up to {} atoms; choose GFN-FF or MMFF94s",
-                super::MAX_GFN2_START_ATOMS
-            )));
-            return Task::none();
-        }
-        let prepared = match reshiki::geometry::Prepared::new(&self.tab.doc, &run.atoms) {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                self.xtb_fail(state::Failure::Other(error.to_string()));
+        let search = match search_for(
+            &self.tab.doc,
+            &run.atoms,
+            &launch,
+            &live.config,
+            &run.config,
+        ) {
+            Ok(search) => search,
+            Err(failure) => {
+                self.xtb_fail(failure);
                 return Task::none();
             }
-        };
-        let Some(parents) = hydrogen_parents(&self.tab.doc, &launch) else {
-            self.xtb_fail(state::Failure::Other(
-                "The 3D model's hydrogens cannot be matched; update the 3D model".into(),
-            ));
-            return Task::none();
-        };
-        let bonds = super::export::frame_bonds(
-            &self.tab.doc,
-            &launch.atoms,
-            &launch.frame.positions_angstrom,
-        )
-        .into_iter()
-        .map(|(a, b, _)| [a, b])
-        .collect();
-        let search = super::Search {
-            prepared,
-            numbers: launch.frame.numbers.clone(),
-            atoms: launch.atoms.clone(),
-            parents,
-            bonds,
-            config: live.config.clone(),
-            job: crate::app::xtb::run::Job {
-                // One GFN-FF topology, from the 3D model, for every start: the
-                // result records that frame as its topology reference.
-                topology: (run.config.method == qcdata::XtbMethod::GfnFf)
-                    .then(|| launch.frame.positions_angstrom.clone()),
-                ..crate::app::xtb::job(&run.config, &launch.frame, vec![])
-            },
         };
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = self.tab.xtb.run.as_mut() else {
@@ -273,43 +240,50 @@ impl App {
     }
 }
 
-/// For each frame atom the 3D model added (a hydrogen the drawing does not
-/// show), the drawing atom it is bonded to.
+/// Prepare the pipeline input from the drawing and the launched model frame.
 #[cfg(not(target_arch = "wasm32"))]
-fn hydrogen_parents(
-    doc: &reshiki::document::Document,
-    launch: &reshiki::science::Launch,
-) -> Option<Vec<Option<u64>>> {
-    let first = launch.atoms.iter().flatten().next()?;
-    let model = doc.models.iter().find(|m| m.linked_atoms.contains(first))?;
-    let sources = model.geometry_sources();
-    let heavy = model.atoms.len();
-    let mut parents = vec![None; heavy];
-    for hydrogen in &model.hydrogens {
-        // Generated models index their parents; imported ones use drawing IDs.
-        let parent = if model.generated.is_some() {
-            *sources.get(usize::try_from(hydrogen.parent).ok()?)?
-        } else {
-            Some(hydrogen.parent)
-        };
-        parents.push(Some(parent?));
-    }
-    (parents.len() == launch.atoms.len()).then_some(parents)
+pub(super) fn search_for(
+    doc: &Document,
+    run_atoms: &[u64],
+    launch: &Launch,
+    search: &super::Config,
+    calc: &state::Config,
+) -> Result<super::Search, state::Failure> {
+    super::Search::from_launch(
+        doc,
+        run_atoms,
+        launch,
+        search.clone(),
+        crate::app::xtb::job(calc, &launch.frame, vec![]),
+        reshiki::geometry::Client::default(),
+        None,
+    )
 }
 
-/// The result to store from a finished search: the lowest conformer is its
-/// frame, every kept conformer its trajectory.
 #[cfg(not(target_arch = "wasm32"))]
 fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, state::Failure> {
-    let failed = |error: &dyn std::fmt::Display| state::Failure::Other(error.to_string());
     let launch = run
         .launch
-        .clone()
+        .as_ref()
         .ok_or_else(|| state::Failure::Other("the search finished before it started".into()))?;
     let live = run
         .search
         .as_ref()
         .ok_or_else(|| state::Failure::Other("not a conformer search".into()))?;
+    pending_for(launch, &run.config, &live.config, run.keep_full, found)
+}
+
+/// The result to store from a finished search: the lowest conformer is its
+/// frame, every kept conformer its trajectory.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn pending_for(
+    launch: &Launch,
+    calc: &state::Config,
+    search: &super::Config,
+    keep_full: bool,
+    found: &super::Found,
+) -> Result<Pending, state::Failure> {
+    let failed = |error: &dyn std::fmt::Display| state::Failure::Other(error.to_string());
     let best = found
         .ranked
         .first()
@@ -318,7 +292,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         positions_angstrom: best.positions.clone(),
         ..(*launch.frame).clone()
     };
-    let method = run.config.method;
+    let method = calc.method;
     let gfnff_reference = (method == qcdata::XtbMethod::GfnFf).then_some(launch.frame.hash());
     let computed = &found.best.computed;
     let mut result = computed
@@ -329,17 +303,9 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
             gfnff_reference,
         )
         .map_err(|e| failed(&e))?;
-    let mut trajectory = reshiki_optimize::conformers::trajectory(
-        &found.ranked,
-        &frame.numbers,
-        frame.charge,
-        frame.multiplicity,
-    )
-    .map_err(|e| failed(&e))?;
-    trajectory.isotopes = frame.isotopes.clone();
-    trajectory.masses_amu = frame.masses_amu.clone();
+    let trajectory = found.trajectory(&frame)?;
     let kept = trajectory.steps();
-    result.provenance.method = Some(live.config.describe(method));
+    result.provenance.method = Some(search.describe(method));
     result.input_frame = Some(launch.frame.hash());
     result.status = if found.stopped {
         qcdata::Status::NotConverged {
@@ -352,12 +318,12 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         qcdata::Status::Converged
     };
     result.trajectory = Some(trajectory);
-    result.keep_full = run.keep_full;
+    result.keep_full = keep_full;
     // The run's settings and summary, as an optimization records them: the
     // whole search's time, and the SCF work of the lowest conformer's run.
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
-        settings.threads = Some(run.config.threads);
-        settings.convergence = Some(if run.config.tight {
+        settings.threads = Some(calc.threads);
+        settings.convergence = Some(if calc.tight {
             qcdata::Convergence::Tight
         } else {
             qcdata::Convergence::Normal
@@ -400,7 +366,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
     Ok(Pending {
         pushed: false,
         accepted: None,
-        launch,
+        launch: launch.clone(),
         frames: vec![frame],
         result,
         line,
