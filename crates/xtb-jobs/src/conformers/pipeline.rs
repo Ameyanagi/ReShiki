@@ -1,7 +1,7 @@
 //! Conformer sampling, clustering and xTB ranking.
 
 use super::{Config, Diversity, Minimizer, Phase};
-use crate::{Failure, run};
+use crate::{Failure, method, run};
 use reshiki_io::geometry::{self, Client, Conformer, Ensemble, ForceField, Prepared};
 use reshiki_model::{
     document::Document,
@@ -48,15 +48,15 @@ pub struct Search {
     bonds: Vec<[usize; 2]>,
     config: Config,
     geometry: Client,
-    executable: PathBuf,
+    executable: Option<PathBuf>,
     /// Template for every xTB optimization. The pipeline replaces positions,
     /// enables optimization, clears fixed atoms and uses one thread per job.
-    /// For an xTB start minimizer, supply that minimizer's method and settings.
     job: run::Job,
 }
 
 impl Search {
     /// Build the search in the atom order of the molecule's 3D model.
+    /// With no explicit xTB executable, resolve the current executable at the first xTB job.
     pub fn from_launch(
         doc: &Document,
         ids: &[u64],
@@ -64,7 +64,7 @@ impl Search {
         config: Config,
         mut job: run::Job,
         geometry: Client,
-        executable: PathBuf,
+        executable: Option<PathBuf>,
     ) -> Result<Self, Failure> {
         let prepared =
             Prepared::new(doc, ids).map_err(|error| Failure::Other(error.to_string()))?;
@@ -75,6 +75,15 @@ impl Search {
             .into_iter()
             .map(|(a, b, _)| [a, b])
             .collect();
+        let selected = config.minimizer.effective_method(job.method.xtb_method());
+        if !method::accepts_spin(selected, job.uhf) {
+            return Err(Failure::Other(
+                "GFN-FF calculates closed shells only".into(),
+            ));
+        }
+        job.method = run::worker_method(selected);
+        job.scf = method::scf_options(selected, || job.scf).unwrap_or_default();
+        job.solvent = job.solvent.filter(|_| method::supports_solvent(selected));
         // GFN-FF keeps one topology, from the 3D model, for every start.
         job.topology =
             (job.method == Method::Gfnff).then(|| launch.frame.positions_angstrom.clone());
@@ -139,11 +148,6 @@ pub fn search_conformers(
         return Err(frame_mismatch());
     }
     let xtb_minimizer = search.config.minimizer.xtb();
-    if xtb_minimizer.is_some_and(|method| method != search.job.method.xtb_method()) {
-        return Err(Failure::Other(
-            "The xTB job method must match the selected conformer minimizer".into(),
-        ));
-    }
     let mut notes = Vec::new();
     let mut starts = sample(&search, cancel, &mut on_event, &mut notes)?;
     let minimized = if xtb_minimizer.is_some() {
@@ -152,7 +156,7 @@ pub fn search_conformers(
             .map(|start| start.positions.as_slice())
             .collect();
         let outcomes = optimize_all(
-            &search.executable,
+            search.executable.as_deref(),
             &search.job,
             positions,
             cancel,
@@ -236,7 +240,7 @@ pub fn search_conformers(
             .map(|rep| start_for(rep).map(|start| start.positions.as_slice()))
             .collect::<Result<_, _>>()?;
         let outcomes = optimize_all(
-            &search.executable,
+            search.executable.as_deref(),
             &search.job,
             positions,
             cancel,
@@ -464,7 +468,7 @@ fn representatives(clustering: &Clustering, limit: usize) -> Result<Vec<Represen
 type Optimization = (usize, Result<Arc<run::Report>, Failure>);
 
 fn optimize_all(
-    executable: &Path,
+    executable: Option<&Path>,
     template: &run::Job,
     positions: Vec<&[[f64; 3]]>,
     cancel: &Cancel,
@@ -476,6 +480,15 @@ fn optimize_all(
         return Err(no_representatives());
     }
     on_event(phase(0, total));
+    let resolved;
+    let executable = match executable {
+        Some(path) => path,
+        None => {
+            resolved = std::env::current_exe()
+                .map_err(|_| Failure::crashed("could not start the xTB worker"))?;
+            &resolved
+        }
+    };
     // The card's Threads setting is how many xTB workers run at once.
     let workers = (template.threads.clamp(1, super::MAX_CONCURRENT_JOBS) as usize).min(total);
     let next = AtomicUsize::new(0);
@@ -545,7 +558,10 @@ fn select_finished(outcomes: Vec<Optimization>, stopped: bool) -> Result<Finishe
                 ));
             }
             Ok(report) => reports.push((slot, report)),
-            Err(Failure::Other(message)) if stopped && message == CANCELED => {}
+            Err(error)
+                if stopped
+                    && matches!(error.reason(), Failure::Other(message) if message == CANCELED) => {
+            }
             Err(error) => {
                 failed += 1;
                 first_failure.get_or_insert(error);
@@ -572,10 +588,11 @@ fn select_finished(outcomes: Vec<Optimization>, stopped: bool) -> Result<Finishe
     })
 }
 
-/// Generate the same fresh MMFF94s starting model the app uses when none exists.
+/// Generate a starting model with the shared fresh/Update parameters.
 pub fn generate_model(
     doc: &Document,
     ids: &[u64],
+    generation: geometry::ModelGeneration,
     client: &Client,
     cancel: &Cancel,
 ) -> Result<Model3d, Failure> {
@@ -584,10 +601,10 @@ pub fn generate_model(
         .without_retained_depth();
     let optimized = geometry_request(
         cancel,
-        client.generate_seeded(&prepared, ForceField::Mmff94s, geometry::DEFAULT_SEED),
+        client.generate_seeded(&prepared, generation.force_field, generation.seed),
     )?;
     let mut model = prepared.model(&optimized).map_err(geometry_failure)?;
-    model.seed = geometry::DEFAULT_SEED;
+    model.seed = generation.seed;
     Ok(model)
 }
 
@@ -661,6 +678,86 @@ fn geometry_failure(error: geometry::Error) -> Failure {
 mod tests {
     use super::*;
     use geometry::Point3;
+    use reshiki_model::{document::Point, models3d};
+
+    fn water_search(minimizer: Minimizer, geometry: Client) -> Search {
+        let mut doc = Document::default();
+        let oxygen = doc.add_atom("O", Point::default());
+        let placed = vec![models3d::Placed {
+            id: oxygen,
+            xyz: [0.; 3],
+        }];
+        let hydrogens = vec![
+            models3d::Hydrogen {
+                parent: oxygen,
+                xyz: [0.96, 0., 0.],
+            },
+            models3d::Hydrogen {
+                parent: oxygen,
+                xyz: [-0.24, 0.93, 0.],
+            },
+        ];
+        doc.models.push(Model3d::new(
+            &doc,
+            placed,
+            hydrogens,
+            models3d::ForceField::Mmff94s,
+        ));
+        models3d::require_version(&mut doc);
+        let launch = science::launch(&doc, oxygen, 0, 1).unwrap();
+        let job = run::Job {
+            optimize: false,
+            frequencies: false,
+            masses: None,
+            numbers: launch.frame.numbers.clone(),
+            positions: launch.frame.positions_angstrom.clone(),
+            charge: 0,
+            uhf: 0,
+            method: Method::Gxtb,
+            conventions: Default::default(),
+            scf: reshiki_xtb_worker::protocol::ScfSettings {
+                accuracy: Some(0.1),
+                ..Default::default()
+            },
+            solvent: Some(method::solvent(reshiki_qcdata::SolventModel::Alpb, "water")),
+            threads: 1,
+            fixed: vec![],
+            tight: false,
+            topology: None,
+            max_steps: None,
+            properties: None,
+            thermo: Default::default(),
+        };
+        let config = Config::new(1, minimizer, Diversity::Normal, 15., 20, 1).unwrap();
+        Search::from_launch(&doc, &[oxygen], &launch, config, job, geometry, None).unwrap()
+    }
+
+    #[test]
+    fn a_geometry_startup_failure_stops_the_search_in_sampling() {
+        let mut geometry = Client::default();
+        geometry.limits.timeout = Duration::ZERO;
+        let search = water_search(Minimizer::Mmff94s, geometry);
+        let mut phases = vec![];
+        let error =
+            search_conformers(search, &Cancel::default(), |phase| phases.push(phase)).unwrap_err();
+        assert_eq!(phases, [Phase::Starts]);
+        assert!(error.to_string().starts_with("3D geometry: Worker limits"));
+    }
+
+    #[test]
+    fn an_xtb_minimizer_sets_the_method_and_options_for_every_job() {
+        let gfnff = water_search(Minimizer::GfnFf, Client::default()).job;
+        assert_eq!(gfnff.method, Method::Gfnff);
+        assert_eq!(gfnff.topology.as_ref(), Some(&gfnff.positions));
+        assert_eq!(gfnff.scf, Default::default());
+        assert_eq!(gfnff.solvent, None);
+
+        let gfn2 = water_search(Minimizer::Gfn2, Client::default()).job;
+        assert_eq!(gfn2.method, Method::Gfn2);
+        assert_eq!(gfn2.topology, None);
+        assert_eq!(gfn2.scf.accuracy, Some(0.1));
+        assert!(gfn2.solvent.is_some());
+    }
 
     fn conformer() -> Conformer {
         Conformer {
@@ -708,8 +805,10 @@ mod tests {
                 &[Some(10), Some(20), None, None, None],
                 &[None, None, Some(10), Some(10), Some(20)],
                 &sample,
-            ),
-            Err(frame_mismatch())
+            )
+            .unwrap_err()
+            .to_string(),
+            FRAME_MISMATCH
         );
     }
 
@@ -721,8 +820,10 @@ mod tests {
                 &[Some(10), Some(20), None, None],
                 &[None, None, Some(10), Some(20)],
                 &conformer(),
-            ),
-            Err(frame_mismatch())
+            )
+            .unwrap_err()
+            .to_string(),
+            FRAME_MISMATCH
         );
     }
 
@@ -747,8 +848,10 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                frame_positions(&[10, 20], &atoms, &parents, &conformer()),
-                Err(frame_mismatch())
+                frame_positions(&[10, 20], &atoms, &parents, &conformer())
+                    .unwrap_err()
+                    .to_string(),
+                FRAME_MISMATCH
             );
         }
     }
@@ -809,12 +912,12 @@ mod tests {
 
     #[test]
     fn no_completed_reports_returns_cancellation_or_the_first_failure() {
-        let failure = Failure::Scf("SCF failed".into());
+        let failed = || Err(Failure::Scf("SCF failed".into()));
         assert!(
-            matches!(select_finished(vec![(1, Err(failure.clone())), (0, Err(canceled()))], true), Err(error) if error == canceled())
+            matches!(select_finished(vec![(1, failed()), (0, Err(canceled()))], true), Err(Failure::Other(message)) if message == CANCELED)
         );
         assert!(
-            matches!(select_finished(vec![(1, Err(failure.clone())), (0, Err(Failure::crashed("worker stopped")))], false), Err(error) if error == failure)
+            matches!(select_finished(vec![(1, failed()), (0, Err(Failure::crashed("worker stopped")))], false), Err(Failure::Scf(message)) if message == "SCF failed")
         );
     }
 }

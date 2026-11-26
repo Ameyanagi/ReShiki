@@ -163,19 +163,15 @@ impl App {
             self.xtb_fail(failure);
             return Task::none();
         }
-        let search = std::env::current_exe()
-            .map_err(|_| state::Failure::crashed("could not start the xTB worker"))
-            .and_then(|executable| {
-                super::Search::from_launch(
-                    &self.tab.doc,
-                    &run.atoms,
-                    &launch,
-                    live.config.clone(),
-                    crate::app::xtb::job(&run.config, &launch.frame, vec![]),
-                    reshiki::geometry::Client::default(),
-                    executable,
-                )
-            });
+        let search = super::Search::from_launch(
+            &self.tab.doc,
+            &run.atoms,
+            &launch,
+            live.config.clone(),
+            crate::app::xtb::job(&run.config, &launch.frame, vec![]),
+            reshiki::geometry::Client::default(),
+            None,
+        );
         let search = match search {
             Ok(search) => search,
             Err(failure) => {

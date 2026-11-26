@@ -269,7 +269,7 @@ impl Failed {
                 self.numbers.len()
             ));
         }
-        let reason = match &self.failure {
+        let reason = match self.failure.reason() {
             state::Failure::Scf(message)
             | state::Failure::Crashed {
                 summary: message, ..
@@ -1016,14 +1016,8 @@ impl Run {
 /// The worker job for `config` on `frame`, holding frame atoms `fixed`.
 #[cfg(not(target_arch = "wasm32"))]
 fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
-    use reshiki_xtb_worker::protocol::{
-        Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
-    };
-    let method = match config.method {
-        qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
-        qcdata::XtbMethod::GXtb => Method::Gxtb,
-        qcdata::XtbMethod::GfnFf => Method::Gfnff,
-    };
+    use reshiki_xtb_jobs::{method, run::worker_method};
+    use reshiki_xtb_worker::protocol::{Conventions, ScfSettings, SolventModel};
     run::Job {
         optimize: config.task.optimizes(),
         frequencies: config.task.frequencies(),
@@ -1032,7 +1026,7 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
         positions: frame.positions_angstrom.clone(),
         charge: config.charge,
         uhf: config.unpaired,
-        method,
+        method: worker_method(config.method),
         conventions: if config.xtb68 {
             Conventions::Xtb68
         } else {
@@ -1044,12 +1038,9 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
             max_iterations: config.max_iterations,
             retries: vec![],
         },
-        solvent: config.solvent.map(|name| Solvent {
-            model: SolventModel::Alpb,
-            name: name.to_lowercase(),
-            state: Default::default(),
-            correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-        }),
+        solvent: config
+            .solvent
+            .map(|name| method::solvent(SolventModel::Alpb, name)),
         threads: config.threads,
         fixed,
         tight: config.tight,

@@ -123,12 +123,26 @@ def test_cef3_can_set_valence_spin_independently(worker):
         ["Ce", "F", "F", "F"], [[0, 0, 0], [2, 0, 0], [-2, 0, 0], [0, 2, 0]]
     )
     assert cef3.multiplicity == 2
-    with pytest.raises(xtb.XtbError, match=r"valence electron count.*unpaired="):
+    with pytest.raises(
+        xtb.XtbError, match=r"xTB input: .*valence electron count and cannot exceed it.*unpaired="
+    ):
         xtb.energy(cef3)
+    with pytest.raises(
+        xtb.XtbError, match=r"xTB input: .*valence electron count and cannot exceed it"
+    ):
+        xtb.energy(cef3, unpaired=100)
     result = xtb.energy(cef3, unpaired=0)
     assert np.isfinite(result.energy)
     assert result.geometry.multiplicity == 2
     assert result.unpaired == 0
+
+
+def test_frequencies_preserve_the_worker_limit_error(worker):
+    atoms = qc.Geometry.from_symbols(["He"] * 201, [[3.0 * i, 0.0, 0.0] for i in range(201)])
+    with pytest.raises(
+        xtb.XtbError, match=r"xTB resource limit: expected at most 200 Hessian atoms"
+    ):
+        xtb.frequencies(atoms)
 
 
 def test_worker_gap_is_reported_without_requesting_orbitals(worker):
@@ -252,6 +266,8 @@ def test_conformers_refresh_stale_model_in_native_bytes(worker):
     drawing["version"] = 33
     model = drawing["models"][0]
     model["fingerprint"] = "27f09dccaae6f1e0"
+    model["force_field"] = "uff"
+    model["seed"] = 91_337
     model["linked_atoms"] = [1, 2]
     model["generated"] = {"sources": [1, 2], "elements": ["C", "O"], "bonds": [[0, 1]]}
     for atom in model["atoms"]:

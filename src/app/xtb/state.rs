@@ -2,6 +2,11 @@
 //! kept free of iced and the worker so they can be tested alone.
 use reshiki::qcdata::{self, XtbMethod};
 use reshiki::science::StereoChange;
+use reshiki_xtb_jobs::method;
+
+pub(crate) use method::supports_scf as electronic;
+pub(super) const CLOSED_SHELL: &str =
+    "GFN-FF calculates closed shells only: set Unpaired electrons to 0";
 
 /// A task the Calculate card runs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -60,11 +65,6 @@ pub(crate) const SOLVENTS: [&str; 9] = [
     "hexane",
 ];
 pub(crate) use reshiki::XTB_NEAR_DEGENERATE as NEAR_DEGENERATE;
-
-/// Whether `method` runs an SCF, and so has orbitals and SCF settings.
-pub(crate) fn electronic(method: XtbMethod) -> bool {
-    method.capabilities().orbitals
-}
 
 /// The one-line note under Method, if the method limits the card.
 pub(crate) fn method_note(method: XtbMethod, solvent: bool) -> Option<&'static str> {
@@ -127,6 +127,8 @@ impl FailureDetails for Failure {
     /// are the frame's atomic numbers, when the run got that far.
     fn explain(&self, method: XtbMethod, numbers: &[u8]) -> (String, String) {
         match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Worker { reason, .. } => reason.explain(method, numbers),
             Self::Scf(message) => (
                 "The SCF did not converge.".into(),
                 format!(
@@ -278,22 +280,21 @@ impl Settings {
         fixed: Vec<u64>,
     ) -> Result<Config, &'static str> {
         let (charge, unpaired) = if typed { self.state(drawn)? } else { drawn };
-        let electronic = electronic(self.method);
-        if !electronic && unpaired > 0 {
-            return Err("GFN-FF calculates closed shells only: set Unpaired electrons to 0");
+        if !method::accepts_spin(self.method, unpaired) {
+            return Err(CLOSED_SHELL);
         }
-        let (accuracy, temperature_k, max_iterations) = if electronic {
-            self.scf()?
-        } else {
-            (None, None, None)
-        };
-        let solvents = self.method.capabilities().solvent != qcdata::SolventSupport::None;
+        let (accuracy, temperature_k, max_iterations) =
+            method::scf_options(self.method, || self.scf())
+                .transpose()?
+                .unwrap_or_default();
         Ok(Config {
             task: self.task,
             method: self.method,
             charge,
             unpaired,
-            solvent: self.solvent.filter(|_| solvents),
+            solvent: self
+                .solvent
+                .filter(|_| method::supports_solvent(self.method)),
             xtb68: self.xtb68,
             accuracy,
             temperature_k,

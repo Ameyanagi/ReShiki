@@ -23,12 +23,11 @@ pub(super) use view::footer;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-use reshiki_xtb_jobs::conformers::MAX_GFN2_START_ATOMS;
 pub(crate) use reshiki_xtb_jobs::conformers::{
-    Config, Diversity, KCAL_PER_HARTREE, MAX_ATOMS, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer,
-    Phase,
+    Config, Diversity, MAX_ATOMS, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer, Phase,
 };
+#[cfg(test)]
+use reshiki_xtb_jobs::conformers::{KCAL_PER_HARTREE, MAX_GFN2_START_ATOMS};
 
 /// The card's Conformers fields as typed.
 #[derive(Clone, Debug, PartialEq)]
@@ -147,13 +146,11 @@ pub(crate) fn effective(
     settings: &super::state::Settings,
     search: &Settings,
 ) -> super::state::Settings {
-    match search.minimizer.xtb() {
-        Some(method) if settings.task == super::CalcTask::Conformers => super::state::Settings {
-            method,
-            ..settings.clone()
-        },
-        _ => settings.clone(),
+    let mut settings = settings.clone();
+    if settings.task == super::CalcTask::Conformers {
+        settings.method = search.minimizer.effective_method(settings.method);
     }
+    settings
 }
 
 /// A stored search's settings to run again with the card's Conformers
@@ -163,22 +160,20 @@ pub(crate) fn recalculation(
     search: &Settings,
 ) -> Result<Config, String> {
     let search = search.config(None)?;
-    if let Some(method) = search.minimizer.xtb() {
-        if !super::state::electronic(method) {
-            if config.unpaired > 0 {
-                return Err(
-                    "GFN-FF calculates closed shells only: set Unpaired electrons to 0".into(),
-                );
-            }
-            (
-                config.solvent,
-                config.accuracy,
-                config.temperature_k,
-                config.max_iterations,
-            ) = (None, None, None, None);
-        }
-        config.method = method;
+    use reshiki_xtb_jobs::method;
+    let selected = search.minimizer.effective_method(config.method);
+    if !method::accepts_spin(selected, config.unpaired) {
+        return Err(super::state::CLOSED_SHELL.into());
     }
+    (config.accuracy, config.temperature_k, config.max_iterations) =
+        method::scf_options(selected, || {
+            (config.accuracy, config.temperature_k, config.max_iterations)
+        })
+        .unwrap_or_default();
+    config.solvent = config
+        .solvent
+        .filter(|_| method::supports_solvent(selected));
+    config.method = selected;
     Ok(search)
 }
 
@@ -197,15 +192,6 @@ pub(crate) fn start_field(result: &CalcResult) -> Option<&'static str> {
         .into_iter()
         .find(|m| m.label() == first && m.xtb().is_none())
         .map(Minimizer::label)
-}
-
-/// Boltzmann populations of the kept conformers at 298.15 K, in percent.
-fn percent(result: &CalcResult) -> Vec<f64> {
-    let energies = super::results::energies(result);
-    export::populations(energies)
-        .into_iter()
-        .map(|p| 100. * p)
-        .collect()
 }
 
 /// "Conformer 3" or "Step 3", for the palette's messages.
@@ -296,43 +282,18 @@ pub(crate) fn rows(
     let Some(path) = result.trajectory.as_ref() else {
         return vec![];
     };
-    let energies = super::results::energies(result);
-    let Some(&lowest) = energies.first() else {
-        return vec![];
-    };
-    let kcal = KCAL_PER_HARTREE;
-    let start_lowest = path
-        .minimizer_energies_hartree
-        .iter()
-        .copied()
-        .fold(f64::INFINITY, f64::min);
     let field = start_field(result).is_some();
-    let percent = percent(result);
-    let first = path.frame(0);
-    let bonds = first.as_ref().map(|first| {
-        export::frame_bonds(doc, atoms, &first.positions_angstrom)
-            .into_iter()
-            .map(|(a, b, _)| [a, b])
-            .collect::<Vec<_>>()
-    });
-    energies
-        .iter()
+    reshiki_xtb_jobs::conformers::trajectory_rows(doc, atoms, path)
+        .into_iter()
         .enumerate()
-        .map(|(i, energy)| {
+        .map(|(i, row)| {
             let frame = path.frame(i);
             Row {
-                delta_kcal: (energy - lowest) * kcal,
-                start_kcal: path
-                    .minimizer_energies_hartree
-                    .get(i)
-                    .filter(|_| field)
-                    .map(|e| (e - start_lowest) * kcal),
-                percent: percent.get(i).copied().unwrap_or(0.),
-                rmsd: match (&first, &frame, &bonds) {
-                    (Some(a), Some(b), Some(bonds)) => symmetric_rmsd(a, b, bonds),
-                    _ => None,
-                },
-                cluster: path.cluster_sizes.get(i).copied(),
+                delta_kcal: row.delta_kcal,
+                start_kcal: row.start_kcal.filter(|_| field),
+                percent: row.percent,
+                rmsd: row.rmsd,
+                cluster: row.cluster,
                 stereo: frame.filter(|_| !stale).and_then(|frame| {
                     reshiki::science::stereo_changes(doc, atoms, &frame)
                         .ok()
@@ -341,29 +302,6 @@ pub(crate) fn rows(
             }
         })
         .collect()
-}
-
-/// Heavy-atom RMSD after the best superposition over the molecule's
-/// symmetry; the browser build, without the optimizer crate, has none.
-fn symmetric_rmsd(a: &qcdata::Frame, b: &qcdata::Frame, bonds: &[[usize; 2]]) -> Option<f64> {
-    #[cfg(target_arch = "wasm32")]
-    return {
-        let _ = (a, b, bonds);
-        None
-    };
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use reshiki_optimize::conformers::{Settings, Topology, rmsd};
-        let topology = Topology::new(a.numbers.clone(), bonds.to_vec()).ok()?;
-        let autos = topology.automorphisms(Settings::default().automorphism_cap);
-        rmsd(
-            &topology,
-            &autos,
-            &a.positions_angstrom,
-            &b.positions_angstrom,
-        )
-        .ok()
-    }
 }
 
 /// Give the previewed model of `doc` the other kept conformers of `shown`,

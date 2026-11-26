@@ -4,7 +4,8 @@ use reshiki::document::Document;
 use reshiki::qc_input::{SdfEntry, write_sdf};
 use reshiki::qcdata::CalcResult;
 pub(crate) use reshiki::science::frame_bonds;
-pub(crate) use reshiki_xtb_jobs::conformers::populations;
+#[cfg(test)]
+use reshiki_xtb_jobs::conformers::populations;
 use reshiki_xtb_jobs::conformers::{self, RankedConformer, ranked_trajectory};
 
 /// Export every saved conformer as XYZ, lowest energy first.
@@ -35,10 +36,10 @@ pub(crate) fn sdf(
             let RankedConformer {
                 step,
                 energy,
-                delta_kcal,
-                percent,
+                statistics,
                 frame,
             } = conformer;
+            let (delta_kcal, percent) = (statistics.delta_kcal, statistics.percent);
             let rank = index + 1;
             let mut items = vec![
                 ("RANK".into(), rank.to_string()),
@@ -46,7 +47,7 @@ pub(crate) fn sdf(
                 ("DELTA_E_KCAL_MOL".into(), format!("{delta_kcal:.3}")),
                 ("BOLTZMANN_PERCENT".into(), format!("{percent:.2}")),
             ];
-            if let Some(size) = path.cluster_sizes.get(*step) {
+            if let Some(size) = statistics.cluster {
                 items.push(("CLUSTER_SIZE".into(), size.to_string()));
             }
             if let Some(start) = path.minimizer_energies_hartree.get(*step) {

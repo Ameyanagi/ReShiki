@@ -5,14 +5,13 @@ use crate::qc::GeometryData;
 use pyo3::prelude::*;
 use reshiki_io::geometry;
 use reshiki_model::{document::Document, molecule_names, science};
+use reshiki_qcdata::XtbMethod;
 use reshiki_xtb_jobs::{
     Failure, XTB_NEAR_DEGENERATE,
-    conformers::{
-        self, Config, Diversity, KCAL_PER_HARTREE, MAX_CONCURRENT_JOBS, Minimizer, Search,
-    },
-    scf,
+    conformers::{self, Config, Diversity, MAX_CONCURRENT_JOBS, Minimizer, Search},
+    method, scf,
 };
-use reshiki_xtb_worker::{client::Cancel, protocol::Method};
+use reshiki_xtb_worker::client::Cancel;
 use serde::Deserialize;
 use serde_json::json;
 use std::path::PathBuf;
@@ -77,11 +76,7 @@ pub fn xtb_conformers(
     )
     .map_err(crate::invalid(py))?;
     let method = request.settings.method().map_err(crate::invalid(py))?;
-    let method = match minimizer {
-        Minimizer::GfnFf => Method::Gfnff,
-        Minimizer::Gfn2 => Method::Gfn2,
-        _ => method,
-    };
+    let method = minimizer.effective_method(method);
     if request
         .threads
         .is_some_and(|threads| !(1..=MAX_CONCURRENT_JOBS).contains(&threads))
@@ -90,12 +85,14 @@ pub fn xtb_conformers(
             "Threads must be from 1 to {MAX_CONCURRENT_JOBS}"
         )));
     }
-    if method != Method::Gfnff {
-        let invalid = |message: &str| crate::invalid(py)(message.into());
-        scf::check(request.settings.accuracy, scf::ACCURACY).map_err(invalid)?;
-        scf::check(request.settings.electronic_temperature, scf::TEMPERATURE).map_err(invalid)?;
-        scf::check(request.settings.max_iterations, scf::ITERATIONS).map_err(invalid)?;
-    }
+    method::scf_options(method, || {
+        scf::check(request.settings.accuracy, scf::ACCURACY)?;
+        scf::check(request.settings.electronic_temperature, scf::TEMPERATURE)?;
+        scf::check(request.settings.max_iterations, scf::ITERATIONS)?;
+        Ok(())
+    })
+    .transpose()
+    .map_err(|message: &str| crate::invalid(py)(message.into()))?;
 
     run_interruptibly(py, move |cancel| {
         let doc = Document::from_native_file(&document_json).map_err(SearchError::Invalid)?;
@@ -112,7 +109,7 @@ impl Request {
         self,
         mut doc: Document,
         config: Config,
-        method: Method,
+        method: XtbMethod,
         executable: PathBuf,
         cancel: &Cancel,
     ) -> Result<String, SearchError> {
@@ -127,7 +124,7 @@ impl Request {
         let charge = self.charge.unwrap_or(charge);
         let uhf = self.settings.unpaired.unwrap_or(multiplicity - 1);
         let multiplicity = uhf.saturating_add(1);
-        if method == Method::Gfnff && uhf != 0 {
+        if !method::accepts_spin(method, uhf) {
             return Err(SearchError::Invalid(
                 "GFN-FF calculates closed shells only: set unpaired=0".into(),
             ));
@@ -135,13 +132,15 @@ impl Request {
         let client = geometry::Client::new(executable.clone(), geometry::Limits::default())
             .map_err(|error| SearchError::Failed(error.to_string()))?;
         let launch = match science::launch(&doc, atom, charge, multiplicity) {
-            Err(science::ScienceError::NoModel | science::ScienceError::StaleModel) => {
+            Err(error @ (science::ScienceError::NoModel | science::ScienceError::StaleModel)) => {
                 config
                     .check_atoms(ids.len())
                     .map_err(|failure| SearchError::Invalid(failure.to_string()))?;
+                let generation = geometry::ModelGeneration::for_calculation(&doc, &ids)
+                    .ok_or_else(|| SearchError::Invalid(error.to_string()))?;
+                let model = conformers::generate_model(&doc, &ids, generation, &client, cancel)?;
                 doc.models
                     .retain(|model| !ids.iter().any(|&id| model.contains(id)));
-                let model = conformers::generate_model(&doc, &ids, &client, cancel)?;
                 doc.models.push(model);
                 reshiki_model::models3d::require_version(&mut doc);
                 science::launch(&doc, atom, charge, multiplicity)
@@ -154,29 +153,22 @@ impl Request {
             .map_err(|failure| SearchError::Invalid(failure.to_string()))?;
         let geometry = GeometryData::from_frame(&launch.frame, "");
         let threads = reshiki_xtb_jobs::threads(self.threads.unwrap_or_default());
-        let mut job = self.settings.job(&geometry, uhf, method, threads);
-        if method == Method::Gfnff {
-            job.scf = Default::default();
-            job.solvent = None;
-        }
+        let job = self.settings.job(&geometry, uhf, method, threads);
 
-        let method_line = config.describe(method.xtb_method());
+        let method_line = config.describe(method);
         let force_field = config.minimizer.xtb().is_none();
-        let search = Search::from_launch(&doc, &ids, &launch, config, job, client, executable)?;
+        let search =
+            Search::from_launch(&doc, &ids, &launch, config, job, client, Some(executable))?;
         let found = conformers::search_conformers(search, cancel, |_| {})?;
         let path = found.trajectory(&launch.frame)?;
         let (_, ranked) =
             conformers::ranked_trajectory(Some(&path)).map_err(SearchError::Failed)?;
-        let start_minimum = path
-            .minimizer_energies_hartree
-            .iter()
-            .copied()
-            .fold(f64::INFINITY, f64::min);
+        let statistics = conformers::trajectory_rows(&doc, &launch.atoms, &path);
         let rows: Vec<_> = ranked
             .into_iter()
             .enumerate()
             .map(|(index, conformer)| {
-                let entry = &found.ranked[conformer.step];
+                let row = &statistics[conformer.step];
                 let stereo = science::stereo_changes(&doc, &launch.atoms, &conformer.frame)
                     .ok()
                     .map(|changes| changes.is_empty());
@@ -184,13 +176,11 @@ impl Request {
                     "rank": index + 1,
                     "geometry": GeometryData::from_frame(&conformer.frame, ""),
                     "energy": conformer.energy,
-                    "delta": conformer.delta_kcal,
-                    "start_delta": force_field.then_some({
-                        (entry.start_energy_hartree - start_minimum) * KCAL_PER_HARTREE
-                    }),
-                    "population": conformer.percent / 100.0,
-                    "rmsd": entry.rmsd_to_best,
-                    "cluster_size": entry.cluster_size,
+                    "delta": row.delta_kcal,
+                    "start_delta": row.start_kcal.filter(|_| force_field),
+                    "population": row.percent / 100.0,
+                    "rmsd": row.rmsd,
+                    "cluster_size": row.cluster,
                     "stereo": stereo,
                 })
             })

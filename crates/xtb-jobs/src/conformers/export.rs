@@ -3,26 +3,8 @@
 use reshiki_io::qc_input::write_xyz_trajectory;
 use reshiki_qcdata::{Frame, Trajectory};
 
-use super::KCAL_PER_HARTREE;
-const RT_KCAL: f64 = 0.001_987_204_258_640_832 * 298.15;
+use super::rows::{RowStatistics, statistics};
 const NO_SAVED_POSITIONS: &str = "This result has no saved conformer positions.";
-
-/// Boltzmann fractions in input order for finite energies at 298.15 K.
-pub fn populations(energies_hartree: &[f64]) -> Vec<f64> {
-    let minimum = energies_hartree
-        .iter()
-        .copied()
-        .fold(f64::INFINITY, f64::min);
-    let mut weights: Vec<_> = energies_hartree
-        .iter()
-        .map(|energy| (-(energy - minimum) * KCAL_PER_HARTREE / RT_KCAL).exp())
-        .collect();
-    let total: f64 = weights.iter().sum();
-    for weight in &mut weights {
-        *weight /= total;
-    }
-    weights
-}
 
 /// Export every saved conformer as XYZ, lowest energy first.
 pub fn xyz(path: Option<&Trajectory>, title: &str) -> Result<String, String> {
@@ -45,15 +27,17 @@ pub fn xyz(path: Option<&Trajectory>, title: &str) -> Result<String, String> {
             .map(|(index, conformer)| {
                 let rank = index + 1;
                 let RankedConformer {
-                    step,
                     energy,
+                    statistics,
+                    ..
+                } = conformer;
+                let RowStatistics {
                     delta_kcal,
                     percent,
                     ..
-                } = conformer;
-                let cluster = path
-                    .cluster_sizes
-                    .get(*step)
+                } = statistics;
+                let cluster = statistics
+                    .cluster
                     .map_or_else(String::new, |size| format!(" · cluster {size}"));
                 // charge= and mult= as extended XYZ reads them back; the
                 // energy last, as ReShiki and xtb tools read it.
@@ -73,8 +57,7 @@ pub struct RankedConformer {
     pub step: usize,
     pub frame: Frame,
     pub energy: f64,
-    pub delta_kcal: f64,
-    pub percent: f64,
+    pub statistics: RowStatistics,
 }
 
 pub fn ranked_trajectory(
@@ -86,23 +69,20 @@ pub fn ranked_trajectory(
     path.validate()
         .map_err(|error| format!("The saved conformers could not be exported ({error})."))?;
     let energies = &path.energies_hartree;
-    let minimum = energies
-        .iter()
-        .copied()
-        .min_by(f64::total_cmp)
-        .ok_or("This result has no saved conformer energies.")?;
+    if energies.is_empty() {
+        return Err("This result has no saved conformer energies.".into());
+    }
     let mut ranked = energies
         .iter()
         .copied()
-        .zip(populations(energies))
+        .zip(statistics(path))
         .enumerate()
-        .map(|(step, (energy, fraction))| {
+        .map(|(step, (energy, statistics))| {
             Ok(RankedConformer {
                 step,
                 frame: path.frame(step).ok_or(NO_SAVED_POSITIONS)?,
                 energy,
-                delta_kcal: (energy - minimum) * KCAL_PER_HARTREE,
-                percent: fraction * 100.0,
+                statistics,
             })
         })
         .collect::<Result<Vec<_>, &str>>()?;

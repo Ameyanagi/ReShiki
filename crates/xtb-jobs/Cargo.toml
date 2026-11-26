@@ -10,11 +10,11 @@ test-fixtures = ["dep:serde_json"]
 
 [dependencies]
 reshiki-io = { path = "../io" }
+reshiki-model = { path = "../model" }
+reshiki-optimize = { path = "../optimize" }
 reshiki-qcdata = { path = "../qcdata" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-reshiki-model = { path = "../model" }
-reshiki-optimize = { path = "../optimize" }
 reshiki-xtb-worker = { path = "../xtb-worker" }
 serde_json = { version = "1", optional = true }
 tokio = { version = "1", features = ["macros", "rt", "time"] }

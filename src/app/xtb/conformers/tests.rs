@@ -208,6 +208,46 @@ fn rows_rank_by_xtb_with_start_energies_populations_and_clusters() {
     }
 }
 
+#[test]
+fn saved_fixture_keeps_the_existing_table_display() {
+    let result = searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+    // The saved compact coordinates follow the same path as an existing file.
+    let result: CalcResult =
+        serde_json::from_str(&serde_json::to_string(&result).unwrap()).unwrap();
+    let rows = rows(
+        &reshiki::document::Document::default(),
+        &[None; 3],
+        &result,
+        true,
+    );
+    let display: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            (
+                format!("{:.2}", row.delta_kcal),
+                format!("{:.2}", row.start_kcal.unwrap()),
+                format!("{:.1} %", row.percent),
+                row.cluster.unwrap().to_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        display,
+        [
+            ("0.00".into(), "0.00".into(), "74.0 %".into(), "12".into()),
+            ("0.63".into(), "0.06".into(), "25.7 %".into(), "5".into()),
+            ("3.14".into(), "0.31".into(), "0.4 %".into(), "1".into()),
+        ]
+    );
+    #[cfg(not(target_arch = "wasm32"))]
+    assert_eq!(
+        rows.iter()
+            .map(|row| format!("{:.2} Å", row.rmsd.unwrap()))
+            .collect::<Vec<_>>(),
+        ["0.00 Å", "0.00 Å", "0.00 Å"]
+    );
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod app {
     use super::{A, B, C};

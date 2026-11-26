@@ -2,8 +2,14 @@ use reshiki_qcdata::XtbMethod;
 use std::fmt;
 
 /// Why a run failed, as reported by the job.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Failure {
+    /// The original xTB client error and the reason used by the Calculate card.
+    #[cfg(not(target_arch = "wasm32"))]
+    Worker {
+        error: std::sync::Arc<reshiki_xtb_worker::client::Error>,
+        reason: Box<Self>,
+    },
     /// The SCF did not converge; the worker's message.
     Scf(String),
     /// `by` (the method that said so, if known) has no parameters for `z`.
@@ -29,6 +35,15 @@ pub enum Failure {
 }
 
 impl Failure {
+    /// The user-facing classification used by the desktop card.
+    pub fn reason(&self) -> &Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Self::Worker { reason, .. } = self {
+            return reason;
+        }
+        self
+    }
+
     pub fn crashed(summary: impl Into<String>) -> Self {
         Self::Crashed {
             summary: summary.into(),
@@ -40,6 +55,8 @@ impl Failure {
 impl fmt::Display for Failure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Worker { reason, .. } => reason.fmt(f),
             Self::Scf(message) | Self::Other(message) => f.write_str(message),
             Self::Crashed { summary, .. } => f.write_str(summary),
             Self::Element { z, by } => match by {
