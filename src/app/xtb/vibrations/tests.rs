@@ -2,7 +2,7 @@
 use super::super::tests::{MOVED, START, event, f32s, model, optfreq, optimized, send, water};
 use super::super::{Action as XtbAction, CalcTask, Outcome, palette, results::View, run};
 use super::*;
-use crate::app::Message;
+use crate::app::{InspectorTab, Message};
 use reshiki::graphics::{Columns, Frame, GraphicKind};
 use reshiki::models3d::{self, Display};
 use reshiki::typography::Script;
