@@ -1,5 +1,6 @@
 """Final wheels must match the generated license files and declare each one."""
 
+import json
 import sys
 import tempfile
 import unittest
@@ -39,8 +40,11 @@ class WheelFixture(unittest.TestCase):
         for name, content in self.files.items():
             (self.licenses / name).write_bytes(content)
 
-    def wheel(self, *, files=None, declarations=None):
+    sbom = ("pyo3", "reshiki-io")
+
+    def wheel(self, *, files=None, declarations=None, sbom=None):
         files = self.files if files is None else files
+        sbom = self.sbom if sbom is None else sbom
         declarations = self.files if declarations is None else declarations
         path = self.directory / "reshiki-1.0-cp310-abi3-any.whl"
         metadata = "Metadata-Version: 2.4\nName: reshiki\nVersion: 1.0\n"
@@ -49,6 +53,11 @@ class WheelFixture(unittest.TestCase):
             archive.writestr("reshiki-1.0.dist-info/METADATA", metadata + "\n")
             for name, content in files.items():
                 archive.writestr(f"reshiki-1.0.dist-info/licenses/wheel-licenses/{name}", content)
+            components = [{"type": "library", "name": name} for name in sbom]
+            archive.writestr(
+                "reshiki-1.0.dist-info/sboms/reshiki.cyclonedx.json",
+                json.dumps({"components": components}),
+            )
         return path
 
 
@@ -112,8 +121,14 @@ class PythonWheelNoticeTests(WheelFixture):
         with self.assertRaisesRegex(ValueError, "base reshiki wheel must not contain"):
             verify_wheel(self.wheel(files={**self.files, name: content}), self.licenses)
 
+    def test_engine_crates_in_the_sbom_are_rejected_in_the_base_wheel(self):
+        with self.assertRaisesRegex(ValueError, "base reshiki wheel contains the xTB engine"):
+            verify_wheel(self.wheel(sbom=("pyo3", "axtb-driver")), self.licenses)
+
 
 class XtbWheelNoticeTests(WheelFixture):
+    sbom = ("axtb", "axtb-driver", "faer")
+
     def setUp(self):
         super().setUp()
         self.files["THIRD-PARTY-NOTICES.txt"] = (
@@ -140,6 +155,10 @@ class XtbWheelNoticeTests(WheelFixture):
                 verify_wheel(
                     self.wheel(files={**self.files, name: content}), self.licenses, xtb=True
                 )
+
+    def test_engine_wheel_sbom_must_list_the_engine(self):
+        with self.assertRaisesRegex(ValueError, "SBOM does not list the axtb engine"):
+            verify_wheel(self.wheel(sbom=("faer",)), self.licenses, xtb=True)
 
     def test_no_font_attribution_is_required(self):
         # Engine wheels do not need the drawing package's fonts.

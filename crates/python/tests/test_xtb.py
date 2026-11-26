@@ -4,7 +4,7 @@ import _thread
 import json
 import sys
 from pathlib import Path
-from threading import Timer
+from threading import Event, Thread
 
 import numpy as np
 import pytest
@@ -142,12 +142,20 @@ def test_version_mismatch(worker, monkeypatch):
 
 def test_keyboard_interrupt(worker):
     caffeine = geometry("caffeine")
-    timer = Timer(0.02, _thread.interrupt_main)
+    stop = Event()
+
+    def interrupt():
+        # Keep interrupting until the call has raised, so a fast machine cannot
+        # finish the calculation between one interrupt and the next check.
+        while not stop.wait(0.01):
+            _thread.interrupt_main()
+
+    thread = Thread(target=interrupt)
     with pytest.raises(KeyboardInterrupt):
-        timer.start()
+        thread.start()
         try:
-            xtb.optimize(caffeine, level="tight")
+            xtb.frequencies(caffeine)
         finally:
-            timer.cancel()
-            timer.join()
+            stop.set()
+            thread.join()
     assert xtb.energy(geometry("water")).energy is not None
