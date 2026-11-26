@@ -1,7 +1,8 @@
 use reshiki_qcdata::{
-    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Convergence, Frame,
-    LIGHT_BOND_ORDER_MIN, MAX_IMPORTED_HEAVY_BYTES, OrbitalSet, Orbitals, Provenance, RunSummary,
-    Settings, Shell, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbMethod,
+    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Convergence, Endpoints,
+    Frame, LIGHT_BOND_ORDER_MIN, MAX_IMPORTED_HEAVY_BYTES, MappedAtom, OrbitalSet, Orbitals,
+    Provenance, RunSummary, Settings, Shell, Source, Spin, Status, Task, Thermo, Trajectory,
+    TransitionStateContext, TransitionStateMapping, TransitionStateRun, Vibrations, XtbMethod,
     XtbSettings,
 };
 
@@ -283,6 +284,7 @@ fn light_optimization_run_metadata_costs_at_most_two_kilobytes() {
         scf_iterations: (0..60).map(|i| 4 + i % 9).collect(),
         finished: Some("2026-11-26T05:03:00Z".into()),
         search: None,
+        transition_state: None,
     });
     let saved = result.for_file(0, &[]);
     saved.validate(&frame).unwrap();
@@ -294,6 +296,80 @@ fn light_optimization_run_metadata_costs_at_most_two_kilobytes() {
         "24-atom light optimization: {baseline} bytes without run metadata, {bytes} bytes with run metadata; {added} bytes added"
     );
     assert!(added <= 2 * 1024);
+}
+
+#[test]
+fn light_transition_state_run_metadata_costs_at_most_four_kilobytes() {
+    let (frame, result) = fixture(24);
+    let mut result = result.light(&[]);
+    result.task = Task::TransitionState;
+    result.endpoints = Some(Endpoints {
+        reactant: frame.hash(),
+        product: reshiki_qcdata::FrameHash([0x12; 32]),
+    });
+    result.trajectory = Some(Trajectory {
+        rmsd_to_best_angstrom: Vec::new(),
+        numbers: frame.numbers.clone(),
+        isotopes: frame.isotopes.clone(),
+        masses_amu: frame.masses_amu.clone(),
+        charge: frame.charge,
+        multiplicity: frame.multiplicity,
+        positions_angstrom: vec![],
+        energies_hartree: vec![-117.6, -117.59, -117.58, -117.57, -117.58, -117.59, -117.61],
+        labels: vec![],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
+    });
+    result.validate(&frame).unwrap();
+    let baseline = result.saved_bytes(0, &[]);
+    let atom = |element: &str, number| MappedAtom {
+        element: element.into(),
+        number,
+    };
+    result.run = Some(RunSummary {
+        seconds: 142.5,
+        scf_iterations: (0..60).map(|i| 4 + i % 9).collect(),
+        finished: Some("2026-11-26T05:03:00Z".into()),
+        search: None,
+        transition_state: Some(Box::new(TransitionStateRun {
+            arrow: Some(42),
+            context: Some(TransitionStateContext {
+                reactant_chemistry: "ab".repeat(32),
+                product_chemistry: "cd".repeat(32),
+                title: "Allyl vinyl ether → pent-4-enal".into(),
+                reactant: "Allyl vinyl ether".into(),
+            }),
+            saddle_converged: true,
+            imaginary: 1,
+            imaginary_cm1: Some(-721.3),
+            climbing_image: 3,
+            mapping: TransitionStateMapping {
+                formed: vec![[atom("O", 1), atom("C", 3)]],
+                broken: vec![[atom("O", 1), atom("C", 2)]],
+                hydrogen_moves: vec![[atom("C", 4), atom("O", 1)]],
+                automatic: true,
+            },
+            diagnostics: vec![
+                ("NEB".into(), "Converged in 46 iterations".into()),
+                ("Saddle".into(), "Converged in 12 steps".into()),
+                ("IRC".into(), "Connects both optimized endpoints".into()),
+            ],
+        })),
+    });
+    let saved = result.for_file(0, &[]);
+    saved.validate(&frame).unwrap();
+    assert_eq!(saved.heavy_bytes(), 0);
+    assert_eq!(saved.run, result.run);
+    let bytes = result.saved_bytes(0, &[]);
+    let added = bytes - baseline;
+    eprintln!(
+        "24-atom light transition state: {baseline} bytes without run metadata, {bytes} bytes with run metadata; {added} bytes added"
+    );
+    assert!(added <= 4 * 1024);
+    let decoded: CalcResult =
+        serde_json::from_slice(&serde_json::to_vec_pretty(&saved).unwrap()).unwrap();
+    decoded.validate(&frame).unwrap();
+    assert_eq!(decoded.run, result.run);
 }
 
 #[test]

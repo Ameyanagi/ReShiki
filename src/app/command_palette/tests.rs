@@ -2208,6 +2208,110 @@ fn reaction_commands_use_the_reaction_chosen_in_roles_with_only_a_product_select
 }
 
 #[test]
+fn xtb_reaction_commands_are_found_by_energy_and_barrier_keywords() {
+    // Builds without the engine list no xTB commands at all.
+    if !crate::app::xtb::available() {
+        return;
+    }
+    let mut app = app();
+    for (query, name) in [
+        ("barrier", "Find transition state (xTB)"),
+        ("activation", "Find transition state (xTB)"),
+        ("reaction energy", "Reaction energy (xTB)"),
+        ("thermochemistry", "Reaction energy (xTB)"),
+        ("delta", "Reaction energy (xTB)"),
+    ] {
+        search(&mut app, query);
+        let command = &app.commands.items[row(&app, name)];
+        assert_eq!(command.need, Need::XtbReaction, "{query}");
+    }
+}
+
+#[test]
+fn xtb_reaction_commands_are_discoverable_and_use_shared_target_and_build_availability() {
+    use crate::app::xtb::{self, ts};
+    use reshiki::{document::Arrow, reactions::Reaction};
+    use ts::review::Mode;
+
+    let mut app = app();
+    app.tab.doc = Default::default();
+    let commands: Vec<_> = catalog::build(&app)
+        .into_iter()
+        .filter(|command| command.need == Need::XtbReaction)
+        .collect();
+    if !xtb::available() {
+        assert!(commands.is_empty(), "Builds without the engine hide them");
+        return;
+    }
+    assert_eq!(
+        commands
+            .iter()
+            .map(|command| command.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Find transition state (xTB)", "Reaction energy (xTB)"]
+    );
+    for (command, transition_state) in commands.iter().zip([true, false]) {
+        assert_eq!(command.category, Category::Analyze);
+        let Run::Send(messages) = &command.run else {
+            panic!("{} must send the shared review message", command.name);
+        };
+        assert!(matches!(
+            messages.as_slice(),
+            [Message::Xtb(xtb::Action::Ts(ts::Action::Review(mode, None)))]
+                if matches!(mode, Mode::TransitionState) == transition_state
+        ));
+    }
+    let unavailable = |app: &App| {
+        commands
+            .iter()
+            .map(|command| app.command_unavailable(command))
+            .collect::<Vec<_>>()
+    };
+    let no_target = "Select one reaction arrow or use a drawing with one reaction";
+    assert_eq!(
+        unavailable(&app),
+        vec![Some(xtb::unavailable().unwrap_or(no_target)); 2]
+    );
+
+    let arrows = [0., 100.].map(|y| {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
+            id,
+            Point::new(0., y),
+            Point::new(100., y),
+            Default::default(),
+            Default::default(),
+        ));
+        id
+    });
+    app.tab.selected = vec![arrows[1]];
+    assert_eq!(unavailable(&app), vec![xtb::unavailable(); 2]);
+    app.tab.busy = true;
+    assert_eq!(
+        unavailable(&app),
+        vec![Some(xtb::unavailable().unwrap_or("Wait for the current task to finish")); 2]
+    );
+    app.tab.busy = false;
+    app.tab.selected.clear();
+    app.tab.doc.reactions = vec![Reaction::new(arrows[0])];
+    assert_eq!(unavailable(&app), vec![xtb::unavailable(); 2]);
+    app.tab.doc.reactions.push(Reaction::new(arrows[1]));
+    let _ = app.reaction_action(super::super::reactions::Action::Choose(arrows[0]));
+    app.tab.selected.clear();
+    assert_eq!(
+        unavailable(&app),
+        vec![Some(xtb::unavailable().unwrap_or(no_target)); 2]
+    );
+    app.tab.selected = vec![arrows[1]];
+    assert_eq!(unavailable(&app), vec![xtb::unavailable(); 2]);
+    app.tab.doc.arrows[1].purpose = reshiki::purpose::Purpose::Reference;
+    assert_eq!(
+        unavailable(&app),
+        vec![Some(xtb::unavailable().unwrap_or(no_target)); 2]
+    );
+}
+
+#[test]
 fn page_home_and_end_move_the_selection() {
     for (key, step) in [
         (Named::PageDown, PAGE),

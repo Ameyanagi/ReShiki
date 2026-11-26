@@ -13,6 +13,7 @@ mod irc;
 mod mapping;
 mod modes;
 mod neb;
+mod reactive_start;
 mod saddle;
 
 #[cfg(test)]
@@ -20,6 +21,7 @@ mod tests;
 
 pub use endpoint::{bonds, build_endpoint};
 pub use mapping::least_motion_map;
+pub use reactive_start::{ReactiveStart, prepare_reactive_start};
 use std::ops::ControlFlow;
 
 use crate::{Accuracy, EvalError, KCAL_PER_HARTREE, Options, Potential, Status, optimize};
@@ -341,11 +343,19 @@ fn minimize(
     p: &mut impl Potential,
     numbers: &[u8],
     x: &[f64],
+    on_step: impl FnMut(usize, f64) -> ControlFlow<()>,
+) -> Result<Minimum, TsError> {
+    minimize_with_options(p, numbers, x, &Options::default(), on_step)
+}
+
+fn minimize_with_options(
+    p: &mut impl Potential,
+    numbers: &[u8],
+    x: &[f64],
+    options: &Options,
     mut on_step: impl FnMut(usize, f64) -> ControlFlow<()>,
 ) -> Result<Minimum, TsError> {
-    let out = optimize(p, numbers, x, &Options::default(), |s| {
-        on_step(s.index, s.energy)
-    });
+    let out = optimize(p, numbers, x, options, |s| on_step(s.index, s.energy));
     match out.status {
         Status::Converged => Ok(Minimum {
             positions: out.positions,

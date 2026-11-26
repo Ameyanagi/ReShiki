@@ -620,19 +620,37 @@ impl<'de> Deserialize<'de> for Science {
 }
 
 /// After every edit and after reading: deleted drawing atoms leave their
-/// attachments in the same edit, so a reused atom ID never links again;
-/// data no attachment needs any more goes with them.
+/// attachments and deleted TS arrows lose their links in the same edit, so
+/// reused IDs never link again; data no attachment needs goes with them.
 pub fn prune(doc: &mut Document) {
     if doc.science.is_empty() {
         return;
     }
     let present: HashSet<u64> = doc.atoms.iter().map(|a| a.id).collect();
+    let arrows: HashSet<u64> = doc.arrows.iter().map(|arrow| arrow.id).collect();
     let mut science = std::mem::take(&mut doc.science);
     for attachment in &mut science.attachments {
         for atom in &mut attachment.atoms {
             if atom.is_some_and(|id| !present.contains(&id)) {
                 *atom = None;
             }
+        }
+    }
+    for stored in &mut science.results {
+        let missing = stored
+            .result
+            .run
+            .as_ref()
+            .and_then(|run| run.transition_state.as_ref())
+            .and_then(|search| search.arrow)
+            .is_some_and(|arrow| !arrows.contains(&arrow));
+        if missing
+            && let Some(search) = Arc::make_mut(&mut stored.result)
+                .run
+                .as_mut()
+                .and_then(|run| run.transition_state.as_mut())
+        {
+            search.arrow = None;
         }
     }
     science.collect_garbage();
@@ -642,7 +660,7 @@ pub fn prune(doc: &mut Document) {
 /// The chemistry digest 3D models use, plus each linked atom's singlet
 /// choice, which sets the spin a calculation describes, and its enhanced
 /// stereo group, which the digest leaves out.
-fn baseline(doc: &Document, ids: &[u64]) -> String {
+pub fn baseline(doc: &Document, ids: &[u64]) -> String {
     let mut text = crate::models3d::fingerprint(doc, ids);
     text.push('/');
     let mut groups = String::new();

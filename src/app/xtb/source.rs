@@ -21,6 +21,15 @@ pub(in crate::app) struct Source {
 }
 
 impl Source {
+    pub(in crate::app) fn saved(frame: Frame, label: String) -> Self {
+        Self {
+            label,
+            short: String::new(),
+            frame: Some(frame),
+            model_state: None,
+        }
+    }
+
     pub fn electronic_state(&self) -> Option<(i32, u32)> {
         self.frame
             .as_ref()

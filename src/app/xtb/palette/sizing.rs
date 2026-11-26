@@ -17,8 +17,10 @@ impl App {
     pub(in crate::app) fn xtb_palette_opened(&mut self) {
         if self.tab.xtb.palette.open
             && !self.xtb.dock.inspector
-            && self.xtb_failed().is_none()
             && self.window_size.height < SHORT_WINDOW_HEIGHT
+            && !self.xtb_palette_has_failure()
+            // A finished search opens on its Path and explanation.
+            && !self.tab.xtb.palette.is_showing_ts()
         {
             self.tab.xtb.palette.collapsed = true;
         }
@@ -31,7 +33,7 @@ impl App {
             && size.height < SHORT_WINDOW_HEIGHT
             && self.tab.xtb.palette.open
             && !self.xtb.dock.inspector
-            && self.xtb_failed().is_none()
+            && !self.xtb_palette_has_failure()
         {
             self.tab.xtb.palette.collapsed = true;
         }

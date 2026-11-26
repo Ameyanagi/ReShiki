@@ -141,7 +141,7 @@ async fn gaussian_job_rows_choose_the_molecule_and_its_results() {
         "Frequencies · Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log · neutral singlet"
     );
     assert_eq!(
-        results_title(Some(&stored.result)),
+        results_title(Some(&stored.result), None),
         "Results · CH2O_CO2.log"
     );
     assert!(app.xtb_bottom_palette().is_some());
@@ -592,10 +592,10 @@ fn a_sorted_file_is_an_ensemble_with_a_turnable_preview_and_the_lowest_overlaid(
     let _ = app.update(Message::Xtb(XtbAction::Palette(PaletteAction::Show)));
     let result = &app.tab.doc.science.results[0].result;
     assert_eq!(
-        crate::app::xtb::results_title(Some(result)),
+        crate::app::xtb::results_title(Some(result), None),
         "Results · crest_conformers.xyz"
     );
-    assert_eq!(crate::app::xtb::results_title(None), "xTB results");
+    assert_eq!(crate::app::xtb::results_title(None, None), "xTB results");
     let _ = app.update(Message::Xtb(XtbAction::Palette(PaletteAction::Step(1))));
     assert!(app.status.contains("Conformer 2 of 3"), "{}", app.status);
     let _ = app.update(Message::Xtb(XtbAction::Palette(PaletteAction::StepBack)));

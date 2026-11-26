@@ -175,6 +175,10 @@ fn dump(app: &App, out: &mut String) {
         Page::Order,
         Page::Arrange,
     ];
+    pages.extend(
+        app.context_calculate_reaction_arrow()
+            .map(Page::CalculateReaction),
+    );
     if super::super::xtb::available() {
         pages.push(Page::Model3d);
     }

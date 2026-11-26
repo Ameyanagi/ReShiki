@@ -116,8 +116,30 @@ impl App {
             return None;
         }
         let collapsed = self.tab.xtb.palette.collapsed && !inspector;
-        if let Some(failed) = self.xtb_failed() {
-            let header = self.xtb_palette_header(vec![], View::Summary, inspector);
+        let shown = self.xtb_shown();
+        let arrow = self.xtb_palette_arrow(shown.as_ref());
+        let failed = self.xtb_palette_failure(arrow);
+        let reaction = failed
+            .and_then(|failed| failed.ts())
+            .map(|request| request.context.title.clone())
+            .or_else(|| {
+                let shown = shown.as_ref()?;
+                super::ts::is_ts(&shown.stored.result).then(|| {
+                    if !shown.stale
+                        && let Some(arrow) = shown.arrow
+                    {
+                        self.xtb_reaction_label(arrow).title()
+                    } else {
+                        self.xtb_saved_reaction_title(&shown.stored.result, shown.arrow)
+                    }
+                })
+            });
+        let title = results::title(
+            shown.as_ref().map(|shown| shown.stored.result.as_ref()),
+            reaction.as_deref(),
+        );
+        if let Some(failed) = failed.filter(|failed| failed.ts().is_none() || shown.is_none()) {
+            let header = self.xtb_palette_header(title, vec![], View::Summary, inspector);
             return Some(if collapsed {
                 header
             } else {
@@ -134,8 +156,11 @@ impl App {
                 }
             });
         }
-        let Some(shown) = self.xtb_shown() else {
-            let header = self.xtb_palette_header(vec![], View::Summary, inspector);
+        let Some(shown) = shown else {
+            if arrow.is_some() {
+                return None;
+            }
+            let header = self.xtb_palette_header(title, vec![], View::Summary, inspector);
             return Some(if collapsed {
                 header
             } else {
@@ -154,11 +179,20 @@ impl App {
         } else {
             View::Summary
         };
-        let header = self.xtb_palette_header(views, view, inspector);
+        let header = self.xtb_palette_header(title, views, view, inspector);
         if collapsed {
             return Some(header);
         }
 
+        // A failed rerun stays above the scrolling body, before its previous result.
+        let mut dock = column![header].spacing(4);
+        if let Some(failed) = failed.filter(|failed| failed.ts().is_some()) {
+            dock = dock.push(self.xtb_failure_card(failed, inspector));
+            dock = dock.push(line(
+                results::previous_result(&shown.stored.result),
+                Tone::Muted,
+            ));
+        }
         let mut content =
             column![text(results::headline(&shown.stored.result, shown.frame)).size(12)].spacing(4);
         // The Conformers table lists every energy; its rows need the room.
@@ -184,6 +218,7 @@ impl App {
             View::Steps => self.xtb_steps(&shown, inspector),
             View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
+            View::Path => self.xtb_ts_path(&shown, inspector),
             View::Log => log(&shown, &shown.method()),
         };
         content = content.push(container(body).padding([6, 0]));
@@ -196,8 +231,8 @@ impl App {
                 .into()
         };
         Some(
-            column![header, middle, self.xtb_footer(&shown, view, inspector)]
-                .spacing(4)
+            dock.push(middle)
+                .push(self.xtb_footer(&shown, view, inspector))
                 .into(),
         )
     }
@@ -205,6 +240,7 @@ impl App {
     /// The result title, tabs with `view` chosen, and dock commands.
     fn xtb_palette_header(
         &self,
+        title: String,
         views: Vec<View>,
         view: View,
         inspector: bool,
@@ -224,7 +260,6 @@ impl App {
         }))
         .spacing(4);
         let collapsed = self.tab.xtb.palette.collapsed && !inspector;
-        let title = results::title(self.xtb_shown().map(|s| s.stored.result.as_ref()));
         let mut header = row![text(title).size(14), tabs]
             .spacing(14)
             .align_y(Alignment::Center);
@@ -295,7 +330,7 @@ impl App {
                 if failed
                     .request
                     .as_ref()
-                    .is_some_and(|r| r.config.hotter().is_some())
+                    .is_some_and(|r| r.ts.is_none() && r.config.hotter().is_some())
                 {
                     actions.push(button(
                         "xtb-retry-hot",
@@ -383,6 +418,9 @@ impl App {
 
     /// The newest converged result for the molecule whose run failed.
     fn xtb_last_successful(&self, failed: &Failed) -> Option<Shown<'_>> {
+        if failed.ts().is_some() {
+            return None;
+        }
         let target = failed.atoms.iter().copied().collect();
         let entry = self
             .tab
@@ -394,6 +432,7 @@ impl App {
             .rev()
             .find(|(_, stored)| {
                 matches!(stored.result.status, reshiki::qcdata::Status::Converged)
+                    && !super::ts::is_ts(&stored.result)
                     && self.xtb_result_belongs(stored, &target)
             })?;
         self.xtb_result(entry)
@@ -401,6 +440,14 @@ impl App {
 
     fn xtb_stale_banner(&self, shown: &Shown<'_>) -> Element<'_, Message> {
         let (message, action): (String, Element<'_, Message>) = match &self.tab.xtb.run {
+            _ if super::ts::not_verified(&shown.stored.result) => (
+                "Reaction freshness not verified. Results are kept, greyed.".into(),
+                Space::new().into(),
+            ),
+            _ if super::ts::is_ts(&shown.stored.result) => (
+                "The reaction changed after this search. Results are kept, greyed.".into(),
+                Space::new().into(),
+            ),
             Some(run) => (
                 format!(
                     "Recalculating with the same settings · {}",
@@ -650,6 +697,7 @@ impl App {
                     text::Wrapping::default(),
                 ));
             }
+            View::Path => {}
             View::Log => {
                 actions = actions.push(
                     command("xtb-copy-log", "Copy the log", "Copy").on_press(send(Action::CopyLog)),
@@ -875,7 +923,13 @@ fn tables<'a>(shown: &Shown<'a>) -> Option<Element<'a, Message>> {
 }
 
 fn log<'a>(shown: &Shown<'a>, method: &str) -> Element<'a, Message> {
-    let log = results::log(&shown.stored.result, shown.frame, shown.info, method);
+    let log = results::log_with_ts(
+        &shown.stored.result,
+        shown.frame,
+        shown.info,
+        method,
+        shown.ts,
+    );
     text(log)
         .size(11)
         .font(iced::Font::MONOSPACE)

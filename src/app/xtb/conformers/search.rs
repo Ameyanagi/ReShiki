@@ -399,6 +399,7 @@ pub(super) fn pending_for(
             kept,
             ..found.search.clone()
         }),
+        transition_state: None,
     });
     let mut notes = found.notes.clone();
     if found.stopped {
@@ -432,5 +433,6 @@ pub(super) fn pending_for(
         line,
         notes,
         info,
+        attempt: None,
     })
 }

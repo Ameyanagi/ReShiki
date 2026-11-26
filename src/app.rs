@@ -1217,6 +1217,7 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
+        let reaction = (document, self.xtb_selected_reaction());
         let xtb_page_was_shown = self.nmr_xtb_page_shown();
         let revision = self.tab.revision;
         let vibrations_were_running = self.xtb_running() && self.xtb_vibrations_visible();
@@ -1233,6 +1234,13 @@ impl App {
         }
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
+        let reaction_result_changed = self.xtb_sync_reaction_palette(
+            reaction
+                != (
+                    (self.tab.id, self.tab.file_epoch),
+                    self.xtb_selected_reaction(),
+                ),
+        );
         let shown = self
             .xtb_vibration_entry()
             .map(|stored| (stored.attachment, Arc::as_ptr(&stored.result)));
@@ -1240,7 +1248,8 @@ impl App {
             .as_ref()
             .map(|(attachment, result)| (*attachment, Weak::as_ptr(result)))
             != shown;
-        if result_changed
+        if reaction_result_changed
+            || result_changed
             || (shown.is_some() && (document_changed || revision != self.tab.revision))
         {
             let reveal = document_changed || (result_changed && !vibrations_were_running);
@@ -1488,6 +1497,9 @@ impl App {
             &message,
             Message::Canvas(Edit::BeginTransform(_))
                 | Message::Mapping(reaction_mapping::Action::Open)
+                | Message::Xtb(xtb::Action::Ts(xtb::ts::Action::ReviewSheet(
+                    xtb::ts::review::Action::EditMap
+                )))
         ) || matches!(
             &message,
             Message::Commands(action) if self.commands.reveals_section(action)
@@ -1609,6 +1621,7 @@ impl App {
             || self.help_open
             || self.settings.open
             || self.qc_export.is_some()
+            || self.ts_review_visible()
             || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
@@ -1624,8 +1637,10 @@ impl App {
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
                     self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_qc_export(self.with_frames_import(self.with_commands(
-                            self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+                        self.with_qc_export(self.with_ts_review(self.with_frames_import(
+                            self.with_commands(self.with_nmr(
+                                self.with_atom_text(self.with_palette(self.workspace())),
+                            )),
                         ))),
                     ))),
                 ))),
@@ -1644,6 +1659,8 @@ impl App {
                     Some(settings_page::modal_key)
                 } else if self.qc_export.is_some() {
                     Some(qc_export::modal_key)
+                } else if self.ts_review_visible() {
+                    Some(xtb::ts::review::modal_key)
                 } else if self.frames_import.is_some() {
                     Some(frames_import::modal_key)
                 } else if self.help_open {

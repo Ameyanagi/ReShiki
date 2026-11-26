@@ -718,6 +718,23 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
             *atom = atom.and_then(|id| mapping.get(&id).copied());
         }
     }
+    for stored in &mut science.results {
+        let arrow = stored
+            .result
+            .run
+            .as_ref()
+            .and_then(|run| run.transition_state.as_ref())
+            .and_then(|search| search.arrow);
+        if let Some(arrow) = arrow
+            && mapping.get(&arrow).copied() != Some(arrow)
+            && let Some(search) = std::sync::Arc::make_mut(&mut stored.result)
+                .run
+                .as_mut()
+                .and_then(|run| run.transition_state.as_mut())
+        {
+            search.arrow = mapping.get(&arrow).copied();
+        }
+    }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
     // ID changes preserve a matching picture, while invalid snapshots stay invalid.
     for index in snapshots {

@@ -72,5 +72,8 @@ pub mod updates;
 pub mod workers;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 pub mod xtb_agent;
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+#[doc(hidden)]
+pub mod xtb_pool;
 
 pub use reshiki_xtb_jobs::XTB_NEAR_DEGENERATE;
