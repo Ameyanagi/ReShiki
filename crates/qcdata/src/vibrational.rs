@@ -86,6 +86,7 @@ fn center_of_mass(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> [f
 /// approach the tolerance. Well-converged geometries typically have much
 /// smaller deviations. A linear rotor has symmetry number 2 if
 /// its ends can be exchanged, and 1 otherwise. A single atom returns 1.
+/// See Fernández-Ramos et al. (2007) \[FernandezRamos2007Symmetry\].
 /// Supply finite positions and positive finite masses, one per label.
 pub fn rotational_symmetry_number(
     labels: &[u32],
