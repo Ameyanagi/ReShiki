@@ -87,6 +87,7 @@ pub(crate) enum Need {
     RingFill,
     Purpose,
     ReactionPreview,
+    XtbReaction,
     ReactionReady,
     ReactionColors,
     Arrow,
@@ -1610,6 +1611,31 @@ fn analysis(app: &App) -> Vec<Command> {
             Message::Assistant(assistant::Action::Open),
         ),
     ];
+    for (name, detail, synonyms, mode) in [
+        (
+            "Find transition state (xTB)",
+            "Review the reaction before finding its transition state with GFN2-xTB",
+            "xtb gfn2 reaction scheme transition state ts saddle neb",
+            xtb::ts::review::Mode::TransitionState,
+        ),
+        (
+            "Reaction energy (xTB)",
+            "Review the reaction before calculating its endpoint energies with GFN2-xTB",
+            "xtb gfn2 reaction scheme energy enthalpy delta",
+            xtb::ts::review::Mode::Energy,
+        ),
+    ] {
+        list.push(
+            send(
+                name,
+                Analyze,
+                detail,
+                synonyms,
+                Message::Xtb(xtb::Action::Ts(xtb::ts::Action::Review(mode, None))),
+            )
+            .need(Need::XtbReaction),
+        );
+    }
     // Builds that cannot calculate hide it, as they hide Run.
     if xtb::available() {
         list.push(Command::new(

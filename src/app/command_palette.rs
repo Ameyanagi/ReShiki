@@ -489,6 +489,16 @@ impl App {
                 })
             }))
             .then_some("Select one reaction arrow"),
+            Need::XtbReaction => super::xtb::unavailable()
+                .or_else(|| {
+                    (self.tab.busy || self.xtb_running())
+                        .then_some("Wait for the current task to finish")
+                })
+                .or_else(|| {
+                    self.xtb_review_target()
+                        .is_none()
+                        .then_some("Select one reaction arrow or use a drawing with one reaction")
+                }),
             Need::ReactionReady => (!self.reaction_arrow().is_some_and(|arrow| {
                 self.tab
                     .doc

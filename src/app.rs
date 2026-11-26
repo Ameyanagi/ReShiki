@@ -1445,6 +1445,9 @@ impl App {
             &message,
             Message::Canvas(Edit::BeginTransform(_))
                 | Message::Mapping(reaction_mapping::Action::Open)
+                | Message::Xtb(xtb::Action::Ts(xtb::ts::Action::ReviewSheet(
+                    xtb::ts::review::Action::EditMap
+                )))
         ) || matches!(
             &message,
             Message::Commands(action) if self.commands.reveals_section(action)
@@ -1566,6 +1569,7 @@ impl App {
             || self.help_open
             || self.settings.open
             || self.qc_export.is_some()
+            || self.ts_review_open()
             || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
@@ -1581,8 +1585,10 @@ impl App {
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
                     self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_qc_export(self.with_frames_import(self.with_commands(
-                            self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+                        self.with_qc_export(self.with_ts_review(self.with_frames_import(
+                            self.with_commands(self.with_nmr(
+                                self.with_atom_text(self.with_palette(self.workspace())),
+                            )),
                         ))),
                     ))),
                 ))),
@@ -1601,6 +1607,8 @@ impl App {
                     Some(settings_page::modal_key)
                 } else if self.qc_export.is_some() {
                     Some(qc_export::modal_key)
+                } else if self.ts_review_open() {
+                    Some(xtb::ts::review::modal_key)
                 } else if self.frames_import.is_some() {
                     Some(frames_import::modal_key)
                 } else if self.help_open {

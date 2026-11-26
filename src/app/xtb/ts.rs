@@ -13,9 +13,11 @@ use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
 pub(super) mod card;
+pub(super) mod energy;
 pub(in crate::app) mod export;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod job;
+pub(in crate::app) mod review;
 mod view;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -24,6 +26,9 @@ pub(super) use job::Event;
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Card(card::Action),
+    Review(review::Mode, Option<u64>),
+    ReviewSheet(review::Action),
+    EnergyTask(state::Task),
     Image(usize),
     Rerun,
     Export,
@@ -190,7 +195,7 @@ impl Session {
         {
             return stale;
         }
-        let stale = ts_plan::plan(doc, self.arrow).as_ref() != Ok(&self.plan);
+        let stale = ts_plan::plan_for_review(doc, self.arrow).as_ref() != Ok(&self.plan);
         self.freshness.set(Some((revision, stale)));
         stale
     }
@@ -249,7 +254,7 @@ pub(super) fn matching_plans<'a>(
             })
         })
         .filter_map(move |reaction| {
-            let plan = ts_plan::plan(doc, reaction.arrow).ok()?;
+            let plan = ts_plan::plan_for_review(doc, reaction.arrow).ok()?;
             (plan.start_atoms.len() == count
                 && plan.start_atoms.iter().all(|id| atoms.contains(&Some(*id))))
             .then_some((reaction.arrow, plan))
@@ -305,6 +310,12 @@ impl App {
     pub(super) fn xtb_ts_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Card(action) => self.xtb_ts_card_action(action),
+            Action::Review(mode, arrow) => self.xtb_review_open(mode, arrow),
+            Action::ReviewSheet(action) => self.xtb_review_action(action),
+            Action::EnergyTask(task) => {
+                self.xtb_reaction_energy_task(task);
+                Task::none()
+            }
             Action::Image(index) => {
                 if self
                     .xtb_shown()

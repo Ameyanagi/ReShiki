@@ -34,6 +34,8 @@ pub struct TsPlan {
     pub hydrogen_moves: Vec<(u64, u64)>,
     /// Number of reactant and product molecules, respectively.
     pub shape: (usize, usize),
+    /// Drawn side charges, kept for comparison after a charge override.
+    pub drawn_charges: (i64, i64),
     /// Total atoms on the start side, including hydrogens.
     pub atoms: usize,
 }
@@ -46,6 +48,8 @@ pub enum TsPlanError {
     Shape { reactants: usize, products: usize },
     #[error("Atom map: {mapped} of {heavy} heavy atoms. Map every heavy atom first.")]
     Unmapped { mapped: usize, heavy: usize },
+    #[error("Map drawn hydrogens that are not terminal on a heavy atom")]
+    UnmappedHydrogen,
     #[error("{0}")]
     Mismatch(String),
     #[error("Total hydrogen counts differ between reactants and products")]
@@ -60,9 +64,47 @@ pub enum TsPlanError {
     Unsupported(String),
 }
 
+/// Changes in the arrow direction, identified by reactant-side drawing IDs.
+pub struct MapReview {
+    pub form: Vec<(u64, u64)>,
+    pub break_: Vec<(u64, u64)>,
+    pub hydrogen_moves: Vec<(u64, u64)>,
+}
+
+/// Read a drawing's atom correspondence regardless of its reaction shape.
+pub fn map_review(doc: &Document, arrow: u64) -> Result<MapReview, TsPlanError> {
+    let reaction = reaction_mapping::reaction(doc, arrow).map_err(|_| TsPlanError::NotReaction)?;
+    if !reaction.ready() {
+        return Err(TsPlanError::NotReaction);
+    }
+    let drawing = |role| {
+        let ids: Vec<_> = side_molecules(doc, reaction.participants(role))?
+            .into_iter()
+            .flatten()
+            .collect();
+        side_drawing(doc, &ids)
+    };
+    let reactants = drawing(Role::Reactant)?;
+    let products = drawing(Role::Product)?;
+    let from = MappedSide::new(&reactants)?;
+    let to = MappedSide::new(&products)?;
+    compatible_maps(&from, &to)?;
+    mapped_changes(&from, &to)
+}
+
 /// Read the explicitly assigned reaction and plan changes away from its
 /// single-molecule side. Agents and bond-order changes do not enter the plan.
 pub fn plan(doc: &Document, arrow: u64) -> Result<TsPlan, TsPlanError> {
+    plan_inner(doc, arrow, true)
+}
+
+/// Plan with the drawing's atom identities and bonds. The caller must check
+/// both sides' reviewed electronic states before starting the calculation.
+pub fn plan_for_review(doc: &Document, arrow: u64) -> Result<TsPlan, TsPlanError> {
+    plan_inner(doc, arrow, false)
+}
+
+fn plan_inner(doc: &Document, arrow: u64, check_drawn_charge: bool) -> Result<TsPlan, TsPlanError> {
     let reaction = reaction_mapping::reaction(doc, arrow).map_err(|_| TsPlanError::NotReaction)?;
     if !reaction.ready() {
         return Err(TsPlanError::NotReaction);
@@ -97,7 +139,48 @@ pub fn plan(doc: &Document, arrow: u64) -> Result<TsPlan, TsPlanError> {
     let other_drawing = side_drawing(doc, &other_atoms)?;
     let from = MappedSide::new(&start_drawing)?;
     let to = MappedSide::new(&other_drawing)?;
+    compatible_maps(&from, &to)?;
+    if check_drawn_charge && from.charge != to.charge {
+        return Err(TsPlanError::Mismatch(
+            "Total charge differs between reactants and products".into(),
+        ));
+    }
 
+    let atoms = from.atoms.len() + from.atoms.values().map(|a| a.hydrogens).sum::<usize>();
+    if atoms > MAX_TS_ATOMS {
+        return Err(TsPlanError::TooLarge { atoms });
+    }
+    let MapReview {
+        form,
+        break_,
+        hydrogen_moves,
+    } = mapped_changes(&from, &to)?;
+    if form.is_empty() && break_.is_empty() && hydrogen_moves.is_empty() {
+        return Err(TsPlanError::NoChange);
+    }
+    Ok(TsPlan {
+        start,
+        start_atoms,
+        mapped: from.atoms.keys().copied().collect(),
+        mapped_hydrogens: from
+            .atoms
+            .values()
+            .filter(|a| a.drawing.element == "H")
+            .map(|a| a.drawing.id)
+            .collect(),
+        form,
+        break_,
+        hydrogen_moves,
+        shape,
+        drawn_charges: match start {
+            Side::Reactant => (from.charge, to.charge),
+            Side::Product => (to.charge, from.charge),
+        },
+        atoms,
+    })
+}
+
+fn compatible_maps(from: &MappedSide<'_>, to: &MappedSide<'_>) -> Result<(), TsPlanError> {
     let missing = from.unmapped + to.unmapped;
     if missing > 0 {
         let mapped = from.atoms.len() + to.atoms.len();
@@ -119,37 +202,14 @@ pub fn plan(doc: &Document, arrow: u64) -> Result<TsPlan, TsPlanError> {
     for &map in to.atoms.keys() {
         from.atom(map)?;
     }
-    if from.charge != to.charge {
-        return Err(TsPlanError::Mismatch(
-            "Total charge differs between reactants and products".into(),
-        ));
-    }
+    Ok(())
+}
 
-    let atoms = from.atoms.len() + from.atoms.values().map(|a| a.hydrogens).sum::<usize>();
-    if atoms > MAX_TS_ATOMS {
-        return Err(TsPlanError::TooLarge { atoms });
-    }
-    let form = from.drawing_bonds(to.bonds.difference(&from.bonds))?;
-    let break_ = from.drawing_bonds(from.bonds.difference(&to.bonds))?;
-    let hydrogen_moves = hydrogen_moves(&from, &to)?;
-    if form.is_empty() && break_.is_empty() && hydrogen_moves.is_empty() {
-        return Err(TsPlanError::NoChange);
-    }
-    Ok(TsPlan {
-        start,
-        start_atoms,
-        mapped: from.atoms.keys().copied().collect(),
-        mapped_hydrogens: from
-            .atoms
-            .values()
-            .filter(|a| a.drawing.element == "H")
-            .map(|a| a.drawing.id)
-            .collect(),
-        form,
-        break_,
-        hydrogen_moves,
-        shape,
-        atoms,
+fn mapped_changes(from: &MappedSide<'_>, to: &MappedSide<'_>) -> Result<MapReview, TsPlanError> {
+    Ok(MapReview {
+        form: from.drawing_bonds(to.bonds.difference(&from.bonds))?,
+        break_: from.drawing_bonds(from.bonds.difference(&to.bonds))?,
+        hydrogen_moves: hydrogen_moves(from, to)?,
     })
 }
 
@@ -242,9 +302,7 @@ impl<'a> MappedSide<'a> {
             let map = drawing.map_num;
             if map == 0 {
                 if drawing.element == "H" {
-                    return Err(TsPlanError::Unsupported(
-                        "Map drawn hydrogens that are not terminal on a heavy atom".into(),
-                    ));
+                    return Err(TsPlanError::UnmappedHydrogen);
                 }
                 unmapped += 1;
                 continue;

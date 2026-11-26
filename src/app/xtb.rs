@@ -126,6 +126,8 @@ pub(crate) struct State {
     pub(super) palette: palette::Palette,
     ts_card: ts::card::State,
     ts_sessions: ts::Sessions,
+    pub(in crate::app::xtb) ts_review: Option<ts::review::Dialog>,
+    energy_state: ts::energy::State,
     pub(super) vibrations: vibrations::State,
     /// What this session knows about stored results' runs, by result.
     infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
@@ -325,7 +327,7 @@ pub(super) fn is_progress(message: &Message) -> bool {
 }
 
 /// Why this build cannot calculate, if it cannot.
-fn unavailable() -> Option<&'static str> {
+pub(super) fn unavailable() -> Option<&'static str> {
     if cfg!(windows) {
         return Some("xTB calculations are coming to Windows once code signing is in place.");
     }
@@ -376,15 +378,22 @@ impl App {
                 }
             }
             Action::Cancel => return self.xtb_cancel(),
-            Action::ApplyAnyway => self.xtb_apply_anyway(),
+            Action::ApplyAnyway => {
+                self.xtb_apply_anyway();
+                return self.xtb_reaction_energy_continue();
+            }
             Action::Discard => {
                 if let Some(Outcome::Review(_)) = self.tab.xtb.outcome.take() {
                     self.status = "Optimized geometry discarded".into();
                     self.error = false;
                 }
+                self.tab
+                    .xtb
+                    .energy_state
+                    .stop("Reaction energy canceled: optimized geometry discarded");
             }
             #[cfg(not(target_arch = "wasm32"))]
-            Action::Event(serial, event) => self.xtb_event(serial, event),
+            Action::Event(serial, event) => return self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
@@ -513,6 +522,11 @@ impl App {
         // A build without the engine shows no Run button; its worker would
         // answer "not included" anyway.
         if self.tab.xtb.run.is_some() {
+            return false;
+        }
+        if self.tab.xtb.energy_state.in_progress() {
+            self.status = "Finish or cancel the reaction energy calculation first".into();
+            self.error = false;
             return false;
         }
         if self.tab.busy
@@ -789,10 +803,11 @@ impl App {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn xtb_event(&mut self, serial: u64, event: run::Event) {
+    fn xtb_event(&mut self, serial: u64, event: run::Event) -> Task<Message> {
         let current = (self.tab.file_epoch, self.tab.revision);
+        let reaction_energy = self.tab.xtb.energy_state.running(serial);
         let Some(run) = self.tab.xtb.run.as_mut().filter(|run| run.serial == serial) else {
-            return;
+            return Task::none();
         };
         match event {
             run::Event::Tick | run::Event::Hessian => {
@@ -819,15 +834,26 @@ impl App {
                 Ok(pending) => {
                     self.tab.xtb.run = None;
                     self.xtb_store(pending, false);
+                    if reaction_energy {
+                        return self.xtb_reaction_energy_continue();
+                    }
                 }
                 Err(failure) => self.xtb_fail(failure),
             },
         }
+        if reaction_energy && let Some(progress) = self.tab.xtb.energy_state.progress() {
+            self.status = format!("{progress} · {}", self.status);
+        }
+        Task::none()
     }
 
     /// End the run in flight, if any, with `failure`. The card and the
     /// results palette show it, keeping the request for Retry and Run again.
     fn xtb_fail(&mut self, failure: state::Failure) {
+        self.tab
+            .xtb
+            .energy_state
+            .stop("Reaction energy stopped: a species calculation failed");
         let run = self.tab.xtb.run.take();
         let numbers = run
             .as_ref()
@@ -869,13 +895,23 @@ impl App {
         if self.xtb_search_stop() {
             return Task::none();
         }
+        let reaction_energy = self.tab.xtb.energy_state.stop("Reaction energy canceled");
         let Some(run) = self.tab.xtb.run.take() else {
+            if reaction_energy {
+                self.status = "Reaction energy canceled".into();
+                self.error = false;
+            }
             return Task::none();
         };
         if run.launch.is_none() {
             self.tab.model_job.take_if(|job| Some(job.key) == run.model);
         }
-        self.status = "Calculation canceled".into();
+        self.status = if reaction_energy {
+            "Reaction energy canceled"
+        } else {
+            "Calculation canceled"
+        }
+        .into();
         self.error = false;
         if run.ts.is_some() {
             return super::focus_drawing();

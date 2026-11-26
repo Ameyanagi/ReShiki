@@ -1198,6 +1198,26 @@ impl App {
                 enabled: !self.tab.busy && !self.xtb_running(),
             });
         }
+        if super::xtb::available()
+            && let Some(arrow) = self
+                .selected_reaction_arrow()
+                .filter(|arrow| super::xtb::ts::review::reaction_arrow(&self.tab.doc, arrow.id))
+        {
+            use super::xtb::{Action, ts};
+            use ts::review::Mode;
+            commands.extend(
+                [
+                    ("Find transition state (GFN2-xTB)", Mode::TransitionState),
+                    ("Reaction energy", Mode::Energy),
+                ]
+                .map(|(label, mode)| RowCommand {
+                    label,
+                    menu: label,
+                    message: Message::Xtb(Action::Ts(ts::Action::Review(mode, Some(arrow.id)))),
+                    enabled: !self.tab.busy && !self.xtb_running(),
+                }),
+            );
+        }
         if !keyboard {
             commands.push(RowCommand {
                 label: "Keyboard drawing",

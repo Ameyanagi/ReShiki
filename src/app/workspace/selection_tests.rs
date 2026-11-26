@@ -225,6 +225,83 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
 }
 
 #[test]
+fn reaction_calculation_row_commands_review_one_selected_arrow_when_xtb_is_available() {
+    use crate::app::xtb::{self, ts};
+    use reshiki::{arrows::Preset, document::Arrow, purpose::Purpose};
+    use ts::review::Mode;
+
+    let (mut app, _) = App::new();
+    app.tab.doc = Default::default();
+    app.tab.busy = false;
+    app.tool = Tool::Select;
+    let arrows = [0., 100.].map(|y| {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
+            id,
+            Point::new(0., y),
+            Point::new(100., y),
+            Default::default(),
+            Default::default(),
+        ));
+        id
+    });
+    let review_commands = |app: &App| {
+        app.context_commands()
+            .into_iter()
+            .filter(|command| {
+                matches!(
+                    command.message,
+                    Message::Xtb(xtb::Action::Ts(ts::Action::Review(..)))
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    assert!(review_commands(&app).is_empty());
+    app.tab.selected = vec![arrows[1]];
+    let commands = review_commands(&app);
+    if xtb::available() {
+        assert_eq!(
+            commands
+                .iter()
+                .map(|command| command.label)
+                .collect::<Vec<_>>(),
+            ["Find transition state (GFN2-xTB)", "Reaction energy"]
+        );
+        assert!(commands.iter().all(|command| command.enabled));
+        assert!(matches!(
+            commands[0].message,
+            Message::Xtb(xtb::Action::Ts(ts::Action::Review(
+                Mode::TransitionState,
+                Some(id)
+            ))) if id == arrows[1]
+        ));
+        assert!(matches!(
+            commands[1].message,
+            Message::Xtb(xtb::Action::Ts(ts::Action::Review(Mode::Energy, Some(id))))
+                if id == arrows[1]
+        ));
+    } else {
+        assert!(
+            commands.is_empty(),
+            "builds without xTB hide row entry points"
+        );
+    }
+
+    app.tab.busy = true;
+    assert!(review_commands(&app).iter().all(|command| !command.enabled));
+    app.tab.busy = false;
+    app.tab.selected = arrows.into();
+    assert!(review_commands(&app).is_empty());
+    app.tab.selected = vec![arrows[1]];
+    app.tab.doc.arrows[1].purpose = Purpose::Reference;
+    assert!(review_commands(&app).is_empty());
+    app.tab.doc.arrows[1].purpose = Purpose::Chemistry;
+    app.tab.doc.arrows[1].kind = Preset::Curved.kind().into();
+    assert!(review_commands(&app).is_empty());
+}
+
+#[test]
 fn select_all_keeps_a_closed_caption_inspector_closed() {
     for open in [false, true] {
         let (mut app, _) = App::new();

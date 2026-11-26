@@ -36,6 +36,7 @@ fn plan(start: Side) -> TsPlan {
         break_: vec![(20, 90)],
         hydrogen_moves: vec![(20, 90)],
         shape: (1, 1),
+        drawn_charges: (0, 0),
         atoms: 5,
     }
 }

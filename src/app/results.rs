@@ -741,6 +741,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Event(..) | Action::Search(..) => Some(Completion::Xtb),
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
                 Action::TsEvent(..) => Some(Completion::Xtb),
+                Action::Ts(super::xtb::ts::Action::ReviewSheet(
+                    super::xtb::ts::review::Action::Ready(..),
+                )) => Some(Completion::Mapping),
                 Action::Page(..)
                 | Action::Task(..)
                 | Action::Charge(..)

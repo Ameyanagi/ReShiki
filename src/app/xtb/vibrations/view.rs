@@ -161,7 +161,7 @@ impl App {
         let settings = &self.tab.xtb.vibrations;
         let result = &shown.stored.result;
         let modes = self.xtb_modes(result).is_some();
-        let model_matches = self.xtb_model_at_result(shown);
+        let model_matches = self.xtb_vibration_model_matches(shown);
         let live = modes && !shown.stale && model_matches;
         let mut controls = column![].spacing(7);
         // Why nothing moves, when nothing can.
@@ -211,7 +211,10 @@ impl App {
                     "Add the displacement arrows to the drawing",
                     "Add to drawing",
                 )
-                .on_press_maybe((live && settings.arrows).then(|| send(Action::PlaceArrows))),
+                .on_press_maybe(
+                    (live && settings.arrows && self.xtb_model_at_result(shown))
+                        .then(|| send(Action::PlaceArrows)),
+                ),
             ]
             .spacing(10)
             .align_y(Alignment::Center),

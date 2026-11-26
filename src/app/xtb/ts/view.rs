@@ -172,13 +172,30 @@ impl App {
             |session| session.extras.engine_imaginary,
         );
         details = details.push(match imaginary {
-            Some(frequency) => line(
-                format!(
-                    "Imaginary frequency {}i cm⁻¹",
-                    state::signed(-frequency.abs(), 0)
+            Some(frequency) => row![
+                line(
+                    format!(
+                        "Imaginary frequency {}i cm⁻¹",
+                        state::signed(-frequency.abs(), 0)
+                    ),
+                    Tone::Good,
                 ),
-                Tone::Good,
-            ),
+                accessible_command(
+                    "xtb-ts-animate",
+                    "Animate the transition state's imaginary mode",
+                    "Animate",
+                )
+                .on_press_maybe(
+                    (interactive && super::card::imaginary_mode(result).is_some()).then(|| {
+                        Message::Xtb(XtbAction::Vibrations(
+                            crate::app::xtb::vibrations::Action::AnimateImaginary,
+                        ))
+                    }),
+                ),
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into(),
             None if shown.ts.is_some() => {
                 line("No significant engine imaginary frequency.", Tone::Warning)
             }
@@ -351,14 +368,7 @@ fn barrier<'a>(label: &'static str, value: f64) -> Element<'a, Message> {
 }
 
 fn imaginary_frequency(result: &CalcResult) -> Option<f64> {
-    result
-        .vibrations
-        .as_ref()?
-        .frequencies_cm1
-        .iter()
-        .copied()
-        .filter(|&frequency| frequency < -IMAGINARY_CM1)
-        .min_by(f64::total_cmp)
+    super::card::imaginary_mode(result).map(|(_, frequency)| frequency)
 }
 
 fn bond_label(frame: &Frame, [a, b]: [usize; 2], maps: &[Option<u32>]) -> String {

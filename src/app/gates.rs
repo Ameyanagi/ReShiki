@@ -157,6 +157,14 @@ impl App {
         if let Message::Mapping(action @ super::reaction_mapping::Action::Ready(..)) = message {
             return Break(self.mapping_action(action));
         }
+        if let Message::Xtb(
+            action @ super::xtb::Action::Ts(super::xtb::ts::Action::ReviewSheet(
+                super::xtb::ts::review::Action::Ready(..),
+            )),
+        ) = message
+        {
+            return Break(self.xtb_action(action));
+        }
         if let Message::LabelsReady(key, result) = message {
             self.labels_ready(key, result);
             return Break(Task::none());
