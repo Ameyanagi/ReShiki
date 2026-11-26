@@ -180,7 +180,12 @@ impl App {
         }))
         .spacing(4);
         let collapsed = self.xtb.dock.collapsed && !inspector;
-        let mut header = row![text("xTB results").size(14), tabs]
+        // Results opened from other programs are not xTB's.
+        let title = match self.xtb_shown().map(|s| &s.stored.result.settings) {
+            Some(reshiki::qcdata::Settings::Imported { .. }) => "Calculation results",
+            _ => "xTB results",
+        };
+        let mut header = row![text(title).size(14), tabs]
             .spacing(14)
             .align_y(Alignment::Center);
         if !inspector {

@@ -258,12 +258,16 @@ impl Diagram {
 
     /// The level under `point`, within a few pixels.
     fn hit(&self, bounds: Rectangle, point: Point) -> Option<(usize, usize)> {
+        // A segment under the pointer wins over a neighbour within reach.
         self.place(bounds)
             .iter()
             .filter(|p| point.x >= p.x0 - 3. && point.x <= p.x1 + 3.)
-            .map(|p| ((p.y - point.y).abs(), (p.column, p.index)))
-            .filter(|(distance, _)| *distance <= 6.)
-            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|p| {
+                let outside = point.x < p.x0 || point.x > p.x1;
+                ((outside, (p.y - point.y).abs()), (p.column, p.index))
+            })
+            .filter(|((_, distance), _)| *distance <= 6.)
+            .min_by(|a, b| a.0.0.cmp(&b.0.0).then(a.0.1.total_cmp(&b.0.1)))
             .map(|(_, hit)| hit)
     }
 }

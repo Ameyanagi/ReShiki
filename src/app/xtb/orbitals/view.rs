@@ -150,10 +150,16 @@ impl App {
         let isovalue = column![
             row![
                 field("Isovalue"),
-                slider(ISO_RANGE, iso, |iso| send(Action::Iso(iso)))
-                    .step(0.005_f32)
-                    .on_release(send(Action::Settle))
-                    .width(Length::Fill),
+                slider(ISO_RANGE, iso, move |iso| {
+                    send(if live {
+                        Action::Iso(iso)
+                    } else {
+                        Action::Settle
+                    })
+                })
+                .step(0.005_f32)
+                .on_release(send(Action::Settle))
+                .width(Length::Fill),
                 text(format!("{iso:.3}")).size(12).width(42),
             ]
             .spacing(6)
@@ -184,8 +190,12 @@ impl App {
         .spacing(2);
         let opacity = row![
             field("Opacity"),
-            slider(20_f32..=100., f32::from(look.opacity), |v| {
-                send(Action::Opacity(v.round() as u8))
+            slider(20_f32..=100., f32::from(look.opacity), move |v| {
+                send(if live {
+                    Action::Opacity(v.round() as u8)
+                } else {
+                    Action::Settle
+                })
             })
             .step(1_f32)
             .on_release(send(Action::Settle))
