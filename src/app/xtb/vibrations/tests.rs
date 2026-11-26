@@ -1,5 +1,7 @@
 //! The Vibrations tab on a water Opt + freq result answered by hand.
-use super::super::tests::{MOVED, START, event, f32s, model, optfreq, optimized, send, water};
+use super::super::tests::{
+    MOVED, START, duplicate_molecule, event, f32s, model, optfreq, optimized, send, water,
+};
 use super::super::{Action as XtbAction, CalcTask, Outcome, palette, results::View, run};
 use super::*;
 use crate::app::{InspectorTab, Message};
@@ -121,6 +123,30 @@ fn selecting_another_result_clears_a_paused_vibration_and_switching_back_resyncs
     select(&mut app, a);
     assert!(app.xtb_vibration_preview().is_some());
     assert_eq!(shown(&app), f32s(&MOVED));
+}
+
+#[test]
+fn selecting_a_duplicate_rebuilds_the_paused_vibration_on_the_copy() {
+    let mut app = opened();
+    let copied = duplicate_molecule(&mut app);
+    for _ in 0..6 {
+        vibrations(&mut app, Action::Tick);
+    }
+    vibrations(&mut app, Action::Play(false));
+    assert_ne!(shown(&app), f32s(&MOVED));
+
+    let original = std::mem::replace(&mut app.tab.selected, copied.clone());
+    assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
+    assert!(app.xtb_vibration_preview().is_none());
+    app.tab.selected = original;
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(copied)));
+    assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
+    assert!(app.xtb_vibration_preview().is_some());
+    let animation = app.tab.xtb.vibrations.animation.as_ref().unwrap();
+    assert_eq!(animation.model, 1);
+    assert_eq!(shown(&app), f32s(&MOVED));
+    assert!(!app.tab.xtb.vibrations.playing);
 }
 
 #[test]
