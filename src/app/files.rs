@@ -416,7 +416,9 @@ pub enum Prepared {
     },
     /// An SD file's records, read.
     Records(Box<super::import::Batch>),
-    /// Several frames of one molecule: the import sheet asks which.
+    /// A geometry and any results read from a calculation.
+    Calculation(Box<super::import::Batch>),
+    /// The import sheet asks which job or frame to open.
     Frames(Box<super::frames_import::File>),
     #[cfg(target_arch = "wasm32")]
     Browser {
@@ -528,41 +530,75 @@ pub(super) fn is_qc_file(path: &std::path::Path, extension: &str) -> bool {
                 .ends_with(".molden.input")
 }
 
-/// Open the default job's final geometry and any result as an unsaved drawing.
+/// Read a calculation once, then choose a job or step when there is a choice.
 fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, String> {
-    use reshiki::qcread::read;
     let name = super::import::name(path);
-    let mut file = read(&name, contents).map_err(|e| e.to_string())?;
-    let jobs = file.jobs.len();
-    let (index, job) = file
-        .default_job()
-        .and_then(|i| file.jobs.get_mut(i).map(|job| (i, job)))
-        .ok_or("The file has no geometry")?;
-    // A job cut off after its last result opens at that result's geometry,
-    // so the result stays with it.
-    let frame = &job
-        .result
-        .as_ref()
-        .and(job.result_step())
-        .or(job.steps.last())
-        .ok_or("The file has no geometry")?
-        .frame;
-    let mut xyz = format!("{}\n\n", frame.numbers.len());
-    for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
-        xyz.push_str(&format!("{number} {x} {y} {z}\n"));
+    let file = reshiki::qcread::read(&name, contents).map_err(|e| e.to_string())?;
+    let index = file.default_job().ok_or("The file has no geometry")?;
+    let output = file.format.has_results();
+    if output
+        && (file.jobs.len() > 1 || file.jobs.get(index).is_some_and(|job| job.steps.len() > 1))
+    {
+        return Ok(Prepared::Frames(Box::new(
+            super::frames_import::File::calculation(name, file),
+        )));
     }
-    let (mut drawing, mut warnings) =
-        reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())?;
-    let what = if jobs > 1 {
-        format!("Final geometry of job {} of {jobs}", index + 1)
-    } else if job.steps.len() > 1 {
-        "Final geometry".into()
+    prepare_qc_drawing(file, index, None, output)
+}
+
+pub(super) fn has_calculated_results(result: &reshiki::qcdata::CalcResult) -> bool {
+    result.energy_hartree.is_some()
+        || result.vibrations.is_some()
+        || result.orbitals.is_some()
+        || !result.charges.is_empty()
+}
+
+/// Open a job at its result's geometry, or open an explicitly picked step.
+pub(super) fn prepare_qc_drawing(
+    file: reshiki::qcread::QcFile,
+    index: usize,
+    step_index: Option<usize>,
+    add_2d: bool,
+) -> Result<Prepared, String> {
+    let jobs = file.jobs.len();
+    let output = file.format.has_results();
+    let job = file
+        .jobs
+        .into_iter()
+        .nth(index)
+        .ok_or("The file has no such job")?;
+    let step = match step_index {
+        Some(i) => job.steps.get(i),
+        None => super::frames_import::job_step(&job),
+    }
+    .ok_or("The file has no geometry")?;
+    let frame = step.frame.clone();
+    let (mut drawing, mut warnings) = super::frames_import::drawing(&frame)?;
+    let mut notice = if output {
+        let formula = super::frames_import::molecule(&frame);
+        let kind = job.kind.name();
+        let mut notice = if jobs > 1 {
+            format!(
+                "Job {} of {jobs} opened · {formula} · {kind}",
+                job.index + 1
+            )
+        } else if let Some(i) = step_index {
+            format!(
+                "Step {} of {} opened · {formula} · {kind}",
+                i + 1,
+                job.steps.len()
+            )
+        } else {
+            format!("{formula} opened · {kind}")
+        };
+        if let Some(completion) = &job.completion
+            && !matches!(completion, reshiki::qcread::Completion::Normal)
+        {
+            notice.push_str(&format!(" · {}", completion.name()));
+        }
+        notice
     } else {
-        "Geometry".into()
-    };
-    let mut notice = match &job.completion {
-        Some(completion) => format!("{what}: {}, {}", job.title(), completion.name()),
-        None => format!("{what} from the {} file", file.format.name()),
+        format!("Geometry from the {} file", file.format.name())
     };
     // Files give the total charge and spin, not which atoms carry them, unless there is one
     // atom. Where a file records neither, the reader's warning says what it assumed.
@@ -575,32 +611,81 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
     if frame.multiplicity != 1 {
         omitted.push(format!("spin multiplicity {}", frame.multiplicity));
     }
-    if let Some(result_frame) = job.result_step().map(|step| step.frame.clone())
-        && let Some(result) = job.result.take()
-    {
-        let frames = result
-            .input_frame
-            .filter(|hash| *hash != result.frame)
-            .and_then(|hash| job.steps.iter().find(|step| step.frame.hash() == hash))
-            .map(|step| step.frame.clone())
-            .into_iter()
-            .collect();
-        if let Err(error) = reshiki::science::import(&mut drawing, 0, result_frame, frames, result)
-        {
-            warnings.push(format!("Could not attach the calculation results: {error}"));
-        }
+    if add_2d {
+        add_qc_structure(&mut drawing);
     }
-    if file.format.has_results() && drawing.science.results.is_empty() {
-        notice.push_str(" · Results can't be shown yet");
+    if let Some(result) = job.result.filter(has_calculated_results) {
+        if frame.hash() == result.frame {
+            let frames = result
+                .input_frame
+                .filter(|hash| *hash != result.frame)
+                .and_then(|hash| job.steps.iter().find(|step| step.frame.hash() == hash))
+                .map(|step| step.frame.clone())
+                .into_iter()
+                .collect();
+            match reshiki::science::import(&mut drawing, 0, frame, frames, result) {
+                Ok(_) => notice.push_str(" · results in the palette"),
+                Err(error) => notice.push_str(&format!(
+                    " · Results could not be attached ({error}). Check the source geometry and open the file again."
+                )),
+            }
+        } else if let Some(bound) = super::frames_import::result_step_index(&job.steps, &result) {
+            notice.push_str(&format!(
+                " · Reopen and choose step {} to see the calculation results",
+                bound + 1
+            ));
+        }
+    } else if output {
+        notice.push_str(" · The file has no calculated results.");
     }
     if !omitted.is_empty() {
         notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
     }
     warnings.insert(0, notice);
     warnings.extend(file.warnings);
-    Ok(Prepared::Records(Box::new(super::import::Batch::one(
-        drawing, warnings,
-    ))))
+    let batch = Box::new(super::import::Batch::one(drawing, warnings));
+    Ok(if output {
+        Prepared::Calculation(batch)
+    } else {
+        Prepared::Records(batch)
+    })
+}
+
+fn add_qc_structure(drawing: &mut reshiki::document::Document) {
+    use reshiki::models3d::{Display, set_display};
+    set_display(drawing, 0, Display::TwoD);
+    let mut request = super::Request::molecule("clean", drawing.clone());
+    request.cleanup = Some(reshiki::cleanup::Options {
+        keep_orientation: false,
+        style_bond_length: true,
+        ..Default::default()
+    });
+    // The XYZ reader already made an opening-view projection for structures
+    // the 2D solver cannot lay out.
+    if let Ok(cleaned) = reshiki::engine::native_cleanup::prepare(&request) {
+        *drawing = cleaned.document;
+    }
+    set_display(drawing, 0, Display::Both);
+}
+
+pub(super) fn nonblank(value: &str) -> Option<&str> {
+    let value = value.trim();
+    (!value.is_empty()).then_some(value)
+}
+
+/// The program as named in the import sheet and the result header.
+pub(super) fn program_label(program: &str, version: Option<&str>) -> String {
+    match version.and_then(nonblank) {
+        Some(version) => {
+            let release = if program == "Gaussian" {
+                version.split(" Revision ").next().unwrap_or(version)
+            } else {
+                version
+            };
+            format!("{program} {release}")
+        }
+        None => program.into(),
+    }
 }
 
 /// Every record of an SD file, read as Insert reads them, before the file
@@ -697,10 +782,13 @@ pub(super) fn open_picked(
                     #[cfg(target_arch = "wasm32")]
                     let result = match (file.handle, result) {
                         (Some(handle), Ok(prepared))
-                            // Neither a picture nor an SD file stays the tab's file.
+                            // These imports start an untitled drawing.
                             if !matches!(
                                 &prepared,
-                                Prepared::Picture(..) | Prepared::Records(..) | Prepared::Frames(..)
+                                Prepared::Picture(..)
+                                    | Prepared::Records(..)
+                                    | Prepared::Calculation(..)
+                                    | Prepared::Frames(..)
                             ) =>
                         {
                             let mut duplicate = None;
@@ -942,6 +1030,7 @@ impl super::App {
         let Some((path, result)) = opened else {
             return iced::Task::none();
         };
+        let calculation = matches!(&result, Ok(Prepared::Calculation(_)));
         match result {
             #[cfg(target_arch = "wasm32")]
             Ok(Prepared::Browser {
@@ -962,7 +1051,7 @@ impl super::App {
             }
             // Side by side, as an unsaved drawing with the file's name: Save
             // cannot write an SD file back.
-            Ok(Prepared::Records(batch)) => {
+            Ok(Prepared::Records(batch) | Prepared::Calculation(batch)) => {
                 let name = super::import::name(&path);
                 let Some((doc, placed, total)) = super::import::side_by_side(batch.drawings) else {
                     self.status = format!("Could not open {name}: it has no structure");
@@ -971,7 +1060,9 @@ impl super::App {
                 };
                 self.open_target(None);
                 self.show_opened(doc, None);
-                if let Some(stored) = self.tab.doc.science.results.last() {
+                if let Some(stored) = self.tab.doc.science.results.last()
+                    && (!calculation || has_calculated_results(&stored.result))
+                {
                     let result = stored.result.clone();
                     self.xtb_show_result(&result);
                 }
@@ -983,8 +1074,13 @@ impl super::App {
                     self.status =
                         format!("Opened {placed} of {total} structures · The rest don't fit");
                 }
+                if calculation {
+                    self.status.clear();
+                }
                 for warning in batch.warnings {
-                    self.status.push_str(" · ");
+                    if !self.status.is_empty() {
+                        self.status.push_str(" · ");
+                    }
                     self.status.push_str(&warning);
                 }
                 #[cfg(not(target_arch = "wasm32"))]
@@ -994,13 +1090,10 @@ impl super::App {
             }
             Ok(Prepared::Frames(file)) => {
                 // One sheet at a time: files opened together wait their turn.
-                let name = super::import::name(&path);
                 if self.frames_import.is_some() || !self.frames_queue.is_empty() {
                     self.frames_queue.push_back((path, *file));
                 } else {
-                    self.frames_import = Some(super::frames_import::Dialog::new(path, *file));
-                    self.status = format!("{name} has several frames: choose which to open");
-                    self.error = false;
+                    self.ask_frames_import(path, *file);
                 }
             }
             Ok(Prepared::Import {

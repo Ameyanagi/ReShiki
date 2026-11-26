@@ -5,9 +5,10 @@ use super::state::{
     Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, capitalized, formula, scientific, signed,
     symbol,
 };
+use crate::app::files::{nonblank, program_label};
 use reshiki::qcdata;
 use reshiki::qcdata::{
-    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Status, Task,
+    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Source, Status, Task,
     XtbConventions,
 };
 use reshiki_xtb_jobs::OPTIMIZER_SEPARATOR;
@@ -97,18 +98,23 @@ pub(crate) struct RunInfo {
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
 pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
+    let method = provenance.method.as_deref().and_then(nonblank);
+    let program = program_label(&provenance.program, provenance.program_version.as_deref());
+    if let Some(source) = imported_source(result) {
+        // Copy table and Export carry the electronic state only here.
+        return format!(
+            "{source} · charge {} · multiplicity {}",
+            signed(f64::from(frame.charge), 0),
+            frame.multiplicity
+        );
+    }
     // Files from other programs may not name their method.
-    let mut parts: Vec<String> = provenance
-        .method
-        .as_deref()
+    let mut parts: Vec<String> = method
         .map(|method| method_without_optimizer(method).to_owned())
         .or_else(|| matches!(result.settings, Settings::Xtb(_)).then(|| "xTB".into()))
         .into_iter()
         .collect();
-    parts.push(match &provenance.program_version {
-        Some(version) => format!("{} {version}", provenance.program),
-        None => provenance.program.clone(),
-    });
+    parts.push(program);
     parts.push(solvent(result));
     if let Settings::Xtb(settings) = &result.settings {
         if settings.conventions == XtbConventions::Xtb68 {
@@ -126,6 +132,41 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     parts.join(" · ")
 }
 
+/// "Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log" for a result read from a file.
+fn imported_source(result: &CalcResult) -> Option<String> {
+    let provenance = &result.provenance;
+    let Source::Imported { file_name, .. } = &provenance.source else {
+        return None;
+    };
+    let program = program_label(&provenance.program, provenance.program_version.as_deref());
+    let method = provenance.method.as_deref().and_then(nonblank);
+    let basis = provenance.basis.as_deref().and_then(nonblank);
+    let level = match (method, basis) {
+        (Some(method), Some(basis)) => Some(format!("{method}/{basis}")),
+        (Some(level), None) | (None, Some(level)) => Some(level.to_owned()),
+        (None, None) => None,
+    };
+    let from = format!("from {file_name}");
+    let source = level
+        .as_ref()
+        .is_none_or(|level| !level.ends_with(&from))
+        .then_some(from);
+    Some(
+        [Some(program), level, source]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" · "),
+    )
+}
+
+pub(in crate::app) fn title(result: Option<&CalcResult>) -> String {
+    match result.map(|result| &result.provenance.source) {
+        Some(Source::Imported { file_name, .. }) => format!("Results · {file_name}"),
+        _ => "xTB results".into(),
+    }
+}
+
 /// The outcome, method, medium and electronic state at a glance.
 pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
     let outcome = match result.task {
@@ -137,6 +178,7 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
                 outcome
             }
         }
+        Task::Energy if matches!(result.settings, Settings::Imported { .. }) => "Energy".into(),
         Task::Energy => "Single-point energy".into(),
         Task::Gradient => "Energy gradient".into(),
         Task::Hessian => "Frequencies".into(),
@@ -149,21 +191,15 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
     };
     let (method, medium) = match &result.settings {
         Settings::Xtb(settings) => (
-            settings.method.label(),
+            settings.method.label().to_owned(),
             if settings.solvent.is_some() {
                 format!("in {}", solvent(result))
             } else {
                 "gas phase".into()
             },
         ),
-        Settings::Imported { .. } => (
-            result
-                .provenance
-                .method
-                .as_deref()
-                .unwrap_or(&result.provenance.program),
-            solvent(result),
-        ),
+        // The program, level and file the numbers come from.
+        Settings::Imported { .. } => (imported_source(result).unwrap_or_default(), String::new()),
     };
     let charge = match frame.charge {
         0 => "neutral".into(),
@@ -181,7 +217,11 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
         5 => "quintet".into(),
         n => format!("multiplicity {n}"),
     };
-    format!("{outcome} · {method} · {medium} · {charge} {spin}")
+    if medium.is_empty() {
+        format!("{outcome} · {method} · {charge} {spin}")
+    } else {
+        format!("{outcome} · {method} · {medium} · {charge} {spin}")
+    }
 }
 
 /// When the calculation finished, in the user's time zone.
@@ -671,15 +711,28 @@ pub(crate) fn log(
     method: &str,
 ) -> String {
     let mut lines = vec![method.to_owned()];
-    if let reshiki::qcdata::Source::Calculated { engine_revision } = &result.provenance.source {
-        lines.push(format!("engine revision {engine_revision}"));
-        if let Some((_, optimizers)) = result
-            .provenance
-            .method
-            .as_deref()
-            .and_then(|method| method.split_once(OPTIMIZER_SEPARATOR))
-        {
-            lines.push(format!("optimizer {optimizers}"));
+    match &result.provenance.source {
+        Source::Calculated { engine_revision } => {
+            lines.push(format!("engine revision {engine_revision}"));
+            if let Some((_, optimizers)) = result
+                .provenance
+                .method
+                .as_deref()
+                .and_then(|method| method.split_once(OPTIMIZER_SEPARATOR))
+            {
+                lines.push(format!("optimizer {optimizers}"));
+            }
+        }
+        Source::Imported { .. } => {
+            let provenance = &result.provenance;
+            if let Some(version) = &provenance.program_version {
+                lines.push(format!("{} {version}", provenance.program));
+            }
+            lines.push(format!(
+                "charge {} · multiplicity {}",
+                signed(f64::from(frame.charge), 0),
+                frame.multiplicity
+            ));
         }
     }
     lines.push(format!(
