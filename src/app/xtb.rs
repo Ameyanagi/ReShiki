@@ -90,6 +90,8 @@ pub(crate) enum Entry {
     Task(CalcTask),
     /// Optimize the geometry with GFN2-xTB.
     OptimizeGfn2,
+    /// Calculate energy with a method that gives molecular orbitals.
+    Orbitals,
     /// ⌘R: the last calculation again, on the selected molecule.
     Rerun,
 }
@@ -542,6 +544,12 @@ impl App {
             Entry::OptimizeGfn2 => {
                 self.xtb.settings.task = CalcTask::Optimize;
                 self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+            }
+            Entry::Orbitals => {
+                self.xtb.settings.task = CalcTask::Energy;
+                if !self.xtb.settings.method.capabilities().orbitals {
+                    self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+                }
             }
             Entry::Rerun => {}
         }

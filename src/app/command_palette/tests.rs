@@ -2000,10 +2000,7 @@ fn xtb_direct_commands_route_calculations_and_require_a_molecule() {
             "Frequencies at the current geometry (xTB)",
             Entry::Task(CalcTask::Frequencies),
         ),
-        (
-            "Single-point energy, HOMO and LUMO (xTB)",
-            Entry::Task(CalcTask::Energy),
-        ),
+        ("Single-point energy, HOMO and LUMO (xTB)", Entry::Orbitals),
         (
             "Find low-energy conformers (xTB)",
             Entry::Task(CalcTask::Conformers),
@@ -2041,6 +2038,7 @@ fn alternate_outcome_titles_preserve_explicit_titles_keys_and_empty_selection() 
         ("s orbital", "s orbital"),
         ("p orbital", "p orbital"),
         ("Iridium (Ir)", "Iridium (Ir)"),
+        ("IR", "Optimize and calculate frequencies (xTB Opt + freq)"),
         (
             "Single-point energy, HOMO and LUMO (xTB)",
             "Single-point energy, HOMO and LUMO (xTB)",
@@ -2050,6 +2048,9 @@ fn alternate_outcome_titles_preserve_explicit_titles_keys_and_empty_selection() 
         search(&mut app, query);
         assert_eq!(top(&app).name, expected, "{query}");
     }
+    app.tab.selected = vec![a];
+    search(&mut app, "Ir");
+    assert_eq!(top(&app).name, "Iridium (Ir)");
     app.tab.selected.clear();
     search(&mut app, "v");
     assert_eq!(top(&app).name, "Select tool");
