@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -212,3 +213,112 @@ def test_keyboard_interrupt(worker):
     lines = done.stdout.splitlines()
     assert lines[0].startswith("interrupted"), done.stdout + done.stderr
     assert lines[1].startswith("energy -42.")
+
+
+def test_butane_conformers(worker):
+    result = xtb.conformers("CCCC")
+    repeated = xtb.conformers("CCCC")
+    np.testing.assert_equal(asdict(result), asdict(repeated))
+    assert result.conformers
+    energies = [conformer.energy for conformer in result.conformers]
+    assert energies == sorted(energies)
+    assert sum(conformer.population for conformer in result.conformers) == pytest.approx(
+        1.0, rel=0, abs=1e-9
+    )
+    lowest = result.conformers[0]
+    assert result.best.energy == lowest.energy
+    assert lowest.rank == 1
+    assert lowest.delta == lowest.rmsd == 0.0
+    np.testing.assert_array_equal(result.best.geometry.positions, lowest.geometry.positions)
+    lines = result.to_xyz().splitlines()
+    frame_length = len(lowest.geometry) + 2
+    assert len(lines) == len(result.conformers) * frame_length
+    for conformer, comment in zip(result.conformers, lines[1::frame_length], strict=True):
+        assert f"conformer {conformer.rank} · ΔE {conformer.delta:.2f} kcal/mol" in comment
+        assert comment.endswith(f"E = {conformer.energy:.10f} Eh")
+
+
+def test_lysine_conformers_preserve_stereo(worker):
+    lysine = reshiki.Molecule.from_smiles("NCCCC[C@H](N)C(=O)O")
+    result = xtb.conformers(lysine)
+    assert len(result.conformers) > 1
+    assert all(conformer.stereo is True for conformer in result.conformers)
+
+
+def test_conformers_refresh_stale_model_in_native_bytes(worker):
+    path = FIXTURES.parent / "models3d" / "model-frame-methanol.rsk"
+    drawing = json.loads(path.read_bytes())
+    # A chemistry edit saves the old methanol geometry with its original fingerprint.
+    drawing["version"] = 33
+    model = drawing["models"][0]
+    model["fingerprint"] = "27f09dccaae6f1e0"
+    model["linked_atoms"] = [1, 2]
+    model["generated"] = {"sources": [1, 2], "elements": ["C", "O"], "bonds": [[0, 1]]}
+    for atom in model["atoms"]:
+        atom["id"] -= 1
+    for hydrogen in model["hydrogens"]:
+        hydrogen["parent"] -= 1
+    drawing["atoms"][1]["element"] = "C"
+
+    result = xtb.conformers(json.dumps(drawing).encode(), starts=1)
+    np.testing.assert_array_equal(np.sort(result.best.geometry.numbers), [1] * 6 + [6] * 2)
+
+
+@pytest.mark.parametrize("threads", [None, 1, 8])
+def test_conformers_accepts_auto_and_search_thread_limits(worker, threads):
+    assert xtb.conformers("CCCC", starts=1, threads=threads).conformers
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"starts": 0},
+        {"starts": 301},
+        {"window": 0.09},
+        {"window": 100.1},
+        {"representatives": 0},
+        {"representatives": 61},
+        {"per_cluster": 2},
+        {"minimizer": "unknown"},
+        {"diversity": "unknown"},
+        {"accuracy": 1001.0},
+        {"electronic_temperature": -1.0},
+        {"max_iterations": 10001},
+        {"threads": 0},
+        {"threads": 9},
+    ],
+)
+def test_conformer_argument_validation(worker, options):
+    with pytest.raises(reshiki.ReShikiError) as caught:
+        xtb.conformers("CCCC", **options)
+    assert caught.value.code == "invalid_arguments"
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+@pytest.mark.parametrize("option", ["window", "accuracy", "electronic_temperature"])
+def test_conformers_reject_nonfinite_options(worker, option, value):
+    with pytest.raises(ReShikiError) as caught:
+        xtb.conformers("CCCC", **{option: value})
+    assert caught.value.code == "invalid_arguments"
+
+
+@pytest.mark.parametrize(
+    ("limit", "minimizer"),
+    [(200, "mmff94s"), (120, "gfn2")],
+)
+def test_conformer_atom_limits(worker, limit, minimizer):
+    with pytest.raises(reshiki.ReShikiError, match=f"up to {limit} atoms") as caught:
+        xtb.conformers("C" * (limit + 1), minimizer=minimizer)
+    assert caught.value.code == "invalid_arguments"
+
+
+@pytest.mark.parametrize(
+    ("carbons", "limit", "minimizer"),
+    [(67, 200, "mmff94s"), (40, 120, "gfn2")],
+)
+def test_conformer_atom_limits_include_hydrogens(worker, carbons, limit, minimizer):
+    # The alkane has 2n + 2 implicit hydrogens and n drawn carbons.
+    assert carbons <= limit < 3 * carbons + 2
+    with pytest.raises(ReShikiError, match=f"up to {limit} atoms") as caught:
+        xtb.conformers("C" * carbons, starts=1, minimizer=minimizer)
+    assert caught.value.code == "invalid_arguments"
