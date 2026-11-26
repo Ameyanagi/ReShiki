@@ -10,8 +10,18 @@ use reshiki::qcdata::{
     Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Status, Task,
     XtbConventions,
 };
+use reshiki_xtb_jobs::OPTIMIZER_SEPARATOR;
 
-/// Always shown under the method line.
+mod methods;
+pub(crate) use methods::methods_text;
+
+pub(super) fn method_without_optimizer(method: &str) -> &str {
+    method
+        .split_once(OPTIMIZER_SEPARATOR)
+        .map_or(method, |(base, _)| base)
+}
+
+/// Shown under the xTB headline.
 pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequencies approximate, orbitals qualitative (minimal basis).";
 /// The gap under which the electronic structure counts as near-degenerate.
 const NEAR_DEGENERATE_EV: f64 = 0.1;
@@ -90,7 +100,8 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     // Files from other programs may not name their method.
     let mut parts: Vec<String> = provenance
         .method
-        .clone()
+        .as_deref()
+        .map(|method| method_without_optimizer(method).to_owned())
         .or_else(|| matches!(result.settings, Settings::Xtb(_)).then(|| "xTB".into()))
         .into_iter()
         .collect();
@@ -115,6 +126,64 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     parts.join(" · ")
 }
 
+/// The outcome, method, medium and electronic state at a glance.
+pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
+    let outcome = match result.task {
+        Task::Optimize => {
+            let outcome = optimization_outcome(result);
+            if result.vibrations.is_some() {
+                format!("{outcome} + frequencies")
+            } else {
+                outcome
+            }
+        }
+        Task::Energy => "Single-point energy".into(),
+        Task::Gradient => "Energy gradient".into(),
+        Task::Hessian => "Frequencies".into(),
+        Task::Conformers => {
+            let kept = energies(result).len();
+            let unit = if kept == 1 { "conformer" } else { "conformers" };
+            format!("{kept} {unit} kept")
+        }
+        Task::TransitionState => "Transition-state search".into(),
+    };
+    let (method, medium) = match &result.settings {
+        Settings::Xtb(settings) => (
+            settings.method.label(),
+            if settings.solvent.is_some() {
+                format!("in {}", solvent(result))
+            } else {
+                "gas phase".into()
+            },
+        ),
+        Settings::Imported { .. } => (
+            result
+                .provenance
+                .method
+                .as_deref()
+                .unwrap_or(&result.provenance.program),
+            solvent(result),
+        ),
+    };
+    let charge = match frame.charge {
+        0 => "neutral".into(),
+        1 => "cation".into(),
+        -1 => "anion".into(),
+        2 => "dication".into(),
+        -2 => "dianion".into(),
+        n => format!("charge {n:+}").replace('-', "−"),
+    };
+    let spin = match frame.multiplicity {
+        1 => "singlet".into(),
+        2 => "doublet".into(),
+        3 => "triplet".into(),
+        4 => "quartet".into(),
+        5 => "quintet".into(),
+        n => format!("multiplicity {n}"),
+    };
+    format!("{outcome} · {method} · {medium} · {charge} {spin}")
+}
+
 /// When the calculation finished, in the user's time zone.
 pub(super) fn finished_local(result: &CalcResult) -> Option<chrono::DateTime<chrono::Local>> {
     let finished = result.run.as_ref()?.finished.as_deref()?;
@@ -130,10 +199,7 @@ fn solvent(result: &CalcResult) -> String {
         Settings::Xtb(settings) => settings.solvent.as_ref().map_or_else(
             || "gas phase".into(),
             |s| {
-                let model = match s.model {
-                    qcdata::SolventModel::Alpb => "ALPB",
-                    qcdata::SolventModel::Gbsa => "GBSA",
-                };
+                let model = solvent_model(s.model);
                 match s.correction {
                     Some(_) => format!("{} ({model}, GFN2-xTB correction)", s.name),
                     None => format!("{} ({model})", s.name),
@@ -141,6 +207,13 @@ fn solvent(result: &CalcResult) -> String {
             },
         ),
         Settings::Imported { .. } => "imported".into(),
+    }
+}
+
+fn solvent_model(model: qcdata::SolventModel) -> &'static str {
+    match model {
+        qcdata::SolventModel::Alpb => "ALPB",
+        qcdata::SolventModel::Gbsa => "GBSA",
     }
 }
 
@@ -152,6 +225,26 @@ pub(crate) fn energies(result: &CalcResult) -> &[f64] {
         .as_ref()
         .filter(|_| matches!(result.task, Task::Optimize | Task::Conformers))
         .map_or(&[], |path| path.energies_hartree.as_slice())
+}
+
+fn optimization_outcome(result: &CalcResult) -> String {
+    let count = energies(result).len();
+    let converged = result.status == Status::Converged;
+    if count == 0 && matches!(result.settings, Settings::Imported { .. }) {
+        return if converged {
+            "Converged"
+        } else {
+            "Optimization"
+        }
+        .into();
+    }
+    let steps = count.saturating_sub(1);
+    let unit = if steps == 1 { "step" } else { "steps" };
+    if converged {
+        format!("Converged in {steps} {unit}")
+    } else {
+        format!("Not converged after {steps} {unit}")
+    }
 }
 
 /// Step `step`'s geometry in Å. The file keeps only the first and the last
@@ -185,24 +278,69 @@ pub(crate) fn step_positions(
     }
 }
 
-/// The Summary's label/value rows. Rows the result has no data for are left out.
+/// Energy, gap and dipole, when reported.
+pub(super) fn key_numbers(
+    result: &CalcResult,
+    info: Option<&RunInfo>,
+) -> Vec<(&'static str, String)> {
+    let mut numbers = Vec::new();
+    if let Some(energy) = result.energy_hartree {
+        numbers.push(("Energy", format!("{} Eh", signed(energy, 6))));
+    }
+    if let Some(gap) = gap_ev(result, info) {
+        numbers.push(("Gap", format!("{gap:.2} eV")));
+    }
+    if let Some(dipole) = result.dipole_e_bohr {
+        let debye = dipole.iter().map(|x| x * x).sum::<f64>().sqrt() * DEBYE_PER_E_BOHR;
+        numbers.push(("Dipole", format!("{debye:.2} D")));
+    }
+    numbers
+}
+
+/// The complete table for copying and saving.
 pub(crate) fn summary_rows(
     result: &CalcResult,
     input: &Frame,
     output: &Frame,
     info: Option<&RunInfo>,
 ) -> Vec<(String, String)> {
+    let mut rows: Vec<_> = key_numbers(result, info)
+        .into_iter()
+        .map(|(label, value)| {
+            let label = match label {
+                "Energy" => "Total energy",
+                "Gap" => "HOMO–LUMO gap",
+                _ => label,
+            };
+            (label.into(), value)
+        })
+        .collect();
+    rows.extend(summary_grid_rows(result, input, output));
+    if let Some(run) = result.run.as_ref().filter(|run| run.seconds > 0.) {
+        rows.push((
+            "Run time".into(),
+            format!(
+                "{:.1} s · {} {}",
+                run.seconds,
+                run.scf_iterations.len(),
+                if matches!(&result.settings, Settings::Xtb(s) if !super::state::electronic(s.method)) {
+                    "calculations"
+                } else {
+                    "SCF calculations"
+                }
+            ),
+        ));
+    }
+    rows
+}
+
+/// The Summary grid, below the key numbers.
+pub(super) fn summary_grid_rows(
+    result: &CalcResult,
+    input: &Frame,
+    output: &Frame,
+) -> Vec<(String, String)> {
     let mut rows = Vec::new();
-    if let Some(energy) = result.energy_hartree {
-        rows.push(("Total energy".into(), format!("{} Eh", signed(energy, 6))));
-    }
-    if let Some(gap) = gap_ev(result, info) {
-        rows.push(("HOMO–LUMO gap".into(), format!("{gap:.2} eV")));
-    }
-    if let Some(dipole) = result.dipole_e_bohr {
-        let debye = dipole.iter().map(|x| x * x).sum::<f64>().sqrt() * DEBYE_PER_E_BOHR;
-        rows.push(("Dipole".into(), format!("{debye:.2} D")));
-    }
     if let Some(charges) = result.charges.first() {
         let scheme = format!("{:?}", charges.scheme);
         let values = &charges.values;
@@ -210,7 +348,7 @@ pub(crate) fn summary_rows(
             values
                 .iter()
                 .zip(&output.numbers)
-                .map(|(q, &z)| format!("{} {}", symbol(z), signed_charge(*q)))
+                .map(|(q, &z)| format!("{} {}", symbol(z), signed_charge(*q, 3)))
                 .collect::<Vec<_>>()
                 .join(" · ")
         } else {
@@ -219,7 +357,7 @@ pub(crate) fn summary_rows(
                 .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &q| {
                     (lo.min(q), hi.max(q))
                 });
-            format!("{} to {}", signed_charge(low), signed_charge(high))
+            format!("{} to {}", signed_charge(low, 3), signed_charge(high, 3))
         };
         rows.push((
             "Charges".into(),
@@ -227,12 +365,10 @@ pub(crate) fn summary_rows(
         ));
     }
     if result.task == Task::Optimize {
-        let steps = energies(result).len().saturating_sub(1);
-        let plural = if steps == 1 { "" } else { "s" };
-        let mut outcome = match &result.status {
-            Status::Converged => format!("converged in {steps} step{plural}"),
-            _ => format!("not converged after {steps} step{plural}"),
-        };
+        let mut outcome = optimization_outcome(result).to_ascii_lowercase();
+        if outcome == "optimization" {
+            outcome = "step count unavailable".into();
+        }
         if let Some(rmsd) = rmsd(&input.positions_angstrom, &output.positions_angstrom) {
             outcome.push_str(&format!(" · RMSD from start {rmsd:.2} Å"));
         }
@@ -310,22 +446,6 @@ pub(crate) fn summary_rows(
             output.numbers.len()
         ),
     ));
-    if let Some(run) = result.run.as_ref().filter(|run| run.seconds > 0.) {
-        rows.push((
-            "Run time".into(),
-            format!(
-                "{:.1} s · {} {}",
-                run.seconds,
-                run.scf_iterations.len(),
-                // GFN-FF has no SCF.
-                if matches!(&result.settings, Settings::Xtb(s) if !super::state::electronic(s.method)) {
-                    "calculations"
-                } else {
-                    "SCF calculations"
-                }
-            ),
-        ));
-    }
     rows
 }
 
@@ -345,16 +465,12 @@ pub(crate) fn warning(result: &CalcResult, info: Option<&RunInfo>) -> Option<&'s
     .then_some(NEAR_DEGENERATE)
 }
 
-/// "+0.280" or "−0.561".
-pub(crate) fn signed_charge(value: f64) -> String {
-    // −0.0004 rounds to zero and shows unsigned.
-    if value.abs() < 5e-4 {
-        return "0.000".into();
-    }
-    if value >= 0. {
-        format!("+{value:.3}")
+/// A partial charge with a sign, except when it rounds to zero.
+pub(super) fn signed_charge(value: f64, places: usize) -> String {
+    if value.abs() < 0.5 * 10_f64.powi(-(places as i32)) {
+        format!("{:.*}", places, 0.)
     } else {
-        signed(value, 3)
+        format!("{value:+.places$}").replace('-', "−")
     }
 }
 
@@ -557,6 +673,14 @@ pub(crate) fn log(
     let mut lines = vec![method.to_owned()];
     if let reshiki::qcdata::Source::Calculated { engine_revision } = &result.provenance.source {
         lines.push(format!("engine revision {engine_revision}"));
+        if let Some((_, optimizers)) = result
+            .provenance
+            .method
+            .as_deref()
+            .and_then(|method| method.split_once(OPTIMIZER_SEPARATOR))
+        {
+            lines.push(format!("optimizer {optimizers}"));
+        }
     }
     lines.push(format!(
         "{} · {} atoms · {} electrons",
@@ -639,8 +763,8 @@ pub(crate) fn log(
     if result.task == Task::Optimize {
         lines.push(match &result.status {
             Status::Converged => format!(
-                "optimization converged in {} steps",
-                energies(result).len().saturating_sub(1)
+                "optimization {}",
+                optimization_outcome(result).to_ascii_lowercase()
             ),
             Status::NotConverged { reason } => format!("optimization not converged: {reason}"),
             Status::Failed { reason } => format!("failed: {reason}"),
