@@ -1,7 +1,7 @@
 //! Work off the UI thread: an xTB result's orbitals recomputed by the
 //! worker (light results keep no coefficients), and isosurface meshes.
 use reshiki::models3d::surface::orbital;
-use reshiki::qcdata::{self, BasisSet, CalcResult, Frame, Settings};
+use reshiki::qcdata::{self, BasisSet};
 use std::sync::Arc;
 
 /// Orbitals `rows` of `result` at its own frame, from the worker, in the
@@ -9,15 +9,15 @@ use std::sync::Arc;
 /// stored ones; a mismatch is reported rather than shown.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn orbitals(
-    result: &CalcResult,
-    frame: &Frame,
+    result: &qcdata::CalcResult,
+    frame: &qcdata::Frame,
     rows: Vec<u32>,
     cancel: &reshiki_xtb_worker::client::Cancel,
 ) -> Result<qcdata::Orbitals, String> {
     use reshiki_xtb_worker::client::{Limits, Session};
     use reshiki_xtb_worker::protocol::{Compute, Method, Open, OrbitalOutput, ScfSettings, Units};
 
-    let Settings::Xtb(settings) = &result.settings else {
+    let qcdata::Settings::Xtb(settings) = &result.settings else {
         return Err("Imported orbitals cannot be recomputed".into());
     };
     let method = match settings.method {

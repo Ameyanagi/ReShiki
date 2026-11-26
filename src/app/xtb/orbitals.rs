@@ -288,7 +288,16 @@ impl App {
                 "This file's orbital shapes are not available: its basis uses functions ReShiki does not read yet (see the warnings when it opened)."
                     .into(),
             )
-        } else if orbitals.basis.is_none() && !super::available() {
+        } else if orbitals.basis.is_none()
+            && !super::available()
+            && self
+                .tab
+                .xtb
+                .orbitals
+                .computed
+                .iter()
+                .all(|(k, _)| *k != key)
+        {
             Some("Needs xTB to show: this build cannot recompute orbitals.".into())
         } else if cfg!(target_arch = "wasm32") {
             Some("Orbital surfaces are drawn in the desktop app.".into())
