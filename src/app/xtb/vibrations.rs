@@ -11,7 +11,7 @@ use crate::app::figure_export::{Kind, Prepared};
 use crate::app::{App, InspectorTab, Message};
 use iced::Task;
 use reshiki::document::{Document, Point};
-use reshiki::graphics::Graphic;
+use reshiki::graphics::{Graphic, IrFigure, Journal, YAxis};
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
 use std::cell::RefCell;
@@ -19,7 +19,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-mod figure;
+pub(crate) mod figure;
 mod view;
 
 /// Frames in one period; a period lasts one second at speed 1×.
@@ -47,11 +47,16 @@ pub(crate) enum Action {
     Arrows(bool),
     /// Add the shown arrows to the drawing, as one Undo step.
     PlaceArrows,
+    Y(YAxis),
+    From(String),
+    To(String),
     Shape(BandShape),
     Fwhm(f32),
     Scale(String),
     PlaceSpectrum,
     ExportSpectrum(&'static str),
+    CopyCaption,
+    CaptionCopied(u64, Result<(), String>),
     Thermo,
     Temperature(String),
     Pressure(String),
@@ -70,6 +75,9 @@ pub(crate) struct State {
     pub amplitude: f32,
     pub speed: f32,
     pub arrows: bool,
+    pub y: YAxis,
+    pub from: String,
+    pub to: String,
     pub shape: BandShape,
     pub fwhm: f32,
     pub scale: String,
@@ -95,9 +103,12 @@ impl Default for State {
             amplitude: 0.3,
             speed: 1.,
             arrows: false,
+            y: YAxis::Transmittance,
+            from: "4000".into(),
+            to: "400".into(),
             shape: BandShape::Lorentzian,
-            fwhm: 15.,
-            scale: "1.00".into(),
+            fwhm: 20.,
+            scale: "1.000".into(),
             thermo: false,
             temperature: "298.15".into(),
             pressure: "1".into(),
@@ -176,6 +187,11 @@ impl State {
     /// The typed scale factor, if it is a sensible one.
     pub(super) fn scale(&self) -> Option<f64> {
         typed(&self.scale).filter(|s| (0.5..=1.5).contains(s))
+    }
+
+    pub(super) fn range(&self) -> Option<(f64, f64)> {
+        let (from, to) = (typed(&self.from)?, typed(&self.to)?);
+        IrFigure::valid_range(from, to).then_some((from, to))
     }
 
     /// Temperature (K) and pressure (Pa) as typed, if valid.
@@ -487,6 +503,9 @@ impl App {
                 return Task::none();
             }
             Action::Shape(shape) => settings.shape = shape,
+            Action::Y(y) => settings.y = y,
+            Action::From(value) => settings.from = value,
+            Action::To(value) => settings.to = value,
             Action::Fwhm(value) => settings.fwhm = value,
             Action::Scale(value) => settings.scale = value,
             Action::PlaceSpectrum => {
@@ -500,9 +519,27 @@ impl App {
                     .map(|result| match result {
                         Ok(export) => Message::ExportReady(export),
                         Err(error) => Message::Xtb(super::Action::Palette(
-                            super::palette::Action::Exported(Err(error)),
+                            super::palette::Action::IrExported(Err(error)),
                         )),
                     });
+            }
+            Action::CopyCaption => {
+                #[cfg(not(target_arch = "wasm32"))]
+                let write = reshiki::clipboard::write_text;
+                #[cfg(target_arch = "wasm32")]
+                let write = crate::web::write_text;
+                return self.xtb_copy_caption_with(write);
+            }
+            Action::CaptionCopied(epoch, result) => {
+                self.copy_as_busy = false;
+                if self.tab.file_epoch == epoch {
+                    self.error = result.is_err();
+                    self.status = result.map_or_else(
+                        |error| format!("Could not copy the IR caption\n{error}"),
+                        |()| "Copied the IR caption".into(),
+                    );
+                }
+                return Task::none();
             }
             Action::Thermo => settings.thermo = !settings.thermo,
             Action::Temperature(value) => settings.temperature = value,
@@ -780,14 +817,67 @@ impl App {
         }
     }
 
+    fn xtb_ir_figure(&self) -> Option<(Shown<'_>, IrFigure)> {
+        let shown = self.xtb_shown()?;
+        let result = &shown.stored.result;
+        let settings = &self.tab.xtb.vibrations;
+        let (from, to) = settings.range()?;
+        let scale = settings.scale()?;
+        if !view::SpectrumData::cached(result, settings).can_plot() {
+            return None;
+        }
+        let vibrations = result.vibrations.as_ref()?;
+        let bands = vibrations
+            .frequencies_cm1
+            .iter()
+            .zip(&vibrations.ir_intensities_km_mol)
+            .filter(|&(&frequency, _)| frequency >= 0.)
+            .map(|(&frequency, &intensity)| [frequency, intensity.max(0.)])
+            .collect();
+        let mut figure = IrFigure::with_defaults(
+            self.export_stem().unwrap_or_else(|| self.document_name()),
+            spectrum_method(result).into(),
+            bands,
+            Journal::for_style(&self.tab.doc.drawing_style),
+        );
+        (figure.y, figure.from, figure.to) = (settings.y, from, to);
+        (figure.shape, figure.fwhm, figure.scale) =
+            (settings.shape, f64::from(settings.fwhm), scale);
+        Some((shown, figure))
+    }
+
+    fn xtb_copy_caption_with<Write, Pending>(&mut self, write: Write) -> Task<Message>
+    where
+        Write: FnOnce(String) -> Pending + iced_runtime::futures::MaybeSend + 'static,
+        Pending: std::future::Future<Output = Result<(), String>>
+            + iced_runtime::futures::MaybeSend
+            + 'static,
+    {
+        let Some((_, figure)) = self.xtb_ir_figure() else {
+            return Task::none();
+        };
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        let epoch = self.tab.file_epoch;
+        self.copy_as_busy = true;
+        self.status = "Copying the IR caption…".into();
+        self.error = false;
+        Task::perform(write(figure.caption()), move |result| {
+            Message::Xtb(super::Action::Vibrations(Action::CaptionCopied(
+                epoch, result,
+            )))
+        })
+    }
+
     fn xtb_place_spectrum(&mut self) {
-        let Some(shown) = self.xtb_shown() else {
+        let Some((shown, mut spectrum)) = self.xtb_ir_figure() else {
             return;
         };
-        let result = &shown.stored.result;
-        let spectrum = view::SpectrumData::cached(result, &self.tab.xtb.vibrations);
-        if !spectrum.can_plot() {
-            return;
+        if spectrum.bands.len() > IrFigure::MAX_BANDS {
+            spectrum.bands.sort_by(|a, b| b[1].total_cmp(&a[1]));
+            spectrum.bands.truncate(IrFigure::MAX_BANDS);
         }
         let doc = &self.tab.doc;
         let mut component_atoms = HashSet::new();
@@ -825,7 +915,7 @@ impl App {
             return;
         };
         let at = Point::new(hi.x + doc.drawing_style.bond_length_world, lo.y);
-        let figure = figure::spectrum(doc, &spectrum, spectrum_method(result), at);
+        let figure = figure::spectrum(doc, &spectrum, at);
         let before = doc.clone();
         let members = figure.group.members.clone();
         figure.add_to(&mut self.tab.doc);
@@ -838,14 +928,9 @@ impl App {
     }
 
     fn xtb_prepare_spectrum(&self, format: &'static str) -> Task<Result<Prepared, String>> {
-        let Some(shown) = self.xtb_shown() else {
+        let Some((_, spectrum)) = self.xtb_ir_figure() else {
             return Task::none();
         };
-        let result = &shown.stored.result;
-        let spectrum = view::SpectrumData::cached(result, &self.tab.xtb.vibrations);
-        if !spectrum.can_plot() {
-            return Task::none();
-        }
         let source = &self.tab.doc;
         let mut doc = Document {
             drawing_style: source.drawing_style.clone(),
@@ -854,11 +939,10 @@ impl App {
             custom_theme: source.custom_theme.clone(),
             ..Document::default()
         };
-        figure::spectrum(&doc, &spectrum, spectrum_method(result), Point::default())
-            .add_to(&mut doc);
+        let figure = figure::spectrum(&doc, &spectrum, Point::default());
+        figure.add_to(&mut doc);
         let engine = self.engine.clone();
-        let name = self.export_stem().unwrap_or_else(|| self.document_name());
-        let stem = Some(format!("{name} IR spectrum"));
+        let stem = Some(format!("{} IR spectrum", spectrum.name));
         let appearance = &self.appearance;
         let render_format = if format == "svg" && !appearance.export_svg_live_text {
             "svg-office"
@@ -866,10 +950,10 @@ impl App {
             format
         };
         let editable = appearance.export_editable_drawing;
+        let dpi = appearance.export_dpi.get();
         let background = appearance
             .export_background
             .paper(appearance.custom_background);
-        let dpi = appearance.export_dpi.get();
         Task::perform(
             async move {
                 #[cfg(target_arch = "wasm32")]
@@ -893,8 +977,8 @@ impl App {
                     exported.bytes,
                     format,
                     stem,
-                    vec![],
-                    Kind::Xtb,
+                    exported.details,
+                    Kind::Ir,
                 ))
             },
             std::convert::identity,

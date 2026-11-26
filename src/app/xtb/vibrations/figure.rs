@@ -1,41 +1,338 @@
 //! An infrared spectrum built from editable drawing objects.
-use super::view::{SpectrumData, WAVENUMBER_TITLE};
 use reshiki::document::{Annotation, Document, Point};
-use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand};
+use reshiki::graphics::{
+    BracketSides, Frame, Graphic, GraphicKind, GraphicStyle, IrFigure, PathCommand, YAxis,
+};
 use reshiki::grouping::Group;
-use reshiki::qcdata::vibrational::BandShape;
-use reshiki::typography::{TextFormat, layout};
-
-const LABEL_INTERVAL_CM1: f64 = 1000.;
-/// Plot width in bond lengths: about a column wide at the journal styles' bond length.
-pub(super) const PLOT_WIDTH_BONDS: f32 = 16.;
-/// Plot height in bond lengths.
-pub(super) const PLOT_HEIGHT_BONDS: f32 = 5.;
+use reshiki::qcdata::vibrational;
+use reshiki::style::DrawingStyle;
+use reshiki::typography::{Script, TextFormat, TextSpan, TextStyle, layout};
 
 #[derive(Debug, PartialEq)]
-pub(super) struct Figure {
-    pub(super) graphics: Vec<Graphic>,
-    pub(super) annotations: Vec<Annotation>,
-    pub(super) group: Group,
+pub(crate) struct Figure {
+    pub(crate) graphics: Vec<Graphic>,
+    pub(crate) annotations: Vec<Annotation>,
+    pub(crate) group: Group,
+    pub(crate) labelled_peaks: Vec<u32>,
 }
 
 impl Figure {
-    pub(super) fn add_to(self, doc: &mut Document) {
+    pub(crate) fn add_to(self, doc: &mut Document) {
         doc.graphics.extend(self.graphics);
         doc.annotations.extend(self.annotations);
         doc.groups.push(self.group);
     }
 }
 
-/// Build from a plottable spectrum, with `at` at the top left including labels and strokes.
-pub(super) fn spectrum(doc: &Document, spectrum: &SpectrumData, method: &str, at: Point) -> Figure {
+const VERTICAL: f32 = -90.;
+// The ordinary SVG scene extends four points past the marks on each side.
+const EXPORT_PAD_PT: f32 = 4.;
+
+fn annotation(id: u64, text: String, format: TextFormat, centre: Point, angle: f32) -> Annotation {
+    let (width, height) = {
+        let measured = layout(&text, &format);
+        (measured.width, measured.height)
+    };
+    Annotation {
+        id,
+        position: centre.offset(-width / 2., -height / 2.),
+        text,
+        format,
+        angle,
+    }
+}
+
+fn ticks(from: f64, to: f64, step: u32) -> impl Iterator<Item = u32> {
+    let first = (to.ceil() as u32).div_ceil(step) * step;
+    let last = from.floor() as u32 / step * step;
+    (first..=last).rev().step_by(step as usize)
+}
+
+fn major_step(figure: &IrFigure, drawing: &DrawingStyle, width: f32, format: &TextFormat) -> u32 {
+    // Even with its axis margins, a one-column figure has room for eight ticks.
+    let limit = (8. * width / drawing.world(234.)).max(8.).floor() as usize;
+    [100, 200, 500, 1000, 2000]
+        .into_iter()
+        .find(|&step| {
+            let widths: Vec<_> = ticks(figure.from, figure.to, step)
+                .map(|tick| layout(&tick.to_string(), format).width)
+                .collect();
+            let spacing = width * (f64::from(step) / (figure.from - figure.to)) as f32;
+            widths.len() <= limit
+                && widths
+                    .iter()
+                    .zip(widths.iter().skip(1))
+                    .all(|(a, b)| (a + b) / 2. + drawing.world(2.) <= spacing)
+        })
+        .unwrap_or(2000)
+}
+
+fn wavenumber_format(text: &str, format: &TextFormat) -> TextFormat {
+    let mut format = format.clone();
+    if let Some(unit) = text.rfind("cm−1") {
+        format.spans.push(TextSpan {
+            start: unit + "cm".len(),
+            end: unit + "cm−1".len(),
+            style: TextStyle {
+                script: Script::Superscript,
+                ..format.style.clone()
+            },
+        });
+    }
+    format
+}
+
+fn method_text(figure: &IrFigure, format: &TextFormat, width: f32) -> (String, TextFormat) {
+    let method = figure.method.lines().next().unwrap_or_default().trim();
+    let details = format!(
+        " · {:?} · FWHM {} cm−1 · scale {:.3}",
+        figure.shape,
+        figure.fwhm_text(),
+        figure.scale,
+    );
+    let text = format!("{method}{details}");
+    let styled = wavenumber_format(&text, format);
+    if layout(&text, &styled).width <= width {
+        return (text, styled);
+    }
+    for prefix in method
+        .char_indices()
+        .rev()
+        .filter_map(|(end, _)| method.get(..end))
+    {
+        let text = format!("{}…{details}", prefix.trim_end());
+        let styled = wavenumber_format(&text, format);
+        if layout(&text, &styled).width <= width {
+            return (text, styled);
+        }
+    }
+    let text = details.trim_start_matches(" · ");
+    (text.into(), wavenumber_format(text, format))
+}
+
+// Clip to the label's x-span before comparing y.
+pub(super) fn hits_box(a: Point, b: Point, lo: Point, hi: Point) -> bool {
+    let (a, b) = if a.x <= b.x { (a, b) } else { (b, a) };
+    if a.x > hi.x || b.x < lo.x {
+        return false;
+    }
+    let (first, last) = if a.x == b.x {
+        (a.y, b.y)
+    } else {
+        let y = |x| a.y + (b.y - a.y) * ((x - a.x) / (b.x - a.x));
+        (y(lo.x.max(a.x)), y(hi.x.min(b.x)))
+    };
+    first.min(last) <= hi.y && first.max(last) >= lo.y
+}
+
+pub(super) fn segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let separated = |a: f32, b: f32, c: f32, d: f32| a.max(b) < c.min(d) || c.max(d) < a.min(b);
+    if separated(a.x, b.x, c.x, d.x) || separated(a.y, b.y, c.y, d.y) {
+        return false;
+    }
+    let side = |a: Point, b: Point, c: Point| (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    let straddles = |a, b, c, d| side(a, b, c) * side(a, b, d) <= 0.;
+    straddles(a, b, c, d) && straddles(c, d, a, b)
+}
+
+/// Build the drawing with `at` at the top left of the publication box.
+pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
     let drawing = &doc.drawing_style;
-    let bond = drawing.bond_length_world;
-    // Labels a little smaller than captions so the curve dominates.
-    let width = PLOT_WIDTH_BONDS * bond;
-    let height = PLOT_HEIGHT_BONDS * bond;
-    let gap = 0.12 * bond;
-    let tick_length = 0.16 * bond;
+    let pt = |points| drawing.world(points);
+    let (family, label_size, tick_size, line_width) = figure.journal.metrics();
+    let text_format = |size_pt| TextFormat {
+        style: TextStyle {
+            family: family.into(),
+            size_pt,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let tick_format = text_format(tick_size);
+    let label_format = text_format(label_size);
+    let (width_pt, height_pt) = figure.columns.size_pt();
+    let (width, height) = (pt(width_pt), pt(height_pt));
+    let pad = pt(EXPORT_PAD_PT);
+    let stroke = pt(line_width) / 2.;
+    let transmittance = figure.y == YAxis::Transmittance;
+    let framed = figure.frame != Frame::Baseline;
+    let y_ticks = (0..=5).map(|i| {
+        if transmittance {
+            (f64::from(i * 20), (i * 20).to_string())
+        } else {
+            let value = f64::from(i) / 5.;
+            (value, format!("{value:.1}"))
+        }
+    });
+    let tick_height = layout("0", &tick_format).height;
+    let number_width = layout(&format!("{:.0}", figure.from.ceil()), &tick_format).width;
+    let y_title = if transmittance {
+        "Transmittance (%)"
+    } else {
+        "Absorbance (a.u.)"
+    };
+    let title_height = layout(y_title, &label_format).height;
+    let widest_y_tick = y_ticks
+        .clone()
+        .map(|(_, text)| layout(&text, &tick_format).width)
+        .fold(0., f32::max);
+    let mut left = if framed {
+        pad + title_height + widest_y_tick + pt(7.)
+    } else {
+        pad + stroke
+    };
+    let mut right = width - pad - stroke;
+    let major = major_step(figure, drawing, right - left - number_width, &tick_format);
+    let fraction = |number| ((figure.from - number) / (figure.from - figure.to)) as f32;
+    let x_labels: Vec<_> = ticks(figure.from, figure.to, major)
+        .map(|tick| {
+            let text = tick.to_string();
+            (
+                fraction(f64::from(tick)),
+                layout(&text, &tick_format).width / 2.,
+            )
+        })
+        .collect();
+    // A centered endpoint label can reach farther than the curve's stroke.
+    // Recompute its overhang after the plot width changes.
+    for _ in 0..3 {
+        let plot_width = right - left;
+        if !framed {
+            left = pad
+                + x_labels
+                    .iter()
+                    .map(|&(f, w)| w - f * plot_width)
+                    .fold(stroke, f32::max);
+        }
+        right = width
+            - pad
+            - x_labels
+                .iter()
+                .map(|&(f, w)| w - (1. - f) * plot_width)
+                .fold(stroke, f32::max);
+    }
+    let plot_width = right - left;
+    let x = |number| left + plot_width * fraction(number);
+    let x_title = "Wavenumber (cm−1)";
+    let x_format = wavenumber_format(x_title, &label_format);
+    let x_title_layout = layout(x_title, &x_format);
+    let x_title_bottom = x_title_layout
+        .fragments
+        .iter()
+        .map(|run| run.position.y + run.style.size() * 1.1)
+        .fold(0., f32::max);
+    let x_title_y = height - pad - x_title_bottom;
+    let major_length = pt(3.2);
+    let tick_gap = pt(3.)
+        + if framed {
+            tick_height / 2.
+        } else {
+            major_length
+        };
+    let base = x_title_y - pt(2.5) - tick_height - tick_gap;
+    let frame_top = pad + stroke;
+    let method = figure
+        .method_line
+        .then(|| method_text(figure, &tick_format, plot_width - pt(4.)));
+    let header = method
+        .as_ref()
+        .map_or(0., |(text, format)| layout(text, format).height);
+    let top = frame_top + header;
+    let y_max = if transmittance { 105. } else { 1.25 };
+
+    let (frequencies, mut intensities): (Vec<_>, Vec<_>) =
+        figure.bands.iter().map(|&[f, i]| (f, i)).unzip();
+    // Rescaling every intensity equally keeps the relative spectrum finite.
+    let strongest = intensities.iter().copied().fold(0., f64::max);
+    if strongest > 0. {
+        intensities.iter_mut().for_each(|i| *i /= strongest);
+    }
+    let step = (figure.fwhm / 8.).min(2.);
+    let samples = (((figure.from - figure.to) / step).ceil() as usize + 1).min(4000);
+    let mut points = vibrational::ir_spectrum(
+        &frequencies,
+        &intensities,
+        figure.scale,
+        figure.fwhm,
+        figure.shape,
+        (figure.from, figure.to),
+        samples,
+    );
+    // Range and relative intensity cutoffs apply to the visible spectrum.
+    let mut peaks = vibrational::ir_peaks(
+        &frequencies,
+        &intensities,
+        figure.scale,
+        figure.fwhm,
+        figure.shape,
+        0.,
+        usize::MAX,
+    );
+    peaks.retain(|&[number, _]| (figure.to..=figure.from).contains(&number));
+    points.extend_from_slice(&peaks);
+    points.sort_by(|a, b| b[0].total_cmp(&a[0]));
+    points.dedup_by(|a, b| a[0] == b[0]);
+    let maximum = points.iter().map(|point| point[1]).fold(0., f64::max);
+    let ordinate = |intensity| {
+        let relative = if maximum > 0. {
+            intensity / maximum
+        } else {
+            0.
+        };
+        (if transmittance {
+            100. - 80. * relative
+        } else {
+            relative
+        }) / y_max
+    };
+    peaks.sort_by(|a, b| b[1].total_cmp(&a[1]).then_with(|| b[0].total_cmp(&a[0])));
+    peaks.retain(|p| p[1] >= maximum * 0.05);
+    peaks.truncate(usize::from(figure.labels));
+    peaks.retain(|p| !figure.hidden_labels.contains(&(p[0].round() as u32)));
+    let label_size = |text: &str| {
+        let measured = layout(text, &tick_format);
+        if figure.vertical_labels {
+            (measured.height, measured.width)
+        } else {
+            (measured.width, measured.height)
+        }
+    };
+    let clearance = pt(1.);
+    let (label_left, label_right) = if framed {
+        (left + stroke, right - stroke)
+    } else {
+        (pad, width - pad)
+    };
+    let label_fits_x = |x: f32, w| x - w / 2. >= label_left && x + w / 2. <= label_right;
+    let offset = pt(3.);
+    // An open baseline has no upper frame. Use the highest curve mark or its
+    // label to set the top edge while keeping the curve's y scale linear.
+    let plot_height = if framed {
+        base - top
+    } else {
+        let (extent, room) = if transmittance {
+            let lowest = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+            (ordinate(lowest), 0.)
+        } else {
+            let room = peaks
+                .first()
+                .filter(|p| p[1] == maximum)
+                .map_or(0., |&[number, _]| {
+                    offset
+                        + label_size(&(number.round() as u32).to_string()).1
+                        + if header > 0. { clearance } else { 0. }
+                });
+            (if maximum > 0. { 1. / y_max } else { 1. }, room)
+        };
+        (base - top - room) / extent as f32
+    };
+    let y = |value| base - plot_height * (value / y_max) as f32;
+    let tip = |intensity| base - plot_height * ordinate(intensity) as f32;
+    let curve_points: Vec<_> = points
+        .into_iter()
+        .map(|[number, intensity]| Point::new(x(number), tip(intensity)))
+        .collect();
+
     let first_id = doc.next_id();
     let mut next_id = first_id;
     let mut id = || {
@@ -43,153 +340,244 @@ pub(super) fn spectrum(doc: &Document, spectrum: &SpectrumData, method: &str, at
         next_id = next_id.saturating_add(1);
         id
     };
-    let mut format = TextFormat {
-        style: drawing.text_style(),
-        ..Default::default()
-    };
-    format.style.size_pt = (0.8 * format.style.size_pt).max(4.);
-    let mut caption_format = format.clone();
-    caption_format.style.size_pt = (0.85 * caption_format.style.size_pt).max(4.);
-    let shape = match spectrum.shape {
-        BandShape::Lorentzian => "Lorentzian",
-        BandShape::Gaussian => "Gaussian",
-    };
-    let scale = spectrum.scale;
-    let scale = if (scale * 100.).round() / 100. == scale {
-        format!("{scale:.2}")
-    } else {
-        scale.to_string()
-    };
-    let caption = Annotation {
-        id: id(),
-        position: Point::default(),
-        text: format!(
-            "{method} · scale {scale} · FWHM {:.0} cm⁻¹ · {shape}",
-            spectrum.fwhm
-        ),
-        format: caption_format,
-        angle: 0.,
-    };
-    // Leave space for the peak labels between the tallest peak and the caption.
-    let base = caption.size().1 + drawing.line_height() + 2. * gap + height;
-    let x = |wavenumber| spectrum.x(wavenumber) * width;
-    let top = spectrum
-        .curve
-        .iter()
-        .chain(&spectrum.peaks)
-        .map(|p| p[1])
-        .fold(0., f64::max);
-    let y = |intensity| base - (intensity / top) as f32 * height;
-    let style = GraphicStyle {
-        width_pt: drawing.line_width_pt,
-        ..Default::default()
-    };
+    let mut annotations = Vec::new();
+    if let Some((text, format)) = method.or_else(|| {
+        (!framed && !transmittance && maximum == 0.)
+            .then(|| ("No IR intensity in range".into(), tick_format.clone()))
+    }) {
+        let measured = layout(&text, &format);
+        let y = if framed { frame_top + pt(1.5) } else { pad };
+        annotations.push(annotation(
+            id(),
+            text,
+            format,
+            Point::new(
+                left + pt(2.) + measured.width / 2.,
+                y + measured.height / 2.,
+            ),
+            0.,
+        ));
+    }
 
-    // Keep every sampled point as well as the refined maxima used for peak labels.
-    let mut points = spectrum.peaks.clone();
-    points.extend_from_slice(&spectrum.curve);
-    points.sort_by(|a, b| b[0].total_cmp(&a[0]));
-    points.dedup_by(|a, b| a[0] == b[0]);
-    let point = |[wavenumber, intensity]: [f64; 2]| Point::new(x(wavenumber), y(intensity));
-    let start = points.first().copied().map_or(Point::new(0., base), point);
-    let end = points
-        .last()
+    let style = GraphicStyle {
+        width_pt: line_width,
+        ..Default::default()
+    };
+    let mut curve = Graphic::pen_curve(
+        id(),
+        Point::new(left, top),
+        Point::new(right, top),
+        style.clone(),
+    );
+    curve.path = curve_points
+        .iter()
         .copied()
-        .map_or(Point::new(width, base), point);
-    let mut curve = Graphic::pen_curve(id(), start, end, style.clone());
-    curve.path = std::iter::once(PathCommand::Move(start))
-        .chain(points.into_iter().skip(1).map(point).map(PathCommand::Line))
+        .enumerate()
+        .map(|(index, point)| {
+            if index == 0 {
+                PathCommand::Move(point)
+            } else {
+                PathCommand::Line(point)
+            }
+        })
         .collect();
     curve.node_types.clear();
+    curve.ir = Some(Box::new(figure.clone()));
 
-    let line = |id, start, end| {
+    let line = |id, start, end, width_pt| {
         Graphic::dragged(
             id,
             GraphicKind::Line,
             start,
             end,
-            style.clone(),
+            GraphicStyle {
+                width_pt,
+                ..style.clone()
+            },
             BracketSides::Both,
             false,
         )
     };
-    let mut graphics = vec![
-        curve,
-        line(id(), Point::new(0., base), Point::new(width, base)),
-    ];
-    let mut annotations = vec![caption];
-    let mut label = |id, text, center: Point, above| {
-        let mut annotation = Annotation {
-            id,
-            position: center,
-            text,
-            format: format.clone(),
-            angle: 0.,
-        };
-        let (w, h) = annotation.size();
-        annotation.position = center.offset(-w / 2., if above { -h } else { 0. });
-        annotations.push(annotation);
-    };
-    let label_top = base + tick_length + gap;
-    let ticks = spectrum.ticks();
-    for &tick in &ticks {
-        let x = x(tick);
+    let p = Point::new;
+    let mut graphics = vec![curve, line(id(), p(left, base), p(right, base), line_width)];
+    if framed {
+        graphics.push(line(id(), p(left, frame_top), p(left, base), line_width));
+    }
+    if figure.frame == Frame::Box {
         graphics.push(line(
             id(),
-            Point::new(x, base),
-            Point::new(x, base + tick_length),
+            p(left, frame_top),
+            p(right, frame_top),
+            line_width,
+        ));
+        graphics.push(line(id(), p(right, frame_top), p(right, base), line_width));
+    }
+    let frame_lines = graphics.len() - 1;
+    let tick_step = if figure.minor_ticks { 100 } else { major };
+    for tick in ticks(figure.from, figure.to, tick_step) {
+        let x = x(f64::from(tick));
+        let is_major = tick.is_multiple_of(major);
+        let length = if is_major { major_length } else { pt(1.8) };
+        graphics.push(line(
+            id(),
+            p(x, base),
+            p(x, base + if framed { -length } else { length }),
+            line_width,
+        ));
+        if is_major {
+            annotations.push(annotation(
+                id(),
+                tick.to_string(),
+                tick_format.clone(),
+                p(x, base + tick_gap + tick_height / 2.),
+                0.,
+            ));
+        }
+    }
+    annotations.push(annotation(
+        id(),
+        x_title.into(),
+        x_format,
+        p((left + right) / 2., x_title_y + x_title_layout.height / 2.),
+        0.,
+    ));
+    if framed {
+        for (value, text) in y_ticks {
+            let y = y(value);
+            graphics.push(line(
+                id(),
+                p(left, y),
+                p(left + major_length, y),
+                line_width,
+            ));
+            let label_width = layout(&text, &tick_format).width;
+            annotations.push(annotation(
+                id(),
+                text,
+                tick_format.clone(),
+                p(left - pt(3.) - label_width / 2., y),
+                0.,
+            ));
+        }
+        annotations.push(annotation(
+            id(),
+            y_title.into(),
+            label_format,
+            p(pad + title_height / 2., (frame_top + base) / 2.),
+            VERTICAL,
         ));
     }
-    let tick_labels: Vec<_> = ticks
-        .into_iter()
-        .filter(|tick| tick % LABEL_INTERVAL_CM1 == 0.)
-        .map(|tick| (x(tick), format!("{tick:.0}")))
-        .collect();
-    let widest_label = tick_labels
+
+    let axes: Vec<_> = graphics
         .iter()
-        .map(|(_, text)| layout(text, &format).width)
-        .fold(0., f32::max);
-    let spacing = x(0.) - x(LABEL_INTERVAL_CM1);
-    let label_step = ((widest_label + gap) / spacing).ceil().max(1.) as usize;
-    for (x, text) in tick_labels.into_iter().step_by(label_step) {
-        label(id(), text, Point::new(x, label_top), false);
-    }
-    label(
-        id(),
-        WAVENUMBER_TITLE.into(),
-        Point::new(width / 2., label_top + drawing.line_height() + gap),
-        false,
-    );
-    for [wavenumber, intensity] in spectrum.labelled_peaks(x, format.style.size(), Vec::new()) {
-        label(
-            id(),
-            format!("{wavenumber:.0}"),
-            Point::new(x(wavenumber), y(intensity) - gap),
-            true,
-        );
+        .skip(1)
+        .map(|line| {
+            let a = line.origin;
+            (a, a.offset(line.axis_x.x, line.axis_x.y))
+        })
+        .collect();
+    let axis_labels: Vec<_> = annotations.iter().map(Annotation::bounds).collect();
+    let mut occupied = Vec::new();
+    let mut leaders = Vec::new();
+    let mut labelled_peaks = Vec::new();
+    let direction = if transmittance { 1. } else { -1. };
+    let angle = if figure.vertical_labels { VERTICAL } else { 0. };
+    let curve_between = |left, right| {
+        let first = curve_points
+            .partition_point(|p| p.x < left)
+            .saturating_sub(1);
+        curve_points
+            .array_windows::<2>()
+            .skip(first)
+            .take_while(move |[a, _]| a.x <= right)
+    };
+    for [number, intensity] in peaks {
+        let rounded = number.round() as u32;
+        let band_tip = p(x(number), tip(intensity));
+        let text = rounded.to_string();
+        let (w, h) = label_size(&text);
+        let label_top = if framed {
+            top + stroke + clearance
+        } else {
+            pad
+        };
+        let mut shifts = Vec::with_capacity(8 * 7);
+        for step in 0..8 {
+            let dy = step as f32 * (h + pt(1.5));
+            shifts.extend([0., -0.5, 0.5, -1., 1., -1.5, 1.5].map(|shift| (w * shift, dy)));
+        }
+        shifts.sort_by(|&(ax, ay), &(bx, by)| (ax * ax + ay * ay).total_cmp(&(bx * bx + by * by)));
+        for (dx, dy) in shifts {
+            let centre = band_tip.offset(dx, direction * (offset + h / 2. + dy));
+            let end = centre.offset(0., -direction * (h / 2. + pt(1.25)));
+            let length = band_tip.distance(end);
+            let start = band_tip.lerp(end, pt(0.8) / length);
+            let clear_start = band_tip.lerp(end, pt(1.5) / length);
+            let (lo, hi) = (
+                centre.offset(-w / 2. - clearance, -h / 2. - clearance),
+                centre.offset(w / 2. + clearance, h / 2. + clearance),
+            );
+            let overlaps =
+                |a: Point, b: Point| lo.x <= b.x && hi.x >= a.x && lo.y <= b.y && hi.y >= a.y;
+            if !label_fits_x(centre.x, w)
+                || centre.y - h / 2. < label_top
+                || centre.y + h / 2. > base - stroke
+                || axis_labels
+                    .iter()
+                    .any(|&(a, b)| overlaps(a, b) || hits_box(start, end, a, b))
+                || axes.iter().enumerate().any(|(i, &(a, b))| {
+                    // Inward ticks clear the label itself. Its padding also clears the frame.
+                    let inset = if i < frame_lines {
+                        -stroke
+                    } else {
+                        clearance - stroke
+                    };
+                    hits_box(a, b, lo.offset(inset, inset), hi.offset(-inset, -inset))
+                })
+                || occupied.iter().any(|&(a, b)| {
+                    overlaps(a, b)
+                        || hits_box(
+                            start,
+                            end,
+                            a.offset(-clearance, -clearance),
+                            b.offset(clearance, clearance),
+                        )
+                })
+                || leaders
+                    .iter()
+                    .any(|&(a, b)| hits_box(a, b, lo, hi) || segments_cross(start, end, a, b))
+                || curve_between(lo.x, hi.x).any(|&[a, b]| hits_box(a, b, lo, hi))
+                || curve_between(clear_start.x.min(end.x), clear_start.x.max(end.x))
+                    .any(|&[a, b]| segments_cross(clear_start, end, a, b))
+            {
+                continue;
+            }
+            leaders.push((start, end));
+            graphics.push(line(id(), start, end, line_width / 2.));
+            let label = annotation(id(), text, tick_format.clone(), centre, angle);
+            occupied.push(label.bounds());
+            annotations.push(label);
+            labelled_peaks.push(rounded);
+            break;
+        }
     }
 
-    // The first tick label can extend past the start of the axis.
-    let left = annotations
-        .iter()
-        .map(|a| a.position.x)
-        .fold(-style.width() / 2., f32::min);
     for graphic in &mut graphics {
-        graphic.origin = graphic.origin.offset(at.x - left, at.y);
+        graphic.origin = graphic.origin.offset(at.x, at.y);
     }
     for annotation in &mut annotations {
-        annotation.position = annotation.position.offset(at.x - left, at.y);
+        annotation.position = annotation.position.offset(at.x, at.y);
     }
     let group_id = id();
-    let group = Group {
-        id: group_id,
-        members: (first_id..group_id).collect(),
-        integral: false,
-        layout: None,
-    };
     Figure {
         graphics,
         annotations,
-        group,
+        group: Group {
+            id: group_id,
+            members: (first_id..group_id).collect(),
+            integral: false,
+            layout: None,
+        },
+        labelled_peaks,
     }
 }
