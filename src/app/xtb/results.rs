@@ -64,13 +64,7 @@ impl View {
     }
 }
 
-/// One SCF the worker ran.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Evaluation {
-    pub energy: f64,
-    pub scf_iterations: usize,
-    pub seconds: f64,
-}
+pub(crate) use reshiki_xtb_jobs::Evaluation;
 
 /// What this session knows about a run beyond the stored result.
 #[derive(Clone, Debug, Default, PartialEq)]

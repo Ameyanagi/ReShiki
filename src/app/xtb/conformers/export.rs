@@ -1,122 +1,15 @@
 //! Conformer ensembles as files: multi-frame XYZ and SDF with energies.
 
-use std::collections::HashMap;
-
 use reshiki::document::Document;
-use reshiki::qc_input::{SdfEntry, write_sdf, write_xyz_trajectory};
-use reshiki::qcdata::{CalcResult, Frame, Trajectory};
-
-const KCAL_PER_HARTREE: f64 = 627.509_474_063;
-const RT_KCAL: f64 = 0.001_987_204_258_640_832 * 298.15;
-const NO_SAVED_POSITIONS: &str = "This result has no saved conformer positions.";
-
-/// Drawing bonds in frame order, with each model hydrogen joined to its nearest linked atom.
-pub(crate) fn frame_bonds(
-    doc: &Document,
-    atoms: &[Option<u64>],
-    positions: &[[f64; 3]],
-) -> Vec<(usize, usize, u8)> {
-    let linked: HashMap<_, _> = atoms
-        .iter()
-        .enumerate()
-        .filter_map(|(index, id)| id.map(|id| (id, index)))
-        .collect();
-    let mut bonds: Vec<_> = doc
-        .bonds
-        .iter()
-        .filter_map(|bond| {
-            let (&a, &b) = (linked.get(&bond.a)?, linked.get(&bond.b)?);
-            (a != b).then_some((a.min(b), a.max(b), bond.order))
-        })
-        .collect();
-
-    let located_atoms = atoms.iter().zip(positions).enumerate();
-    let linked_positions: Vec<_> = located_atoms
-        .clone()
-        .filter_map(|(index, (id, position))| id.is_some().then_some((index, position)))
-        .collect();
-    for (hydrogen, (_, position)) in located_atoms.filter(|(_, (id, _))| id.is_none()) {
-        let nearest = linked_positions
-            .iter()
-            .map(|&(index, candidate)| {
-                let squared_distance = position
-                    .iter()
-                    .zip(candidate)
-                    .map(|(a, b)| (a - b).powi(2))
-                    .sum::<f64>();
-                (index, squared_distance)
-            })
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        if let Some((neighbor, _)) = nearest {
-            bonds.push((hydrogen.min(neighbor), hydrogen.max(neighbor), 1));
-        }
-    }
-
-    bonds.sort_by_key(|&(a, b, _)| (a, b));
-    bonds.dedup_by_key(|bond| (bond.0, bond.1));
-    bonds
-}
-
-/// Boltzmann fractions in input order for finite energies at 298.15 K.
-pub(crate) fn populations(energies_hartree: &[f64]) -> Vec<f64> {
-    let minimum = energies_hartree
-        .iter()
-        .copied()
-        .fold(f64::INFINITY, f64::min);
-    let mut weights: Vec<_> = energies_hartree
-        .iter()
-        .map(|energy| (-(energy - minimum) * KCAL_PER_HARTREE / RT_KCAL).exp())
-        .collect();
-    let total: f64 = weights.iter().sum();
-    for weight in &mut weights {
-        *weight /= total;
-    }
-    weights
-}
+use reshiki::qc_input::{SdfEntry, write_sdf};
+use reshiki::qcdata::CalcResult;
+pub(crate) use reshiki::science::frame_bonds;
+pub(crate) use reshiki_xtb_jobs::conformers::populations;
+use reshiki_xtb_jobs::conformers::{self, RankedConformer, ranked_trajectory};
 
 /// Export every saved conformer as XYZ, lowest energy first.
 pub(crate) fn xyz(result: &CalcResult, title: &str) -> Result<String, String> {
-    let (path, ranked) = ranked_trajectory(result)?;
-    let labeled = Trajectory {
-        numbers: path.numbers.clone(),
-        isotopes: path.isotopes.clone(),
-        masses_amu: path.masses_amu.clone(),
-        charge: path.charge,
-        multiplicity: path.multiplicity,
-        positions_angstrom: ranked
-            .iter()
-            .flat_map(|conformer| conformer.frame.positions_angstrom.iter().flatten().copied())
-            .collect(),
-        // The label supplies the entire comment, including the energy.
-        energies_hartree: vec![],
-        labels: ranked
-            .iter()
-            .enumerate()
-            .map(|(index, conformer)| {
-                let rank = index + 1;
-                let RankedConformer {
-                    step,
-                    energy,
-                    delta_kcal,
-                    percent,
-                    ..
-                } = conformer;
-                let cluster = path
-                    .cluster_sizes
-                    .get(*step)
-                    .map_or_else(String::new, |size| format!(" · cluster {size}"));
-                // charge= and mult= as extended XYZ reads them back; the
-                // energy last, as ReShiki and xtb tools read it.
-                format!(
-                    "{title} conformer {rank} · ΔE {delta_kcal:.2} kcal/mol · {percent:.1} %{cluster} · charge={} mult={} · E = {energy:.10} Eh",
-                    path.charge, path.multiplicity
-                )
-            })
-            .collect(),
-        minimizer_energies_hartree: vec![],
-        cluster_sizes: vec![],
-    };
-    write_xyz_trajectory(&labeled, title).map_err(|error| error.to_string())
+    conformers::xyz(result.trajectory.as_ref(), title)
 }
 
 /// Export every saved conformer as a V3000 SDF record with drawing bonds and charges.
@@ -126,8 +19,10 @@ pub(crate) fn sdf(
     result: &CalcResult,
     title: &str,
 ) -> Result<String, String> {
-    let (path, ranked) = ranked_trajectory(result)?;
-    let first = ranked.first().ok_or(NO_SAVED_POSITIONS)?;
+    let (path, ranked) = ranked_trajectory(result.trajectory.as_ref())?;
+    let first = ranked
+        .first()
+        .ok_or("This result has no saved conformer positions.")?;
     let bonds = frame_bonds(doc, atoms, &first.frame.positions_angstrom);
     let formal_charges: Vec<_> = atoms
         .iter()
@@ -178,52 +73,11 @@ pub(crate) fn sdf(
     write_sdf(&entries).map_err(|error| error.to_string())
 }
 
-struct RankedConformer {
-    step: usize,
-    frame: Frame,
-    energy: f64,
-    delta_kcal: f64,
-    percent: f64,
-}
-
-fn ranked_trajectory(result: &CalcResult) -> Result<(&Trajectory, Vec<RankedConformer>), String> {
-    let path = result
-        .trajectory
-        .as_ref()
-        .filter(|path| !path.positions_angstrom.is_empty())
-        .ok_or(NO_SAVED_POSITIONS)?;
-    path.validate()
-        .map_err(|error| format!("The saved conformers could not be exported ({error})."))?;
-    let energies = &path.energies_hartree;
-    let minimum = energies
-        .iter()
-        .copied()
-        .min_by(f64::total_cmp)
-        .ok_or("This result has no saved conformer energies.")?;
-    let mut ranked = energies
-        .iter()
-        .copied()
-        .zip(populations(energies))
-        .enumerate()
-        .map(|(step, (energy, fraction))| {
-            Ok(RankedConformer {
-                step,
-                frame: path.frame(step).ok_or(NO_SAVED_POSITIONS)?,
-                energy,
-                delta_kcal: (energy - minimum) * KCAL_PER_HARTREE,
-                percent: fraction * 100.0,
-            })
-        })
-        .collect::<Result<Vec<_>, &str>>()?;
-    ranked.sort_by(|a, b| a.energy.total_cmp(&b.energy));
-    Ok((path, ranked))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use reshiki::document::Point;
-    use reshiki::qcdata::{Provenance, Settings, Source, Status, Task};
+    use reshiki::qcdata::{Provenance, Settings, Source, Status, Task, Trajectory};
 
     const LOWEST: [[f64; 3]; 3] = [[-0.24, 0.93, 0.0], [0.0, 0.0, 0.0], [0.96, 0.0, 0.0]];
     const MIDDLE: [[f64; 3]; 3] = [[-0.24, 0.93, 0.0], [0.0, 0.0, 0.01], [0.95, 0.0, 0.0]];

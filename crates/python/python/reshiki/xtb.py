@@ -1,4 +1,4 @@
-"""xTB energies, geometry optimizations and frequencies.
+"""xTB energies, geometry optimizations, frequencies and conformer searches.
 
 Install with ``pip install "reshiki[xtb]"``. Each calculation uses the geometry's
 charge and multiplicity unless you override them. Choose ``method="gfn2"``
@@ -20,22 +20,25 @@ from __future__ import annotations
 import importlib
 import json
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal, Sequence, cast
 
-from . import __version__, _native
+from . import Molecule, __version__, _native, parse
 from ._errors import ReShikiError
-from .qc import Geometry, Result, _geometry_data, _result_from_data
+from .qc import Geometry, Result, _geometry_data, _geometry_from_data, _result_from_data
 
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
 
 __all__ = [
+    "Conformer",
+    "ConformerSearch",
     "Optimization",
     "XtbError",
     "XtbNotInstalled",
     "available",
+    "conformers",
     "energy",
     "engine",
     "frequencies",
@@ -69,6 +72,46 @@ class Optimization(Result):
     steps: int
     energies: NDArray[np.float64]
     trajectory: NDArray[np.float64]
+
+
+@dataclass(frozen=True)
+class Conformer:
+    """A ranked geometry with energy in hartree and RMSD to rank 1 in ångströms.
+
+    ``delta`` and ``start_delta`` are in kcal/mol. ``start_delta`` is present
+    for force-field starts. ``population`` is a Boltzmann fraction at 298.15 K.
+    ``stereo`` records whether the drawing's stereochemistry holds, or ``None``
+    if the check was unavailable.
+    """
+
+    rank: int
+    geometry: Geometry
+    energy: float
+    delta: float
+    start_delta: float | None
+    population: float
+    rmsd: float
+    cluster_size: int
+    stereo: bool | None = None
+
+
+@dataclass(frozen=True)
+class ConformerSearch:
+    """The energy-ranked ensemble, best optimization and search summary."""
+
+    conformers: tuple[Conformer, ...]
+    best: Optimization
+    starts: int
+    clusters: int
+    reranked: int
+    planned: int
+    notes: tuple[str, ...]
+    method: str
+    _xyz: str = field(repr=False)
+
+    def to_xyz(self) -> str:
+        """Return the ensemble as multi-frame XYZ in energy order."""
+        return self._xyz
 
 
 def _worker_path() -> str:
@@ -248,20 +291,22 @@ def optimize(
         conventions,
         threads,
     )
+    return _result_from_data(data, Optimization, **_optimization_fields(data))
+
+
+def _optimization_fields(data: dict[str, Any]) -> dict[str, Any]:
     import numpy as np
 
     energies = np.asarray(data["energies"], dtype=np.float64)
     trajectory = np.asarray(data["trajectory"], dtype=np.float64)
     energies.setflags(write=False)
     trajectory.setflags(write=False)
-    return _result_from_data(
-        data,
-        Optimization,
-        converged=data["converged"],
-        steps=data["steps"],
-        energies=energies,
-        trajectory=trajectory,
-    )
+    return {
+        "converged": data["converged"],
+        "steps": data["steps"],
+        "energies": energies,
+        "trajectory": trajectory,
+    }
 
 
 def frequencies(
@@ -307,4 +352,95 @@ def frequencies(
             conventions,
             threads,
         )
+    )
+
+
+def conformers(
+    molecule: Molecule | str | bytes,
+    *,
+    starts: int = 100,
+    minimizer: Literal["mmff94s", "mmff94", "uff", "gfnff", "gfn2"] = "mmff94s",
+    diversity: Literal["fine", "normal", "coarse"] = "normal",
+    window: float = 15.0,
+    representatives: int = 20,
+    per_cluster: Literal[1, 3] = 1,
+    method: str = "gfn2",
+    charge: int | None = None,
+    unpaired: int | None = None,
+    solvent: str | None = None,
+    solvent_model: Literal["alpb", "gbsa"] = "alpb",
+    electronic_temperature: float | None = None,
+    accuracy: float | None = None,
+    max_iterations: int | None = None,
+    conventions: Literal["axtb", "xtb-6.8"] = "axtb",
+    threads: int | None = None,
+) -> ConformerSearch:
+    """Search one molecule using the desktop app's conformer pipeline.
+
+    Pass a ``Molecule`` or molecular structure text or bytes accepted by
+    ``reshiki.parse``. The energy ``window`` is in kcal/mol. With a force-field
+    minimizer, xTB re-ranks cluster representatives using ``method``.
+    ``threads=None`` uses the app's Auto setting.
+
+    .. code-block:: python
+
+        from pathlib import Path
+        from reshiki import xtb
+        search = xtb.conformers("CCCC")
+        print(search.method)
+        print(search.best.energy)
+        Path("butane.xyz").write_text(search.to_xyz(), encoding="utf-8")
+    """
+    path = _worker_path()
+    drawing = molecule if isinstance(molecule, Molecule) else parse(molecule)
+    options = {
+        "starts": starts,
+        "minimizer": minimizer,
+        "diversity": diversity,
+        "window": window,
+        "representatives": representatives,
+        "per_cluster": per_cluster,
+        "method": method,
+        "charge": charge,
+        "unpaired": unpaired,
+        "solvent": solvent,
+        "solvent_model": solvent_model,
+        "electronic_temperature": electronic_temperature,
+        "accuracy": accuracy,
+        "max_iterations": max_iterations,
+        "conventions": conventions,
+        "threads": 0 if threads is None else threads,
+    }
+    try:
+        data = json.loads(
+            _native.xtb_conformers(path, drawing._data, json.dumps(options, allow_nan=False))
+        )
+    except ReShikiError as error:
+        if error.code == "invalid_arguments":
+            raise
+        raise XtbError(str(error)) from error
+    best = data["best"]
+    return ConformerSearch(
+        conformers=tuple(
+            Conformer(
+                rank=row["rank"],
+                geometry=_geometry_from_data(row["geometry"]),
+                energy=row["energy"],
+                delta=row["delta"],
+                start_delta=row["start_delta"],
+                population=row["population"],
+                rmsd=row["rmsd"],
+                cluster_size=row["cluster_size"],
+                stereo=row.get("stereo"),
+            )
+            for row in data["conformers"]
+        ),
+        best=_result_from_data(best, Optimization, **_optimization_fields(best)),
+        starts=data["starts"],
+        clusters=data["clusters"],
+        reranked=data["reranked"],
+        planned=data["planned"],
+        notes=tuple(data["notes"]),
+        method=data["method"],
+        _xyz=data["xyz"],
     )

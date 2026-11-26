@@ -44,6 +44,7 @@ members = [
   "crates/web",
   "crates/python",
   "crates/xtb-worker",
+  "crates/xtb-jobs",
 ]
 default-members = [
   ".",
@@ -80,6 +81,9 @@ oo7 = { version = "0.6", default-features = false, features = ["tokio", "native_
 reshiki-windows = { path = "native/windows" }
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+reshiki-xtb-jobs = { path = "crates/xtb-jobs", features = ["test-fixtures"] }
+
 [target.'cfg(windows)'.dev-dependencies]
 # The partial-redraw regression tests exercise the software fallback directly.
 iced_tiny_skia = { version = "0.14", default-features = false }
@@ -101,6 +105,7 @@ reshiki-depict-math = { path = "crates/depict-math" }
 reshiki-chemistry = { path = "crates/chemistry" }
 reshiki-model = { path = "crates/model" }
 reshiki-io = { path = "crates/io" }
+reshiki-xtb-jobs = { path = "crates/xtb-jobs" }
 # Explicitly request the acknowledgment frame before preparing clipboard PDFs.
 iced_runtime = "0.14"
 iced = { version = "0.14", default-features = false, features = [

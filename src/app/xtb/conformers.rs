@@ -23,92 +23,12 @@ pub(super) use view::footer;
 #[cfg(test)]
 mod tests;
 
-/// Starts ETKDG may make; the engine's limit.
-pub(crate) const MAX_STARTS: u32 = 300;
-/// xTB re-ranking (and so the whole search) works up to this many atoms.
-pub(crate) const MAX_ATOMS: usize = qcdata::MAX_HESSIAN_ATOMS;
-/// GFN2-xTB may minimize every start only up to this many atoms.
-pub(crate) const MAX_GFN2_START_ATOMS: usize = 120;
-/// CODATA 2022 hartree in thermochemical kcal/mol, as the optimizer uses it.
-const KCAL_PER_HARTREE: f64 = 627.509_474_063;
-/// Representatives xTB re-ranks at most.
-pub(crate) const MAX_REPRESENTATIVES: usize = 60;
-
-/// What relaxes the ETKDG starts before clustering.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum Minimizer {
-    #[default]
-    Mmff94s,
-    Mmff94,
-    Uff,
-    GfnFf,
-    Gfn2,
-}
-
-impl Minimizer {
-    pub(crate) const ALL: [Self; 5] = [
-        Self::Mmff94s,
-        Self::Mmff94,
-        Self::Uff,
-        Self::GfnFf,
-        Self::Gfn2,
-    ];
-
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::Mmff94s => "MMFF94s",
-            Self::Mmff94 => "MMFF94",
-            Self::Uff => "UFF",
-            Self::GfnFf => "GFN-FF",
-            Self::Gfn2 => "GFN2-xTB",
-        }
-    }
-
-    /// The xTB method that minimizes every start, for GFN-FF and GFN2-xTB.
-    pub(crate) fn xtb(self) -> Option<XtbMethod> {
-        match self {
-            Self::GfnFf => Some(XtbMethod::GfnFf),
-            Self::Gfn2 => Some(XtbMethod::Gfn2Xtb),
-            _ => None,
-        }
-    }
-}
-
-impl std::fmt::Display for Minimizer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
-    }
-}
-
-/// Clustering threshold, as the card names it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum Diversity {
-    Fine,
-    #[default]
-    Normal,
-    Coarse,
-}
-
-impl Diversity {
-    pub(crate) const ALL: [Self; 3] = [Self::Fine, Self::Normal, Self::Coarse];
-
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Self::Fine => "fine",
-            Self::Normal => "normal",
-            Self::Coarse => "coarse",
-        }
-    }
-
-    /// Heavy-atom RMSD cutoff in Å, as the engine uses it.
-    pub(crate) fn angstrom(self) -> f64 {
-        match self {
-            Self::Fine => 0.5,
-            Self::Normal => 0.75,
-            Self::Coarse => 1.25,
-        }
-    }
-}
+#[cfg(test)]
+use reshiki_xtb_jobs::conformers::MAX_GFN2_START_ATOMS;
+pub(crate) use reshiki_xtb_jobs::conformers::{
+    Config, Diversity, KCAL_PER_HARTREE, MAX_ATOMS, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer,
+    Phase,
+};
 
 /// The card's Conformers fields as typed.
 #[derive(Clone, Debug, PartialEq)]
@@ -137,114 +57,29 @@ impl Default for Settings {
     }
 }
 
-/// A search as it runs: the card's fields, checked.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Config {
-    pub starts: u32,
-    pub minimizer: Minimizer,
-    pub diversity: Diversity,
-    pub window_kcal: f64,
-    pub representatives: usize,
-    pub three: bool,
-}
-
 impl Settings {
-    /// The search these fields describe for a molecule of `atoms` atoms
-    /// (with hydrogens, when known), or why it cannot run.
+    /// The search these fields describe, with hydrogens counted when known.
     pub(crate) fn config(&self, atoms: Option<usize>) -> Result<Config, String> {
-        let starts = self
-            .starts
-            .trim()
-            .parse::<u32>()
-            .ok()
-            .filter(|n| (1..=MAX_STARTS).contains(n))
-            .ok_or(format!(
-                "Starting structures must be a whole number from 1 to {MAX_STARTS}"
-            ))?;
-        let window_kcal = self
-            .window
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .filter(|w| w.is_finite() && *w >= 0.1 && *w <= 100.)
-            .ok_or("Energy window must be from 0.1 to 100 kcal/mol")?;
-        // When xTB minimized every start there is no re-ranking: every
-        // cluster representative is kept, and the field does not apply.
-        let representatives = if self.minimizer.xtb().is_some() {
-            MAX_REPRESENTATIVES
-        } else {
-            self.representatives
-                .trim()
-                .parse::<usize>()
-                .ok()
-                .filter(|n| (1..=MAX_REPRESENTATIVES).contains(n))
-                .ok_or(format!(
-                    "Representatives must be a whole number from 1 to {MAX_REPRESENTATIVES}"
-                ))?
-        };
-        if let Some(atoms) = atoms {
-            if atoms > MAX_ATOMS {
-                return Err(format!(
-                    "Conformer search re-ranks with xTB up to {MAX_ATOMS} atoms; this molecule has {atoms}."
-                ));
-            }
-            if self.minimizer == Minimizer::Gfn2 && atoms > MAX_GFN2_START_ATOMS {
-                return Err(format!(
-                    "GFN2-xTB minimizes every start up to {MAX_GFN2_START_ATOMS} atoms; choose GFN-FF or MMFF94s."
-                ));
-            }
+        let config = Config::new(
+            self.starts.trim().parse().unwrap_or_default(),
+            self.minimizer,
+            self.diversity,
+            self.window.trim().parse().unwrap_or_default(),
+            if self.minimizer.xtb().is_some() {
+                MAX_REPRESENTATIVES
+            } else {
+                self.representatives.trim().parse().unwrap_or_default()
+            },
+            if self.three { 3 } else { 1 },
+        )?;
+        if let Some(count) = atoms {
+            config.check_atoms(count).map_err(|failure| match failure {
+                super::state::Failure::Other(message) => format!("{message}."),
+                failure => failure.to_string(),
+            })?;
         }
-        Ok(Config {
-            starts,
-            minimizer: self.minimizer,
-            diversity: self.diversity,
-            window_kcal,
-            representatives,
-            // Without re-ranking every cluster keeps its lowest member.
-            three: self.three && self.minimizer.xtb().is_none(),
-        })
+        Ok(config)
     }
-}
-
-impl Config {
-    /// The method line's search part, kept as the result's method name:
-    /// "MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank".
-    pub(crate) fn describe(&self, method: XtbMethod) -> String {
-        let mut text = format!(
-            "{} ETKDG {} starts · Butina {} Å",
-            self.minimizer.label(),
-            self.starts,
-            self.diversity.angstrom()
-        );
-        if self.minimizer.xtb().is_none() {
-            text.push_str(&format!(" · {} re-rank", method.label()));
-        }
-        text
-    }
-}
-
-/// What the running search is doing.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum Phase {
-    /// The geometry worker embeds (and, with a force field, minimizes) starts.
-    #[default]
-    Starts,
-    /// Valid starts so far of those asked for.
-    Sampled {
-        done: usize,
-        total: usize,
-    },
-    /// xTB minimizes every start (GFN-FF, GFN2-xTB).
-    Minimizing {
-        done: usize,
-        total: usize,
-    },
-    Clustering,
-    /// xTB optimizes the representatives.
-    Reranking {
-        done: usize,
-        total: usize,
-    },
 }
 
 /// A running search's state the card and status bar show.

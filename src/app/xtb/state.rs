@@ -116,33 +116,16 @@ impl Config {
     }
 }
 
-/// Why a run failed, as the error card says it.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Failure {
-    /// The SCF did not converge; the worker's message.
-    Scf(String),
-    /// `by` (the method that said so, if known) has no parameters for `z`.
-    Element {
-        z: u8,
-        by: Option<XtbMethod>,
-    },
-    TooMany {
-        count: usize,
-        limit: usize,
-    },
-    /// The worker stopped: exited, timed out or broke the protocol.
-    Crashed(String),
-    /// The method's valence model needs `valence` unpaired electrons.
-    Spin {
-        valence: u32,
-    },
-    Other(String),
+pub(crate) use reshiki_xtb_jobs::Failure;
+
+pub(super) trait FailureDetails {
+    fn explain(&self, method: XtbMethod, numbers: &[u8]) -> (String, String);
 }
 
-impl Failure {
+impl FailureDetails for Failure {
     /// The error card's plain sentence and its grey second line. `numbers`
     /// are the frame's atomic numbers, when the run got that far.
-    pub(crate) fn explain(&self, method: XtbMethod, numbers: &[u8]) -> (String, String) {
+    fn explain(&self, method: XtbMethod, numbers: &[u8]) -> (String, String) {
         match self {
             Self::Scf(message) => (
                 "The SCF did not converge.".into(),
@@ -328,46 +311,28 @@ impl Settings {
     /// The typed SCF overrides: accuracy, electronic temperature (K) and
     /// maximum iterations. Empty fields are the method's defaults.
     pub(crate) fn scf(&self) -> Result<Scf, &'static str> {
+        use reshiki_xtb_jobs::scf;
         fn typed<T: std::str::FromStr + PartialOrd>(
             text: &str,
-            range: std::ops::RangeInclusive<T>,
-            error: &'static str,
+            bounds: (std::ops::RangeInclusive<T>, &'static str),
         ) -> Result<Option<T>, &'static str> {
             match text.trim() {
                 "" => Ok(None),
-                text => text
-                    .replace('−', "-")
-                    .parse()
-                    .ok()
-                    .filter(|value| range.contains(value))
-                    .map(Some)
-                    .ok_or(error),
+                text => {
+                    let value = text.replace('−', "-").parse().map_err(|_| bounds.1)?;
+                    scf::check(Some(value), bounds)
+                }
             }
         }
         Ok((
-            typed(
-                &self.accuracy,
-                1e-4..=1e3,
-                "Accuracy must be a number from 0.0001 to 1000",
-            )?,
-            typed(
-                &self.temperature,
-                0.0..=1e5,
-                "Electronic temperature must be from 0 to 100000 K",
-            )?,
-            typed(
-                &self.iterations,
-                1..=10_000,
-                "Max SCF iterations must be a whole number from 1 to 10000",
-            )?,
+            typed(&self.accuracy, scf::ACCURACY)?,
+            typed(&self.temperature, scf::TEMPERATURE)?,
+            typed(&self.iterations, scf::ITERATIONS)?,
         ))
     }
 
     pub(crate) fn threads(&self) -> u32 {
-        if self.threads > 0 {
-            return self.threads;
-        }
-        std::thread::available_parallelism().map_or(1, |n| n.get().min(8) as u32)
+        reshiki_xtb_jobs::threads(self.threads)
     }
 }
 
