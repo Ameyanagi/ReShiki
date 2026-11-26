@@ -3,6 +3,9 @@
 //! A climbing-image elastic band supplies the starting point and direction for
 //! partitioned rational-function optimization. Vibrational analysis and two
 //! downhill intrinsic reaction paths characterize the resulting stationary point.
+//!
+//! Bracketed keys such as [Henkelman2000CINEB] name the full citations in
+//! docs/references/xtb.md.
 
 mod endpoint;
 mod idpp;
