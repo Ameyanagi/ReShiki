@@ -1,4 +1,4 @@
-"""Candidate engine wheels stay paired and publish only after their source."""
+"""Candidate engine wheels stay paired and get a release publishing dry run."""
 
 import re
 import shlex
@@ -118,32 +118,41 @@ class PythonWheelWorkflowTests(unittest.TestCase):
         # The wheelhouse now also holds a base wheel; it must not enter this artifact.
         self.assertIn("path: dist/reshiki_xtb-*.whl", engine)
 
-    def test_testpypi_engine_publication_requires_the_public_tagged_source(self):
+    def test_engine_publish_dry_run_requires_the_public_tagged_source(self):
         jobs = workflow_jobs("release.yml")
-        engine = jobs["testpypi_xtb"]
+        engine = jobs["xtb_wheels_check"]
+        self.assertNotIn("testpypi_xtb", jobs)
         self.assertIn("needs: [publish, python_wheels]", engine)
+        self.assertIn("!cancelled()", engine)
         self.assertIn("github.event_name == 'push'", engine)
         self.assertIn("startsWith(github.ref, 'refs/tags/v')", engine)
         self.assertIn("needs.publish.result == 'success'", engine)
         self.assertIn("needs.python_wheels.result == 'success'", engine)
         self.assertNotIn("workflow_dispatch", engine)
         self.assertNotIn("inputs.pypi_only", engine)
-        self.assertIn("environment: testpypi", engine)
-        self.assertIn("id-token: write", engine)
+        self.assertNotIn("environment:", engine)
+        self.assertIn("    permissions:\n      contents: read\n    steps:\n", engine)
+        self.assertNotIn("uses: pypa/gh-action-pypi-publish@", engine)
         self.assertIn("pattern: python-xtb-wheel-*", engine)
-        self.assertIn("repository-url: https://test.pypi.org/legacy/", engine)
-        self.assertIn("skip-existing: true", engine)
         check = 'scripts/check_python_wheel_notices.py --release-tag "$RELEASE_TAG" "dist/reshiki_xtb-*.whl"'
+        twine_check = "uvx twine@6.1.0 check dist/reshiki_xtb-*.whl"
+        dry_run = (
+            "uv publish --dry-run --trusted-publishing never "
+            "--publish-url https://test.pypi.org/legacy/ dist/reshiki_xtb-*.whl"
+        )
         self.assertIn("RELEASE_TAG: ${{ github.ref_name }}", engine)
         self.assertIn(check, engine)
+        self.assertIn(twine_check, engine)
+        self.assertIn(dry_run, engine)
         self.assertIn("sparse-checkout: scripts", engine)
         self.assertLess(engine.index("pattern: python-xtb-wheel-*"), engine.index(check))
-        self.assertLess(engine.index(check), engine.index("uses: pypa/gh-action-pypi-publish@"))
+        self.assertLess(engine.index(check), engine.index(twine_check))
+        self.assertLess(engine.index(twine_check), engine.index(dry_run))
         self.assertIn("uses: ./.github/workflows/python-wheels.yml", jobs["python_wheels"])
         self.assertIn("pattern: python-wheel-*", jobs["pypi"])
         for name, job in jobs.items():
             if "pattern: python-xtb-wheel-*" in job:
-                self.assertEqual(name, "testpypi_xtb")
+                self.assertEqual(name, "xtb_wheels_check")
 
 
 if __name__ == "__main__":
