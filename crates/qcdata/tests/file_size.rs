@@ -307,6 +307,7 @@ fn light_transition_state_run_metadata_costs_at_most_four_kilobytes() {
         product: reshiki_qcdata::FrameHash([0x12; 32]),
     });
     result.trajectory = Some(Trajectory {
+        rmsd_to_best_angstrom: Vec::new(),
         numbers: frame.numbers.clone(),
         isotopes: frame.isotopes.clone(),
         masses_amu: frame.masses_amu.clone(),

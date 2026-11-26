@@ -1278,6 +1278,7 @@ fn transition_state_drawing() -> (Document, u64) {
         product: start.frame.hash(),
     });
     finished.trajectory = Some(Trajectory {
+        rmsd_to_best_angstrom: Vec::new(),
         numbers: start.frame.numbers.clone(),
         isotopes: start.frame.isotopes.clone(),
         masses_amu: start.frame.masses_amu.clone(),
