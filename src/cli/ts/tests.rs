@@ -8,6 +8,86 @@ use reshiki_xtb_worker::{
     protocol::{Engine, Units},
 };
 
+#[test]
+fn trace_requires_an_explicit_value() {
+    for value in [
+        None,
+        Some(""),
+        Some("0"),
+        Some("false"),
+        Some("TRUE"),
+        Some(" 1"),
+    ] {
+        assert!(!super::trace_enabled(value), "{value:?}");
+    }
+    for value in ["1", "true"] {
+        assert!(super::trace_enabled(Some(value)), "{value}");
+    }
+}
+
+#[test]
+fn trace_distinguishes_climbing_image_from_a_higher_endpoint() {
+    use reshiki_optimize::ts::Event;
+
+    let mut progress = super::Progress {
+        trace: true,
+        ..Default::default()
+    };
+    let mut output = Vec::new();
+    for climbing in [None, Some(2)] {
+        let _ = progress.show(
+            Event::Neb {
+                iteration: 0,
+                energies: &[5., 1., 3., 2., 0.],
+                climbing,
+                max_force: 0.,
+            },
+            &mut output,
+        );
+    }
+    let output = String::from_utf8(output).unwrap();
+    let mut lines = output.lines();
+    let pending = lines.next().unwrap();
+    assert!(
+        pending.contains("band_peak_energy=5.000000000000 climbing_image_energy=pending"),
+        "{pending}"
+    );
+    let climbing = lines.next().unwrap();
+    assert!(
+        climbing.contains("band_peak_energy=5.000000000000 climbing_image_energy=3.000000000000"),
+        "{climbing}"
+    );
+}
+
+#[test]
+fn force_exception_trace_preserves_both_ratios() {
+    use reshiki_optimize::ts::Event;
+
+    let mut progress = super::Progress {
+        trace: true,
+        ..Default::default()
+    };
+    let mut output = Vec::new();
+    let _ = progress.show(
+        Event::SaddleTrial {
+            energy: 0.0,
+            max_gradient: 0.0,
+            rms_gradient: 0.0,
+            length: 0.0028,
+            ratio: 0.988862,
+            energy_ratio: -3.975,
+            force_ratio: 0.988862,
+            decision: "accept: projected force",
+        },
+        &mut output,
+    );
+    let output = String::from_utf8(output).unwrap();
+    assert!(
+        output.contains("energy_ratio=-3.975000 force_ratio=0.988862"),
+        "{output}"
+    );
+}
+
 fn point(energy: f64, distance: f64) -> Minimum {
     Minimum {
         energy,
@@ -27,6 +107,8 @@ fn report() -> TsReport {
         climbing_image: 1,
         ts,
         saddle_converged: true,
+        saddle_reason: reshiki_optimize::ts::SaddleReason::Stationary,
+        saddle_diagnostics: Vec::new(),
         frequencies_cm1: vec![-50.1],
         imaginary: 1,
         hessian: vec![0.25; 36],
@@ -158,6 +240,33 @@ pub(in crate::cli) fn worker_failure_keeps_characterized_candidate_and_files() {
     assert!(hessian.contains("$hessian\n6\n"), "{hessian}");
     assert!(hessian.contains("2.5000000000E-01"), "{hessian}");
     assert!(!hessian.contains("5.0000000000E-01"), "{hessian}");
+}
+
+#[test]
+fn ceiling_reason_and_optional_probe_failure_reach_cli_report() {
+    let directory = tempfile::tempdir().unwrap();
+    let command = command(directory.path());
+    let mut summary = summary(&command);
+    summary.report.saddle_converged = false;
+    summary.report.saddle_reason = reshiki_optimize::ts::SaddleReason::EnergyCeiling;
+    let diagnostic = "left midpoint recovery probe: SCF failure: iteration limit";
+    summary.report.saddle_diagnostics.push(diagnostic.into());
+    summary.report.irc = None;
+    summary.report.connects = false;
+
+    let (success, table, stderr, json) = finish_report(&summary);
+    assert!(!success);
+    assert!(table.contains("energy ceiling exhausted"));
+    assert!(stderr.contains("energy ceiling exhausted") && stderr.contains(diagnostic));
+    assert_eq!(json["saddle"]["reason"], "energy ceiling exhausted");
+    assert_eq!(
+        json["saddle"]["diagnostics"],
+        serde_json::json!([diagnostic])
+    );
+    assert_eq!(
+        json["failure_reason"],
+        "saddle refinement did not converge (energy ceiling exhausted)"
+    );
 }
 
 pub(in crate::cli) fn worker_count_disagreement_fails_with_diagnostics() {

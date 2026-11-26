@@ -1,11 +1,12 @@
 //! Partitioned rational-function saddle refinement.
 //!
-//! Written from Banerjee, Adams, Simons & Shepard, J. Phys. Chem. 89, 52 (1985) [Banerjee1985PRFO],
-//! Baker, J. Comput. Chem. 7, 385 (1986) [Baker1986PRFO], and Bofill, J. Comput. Chem. 15, 1 (1994)
-//! [Bofill1994Update]. P-RFO maximizes one Hessian eigenmode and minimizes the orthogonal physical
-//! block. A Fletcher-style model ratio adjusts the trust radius. Mode following uses maximum
-//! absolute overlap across the physical spectrum, initially with the normalized NEB tangent, then
-//! with the prior mode. Initial overlap below 0.3 falls back to the lowest physical mode.
+//! Written from Banerjee, Adams, Simons & Shepard, J. Phys. Chem. 89, 52 (1985)
+//! \[Banerjee1985PRFO\], Baker, J. Comput. Chem. 7, 385 (1986) \[Baker1986PRFO\], and Bofill, J.
+//! Comput. Chem. 15, 1 (1994) \[Bofill1994Update\]. P-RFO maximizes one Hessian eigenmode and
+//! minimizes the orthogonal physical block. A Fletcher-style model ratio adjusts the trust
+//! radius. Mode following uses maximum absolute overlap across the physical spectrum, initially
+//! with the normalized NEB tangent, then with the prior mode. Initial overlap below 0.3 falls
+//! back to the lowest physical mode.
 
 use std::ops::ControlFlow;
 
@@ -14,12 +15,98 @@ use crate::{
     linalg::{dot, norm, projected_eigen, symmetric_eigen},
 };
 
-use super::{Event, Minimum, TsError, TsOptions, emit, evaluate, modes, neb::Band};
+use super::{
+    Event, Minimum, SaddleReason, TsError, TsOptions, emit, evaluate, modes,
+    neb::{Band, RecoverySeed},
+};
+
+#[cfg(test)]
+#[path = "saddle_regressions.rs"]
+mod regressions;
 
 const DIFFERENCE_STEP: f64 = 0.005;
 const MIN_RADIUS: f64 = 0.01;
 const MAX_RADIUS: f64 = 0.3;
 const ENERGY_CANCELLATION_RELATIVE: f64 = 1e-3;
+
+/// Bound expensive checks that do not advance the normal refinement schedule:
+/// rejected trial certifications, force-only acceptances, secant refreshes and
+/// a band restart share seven exact Hessians for the entire search. The eighth
+/// slot is reserved for a force-converged trial. Normal scheduled/force-converged
+/// trials refund their slot on acceptance.
+/// Thus the total is at most one initial + accepted steps + eight recovery
+/// Hessians, plus the independent one-time final candidate verification.
+const MAX_RECOVERY_HESSIANS: usize = 8;
+
+#[derive(Default)]
+struct HessianBudget {
+    used: usize,
+}
+
+impl HessianBudget {
+    fn reserve(&mut self) -> bool {
+        self.reserve_trial(false)
+    }
+
+    fn reserve_trial(&mut self, force_converged: bool) -> bool {
+        let limit = if force_converged {
+            MAX_RECOVERY_HESSIANS
+        } else {
+            MAX_RECOVERY_HESSIANS - 1
+        };
+        if self.used >= limit {
+            return false;
+        }
+        self.used += 1;
+        true
+    }
+
+    fn refund(&mut self) {
+        self.used -= 1;
+    }
+}
+
+// Progress events carry static strings. Select the terminal event from the same
+// reason stored in the refinement report.
+fn reason_status(reason: SaddleReason) -> Event<'static> {
+    Event::SaddleStatus(match reason {
+        SaddleReason::Stationary => "stationary",
+        SaddleReason::AcceptedStepLimit => "accepted-step limit",
+        SaddleReason::MinimumRadiusExhausted => "minimum radius exhausted",
+        SaddleReason::EnergyCeiling => "energy ceiling exhausted",
+        SaddleReason::FollowedModeLost => "followed mode lost",
+        SaddleReason::HessianBudgetExhausted => "recovery Hessian budget exhausted",
+    })
+}
+
+fn at_minimum_radius(radius: f64, length: f64) -> bool {
+    // Recomputed scaled norms can round a clipped step one ulp above radius.
+    // Acceptance and rejection must use the identical floor decision.
+    radius.min(length) <= MIN_RADIUS
+}
+
+fn update_accepted_radius(
+    radius: &mut f64,
+    awaiting_energy_agreement: &mut bool,
+    length: f64,
+    ratio: f64,
+    energy_agrees: bool,
+    force_only: bool,
+) {
+    if force_only {
+        *awaiting_energy_agreement = true;
+    } else if energy_agrees {
+        *awaiting_energy_agreement = false;
+    }
+    if *awaiting_energy_agreement {
+        return;
+    }
+    if !(0.25..=1.75).contains(&ratio) {
+        *radius = (0.5 * *radius).max(MIN_RADIUS);
+    } else if (0.75..=1.25).contains(&ratio) && length >= 0.8 * *radius {
+        *radius = (1.5 * *radius).min(MAX_RADIUS);
+    }
+}
 
 /// Analytic Hessian when available, otherwise central gradient differences
 /// with a 0.005 bohr displacement. Both paths explicitly symmetrize the result.
@@ -54,6 +141,24 @@ pub(super) fn hessian(p: &mut impl Potential, x: &[f64]) -> Result<Vec<f64>, TsE
         }
     }
     Ok(h)
+}
+
+/// A local SCF failure can rule out a trial or restart while another geometry
+/// remains available. Cancellation and backend failures still end the search.
+fn optional_hessian(
+    p: &mut impl Potential,
+    x: &[f64],
+    context: &str,
+    diagnostics: &mut Vec<String>,
+) -> Result<Option<Vec<f64>>, TsError> {
+    match hessian(p, x) {
+        Ok(h) => Ok(Some(h)),
+        Err(error @ TsError::Scf(_)) => {
+            diagnostics.push(format!("{context}: {error}"));
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// Bofill's SR1/PSB mixture. With r = y - Hs, the SR1 weight is
@@ -111,6 +216,12 @@ struct Modes {
     vectors: Vec<f64>,
     followed: usize,
     overlap: f64,
+    rfo: Option<RfoModel>,
+    characterization: Option<Characterization>,
+    #[cfg(test)]
+    rfo_builds: usize,
+    #[cfg(test)]
+    characterization_builds: usize,
 }
 
 impl Modes {
@@ -145,6 +256,12 @@ impl Modes {
             vectors,
             followed,
             overlap,
+            rfo: None,
+            characterization: None,
+            #[cfg(test)]
+            rfo_builds: 0,
+            #[cfg(test)]
+            characterization_builds: 0,
         })
     }
 
@@ -153,7 +270,12 @@ impl Modes {
     }
 
     fn lost_mode(&self, previous: &Self) -> bool {
-        self.overlap < MIN_MODE_OVERLAP || (previous.curvature() < 0.0 && self.curvature() > 0.0)
+        // A followed negative mode must stay negative, including across a flat plateau.
+        self.overlap < MIN_MODE_OVERLAP || (previous.curvature() < 0.0 && self.curvature() >= 0.0)
+    }
+
+    fn is_index_one(&self) -> bool {
+        self.followed == 0 && self.values[0] < 0.0 && self.values.get(1).is_none_or(|v| *v >= 0.0)
     }
 
     fn energy_changes(&self, step: &[f64], g: &[f64]) -> (f64, f64) {
@@ -179,6 +301,83 @@ impl Modes {
     fn curvature(&self) -> f64 {
         self.values[self.followed]
     }
+
+    /// A mode model belongs to one geometry, gradient and Hessian. Rejected
+    /// radius-only trials keep it, so their augmented blocks are solved once.
+    fn step(&mut self, g: &[f64], radius: f64) -> Result<Vec<f64>, TsError> {
+        if self.rfo.is_none() {
+            self.rfo = Some(RfoModel::new(
+                &self.values,
+                &self.vectors,
+                g,
+                self.followed,
+            )?);
+            #[cfg(test)]
+            {
+                self.rfo_builds += 1;
+            }
+        }
+        Ok(self
+            .rfo
+            .as_ref()
+            .unwrap()
+            .step(&self.vectors, self.followed, radius))
+    }
+
+    fn characterize(
+        &mut self,
+        x: &[f64],
+        gradient: &[f64],
+        h: &[f64],
+        masses: &[f64],
+        inverse_sqrt: &[f64],
+    ) -> Result<Characterization, TsError> {
+        if let Some(characterization) = self.characterization {
+            return Ok(characterization);
+        }
+        let (curvature, slope, imaginary) = if masses.is_empty() {
+            (
+                self.curvature(),
+                dot(gradient, self.direction(x.len())).abs(),
+                self.values.iter().filter(|v| **v < 0.0).count(),
+            )
+        } else {
+            let weighted = modes::mass_weight(h, inverse_sqrt);
+            let (values, vectors) = modes::spectrum(x, &weighted, masses)?;
+            let weighted_gradient: Vec<_> = gradient
+                .iter()
+                .zip(inverse_sqrt)
+                .map(|(g, m)| g * m)
+                .collect();
+            (
+                values[0],
+                dot(&weighted_gradient, &vectors[..x.len()]).abs(),
+                modes::imaginary_count(&values),
+            )
+        };
+        let characterization = Characterization {
+            mode_displacement: if curvature != 0.0 {
+                slope / curvature.abs()
+            } else if slope == 0.0 {
+                0.0
+            } else {
+                f64::INFINITY
+            },
+            imaginary,
+        };
+        self.characterization = Some(characterization);
+        #[cfg(test)]
+        {
+            self.characterization_builds += 1;
+        }
+        Ok(characterization)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Characterization {
+    mode_displacement: f64,
+    imaginary: usize,
 }
 
 fn physical_basis(x: &[f64], masses: &[f64]) -> Vec<Vec<f64>> {
@@ -189,42 +388,105 @@ fn physical_basis(x: &[f64], masses: &[f64]) -> Vec<Vec<f64>> {
     }
 }
 
-/// Extreme eigenvector of the augmented RFO block, in intermediate
-/// normalization. A vanishing last component is an uphill escape direction
-/// at a stationary point with the wrong Hessian index. Cap it at the radius.
-fn partition_step(
-    values: &[f64],
-    gradient: &[f64],
-    maximize: bool,
-    radius: f64,
-) -> Result<Vec<f64>, TsError> {
-    let dim = values.len();
-    if dim == 0 {
-        return Ok(Vec::new());
-    }
-    let size = dim + 1;
-    let mut augmented = vec![0.0; size * size];
-    for i in 0..dim {
-        augmented[i * size + i] = values[i];
-        augmented[i * size + dim] = gradient[i];
-        augmented[dim * size + i] = gradient[i];
-    }
-    let (_, vectors) = symmetric_eigen(augmented, size).map_err(TsError::Failed)?;
-    let row = if maximize {
-        &vectors[dim * size..]
-    } else {
-        &vectors[..size]
-    };
-    let mut step = row[..dim].to_vec();
-    let scale = if row[dim].abs() > 1e-10 {
-        row[dim].recip()
-    } else {
-        radius / norm(&step)
-    };
-    step.iter_mut().for_each(|v| *v *= scale);
-    Ok(step)
+/// Extreme augmented RFO eigenvector before intermediate normalization. Its
+/// solution is radius independent, including a stationary escape with a zero
+/// last component. Apply that escape's radius only when constructing a trial.
+struct Partition {
+    vector: Vec<f64>,
+    last: f64,
+    escape_norm: f64,
 }
 
+impl Partition {
+    fn new(values: &[f64], gradient: &[f64], maximize: bool) -> Result<Self, TsError> {
+        let dim = values.len();
+        if dim == 0 {
+            return Ok(Self {
+                vector: Vec::new(),
+                last: 1.0,
+                escape_norm: 0.0,
+            });
+        }
+        let size = dim + 1;
+        let mut augmented = vec![0.0; size * size];
+        for i in 0..dim {
+            augmented[i * size + i] = values[i];
+            augmented[i * size + dim] = gradient[i];
+            augmented[dim * size + i] = gradient[i];
+        }
+        let (_, vectors) = symmetric_eigen(augmented, size).map_err(TsError::Failed)?;
+        let row = if maximize {
+            &vectors[dim * size..]
+        } else {
+            &vectors[..size]
+        };
+        let vector = row[..dim].to_vec();
+        let escape_norm = norm(&vector);
+        Ok(Self {
+            vector,
+            last: row[dim],
+            escape_norm,
+        })
+    }
+
+    fn amplitudes(&self, radius: f64) -> Vec<f64> {
+        let mut step = self.vector.clone();
+        let scale = if self.last.abs() > 1e-10 {
+            self.last.recip()
+        } else {
+            radius / self.escape_norm
+        };
+        step.iter_mut().for_each(|v| *v *= scale);
+        step
+    }
+}
+
+struct RfoModel {
+    uphill: Partition,
+    downhill: Partition,
+    other: Vec<usize>,
+    dimensions: usize,
+}
+
+impl RfoModel {
+    fn new(values: &[f64], vectors: &[f64], g: &[f64], followed: usize) -> Result<Self, TsError> {
+        let n = g.len();
+        let mode_gradient: Vec<_> = vectors.chunks_exact(n).map(|v| dot(v, g)).collect();
+        let uphill = Partition::new(&[values[followed]], &[mode_gradient[followed]], true)?;
+        let other: Vec<_> = (0..values.len()).filter(|&i| i != followed).collect();
+        let downhill_values: Vec<_> = other.iter().map(|&i| values[i]).collect();
+        let downhill_gradient: Vec<_> = other.iter().map(|&i| mode_gradient[i]).collect();
+        let downhill = Partition::new(&downhill_values, &downhill_gradient, false)?;
+        Ok(Self {
+            uphill,
+            downhill,
+            other,
+            dimensions: n,
+        })
+    }
+
+    fn step(&self, vectors: &[f64], followed: usize, radius: f64) -> Vec<f64> {
+        let n = self.dimensions;
+        let uphill = self.uphill.amplitudes(radius);
+        let downhill = self.downhill.amplitudes(radius);
+        let mut step: Vec<_> = vectors[followed * n..(followed + 1) * n]
+            .iter()
+            .map(|v| uphill[0] * v)
+            .collect();
+        for (&i, amplitude) in self.other.iter().zip(downhill) {
+            for (s, v) in step.iter_mut().zip(&vectors[i * n..(i + 1) * n]) {
+                *s += amplitude * v;
+            }
+        }
+        let length = norm(&step);
+        if length > radius {
+            step.iter_mut().for_each(|v| *v *= radius / length);
+        }
+        step
+    }
+}
+
+#[cfg(test)]
 fn rfo_step(
     values: &[f64],
     vectors: &[f64],
@@ -232,32 +494,7 @@ fn rfo_step(
     followed: usize,
     radius: f64,
 ) -> Result<Vec<f64>, TsError> {
-    let n = g.len();
-    let mode_gradient: Vec<_> = vectors.chunks_exact(n).map(|v| dot(v, g)).collect();
-    let uphill = partition_step(
-        &[values[followed]],
-        &[mode_gradient[followed]],
-        true,
-        radius,
-    )?;
-    let other: Vec<_> = (0..values.len()).filter(|&i| i != followed).collect();
-    let downhill_values: Vec<_> = other.iter().map(|&i| values[i]).collect();
-    let downhill_gradient: Vec<_> = other.iter().map(|&i| mode_gradient[i]).collect();
-    let downhill = partition_step(&downhill_values, &downhill_gradient, false, radius)?;
-    let mut step: Vec<_> = vectors[followed * n..(followed + 1) * n]
-        .iter()
-        .map(|v| uphill[0] * v)
-        .collect();
-    for (&i, amplitude) in other.iter().zip(downhill) {
-        for (s, v) in step.iter_mut().zip(&vectors[i * n..(i + 1) * n]) {
-            *s += amplitude * v;
-        }
-    }
-    let length = norm(&step);
-    if length > radius {
-        step.iter_mut().for_each(|v| *v *= radius / length);
-    }
-    Ok(step)
+    Ok(RfoModel::new(values, vectors, g, followed)?.step(vectors, followed, radius))
 }
 
 fn gradient_metrics(g: &[f64]) -> (f64, f64) {
@@ -270,46 +507,11 @@ fn gradient_metrics(g: &[f64]) -> (f64, f64) {
 pub(super) struct Refinement {
     pub(super) point: Minimum,
     pub(super) converged: bool,
+    pub(super) reason: SaddleReason,
+    pub(super) diagnostics: Vec<String>,
     /// A Hessian rebuilt at `point`, suitable for its frequency analysis.
     /// Absent if the last accepted step has only a Bofill Hessian model.
     pub(super) hessian: Option<Vec<f64>>,
-}
-
-/// Near a stationary point the residual displacement along the mass-weighted
-/// IRC launch mode is |u·M⁻¹/²g| / |λ|. Use the same spectrum as the IRC.
-fn launch_displacement(
-    x: &[f64],
-    gradient: &[f64],
-    h: &[f64],
-    model: &Modes,
-    masses: &[f64],
-    inverse_sqrt: &[f64],
-) -> Result<f64, TsError> {
-    let (curvature, slope) = if masses.is_empty() {
-        (
-            model.curvature(),
-            dot(gradient, model.direction(x.len())).abs(),
-        )
-    } else {
-        let weighted = modes::mass_weight(h, inverse_sqrt);
-        let (values, vectors) = modes::spectrum(x, &weighted, masses)?;
-        let weighted_gradient: Vec<_> = gradient
-            .iter()
-            .zip(inverse_sqrt)
-            .map(|(g, m)| g * m)
-            .collect();
-        (
-            values[0],
-            dot(&weighted_gradient, &vectors[..x.len()]).abs(),
-        )
-    };
-    Ok(if curvature != 0.0 {
-        slope / curvature.abs()
-    } else if slope == 0.0 {
-        0.0
-    } else {
-        f64::INFINITY
-    })
 }
 
 /// Keep the best measured index-one point, and the best provisional point from
@@ -317,13 +519,15 @@ fn launch_displacement(
 /// failed search (also important for central-difference potentials).
 #[derive(Default)]
 struct Candidates {
-    verified: Option<(f64, Refinement)>,
+    verified: Option<(f64, Minimum, Vec<f64>)>,
     provisional: Option<(f64, Minimum)>,
 }
 
 impl Candidates {
     fn improves(&self, rms: f64) -> bool {
-        self.verified.as_ref().is_none_or(|(best, _)| rms < *best)
+        self.verified
+            .as_ref()
+            .is_none_or(|(best, _, _)| rms < *best)
     }
 
     fn verify(
@@ -335,33 +539,34 @@ impl Candidates {
         masses: &[f64],
     ) -> Result<(), TsError> {
         let (frequencies, _) = modes::frequencies(x, h, masses)?;
-        if frequencies
-            .iter()
-            .filter(|f| **f < -super::IMAGINARY_CM1)
-            .count()
-            == 1
-        {
+        self.retain(
+            x,
+            energy,
+            rms,
+            h,
+            frequencies
+                .iter()
+                .filter(|f| **f < -super::IMAGINARY_CM1)
+                .count()
+                == 1,
+        );
+        Ok(())
+    }
+
+    fn retain(&mut self, x: &[f64], energy: f64, rms: f64, h: &[f64], index_one: bool) {
+        if index_one {
             self.verified = Some((
                 rms,
-                Refinement {
-                    point: Minimum {
-                        positions: x.to_vec(),
-                        energy,
-                    },
-                    converged: false,
-                    hessian: Some(h.to_vec()),
+                Minimum {
+                    positions: x.to_vec(),
+                    energy,
                 },
+                h.to_vec(),
             ));
         }
-        Ok(())
     }
 }
 
-/// Molecular energies are hartree. Local refinement can recover a missed
-/// between-image peak, but accepting more than 10 kcal/mol above the original
-/// climbing image can take it into an unrelated basin. This is a search policy,
-/// independent of the forward and reverse barriers.
-const BAND_HEADROOM: f64 = 10.0 / crate::KCAL_PER_HARTREE;
 const MIN_MODE_OVERLAP: f64 = 0.5;
 
 pub(super) fn refine_band(
@@ -405,13 +610,22 @@ fn run(
     options: &TsOptions,
     on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
 ) -> Result<Refinement, TsError> {
-    let ceiling = if masses.is_empty() {
+    let headroom = options.saddle_headroom_kcal / crate::KCAL_PER_HARTREE;
+    let mut ceiling = if masses.is_empty() {
         f64::INFINITY
     } else {
-        start.energy + BAND_HEADROOM
+        start.energy + headroom
     };
     let mut x = start.positions.clone();
     let (mut energy, mut gradient) = evaluate(p, &x)?;
+    let mut original_seed = band.map(|_| RecoverySeed {
+        point: Minimum {
+            positions: x.clone(),
+            energy,
+        },
+        gradient: gradient.clone(),
+        direction: tangent.to_vec(),
+    });
     let mut h = hessian(p, &x)?;
     let mut h_is_exact = true;
     let mut reference = tangent.to_vec();
@@ -421,39 +635,43 @@ fn run(
         masses.iter().flat_map(|m| [m.sqrt().recip(); 3]).collect()
     };
     let mut radius = 0.1;
+    let mut awaiting_energy_agreement = false;
     let criteria = Level::Normal.criteria();
     let mut first = true;
     let mut accepted = 0;
+    let mut recovery_hessians = HessianBudget::default();
 
     let mut cached_modes = None;
     let mut recovery = band;
     let mut probed_links = false;
     let mut stalled = false;
+    let mut reason = SaddleReason::AcceptedStepLimit;
+    let mut diagnostics = Vec::new();
     let mut candidates = Candidates::default();
 
-    loop {
+    'refinement: loop {
         let rigid = physical_basis(&x, masses);
         let mut g = gradient.clone();
         modes::project(&mut g, &rigid);
         let (max_gradient, rms_gradient) = gradient_metrics(&g);
         let gradient_passes =
             max_gradient <= criteria.max_gradient && rms_gradient <= criteria.rms_gradient;
-        let model = match cached_modes.take() {
+        let mut model = match cached_modes.take() {
             Some(model) => model,
             None => Modes::new(&h, &rigid, &reference, first)?,
         };
-        let followed = model.followed;
-        let values = &model.values;
-        let vectors = &model.vectors;
+        let characterize = gradient_passes
+            || (band.is_some()
+                && !masses.is_empty()
+                && h_is_exact
+                && candidates.improves(rms_gradient));
+        let characterization = if characterize {
+            Some(model.characterize(&x, &gradient, &h, masses, &inverse_sqrt)?)
+        } else {
+            None
+        };
         let mode_displacement = if gradient_passes {
-            Some(launch_displacement(
-                &x,
-                &gradient,
-                &h,
-                &model,
-                masses,
-                &inverse_sqrt,
-            )?)
+            characterization.map(|value| value.mode_displacement)
         } else {
             None
         };
@@ -471,55 +689,34 @@ fn run(
                 exact: h_is_exact,
             },
         )?;
-        // A positive mode at the discrete maximum can be an unresolved
-        // inter-image barrier. A failed trust step can also invalidate that
-        // handoff. Try one fresh local seed, retaining the original ceiling
-        // and the caller's total step budget across the restart.
-        if (stalled || first && model.curvature() > 0.0)
-            && accepted < options.saddle_max_steps
-            && let Some(band) = recovery
-        {
-            let alternative = if probed_links {
-                None
-            } else {
-                probed_links = true;
-                band.intermediate_peak(p, masses, ceiling)?
-            };
-            let seed = alternative.or_else(|| {
-                (stalled && x != start.positions).then(|| (start.clone(), tangent.to_vec()))
-            });
-            if let Some((point, direction)) = seed {
-                recovery = None;
-                emit(
-                    on_event,
-                    Event::SaddleStatus("restart from band with fresh Hessian"),
-                )?;
-                x = point.positions;
-                (energy, gradient) = evaluate(p, &x)?;
-                h = hessian(p, &x)?;
-                h_is_exact = true;
-                reference = direction;
-                first = true;
-                stalled = false;
-                radius = 0.05;
-                continue;
-            }
-        }
-        if !stalled && mode_displacement.is_some_and(|d| d < 0.1 * options.irc_step) {
-            emit(on_event, Event::SaddleStatus("stationary"))?;
+        let stationary =
+            !stalled && h_is_exact && mode_displacement.is_some_and(|d| d < 0.1 * options.irc_step);
+        // A tangent can select a stable mode at the correct first-order saddle.
+        // Certify its physical index before an optional between-image handoff.
+        if stationary && characterization.is_some_and(|value| value.imaginary == 1) {
+            emit(on_event, reason_status(SaddleReason::Stationary))?;
             return Ok(Refinement {
                 point: Minimum {
                     positions: x,
                     energy,
                 },
                 converged: true,
+                reason: SaddleReason::Stationary,
+                diagnostics,
                 hessian: Some(h),
             });
         }
         if band.is_some() && !masses.is_empty() && candidates.improves(rms_gradient) {
             if h_is_exact {
-                candidates.verify(&x, energy, rms_gradient, &h, masses)?;
-            } else if model.curvature() < 0.0
+                candidates.retain(
+                    &x,
+                    energy,
+                    rms_gradient,
+                    &h,
+                    characterization.is_some_and(|value| value.imaginary == 1),
+                );
+            } else if !stalled
+                && model.curvature() < 0.0
                 && candidates
                     .provisional
                     .as_ref()
@@ -534,16 +731,114 @@ fn run(
                 ));
             }
         }
+        // A positive mode at the discrete maximum can be an unresolved
+        // inter-image barrier. Retain verified candidates before trying optional
+        // seeds, and keep the caller's total accepted-step budget across handoff.
+        if (stalled || first && model.curvature() > 0.0)
+            && accepted < options.saddle_max_steps
+            && let Some(band) = recovery
+        {
+            let mut seeds = Vec::new();
+            let mut ceiling_exhausted = false;
+            if !probed_links {
+                probed_links = true;
+                let probe = band.intermediate_peaks(p, masses, ceiling)?;
+                seeds = probe.seeds;
+                ceiling_exhausted = probe.ceiling_exhausted;
+                diagnostics.extend(probe.diagnostics);
+            }
+            if stalled && x != start.positions {
+                seeds.extend(original_seed.take());
+            }
+            for seed in seeds {
+                if !recovery_hessians.reserve() {
+                    reason = SaddleReason::HessianBudgetExhausted;
+                    emit(on_event, reason_status(reason))?;
+                    stalled = true;
+                    break;
+                }
+                let Some(exact) = optional_hessian(
+                    p,
+                    &seed.point.positions,
+                    "optional recovery seed Hessian",
+                    &mut diagnostics,
+                )?
+                else {
+                    continue;
+                };
+                let seed_rigid = physical_basis(&seed.point.positions, masses);
+                let mut seed_gradient = seed.gradient.clone();
+                modes::project(&mut seed_gradient, &seed_rigid);
+                let (seed_max, seed_rms) = gradient_metrics(&seed_gradient);
+                let mut seed_model = Modes::new(&exact, &seed_rigid, &seed.direction, true)?;
+                if seed_max <= criteria.max_gradient && seed_rms <= criteria.rms_gradient {
+                    let characterization = seed_model.characterize(
+                        &seed.point.positions,
+                        &seed.gradient,
+                        &exact,
+                        masses,
+                        &inverse_sqrt,
+                    )?;
+                    if characterization.mode_displacement < 0.1 * options.irc_step
+                        && characterization.imaginary != 1
+                    {
+                        diagnostics.push(format!(
+                            "optional recovery seed is stationary with {} imaginary modes",
+                            characterization.imaginary
+                        ));
+                        continue;
+                    }
+                }
+                recovery = None;
+                emit(
+                    on_event,
+                    Event::SaddleStatus("restart from band with fresh Hessian"),
+                )?;
+                // Reuse the energy and gradient that established this seed.
+                // The accepted midpoint gets the same headroom as the original CI.
+                if !masses.is_empty() {
+                    ceiling = start.energy.max(seed.point.energy) + headroom;
+                }
+                x = seed.point.positions;
+                energy = seed.point.energy;
+                gradient = seed.gradient;
+                h = exact;
+                h_is_exact = true;
+                cached_modes = Some(seed_model);
+                reference = seed.direction;
+                first = true;
+                stalled = false;
+                reason = SaddleReason::AcceptedStepLimit;
+                radius = 0.05;
+                continue 'refinement;
+            }
+            if ceiling_exhausted && reason != SaddleReason::HessianBudgetExhausted {
+                reason = SaddleReason::EnergyCeiling;
+                emit(on_event, reason_status(reason))?;
+                stalled = true;
+            }
+        }
+        if stationary && !stalled {
+            // The index-one case returned above. A stationary point of another
+            // index must still pass through the retained-candidate fallback.
+            reason = SaddleReason::Stationary;
+            emit(on_event, reason_status(reason))?;
+            cached_modes = Some(model);
+            break;
+        }
         if stalled {
+            cached_modes = Some(model);
             break;
         }
         reference.copy_from_slice(model.direction(x.len()));
         first = false;
         if accepted == options.saddle_max_steps {
-            emit(on_event, Event::SaddleStatus("accepted-step limit"))?;
+            reason = SaddleReason::AcceptedStepLimit;
+            emit(on_event, reason_status(reason))?;
+            cached_modes = Some(model);
             break;
         }
-        let step = rfo_step(values, vectors, &g, followed, radius)?;
+        let step = model.step(&g, radius)?;
         let mut predicted_gradient: Vec<_> = h
             .chunks_exact(x.len())
             .zip(&g)
@@ -567,25 +862,35 @@ fn run(
         let (trial_max, trial_rms) = gradient_metrics(&trial_g);
         let old = dot(&g, &g);
         let expected = old - dot(&predicted_gradient, &predicted_gradient);
-        let force_ratio = if expected > 1e-24 {
-            (old - dot(&trial_g, &trial_g)) / expected
-        } else {
-            0.0
-        };
+        let force_ratio = (old - dot(&trial_g, &trial_g)) / expected;
+        let energy_ratio = actual / predicted;
         let mut ratio = if !cancels {
-            actual / predicted
+            energy_ratio
         } else if expected.abs() > 1e-24 {
-            (old - dot(&trial_g, &trial_g)) / expected
+            force_ratio
         } else if (actual - predicted).abs() < 1e-12 {
             1.0
         } else {
             0.0
         };
         let length = norm(&step);
-        let mut accepted_by = "accept";
+        let floor_exhausted = at_minimum_radius(radius, length);
+        // Cancellation accepts on the force model just like the floor
+        // fallback, so both paths need the same force and exact-index checks.
+        let mut force_only = cancels && expected.abs() > 1e-24;
+        let force_improves = model.is_index_one()
+            && trial_max < max_gradient
+            && trial_rms < rms_gradient
+            && expected > 1e-24
+            && force_ratio.is_finite()
+            && force_ratio >= 0.1;
         let mut rejection = None;
         if trial_energy > ceiling {
             rejection = Some("reject: energy ceiling");
+        } else if force_only {
+            if !force_improves {
+                rejection = Some("reject: model ratio");
+            }
         } else if !ratio.is_finite() || ratio < 0.1 {
             // At an index-one point, the local Newton step solves g(x)=0.
             // Squared force is a local merit function (McIver & Komornicki,
@@ -593,31 +898,24 @@ fn run(
             // When an already short step would exhaust the radius, use the
             // measured reduction in squared *physical* force if the model
             // predicted a reduction and both force metrics actually improve.
-            if length <= MIN_RADIUS
-                && followed == 0
-                && values[0] < 0.0
-                && values.get(1).is_none_or(|v| *v >= 0.0)
-                && trial_max < max_gradient
-                && trial_rms < rms_gradient
-                && force_ratio >= 0.1
-            {
+            if floor_exhausted && force_improves {
                 ratio = force_ratio;
-                accepted_by = "accept: projected force";
+                force_only = true;
             } else {
                 rejection = Some("reject: model ratio");
             }
         }
         let mut next_model = None;
-        if rejection.is_none() {
-            // Certify the launch against a fresh Hessian before accepting a
-            // force-converged trial. A secant model can hide a mode switch.
-            let mut exact = (trial_max <= criteria.max_gradient
-                && trial_rms <= criteria.rms_gradient)
-                || (options.hessian_every > 0
-                    && (accepted + 1).is_multiple_of(options.hessian_every));
-            let mut trial_h = if exact {
-                hessian(p, &trial)?
-            } else {
+        let mut confirmed_trial_mode_loss = false;
+        'certify: {
+            if rejection.is_some() {
+                break 'certify;
+            }
+            let force_converged =
+                trial_max <= criteria.max_gradient && trial_rms <= criteria.rms_gradient;
+            let scheduled =
+                options.hessian_every > 0 && (accepted + 1).is_multiple_of(options.hessian_every);
+            if !force_converged && !scheduled && !force_only {
                 let y: Vec<_> = trial_gradient
                     .iter()
                     .zip(&gradient)
@@ -625,18 +923,44 @@ fn run(
                     .collect();
                 let mut updated = h.clone();
                 bofill(&mut updated, &step, &y);
-                updated
+                let next = Modes::new(&updated, &trial_rigid, &reference, false)?;
+                if !next.lost_mode(&model) {
+                    next_model = Some((updated, next, false));
+                    break 'certify;
+                }
+            }
+            // An exact Hessian certifies stationarity, force-only merit, and
+            // apparent secant mode loss. A rejected build spends its slot.
+            if !recovery_hessians.reserve_trial(force_converged) {
+                rejection = Some("reject: Hessian budget");
+                stalled = recovery_hessians.used == MAX_RECOVERY_HESSIANS;
+                if stalled {
+                    reason = SaddleReason::HessianBudgetExhausted;
+                    emit(on_event, reason_status(reason))?;
+                }
+                break 'certify;
+            }
+            let Some(trial_h) = optional_hessian(p, &trial, "trial Hessian", &mut diagnostics)?
+            else {
+                rejection = Some("reject: Hessian SCF failure");
+                break 'certify;
             };
             let mut next = Modes::new(&trial_h, &trial_rigid, &reference, false)?;
-            if !exact && next.lost_mode(&model) {
-                trial_h = hessian(p, &trial)?;
-                next = Modes::new(&trial_h, &trial_rigid, &reference, false)?;
-                exact = true;
-            }
             if next.lost_mode(&model) {
+                confirmed_trial_mode_loss = true;
                 rejection = Some("reject: followed mode");
+            } else if force_only
+                && next
+                    .characterize(&trial, &trial_gradient, &trial_h, masses, &inverse_sqrt)?
+                    .imaginary
+                    != 1
+            {
+                rejection = Some("reject: trial Hessian index");
             } else {
-                next_model = Some((trial_h, next, exact));
+                if (force_converged || scheduled) && !force_only {
+                    recovery_hessians.refund();
+                }
+                next_model = Some((trial_h, next, true));
             }
         }
         emit(
@@ -647,35 +971,91 @@ fn run(
                 rms_gradient: trial_rms,
                 length,
                 ratio,
-                decision: rejection.unwrap_or(accepted_by),
+                energy_ratio,
+                force_ratio,
+                decision: rejection.unwrap_or(if force_only {
+                    "accept: projected force"
+                } else {
+                    "accept"
+                }),
             },
         )?;
         let Some((trial_h, next, exact)) = next_model else {
             let rejected_length = radius.min(length);
-            if rejected_length <= MIN_RADIUS {
-                if !h_is_exact {
-                    // Rebuild at the last accepted geometry before discarding
-                    // an apparently unproductive secant direction.
+            let stop_reason = if rejection == Some("reject: Hessian budget") {
+                SaddleReason::HessianBudgetExhausted
+            } else if rejection == Some("reject: energy ceiling") {
+                SaddleReason::EnergyCeiling
+            } else if confirmed_trial_mode_loss {
+                SaddleReason::FollowedModeLost
+            } else {
+                SaddleReason::MinimumRadiusExhausted
+            };
+            if !stalled && !h_is_exact && (confirmed_trial_mode_loss || floor_exhausted) {
+                // One exact trial-mode loss is enough to distrust a secant
+                // model. Replan immediately at the current point instead of
+                // paying for another exact trial at every smaller radius.
+                if recovery_hessians.reserve() {
                     emit(
                         on_event,
                         Event::SaddleStatus("refresh rejected secant model"),
                     )?;
-                    h = hessian(p, &x)?;
+                    let Some(exact) =
+                        optional_hessian(p, &x, "secant model refresh", &mut diagnostics)?
+                    else {
+                        if candidates
+                            .provisional
+                            .as_ref()
+                            .is_some_and(|(_, point)| point.positions == x)
+                            && candidates.verified.is_some()
+                        {
+                            candidates.provisional = None;
+                        }
+                        cached_modes = Some(model);
+                        reason = stop_reason;
+                        emit(on_event, reason_status(reason))?;
+                        stalled = true;
+                        continue;
+                    };
+                    h = exact;
                     h_is_exact = true;
+                    let refreshed = Modes::new(&h, &rigid, &reference, false)?;
+                    if refreshed.lost_mode(&model) {
+                        reason = SaddleReason::FollowedModeLost;
+                        emit(on_event, reason_status(reason))?;
+                        stalled = true;
+                    }
+                    cached_modes = Some(refreshed);
                 } else {
-                    emit(on_event, Event::SaddleStatus("minimum radius exhausted"))?;
+                    reason = SaddleReason::HessianBudgetExhausted;
+                    emit(on_event, reason_status(reason))?;
                     stalled = true;
                 }
             } else {
-                radius = (0.5 * rejected_length).max(MIN_RADIUS);
+                // Neither geometry nor Hessian changes on radius-only retries.
+                cached_modes = Some(model);
+                if !stalled {
+                    if floor_exhausted {
+                        reason = stop_reason;
+                        emit(on_event, reason_status(reason))?;
+                        stalled = true;
+                    } else {
+                        radius = (0.5 * rejected_length).max(MIN_RADIUS);
+                    }
+                }
             }
             continue;
         };
-        if !(0.25..=1.75).contains(&ratio) {
-            radius = (0.5 * radius).max(MIN_RADIUS);
-        } else if (0.75..=1.25).contains(&ratio) && norm(&step) >= 0.8 * radius {
-            radius = (1.5 * radius).min(MAX_RADIUS);
-        }
+        // Any acceptance based on force agreement holds the radius until a
+        // reliable accepted energy ratio establishes model agreement again.
+        update_accepted_radius(
+            &mut radius,
+            &mut awaiting_energy_agreement,
+            length,
+            ratio,
+            !cancels && energy_ratio.is_finite() && energy_ratio >= 0.1,
+            force_only,
+        );
         h = trial_h;
         h_is_exact = exact;
         cached_modes = Some(next);
@@ -688,26 +1068,65 @@ fn run(
         && candidates.improves(rms)
     {
         emit(on_event, Event::SaddleStatus("verify candidate Hessian"))?;
-        let exact = if h_is_exact && x == point.positions {
-            h.clone()
+        let current_exact = h_is_exact && x == point.positions;
+        let exact = if current_exact {
+            Ok(h.clone())
         } else {
-            hessian(p, &point.positions)?
+            hessian(p, &point.positions)
         };
-        candidates.verify(&point.positions, point.energy, rms, &exact, masses)?;
+        match exact {
+            Ok(exact) => {
+                if current_exact
+                    && let Some(characterization) = cached_modes
+                        .as_ref()
+                        .and_then(|model| model.characterization)
+                {
+                    candidates.retain(
+                        &point.positions,
+                        point.energy,
+                        rms,
+                        &exact,
+                        characterization.imaginary == 1,
+                    );
+                } else {
+                    candidates.verify(&point.positions, point.energy, rms, &exact, masses)?;
+                }
+                if x == point.positions {
+                    h = exact;
+                    h_is_exact = true;
+                }
+            }
+            Err(error @ TsError::Scf(_))
+                if candidates.verified.is_some() || point.positions != x =>
+            {
+                diagnostics.push(format!("optional provisional candidate Hessian: {error}"));
+            }
+            // Without another result, final characterization would repeat this
+            // same failed Hessian. Propagate it once rather than retrying.
+            Err(error) => return Err(error),
+        }
     }
-    if let Some((_, result)) = candidates.verified {
+    if let Some((_, point, hessian)) = candidates.verified {
         emit(
             on_event,
             Event::SaddleStatus("return lowest-force verified index-one candidate"),
         )?;
-        return Ok(result);
+        return Ok(Refinement {
+            point,
+            converged: false,
+            reason,
+            diagnostics,
+            hessian: Some(hessian),
+        });
     }
     Ok(Refinement {
         point: Minimum {
             positions: x,
             energy,
         },
-        converged: false,
+        converged: reason == SaddleReason::Stationary,
+        reason,
+        diagnostics,
         hessian: h_is_exact.then_some(h),
     })
 }
@@ -734,6 +1153,61 @@ mod tests {
     #[test]
     fn zero_tangent_follows_lowest_mode() {
         assert_eq!(selected_mode(&[1.0, 0.0, 0.0, 1.0], 2, &[0.0, 0.0]), 0);
+    }
+
+    #[test]
+    fn radius_retries_reuse_augmented_solutions_and_preserve_clipping() {
+        for (hessian, gradient, followed) in [
+            (vec![-2.0, 0.0, 0.0, 3.0], vec![0.4, 0.6], 0),
+            // The positive followed mode has zero slope, so its augmented
+            // extreme vector has zero last component and scales with radius.
+            (vec![2.0, 0.0, 0.0, 3.0], vec![0.0, 0.6], 0),
+        ] {
+            let mut model = Modes::new(&hessian, &[], &[1.0, 0.0], true).unwrap();
+            assert_eq!(model.followed, followed);
+            for radius in [0.1, 0.05, 0.025, MIN_RADIUS] {
+                let step = model.step(&gradient, radius).unwrap();
+                let fresh =
+                    rfo_step(&model.values, &model.vectors, &gradient, followed, radius).unwrap();
+                assert_eq!(step, fresh);
+                assert!((norm(&step) - radius).abs() < 1e-15);
+                assert_eq!(model.rfo_builds, 1);
+            }
+        }
+    }
+
+    #[test]
+    fn radius_retries_reuse_launch_and_index_characterization() {
+        let x = [0.0, 0.0, 0.0, 2.0, 0.0, 0.0];
+        let masses = [1.0, 4.0];
+        let mut hessian = vec![0.0; 36];
+        for (i, j, value) in [(0, 0, -0.25), (0, 3, 0.25), (3, 0, 0.25), (3, 3, -0.25)] {
+            hessian[i * 6 + j] = value;
+        }
+        let tangent = [-1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        let gradient = [0.001, 0.0, 0.0, -0.001, 0.0, 0.0];
+        let inverse_sqrt: Vec<_> = masses
+            .iter()
+            .flat_map(|m: &f64| [m.sqrt().recip(); 3])
+            .collect();
+        let mut model = Modes::new(&hessian, &physical_basis(&x, &masses), &tangent, true).unwrap();
+        let expected = model
+            .characterize(&x, &gradient, &hessian, &masses, &inverse_sqrt)
+            .unwrap();
+        assert_eq!(expected.imaginary, 1);
+        for radius in [0.1, 0.05, 0.025, MIN_RADIUS] {
+            model.step(&gradient, radius).unwrap();
+            let characterization = model
+                .characterize(&x, &gradient, &hessian, &masses, &inverse_sqrt)
+                .unwrap();
+            assert_eq!(characterization.imaginary, expected.imaginary);
+            assert_eq!(
+                characterization.mode_displacement,
+                expected.mode_displacement
+            );
+            assert_eq!(model.characterization_builds, 1);
+            assert_eq!(model.rfo_builds, 1);
+        }
     }
 
     struct Quadratic {
@@ -865,6 +1339,7 @@ mod tests {
             point,
             converged,
             hessian,
+            ..
         } = refine(
             &mut SoftCubic { cubic: 0.1 },
             &Minimum {
@@ -914,6 +1389,7 @@ mod tests {
             point,
             converged,
             hessian,
+            ..
         } = refine(
             &mut potential,
             &start,
@@ -928,8 +1404,8 @@ mod tests {
         .unwrap();
         assert!(!converged);
         assert!(
-            hessian.is_none(),
-            "an updated model is not a rebuilt Hessian"
+            hessian.is_some(),
+            "force agreement must be certified against an exact Hessian"
         );
         assert!(
             point.positions[0] < 0.099,
@@ -959,6 +1435,7 @@ mod tests {
         }
         let x = vec![0.002, 0.002];
         let (energy, _) = evaluate(&mut SaddleCubic, &x).unwrap();
+        let mut ratios = None;
         let result = refine(
             &mut SaddleCubic,
             &Minimum {
@@ -968,9 +1445,23 @@ mod tests {
             &[1., 0.],
             &[],
             &TsOptions::default(),
-            &mut |_| ControlFlow::Continue(()),
+            &mut |event| {
+                if let Event::SaddleTrial {
+                    decision: "accept: projected force",
+                    energy_ratio,
+                    force_ratio,
+                    ..
+                } = event
+                {
+                    ratios.get_or_insert((energy_ratio, force_ratio));
+                }
+                ControlFlow::Continue(())
+            },
         )
         .unwrap();
+        let (energy_ratio, force_ratio) = ratios.expect("expected force-based acceptance");
+        assert!((energy_ratio + 3.975).abs() < 0.001, "{energy_ratio}");
+        assert!((force_ratio - 0.989).abs() < 0.001, "{force_ratio}");
         assert!(result.converged);
         assert!(
             gradient_metrics(
@@ -1286,5 +1777,204 @@ mod tests {
             !result.converged,
             "the IRC mode remains {displacement} sqrt(amu) bohr from stationarity"
         );
+    }
+
+    type StretchSurface = fn(f64, f64) -> (f64, [f64; 2], [f64; 3]);
+
+    struct TwoStretches(StretchSurface);
+
+    fn stretch_geometry(a: f64, b: f64) -> Vec<f64> {
+        vec![
+            -2.0 - a / 2_f64.sqrt() + b / 6_f64.sqrt(),
+            0.0,
+            0.0,
+            -2.0 * b / 6_f64.sqrt(),
+            0.0,
+            0.0,
+            2.0 + a / 2_f64.sqrt() + b / 6_f64.sqrt(),
+            0.0,
+            0.0,
+        ]
+    }
+
+    fn stretch_coordinates(x: &[f64]) -> [f64; 2] {
+        [
+            (x[6] - x[0] - 4.0) / 2_f64.sqrt(),
+            (x[0] - 2.0 * x[3] + x[6]) / 6_f64.sqrt(),
+        ]
+    }
+
+    fn stretch_jacobian() -> [[f64; 3]; 2] {
+        // Two orthonormal Cartesian stretches of the collinear triatomic.
+        [
+            [-1.0 / 2_f64.sqrt(), 0.0, 1.0 / 2_f64.sqrt()],
+            [1.0 / 6_f64.sqrt(), -2.0 / 6_f64.sqrt(), 1.0 / 6_f64.sqrt()],
+        ]
+    }
+
+    impl Potential for TwoStretches {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            let [a, b] = stretch_coordinates(x);
+            let (mut energy, [da, db], _) = (self.0)(a, b);
+            let jacobian = stretch_jacobian();
+            g.fill(0.0);
+            for i in 0..3 {
+                g[3 * i] = da * jacobian[0][i] + db * jacobian[1][i];
+                for axis in 1..3 {
+                    let transverse = 3 * i + axis;
+                    energy += x[transverse] * x[transverse];
+                    g[transverse] = 2.0 * x[transverse];
+                }
+            }
+            Ok(energy)
+        }
+
+        fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            let [a, b] = stretch_coordinates(x);
+            let (_, _, [haa, hab, hbb]) = (self.0)(a, b);
+            let jacobian = stretch_jacobian();
+            h.fill(0.0);
+            for i in 0..3 {
+                // Keep the remaining physical bending modes strictly stable.
+                for axis in 1..3 {
+                    let transverse = 3 * i + axis;
+                    h[transverse * 9 + transverse] = 2.0;
+                }
+                for j in 0..3 {
+                    h[(3 * i) * 9 + 3 * j] = haa * jacobian[0][i] * jacobian[0][j]
+                        + hab * (jacobian[0][i] * jacobian[1][j] + jacobian[1][i] * jacobian[0][j])
+                        + hbb * jacobian[1][i] * jacobian[1][j];
+                }
+            }
+            Some(Ok(()))
+        }
+    }
+
+    fn mixed_midpoint_surface(a: f64, b: f64) -> (f64, [f64; 2], [f64; 3]) {
+        let offset = a + 0.5;
+        let bump = (1.0 - 16.0 * offset * offset).max(0.0);
+        (
+            a.powi(6) / 6.0 - 5.0 * a.powi(4) / 16.0
+                + a * a / 8.0
+                + 0.2 * bump.powi(3)
+                + 0.5 * (1.0 + 4.0 * a) * b * b
+                + b.powi(4) / 4.0,
+            [
+                a.powi(5) - 1.25 * a.powi(3) + 0.25 * a - 19.2 * offset * bump * bump + 2.0 * b * b,
+                (1.0 + 4.0 * a) * b + b.powi(3),
+            ],
+            [
+                5.0 * a.powi(4) - 3.75 * a * a + 0.25 - 19.2 * bump * bump
+                    + 1228.8 * offset * offset * bump,
+                4.0 * b,
+                1.0 + 4.0 * a + 3.0 * b * b,
+            ],
+        )
+    }
+
+    fn stretch_band(potential: &mut TwoStretches, coordinates: &[f64], climbing: usize) -> Band {
+        Band {
+            path: coordinates
+                .iter()
+                .map(|&a| {
+                    let positions = stretch_geometry(a, 0.0);
+                    let (energy, _) = evaluate(potential, &positions).unwrap();
+                    Minimum { positions, energy }
+                })
+                .collect(),
+            converged: false,
+            climbing,
+            tangent: vec![-1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        }
+    }
+
+    #[test]
+    fn stationary_index_two_midpoint_does_not_consume_the_connecting_saddle_handoff() {
+        let masses = [1.0; 3];
+        let mut potential = TwoStretches(mixed_midpoint_surface);
+        let band = stretch_band(&mut potential, &[0.0, -1.0, 0.0, 1.0, 1.0], 2);
+        let ceiling = band.path[2].energy
+            + TsOptions::default().saddle_headroom_kcal / crate::KCAL_PER_HARTREE;
+        let probe = band
+            .intermediate_peaks(&mut potential, &masses, ceiling)
+            .unwrap();
+        assert_eq!(probe.seeds.len(), 2);
+        for (seed, expected_a, expected_energy, expected_index) in [
+            (&probe.seeds[0], -0.5, 0.21432291666666667, 2),
+            (&probe.seeds[1], 0.5, 0.01432291666666667, 1),
+        ] {
+            let [a, b] = stretch_coordinates(&seed.point.positions);
+            assert!((a - expected_a).abs() < 1e-12 && b.abs() < 1e-12);
+            assert!((seed.point.energy - expected_energy).abs() < 1e-12);
+            let exact = hessian(&mut potential, &seed.point.positions).unwrap();
+            let (frequencies, _) =
+                modes::frequencies(&seed.point.positions, &exact, &masses).unwrap();
+            assert_eq!(
+                frequencies
+                    .iter()
+                    .filter(|f| **f < -super::super::IMAGINARY_CM1)
+                    .count(),
+                expected_index
+            );
+        }
+        let mut restarts = 0;
+        let result = refine_band(
+            &mut potential,
+            &band,
+            &masses,
+            &TsOptions::default(),
+            &mut |event| {
+                if let Event::SaddleStatus("restart from band with fresh Hessian") = event {
+                    restarts += 1;
+                }
+                ControlFlow::Continue(())
+            },
+        )
+        .unwrap();
+        assert_eq!(restarts, 1);
+        assert!(result.converged);
+        let [a, b] = stretch_coordinates(&result.point.positions);
+        assert!((a - 0.5).abs() < 1e-12 && b.abs() < 1e-12, "a={a}, b={b}");
+        assert!((result.point.energy - 0.01432291666666667).abs() < 1e-12);
+    }
+
+    #[test]
+    fn late_stationary_index_two_point_returns_the_retained_index_one_candidate() {
+        let mut potential = TwoStretches(|a, b| {
+            (
+                -0.5 * a * a + 0.5 * (1000.0 * a - 1.0) * b * b + b.powi(4) / 4.0,
+                [-a + 500.0 * b * b, (1000.0 * a - 1.0) * b + b.powi(3)],
+                [-1.0, 1000.0 * b, 1000.0 * a - 1.0 + 3.0 * b * b],
+            )
+        });
+        let band = stretch_band(&mut potential, &[-0.003, 0.002, 0.004], 1);
+        let mut accepted = 0;
+        let result = refine_band(
+            &mut potential,
+            &band,
+            &[1.0; 3],
+            &TsOptions {
+                saddle_max_steps: 1,
+                ..TsOptions::default()
+            },
+            &mut |event| {
+                if let Event::SaddleTrial {
+                    decision: "accept", ..
+                } = event
+                {
+                    accepted += 1;
+                }
+                ControlFlow::Continue(())
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            accepted, 1,
+            "the trial reaches the stationary index-two point"
+        );
+        assert_eq!(result.reason, SaddleReason::Stationary);
+        assert!(!result.converged);
+        assert_eq!(result.point.positions, band.path[1].positions);
+        assert!(result.hessian.is_some());
     }
 }

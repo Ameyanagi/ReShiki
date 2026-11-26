@@ -67,7 +67,7 @@ mod report {
     use super::*;
     use crate::cli::{args::Ts, host::CliError, io};
     use reshiki_io::{qc_input::write_orca_hess, qcdata::Frame};
-    use reshiki_optimize::ts::{IMAGINARY_CM1, TsReport};
+    use reshiki_optimize::ts::{IMAGINARY_CM1, SaddleReason, TsReport};
     use reshiki_xtb_worker::protocol::Engine;
     use serde_json::json;
     use std::{
@@ -194,9 +194,9 @@ mod report {
         text
     }
 
-    fn skipped_irc_reason(saddle_converged: bool, imaginary: usize) -> Option<String> {
-        if !saddle_converged {
-            Some("saddle refinement did not converge".into())
+    fn skipped_irc_reason(reason: SaddleReason, imaginary: usize) -> Option<String> {
+        if reason != SaddleReason::Stationary {
+            Some(format!("saddle refinement did not converge ({reason})"))
         } else if imaginary != 1 {
             Some(format!(
                 "expected one imaginary frequency below -{IMAGINARY_CM1} cm-1, found {imaginary}"
@@ -230,7 +230,7 @@ mod report {
                         .as_ref()
                         .map(|reason| format!("IRC failed: {reason}"))
                 })
-                .or_else(|| skipped_irc_reason(self.report.saddle_converged, self.report.imaginary))
+                .or_else(|| skipped_irc_reason(self.report.saddle_reason, self.report.imaginary))
                 .or_else(|| {
                     (!self.report.connects)
                         .then(|| "IRC did not connect the reactant and product".into())
@@ -250,7 +250,7 @@ mod report {
                 }
                 None => match &report.irc_error {
                     Some(reason) => format!("failed: {reason}"),
-                    None => skipped_irc_reason(report.saddle_converged, report.imaginary)
+                    None => skipped_irc_reason(report.saddle_reason, report.imaginary)
                         .map_or_else(|| "skipped".into(), |reason| format!("skipped ({reason})")),
                 },
             };
@@ -437,7 +437,12 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 "connects": report.connects,
                 "path_energies_eh": report.path.iter().map(|image| image.energy).collect::<Vec<_>>(),
                 "neb": {"converged": report.neb_converged, "iterations": self.iterations},
-                "saddle": {"converged": report.saddle_converged, "steps": self.steps},
+                "saddle": {
+                    "converged": report.saddle_converged,
+                    "steps": self.steps,
+                    "reason": report.saddle_reason.to_string(),
+                    "diagnostics": report.saddle_diagnostics,
+                },
                 "evaluations": self.evaluations,
                 "hessians": report.hessians + 1,
                 "seconds": self.seconds,
@@ -453,16 +458,16 @@ Work          {} gradients · {} Hessians · {:.1} s",
         #[test]
         fn skipped_irc_distinguishes_stationarity_from_imaginary_count() {
             assert_eq!(
-                skipped_irc_reason(false, 1).as_deref(),
-                Some("saddle refinement did not converge")
+                skipped_irc_reason(SaddleReason::EnergyCeiling, 1).as_deref(),
+                Some("saddle refinement did not converge (energy ceiling exhausted)")
             );
             for count in [0, 2] {
                 assert_eq!(
-                    skipped_irc_reason(true, count).unwrap(),
+                    skipped_irc_reason(SaddleReason::Stationary, count).unwrap(),
                     format!("expected one imaginary frequency below -50 cm-1, found {count}")
                 );
             }
-            assert_eq!(skipped_irc_reason(true, 1), None);
+            assert_eq!(skipped_irc_reason(SaddleReason::Stationary, 1), None);
         }
     }
 }
