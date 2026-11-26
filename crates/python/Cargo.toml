@@ -17,11 +17,15 @@ doctest = false
 reshiki-process-heap = { path = "../process-heap" }
 reshiki-io = { path = "../io" }
 reshiki-model = { path = "../model" }
+reshiki-optimize = { path = "../optimize" }
+reshiki-qcdata = { path = "../qcdata" }
+reshiki-xtb-worker = { path = "../xtb-worker" }
 nazuchem-n2s = { workspace = true }
 pyo3 = { version = "0.29", features = ["abi3-py310", "extension-module"] }
 rayon = "1.12"
 resvg = "0.45"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
 png = "0.17"
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
