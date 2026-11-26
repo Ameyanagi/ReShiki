@@ -360,6 +360,7 @@ impl App {
         self.tabs.temporary_depth == 0
             && palette.open
             && palette.view == View::Vibrations
+            && self.xtb_failed().is_none()
             && if self.xtb.dock.inspector {
                 self.inspector_open
                     && self.inspector_tab == InspectorTab::Predict

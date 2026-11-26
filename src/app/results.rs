@@ -757,6 +757,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Entry(..)
                 | Action::Retry
                 | Action::RunAgain
+                | Action::ResetRetry
                 | Action::CopyDetails
                 | Action::Cancel
                 | Action::ApplyAnyway

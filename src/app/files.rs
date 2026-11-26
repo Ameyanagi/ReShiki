@@ -1005,16 +1005,13 @@ impl super::App {
                 #[cfg(target_arch = "wasm32")]
                 let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
+                    let result_status = opened_results_status(&path, &doc);
                     self.show_opened(*doc, Some(path));
                     if let Some(view) = view {
                         self.restore_view(view);
                     }
-                    let results = self.tab.doc.science.results.len();
-                    if results > 0 {
-                        self.status = format!(
-                            "{results} calculation result{} in this file",
-                            if results == 1 { "" } else { "s" }
-                        );
+                    if let Some(status) = result_status {
+                        self.status = status;
                     }
                 }
                 return kept;
@@ -1491,6 +1488,40 @@ mod performance;
 /// A browser download can still be blocked or cancelled after this handoff.
 fn download_status(filename: &str) -> String {
     format!("Downloaded {filename}")
+}
+
+/// A native open names the file and its saved results, including each result
+/// whose attachment no longer matches the drawing.
+fn opened_results_status(
+    path: &std::path::Path,
+    doc: &reshiki::document::Document,
+) -> Option<String> {
+    let results = doc.science.results.len();
+    if results == 0 {
+        return None;
+    }
+    let name = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy();
+    let mut status = format!(
+        "Opened {name} · {results} calculation result{}",
+        if results == 1 { "" } else { "s" },
+    );
+    let outdated = doc
+        .science
+        .results
+        .iter()
+        .filter(|stored| {
+            doc.science
+                .attachment(stored.attachment)
+                .is_some_and(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
+        })
+        .count();
+    if outdated > 0 {
+        status.push_str(&format!(" · {outdated} outdated (the drawing changed)"));
+    }
+    Some(status)
 }
 
 pub(super) fn export_status(path: &std::path::Path, details: &[String], browser: bool) -> String {
