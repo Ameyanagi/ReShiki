@@ -676,7 +676,13 @@ fn tables<'a>(shown: &Shown<'a>) -> Option<Element<'a, Message>> {
 }
 
 fn log<'a>(shown: &Shown<'a>, method: &str) -> Element<'a, Message> {
-    let log = results::log(&shown.stored.result, shown.frame, shown.info, method);
+    let log = results::log_with_ts(
+        &shown.stored.result,
+        shown.frame,
+        shown.info,
+        method,
+        shown.ts,
+    );
     text(log)
         .size(11)
         .font(iced::Font::MONOSPACE)

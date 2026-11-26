@@ -293,6 +293,7 @@ fn calculated_result_round_trips_with_solvent_settings() {
         seconds: 12.5,
         scf_iterations: vec![7, 5, 4],
         finished: Some("2026-11-26T05:03:00Z".into()),
+        transition_state: None,
     });
     calculated.validate(&frame).unwrap();
     let value = serde_json::to_value(&calculated).unwrap();
@@ -435,6 +436,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
             seconds,
             scf_iterations: vec![],
             finished: None,
+            transition_state: None,
         });
         assert!(result.validate(&frame).is_err());
     }
@@ -442,6 +444,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
         seconds: 0.0,
         scf_iterations: vec![0; MAX_RUN_EVALUATIONS + 1],
         finished: None,
+        transition_state: None,
     });
     assert!(matches!(
         result.validate(&frame),

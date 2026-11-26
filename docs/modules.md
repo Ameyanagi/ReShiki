@@ -221,7 +221,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/ts.rs`: Transition-state searches from the reaction arrow, with session-only path previews.
-- `src/app/xtb/ts/card.rs`: The selected reaction arrow's transition-state card and its reviewed inputs.
+- `src/app/xtb/ts/card.rs`: Predict controls and results for a single selected reaction arrow.
 - `src/app/xtb/ts/energy.rs`: Reaction energies are ordinary, sequential molecule calculations.
 - `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.

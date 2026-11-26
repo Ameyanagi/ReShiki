@@ -98,6 +98,95 @@ pub struct RunSummary {
     /// When the run finished: RFC 3339, UTC, whole seconds (e.g. "2026-11-26T05:03:00Z").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished: Option<String>,
+    /// Transition-state search details, retained with the light result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transition_state: Option<Box<TransitionStateRun>>,
+}
+
+/// Interpretation and audit details of one transition-state search.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TransitionStateRun {
+    pub arrow: u64,
+    pub saddle_converged: bool,
+    pub imaginary: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imaginary_cm1: Option<f64>,
+    pub climbing_image: usize,
+    pub mapping: TransitionStateMapping,
+    pub diagnostics: Vec<(String, String)>,
+}
+
+/// Atom labels are captured at run start, in the direction of the reaction arrow.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransitionStateMapping {
+    pub formed: Vec<[MappedAtom; 2]>,
+    pub broken: Vec<[MappedAtom; 2]>,
+    pub hydrogen_moves: Vec<[MappedAtom; 2]>,
+    pub automatic: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MappedAtom {
+    pub element: String,
+    pub number: u32,
+}
+
+impl TransitionStateRun {
+    fn validate(&self, result: &CalcResult, atoms: usize) -> Result<(), Error> {
+        let valid_pairs = |pairs: &[[MappedAtom; 2]]| {
+            pairs.len() <= atoms * atoms
+                && pairs.iter().flatten().all(|atom| {
+                    atom.number != 0
+                        && (1..=3).contains(&atom.element.len())
+                        && atom.element.bytes().all(|byte| byte.is_ascii_alphabetic())
+                })
+        };
+        if result.task != Task::TransitionState
+            || self.arrow == 0
+            || self.imaginary > 3 * atoms
+            || self
+                .imaginary_cm1
+                .is_some_and(|value| !value.is_finite() || value >= 0.)
+            || result
+                .trajectory
+                .as_ref()
+                .is_none_or(|path| self.climbing_image >= path.energies_hartree.len())
+            || !valid_pairs(&self.mapping.formed)
+            || !valid_pairs(&self.mapping.broken)
+            || !valid_pairs(&self.mapping.hydrogen_moves)
+            || self.diagnostics.len() > 64
+            || self
+                .diagnostics
+                .iter()
+                .any(|(label, value)| label.len() > 128 || value.len() > 8192)
+        {
+            return Err(Error::Invalid(
+                "invalid transition-state run details".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn heap_bytes(&self) -> usize {
+        let pairs = |pairs: &[[MappedAtom; 2]]| {
+            size_of_val(pairs)
+                + pairs
+                    .iter()
+                    .flatten()
+                    .map(|atom| atom.element.len())
+                    .sum::<usize>()
+        };
+        size_of::<Self>()
+            + pairs(&self.mapping.formed)
+            + pairs(&self.mapping.broken)
+            + pairs(&self.mapping.hydrogen_moves)
+            + size_of_val(self.diagnostics.as_slice())
+            + self
+                .diagnostics
+                .iter()
+                .map(|(label, value)| label.len() + value.len())
+                .sum::<usize>()
+    }
 }
 
 /// Calculation task.
@@ -497,6 +586,9 @@ impl CalcResult {
                     count: run.scf_iterations.len(),
                     max: MAX_RUN_EVALUATIONS,
                 });
+            }
+            if let Some(ts) = &run.transition_state {
+                ts.validate(self, frame.numbers.len())?;
             }
         }
         let n_atoms = frame.numbers.len();
@@ -905,7 +997,11 @@ impl CalcResult {
         }
         if let Some(run) = &self.run {
             bytes += size_of_val(run.scf_iterations.as_slice())
-                + run.finished.as_ref().map_or(0, String::len);
+                + run.finished.as_ref().map_or(0, String::len)
+                + run
+                    .transition_state
+                    .as_deref()
+                    .map_or(0, TransitionStateRun::heap_bytes);
         }
         bytes
             + self.orbitals.as_ref().map_or(0, Orbitals::heap_bytes)

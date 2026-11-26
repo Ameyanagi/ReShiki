@@ -25,20 +25,9 @@ use std::{collections::BTreeSet, ops::ControlFlow, sync::Arc, time::Instant};
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
     Stage(Stage),
-    Neb {
-        iteration: usize,
-        /// Hartree per bohr.
-        max_force: f64,
-        /// Zero-based climbing image, once enabled.
-        climbing: Option<usize>,
-    },
-    Saddle {
-        step: usize,
-    },
-    Irc {
-        forward: bool,
-        step: usize,
-    },
+    Neb { iteration: usize },
+    Saddle { step: usize },
+    Irc { forward: bool, step: usize },
     Done(Result<Arc<Report>, Failure>),
 }
 
@@ -81,6 +70,8 @@ fn run(
     tx: &mpsc::UnboundedSender<Event>,
 ) -> Result<Report, Failure> {
     let started = Instant::now();
+    let mut trace = SearchTrace::default();
+    trace.enter("Building endpoints");
     if !(5..=24).contains(&images) {
         return Err(Failure::Other(
             "A transition-state search needs 5 to 24 images".into(),
@@ -163,6 +154,7 @@ fn run(
         &mut workers,
         &search,
         |event| {
+            trace.observe(event);
             if let Some(event) = progress(event)
                 && send(tx, cancel, event).is_err()
             {
@@ -174,12 +166,14 @@ fn run(
     )
     .map_err(failed)?;
     check_cancel(cancel)?;
+    trace.enter("Worker check");
     let checked = workers
         .first_mut()
         .ok_or_else(|| Failure::Other("No xTB worker".into()))?
         .checked_hessian(&report.ts.positions, &masses)
         .map_err(ts::TsError::from);
     check_cancel(cancel)?;
+    trace.finish();
     let evaluations = workers
         .iter()
         .flat_map(|worker| worker.evaluations.iter())
@@ -200,6 +194,7 @@ fn run(
             evaluations,
             masses,
             seconds: started.elapsed().as_secs_f64(),
+            trace,
         },
     )
 }
@@ -350,6 +345,49 @@ struct Completion {
     evaluations: Vec<Evaluation>,
     masses: Vec<f64>,
     seconds: f64,
+    trace: SearchTrace,
+}
+
+/// Search counters and wall times are independent of the visible progress text.
+#[derive(Default)]
+struct SearchTrace {
+    neb_iterations: Option<usize>,
+    saddle_steps: Option<usize>,
+    current: Option<(&'static str, Instant)>,
+    times: Vec<(String, f64)>,
+}
+
+impl SearchTrace {
+    fn enter(&mut self, stage: &'static str) {
+        if self.current.is_some_and(|(current, _)| current == stage) {
+            return;
+        }
+        self.finish();
+        self.current = Some((stage, Instant::now()));
+    }
+
+    fn finish(&mut self) {
+        if let Some((stage, started)) = self.current.take() {
+            self.times
+                .push((stage.into(), started.elapsed().as_secs_f64()));
+        }
+    }
+
+    fn observe(&mut self, event: ts::Event<'_>) {
+        match event {
+            ts::Event::Stage(stage) => self.enter(match stage {
+                ts::Stage::Endpoints => "Building endpoints",
+                ts::Stage::Interpolation => "IDPP interpolation",
+                ts::Stage::Neb => "CI-NEB",
+                ts::Stage::Saddle => "P-RFO refinement",
+                ts::Stage::Frequencies => "Frequency analysis",
+                ts::Stage::Irc => "IRC verification",
+            }),
+            ts::Event::Neb { iteration, .. } => self.neb_iterations = Some(iteration),
+            ts::Event::Saddle { step, .. } => self.saddle_steps = Some(step),
+            _ => {}
+        }
+    }
 }
 
 fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
@@ -361,6 +399,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         evaluations,
         masses,
         seconds,
+        trace,
     } = done;
     let frame = |positions: &[f64]| Frame {
         positions_angstrom: angstroms(positions),
@@ -403,6 +442,8 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         ),
     };
     result.task = qcdata::Task::TransitionState;
+    // The search's refined saddle is the energy used by every barrier display.
+    result.energy_hartree = Some(report.ts.energy);
     result.input_frame = Some(launch.frame.hash());
     result.endpoints = Some(qcdata::Endpoints {
         reactant: reactant.hash(),
@@ -432,11 +473,15 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .map(|e| e.scf_iterations as u32)
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+        transition_state: None,
     });
     result
         .validate(&transition)
         .map_err(|error| Failure::Other(error.to_string()))?;
     let extras = Extras {
+        saddle_converged: report.saddle_converged,
+        num_imaginary: report.imaginary,
+        diagnostics: diagnostics(&report, &worker_frequencies, &result, &trace),
         image_positions: report
             .path
             .iter()
@@ -463,6 +508,124 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         extras,
         info,
     })
+}
+
+fn diagnostics(
+    report: &TsReport,
+    worker_frequencies: &[f64],
+    result: &CalcResult,
+    trace: &SearchTrace,
+) -> Vec<(String, String)> {
+    let convergence = |converged| {
+        if converged {
+            "converged"
+        } else {
+            "not converged"
+        }
+    };
+    let mut rows = vec![
+        ("Method".into(), "IDPP → CI-NEB → P-RFO → IRC".into()),
+        (
+            "Images".into(),
+            format!(
+                "{} · climbing image {}",
+                report.path.len(),
+                report.climbing_image + 1
+            ),
+        ),
+        (
+            "NEB".into(),
+            format!(
+                "{} · {}",
+                trace.neb_iterations.map_or_else(
+                    || "iterations unavailable".into(),
+                    |n| format!("{n} iterations")
+                ),
+                convergence(report.neb_converged)
+            ),
+        ),
+        (
+            "Saddle".into(),
+            format!(
+                "{} · {} · {}",
+                trace
+                    .saddle_steps
+                    .map_or_else(|| "steps unavailable".into(), |n| format!("{n} steps")),
+                convergence(report.saddle_converged),
+                report.saddle_reason
+            ),
+        ),
+    ];
+    let worker = worker_frequencies
+        .iter()
+        .filter(|&&f| f < -ts::IMAGINARY_CM1)
+        .count();
+    rows.push((
+        "Worker check".into(),
+        if worker_frequencies.is_empty() {
+            match &result.status {
+                qcdata::Status::NotConverged { reason } | qcdata::Status::Failed { reason }
+                    if reason.starts_with("worker check failed: ") =>
+                {
+                    reason.clone()
+                }
+                _ => "frequency check unavailable".into(),
+            }
+        } else {
+            format!(
+                "engine {} imaginary mode(s); worker {worker} · {}",
+                report.imaginary,
+                if report.imaginary == worker {
+                    "agree"
+                } else {
+                    "disagree"
+                }
+            )
+        },
+    ));
+    if let Some(branches) = &report.irc {
+        for (label, branch) in ["IRC +mode", "IRC −mode"].into_iter().zip(branches) {
+            let endpoint = match branch.reached {
+                ts::Reached::Reactant => "reactant",
+                ts::Reached::Product => "product",
+                ts::Reached::Other => "different minimum",
+            };
+            rows.push((
+                label.into(),
+                format!(
+                    "{endpoint} · downhill trace {} · {} points",
+                    convergence(branch.completed),
+                    branch.path.len()
+                ),
+            ));
+        }
+    } else {
+        rows.push(("IRC".into(), "not completed".into()));
+    }
+    if let Some(error) = &report.irc_error {
+        rows.push(("IRC error".into(), error.clone()));
+    }
+    rows.push(("Evaluations".into(), report.evaluations.to_string()));
+    rows.push(("Hessians".into(), report.hessians.to_string()));
+    rows.extend(
+        trace
+            .times
+            .iter()
+            .map(|(stage, seconds)| (format!("Time · {stage}"), format!("{seconds:.2} s"))),
+    );
+    rows.extend(
+        report
+            .saddle_diagnostics
+            .iter()
+            .enumerate()
+            .map(|(index, diagnostic)| {
+                (
+                    format!("Saddle diagnostic {}", index + 1),
+                    diagnostic.clone(),
+                )
+            }),
+    );
+    rows
 }
 
 fn engine_candidate(frame: &Frame, report: &TsReport, engine: &Engine) -> CalcResult {
@@ -575,16 +738,7 @@ fn progress(event: ts::Event<'_>) -> Option<Event> {
             ts::Stage::Saddle | ts::Stage::Frequencies => Stage::Saddle,
             ts::Stage::Irc => Stage::Irc,
         }),
-        ts::Event::Neb {
-            iteration,
-            max_force,
-            climbing,
-            ..
-        } => Event::Neb {
-            iteration,
-            max_force,
-            climbing,
-        },
+        ts::Event::Neb { iteration, .. } => Event::Neb { iteration },
         ts::Event::Saddle { step, .. } => Event::Saddle { step },
         ts::Event::Irc { forward, step, .. } => Event::Irc { forward, step },
         ts::Event::Endpoint { .. } | ts::Event::SaddleTrial { .. } | ts::Event::SaddleStatus(_) => {

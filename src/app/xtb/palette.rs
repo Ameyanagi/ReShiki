@@ -165,9 +165,14 @@ impl App {
                 || ts::is_ts(&stored.result)
                     && ts.map_or_else(
                         || {
-                            ts::matching_plans(&self.tab.doc, &link.atoms)
-                                .next()
-                                .is_none()
+                            ts::saved_search(&stored.result).map_or_else(
+                                || {
+                                    ts::matching_plans(&self.tab.doc, &link.atoms)
+                                        .next()
+                                        .is_none()
+                                },
+                                |search| ts::saved_search_stale(&self.tab.doc, search),
+                            )
                         },
                         |ts| ts.stale(&self.tab.doc, (self.tab.file_epoch, self.tab.revision)),
                     ),
@@ -200,6 +205,11 @@ impl App {
     /// The newest result stored for the card's molecule; cheap enough for
     /// every frame (no freshness or frame hashing).
     fn xtb_newest(&self) -> Option<Arc<CalcResult>> {
+        if let Some(arrow) = self.xtb_selected_reaction()
+            && let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow)
+        {
+            return Some(Arc::clone(result));
+        }
         let target: std::collections::HashSet<u64> = self
             .xtb_target()
             .or_else(|| self.xtb_ts_target())?
@@ -407,7 +417,13 @@ impl App {
                 };
                 let method = shown.method();
                 if matches!(action, Action::CopyLog) {
-                    let log = results::log(&shown.stored.result, shown.frame, shown.info, &method);
+                    let log = results::log_with_ts(
+                        &shown.stored.result,
+                        shown.frame,
+                        shown.info,
+                        &method,
+                        shown.ts,
+                    );
                     self.status = "Copied the xTB log".into();
                     self.error = false;
                     return iced::clipboard::write(log);
@@ -517,7 +533,7 @@ impl App {
             Some(doc)
         });
         let name = if path {
-            format!("Path image {}", index + 1)
+            "Path point".into()
         } else {
             super::conformers::step_name(result, index)
         };
@@ -525,7 +541,7 @@ impl App {
             format!("{name} cannot be shown: {error}")
         } else if preview.is_some() {
             if path {
-                format!("Previewing image {} of {count} · Esc returns", index + 1)
+                "Previewing the reaction path · Esc returns".into()
             } else {
                 super::conformers::previewing(
                     result,
@@ -535,7 +551,7 @@ impl App {
                 )
             }
         } else if path {
-            format!("{name} of {count}")
+            "Selected a point on the reaction path".into()
         } else {
             format!("{name} is not saved in this file")
         };

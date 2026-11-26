@@ -281,6 +281,7 @@ fn light_optimization_run_metadata_costs_at_most_two_kilobytes() {
         seconds: 42.5,
         scf_iterations: (0..60).map(|i| 4 + i % 9).collect(),
         finished: Some("2026-11-26T05:03:00Z".into()),
+        transition_state: None,
     });
     let saved = result.for_file(0, &[]);
     saved.validate(&frame).unwrap();

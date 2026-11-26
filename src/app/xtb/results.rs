@@ -95,12 +95,6 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
         Some(version) => format!("{} {version}", provenance.program),
         None => provenance.program.clone(),
     });
-    if super::ts::is_ts(result) && !super::ts::path_energies(result).is_empty() {
-        parts.push(format!(
-            "IDPP → CI-NEB ({} images) → P-RFO → IRC",
-            super::ts::path_energies(result).len()
-        ));
-    }
     parts.push(solvent(result));
     if let Settings::Xtb(settings) = &result.settings {
         if settings.conventions == XtbConventions::Xtb68 {
@@ -563,11 +557,22 @@ pub(super) fn thermo_defaults(thermo: &qcdata::Thermo) -> bool {
 }
 
 /// The Log tab: settings, then each SCF the worker ran, then the result.
+#[cfg(test)]
 pub(crate) fn log(
     result: &CalcResult,
     frame: &Frame,
     info: Option<&RunInfo>,
     method: &str,
+) -> String {
+    log_with_ts(result, frame, info, method, None)
+}
+
+pub(super) fn log_with_ts(
+    result: &CalcResult,
+    frame: &Frame,
+    info: Option<&RunInfo>,
+    method: &str,
+    session: Option<&super::ts::Session>,
 ) -> String {
     let mut lines = vec![method.to_owned()];
     if let reshiki::qcdata::Source::Calculated { engine_revision } = &result.provenance.source {
@@ -623,6 +628,11 @@ pub(crate) fn log(
     lines.push(task_line);
     if let Some(info) = info.filter(|info| !info.numerics.is_empty()) {
         lines.push(format!("numerics {}", info.numerics));
+    }
+    let search = super::ts::view::search_log(result, session);
+    if !search.is_empty() {
+        lines.push(String::new());
+        lines.push(search);
     }
     lines.push(String::new());
     if let Some(info) = info {

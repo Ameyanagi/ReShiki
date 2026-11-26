@@ -1,6 +1,6 @@
 //! Review reaction participants, atom correspondence and electronic state before xTB.
 use super::super::{
-    Action as XtbAction, CalcTask, available,
+    Action as XtbAction, CalcTask, Page, available,
     tone::{Tone, line},
 };
 use super::{Action as TsAction, energy::Species};
@@ -39,6 +39,7 @@ pub(crate) enum Action {
     Ready(u64, Result<Arc<Proposal>, String>),
     Charge(usize, String),
     Multiplicity(usize, String),
+    PathPoints(String),
     Task(CalcTask),
     Accept,
     EditMap,
@@ -154,10 +155,12 @@ pub(in crate::app::xtb) struct Dialog {
     arrow: u64,
     mode: Mode,
     rerun: bool,
+    explicit: bool,
     inferred: bool,
     unmapped_isotope_hydrogen: bool,
     ignored: Option<String>,
     inputs: Vec<species::Input>,
+    path_points: String,
     task: CalcTask,
     mapping: Mapping,
     preview: Option<Preview>,
@@ -166,6 +169,18 @@ pub(in crate::app::xtb) struct Dialog {
 }
 
 impl Dialog {
+    fn images(&self) -> Result<usize, String> {
+        if self.rerun {
+            return Ok(20);
+        }
+        self.path_points
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .filter(|points| (10..=20).contains(points))
+            .ok_or_else(|| "Enter a whole number from 10 to 20 for the path points.".into())
+    }
+
     fn refresh(&mut self, source: Document) {
         self.plan = ts_plan::plan_for_review(&source, self.arrow);
         let plan = self
@@ -189,6 +204,7 @@ impl Dialog {
                 TsPlanError::Shape { .. } => SHAPE_NOTE.into(),
                 _ => error.to_string(),
             })?;
+            self.images()?;
             species::ts_state(species, plan.start)?;
         }
         Ok(())
@@ -201,12 +217,30 @@ impl Dialog {
     }
 
     fn needs_review(&self) -> bool {
-        !matches!(self.mapping, Mapping::Drawing)
+        self.explicit
+            || self.unmapped_isotope_hydrogen
+            || match &self.mapping {
+                Mapping::Drawing => false,
+                Mapping::Proposed(proposal) => {
+                    !proposal.complete
+                        || proposal.multiple_best
+                        || proposal.unmatched_reactants != 0
+                        || proposal.unmatched_products != 0
+                }
+                Mapping::Finding | Mapping::Failed(_) => true,
+            }
             || !self
                 .changes
                 .as_ref()
                 .is_ok_and(|changes| changes.hydrogens.is_empty())
             || self.validate().is_err()
+    }
+
+    fn visible(&self) -> bool {
+        self.explicit
+            || self.unmapped_isotope_hydrogen
+            || !matches!(self.mapping, Mapping::Finding)
+            || species::validate(&self.inputs).is_err()
     }
 }
 
@@ -227,6 +261,10 @@ fn send(action: Action) -> Message {
 pub(super) fn scheme_plan(doc: &Document, arrow: u64) -> Result<TsPlan, TsPlanError> {
     let source = with_roles(doc, arrow).map_err(|_| TsPlanError::NotReaction)?;
     ts_plan::plan(&source, arrow)
+}
+
+pub(super) fn species_formula(doc: &Document, atoms: &[u64]) -> Option<String> {
+    species::species_formula(doc, atoms)
 }
 
 pub(in crate::app) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
@@ -252,7 +290,24 @@ impl App {
     }
 
     pub(in crate::app) fn ts_review_open(&self) -> bool {
-        self.tab.xtb.ts_review.is_some()
+        self.tab
+            .xtb
+            .ts_review
+            .as_ref()
+            .is_some_and(|dialog| dialog.visible() || dialog.at == self.review_stamp())
+    }
+
+    pub(in crate::app) fn ts_review_visible(&self) -> bool {
+        self.tab.xtb.ts_review.as_ref().is_some_and(Dialog::visible)
+    }
+
+    pub(in crate::app) fn xtb_automatic_mapping_pending(&self, arrow: u64) -> bool {
+        self.tab.xtb.ts_review.as_ref().is_some_and(|dialog| {
+            dialog.arrow == arrow
+                && dialog.at == self.review_stamp()
+                && matches!(dialog.mapping, Mapping::Finding)
+                && !dialog.visible()
+        })
     }
 
     pub(in crate::app) fn xtb_scheme_ignored(&self, arrow: u64) -> Option<Element<'_, Message>> {
@@ -274,25 +329,42 @@ impl App {
     }
 
     pub(super) fn xtb_review_open(&mut self, mode: Mode, arrow: Option<u64>) -> Task<Message> {
-        self.xtb_review_open_inner(mode, arrow, false)
+        self.xtb_review_open_inner(mode, arrow, false, false)
+    }
+
+    pub(super) fn xtb_review_show(&mut self, mode: Mode, arrow: Option<u64>) -> Task<Message> {
+        self.xtb_review_open_inner(mode, arrow, true, false)
     }
 
     pub(super) fn xtb_review_rerun(&mut self, arrow: u64) -> Task<Message> {
-        self.xtb_review_open_inner(Mode::TransitionState, Some(arrow), true)
+        self.xtb_review_open_inner(Mode::TransitionState, Some(arrow), true, true)
     }
 
     fn xtb_review_open_inner(
         &mut self,
         mode: Mode,
         arrow: Option<u64>,
+        explicit: bool,
         rerun: bool,
     ) -> Task<Message> {
+        if self
+            .tab
+            .xtb
+            .ts_review
+            .as_ref()
+            .is_some_and(|dialog| dialog.at != self.review_stamp() && !dialog.visible())
+        {
+            self.tab.xtb.ts_review = None;
+        }
         if !available() || !self.xtb_can_start() || self.ts_review_open() {
             return Task::none();
         }
         let Some(arrow) = arrow.or_else(|| self.xtb_review_target()) else {
             return self.review_error("Select a reaction arrow first".into());
         };
+        self.tab.selected = vec![arrow];
+        self.xtb.page = Page::Xtb;
+        let _ = self.show_inspector_tab(InspectorTab::Predict);
         let reaction = match reactions::preview(&self.tab.doc, arrow) {
             Ok(reaction) if reaction.ready() => reaction,
             Ok(_) => return self.review_error("Assign reactants and products first".into()),
@@ -307,6 +379,21 @@ impl App {
             Err(error) => return self.review_error(error),
         };
         let plan = ts_plan::plan_for_review(&source, arrow);
+        if !explicit
+            && mode == Mode::TransitionState
+            && let Err(
+                error @ (TsPlanError::Shape { .. }
+                | TsPlanError::TooLarge { .. }
+                | TsPlanError::Unsupported(_)
+                | TsPlanError::NoChange),
+            ) = &plan
+            && species::validate(&inputs).is_ok()
+        {
+            return self.review_error(match error {
+                TsPlanError::Shape { .. } => SHAPE_NOTE.into(),
+                _ => error.to_string(),
+            });
+        }
         let changes = Changes::read(
             &source,
             arrow,
@@ -341,8 +428,10 @@ impl App {
             arrow,
             mode,
             rerun,
+            explicit,
             task,
             inputs,
+            path_points: "15".into(),
             mapping,
             plan,
             changes,
@@ -352,7 +441,9 @@ impl App {
             preview: None,
         };
         let finding = matches!(dialog.mapping, Mapping::Finding);
-        if !rerun && !dialog.needs_review() {
+        // Every entry route reveals the same reaction card while a detached
+        // map is calculated. The sheet is reserved for decisions to review.
+        if !dialog.needs_review() {
             return self.xtb_review_run(dialog);
         }
         dialog.preview = Some(Preview::for_reaction(source.as_ref().clone(), arrow));
@@ -361,6 +452,10 @@ impl App {
                 send(Action::Ready(id, result))
             })
         });
+        if finding && !dialog.visible() {
+            self.status = "Matching reaction atoms…".into();
+            self.error = false;
+        }
         self.tab.xtb.ts_review = Some(dialog);
         map_task.unwrap_or_else(Task::none)
     }
@@ -372,10 +467,21 @@ impl App {
         };
         match action {
             Action::Cancel => {
+                if !dialog.visible() {
+                    self.status = "Atom matching cancelled".into();
+                    self.error = false;
+                }
                 self.tab.xtb.ts_review = None;
                 return crate::app::focus_drawing();
             }
-            _ if dialog.at != at => return Task::none(),
+            _ if dialog.at != at => {
+                if !dialog.visible() {
+                    self.tab.xtb.ts_review = None;
+                    self.status = "Reaction changed; atom matching cancelled".into();
+                    self.error = false;
+                }
+                return Task::none();
+            }
             Action::Ready(id, result)
                 if id == dialog.id && matches!(dialog.mapping, Mapping::Finding) =>
             {
@@ -390,6 +496,15 @@ impl App {
                     }
                     Err(error) => Mapping::Failed(error),
                 };
+                if !dialog.needs_review()
+                    && let Some(dialog) = self.tab.xtb.ts_review.take()
+                {
+                    return if self.xtb_can_start() {
+                        self.xtb_review_run(dialog)
+                    } else {
+                        Task::none()
+                    };
+                }
             }
             Action::Ready(..) => {}
             Action::Charge(index, value) => {
@@ -402,6 +517,7 @@ impl App {
                     input.multiplicity = value;
                 }
             }
+            Action::PathPoints(value) => dialog.path_points = value,
             Action::Task(task) if dialog.mode == Mode::Energy && task.optimizes() => {
                 dialog.task = task
             }
@@ -450,16 +566,30 @@ impl App {
             Err(error) => return self.review_error(error),
         };
         if let Some(candidate) = candidate {
-            if let Err(error) = self.try_replace_document(candidate, vec![arrow]) {
+            let selection = if dialog.needs_review() {
+                vec![arrow]
+            } else {
+                self.tab.selected.clone()
+            };
+            if let Err(error) = self.try_replace_document(candidate, selection) {
                 return self.review_error(error);
             }
         } else {
             self.tab.selected = vec![arrow];
         }
-        self.inspector_open = true;
-        self.inspector_tab = InspectorTab::Properties;
+        if dialog.mapping.proposal().is_some()
+            && let Ok(plan) = &dialog.plan
+        {
+            self.tab
+                .xtb
+                .ts_card
+                .accept_automatic_map((self.tab.file_epoch, arrow), plan);
+        }
         match dialog.mode {
             Mode::TransitionState => {
+                let Ok(images) = dialog.images() else {
+                    return Task::none();
+                };
                 let Ok(plan) = dialog.plan else {
                     return Task::none();
                 };
@@ -468,15 +598,6 @@ impl App {
                     Err(error) => return self.review_error(error),
                 };
                 let unpaired = start.multiplicity - 1;
-                if dialog.rerun {
-                    self.tab.xtb.ts_card.rerun_images();
-                }
-                let images = self.tab.xtb.ts_card.accept_review(
-                    (self.tab.file_epoch, arrow),
-                    &plan,
-                    start.charge,
-                    unpaired,
-                );
                 self.xtb_ts_begin(arrow, plan, images, start.charge, unpaired)
             }
             Mode::Energy => self.xtb_reaction_energy_begin(arrow, species, dialog.task),
@@ -490,6 +611,9 @@ impl App {
         let Some(dialog) = &self.tab.xtb.ts_review else {
             return base;
         };
+        if !dialog.visible() {
+            return base;
+        }
         let current = dialog.at == self.review_stamp();
         let title = match dialog.mode {
             Mode::TransitionState => "Review transition-state search (GFN2-xTB)",
@@ -567,6 +691,26 @@ impl App {
                     text(&input.label).size(13).width(Length::Fill),
                     field("Charge", &input.charge, Action::Charge),
                     field("Multiplicity", &input.multiplicity, Action::Multiplicity),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center),
+            );
+        }
+        if dialog.mode == Mode::TransitionState && !dialog.rerun {
+            content = content.push(
+                row![
+                    text("Path points (10–20)").size(12),
+                    reshiki::accessibility::text_input(
+                        "ts.review.path-points",
+                        "Path points",
+                        "15",
+                        &dialog.path_points,
+                    )
+                    .style(crate::appearance::input_style)
+                    .size(13)
+                    .padding(5)
+                    .width(94)
+                    .on_input(|value| send(Action::PathPoints(value))),
                 ]
                 .spacing(10)
                 .align_y(Alignment::Center),

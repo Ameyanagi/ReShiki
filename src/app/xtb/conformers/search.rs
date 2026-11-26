@@ -372,6 +372,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
             .map(|evaluation| evaluation.scf_iterations as u32)
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+        transition_state: None,
     });
     let mut notes = found.notes.clone();
     if found.stopped {

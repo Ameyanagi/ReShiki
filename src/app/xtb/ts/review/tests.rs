@@ -62,28 +62,47 @@ fn palette_counts_assigned_and_inferred_arrows_together() {
     assert_eq!(app.xtb_review_target(), None);
 }
 
+#[test]
+fn species_title_formula_uses_plain_digits_and_the_requested_atoms() {
+    let (doc, _) = claisen();
+    assert_eq!(
+        species_formula(&doc, &doc.reactions[0].reactants[0].atoms).as_deref(),
+        Some("C5H8O")
+    );
+}
+
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 fn finish_mapping(app: &mut App) {
+    finish_mapping_with(app, |_| {});
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+fn finish_mapping_with(app: &mut App, change: impl FnOnce(&mut Proposal)) {
     let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
     assert!(matches!(dialog.mapping, Mapping::Finding));
     let source = with_roles(&app.tab.doc, dialog.arrow).unwrap();
-    let proposal =
+    let mut proposal =
         reshiki::reaction_mapping::propose(&source, dialog.arrow, Default::default()).unwrap();
+    change(&mut proposal);
     let _ = app.update(send(Action::Ready(dialog.id, Ok(Arc::new(proposal)))));
-    assert!(matches!(
-        app.tab.xtb.ts_review.as_ref().unwrap().mapping,
-        Mapping::Proposed(_)
-    ));
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
-fn inferred_roles_and_auto_map_wait_for_accept_then_commit_together() {
+fn sure_auto_map_starts_silently_and_commits_inferred_roles_and_maps_together() {
     let (doc, arrow) = drawn_claisen();
     let before = doc.clone();
     let mut app = app(doc, arrow);
     open(&mut app, Mode::TransitionState);
     assert!(!app.xtb_running());
+    assert!(
+        !app.ts_review_visible(),
+        "A sure map is found without a modal"
+    );
+    assert!(app.xtb_automatic_mapping_pending(arrow));
+    assert!(!app.xtb_automatic_mapping_pending(arrow + 1));
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
+    assert_eq!(app.xtb.page, Page::Xtb);
     let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
     assert!(dialog.inferred);
     assert_eq!(dialog.inputs.len(), 2);
@@ -91,17 +110,17 @@ fn inferred_roles_and_auto_map_wait_for_accept_then_commit_together() {
         dialog.ignored.as_deref(),
         Some("Ignored: reagents and conditions · H2O")
     );
-    finish_mapping(&mut app);
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
-    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
-    assert!(dialog.validate().is_ok(), "{:?}", dialog.validate());
+    finish_mapping_with(&mut app, |proposal| {
+        assert!(proposal.complete && !proposal.multiple_best);
+    });
     assert_eq!(
-        dialog.changes.as_ref().unwrap().bonds,
+        Changes::from_plan(&app.tab.doc, &scheme_plan(&app.tab.doc, arrow).unwrap()).bonds,
         "Bonds formed: C1–C6 · broken: O3–C4"
     );
-    let _ = app.update(send(Action::Accept));
     assert!(!app.ts_review_open());
+    assert!(!app.xtb_automatic_mapping_pending(arrow));
     assert!(app.xtb_running());
     assert_eq!(app.tab.doc.reactions.len(), 1);
     assert_eq!(app.tab.doc.reactions[0].agents.len(), 1);
@@ -112,6 +131,20 @@ fn inferred_roles_and_auto_map_wait_for_accept_then_commit_together() {
             .all(|id| app.tab.doc.atom(*id).unwrap().map_num != 0)
     );
     assert!(app.tab.history.can_undo());
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    assert_eq!(
+        app.tab
+            .xtb
+            .run
+            .as_ref()
+            .unwrap()
+            .ts
+            .as_ref()
+            .unwrap()
+            .request
+            .images,
+        15
+    );
     let _ = app.update(Message::Xtb(XtbAction::Cancel));
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.reactions, before.reactions);
@@ -132,7 +165,8 @@ fn edit_map_hands_off_the_inferred_proposal_without_editing_the_drawing() {
     let (doc, arrow) = drawn_claisen();
     let before = doc.clone();
     let mut app = app(doc, arrow);
-    open(&mut app, Mode::TransitionState);
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    assert!(app.ts_review_visible());
     finish_mapping(&mut app);
     let _ = app.update(send(Action::EditMap));
     assert!(!app.ts_review_open());
@@ -168,6 +202,35 @@ fn complete_map_with_moving_hydrogen_requires_the_sheet() {
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
+fn a_sure_proposal_with_moving_hydrogen_still_waits_for_review() {
+    let (mut doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
+    for atom in &mut doc.atoms {
+        if atom.map_num == 1 {
+            atom.map_num = 0;
+        }
+    }
+    let before = doc.clone();
+    let mut app = app(doc, arrow);
+    open(&mut app, Mode::TransitionState);
+    assert!(app.xtb_automatic_mapping_pending(arrow));
+    finish_mapping_with(&mut app, |proposal| {
+        assert!(proposal.complete && !proposal.multiple_best);
+    });
+    assert!(app.ts_review_visible());
+    assert!(!app.xtb_automatic_mapping_pending(arrow));
+    assert!(!app.xtb_running());
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(
+        dialog.changes.as_ref().unwrap().hydrogens,
+        ["H from C2 to O3 (least motion)"]
+    );
+    assert!(dialog.validate().is_ok());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
 fn missing_isotope_maps_open_auto_map_with_an_explanation() {
     let (mut doc, arrow) = claisen();
     let attachments = [
@@ -192,12 +255,137 @@ fn missing_isotope_maps_open_auto_map_with_an_explanation() {
     assert!(!app.xtb_running());
     let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
     assert!(dialog.unmapped_isotope_hydrogen);
+    assert!(app.ts_review_visible());
     assert!(matches!(dialog.mapping, Mapping::Finding));
     finish_mapping(&mut app);
     let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
     assert!(dialog.unmapped_isotope_hydrogen);
     assert!(dialog.validate().is_ok());
     assert!(!app.xtb_running());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn mapper_ties_and_unfinished_searches_require_review_before_applying() {
+    for tied in [true, false] {
+        let (doc, arrow) = drawn_claisen();
+        let before = doc.clone();
+        let mut app = app(doc, arrow);
+        open(&mut app, Mode::TransitionState);
+        finish_mapping_with(&mut app, |proposal| {
+            proposal.multiple_best = tied;
+            proposal.complete = tied;
+        });
+        assert!(app.ts_review_visible());
+        assert!(!app.xtb_running());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+        assert!(dialog.needs_review());
+        assert!(dialog.validate().is_ok());
+        let _ = app.update(send(Action::Accept));
+        assert!(!app.ts_review_open());
+        assert!(app.xtb_running());
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn explicit_review_waits_even_with_a_complete_sure_map() {
+    let (doc, arrow) = claisen();
+    let before = doc.clone();
+    let mut app = app(doc, arrow);
+    app.tab.selected.clear();
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    assert!(app.ts_review_visible());
+    assert!(!app.xtb_running());
+    assert_eq!(app.tab.selected, [arrow]);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
+    assert!(app.tab.xtb.ts_review.as_ref().unwrap().validate().is_ok());
+    let _ = app.update(send(Action::PathPoints("21".into())));
+    assert!(app.tab.xtb.ts_review.as_ref().unwrap().validate().is_err());
+    let _ = app.update(send(Action::PathPoints("18".into())));
+    assert_eq!(
+        app.tab.xtb.ts_review.as_ref().unwrap().images().unwrap(),
+        18
+    );
+    let _ = app.update(send(Action::Cancel));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn a_complete_sure_map_starts_from_the_sole_target_without_review() {
+    let (doc, arrow) = claisen();
+    let before = doc.clone();
+    let mut app = app(doc, arrow);
+    app.tab.selected.clear();
+    open(&mut app, Mode::TransitionState);
+    assert!(!app.ts_review_open());
+    assert!(app.xtb_running());
+    assert_eq!(app.tab.selected, [arrow]);
+    assert_eq!(app.inspector_tab, InspectorTab::Predict);
+    assert_eq!(app.xtb.page, Page::Xtb);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn a_stale_silent_map_never_edits_or_starts_the_changed_drawing() {
+    let (doc, arrow) = drawn_claisen();
+    let mut app = app(doc, arrow);
+    open(&mut app, Mode::TransitionState);
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    let id = dialog.id;
+    let source = with_roles(&app.tab.doc, arrow).unwrap();
+    let proposal = reshiki::reaction_mapping::propose(&source, arrow, Default::default()).unwrap();
+    app.tab.revision += 1;
+    assert!(
+        !app.ts_review_open(),
+        "a stale hidden request must not lock the card"
+    );
+    let _ = app.update(send(Action::Ready(id, Ok(Arc::new(proposal)))));
+    assert!(!app.ts_review_open());
+    assert!(!app.xtb_running());
+    assert!(!app.tab.history.can_undo());
+    assert!(app.tab.doc.reactions.is_empty());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn a_sure_automatic_map_keeps_a_newer_selection() {
+    let (doc, arrow) = drawn_claisen();
+    let atom = doc.atoms[0].id;
+    let mut app = app(doc, arrow);
+    open(&mut app, Mode::TransitionState);
+    app.tab.selected = vec![atom];
+    finish_mapping(&mut app);
+    assert!(app.xtb_running());
+    assert_eq!(app.tab.selected, [atom]);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn cancelling_silent_mapping_discards_a_late_proposal() {
+    let (doc, arrow) = drawn_claisen();
+    let before = doc.clone();
+    let mut app = app(doc, arrow);
+    open(&mut app, Mode::TransitionState);
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    let id = dialog.id;
+    let source = with_roles(&app.tab.doc, arrow).unwrap();
+    let proposal = reshiki::reaction_mapping::propose(&source, arrow, Default::default()).unwrap();
+    let _ = app.update(send(Action::Cancel));
+    assert!(!app.xtb_automatic_mapping_pending(arrow));
+    assert_eq!(app.status, "Atom matching cancelled");
+    let _ = app.update(send(Action::Ready(id, Ok(Arc::new(proposal)))));
+    assert!(!app.ts_review_open());
+    assert!(!app.xtb_running());
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
@@ -290,6 +478,7 @@ fn imbalance_blocks_accept_and_two_to_two_allows_reaction_energy() {
     let (doc, arrow) = ions(true);
     let mut blocked = app(doc, arrow);
     open(&mut blocked, Mode::Energy);
+    assert!(blocked.ts_review_visible());
     let dialog = blocked.tab.xtb.ts_review.as_ref().unwrap();
     assert!(
         dialog
@@ -307,19 +496,9 @@ fn imbalance_blocks_accept_and_two_to_two_allows_reaction_energy() {
     }
     let mut app = app(doc, arrow);
     open(&mut app, Mode::TransitionState);
-    assert_eq!(
-        app.tab
-            .xtb
-            .ts_review
-            .as_ref()
-            .unwrap()
-            .validate()
-            .unwrap_err(),
-        SHAPE_NOTE
-    );
-    let _ = app.update(send(Action::Accept));
+    assert!(!app.ts_review_open());
+    assert_eq!(app.status, SHAPE_NOTE);
     assert!(!app.xtb_running());
-    let _ = app.update(send(Action::Cancel));
     open(&mut app, Mode::Energy);
     assert!(!app.ts_review_open());
     assert!(app.xtb_running(), "{}", app.status);
