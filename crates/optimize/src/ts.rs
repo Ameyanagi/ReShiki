@@ -4,7 +4,7 @@
 //! partitioned rational-function optimization. Vibrational analysis and two
 //! downhill intrinsic reaction paths characterize the resulting stationary point.
 //!
-//! Bracketed keys such as [Henkelman2000CINEB] name the full citations in
+//! Bracketed keys such as \[Henkelman2000CINEB\] name the full citations in
 //! docs/references/xtb.md.
 
 mod endpoint;
@@ -47,6 +47,10 @@ pub struct TsOptions {
     pub optimize_endpoints: bool,
     pub neb_max_iterations: usize,
     pub saddle_max_steps: usize,
+    /// Energy headroom in kcal/mol above the climbing image. A successful
+    /// handoff to an observed between-image peak raises the reference to that
+    /// midpoint's energy before applying the same headroom.
+    pub saddle_headroom_kcal: f64,
     /// Periodic Hessian rebuild interval in accepted saddle steps. Zero disables
     /// scheduled builds. Mode tracking, failed secant steps and the final
     /// stationarity check can also request a fresh Hessian.
@@ -64,10 +68,36 @@ impl Default for TsOptions {
             optimize_endpoints: true,
             neb_max_iterations: 300,
             saddle_max_steps: 100,
+            saddle_headroom_kcal: 10.0,
             hessian_every: 0,
             irc_max_steps: 60,
             irc_step: 0.15,
         }
+    }
+}
+
+/// Why saddle refinement stopped. The final spectrum independently reports
+/// whether a stationary point has one qualifying imaginary frequency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaddleReason {
+    Stationary,
+    AcceptedStepLimit,
+    MinimumRadiusExhausted,
+    EnergyCeiling,
+    FollowedModeLost,
+    HessianBudgetExhausted,
+}
+
+impl std::fmt::Display for SaddleReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Stationary => "stationary",
+            Self::AcceptedStepLimit => "accepted-step limit",
+            Self::MinimumRadiusExhausted => "minimum radius exhausted",
+            Self::EnergyCeiling => "energy ceiling exhausted",
+            Self::FollowedModeLost => "followed mode lost",
+            Self::HessianBudgetExhausted => "recovery Hessian budget exhausted",
+        })
     }
 }
 
@@ -113,7 +143,12 @@ pub enum Event<'a> {
         max_gradient: f64,
         rms_gradient: f64,
         length: f64,
+        /// Ratio used for the trust decision, including force-based acceptance.
         ratio: f64,
+        /// Measured over predicted energy change. May be undefined for a zero prediction.
+        energy_ratio: f64,
+        /// Measured over predicted squared-force reduction. May be undefined for a zero prediction.
+        force_ratio: f64,
         decision: &'static str,
     },
     SaddleStatus(&'static str),
@@ -169,6 +204,11 @@ pub struct TsReport {
     /// Whether P-RFO met the Normal projected gradient tolerances and its IRC launch-mode
     /// Newton displacement was below one tenth of the mass-weighted IRC step.
     pub saddle_converged: bool,
+    pub saddle_reason: SaddleReason,
+    /// Diagnostics from optional recovery and candidate checks, including
+    /// geometry-specific SCF failures and unresolved energy ceilings.
+    /// Cancellation and fatal potential errors remain search errors.
+    pub saddle_diagnostics: Vec<String>,
     /// Rebuilt Cartesian Hessian at the fitted TS in Eh/bohr², stored row-major.
     pub hessian: Vec<f64>,
     /// Ascending projected harmonic wavenumbers, with imaginary values negative.
@@ -252,6 +292,12 @@ impl Search<'_> {
         }
         if !(5..=24).contains(&self.options.images) {
             return Err(TsError::Invalid("images must be in 5..=24".into()));
+        }
+        if !self.options.saddle_headroom_kcal.is_finite() || self.options.saddle_headroom_kcal < 0.
+        {
+            return Err(TsError::Invalid(
+                "saddle headroom must be finite and nonnegative".into(),
+            ));
         }
         if !self.options.irc_step.is_finite() || self.options.irc_step <= 0. {
             return Err(TsError::Invalid(
@@ -407,6 +453,8 @@ pub fn search_with_cancel<P: Potential + Send>(
     let saddle::Refinement {
         point: mut ts,
         converged: saddle_converged,
+        reason: saddle_reason,
+        diagnostics: saddle_diagnostics,
         hessian,
     } = saddle::refine_band(&mut pool[0], &band, masses, options, &mut on_event)?;
     // The exact Hessian that certified the Newton displacement also supplies the
@@ -456,6 +504,8 @@ pub fn search_with_cancel<P: Potential + Send>(
         climbing_image: band.climbing,
         ts,
         saddle_converged,
+        saddle_reason,
+        saddle_diagnostics,
         hessian,
         imaginary,
         frequencies_cm1,

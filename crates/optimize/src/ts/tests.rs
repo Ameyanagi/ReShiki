@@ -780,6 +780,468 @@ fn sparse_band_restart_recovers_a_saddle_hidden_after_a_positive_mode() {
     );
 }
 
+/// The band tangent can select a stable mode at the correct stationary saddle.
+/// Its neighboring link midpoints are higher stationary index-two points.
+struct TangentialSaddle;
+
+impl Potential for TangentialSaddle {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+        let (a, b) = (x[0], x[1]);
+        g[0] = a.powi(5) - 1.25 * a.powi(3) + 0.25 * a;
+        g[1] = -2. * b + 4. * b.powi(3);
+        Ok(a.powi(6) / 6. - 5. * a.powi(4) / 16. + a * a / 8. - b * b + b.powi(4))
+    }
+
+    fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+        h.copy_from_slice(&[
+            5. * x[0].powi(4) - 3.75 * x[0] * x[0] + 0.25,
+            0.,
+            0.,
+            -2. + 12. * x[1] * x[1],
+        ]);
+        Some(Ok(()))
+    }
+}
+
+#[test]
+fn exact_index_one_stationarity_precedes_positive_tangent_recovery() {
+    let mut surface = TangentialSaddle;
+    let v = 0.5_f64.sqrt();
+    let band = neb::Band {
+        path: [[0., -v], [-1., 0.], [0., 0.], [1., 0.], [0., v]]
+            .into_iter()
+            .map(|x| Minimum {
+                positions: x.to_vec(),
+                energy: evaluate(&mut surface, &x).unwrap().0,
+            })
+            .collect(),
+        converged: false,
+        climbing: 2,
+        tangent: vec![1., 0.],
+    };
+    let result = saddle::refine_band(
+        &mut surface,
+        &band,
+        &[],
+        &TsOptions::default(),
+        &mut proceed,
+    )
+    .unwrap();
+    assert!(result.converged);
+    assert_eq!(result.point.positions, [0., 0.]);
+    let (values, _) = symmetric_eigen(result.hessian.unwrap(), 2).unwrap();
+    assert_eq!(values.iter().filter(|v| **v < 0.).count(), 1);
+}
+
+#[test]
+fn bracketed_hidden_peak_above_default_headroom_recovers_saddle() {
+    let minimum = Minimum {
+        positions: vec![0., 0., 0., 1., 0., 0.],
+        energy: 0.,
+    };
+    let band = neb::Band {
+        path: vec![
+            minimum.clone(),
+            minimum,
+            Minimum {
+                positions: vec![0., 0., 0., 3., 0., 0.],
+                energy: 0.,
+            },
+        ],
+        converged: false,
+        climbing: 1,
+        tangent: vec![-1., 0., 0., 1., 0., 0.],
+    };
+    let result = saddle::refine_band(
+        &mut CarbonStretch(0.08),
+        &band,
+        &[12.; 2],
+        &TsOptions::default(),
+        &mut proceed,
+    )
+    .unwrap();
+    assert!(result.converged);
+    assert!((result.point.energy - 0.020).abs() < 1e-10);
+    let x = &result.point.positions;
+    assert!((distance(&x[..3], &x[3..]) - 2.).abs() < 1e-8);
+    let (frequencies, _) = modes::frequencies(x, &result.hessian.unwrap(), &[12.; 2]).unwrap();
+    assert_eq!(
+        frequencies.iter().filter(|f| **f < -IMAGINARY_CM1).count(),
+        1
+    );
+}
+
+struct OptionalMidpointFailure {
+    failed: f64,
+    error: EvalError,
+    calls: Vec<f64>,
+}
+
+impl Potential for OptionalMidpointFailure {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+        self.calls.push(x[0]);
+        if x[0] == self.failed {
+            return Err(self.error.clone());
+        }
+        g[0] = -4. * x[0] * (x[0] * x[0] - 0.25);
+        Ok(-(x[0] * x[0] - 0.25).powi(2))
+    }
+}
+
+fn optional_midpoint_band() -> neb::Band {
+    neb::Band {
+        path: [-1.0_f64, 0., 1.]
+            .into_iter()
+            .map(|x| Minimum {
+                positions: vec![x],
+                energy: -(x * x - 0.25).powi(2),
+            })
+            .collect(),
+        converged: false,
+        climbing: 1,
+        tangent: vec![1.],
+    }
+}
+
+#[test]
+fn optional_midpoint_scf_failure_keeps_the_other_link() {
+    for failed in [-0.5, 0.5] {
+        let mut surface = OptionalMidpointFailure {
+            failed,
+            error: EvalError::Scf("optional midpoint unavailable".into()),
+            calls: Vec::new(),
+        };
+        let probe = optional_midpoint_band()
+            .intermediate_peaks(&mut surface, &[], 1.)
+            .expect("an optional midpoint SCF failure discarded the usable link");
+        assert_eq!(surface.calls, [-0.5, 0.5]);
+        assert_eq!(probe.diagnostics.len(), 1);
+        assert!(probe.diagnostics[0].contains("optional midpoint unavailable"));
+        let seed = probe.seeds.into_iter().next().unwrap();
+        assert_eq!(seed.point.positions, [-failed]);
+    }
+}
+
+#[test]
+fn optional_midpoint_cancellation_and_fatal_failure_propagate() {
+    for error in [
+        EvalError::Cancelled,
+        EvalError::Failed("worker disconnected".into()),
+    ] {
+        let mut surface = OptionalMidpointFailure {
+            failed: -0.5,
+            error: error.clone(),
+            calls: Vec::new(),
+        };
+        let result = optional_midpoint_band().intermediate_peaks(&mut surface, &[], 1.);
+        assert!(matches!(result, Err(actual) if actual == TsError::from(error)));
+        assert_eq!(surface.calls, [-0.5]);
+    }
+}
+
+struct OptionalSeedHessianFailure {
+    failed: f64,
+    hessian_calls: Vec<f64>,
+}
+
+impl Potential for OptionalSeedHessianFailure {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+        let a = x[0];
+        let tilt = self.failed.signum() * 0.001;
+        g[0] = a - 4. * a.powi(3) + tilt * (15. * a * a - 60. * a.powi(4));
+        Ok(-(a * a - 0.25).powi(2) + tilt * a.powi(3) * (5. - 12. * a * a))
+    }
+
+    fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+        self.hessian_calls.push(x[0]);
+        if x[0] == self.failed {
+            Some(Err(EvalError::Scf(
+                "optional seed Hessian unavailable".into(),
+            )))
+        } else {
+            let a = x[0];
+            let tilt = self.failed.signum() * 0.001;
+            h[0] = 1. - 12. * a * a + tilt * (30. * a - 240. * a.powi(3));
+            Some(Ok(()))
+        }
+    }
+}
+
+#[test]
+fn optional_recovery_hessian_scf_failure_tries_the_other_link() {
+    for failed in [-0.5, 0.5] {
+        let mut surface = OptionalSeedHessianFailure {
+            failed,
+            hessian_calls: Vec::new(),
+        };
+        let mut band = optional_midpoint_band();
+        for point in &mut band.path {
+            point.energy = evaluate(&mut surface, &point.positions).unwrap().0;
+        }
+        let result = saddle::refine_band(
+            &mut surface,
+            &band,
+            &[],
+            &TsOptions::default(),
+            &mut proceed,
+        )
+        .unwrap();
+        assert_eq!(surface.hessian_calls, [0., failed, -failed]);
+        assert!(result.converged);
+        assert_eq!(result.point.positions, [-failed]);
+        assert_eq!(result.diagnostics.len(), 1);
+        assert!(result.diagnostics[0].contains("optional seed Hessian unavailable"));
+    }
+}
+
+struct FinalCandidateFailure {
+    error: EvalError,
+    failed_hessians: usize,
+}
+
+impl Potential for FinalCandidateFailure {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], accuracy: Accuracy) -> Result<f64, EvalError> {
+        CarbonStretch(0.02).evaluate(x, g, accuracy)
+    }
+
+    fn hessian(&mut self, x: &[f64], _: &mut [f64]) -> Option<Result<(), EvalError>> {
+        if distance(&x[..3], &x[3..]) > 1.51 {
+            self.failed_hessians += 1;
+            Some(Err(self.error.clone()))
+        } else {
+            None
+        }
+    }
+}
+
+fn final_candidate_failure(
+    surface: &mut FinalCandidateFailure,
+    masses: &[f64],
+) -> Result<saddle::Refinement, TsError> {
+    let positions = vec![0., 0., 0., 1.5, 0., 0.];
+    let start = Minimum {
+        energy: evaluate(surface, &positions).unwrap().0,
+        positions,
+    };
+    let band = neb::Band {
+        path: vec![start.clone(), start.clone(), start],
+        converged: false,
+        climbing: 1,
+        tangent: vec![-1., 0., 0., 1., 0., 0.],
+    };
+    saddle::refine_band(
+        surface,
+        &band,
+        masses,
+        &TsOptions {
+            saddle_max_steps: 1,
+            ..TsOptions::default()
+        },
+        &mut proceed,
+    )
+}
+
+#[test]
+fn optional_final_candidate_scf_failure_keeps_verified_candidate() {
+    let mut surface = FinalCandidateFailure {
+        error: EvalError::Scf("provisional Hessian unavailable".into()),
+        failed_hessians: 0,
+    };
+    let result = final_candidate_failure(&mut surface, &[12.; 2])
+        .expect("a failed provisional Hessian discarded the earlier verified candidate");
+    assert_eq!(
+        surface.failed_hessians, 1,
+        "the provisional candidate was not checked"
+    );
+    assert!(!result.converged);
+    assert_eq!(result.point.positions, [0., 0., 0., 1.5, 0., 0.]);
+    assert!(result.hessian.is_some());
+    assert_eq!(result.reason, SaddleReason::AcceptedStepLimit);
+    assert_eq!(result.diagnostics.len(), 1);
+    assert!(result.diagnostics[0].contains("provisional Hessian unavailable"));
+}
+
+#[test]
+fn unavailable_final_hessian_without_verified_candidate_propagates_once() {
+    let mut surface = FinalCandidateFailure {
+        error: EvalError::Scf("provisional Hessian unavailable".into()),
+        failed_hessians: 0,
+    };
+    // These masses put the initial imaginary frequency below the significance
+    // threshold, leaving no previously verified index-one fallback.
+    let result = final_candidate_failure(&mut surface, &[1e8; 2]);
+    assert!(
+        matches!(result, Err(TsError::Scf(message)) if message == "provisional Hessian unavailable")
+    );
+    assert_eq!(surface.failed_hessians, 1);
+}
+
+#[test]
+fn optional_final_candidate_cancellation_and_fatal_failure_propagate() {
+    for error in [
+        EvalError::Cancelled,
+        EvalError::Failed("worker disconnected".into()),
+    ] {
+        let mut surface = FinalCandidateFailure {
+            error: error.clone(),
+            failed_hessians: 0,
+        };
+        let result = final_candidate_failure(&mut surface, &[12.; 2]);
+        assert!(matches!(result, Err(actual) if actual == TsError::from(error)));
+        assert_eq!(surface.failed_hessians, 1);
+    }
+}
+
+fn carbon_recovery_band(surface: &mut impl Potential, neighbors: [f64; 2]) -> neb::Band {
+    neb::Band {
+        path: [neighbors[0], 1., neighbors[1]]
+            .into_iter()
+            .map(|r| {
+                let positions = vec![0., 0., 0., r, 0., 0.];
+                Minimum {
+                    energy: evaluate(surface, &positions).unwrap().0,
+                    positions,
+                }
+            })
+            .collect(),
+        converged: false,
+        climbing: 1,
+        tangent: vec![-1., 0., 0., 1., 0., 0.],
+    }
+}
+
+#[test]
+fn bracketed_midpoint_handoff_retains_headroom_for_uphill_refinement() {
+    let mut surface = CarbonStretch(0.08);
+    let band = carbon_recovery_band(&mut surface, [1., 2.8]);
+    let midpoint_energy = 0.08 * (0.1_f64.powi(2) - 1.).powi(2) / 4.;
+    let options = TsOptions {
+        saddle_headroom_kcal: 0.5,
+        ..TsOptions::default()
+    };
+    let original_ceiling = options.saddle_headroom_kcal / KCAL_PER_HARTREE;
+    assert!(midpoint_energy > original_ceiling);
+    let raised_ceiling = midpoint_energy + original_ceiling;
+    let mut accepted_uphill = false;
+    let result = saddle::refine_band(&mut surface, &band, &[12.; 2], &options, &mut |event| {
+        if let Event::Saddle { step, energy, .. } = event {
+            assert!(energy <= raised_ceiling);
+            accepted_uphill |= step > 0 && energy > midpoint_energy + 1e-7;
+        }
+        proceed(event)
+    })
+    .unwrap();
+    assert!(accepted_uphill, "the midpoint must refine further uphill");
+    assert!(result.converged);
+    assert_eq!(result.reason, SaddleReason::Stationary);
+    assert!((result.point.energy - 0.020).abs() < 3e-6);
+    assert!(
+        (distance(&result.point.positions[..3], &result.point.positions[3..]) - 2.).abs() < 0.007
+    );
+}
+
+#[test]
+fn unbracketed_over_ceiling_handoff_does_not_converge_as_a_minimum() {
+    let mut surface = CarbonStretch(0.08);
+    // The far endpoint is above the midpoint, so this observed link does not
+    // bracket a new peak and cannot raise the original energy reference.
+    let band = carbon_recovery_band(&mut surface, [1., 3.5]);
+    let result = saddle::refine_band(
+        &mut surface,
+        &band,
+        &[12.; 2],
+        &TsOptions::default(),
+        &mut proceed,
+    )
+    .unwrap();
+    assert!(!result.converged);
+    assert_eq!(result.reason, SaddleReason::EnergyCeiling);
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|message| message.contains("right midpoint exceeds"))
+    );
+    assert_eq!(result.point.positions, band.path[band.climbing].positions);
+}
+
+struct MidpointScfStretch {
+    failed: f64,
+    failures: usize,
+}
+
+impl Potential for MidpointScfStretch {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], accuracy: Accuracy) -> Result<f64, EvalError> {
+        if (distance(&x[..3], &x[3..]) - self.failed).abs() < 1e-12 {
+            self.failures += 1;
+            Err(EvalError::Scf("link midpoint unavailable".into()))
+        } else {
+            CarbonStretch(0.08).evaluate(x, g, accuracy)
+        }
+    }
+}
+
+#[test]
+fn recovery_reports_scf_diagnostics_and_refines_the_other_link() {
+    for (failed, side) in [(1.7, "left"), (1.9, "right")] {
+        let mut surface = MidpointScfStretch {
+            failed,
+            failures: 0,
+        };
+        let band = carbon_recovery_band(&mut surface, [2.4, 2.8]);
+        let result = saddle::refine_band(
+            &mut surface,
+            &band,
+            &[12.; 2],
+            &TsOptions::default(),
+            &mut proceed,
+        )
+        .unwrap();
+        assert_eq!(surface.failures, 1);
+        assert!(result.converged);
+        assert!((result.point.energy - 0.020).abs() < 3e-6);
+        assert_eq!(result.diagnostics.len(), 1);
+        assert!(result.diagnostics[0].contains(&format!("{side} midpoint")));
+        assert!(result.diagnostics[0].contains("link midpoint unavailable"));
+    }
+}
+
+#[test]
+fn saddle_headroom_configuration_requires_finite_nonnegative_values() {
+    let x = [0., 0., 0., 1., 0., 0.];
+    for value in [-1., f64::INFINITY, f64::NAN] {
+        let options = TsOptions {
+            saddle_headroom_kcal: value,
+            ..TsOptions::default()
+        };
+        let input = Search {
+            numbers: &[6; 2],
+            masses_amu: &[12.; 2],
+            reactant: &x,
+            product: &x,
+            options: &options,
+        };
+        assert!(
+            matches!(input.validate(), Err(TsError::Invalid(message)) if message.contains("headroom"))
+        );
+    }
+    let options = TsOptions {
+        saddle_headroom_kcal: 0.,
+        ..TsOptions::default()
+    };
+    assert!(
+        Search {
+            numbers: &[6; 2],
+            masses_amu: &[12.; 2],
+            reactant: &x,
+            product: &x,
+            options: &options,
+        }
+        .validate()
+        .is_ok()
+    );
+}
+
 #[test]
 fn refinement_cannot_leave_the_band_for_a_remote_higher_saddle() {
     // A sparse band hands off a point barely outside the reactant well.
@@ -792,6 +1254,7 @@ fn refinement_cannot_leave_the_band_for_a_remote_higher_saddle() {
         energy,
     };
     let limit = energy + 10.0 / KCAL_PER_HARTREE;
+    let mut exhausted = false;
     let result = saddle::refine(
         &mut surface,
         &start,
@@ -802,12 +1265,20 @@ fn refinement_cannot_leave_the_band_for_a_remote_higher_saddle() {
             if let Event::Saddle { energy, .. } = event {
                 assert!(energy <= limit, "accepted energy {energy} above {limit}");
             }
+            if let Event::SaddleStatus("energy ceiling exhausted") = event {
+                exhausted = true;
+            }
             proceed(event)
         },
     )
     .unwrap();
     assert!(!result.converged);
     assert!(result.point.energy <= limit);
+    assert!(
+        exhausted,
+        "the unbracketed remote saddle exceeded the energy ceiling"
+    );
+    assert_eq!(result.reason, SaddleReason::EnergyCeiling);
 }
 
 fn carbon_stretch(k: f64, options: TsOptions) -> TsReport {
