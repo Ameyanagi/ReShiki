@@ -133,6 +133,7 @@ pub enum Kind {
     Structure,
     Nmr,
     Xtb,
+    Irc,
     Ir,
 }
 
@@ -208,6 +209,9 @@ impl Prepared {
             Kind::Xtb => Message::Xtb(super::xtb::Action::Palette(
                 super::xtb::palette::Action::Exported(result),
             )),
+            Kind::Irc => Message::Xtb(super::xtb::Action::Palette(
+                super::xtb::palette::Action::IrcExported(result),
+            )),
             Kind::Ir => Message::Xtb(super::xtb::Action::Palette(
                 super::xtb::palette::Action::IrExported(
                     result.map(|saved| saved.map(|saved| saved.path)),
@@ -235,6 +239,7 @@ impl Prepared {
                     Kind::Nmr => "Export predicted NMR shifts".into(),
                     Kind::Xtb => "Export xTB results".into(),
                     Kind::Ir => "Export IR spectrum".into(),
+                    Kind::Irc => "Export IRC (XYZ)".into(),
                     _ => format!("Export {}", super::export_format_label(self.format)),
                 };
                 let result = super::files::save_bytes(

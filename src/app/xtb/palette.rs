@@ -37,6 +37,7 @@ pub(crate) enum Action {
     CopyTable,
     Export,
     Exported(Result<Option<crate::app::figure_export::Saved>, String>),
+    IrcExported(Result<Option<crate::app::figure_export::Saved>, String>),
     IrExported(Result<Option<std::path::PathBuf>, String>),
     CopyLog,
     Labels(bool),
@@ -69,6 +70,8 @@ pub(crate) struct Palette {
     /// The live search explicitly chosen for the dock, independently of saved results.
     live_ts: Option<u64>,
     step: Option<Step>,
+    pub(super) profile: Option<ts::irc::Profile>,
+    pub(super) irc_playback: Option<ts::irc::Playback>,
     ts_views: Vec<TsView>,
     /// Why the previewed step was not used: the stereo check's findings.
     pub(super) confirm: Vec<String>,
@@ -101,6 +104,7 @@ enum PreviewPoint {
 struct TsView {
     result: Vec<Weak<CalcResult>>,
     view: View,
+    profile: Option<ts::irc::Profile>,
     step: Option<Step>,
 }
 
@@ -126,6 +130,7 @@ impl Palette {
             self.ts_views.push(TsView {
                 result: std::mem::take(&mut self.result),
                 view: self.view,
+                profile: self.profile,
                 step: self.step.take().map(|step| Step {
                     preview: None,
                     ..step
@@ -133,6 +138,8 @@ impl Palette {
             });
         }
         self.result.clear();
+        self.profile = None;
+        self.irc_playback = None;
         self.view = View::Summary;
         self.step = None;
         self.confirm.clear();
@@ -168,6 +175,7 @@ impl Palette {
                 let saved = self.ts_views.swap_remove(index);
                 self.result = saved.result;
                 self.view = saved.view;
+                self.profile = saved.profile;
                 self.step = saved.step;
                 return self.step.is_some();
             }
@@ -623,7 +631,8 @@ impl App {
 
     /// Esc ends a step preview first.
     pub(in crate::app) fn xtb_end_preview(&mut self) -> bool {
-        let previewing = self.xtb_current_step().is_some();
+        let playing = self.tab.xtb.palette.irc_playback.take().is_some();
+        let previewing = playing || self.xtb_current_step().is_some();
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
         // The overlay belongs to the preview that drew it.
@@ -825,7 +834,10 @@ impl App {
                 self.xtb_end_preview();
                 return super::super::focus_drawing();
             }
-            Action::Collapse => self.tab.xtb.palette.collapsed = !self.tab.xtb.palette.collapsed,
+            Action::Collapse => {
+                self.tab.xtb.palette.collapsed = !self.tab.xtb.palette.collapsed;
+                self.tab.xtb.palette.irc_playback = None;
+            }
             Action::Previous => self.tab.xtb.palette.previous = !self.tab.xtb.palette.previous,
             Action::Dock => {
                 let old_width = self.inspector_width();
@@ -850,6 +862,9 @@ impl App {
                     self.xtb_clear_palette_status(Some(StatusKind::Mode));
                 }
                 self.tab.xtb.palette.view = view;
+                if view != View::Path {
+                    self.tab.xtb.palette.irc_playback = None;
+                }
                 if !matches!(view, View::Steps | View::Conformers | View::Path) {
                     self.xtb_end_preview();
                 }
@@ -934,6 +949,10 @@ impl App {
                     false,
                 )
             }
+            Action::IrcExported(result) => {
+                self.xtb_palette_exported(result.map(|saved| saved.map(|s| s.path)), &[], false);
+                return crate::app::focus_drawing();
+            }
             Action::IrExported(result) => self.xtb_palette_exported(result, &[], true),
             Action::Labels(on) => self.tab.xtb.palette.labels = on,
             Action::PlaceCharges => {
@@ -982,6 +1001,7 @@ impl App {
     }
 
     fn xtb_preview_point(&mut self, point: PreviewPoint) {
+        self.tab.xtb.palette.irc_playback = None;
         let Some(shown) = self.xtb_shown() else {
             return;
         };
@@ -1363,6 +1383,7 @@ pub(in crate::app) fn size_question(
 }
 
 mod sizing;
+pub(super) use sizing::dock_height;
 mod status;
 mod view;
 

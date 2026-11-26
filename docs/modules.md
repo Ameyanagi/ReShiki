@@ -71,6 +71,7 @@ explains how the crates and modules fit together.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
 - `src/app/energy_plot.rs`: A small energy diagram shared by the import sheet and the Conformers tab
+- `src/app/energy_plot/profile.rs`: Labelled reaction-energy figures.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.
@@ -131,6 +132,7 @@ explains how the crates and modules fit together.
 - `src/app/linked_properties.rs`: Property captions shown from the Properties panel pins and the right-click "Show properties" menu.
 - `src/app/macos_files.rs`: Finder and Dock requests to open drawings, which open as tabs.
 - `src/app/models3d.rs`: Show a selected molecule as its 2D drawing, a 3D model or both (#386).
+- `src/app/models3d/thumbnail.rs`: Prepared ball-and-stick thumbnails using the paper's model renderer.
 - `src/app/molecule_shortcuts.rs`: Molecule shortcuts and edit context.
 - `src/app/naming.rs`: Per-document local name parsing, editable previews and rule-based name generation.
 - `src/app/naming/aliases.rs`: Source-labelled aliases share the Import dock and normal linked captions.
@@ -234,14 +236,16 @@ explains how the crates and modules fit together.
 - `src/app/xtb/source.rs`: Where a molecule's 3D coordinates came from (an xTB conformer, an optimized geometry or step, the file or the force field) and the other geometries its current xTB results hold, for the input-file dialog and the Undo status.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
-- `src/app/xtb/ts.rs`: Transition-state searches from the reaction arrow, with session-only path previews.
+- `src/app/xtb/ts.rs`: Transition-state searches and reaction-path previews from the reaction arrow.
 - `src/app/xtb/ts/card.rs`: Predict controls and results for a single selected reaction arrow.
 - `src/app/xtb/ts/energy.rs`: Reaction energies are ordinary, sequential molecule calculations.
 - `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
+- `src/app/xtb/ts/irc.rs`: Select the saved reaction path, preview its geometries, and export its XYZ trajectory.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
 - `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
 - `src/app/xtb/ts/review/view.rs`: Review both reaction sides while keeping uncommon calculation settings folded.
+- `src/app/xtb/ts/thumbnails.rs`: Saved-geometry preparation for the reactant, TS and product profile models.
 - `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
 - `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
@@ -1065,6 +1069,7 @@ explains how the crates and modules fit together.
 - `crates/qcdata/src/capabilities.rs`: Method × task capabilities and calculation admission checks.
 - `crates/qcdata/src/compact.rs`: Compact encodings for floating-point arrays in their field's declared units.
 - `crates/qcdata/src/frame.rs`: Exact molecular frames, their SHA-256 identity, and trajectories.
+- `crates/qcdata/src/irc.rs`: Ordered intrinsic reaction coordinates, including the scalar data kept in light saves.
 - `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
 - `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
 - `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.

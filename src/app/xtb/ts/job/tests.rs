@@ -155,6 +155,95 @@ fn worker_pool_respects_cores_and_inner_images() {
     assert_eq!(worker_count(24, 1), 1);
 }
 
+#[test]
+fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
+    let mut report = ts_report();
+    let branches = report.irc.as_mut().unwrap();
+    branches[0].path = vec![point(-1.5, 2.75), point(-2., 2.5)];
+    branches[0].energies = vec![-1., -1.5, -2., -3.];
+    branches[0].completed = false;
+    branches[1].path = vec![point(-1.25, 3.25)];
+    branches[1].energies = vec![-1., -1.25, -2.];
+    let frame = Frame {
+        numbers: vec![1, 1],
+        isotopes: vec![1, 2],
+        masses_amu: vec![1., 4.],
+        positions_angstrom: angstroms(&report.ts.positions),
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let path = ordered_irc(&report, &frame).unwrap().unwrap();
+    assert_eq!(path.steps(), 4);
+    assert_eq!(path.ts_index, 2);
+    assert_eq!(path.trajectory.energies_hartree, [-2., -1.5, -1., -1.25]);
+    assert_eq!(path.completed, [false, true]);
+    assert_eq!(
+        path.reached,
+        [qcdata::IrcEndpoint::Reactant, qcdata::IrcEndpoint::Product]
+    );
+    assert_eq!(path.frame(path.ts_index), Some(frame));
+    assert_eq!(
+        path.relaxed_ends
+            .as_ref()
+            .unwrap()
+            .each_ref()
+            .map(|end| end.energy_hartree),
+        [-3., -2.]
+    );
+    for (actual, expected) in path
+        .arc_lengths_sqrt_amu_bohr
+        .iter()
+        .zip([-1., -0.5, 0., 0.5])
+    {
+        assert!((actual - expected).abs() < 1e-12);
+    }
+    for (actual, expected) in path
+        .neb_arc_lengths_sqrt_amu_bohr
+        .iter()
+        .zip([-1., 0., 0.5])
+    {
+        assert!((actual - expected).abs() < 1e-12);
+    }
+
+    // Reversing the arbitrary mode sign must not reverse the displayed reaction.
+    report.irc.as_mut().unwrap().swap(0, 1);
+    assert_eq!(
+        ordered_irc(&report, &path.frame(path.ts_index).unwrap()).unwrap(),
+        Some(path)
+    );
+}
+
+#[test]
+fn ordered_irc_keeps_unknown_end_classes_and_handles_missing_branches() {
+    let mut report = ts_report();
+    let frame = Frame {
+        numbers: vec![1, 1],
+        isotopes: vec![],
+        masses_amu: vec![1., 4.],
+        positions_angstrom: angstroms(&report.ts.positions),
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    for reached in [
+        [Reached::Other, Reached::Product],
+        [Reached::Product, Reached::Other],
+        [Reached::Other, Reached::Reactant],
+        [Reached::Reactant, Reached::Other],
+    ] {
+        for (branch, reached) in report.irc.as_mut().unwrap().iter_mut().zip(reached) {
+            branch.reached = reached;
+        }
+        let path = ordered_irc(&report, &frame).unwrap().unwrap();
+        assert_ne!(path.reached[0], qcdata::IrcEndpoint::Product);
+        assert_ne!(path.reached[1], qcdata::IrcEndpoint::Reactant);
+        assert!(path.reached.contains(&qcdata::IrcEndpoint::Other));
+    }
+    report.irc = None;
+    assert_eq!(ordered_irc(&report, &frame).unwrap(), None);
+}
+
 fn point(energy: f64, distance: f64) -> Minimum {
     Minimum {
         energy,
@@ -276,14 +365,30 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
     assert_eq!(report.extras.worker_frequencies, [-55.]);
     assert_eq!(report.extras.engine_imaginary, Some(-60.));
     assert_eq!(report.extras.image_positions.len(), 3);
-    assert_eq!(report.extras.irc_energies, [vec![-1., -3.], vec![-1., -2.]]);
+    let irc = report.extras.irc.as_ref().unwrap();
+    assert_eq!(irc.trajectory.energies_hartree, [-1.]);
+    assert_eq!(
+        irc.relaxed_ends
+            .as_ref()
+            .unwrap()
+            .each_ref()
+            .map(|end| end.energy_hartree),
+        [-3., -2.]
+    );
     assert!(report.extras.connects);
     assert!(report.extras.saddle_converged);
     assert_eq!(report.extras.num_imaginary, 1);
     assert!(report.extras.candidate.is_none());
     let trajectory = result.trajectory.as_ref().unwrap();
     assert_eq!(trajectory.energies_hartree, [-3., -1.1, -2.]);
-    assert!(trajectory.positions_angstrom.is_empty());
+    assert_eq!(
+        trajectory.frame(1).unwrap().positions_angstrom,
+        report.extras.image_positions[1]
+    );
+    let light = result.light(&[]);
+    let light_band = light.trajectory.as_ref().unwrap();
+    assert_eq!(light_band.energies_hartree, trajectory.energies_hartree);
+    assert!(light_band.positions_angstrom.is_empty());
     assert_eq!(result.provenance.method.as_deref(), Some("GFN2-xTB"));
     assert_eq!(result.status, qcdata::Status::Converged);
     assert!(!result.keep_full);
@@ -537,7 +642,8 @@ fn failed_worker_check_keeps_engine_candidate_and_cancellation_discards_it() {
             product: report.frames[2].hash(),
         })
     );
-    assert_eq!(report.extras.irc_energies, [vec![-1., -3.], vec![-1., -2.]]);
+    let irc = report.extras.irc.as_ref().unwrap();
+    assert_eq!(irc.trajectory.energies_hartree, [-1.]);
     assert!(report.extras.worker_frequencies.is_empty());
     result.validate(&report.frames[0]).unwrap();
 

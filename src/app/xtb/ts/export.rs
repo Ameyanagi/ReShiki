@@ -219,7 +219,11 @@ impl App {
         self.open_qc_export_source(source)
     }
 
-    fn xtb_ts_export_source(&self, result: &Arc<CalcResult>, arrow: Option<u64>) -> Option<Source> {
+    pub(super) fn xtb_ts_export_source(
+        &self,
+        result: &Arc<CalcResult>,
+        arrow: Option<u64>,
+    ) -> Option<Source> {
         let doc = &self.tab.doc;
         let reference = self.xtb_ts_reference(result, arrow);
         if let Some(context) =

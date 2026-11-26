@@ -438,6 +438,9 @@ impl App {
         let vibrations = &self.tab.xtb.vibrations;
         if vibrations.playing && self.xtb_vibration_preview().is_some() {
             iced::time::every(TICK).map(|_| Message::Xtb(super::Action::Vibrations(Action::Tick)))
+        } else if self.xtb_irc_preview().is_some() {
+            iced::time::every(std::time::Duration::from_millis(80))
+                .map(|_| Message::Xtb(super::Action::Ts(super::ts::Action::IrcTick)))
         } else if self.xtb_live_ts().is_some() {
             iced::time::every(std::time::Duration::from_millis(100))
                 .map(|_| Message::Xtb(super::Action::Ts(super::ts::Action::Tick)))
