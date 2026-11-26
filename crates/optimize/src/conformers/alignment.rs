@@ -137,7 +137,7 @@ fn dot(a: Point, b: Point) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn horn_rotation([[a, b, c], [d, e, f], [g, h, i]]: Matrix3) -> Matrix3 {
+pub(crate) fn horn_rotation([[a, b, c], [d, e, f], [g, h, i]]: Matrix3) -> Matrix3 {
     let [w, x, y, z] = largest_eigenvector([
         [a + e + i, f - h, g - c, b - d],
         [f - h, a - e - i, b + d, c + g],
