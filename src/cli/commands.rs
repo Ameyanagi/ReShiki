@@ -338,6 +338,7 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
                                   [--job JOB] [--template N|--method M --basis B]
                                   [--charge C] [--multiplicity M] [--cores N]
                                   [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--reactant R.xyz] [--product P.xyz] [--hessian H.hess]
                                   [--out PATH]",
     options: &[
         OptionSpec {
@@ -350,7 +351,7 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--job",
             value: Some("JOB"),
-            help: "single-point, optimize, opt-freq, transition-state or irc.",
+            help: "single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts.",
             sets: Some("export_input.job"),
             ..QC_OPTION
         },
@@ -420,9 +421,27 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
             ..QC_OPTION
         },
         OptionSpec {
+            flag: "--reactant",
+            value: Some("R.xyz"),
+            help: "First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--product",
+            value: Some("P.xyz"),
+            help: "First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--hessian",
+            value: Some("H.hess"),
+            help: "ORCA Cartesian Hessian. Requires --program orca with --job ts or irc.",
+            ..QC_OPTION
+        },
+        OptionSpec {
             flag: "--out",
             value: Some("PATH"),
-            help: "Main file, replaced if it exists; companions go beside it.",
+            help: "Main file. Required for ORCA neb-ts or when using --hessian.",
             ..QC_OPTION
         },
     ],
@@ -1318,7 +1337,14 @@ radicals or isotope labels, is an error.
 
 fn export_input_help() -> String {
     let mut text = format!(
-        "Usage: {}\n\nWrites input for another program from the first frame of INPUT.xyz (Å);\nstdout without --out. An existing companion file stops the export.\nWarnings go to stderr.\n\nOptions:\n",
+        "Usage: {}\n\n\
+Writes input for another program from the first frame of INPUT.xyz (Å).\n\
+Without --out, the input goes to stdout. With --out, the main file is\n\
+replaced and new companions go beside it. An existing companion file\n\
+stops the export. Warnings go to stderr.\n\n\
+Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts. They must\n\
+list the same elements as INPUT.xyz in the same order. Corresponding atoms\n\
+must have the same index in every structure.\n\nOptions:\n",
         EXPORT_INPUT.usage,
     );
     for option in EXPORT_INPUT.options {
@@ -1336,6 +1362,9 @@ fn export_input_help() -> String {
             .unwrap_or_default();
         text.push_str(&format!("  {}  {}{only}\n", index + 1, template.name));
     }
+    text.push_str(
+        "\nExample:\n  reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz\n",
+    );
     text
 }
 

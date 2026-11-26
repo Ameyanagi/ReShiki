@@ -1957,3 +1957,5 @@ fn oversized_baselines_are_refused_on_read() {
     json["science"]["attachments"][0]["baseline"] = json!("0".repeat(10_000));
     assert!(Document::from_json(&serde_json::to_vec(&json).unwrap()).is_err());
 }
+
+mod import;

@@ -642,14 +642,7 @@ fn baseline(doc: &Document, ids: &[u64]) -> String {
 /// with the chemistry of `expected`.
 fn freshness(doc: &Document, atoms: &[Option<u64>], expected: &str) -> Freshness {
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let whole = ids.first().is_some_and(|first| {
-        let set: HashSet<u64> = ids.iter().copied().collect();
-        let component: HashSet<u64> = crate::molecule_names::component(doc, *first)
-            .into_iter()
-            .collect();
-        component == set
-    });
-    if whole && baseline(doc, &ids) == expected {
+    if !ids.is_empty() && closed(doc, &ids) && baseline(doc, &ids) == expected {
         Freshness::Current
     } else {
         Freshness::Stale
@@ -690,6 +683,38 @@ fn atomic_number(symbol: &str) -> Option<u8> {
         .iter()
         .position(|e| *e == symbol)
         .and_then(|i| u8::try_from(i + 1).ok())
+}
+
+/// Whether `ids` are whole molecules: every atom bonded to one of them is
+/// one of them. A calculation is for one molecule, a file's result can be
+/// for a complex of several.
+fn closed(doc: &Document, ids: &[u64]) -> bool {
+    let set: HashSet<u64> = ids.iter().copied().collect();
+    ids.iter().all(|&id| {
+        doc.atom(id).is_some()
+            && crate::molecule_names::component(doc, id)
+                .into_iter()
+                .all(|atom| set.contains(&atom))
+    })
+}
+
+fn model_baseline(
+    doc: &Document,
+    atom: u64,
+    atoms: &[Option<u64>],
+) -> Result<String, ScienceError> {
+    let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
+    let molecule: HashSet<u64> = crate::molecule_names::component(doc, atom)
+        .into_iter()
+        .collect();
+    if ids.iter().copied().collect::<HashSet<_>>() != molecule {
+        return Err(if ids.iter().all(|id| doc.atom(*id).is_some()) {
+            ScienceError::Fragments
+        } else {
+            ScienceError::StaleModel
+        });
+    }
+    Ok(baseline(doc, &ids))
 }
 
 /// The total charge and multiplicity the drawing gives the molecule of
@@ -769,18 +794,7 @@ pub fn launch(
         drawing_atoms: vec![],
     };
     frame.validate()?;
-    let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let molecule: HashSet<u64> = crate::molecule_names::component(doc, atom)
-        .into_iter()
-        .collect();
-    if ids.iter().copied().collect::<HashSet<_>>() != molecule {
-        return Err(if ids.iter().all(|id| doc.atom(*id).is_some()) {
-            ScienceError::Fragments
-        } else {
-            ScienceError::StaleModel
-        });
-    }
-    let baseline = baseline(doc, &ids);
+    let baseline = model_baseline(doc, atom, &atoms)?;
     let shown = |stored: &Frame| {
         stored.numbers == frame.numbers
             && stored.isotopes == frame.isotopes
@@ -886,6 +900,86 @@ pub fn attach(
         freshness: freshness(doc, &launch.atoms, &launch.baseline),
         attachment,
     })
+}
+
+/// Attach an external result whose exact `frame` matches `model` in atom
+/// order and within 1e-3 Å. Pass any other referenced geometries in `frames`.
+pub fn import(
+    doc: &mut Document,
+    model: usize,
+    frame: Frame,
+    mut frames: Vec<Frame>,
+    result: CalcResult,
+) -> Result<Attached, ScienceError> {
+    let model = doc.models.get(model).ok_or(ScienceError::NoModel)?;
+    if model.cell.is_some() {
+        return Err(ScienceError::Periodic);
+    }
+    if frame.hash() != result.frame {
+        return Err(ScienceError::Unknown);
+    }
+    let mut atoms = model.geometry_sources();
+    atoms.resize(model.atoms.len() + model.hydrogens.len(), None);
+    let matches = frame.numbers.len() == atoms.len()
+        && frame.numbers.iter().enumerate().all(|(i, &number)| {
+            let element = if i < model.atoms.len() {
+                model_element(doc, model, i)
+            } else {
+                Some("H")
+            };
+            element.and_then(atomic_number) == Some(number)
+        })
+        && model
+            .atoms
+            .iter()
+            .map(|a| a.xyz)
+            .chain(model.hydrogens.iter().map(|h| h.xyz))
+            .zip(&frame.positions_angstrom)
+            .all(|(shown, exact)| {
+                shown
+                    .into_iter()
+                    .zip(exact)
+                    .map(|(a, b)| (f64::from(a) - b).powi(2))
+                    .sum::<f64>()
+                    <= 1e-6
+            });
+    if !matches {
+        return Err(ScienceError::ModelMismatch);
+    }
+    let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
+    if ids.is_empty() {
+        return Err(ScienceError::Gone);
+    }
+    // The model may hold a complex of several molecules (a dimer, an ion
+    // pair): its result belongs to all of them.
+    if !closed(doc, &ids) {
+        return Err(ScienceError::Fragments);
+    }
+    let baseline = baseline(doc, &ids);
+    let frame = if let Some(input) = result.input_frame.filter(|hash| *hash != result.frame) {
+        let input_frame = if let Some(index) = frames.iter().position(|frame| frame.hash() == input)
+        {
+            let input = frames.swap_remove(index);
+            input.validate()?;
+            Arc::new(input)
+        } else {
+            doc.science
+                .frame(&input)
+                .cloned()
+                .ok_or(ScienceError::Unknown)?
+        };
+        frames.push(frame);
+        input_frame
+    } else {
+        frame.validate()?;
+        Arc::new(frame)
+    };
+    let launch = Launch {
+        frame,
+        atoms,
+        baseline,
+    };
+    attach(doc, &launch, frames, result)
 }
 
 /// Every result stored for the molecule of `atom` (any of its current atoms
