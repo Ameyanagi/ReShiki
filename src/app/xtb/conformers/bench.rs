@@ -25,7 +25,9 @@ use std::{
 
 const USAGE: &str = "Usage: reshiki --conformer-bench FILE.smi [--starts N] \
     [--minimizer mmff94s|gfnff|gfn2] [--diversity fine|normal|coarse] \
-    [--representatives N] [--threads N] [--embed-probe]";
+    [--representatives N] [--threads N] [--embed-probe]
+
+--embed-probe times only embedding the same starts (no minimization) and skips the search.";
 
 impl App {
     pub(crate) fn xtb_conformer_bench(args: impl Iterator<Item = OsString>) -> i32 {
@@ -195,7 +197,9 @@ fn benchmark(args: Args) -> Result<Value, String> {
         search::search_for(&doc, &atoms, &launch, &settings, &calc).map_err(failure_message)?;
     let prepare_search_seconds = began.elapsed().as_secs_f64();
 
-    let (embed_seconds, embed_count) = if args.embed_probe {
+    if args.embed_probe {
+        // Embedding only, in a run of its own so it never warms the machine
+        // before a timed search: the same starts without minimization.
         let began = Instant::now();
         // The pipeline's private BASE_SEED has the same value as DEFAULT_SEED.
         let embedded = runtime
@@ -212,13 +216,14 @@ fn benchmark(args: Args) -> Result<Value, String> {
         if let Some(reason) = embedded.stopped {
             return Err(format!("Embedding probe stopped early: {reason}"));
         }
-        (
-            Some(began.elapsed().as_secs_f64()),
-            Some(embedded.conformers.len()),
-        )
-    } else {
-        (None, None)
-    };
+        return Ok(json!({
+            "smiles": smiles,
+            "atoms": numbers.len(),
+            "starts_requested": settings.starts,
+            "embed_seconds": began.elapsed().as_secs_f64(),
+            "embed_count": embedded.conformers.len(),
+        }));
+    }
 
     let (found, phases) = block_on(run_search(search)).map_err(failure_message)?;
     let starts = phases.starts.ok_or("Missing Starts event")?;
@@ -258,13 +263,13 @@ fn benchmark(args: Args) -> Result<Value, String> {
         "model_seconds": model_seconds,
         "launch_seconds": launch_seconds,
         "prepare_search_seconds": prepare_search_seconds,
-        "embed_seconds": embed_seconds,
-        "embed_count": embed_count,
         "phases": phases,
         "sampling_seconds": sampling_end - starts,
         "minimizing_seconds": minimizing_seconds,
+        // Without re-ranking (xTB minimized every start) this also holds the final ranking.
         "clustering_seconds": phases.first_reranking.unwrap_or(done) - clustering,
-        "rerank_seconds": phases.first_reranking.map(|first| done - first),
+        "rerank_seconds": phases.first_reranking.zip(phases.last_reranking).map(|(first, last)| last - first),
+        "ranking_seconds": phases.last_reranking.map(|last| done - last),
         "search_seconds": found.seconds,
         "starts": found.starts,
         "clusters": found.clusters,
