@@ -29,6 +29,8 @@ pub(crate) enum Command {
     Version,
     Calc(Calc),
     Ts(Ts),
+    Calculate(Calculate),
+    ReadOutput(ReadOutput),
     Tools,
     Schema(Schema),
     Skill(Skill),
@@ -83,6 +85,31 @@ pub(crate) struct Ts {
     pub(crate) keep_endpoints: bool,
     pub(crate) out_dir: Option<PathBuf>,
     pub(crate) json: Option<PathBuf>,
+}
+
+/// `calculate`: one XYZ file and the compact calculation tool's settings.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Calculate {
+    pub(crate) file: PathBuf,
+    pub(crate) task: &'static str,
+    pub(crate) method: &'static str,
+    pub(crate) charge: i32,
+    pub(crate) uhf: u32,
+    pub(crate) solvent: Option<String>,
+    pub(crate) conventions: &'static str,
+    pub(crate) electronic_temperature_k: Option<f64>,
+    pub(crate) accuracy: Option<f64>,
+    pub(crate) max_iterations: Option<u32>,
+    pub(crate) threads: Option<u32>,
+    pub(crate) convergence: Option<&'static str>,
+    pub(crate) fixed_atoms: Option<Vec<u32>>,
+}
+
+/// `read-output`: a quantum chemistry file and an optional zero-based job.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ReadOutput {
+    pub(crate) file: PathBuf,
+    pub(crate) job: Option<usize>,
 }
 
 /// A schema the CLI can print without a tool host.
@@ -250,6 +277,8 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "pieces" => pieces(spec, rest),
         "calc" => calc(&options(spec, rest)?),
         "ts" => ts(&options(spec, rest)?),
+        "calculate" => calculate(&options(spec, rest)?),
+        "read-output" => read_output(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -443,23 +472,14 @@ fn calc(options: &Options) -> Result<Command, String> {
 }
 
 fn charge(value: Option<&OsStr>) -> Result<i32, &'static str> {
-    value.map_or(Ok(0), |value| {
-        value
-            .to_str()
-            .and_then(|text| text.parse().ok())
-            .ok_or("--charge must be a whole number in the signed 32-bit range")
-    })
+    optional_integer("--charge", value)
+        .map(|charge| charge.unwrap_or_default())
+        .map_err(|_| "--charge must be a whole number in the signed 32-bit range")
 }
 
 fn uhf(value: Option<&OsStr>) -> Result<Option<u32>, &'static str> {
-    value
-        .map(|value| {
-            value
-                .to_str()
-                .and_then(|text| text.parse().ok())
-                .ok_or("--uhf must be a nonnegative whole number in the unsigned 32-bit range")
-        })
-        .transpose()
+    optional_integer("--uhf", value)
+        .map_err(|_| "--uhf must be a nonnegative whole number in the unsigned 32-bit range")
 }
 
 fn ts(options: &Options) -> Result<Command, String> {
@@ -558,6 +578,146 @@ fn ts_pairs(flag: &str, values: &[OsString]) -> Result<Vec<(usize, usize)>, Stri
             }
         })
         .collect()
+}
+
+fn calculate(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .filter(|file| {
+            file.extension()
+                .and_then(OsStr::to_str)
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("xyz"))
+        })
+        .ok_or("calculate needs an XYZ file: FILE.xyz")?;
+    let task = match option_text("--task", options.task.as_deref())? {
+        None | Some("energy") => "energy",
+        Some("optimize") => "optimize",
+        Some("frequencies") => "frequencies",
+        Some("opt+freq") => "opt+freq",
+        _ => return Err("--task must be energy, optimize, frequencies or opt+freq".into()),
+    };
+    let method = match option_text("--method", options.method.as_deref())? {
+        None | Some("gfn2") => "gfn2",
+        Some("gxtb") => "gxtb",
+        Some("gfnff") => "gfnff",
+        _ => return Err("--method must be gfn2, gxtb or gfnff".into()),
+    };
+    let conventions = match option_text("--conventions", options.conventions.as_deref())? {
+        None | Some("axtb") => "axtb",
+        Some("xtb-6.8") => "xtb-6.8",
+        _ => return Err("--conventions must be axtb or xtb-6.8".into()),
+    };
+    let uhf = integer("--uhf", options.uhf.as_deref(), 0_u32)?;
+    if uhf == u32::MAX {
+        return Err("--uhf is too large for a spin multiplicity".into());
+    }
+    let solvent = option_text("--solvent", options.solvent.as_deref())?
+        .map(|text| {
+            if text.trim().is_empty() {
+                Err("--solvent needs a nonempty name")
+            } else {
+                Ok(text.to_owned())
+            }
+        })
+        .transpose()?;
+    let electronic_temperature_k = option_text("--etemp", options.etemp.as_deref())?
+        .map(|text| {
+            text.parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value >= 0.0)
+                .ok_or("--etemp must be finite and at least 0 K")
+        })
+        .transpose()?;
+    let accuracy = option_text("--accuracy", options.accuracy.as_deref())?
+        .map(|text| {
+            text.parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .ok_or("--accuracy must be finite and positive")
+        })
+        .transpose()?;
+    let max_iterations = option_text("--max-iter", options.max_iter.as_deref())?
+        .map(|text| {
+            text.parse::<u32>()
+                .ok()
+                .filter(|value| *value > 0)
+                .ok_or("--max-iter must be a whole number from 1 to 4294967295")
+        })
+        .transpose()?;
+    let threads = option_text("--threads", options.threads.as_deref())?
+        .map(|text| {
+            text.parse::<u32>()
+                .ok()
+                .filter(|value| (1..=64).contains(value))
+                .ok_or("--threads must be a whole number from 1 to 64")
+        })
+        .transpose()?;
+    let convergence = match option_text("--convergence", options.convergence.as_deref())? {
+        None => None,
+        Some("normal") => Some("normal"),
+        Some("tight") => Some("tight"),
+        _ => return Err("--convergence must be normal or tight".into()),
+    };
+    let fixed_atoms = option_text("--fix", options.fix.as_deref())?
+        .map(|text| {
+            let mut atoms = Vec::new();
+            for atom in text.split(',') {
+                let atom = atom
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|atom| *atom > 0)
+                    .ok_or("--fix must list atom numbers starting at 1, separated by commas")?;
+                if atoms.contains(&atom) {
+                    return Err("--fix atom numbers must be unique");
+                }
+                atoms.push(atom);
+            }
+            Ok(atoms)
+        })
+        .transpose()?;
+    if !matches!(task, "optimize" | "opt+freq") {
+        if convergence.is_some() {
+            return Err("--convergence requires --task optimize or opt+freq".into());
+        }
+        if fixed_atoms.is_some() {
+            return Err("--fix requires --task optimize or opt+freq".into());
+        }
+    }
+    Ok(Command::Calculate(Calculate {
+        file,
+        task,
+        method,
+        charge: integer("--charge", options.charge.as_deref(), 0)?,
+        uhf,
+        solvent,
+        conventions,
+        electronic_temperature_k,
+        accuracy,
+        max_iterations,
+        threads,
+        convergence,
+        fixed_atoms,
+    }))
+}
+
+fn read_output(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .ok_or("read-output needs a file: FILE")?;
+    let job = option_text("--job", options.job.as_deref())?
+        .map(|text| {
+            text.parse::<usize>()
+                .map_err(|_| "--job must be a nonnegative whole number")
+        })
+        .transpose()?;
+    Ok(Command::ReadOutput(ReadOutput { file, job }))
 }
 
 fn pieces(spec: &CommandSpec, rest: &[OsString]) -> Result<Command, String> {
@@ -713,6 +873,9 @@ struct Options {
     keep_endpoints: bool,
     out_dir: Option<OsString>,
     json_file: Option<OsString>,
+    solvent: Option<OsString>,
+    convergence: Option<OsString>,
+    fix: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     dark: bool,
@@ -809,6 +972,9 @@ fn parse_options(
                 "--workers" => options.workers = Some(value),
                 "--out-dir" => options.out_dir = Some(value),
                 "--json" => options.json_file = Some(value),
+                "--solvent" => options.solvent = Some(value),
+                "--convergence" => options.convergence = Some(value),
+                "--fix" => options.fix = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,
@@ -1113,12 +1279,19 @@ fn integer<T: std::str::FromStr>(
     value: Option<&OsStr>,
     default: T,
 ) -> Result<T, String> {
-    match option_text(flag, value)? {
-        None => Ok(default),
-        Some(text) => text
-            .parse()
-            .map_err(|_| format!("{flag} must be a whole number")),
-    }
+    optional_integer(flag, value).map(|value| value.unwrap_or(default))
+}
+
+fn optional_integer<T: std::str::FromStr>(
+    flag: &str,
+    value: Option<&OsStr>,
+) -> Result<Option<T>, String> {
+    option_text(flag, value)?
+        .map(|text| {
+            text.parse()
+                .map_err(|_| format!("{flag} must be a whole number"))
+        })
+        .transpose()
 }
 
 /// `render`: the input, the image format and destination, then the size.

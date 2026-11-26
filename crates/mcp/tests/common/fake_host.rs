@@ -10,6 +10,8 @@
 //!   once the host was asked to cancel it.
 //! - `panic` panics inside the call.
 //! - `big` returns `{text}` with `n` characters of quote-heavy text.
+//! - `progress` reports 33 steps and retains its sink for late-report tests;
+//!   tests opt into its separate [`PROGRESS_SPEC`].
 // Each test crate that includes this module uses a subset of it.
 #![allow(dead_code)]
 use reshiki_agent::{
@@ -17,6 +19,7 @@ use reshiki_agent::{
     ops::{
         error::{ErrorKind, OpError},
         host::{Call, ToolHost},
+        progress::{Progress, Sink},
         result::{Blob, Image, ToolResult},
         wire::{Principal, RequestId},
     },
@@ -122,6 +125,12 @@ pub const SPECS: &[ToolSpec] = &[
     tool("big", big_schema, None),
 ];
 
+/// A progress-reporting tool tests can list without changing the transcripts.
+pub const PROGRESS_SPEC: ToolSpec = tool("progress", no_arguments, None);
+
+/// The final progress value emitted by the progress tool.
+pub const PROGRESS_STEPS: u32 = 32;
+
 /// The versions the scripted results report.
 pub fn versions() -> Versions {
     Versions::current(APP_VERSION)
@@ -150,6 +159,8 @@ pub struct FakeHost {
     pub live_jobs: Arc<AtomicUsize>,
     /// Set if a `slow` call's future was dropped while its job ran.
     pub dropped_while_live: Arc<AtomicBool>,
+    /// The last progress call's sink, retained beyond its result.
+    pub retained_progress: Mutex<Option<Sink>>,
 }
 
 impl Default for FakeHost {
@@ -169,6 +180,7 @@ impl FakeHost {
             release: Arc::new(Barrier::new(2)),
             live_jobs: Arc::default(),
             dropped_while_live: Arc::default(),
+            retained_progress: Mutex::default(),
         }
     }
 
@@ -255,7 +267,7 @@ impl ToolHost for FakeHost {
             request,
             tool,
             arguments,
-            ..
+            progress,
         } = call;
         self.calls.lock().unwrap().push(Received {
             principal: principal.clone(),
@@ -292,6 +304,25 @@ impl ToolHost for FakeHost {
                 ..value(json!({"format": "svg"}))
             }),
             "slow" => self.slow(&principal, &request).await,
+            "progress" => {
+                if let Some(sink) = &progress {
+                    sink(Progress {
+                        completed: 0.0,
+                        total: None,
+                        message: None,
+                    });
+                    for completed in 1..=PROGRESS_STEPS {
+                        sink(Progress {
+                            completed: f64::from(completed),
+                            total: Some(f64::from(PROGRESS_STEPS)),
+                            message: Some(format!("Step {completed}")),
+                        });
+                    }
+                }
+                let supplied = progress.is_some();
+                *self.retained_progress.lock().unwrap() = progress;
+                Ok(value(json!({"progress": supplied})))
+            }
             "panic" => panic!("RESHIKI-CANARY-panic {arguments}"),
             "big" => {
                 let n = arguments["n"].as_u64().unwrap();
