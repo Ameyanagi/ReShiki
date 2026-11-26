@@ -1,11 +1,11 @@
 //! Distance-restrained endpoint construction and covalent connectivity.
 //!
-//! Covalent radii are Pyykkö and Atsumi, Chem. Eur. J. 15, 186 (2009) [Pyykko2009Radii],
+//! Covalent radii are Pyykkö and Atsumi, Chem. Eur. J. 15, 186 (2009) \[Pyykko2009Radii\],
 //! as tabulated by the crate's model Hessian. The TS graph uses a 1.2 cutoff.
 //! Staged harmonic distance restraints preserve rigid-motion invariance and
 //! use the existing molecular minimizer (Wang and Song, J. Chem. Phys. 144,
-//! 214108, 2016 [Wang2016TRIC], and Banerjee et al., J. Phys. Chem. 89, 52,
-//! 1985 [Banerjee1985PRFO]).
+//! 214108, 2016 \[Wang2016TRIC\], and Banerjee et al., J. Phys. Chem. 89, 52,
+//! 1985 \[Banerjee1985PRFO\]).
 
 use std::{collections::BTreeSet, ops::ControlFlow};
 

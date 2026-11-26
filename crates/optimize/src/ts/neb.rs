@@ -1,10 +1,10 @@
 //! Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J. Chem. Phys. 113, 9978
-//! (2000) [Henkelman2000Tangent], and climbing force of Henkelman, Uberuaga & Jónsson, J. Chem.
-//! Phys. 113, 9901 (2000) [Henkelman2000CINEB]. The band is relaxed with FIRE (Bitzek et al., Phys.
-//! Rev. Lett. 97, 170201, 2006 [Bitzek2006FIRE]), using unit artificial masses and a 0.2-bohr
-//! per-atom step cap. A fixed initial force scale sets the fictitious time unit and scales equal
-//! springs from 0.1 Eh/bohr² upward on unusually stiff surfaces (including unscaled analytic test
-//! potentials).
+//! (2000) \[Henkelman2000Tangent\], and climbing force of Henkelman, Uberuaga & Jónsson, J. Chem.
+//! Phys. 113, 9901 (2000) \[Henkelman2000CINEB\]. The band is relaxed with FIRE (Bitzek et al.,
+//! Phys. Rev. Lett. 97, 170201, 2006 \[Bitzek2006FIRE\]), using unit artificial masses and a
+//! 0.2-bohr per-atom step cap. A fixed initial force scale sets the fictitious time unit and
+//! scales equal springs from 0.1 Eh/bohr² upward on unusually stiff surfaces (including unscaled
+//! analytic test potentials).
 
 use std::ops::ControlFlow;
 
@@ -41,7 +41,7 @@ impl Band {
     /// Probe unresolved peaks next to the climbing image without changing the band.
     /// Adaptive insertion near a transition state follows the motivation of
     /// Kolsbjerg, Groves & Hammer, J. Chem. Phys. 145, 094107 (2016)
-    /// [Kolsbjerg2016AutoNEB]. The two-midpoint selection rule here is our own.
+    /// \[Kolsbjerg2016AutoNEB\]. The two-midpoint selection rule here is our own.
     /// Molecular neighbors use a unit-weight fit in the climbing image's frame.
     /// The returned unit directions follow increasing image index.
     pub(super) fn intermediate_peaks(
@@ -123,7 +123,8 @@ impl Band {
             });
         }
         // Stable sorting preserves the left-link tie break used by the original
-        // two-midpoint rule, while retaining the other link if a seed fails SCF.
+        // two-midpoint rule, while retaining the other link if a seed fails SCF
+        // or its exact stationary-point index disqualifies the handoff.
         result
             .seeds
             .sort_by(|a, b| b.point.energy.total_cmp(&a.point.energy));
