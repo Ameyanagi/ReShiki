@@ -5,10 +5,15 @@ use super::{is, state};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
-use reshiki::qcdata::{CalcResult, Frame, Task as CalcTask, TransitionStateRun};
+use reshiki::qcdata::{
+    CalcResult, Frame, Task as CalcTask, TransitionStateContext, TransitionStateRun,
+};
 use reshiki::reactions::ts_plan::{self, TsPlan};
+use reshiki::reactions::{Reaction, Role};
 use reshiki::science::ScienceError;
+use sha2::{Digest, Sha256};
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
@@ -39,6 +44,7 @@ pub(crate) enum Action {
 pub(super) struct Request {
     pub arrow: u64,
     bonds: card::BondChanges,
+    pub context: TransitionStateContext,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     plan: TsPlan,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -141,21 +147,18 @@ struct Extras {
 
 pub(super) struct Session {
     extras: Extras,
-    arrow: u64,
-    plan: TsPlan,
-    /// The starting attachment covers just one side of the reaction.
-    /// Check its reaction plan too when the drawing changes.
+    pub(super) arrow: u64,
     freshness: Cell<Option<((u64, u64), bool)>>,
 }
 
 impl Session {
-    pub(super) fn stale(&self, doc: &Document, revision: (u64, u64)) -> bool {
+    fn stale(&self, doc: &Document, search: &TransitionStateRun, revision: (u64, u64)) -> bool {
         if let Some((at, stale)) = self.freshness.get()
             && at == revision
         {
             return stale;
         }
-        let stale = ts_plan::plan_for_review(doc, self.arrow).as_ref() != Ok(&self.plan);
+        let stale = saved_search_stale(doc, search);
         self.freshness.set(Some((revision, stale)));
         stale
     }
@@ -190,13 +193,85 @@ pub(super) fn saved_search(result: &CalcResult) -> Option<&TransitionStateRun> {
     result.run.as_ref()?.transition_state.as_deref()
 }
 
-pub(super) fn saved_search_stale(doc: &Document, search: &TransitionStateRun) -> bool {
-    let Ok(plan) = ts_plan::plan_for_review(doc, search.arrow) else {
+fn endpoint_chemistry(doc: &Document, reaction: &Reaction, role: Role) -> String {
+    let members: HashSet<_> = reaction
+        .participants(role)
+        .iter()
+        .flat_map(|participant| participant.atoms.iter().copied())
+        .collect();
+    let mut atoms: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| members.contains(&atom.id))
+        .collect();
+    // Insertion reassigns drawing IDs, so break map-number ties in drawing order.
+    atoms.sort_by_key(|atom| atom.map_num);
+    let ids: Vec<_> = atoms.iter().map(|atom| atom.id).collect();
+    format!(
+        "{:x}",
+        Sha256::digest(reshiki::science::baseline(doc, &ids))
+    )
+}
+
+pub(super) fn bound_arrow(doc: &Document, arrow: u64, atoms: &[Option<u64>]) -> Option<u64> {
+    if !review::reaction_arrow(doc, arrow) {
+        return None;
+    }
+    let reaction = reshiki::reaction_mapping::reaction(doc, arrow).ok()?;
+    let mut linked = atoms.iter().flatten().peekable();
+    linked.peek()?;
+    reaction
+        .reactants
+        .iter()
+        .chain(&reaction.products)
+        .any(|participant| linked.clone().all(|id| participant.atoms.contains(id)))
+        .then_some(arrow)
+}
+
+pub(super) fn not_verified(result: &CalcResult) -> bool {
+    is_ts(result) && saved_search(result).is_none_or(|search| search.context.is_none())
+}
+
+fn saved_search_stale(doc: &Document, search: &TransitionStateRun) -> bool {
+    let (Some(arrow), Some(context)) = (search.arrow, &search.context) else {
+        return true;
+    };
+    let Ok(reaction) = reshiki::reaction_mapping::reaction(doc, arrow) else {
+        return true;
+    };
+    let Ok(plan) = ts_plan::plan_for_review(doc, arrow) else {
         return true;
     };
     let mut drawn = card::BondChanges::from_plan(doc, &plan).0;
     drawn.automatic = search.mapping.automatic;
     drawn != search.mapping
+        || context.reactant_chemistry != endpoint_chemistry(doc, reaction, Role::Reactant)
+        || context.product_chemistry != endpoint_chemistry(doc, reaction, Role::Product)
+}
+
+impl App {
+    pub(super) fn xtb_ts_search_stale(&self, result: &Arc<CalcResult>) -> bool {
+        let Some(search) = saved_search(result) else {
+            return true;
+        };
+        let doc = &self.tab.doc;
+        match self.tab.xtb.ts_sessions.get(result) {
+            Some(session) => session.stale(doc, search, (self.tab.file_epoch, self.tab.revision)),
+            None => saved_search_stale(doc, search),
+        }
+    }
+
+    pub(super) fn xtb_saved_reaction_title(
+        &self,
+        result: &CalcResult,
+        arrow: Option<u64>,
+    ) -> String {
+        saved_search(result)
+            .and_then(|search| search.context.as_ref())
+            .map(|context| context.title.clone())
+            .or_else(|| arrow.map(|arrow| self.xtb_reaction_label(arrow).title()))
+            .unwrap_or_else(|| "Reaction".into())
+    }
 }
 
 pub(super) fn path_energies(result: &CalcResult) -> &[f64] {
@@ -314,35 +389,12 @@ impl App {
         }
     }
 
-    pub(super) fn xtb_ts_target(&self) -> Option<Vec<u64>> {
-        let arrow = self.selected_reaction_arrow()?.id;
-        Some(ts_plan::plan(&self.tab.doc, arrow).ok()?.start_atoms)
-    }
-
-    fn xtb_ts_rerun_arrow(&self, shown: &super::palette::Shown<'_>) -> Option<u64> {
-        if shown.stale || !is_ts(&shown.stored.result) {
-            return None;
-        }
-        if let Some(session) = shown.ts {
-            return Some(session.arrow);
-        }
-        if let Some(search) = saved_search(&shown.stored.result) {
-            return Some(search.arrow);
-        }
-        // The file links the result to the starting molecule. Only infer an
-        // arrow after reopening when that molecule identifies a single plan.
-        unique_matching_plan(&self.tab.doc, shown.atoms).map(|(arrow, _)| arrow)
-    }
-
     fn xtb_ts_can_rerun(&self, shown: &super::palette::Shown<'_>) -> bool {
-        super::available() && !self.xtb_running() && self.xtb_ts_rerun_arrow(shown).is_some()
+        super::available() && !self.xtb_running() && shown.arrow.is_some()
     }
 
     fn xtb_ts_rerun(&mut self) -> Task<Message> {
-        let Some(shown) = self.xtb_shown() else {
-            return Task::none();
-        };
-        let Some(arrow) = self.xtb_ts_rerun_arrow(&shown) else {
+        let Some(arrow) = self.xtb_shown().and_then(|shown| shown.arrow) else {
             return Task::none();
         };
         self.xtb_review_rerun(arrow)
@@ -383,6 +435,16 @@ impl App {
             .xtb
             .ts_card
             .automatic_map((self.tab.file_epoch, arrow), &plan);
+        let Ok(reaction) = reshiki::reaction_mapping::reaction(&self.tab.doc, arrow) else {
+            return Task::none();
+        };
+        let label = self.xtb_reaction_label(arrow);
+        let context = TransitionStateContext {
+            reactant_chemistry: endpoint_chemistry(&self.tab.doc, reaction, Role::Reactant),
+            product_chemistry: endpoint_chemistry(&self.tab.doc, reaction, Role::Product),
+            title: label.title(),
+            reactant: label.first_reactant().unwrap_or("Reaction").to_owned(),
+        };
         self.xtb_begin(super::Request {
             atoms: plan.start_atoms.clone(),
             config,
@@ -392,6 +454,7 @@ impl App {
             ts: Some(Request {
                 arrow,
                 bonds,
+                context,
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
                 plan,
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -454,10 +517,11 @@ impl App {
                 live.step = Some(step);
             }
             Event::Done(Ok(report)) => {
+                let request = live.request.clone();
+                let attempt = run.attempt();
                 let Some(launch) = run.launch.take() else {
                     return;
                 };
-                let request = live.request.clone();
                 let job::Report {
                     mut result,
                     frames,
@@ -479,19 +543,19 @@ impl App {
                         ));
                     }
                     summary.transition_state = Some(Box::new(TransitionStateRun {
-                        arrow: request.arrow,
+                        arrow: Some(request.arrow),
                         saddle_converged: extras.saddle_converged,
                         imaginary: extras.num_imaginary,
                         imaginary_cm1: extras.engine_imaginary,
                         climbing_image: extras.climbing,
                         mapping: request.bonds.0,
                         diagnostics,
+                        context: Some(request.context),
                     }));
                 }
                 let session = Rc::new(Session {
                     extras,
                     arrow: request.arrow,
-                    plan: request.plan,
                     freshness: Cell::new(None),
                 });
                 let line = view::presentation(&result, Some(&session)).status_line();
@@ -504,6 +568,7 @@ impl App {
                     line,
                     notes: vec![],
                     info,
+                    attempt: Some(attempt),
                 };
                 self.tab.xtb.run = None;
                 self.xtb_store_with_session(pending, false, Some(session));

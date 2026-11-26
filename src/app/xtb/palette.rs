@@ -60,6 +60,7 @@ pub(crate) struct Palette {
     pub(super) view: View,
     pub(super) labels: bool,
     step: Option<Step>,
+    ts_views: Vec<TsView>,
     /// Why the previewed step was not used: the stereo check's findings.
     pub(super) confirm: Vec<String>,
     /// The Conformers tab's overlay choice and its table.
@@ -79,6 +80,12 @@ struct Step {
     preview: Option<Box<Document>>,
 }
 
+struct TsView {
+    result: Vec<Weak<CalcResult>>,
+    view: View,
+    step: Option<(usize, (u64, u64))>,
+}
+
 struct Sizes {
     /// The results measured, by identity and "keep full" choice, without
     /// holding them, and the attachments (imported results share a size
@@ -94,13 +101,59 @@ struct Sizes {
 }
 
 impl Palette {
-    /// Open on the result's main view.
-    pub(super) fn show(&mut self, result: &Arc<CalcResult>) {
-        // The same result again keeps its lighter copies' identities.
-        if !self.result.iter().any(|weak| is(weak, result)) {
+    fn clear_result(&mut self) {
+        self.ts_views
+            .retain(|view| view.result.iter().any(|weak| weak.strong_count() > 0));
+        if self.is_showing_ts() {
+            self.ts_views.push(TsView {
+                result: std::mem::take(&mut self.result),
+                view: self.view,
+                step: self.step.as_ref().map(|step| (step.index, step.revision)),
+            });
+        }
+        self.result.clear();
+        self.view = View::Summary;
+        self.step = None;
+        self.confirm.clear();
+    }
+
+    fn is_showing_ts(&self) -> bool {
+        self.result
+            .iter()
+            .filter_map(Weak::upgrade)
+            .any(|result| ts::is_ts(&result))
+    }
+
+    fn follows(&self, result: &Arc<CalcResult>) -> bool {
+        self.result.iter().any(|weak| is(weak, result))
+    }
+
+    /// Open the result, restoring a reaction's last tab and path selection.
+    pub(super) fn show(&mut self, result: &Arc<CalcResult>) -> bool {
+        self.open = true;
+        let same = self.follows(result);
+        if same && ts::is_ts(result) {
+            return false;
+        }
+        if !same {
+            self.clear_result();
+            if let Some(index) = self
+                .ts_views
+                .iter()
+                .position(|view| view.result.iter().any(|weak| is(weak, result)))
+            {
+                let saved = self.ts_views.swap_remove(index);
+                self.result = saved.result;
+                self.view = saved.view;
+                self.step = saved.step.map(|(index, revision)| Step {
+                    index,
+                    revision,
+                    preview: None,
+                });
+                return self.step.is_some();
+            }
             self.result = vec![Arc::downgrade(result)];
         }
-        self.open = true;
         self.view = if ts::is_ts(result) {
             View::Path
         } else if super::conformers::is_search(result) {
@@ -110,6 +163,7 @@ impl Palette {
         };
         self.step = None;
         self.confirm.clear();
+        false
     }
 }
 
@@ -121,6 +175,7 @@ pub(super) struct Shown<'a> {
     pub frame: &'a Arc<Frame>,
     pub atoms: &'a [Option<u64>],
     pub stale: bool,
+    pub arrow: Option<u64>,
     pub info: Option<&'a RunInfo>,
     pub ts: Option<&'a ts::Session>,
 }
@@ -144,12 +199,23 @@ impl Shown<'_> {
 
 impl App {
     /// The result the palette follows, while the document holds it.
+    fn xtb_palette_result(&self) -> Option<(usize, &Stored)> {
+        self.tab
+            .doc
+            .science
+            .results
+            .iter()
+            .enumerate()
+            .find(|(_, s)| {
+                let shown = &self.tab.xtb.palette.result;
+                shown.iter().any(|weak| is(weak, &s.result))
+            })
+    }
+
     pub(super) fn xtb_shown(&self) -> Option<Shown<'_>> {
-        let science = &self.tab.doc.science;
-        let (index, stored) = science.results.iter().enumerate().find(|(_, s)| {
-            let shown = &self.tab.xtb.palette.result;
-            shown.iter().any(|weak| is(weak, &s.result))
-        })?;
+        let doc = &self.tab.doc;
+        let science = &doc.science;
+        let (index, stored) = self.xtb_palette_result()?;
         let link = science.attachment(stored.attachment)?;
         let ts = self
             .tab
@@ -157,39 +223,91 @@ impl App {
             .ts_sessions
             .get(&stored.result)
             .map(|ts| ts.as_ref());
+        let is_ts = ts::is_ts(&stored.result);
+        let arrow = if is_ts {
+            match ts::saved_search(&stored.result) {
+                Some(search) => search
+                    .arrow
+                    .and_then(|arrow| ts::bound_arrow(doc, arrow, &link.atoms)),
+                None => match ts {
+                    Some(session) => ts::bound_arrow(doc, session.arrow, &link.atoms),
+                    None => ts::unique_matching_plan(doc, &link.atoms).map(|(arrow, _)| arrow),
+                },
+            }
+        } else {
+            None
+        };
         Some(Shown {
             index,
             stored,
             input: science.frame(&link.frame)?,
             frame: science.frame(&stored.result.frame)?,
             atoms: &link.atoms,
-            stale: link.freshness(&self.tab.doc) == Freshness::Stale
-                || ts::is_ts(&stored.result)
-                    && ts.map_or_else(
-                        || {
-                            ts::saved_search(&stored.result).map_or_else(
-                                || {
-                                    ts::matching_plans(&self.tab.doc, &link.atoms)
-                                        .next()
-                                        .is_none()
-                                },
-                                |search| ts::saved_search_stale(&self.tab.doc, search),
-                            )
-                        },
-                        |ts| ts.stale(&self.tab.doc, (self.tab.file_epoch, self.tab.revision)),
-                    ),
+            stale: link.freshness(doc) == Freshness::Stale
+                || is_ts && (arrow.is_none() || self.xtb_ts_search_stale(&stored.result)),
+            arrow,
             info: self.tab.xtb.info(&stored.result),
             ts,
         })
+    }
+
+    pub(super) fn xtb_show_result(&mut self, result: &Arc<CalcResult>) {
+        if self.tab.xtb.palette.show(result)
+            && let Some(index) = self.xtb_step()
+        {
+            let status = std::mem::take(&mut self.status);
+            let error = self.error;
+            self.xtb_preview_step(index);
+            self.status = status;
+            self.error = error;
+        }
+    }
+
+    pub(in crate::app) fn xtb_sync_reaction_palette(&mut self, selection_changed: bool) -> bool {
+        let palette = &self.tab.xtb.palette;
+        let Some(arrow) = self.xtb_selected_reaction().filter(|_| palette.open) else {
+            return false;
+        };
+        let showing_ts = palette.is_showing_ts();
+        let failed = self
+            .xtb_palette_failure()
+            .is_some_and(|failed| failed.ts().is_some());
+        if !selection_changed && !showing_ts && !failed {
+            return false;
+        }
+        if let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) {
+            if palette.follows(result) {
+                return false;
+            }
+            let result = Arc::clone(result);
+            self.xtb_show_result(&result);
+        } else if showing_ts || failed {
+            if palette.result.is_empty() {
+                return false;
+            }
+            self.tab.xtb.palette.clear_result();
+        } else {
+            return false;
+        }
+        self.xtb_vibrations_leave();
+        true
+    }
+
+    fn xtb_palette_failure(&self) -> Option<&super::Failed> {
+        let Some(super::Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
+            return None;
+        };
+        failed
+            .ts()
+            .is_none_or(|ts| self.xtb_selected_reaction() == Some(ts.arrow))
+            .then_some(failed)
     }
 
     /// Whether Show results would show something new: the card's molecule
     /// has a newer result than the one on display, or the palette is closed
     /// on results.
     pub(super) fn xtb_can_show(&self) -> bool {
-        if !self.tab.xtb.palette.open
-            && matches!(self.tab.xtb.outcome, Some(super::Outcome::Failed(_)))
-        {
+        if !self.tab.xtb.palette.open && self.xtb_palette_failure().is_some() {
             return true;
         }
         let visible = self.xtb_palette_visible();
@@ -207,16 +325,13 @@ impl App {
     /// The newest result stored for the card's molecule; cheap enough for
     /// every frame (no freshness or frame hashing).
     fn xtb_newest(&self) -> Option<Arc<CalcResult>> {
-        if let Some(arrow) = self.xtb_selected_reaction()
-            && let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow)
-        {
-            return Some(Arc::clone(result));
+        if let Some(arrow) = self.xtb_selected_reaction() {
+            return match self.xtb_ts_card_result(arrow) {
+                ts::card::ArrowResult::Found(result) => Some(Arc::clone(result)),
+                _ => None,
+            };
         }
-        let target: std::collections::HashSet<u64> = self
-            .xtb_target()
-            .or_else(|| self.xtb_ts_target())?
-            .into_iter()
-            .collect();
+        let target: std::collections::HashSet<u64> = self.xtb_target()?.into_iter().collect();
         let science = &self.tab.doc.science;
         science
             .results
@@ -373,14 +488,17 @@ impl App {
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
-                if matches!(self.tab.xtb.outcome, Some(super::Outcome::Failed(_))) {
+                if self.xtb_palette_failure().is_some() {
                     self.tab.xtb.palette.open = true;
                     self.xtb.dock.collapsed = false;
                 }
                 let newest = self.xtb_newest();
-                let shown = self.xtb_shown().map(|shown| shown.stored.result.clone());
+                let shown = self
+                    .xtb_palette_result()
+                    .filter(|_| self.xtb_selected_reaction().is_none())
+                    .map(|(_, shown)| shown.result.clone());
                 if let Some(result) = newest.or(shown) {
-                    self.tab.xtb.palette.show(&result);
+                    self.xtb_show_result(&result);
                 }
             }
             Action::Close => {
@@ -799,6 +917,11 @@ impl App {
             let shown = &mut self.tab.xtb.palette.result;
             if shown.iter().any(|weak| is(weak, &old.result)) {
                 shown.push(Arc::downgrade(&new.result));
+            }
+            for view in &mut self.tab.xtb.palette.ts_views {
+                if view.result.iter().any(|weak| is(weak, &old.result)) {
+                    view.result.push(Arc::downgrade(&new.result));
+                }
             }
         }
     }

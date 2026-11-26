@@ -91,15 +91,36 @@ impl App {
         if !self.tab.xtb.palette.open {
             return None;
         }
-        let failure = self.xtb_failure_card();
-        let Some(shown) = self.xtb_shown() else {
-            return failure.map(|card| {
-                column![
-                    self.xtb_palette_header(vec![], View::Summary, inspector),
-                    card
-                ]
-                .spacing(8)
-                .into()
+        let failed = self.xtb_palette_failure();
+        let shown = self.xtb_shown();
+        let reaction = failed
+            .and_then(|failed| failed.ts())
+            .map(|request| request.context.title.clone())
+            .or_else(|| {
+                let shown = shown.as_ref()?;
+                super::ts::is_ts(&shown.stored.result).then(|| {
+                    if !shown.stale
+                        && let Some(arrow) = shown.arrow
+                    {
+                        self.xtb_reaction_label(arrow).title()
+                    } else {
+                        self.xtb_saved_reaction_title(&shown.stored.result, shown.arrow)
+                    }
+                })
+            });
+        let title = reaction.map_or_else(
+            || "xTB results".into(),
+            |title| format!("xTB results · {title}"),
+        );
+        let Some(shown) = shown else {
+            return failed.map(|failed| {
+                let mut content =
+                    column![self.xtb_palette_header(title, vec![], View::Summary, inspector),]
+                        .spacing(8);
+                if inspector || !self.xtb.dock.collapsed {
+                    content = content.push(self.xtb_failure_card(failed));
+                }
+                content.into()
             });
         };
         let palette = &self.tab.xtb.palette;
@@ -110,23 +131,32 @@ impl App {
             View::Summary
         };
         let collapsed = self.xtb.dock.collapsed && !inspector;
-        let header = self.xtb_palette_header(views, view, inspector);
+        let header = self.xtb_palette_header(title, views, view, inspector);
         if collapsed {
             return Some(header);
         }
 
         let method = shown.method();
-        let mut content = column![
-            header,
-            text(method.clone()).size(12),
-            line(results::LIMITATIONS, Tone::Muted),
-        ]
-        .spacing(4);
-        if let Some(card) = failure {
-            content = content.push(card);
+        let mut content = column![header].spacing(4);
+        if let Some(failed) = failed.filter(|failed| failed.ts().is_some()) {
+            content = content.push(self.xtb_failure_card(failed));
+            content = content.push(line(
+                results::previous_result(&shown.stored.result),
+                Tone::Muted,
+            ));
+        }
+        content = content.push(
+            column![
+                text(method.clone()).size(12),
+                line(results::LIMITATIONS, Tone::Muted),
+            ]
+            .spacing(4),
+        );
+        if let Some(failed) = failed.filter(|failed| failed.ts().is_none()) {
+            content = content.push(self.xtb_failure_card(failed));
         }
         if shown.stale {
-            content = content.push(self.xtb_stale_banner());
+            content = content.push(self.xtb_stale_banner(&shown));
         }
         if let Some(warning) = results::warning(&shown.stored.result, shown.info) {
             content = content.push(alert(true, warning.into(), String::new(), vec![]));
@@ -155,6 +185,7 @@ impl App {
     /// "xTB results", the tabs `views` with `view` chosen, and the dock commands.
     fn xtb_palette_header(
         &self,
+        title: String,
         views: Vec<View>,
         view: View,
         inspector: bool,
@@ -174,7 +205,7 @@ impl App {
         }))
         .spacing(4);
         let collapsed = self.xtb.dock.collapsed && !inspector;
-        let mut header = row![text("xTB results").size(14), tabs]
+        let mut header = row![text(title).size(14), tabs]
             .spacing(14)
             .align_y(Alignment::Center);
         if !inspector {
@@ -220,10 +251,7 @@ impl App {
     }
 
     /// The last run's failure, with its one action (two after a crash).
-    fn xtb_failure_card(&self) -> Option<Element<'_, Message>> {
-        let Some(super::super::Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
-            return None;
-        };
+    fn xtb_failure_card(&self, failed: &super::super::Failed) -> Element<'_, Message> {
         let (title, detail) = failed.explain();
         let button = |id: &'static str, name: &'static str, label: &'static str, action| {
             reshiki::accessibility::button(id, name, text(label).size(12))
@@ -268,7 +296,7 @@ impl App {
             }
             _ => vec![],
         };
-        Some(alert(false, title, detail, actions))
+        alert(false, title, detail, actions)
     }
 
     /// Whether Recalculate can repeat the shown result with the card.
@@ -278,8 +306,16 @@ impl App {
         })
     }
 
-    fn xtb_stale_banner(&self) -> Element<'_, Message> {
+    fn xtb_stale_banner(&self, shown: &Shown<'_>) -> Element<'_, Message> {
         let (message, action): (String, Element<'_, Message>) = match &self.tab.xtb.run {
+            _ if super::ts::not_verified(&shown.stored.result) => (
+                "Reaction freshness not verified. Results are kept, greyed.".into(),
+                Space::new().into(),
+            ),
+            _ if super::ts::is_ts(&shown.stored.result) => (
+                "The reaction changed after this search. Results are kept, greyed.".into(),
+                Space::new().into(),
+            ),
             Some(run) => (
                 format!(
                     "Recalculating with the same settings · {}",

@@ -407,5 +407,6 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         line,
         notes,
         info,
+        attempt: None,
     })
 }

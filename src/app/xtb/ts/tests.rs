@@ -18,6 +18,42 @@ fn reaction_app(doc: Document, arrow: u64) -> App {
     app
 }
 
+fn select(app: &mut App, arrow: u64) {
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![arrow])));
+    assert_eq!(app.xtb_selected_reaction(), Some(arrow));
+}
+
+fn name_reactant(doc: &mut Document, arrow: u64, name: &str) {
+    let atoms = reshiki::reaction_mapping::reaction(doc, arrow)
+        .unwrap()
+        .reactants[0]
+        .atoms
+        .clone();
+    let identity = reshiki::naming::selected_identity(doc, &atoms)
+        .unwrap()
+        .smiles;
+    reshiki::molecule_names::show(
+        doc,
+        &atoms,
+        name.into(),
+        identity,
+        Default::default(),
+        false,
+    )
+    .unwrap();
+}
+
+fn append_reaction(doc: &mut Document, name: &str) -> u64 {
+    let (mut source, arrow) = card::tests::claisen();
+    name_reactant(&mut source, arrow, name);
+    reshiki::editing::append_preserving_layout(
+        doc,
+        &source,
+        reshiki::document::Point::new(0., 160.),
+    );
+    doc.reactions.last().unwrap().arrow
+}
+
 fn start() -> (App, u64) {
     let (doc, arrow) = card::tests::claisen();
     let mut app = reaction_app(doc, arrow);
@@ -161,7 +197,7 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
     result.run = Some(reshiki::qcdata::RunSummary {
         seconds: 2.,
         scf_iterations: vec![9, 4],
-        finished: None,
+        finished: Some("2026-11-25T12:00:00Z".into()),
         transition_state: None,
     });
     let extras = Extras {
@@ -188,6 +224,225 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         extras,
         info: Default::default(),
     })
+}
+
+fn complete(app: &mut App) {
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let report = example_report(run.launch.as_ref().unwrap());
+    send(app, XtbAction::TsEvent(serial, Event::Done(Ok(report))));
+}
+
+#[test]
+fn selecting_reactions_switches_the_palette_and_restores_its_path_preview() {
+    let (mut app, a) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    let a_result = Arc::clone(&app.xtb_shown().unwrap().stored.result);
+    let mut candidate = app.tab.doc.clone();
+    let b = append_reaction(&mut candidate, "Second reactant");
+    let c = append_reaction(&mut candidate, "Third reactant");
+    app.try_replace_document(candidate, vec![a]).unwrap();
+
+    select(&mut app, b);
+    assert!(app.xtb_bottom_palette().is_none());
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    finish_model(&mut app);
+    complete(&mut app);
+    let b_result = Arc::clone(&app.xtb_shown().unwrap().stored.result);
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(results::View::Log)),
+    );
+
+    select(&mut app, a);
+    assert!(Arc::ptr_eq(
+        &app.xtb_shown().unwrap().stored.result,
+        &a_result
+    ));
+    assert_eq!(app.tab.xtb.palette.view, results::View::Path);
+    send(&mut app, XtbAction::Ts(Action::Image(1)));
+    assert!(app.xtb_step_preview().is_some());
+    select(&mut app, b);
+    assert!(Arc::ptr_eq(
+        &app.xtb_shown().unwrap().stored.result,
+        &b_result
+    ));
+    assert_eq!(app.tab.xtb.palette.view, results::View::Log);
+    assert!(app.xtb_step_preview().is_none());
+    select(&mut app, c);
+    assert!(app.xtb_bottom_palette().is_none());
+    select(&mut app, a);
+    assert_eq!(app.tab.xtb.palette.view, results::View::Path);
+    assert_eq!(app.xtb_step(), Some(1));
+    assert!(app.xtb_step_preview().is_some());
+}
+
+#[test]
+fn saved_arrow_with_an_unrelated_attachment_stays_unbound() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    let mut doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
+    let other = append_reaction(&mut doc, "Unrelated reactant");
+    let result = Arc::make_mut(&mut doc.science.results[0].result);
+    result
+        .run
+        .as_mut()
+        .unwrap()
+        .transition_state
+        .as_mut()
+        .unwrap()
+        .arrow = Some(other);
+    let mut reopened = reaction_app(doc, other);
+    send(&mut reopened, XtbAction::Palette(palette::Action::Show));
+    assert!(matches!(
+        reopened.xtb_ts_card_result(other),
+        card::ArrowResult::Missing
+    ));
+    assert!(reopened.xtb_shown().is_none());
+    assert!(matches!(
+        reopened.xtb_ts_card_result(arrow),
+        card::ArrowResult::Missing
+    ));
+}
+
+#[tokio::test]
+async fn worker_and_storage_failures_show_before_the_previous_reaction_result() {
+    let ui = card::tests::ViewHarness::new().await;
+    for storage_failure in [false, true] {
+        let (mut app, arrow) = start();
+        finish_model(&mut app);
+        complete(&mut app);
+        let previous = Arc::clone(&app.xtb_shown().unwrap().stored.result);
+        let mut candidate = app.tab.doc.clone();
+        let other = append_reaction(&mut candidate, "Unrelated reactant");
+        app.try_replace_document(candidate, vec![arrow]).unwrap();
+        send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+        let run = app.tab.xtb.run.as_ref().unwrap();
+        let serial = run.serial;
+        if storage_failure {
+            let science = &mut app.tab.doc.science;
+            let available = reshiki::science::MAX_SCIENCE_RECORDS
+                - science.frames.len()
+                - science.attachments.len();
+            science
+                .results
+                .resize(available, science.results[0].clone());
+            complete(&mut app);
+        } else {
+            send(
+                &mut app,
+                XtbAction::TsEvent(
+                    serial,
+                    Event::Done(Err(state::Failure::Crashed("worker stopped".into()))),
+                ),
+            );
+        }
+        let Some(super::super::Outcome::Failed(failed)) = &app.tab.xtb.outcome else {
+            panic!("the attempt should have failed");
+        };
+        assert_eq!(failed.ts().unwrap().arrow, arrow);
+        let (failure, _) = failed.explain();
+        if storage_failure {
+            assert!(failure.contains("would exceed"), "{failure}");
+        }
+        assert!(Arc::ptr_eq(
+            &app.xtb_shown().unwrap().stored.result,
+            &previous
+        ));
+        let title = format!("xTB results · {}", app.xtb_reaction_label(arrow).title());
+        let palette = ui.inspect(app.xtb_bottom_palette().unwrap()).texts;
+        let position = |text: &str| palette.iter().position(|item| item == text).unwrap();
+        let earlier = palette
+            .iter()
+            .position(|text| text.starts_with("Previous result ("))
+            .unwrap();
+        assert!(position(&title) < position(&failure));
+        assert!(position(&failure) < earlier);
+        assert!(palette[earlier].contains("Nov 2026"));
+        app.xtb.page = super::super::Page::Xtb;
+        let card = ui.inspect(app.predict_inspector()).texts;
+        assert!(
+            card.iter()
+                .position(|text| text == "No reliable transition state found.")
+                .unwrap()
+                < card
+                    .iter()
+                    .position(|text| text == &palette[earlier])
+                    .unwrap()
+        );
+        select(&mut app, other);
+        assert!(app.xtb_bottom_palette().is_none());
+        assert!(!ui.inspect(app.predict_inspector()).texts.contains(&failure));
+        select(&mut app, arrow);
+        assert!(Arc::ptr_eq(
+            &app.xtb_shown().unwrap().stored.result,
+            &previous
+        ));
+    }
+}
+
+#[tokio::test]
+async fn reopened_legacy_result_is_labelled_not_verified() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    let mut doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
+    let result = Arc::make_mut(&mut doc.science.results[0].result);
+    result
+        .run
+        .as_mut()
+        .unwrap()
+        .transition_state
+        .as_mut()
+        .unwrap()
+        .context = None;
+    let mut reopened = reaction_app(doc, arrow);
+    send(&mut reopened, XtbAction::Palette(palette::Action::Show));
+    assert!(reopened.xtb_shown().unwrap().stale);
+    let ui = card::tests::ViewHarness::new().await;
+    assert!(
+        ui.inspect(reopened.xtb_bottom_palette().unwrap())
+            .texts
+            .iter()
+            .any(|text| text.starts_with("Reaction freshness not verified"))
+    );
+}
+
+#[test]
+fn stale_result_keeps_its_saved_title_and_export_name() {
+    let (mut doc, arrow) = card::tests::claisen();
+    name_reactant(&mut doc, arrow, "allyl vinyl ether");
+    let mut app = reaction_app(doc, arrow);
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    finish_model(&mut app);
+    complete(&mut app);
+    let mut doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
+    let saved_title = saved_search(&doc.science.results[0].result)
+        .unwrap()
+        .context
+        .as_ref()
+        .unwrap()
+        .title
+        .clone();
+    assert_eq!(saved_title, "allyl vinyl ether → C5H8O");
+    name_reactant(&mut doc, arrow, "Renamed reactant");
+    let product = doc.reactions[0].products[0].atoms[0];
+    doc.atom_mut(product).unwrap().map_num = 0;
+    let mut reopened = reaction_app(doc, arrow);
+    send(&mut reopened, XtbAction::Palette(palette::Action::Show));
+    let shown = reopened.xtb_shown().unwrap();
+    assert!(shown.stale);
+    assert_ne!(reopened.xtb_reaction_label(arrow).title(), saved_title);
+    assert_eq!(
+        reopened.xtb_saved_reaction_title(&shown.stored.result, shown.arrow),
+        saved_title
+    );
+    send(&mut reopened, XtbAction::Ts(Action::Export));
+    let output = reopened.qc_output().unwrap();
+    assert_eq!(output.main.name, "allyl-vinyl-ether-ts.gjf");
+    assert!(output.main.text.contains(&saved_title));
 }
 
 #[test]
@@ -265,7 +520,8 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     let shown = reopened.xtb_shown().unwrap();
     assert!(shown.ts.is_none());
     let search = saved_search(&shown.stored.result).unwrap();
-    assert_eq!(search.arrow, arrow);
+    assert_eq!(search.arrow, Some(arrow));
+    assert!(search.context.is_some());
     assert_eq!(
         search.mapping.formed[0].each_ref().map(|atom| atom.number),
         [1, 6]
@@ -344,7 +600,7 @@ fn every_rerun_requires_review_even_after_an_earlier_review_was_accepted() {
 }
 
 #[test]
-fn reopened_rerun_reviews_the_current_endpoint_charge_before_starting() {
+fn reopened_endpoint_charge_makes_the_result_stale_and_requires_review() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
     let run = app.tab.xtb.run.as_ref().unwrap();
@@ -372,7 +628,7 @@ fn reopened_rerun_reviews_the_current_endpoint_charge_before_starting() {
     reopened.changed(before);
     assert!(ts_plan::plan_for_review(&reopened.tab.doc, arrow).is_ok());
     assert!(ts_plan::plan(&reopened.tab.doc, arrow).is_err());
-    assert!(!reopened.xtb_shown().unwrap().stale);
+    assert!(reopened.xtb_shown().unwrap().stale);
 
     send(&mut reopened, XtbAction::Ts(Action::Rerun));
     assert!(reopened.ts_review_open());
@@ -615,8 +871,11 @@ fn reopened_ts_animate_does_not_guess_between_arrows_sharing_the_starting_molecu
     assert_eq!(app.tab.xtb.palette.view, results::View::Path);
 
     let mut reopened = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    reopened.tab.selected = vec![reopened.tab.doc.reactions[0].reactants[0].atoms[0]];
     send(&mut reopened, XtbAction::Palette(palette::Action::Show));
     assert!(reopened.xtb_shown().unwrap().ts.is_none());
+    assert!(reopened.xtb_shown().unwrap().arrow.is_none());
+    assert!(reopened.xtb_shown().unwrap().stale);
     for candidate in [arrow, other] {
         reopened.tab.selected = vec![candidate];
         assert!(matches!(

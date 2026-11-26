@@ -106,7 +106,12 @@ pub struct RunSummary {
 /// Interpretation and audit details of one transition-state search.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransitionStateRun {
-    pub arrow: u64,
+    /// Drawing arrow, if it still belongs to the document containing this result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arrow: Option<u64>,
+    /// Chemistry and export labels captured when the search was requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TransitionStateContext>,
     pub saddle_converged: bool,
     pub imaginary: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -114,6 +119,19 @@ pub struct TransitionStateRun {
     pub climbing_image: usize,
     pub mapping: TransitionStateMapping,
     pub diagnostics: Vec<(String, String)>,
+}
+
+/// Saved reaction identity, independent of live drawing labels and atom IDs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransitionStateContext {
+    /// SHA-256 digest of the reactant's Calculate chemistry baseline, as lowercase hex.
+    pub reactant_chemistry: String,
+    /// SHA-256 digest of the product's Calculate chemistry baseline, as lowercase hex.
+    pub product_chemistry: String,
+    /// Reaction title used by input export.
+    pub title: String,
+    /// First reactant label used by exported file names.
+    pub reactant: String,
 }
 
 /// Atom labels are captured at run start, in the direction of the reaction arrow.
@@ -142,7 +160,19 @@ impl TransitionStateRun {
                 })
         };
         if result.task != Task::TransitionState
-            || self.arrow == 0
+            || self.arrow == Some(0)
+            || self.context.as_ref().is_some_and(|context| {
+                [&context.reactant_chemistry, &context.product_chemistry]
+                    .into_iter()
+                    .any(|digest| {
+                        digest.len() != 64
+                            || !digest
+                                .bytes()
+                                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                    })
+                    || context.title.len() > 256 * 1024
+                    || context.reactant.len() > 256 * 1024
+            })
             || self.imaginary > 3 * atoms
             || self
                 .imaginary_cm1
@@ -177,6 +207,12 @@ impl TransitionStateRun {
                     .sum::<usize>()
         };
         size_of::<Self>()
+            + self.context.as_ref().map_or(0, |context| {
+                context.reactant_chemistry.len()
+                    + context.product_chemistry.len()
+                    + context.title.len()
+                    + context.reactant.len()
+            })
             + pairs(&self.mapping.formed)
             + pairs(&self.mapping.broken)
             + pairs(&self.mapping.hydrogen_moves)
