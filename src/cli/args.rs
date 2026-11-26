@@ -58,6 +58,7 @@ pub(crate) struct Calc {
     pub(crate) conventions: Conventions,
     pub(crate) solvent: Option<Solvent>,
     pub(crate) scf: Option<ScfSettings>,
+    pub(crate) thermo_temperature_k: Option<f64>,
     pub(crate) threads: u32,
 }
 
@@ -341,6 +342,9 @@ fn calc(options: &Options) -> Result<Command, String> {
         Some(Some("orbitals")) => CalcTask::Orbitals,
         _ => return Err("--task must be energy, gradient, hessian or orbitals".into()),
     };
+    if task != CalcTask::Hessian && options.thermo_temperature.is_some() {
+        return Err("--thermo-temperature needs --task hessian".into());
+    }
     let method = match options.method.as_deref().map(OsStr::to_str) {
         None | Some(Some("gfn2")) => Method::Gfn2,
         Some(Some("gfnff")) => Method::Gfnff,
@@ -396,6 +400,17 @@ fn calc(options: &Options) -> Result<Command, String> {
         .etemp
         .as_deref()
         .map(|value| temperature("--etemp", value))
+        .transpose()?;
+    let thermo_temperature_k = options
+        .thermo_temperature
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| *value > 0.0 && *value <= 10_000.0)
+                .ok_or("--thermo-temperature must be greater than 0 K and at most 10000 K")
+        })
         .transpose()?;
     let accuracy = options
         .accuracy
@@ -467,6 +482,7 @@ fn calc(options: &Options) -> Result<Command, String> {
         conventions,
         solvent,
         scf,
+        thermo_temperature_k,
         threads,
     }))
 }
@@ -859,6 +875,7 @@ struct Options {
     gbsa: Option<OsString>,
     solvent_correction: Option<OsString>,
     etemp: Option<OsString>,
+    thermo_temperature: Option<OsString>,
     accuracy: Option<OsString>,
     max_iter: Option<OsString>,
     scf_retry: Vec<OsString>,
@@ -960,6 +977,7 @@ fn parse_options(
                 "--gbsa" => options.gbsa = Some(value),
                 "--solvent-correction" => options.solvent_correction = Some(value),
                 "--etemp" => options.etemp = Some(value),
+                "--thermo-temperature" => options.thermo_temperature = Some(value),
                 "--accuracy" => options.accuracy = Some(value),
                 "--max-iter" => options.max_iter = Some(value),
                 "--scf-retry" => options.scf_retry.push(value),
