@@ -805,6 +805,7 @@ impl App {
                     selected: Some(index),
                     notes: vec![],
                     select: Some(|i| Message::FramesImport(Action::Choose(Choice::Frame(i)))),
+                    steps: vec![],
                 })
                 .width(Length::Fill)
                 .height(130),

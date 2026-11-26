@@ -491,7 +491,11 @@ fn palette_status_clears_on_tab_switch_and_preserves_other_feedback() {
     palette(&mut app, Action::Close);
     palette(
         &mut app,
-        Action::Exported(Ok(Some("/folder/table.tsv".into()))),
+        Action::Exported(Ok(Some(crate::app::figure_export::Saved {
+            path: "/folder/table.tsv".into(),
+            details: vec![],
+            recent: None,
+        }))),
     );
     assert_eq!(app.status, "Saved the drawing");
 }

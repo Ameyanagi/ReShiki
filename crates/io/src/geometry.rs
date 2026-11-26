@@ -23,6 +23,8 @@ pub const DEFAULT_SEED: i32 = 0x52534b;
 pub const GENERATION_SEED_MAX: i32 = i32::MAX - 8;
 /// Maximum number of embeddings requested across one conformer search.
 pub const MAX_CONFORMER_STARTS: u32 = 300;
+// Let MMFF94s finish flexible starts: ritonavir went from 99/100 at 1000 iterations to 100/100 at 2000.
+const ENSEMBLE_ITERATION_LIMIT: u32 = 2000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -243,6 +245,12 @@ pub struct Starts {
     /// later batch's error, with earlier batches kept. `None` when all ran;
     /// completed sampling can still yield fewer valid conformers than requested.
     pub stopped: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct StereoPinning {
+    pub pinned: Vec<u64>,
+    pub unpinned: Vec<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -487,6 +495,132 @@ impl Prepared {
     }
     pub fn ids(&self) -> &[u64] {
         &self.ids
+    }
+    /// Preserve the model's tetrahedral configuration at centres the drawing
+    /// leaves undefined. Wavy single bonds leave both endpoints undefined.
+    /// The inferred tags use this prepared graph's native neighbour order;
+    /// neither the drawing nor already defined configurations are changed.
+    /// Centres with no readable winding remain undefined. Inversion applies
+    /// only to newly pinned centres. Errors leave the prepared molecule unchanged.
+    pub fn pin_undefined_stereo(
+        &mut self,
+        positions: &HashMap<u64, Point3>,
+        invert: bool,
+    ) -> Result<StereoPinning, Error> {
+        use crate::chemistry::{
+            kekulize::Direction,
+            stereo::{self, SpatialAnnotations, SpatialOptions, perception},
+        };
+
+        let mut inference = self.molecule.state.clone();
+        let wavy: HashSet<_> = inference
+            .graph
+            .bonds
+            .iter()
+            .zip(&inference.directions)
+            .zip(&inference.metadata.bonds)
+            .filter(|((bond, direction), meta)| {
+                bond.order == 1 && (**direction == Direction::Unknown || meta.unknown_stereo)
+            })
+            .flat_map(|((bond, _), _)| [bond.a, bond.b])
+            .collect();
+        for meta in &mut inference.metadata.atoms {
+            meta.map_number = 0;
+            meta.map_present = false;
+        }
+        for properties in &mut inference.properties.atoms {
+            properties.cip_code = None;
+            properties.cip_rank = None;
+            properties.possible = None;
+        }
+        // This graph's bond annotations were already prepared. Retain them
+        // while finding potential centres, including authoritative absence.
+        let possible = perception::perceive_preserving_bonds(
+            &inference,
+            perception::Options {
+                clean: false,
+                force: true,
+                flag_possible: true,
+            },
+            &vec![true; inference.graph.bonds.len()],
+        )
+        .map_err(Error::Invalid)?;
+        let (centres, _) = perception::stereogenic_units(&possible).map_err(Error::Invalid)?;
+        let undefined = centres
+            .into_iter()
+            .filter(|&i| {
+                inference
+                    .metadata
+                    .atoms
+                    .get(i)
+                    .is_some_and(|meta| meta.chiral_tag == 0 || wavy.contains(&i))
+            })
+            .collect::<HashSet<_>>();
+        if undefined.is_empty() {
+            return Ok(StereoPinning::default());
+        }
+        // Unknown markers describe the drawing, while this pass explicitly
+        // reads the current model. Clear them only in the detached input.
+        inference.directions.fill(Direction::None);
+        for meta in &mut inference.metadata.bonds {
+            meta.unknown_stereo = false;
+        }
+        let conformer = stereo::wedging::Conformer {
+            positions: self
+                .ids
+                .iter()
+                .map(|id| {
+                    positions
+                        .get(id)
+                        .copied()
+                        .filter(|&point| valid_point(point))
+                        .ok_or(Error::Coordinates("Missing or invalid model atom"))
+                })
+                .collect::<Result<_, _>>()?,
+            is_3d: true,
+        };
+        let spatial = stereo::from_3d(
+            &inference.graph,
+            &inference.metadata,
+            &inference.directions,
+            Some(&conformer),
+            &SpatialAnnotations {
+                non_explicit: vec![None; self.ids.len()],
+                done: None,
+            },
+            SpatialOptions {
+                replace_existing: true,
+                allow_nontetrahedral: false,
+            },
+        )
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+        let mut metadata = self.molecule.state.metadata.clone();
+        let mut pinning = StereoPinning::default();
+        for (i, (meta, spatial)) in metadata
+            .atoms
+            .iter_mut()
+            .zip(&spatial.metadata.atoms)
+            .enumerate()
+        {
+            if !undefined.contains(&i) {
+                continue;
+            }
+            let id = *self
+                .ids
+                .get(i)
+                .ok_or(Error::Coordinates("Missing stereocenter atom"))?;
+            let tag = spatial.chiral_tag;
+            if matches!(tag, 1 | 2) {
+                meta.chiral_tag = if invert { tag ^ 3 } else { tag };
+                pinning.pinned.push(id);
+            } else {
+                meta.chiral_tag = 0;
+                pinning.unpinned.push(id);
+            }
+            meta.chiral_permutation = None;
+        }
+        self.molecule.state.metadata = metadata;
+        Ok(pinning)
     }
     /// The same molecule without the drawing's retained depth, so ordinary
     /// generation embeds fresh conformers. Relaxed metal coordination can still
@@ -770,6 +904,7 @@ impl Prepared {
         request.coordinates.clear();
         request.conformers = count;
         request.ensemble = Some(mode);
+        request.max_iterations = ENSEMBLE_ITERATION_LIMIT;
         request.validate().map_err(Error::Invalid)?;
         Ok(request)
     }
