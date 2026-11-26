@@ -2900,6 +2900,8 @@ pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
     let side = (hi.x - lo.x) * PANEL_SCALE;
     let gap = side * 0.15;
     let size = (model.size / 22.).clamp(7., 14.);
+    // Captions wider than a small model still keep clear space between them.
+    let between = gap.max(size * 1.5);
     let style = crate::typography::TextStyle::default();
     // Each panel is as wide as its model or its caption, whichever is wider.
     let widths: Vec<f32> = model
@@ -2907,7 +2909,7 @@ pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
         .iter()
         .map(|panel| crate::style::styled_text_width(&panel.caption, size, &style).max(side))
         .collect();
-    let total = widths.iter().sum::<f32>() + gap * (widths.len() - 1) as f32;
+    let total = widths.iter().sum::<f32>() + between * (widths.len() - 1) as f32;
     let mut left = (lo.x + hi.x) / 2. - total / 2.;
     let centre = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
     model
@@ -2916,7 +2918,7 @@ pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
         .zip(widths)
         .filter_map(|(panel, slot)| {
             let x = left + slot / 2.;
-            left += slot + gap;
+            left += slot + between;
             let y = hi.y + gap + side / 2.;
             let mut small = model.clone();
             small.panels = vec![];
