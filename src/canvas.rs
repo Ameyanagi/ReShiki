@@ -755,6 +755,8 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
     /// xTB "Show as labels": a result's value under its molecule.
     pub(crate) result_label: Option<ResultLabel>,
+    /// Linked atoms of outdated models, for editing aids absent from exports.
+    pub(crate) outdated_models: Vec<&'a [u64]>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -819,6 +821,7 @@ impl<'a> MoleculeCanvas<'a> {
             morph: None,
             model_generation: None,
             result_label: None,
+            outdated_models: vec![],
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,

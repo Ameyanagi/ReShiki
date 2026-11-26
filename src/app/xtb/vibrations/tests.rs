@@ -1,8 +1,10 @@
 //! The Vibrations tab on a water Opt + freq result answered by hand.
-use super::super::tests::{MOVED, START, event, f32s, model, optfreq, send, water};
+use super::super::tests::{
+    MOVED, START, duplicate_molecule, event, f32s, model, optfreq, optimized, send, water,
+};
 use super::super::{Action as XtbAction, CalcTask, Outcome, palette, results::View, run};
 use super::*;
-use crate::app::Message;
+use crate::app::{InspectorTab, Message};
 use reshiki::graphics::{Columns, Frame, GraphicKind};
 use reshiki::models3d::{self, Display};
 use reshiki::typography::Script;
@@ -69,6 +71,82 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
     );
     assert!(app.tab.xtb.vibrations.animation.is_none());
     assert_eq!(shown(&app), f32s(&MOVED));
+}
+
+#[test]
+fn selecting_another_result_clears_a_paused_vibration_and_switching_back_resyncs() {
+    let (mut app, a) = water(CalcTask::OptFreq);
+    event(
+        &mut app,
+        run::Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))),
+    );
+    let before = app.tab.doc.clone();
+    let b = app.tab.doc.add_atom("O", Point::new(200., 0.));
+    app.changed(before);
+    let select = |app: &mut App, id| {
+        let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![id])));
+    };
+    select(&mut app, b);
+    app.xtb.settings.task = CalcTask::Energy;
+    send(&mut app, XtbAction::Run);
+    let positions = START.map(|[x, y, z]| reshiki::geometry::Point3 { x, y, z });
+    let _ = app.finish_model(positions.to_vec(), vec![0, 0]);
+    event(&mut app, optimized(&START, &START));
+    select(&mut app, a);
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(View::Vibrations)),
+    );
+    vibrations(&mut app, Action::Arrows(true));
+    for _ in 0..6 {
+        vibrations(&mut app, Action::Tick);
+    }
+    vibrations(&mut app, Action::Play(false));
+    assert_ne!(shown(&app), f32s(&MOVED));
+    assert!(!app.display_document().graphics.is_empty());
+
+    app.tab.selected = vec![b];
+    assert!(app.xtb_vibration_preview().is_none());
+    app.tab.selected = vec![a];
+
+    let revision = app.tab.revision;
+    select(&mut app, b);
+    assert_eq!(app.tab.revision, revision);
+    assert!(
+        app.xtb_shown()
+            .is_some_and(|entry| entry.atoms.contains(&Some(b)))
+    );
+    assert!(app.tab.xtb.vibrations.animation.is_none());
+    assert_eq!(shown(&app), f32s(&MOVED));
+    assert!(app.display_document().graphics.is_empty());
+
+    select(&mut app, a);
+    assert!(app.xtb_vibration_preview().is_some());
+    assert_eq!(shown(&app), f32s(&MOVED));
+}
+
+#[test]
+fn selecting_a_duplicate_rebuilds_the_paused_vibration_on_the_copy() {
+    let mut app = opened();
+    let copied = duplicate_molecule(&mut app);
+    for _ in 0..6 {
+        vibrations(&mut app, Action::Tick);
+    }
+    vibrations(&mut app, Action::Play(false));
+    assert_ne!(shown(&app), f32s(&MOVED));
+
+    let original = std::mem::replace(&mut app.tab.selected, copied.clone());
+    assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
+    assert!(app.xtb_vibration_preview().is_none());
+    app.tab.selected = original;
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(copied)));
+    assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
+    assert!(app.xtb_vibration_preview().is_some());
+    let animation = app.tab.xtb.vibrations.animation.as_ref().unwrap();
+    assert_eq!(animation.model, 1);
+    assert_eq!(shown(&app), f32s(&MOVED));
+    assert!(!app.tab.xtb.vibrations.playing);
 }
 
 #[test]
@@ -1348,9 +1426,9 @@ fn a_recompute_reply_from_a_previous_file_epoch_is_ignored() {
 fn switching_away_from_docked_vibrations_cancels_recomputation() {
     let (mut app, light) = light_result(1590.13);
     send(&mut app, XtbAction::Palette(palette::Action::Dock));
-    send(&mut app, XtbAction::Page(Page::Nmr));
+    send(&mut app, XtbAction::Page(crate::app::xtb::Page::Nmr));
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
-    send(&mut app, XtbAction::Page(Page::Xtb));
+    send(&mut app, XtbAction::Page(crate::app::xtb::Page::Xtb));
     assert!(app.tab.xtb.vibrations.recomputing(&light));
 }
 
