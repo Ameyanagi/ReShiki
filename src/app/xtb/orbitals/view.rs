@@ -223,7 +223,7 @@ impl App {
             })
         };
         let [positive, negative] = reshiki::models3d::surface::draw::figure_colors(dark);
-        let colours = row![
+        let colors = row![
             field("Phases"),
             swatch(positive),
             text("+").size(12),
@@ -324,7 +324,7 @@ impl App {
                 text(if open {
                     "Appearance ▾"
                 } else {
-                    "Appearance ▸ (isovalue, look, opacity, colours)"
+                    "Appearance ▸ (isovalue, look, opacity, colors)"
                 })
                 .size(12),
             )
@@ -341,7 +341,7 @@ impl App {
                         .align_y(Alignment::Center),
                     mesh_lines,
                     opacity,
-                    colours,
+                    colors,
                 ]
                 .spacing(8),
             );
