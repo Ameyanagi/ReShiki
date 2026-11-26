@@ -7,7 +7,7 @@ const SHORT_WINDOW_HEIGHT: f32 = 800.;
 const DOCK_HEIGHT: f32 = 360.;
 
 /// The expanded bottom dock's height: at most 40 % of the window.
-pub(super) fn dock_height(window_height: f32) -> f32 {
+pub(in crate::app::xtb) fn dock_height(window_height: f32) -> f32 {
     DOCK_HEIGHT.min(window_height * MAX_HEIGHT_FRACTION)
 }
 

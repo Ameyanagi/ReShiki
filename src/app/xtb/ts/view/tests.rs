@@ -1,4 +1,5 @@
 use super::*;
+use iced::Point;
 
 #[test]
 fn reopened_and_stale_profiles_explain_why_the_model_does_not_preview() {
@@ -13,13 +14,13 @@ fn live_path_chart_uses_the_saved_chart_axes_without_point_labels() {
     let chart = PathChart::live(&[-5., -4.97, -5.01], EnergyUnit::KjPerMol);
     let next = PathChart::live(&[-5., -4.95, -5.02], EnergyUnit::KjPerMol);
     assert_eq!(chart.axis_title(), next.axis_title());
-    assert_eq!(next.axis_title(), "ΔE from reactants (kJ/mol)");
+    assert_eq!(next.axis_title(), "ΔE (kJ/mol)");
     assert_eq!(next.deltas[0], 0.);
     assert!(next.deltas[1] > chart.deltas[1]);
     assert!(next.deltas[2] < chart.deltas[2]);
     assert!(!next.interactive);
     assert_eq!(next.endpoint_marker(0), None);
-    assert_eq!(next.endpoint_marker(2), None);
+    assert_eq!(next.endpoint_marker(1), None);
     assert_eq!(next.refined_ts_marker(), None);
 }
 
@@ -53,6 +54,7 @@ fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
         stale: false,
         live: false,
         unit: EnergyUnit::KcalPerMol,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(420., 190.));
     assert_eq!(chart.nearest(chart.x(0, bounds), bounds), Some(0));
@@ -64,8 +66,11 @@ fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
 fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
     let reactant = -5.;
     let energy = |delta| reactant + delta / KCAL_PER_HARTREE;
-    let (deltas, refined_delta) =
-        relative_energies(&[reactant, energy(30.2), energy(-8.2)], Some(energy(26.5)));
+    let (deltas, refined_delta) = relative_energies(
+        &[reactant, energy(30.2), energy(-8.2)],
+        Some(energy(26.5)),
+        None,
+    );
     let chart = PathChart {
         deltas,
         refined_delta,
@@ -75,6 +80,7 @@ fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
         stale: false,
         live: false,
         unit: EnergyUnit::KcalPerMol,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
     };
     assert_eq!(chart.refined_ts_marker().unwrap().1, "TS‡ 26.5");
     assert!(selection_label(chart.deltas[1], chart.unit).ends_with("ΔE 30.2 kcal/mol"));
@@ -101,6 +107,108 @@ fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
         ..lower_saddle
     };
     assert_eq!(no_saddle.refined_ts_marker(), None);
+}
+
+#[test]
+fn irc_markers_show_the_actual_reached_ends_and_refined_saddle() {
+    let chart = PathChart {
+        deltas: vec![0., 12., 26.5, 4., -7.2],
+        refined_delta: Some(26.5),
+        coordinates: vec![-8., -0.5, 0., 1.2, 9.],
+        neb_overlay: vec![(-8., 0.), (0., 30.2), (9., -8.44)],
+        endpoint_labels: ["R", "P"],
+        irc: true,
+        live: false,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    let profile = chart.profile();
+    let ts = profile
+        .markers
+        .iter()
+        .find(|marker| marker.transition)
+        .unwrap();
+    assert_eq!((ts.sample.x, ts.sample.energy), (0., 26.5));
+    assert_eq!(chart.energy_bounds(), (-8.44, 30.2));
+    assert_eq!(chart.endpoint_marker(0).as_deref(), Some("R 0.0"));
+    assert_eq!(chart.endpoint_marker(1).as_deref(), Some("P −7.2"));
+    assert_eq!(chart.deltas[0], 0.);
+    assert_eq!(chart.deltas[4], -7.2);
+    assert!(chart.accessible_name().contains("reactant side negative"));
+    assert!(profile.x_title.contains("amu½·bohr"));
+    let reached = PathChart {
+        endpoint_labels: ["R", "Other endpoint"],
+        ..chart
+    };
+    assert_eq!(
+        reached.endpoint_marker(1).as_deref(),
+        Some("Other endpoint −7.2")
+    );
+    assert!(!reached.accessible_name().contains("P −8.4"));
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn irc_chart_ts_label_matches_the_card_barrier_and_relaxed_r_is_off_zero() {
+    let (mut app, _) = super::super::tests::finished_irc();
+    for unit in EnergyUnit::ALL {
+        app.appearance.energy_unit = unit;
+        let shown = app.xtb_shown().unwrap();
+        let result = &shown.stored.result;
+        let card = presentation(result, app.xtb_ts_refinement_session(result));
+        let chart = app.xtb_ts_path_chart(&shown, card.refined_kcal);
+        let expected = (result.energy_hartree.unwrap() + 5.) * KCAL_PER_HARTREE;
+        assert_eq!(
+            card.barrier_line(unit),
+            Some(format!("ΔE‡ {}", unit.format(expected)))
+        );
+        assert_eq!(
+            chart.refined_ts_marker(),
+            Some((expected, format!("TS‡ {}", unit.number(expected))))
+        );
+
+        let profile = chart.profile();
+        let reactant = profile
+            .markers
+            .iter()
+            .find(|marker| marker.label == "R")
+            .unwrap();
+        let relaxed = (-5.003 + 5.) * KCAL_PER_HARTREE;
+        assert_eq!(reactant.sample.energy, relaxed);
+        assert_eq!(reactant.tooltip.as_deref(), Some("relaxed IRC end"));
+        let traced_end = reactant.connector_from.unwrap();
+        assert_eq!(traced_end.x, reactant.sample.x);
+        assert_eq!(traced_end.energy, profile.samples[0].energy);
+        assert_ne!(traced_end.energy, relaxed);
+        assert_eq!(profile.samples.len(), irc::saved(result).unwrap().steps());
+    }
+}
+
+#[test]
+fn irc_clicks_do_not_publish_neb_image_selection() {
+    let chart = PathChart {
+        deltas: vec![0., 10., -2.],
+        coordinates: vec![-1., 0., 1.],
+        irc: true,
+        interactive: true,
+        live: false,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(330., 146.));
+    let cursor = mouse::Cursor::Available(Point::new(150., 80.));
+    assert!(
+        canvas::Program::update(
+            &chart,
+            &mut (),
+            &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor
+        )
+        .is_none()
+    );
+    assert_eq!(
+        canvas::Program::mouse_interaction(&chart, &(), bounds, cursor),
+        mouse::Interaction::default()
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -243,12 +351,12 @@ mod presentation_tests {
             let shown = app.xtb_shown().expect("saved Path result");
             let saved = presentation(&shown.stored.result, shown.ts);
             let chart = app.xtb_ts_path_chart(&shown, saved.refined_kcal);
-            assert_eq!(chart.axis_title(), format!("ΔE from reactants ({title})"));
+            assert_eq!(chart.axis_title(), format!("ΔE ({title})"));
             assert_eq!(
                 chart.refined_ts_marker().unwrap().1,
                 format!("TS‡ {saddle}")
             );
-            assert_eq!(chart.endpoint_marker(2).unwrap(), format!("P {product}"));
+            assert_eq!(chart.endpoint_marker(1), Some(format!("P {product}")));
             assert!(
                 chart
                     .accessible_name()
@@ -318,6 +426,7 @@ mod presentation_tests {
             product: frame.hash(),
         });
         let search = TransitionStateRun {
+            irc: None,
             arrow: None,
             context: None,
             free_energy: true,
@@ -328,6 +437,8 @@ mod presentation_tests {
             imaginary: 1,
             imaginary_cm1: Some(-387.),
             climbing_image: 1,
+            forming_bonds: vec![],
+            breaking_bonds: vec![],
             mapping: TransitionStateMapping {
                 formed: vec![],
                 broken: vec![],

@@ -34,6 +34,7 @@ mod input;
 pub mod layered;
 mod markers;
 mod models3d;
+pub(crate) use models3d::ModelImage;
 mod movement;
 pub(crate) mod nmr;
 pub(crate) mod optimization;

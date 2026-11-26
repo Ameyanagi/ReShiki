@@ -593,6 +593,7 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
         finished: Some("2026-11-26T05:03:00Z".into()),
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            irc: None,
             arrow: Some(123),
             context: None,
             free_energy: false,
@@ -603,6 +604,8 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
             imaginary: 1,
             imaginary_cm1: Some(-721.3),
             climbing_image: 1,
+            forming_bonds: vec![],
+            breaking_bonds: vec![],
             mapping: TransitionStateMapping {
                 formed: vec![[
                     MappedAtom {
