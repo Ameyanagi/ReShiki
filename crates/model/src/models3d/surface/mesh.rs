@@ -33,6 +33,10 @@ pub struct Grid {
 }
 
 impl Grid {
+    pub(super) fn coordinate(&self, axis: usize, index: usize) -> f32 {
+        (self.origin[axis] as f64 + index as f64 * self.step as f64) as f32
+    }
+
     /// Cover the box with cubic voxels.
     pub fn around(lo: [f32; 3], hi: [f32; 3]) -> Grid {
         Self::fit(lo, hi, MAX_SIDE)
@@ -121,8 +125,31 @@ pub fn isosurface(field: impl Fn([f32; 3]) -> f32, grid: Grid, iso: f32) -> Mesh
 /// Also return the spacing used after box growth or a coarser retry.
 pub(super) fn isosurface_with_step(
     field: impl Fn([f32; 3]) -> f32,
+    grid: Grid,
+    iso: f32,
+) -> (Mesh, f32) {
+    let field = &field;
+    isosurface_sampled(field, grid, iso, |grid| {
+        let [nx, ny, nz] = grid.size;
+        (0..nz).flat_map(move |z| {
+            (0..ny).flat_map(move |y| {
+                (0..nx).map(move |x| {
+                    let point = [x, y, z];
+                    field(std::array::from_fn(|axis| {
+                        grid.coordinate(axis, point[axis])
+                    }))
+                })
+            })
+        })
+    })
+}
+
+/// The sampler supplies interior values for each grid, x fastest.
+pub(super) fn isosurface_sampled<I: IntoIterator<Item = f32>>(
+    field: &impl Fn([f32; 3]) -> f32,
     mut grid: Grid,
     iso: f32,
+    sample: impl Fn(Grid) -> I,
 ) -> (Mesh, f32) {
     assert!(
         iso.is_finite() && iso > 0.,
@@ -146,13 +173,11 @@ pub(super) fn isosurface_with_step(
         let mut peak = 0f32;
         let mut grow_lo = [false; 3];
         let mut grow_hi = [false; 3];
+        let mut samples = sample(grid).into_iter();
         for z in 1..nz - 1 {
             for y in 1..ny - 1 {
-                for x in 1..nx - 1 {
+                for (x, value) in (1..nx - 1).zip(&mut samples) {
                     let ijk = [x - 1, y - 1, z - 1];
-                    let value = field(std::array::from_fn(|i| {
-                        (grid.origin[i] as f64 + ijk[i] as f64 * grid.step as f64) as f32
-                    }));
                     let value = if value.is_finite() { value } else { 0. };
                     peak = peak.max(value.abs());
                     if value.abs() >= iso {
@@ -170,6 +195,7 @@ pub(super) fn isosurface_with_step(
                 }
             }
         }
+        drop(samples);
         let truncated = grow_lo.into_iter().chain(grow_hi).any(|b| b);
         if truncated && growths < 3 {
             let extent = grid.size.map(|n| (n - 1) as f32 * grid.step);
@@ -318,7 +344,7 @@ pub(super) fn isosurface_with_step(
                         });
                         let id = mesh.positions.len() as u32;
                         mesh.positions.push(p);
-                        let n = field_normal(&field, p, h, positive);
+                        let n = field_normal(field, p, h, positive);
                         needs_face_normals |= n == [0.; 3];
                         mesh.normals.push(n);
                         id

@@ -1,19 +1,19 @@
-//! The developer demo surface and its place in a model's picture: an
-//! analytic π-like field around the model's atoms, meshed once and cached
-//! (never saved), then cut and merged for the model's view each time it is
-//! drawn. See docs/plans/xtb-surfaces.md.
+//! Orbital meshes and their projection into a model's picture.
 // Fixed three-axis arrays, and mesh and atom indices made by the mesher and
 // the model's own geometry.
 #![allow(clippy::indexing_slicing)]
 use super::mesh::{self, Grid, Mesh};
 use super::visible::{self, Input, Line, Occluder, Visible};
-use super::{Fill, Look, fit};
-use crate::document::Document;
+use super::{Figure, Fill, Look, OrbitalRef, fit};
+use crate::document::{Document, Point};
 use crate::models3d::{BLACK, Model3d, Style, View, WHITE, dot, mix, rgb, rotate, sub};
 use crate::scene::{Outline, Primitive, SurfaceFill, SurfaceGroup, SurfaceStroke};
+use crate::science::{self, Freshness};
+use serde::{Serialize, Serializer};
+use sha2::{Digest, Sha256};
 use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::OnceLock;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
 /// Triangles for the drawing and export, and while the model turns.
 pub const DETAIL: [usize; 2] = [20_000, 4_000];
@@ -51,29 +51,18 @@ enum Demo {
     PiStar,
 }
 
-static SWITCH: OnceLock<(Demo, f32, Look)> = OnceLock::new();
 thread_local! {
     static THREAD: std::cell::Cell<Option<(Demo, f32, Look)>> = const { std::cell::Cell::new(None) };
 }
 
-/// Turns the analytic demo surface on for every 3D model it supports, from
-/// `RESHIKI_DEV_ORBITAL_SURFACE`: `name[:iso][,look=<token>][,opacity=<percent>]`.
-pub fn enable_demo(spec: &str) -> Result<(), String> {
-    SWITCH
-        .set(parse(spec)?)
-        .map_err(|_| "The demo surface is already on".to_string())
-}
-
-/// Turns the demo surface on for this thread only, ahead of the
-/// process-wide switch, or with `None` goes back to that switch: for tests,
-/// which share one process and never set the process-wide switch.
+/// Turns the analytic demo on or off for this thread, in tests.
 pub fn demo_on_this_thread(spec: Option<&str>) -> Result<(), String> {
     THREAD.set(spec.map(parse).transpose()?);
     Ok(())
 }
 
 fn switch() -> Option<(Demo, f32, Look)> {
-    THREAD.get().or_else(|| SWITCH.get().copied())
+    THREAD.get()
 }
 
 fn parse(spec: &str) -> Result<(Demo, f32, Look), String> {
@@ -115,13 +104,225 @@ fn parse(spec: &str) -> Result<(Demo, f32, Look), String> {
     ))
 }
 
-/// The model's demo meshes at both details, if the switch is on and the
-/// prototype supports the model (no crystals, no Wireframe or ellipsoids).
-pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<[Mesh; 2]>> {
-    let (demo, iso, _) = switch()?;
-    if model.cell.is_some() || matches!(model.style, Style::Wireframe | Style::Ellipsoids) {
+type Meshes = Arc<[Mesh; 2]>;
+static REGISTERED: Mutex<Vec<(u64, Meshes)>> = Mutex::new(Vec::new());
+const REGISTERED_LIMIT: usize = 24;
+
+/// The mesh identity of the model's placed orbital and geometry.
+pub fn key(doc: &Document, model: &Model3d) -> Option<u64> {
+    let figure = model.surface.as_ref()?;
+    let points = model.points(doc)?;
+    if points.is_empty() {
         return None;
     }
+    let mut hash = DefaultHasher::new();
+    (
+        &figure.orbital.result,
+        figure.orbital.spin,
+        figure.orbital.index,
+        figure.iso.to_bits(),
+    )
+        .hash(&mut hash);
+    for (element, xyz) in points {
+        (element, xyz.map(f32::to_bits)).hash(&mut hash);
+    }
+    Some(hash.finish())
+}
+
+/// Counts registrations, so a cached picture of an unchanged drawing knows a
+/// new mesh may change it.
+static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many meshes have been registered in this process.
+pub fn generation() -> u64 {
+    GENERATION.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Registers drawing and turning meshes, in that order.
+pub fn register(key: u64, meshes: Arc<[Mesh; 2]>) {
+    GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let Ok(mut entries) = REGISTERED.lock() else {
+        return;
+    };
+    entries.retain(|(k, _)| *k != key);
+    if entries.len() == REGISTERED_LIMIT {
+        entries.remove(0);
+    }
+    entries.push((key, meshes));
+}
+
+/// Finds and promotes a recently registered pair of meshes.
+pub fn registered(key: u64) -> Option<Arc<[Mesh; 2]>> {
+    let mut entries = REGISTERED.lock().ok()?;
+    let at = entries.iter().position(|(k, _)| *k == key)?;
+    let entry = entries.remove(at);
+    let meshes = Arc::clone(&entry.1);
+    entries.push(entry);
+    Some(meshes)
+}
+
+/// Identity of the rendered view, independent of the frame's position.
+pub fn view_signature(doc: &Document, model: &Model3d) -> String {
+    use crate::models3d as m;
+
+    // Keep the original wire representation so existing snapshots still match.
+    #[derive(Serialize)]
+    #[serde(remote = "Model3d")]
+    struct SignatureModel {
+        display: m::Display,
+        atoms: Vec<m::Placed>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        hydrogens: Vec<m::Hydrogen>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fingerprint: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        generated: Option<m::Generated>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        linked_atoms: Vec<u64>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        file_geometry: bool,
+        #[serde(skip_serializing_if = "m::polish::is_zero")]
+        seed: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cell: Option<m::Cell>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        sites: Vec<m::Site>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        notes: Vec<String>,
+        rotation: [f32; 4],
+        #[serde(getter = "default_offset")]
+        offset: Point,
+        size: f32,
+        style: Style,
+        #[serde(skip_serializing_if = "m::is_fifty")]
+        probability: m::Probability,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        molecule_only: bool,
+        #[serde(skip_serializing_if = "m::is_included")]
+        include_solvent: bool,
+        look: m::Look,
+        #[serde(skip_serializing_if = "m::Labels::is_none")]
+        labels: m::Labels,
+        depth_fade: f32,
+        perspective: f32,
+        show_hydrogens: m::Hydrogens,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        charges: bool,
+        #[serde(skip_serializing_if = "m::is_one_cell")]
+        repeat: [u8; 3],
+        #[serde(skip_serializing_if = "m::is_copy_opacity")]
+        copy_opacity: f32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        along: Option<m::Along>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        manual_along: bool,
+        background: m::Background,
+        #[serde(
+            skip_serializing_if = "Option::is_none",
+            serialize_with = "serialize_figure"
+        )]
+        surface: Option<Figure>,
+        force_field: m::ForceField,
+        #[serde(skip_serializing_if = "m::is_original")]
+        layout: m::Layout,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        drawn: Option<m::Drawn>,
+    }
+    fn default_offset(_: &Model3d) -> Point {
+        Point::default()
+    }
+    fn serialize_figure<S: Serializer>(
+        figure: &Option<Figure>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct SignatureFigure<'a> {
+            orbital: &'a OrbitalRef,
+            iso: f32,
+            #[serde(flatten)]
+            look: Look,
+        }
+        figure
+            .as_ref()
+            .map(|figure| SignatureFigure {
+                orbital: &figure.orbital,
+                iso: figure.iso,
+                look: figure.look,
+            })
+            .serialize(serializer)
+    }
+    #[derive(Serialize)]
+    struct WithoutSnapshot<'a>(#[serde(with = "SignatureModel")] &'a Model3d);
+
+    let points = model.points(doc).map(|points| {
+        points
+            .into_iter()
+            .map(|(element, xyz)| (element, xyz.map(f32::to_bits)))
+            .collect::<Vec<_>>()
+    });
+    let bytes =
+        serde_json::to_vec(&(WithoutSnapshot(model), doc.canvas_theme, points)).unwrap_or_default();
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn supported(model: &Model3d) -> bool {
+    model.cell.is_none() && !matches!(model.style, Style::Wireframe | Style::Ellipsoids)
+}
+
+/// Whether this figure's molecule and displayed geometry still match its result.
+pub fn figure_ready(doc: &Document, model: &Model3d) -> bool {
+    supported(model) && current(doc, model).is_some()
+}
+
+fn current(doc: &Document, model: &Model3d) -> Option<()> {
+    let (_, stored) = science::figure_result(doc, model)?;
+    let attachment = doc.science.attachment(stored.attachment)?;
+    if attachment.freshness(doc) != Freshness::Current {
+        return None;
+    }
+    let frame = doc.science.frame(&stored.result.frame)?;
+    let points = model.points(doc)?;
+    (points.len() == frame.numbers.len()
+        && points.len() == frame.positions_angstrom.len()
+        && points
+            .iter()
+            .zip(&frame.numbers)
+            .zip(&frame.positions_angstrom)
+            .all(|(((element, p), &number), q)| {
+                number
+                    .checked_sub(1)
+                    .and_then(|i| crate::editing::ELEMENTS.get(usize::from(i)))
+                    == Some(element)
+                    && p.iter()
+                        .zip(q)
+                        .map(|(&a, &b)| (f64::from(a) - b).powi(2))
+                        .sum::<f64>()
+                        <= 1e-6
+            }))
+    .then_some(())
+}
+
+pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {
+    if model.surface.is_some() {
+        registered(key(doc, model)?).filter(|_| figure_ready(doc, model))
+    } else if supported(model) {
+        demo_meshes(doc, model)
+    } else {
+        None
+    }
+}
+
+pub(in crate::models3d) fn snapshot_reach(doc: &Document, model: &Model3d) -> Option<f32> {
+    let saved = model.surface.as_ref()?.snapshot.as_ref()?;
+    (saved.reach.is_finite()
+        && saved.reach > 0.
+        && figure_ready(doc, model)
+        && saved.view == view_signature(doc, model))
+    .then_some(saved.reach)
+}
+
+fn demo_meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {
+    let (demo, iso, _) = switch()?;
     let points = model.points(doc)?;
     let bonds = model.geometry_bonds(doc);
     let mut key: Vec<u32> = vec![demo as u32, iso.to_bits(), points.len() as u32];
@@ -152,7 +353,7 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
     let found = (!raw.truncated).then(|| {
         let fine = mesh::simplify(&raw, DETAIL[0]);
         let coarse = mesh::simplify(&fine, DETAIL[1]);
-        Rc::new([fine, coarse].map(|m| mesh::refine(&m, &field, iso, step)))
+        Arc::new([fine, coarse].map(|m| mesh::refine(&m, &field, iso, step)))
     });
     MESHES.with_borrow_mut(|kept| {
         if kept.len() >= KEPT {
@@ -165,7 +366,7 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
 
 const KEPT: usize = 4;
 /// Recent models' meshes by their geometry, switch and isovalue.
-type Kept = Vec<(Vec<u32>, Option<Rc<[Mesh; 2]>>)>;
+type Kept = Vec<(Vec<u32>, Option<Meshes>)>;
 thread_local! {
     static MESHES: RefCell<Kept> = Default::default();
 }
@@ -315,12 +516,26 @@ fn mesh_lines(
     lines
 }
 
-fn phase_base(positive: bool, dark: bool) -> [f32; 3] {
-    if positive {
-        POSITIVE
+pub(in crate::models3d) fn phase_colors(model: &Model3d, dark: bool) -> [[f32; 3]; 2] {
+    if model.surface.is_none() {
+        demo_colors(dark)
     } else {
-        NEGATIVE[usize::from(dark)]
+        figure_colors(dark).map(|c| c.map(f32::from))
     }
+}
+
+/// A placed orbital's positive and negative lobe colours on a light or dark
+/// canvas.
+pub fn figure_colors(dark: bool) -> [[u8; 3]; 2] {
+    if dark {
+        [[112, 169, 230], [245, 160, 89]]
+    } else {
+        [[58, 120, 189], [218, 122, 48]]
+    }
+}
+
+fn demo_colors(dark: bool) -> [[f32; 3]; 2] {
+    [POSITIVE, NEGATIVE[usize::from(dark)]]
 }
 
 fn shaded(base: [f32; 3], light: f32, backdrop: [f32; 3], fade: f32) -> [u8; 3] {
@@ -394,7 +609,12 @@ fn group_weight(alpha: f32, depth: usize) -> f32 {
     alpha * (1. - alpha).powi(depth as i32)
 }
 
-fn tone_counts(look: Look, dark: bool, backdrop: [f32; 3], fade: f32) -> Vec<usize> {
+fn phase_tone_counts(
+    look: Look,
+    colors: [[f32; 3]; 2],
+    backdrop: [f32; 3],
+    fade: f32,
+) -> Vec<usize> {
     let alpha = look.alpha();
     let groups = (1..MAX_GROUPS)
         .find(|&depth| group_weight(alpha, depth) < 1. / 50.)
@@ -403,8 +623,8 @@ fn tone_counts(look: Look, dark: bool, backdrop: [f32; 3], fade: f32) -> Vec<usi
         Fill::None => vec![0; groups],
         Fill::Solid | Fill::Outline => vec![1; groups],
         Fill::Shaded => {
-            let levels = [true, false]
-                .map(|positive| Ramp::new(phase_base(positive, dark), backdrop, fade).levels())
+            let levels = colors
+                .map(|base| Ramp::new(base, backdrop, fade).levels())
                 .into_iter()
                 .fold(0., f32::max);
             (0..groups)
@@ -432,19 +652,22 @@ impl Prepared {
     /// during the 2D → 3D morph.
     /// `outline` is the width of the balls' painted outline.
     pub(in crate::models3d) fn new(
-        doc: &Document,
+        meshes: &[Mesh; 2],
         model: &Model3d,
         view: &View,
         outline: f32,
-        dark: bool,
+        colors: [[f32; 3]; 2],
         backdrop: [f32; 3],
         fade: f32,
     ) -> Option<Self> {
         if model.morph.is_some_and(|m| m < 1.) {
             return None;
         }
-        let (_, _, look) = switch()?;
-        let meshes = meshes(doc, model)?;
+        let look = if let Some(figure) = &model.surface {
+            figure.look
+        } else {
+            switch()?.2
+        };
         let mesh = &meshes[usize::from(model.turning)];
         let rotated: Vec<[f32; 3]> = mesh
             .positions
@@ -467,8 +690,7 @@ impl Prepared {
         let length = dot(l, l).sqrt();
         let light = l.map(|v| v / length);
         // Tone coordinates even in colour, by each vertex's phase.
-        let ramps =
-            [true, false].map(|positive| Ramp::new(phase_base(positive, dark), backdrop, fade));
+        let ramps = colors.map(|base| Ramp::new(base, backdrop, fade));
         let mut phase = vec![0; mesh.positions.len()];
         for (t, &positive) in mesh.triangles.iter().zip(&mesh.positive) {
             for &v in t {
@@ -483,7 +705,7 @@ impl Prepared {
                 ramps[phase].tone(dot(rotate(model.rotation, *n), light).clamp(0., 1.))
             })
             .collect();
-        let mut tones = tone_counts(look, dark, backdrop, fade);
+        let mut tones = phase_tone_counts(look, colors, backdrop, fade);
         if model.turning {
             tones.truncate(TURNING_GROUPS);
             for count in &mut tones {
@@ -546,9 +768,9 @@ impl Prepared {
     }
 
     /// Fit the visible shapes and paint each depth as a group.
-    pub(in crate::models3d) fn primitive(
+    pub(in crate::models3d) fn paint(
         &self,
-        dark: bool,
+        colors: [[f32; 3]; 2],
         backdrop: [f32; 3],
         fade: f32,
         outline: Option<Outline>,
@@ -575,8 +797,7 @@ impl Prepared {
         for (depth, &count) in self.tones.iter().enumerate().rev() {
             let mut fills = Vec::new();
             let mut strokes = Vec::new();
-            for (sign, positive) in [true, false].into_iter().enumerate() {
-                let base = phase_base(positive, dark);
+            for (sign, (positive, base)) in [true, false].into_iter().zip(colors).enumerate() {
                 let ramp = Ramp::new(base, backdrop, fade);
                 let color = |tone: usize| match self.look.fill {
                     Fill::Shaded => {
@@ -690,6 +911,8 @@ fn occluders(view: &View, model: &Model3d, rim: f32) -> Vec<Occluder> {
     out
 }
 
+#[cfg(test)]
+mod figures;
 #[cfg(test)]
 mod tests;
 
