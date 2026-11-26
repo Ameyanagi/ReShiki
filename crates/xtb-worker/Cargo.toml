@@ -11,10 +11,11 @@ path = "src/bin/reshiki-xtb-worker.rs"
 required-features = ["engine"]
 
 [features]
-engine = ["dep:axtb-driver"]
+engine = ["dep:axtb-driver", "dep:reshiki-io"]
 
 [dependencies]
 axtb-driver = { workspace = true, optional = true }
+reshiki-io = { path = "../io", optional = true }
 reshiki-process-heap = { path = "../process-heap" }
 reshiki-qcdata = { path = "../qcdata" }
 serde = { version = "1", features = ["derive"] }
