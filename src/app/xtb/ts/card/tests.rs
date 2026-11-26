@@ -14,6 +14,7 @@ use reshiki::reactions::{Participant, Reaction};
 use std::collections::BTreeMap;
 
 /// Inspect the widgets a production view actually creates, including lazy cards.
+/// Run opt-in renderer tests with `--test-threads=1` on headless GPU hosts.
 #[cfg(not(target_arch = "wasm32"))]
 pub(in crate::app::xtb::ts) struct ViewHarness {
     renderer: iced::Renderer,
@@ -437,6 +438,9 @@ fn bond_marks_follow_the_visible_reaction_and_highlight_one_pair() {
     let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![c1])));
     assert!(app.xtb_reaction_bond_marks().is_empty());
     let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![arrow])));
+    assert_eq!(app.inspector_tab, crate::app::InspectorTab::Properties);
+    assert!(app.xtb_reaction_bond_marks().is_empty());
+    show_reaction_card(&mut app);
     assert_eq!(app.xtb_reaction_bond_marks(), [formed, broken]);
     let _ = app.update(Message::ToggleInspector);
     assert!(app.xtb_reaction_bond_marks().is_empty());

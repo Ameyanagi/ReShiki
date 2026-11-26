@@ -52,8 +52,10 @@ pub(crate) fn run(
         neb_images: 12,
     };
     let file_stem = match &command.output {
-        Output::File(path) => file_stem(path),
-        Output::Stdout => qc_input::default_stem(&file_stem(&command.input), command.program),
+        Output::File(path) => file_stem(path, command.program),
+        Output::Stdout => {
+            qc_input::default_stem(&file_stem(&command.input, command.program), command.program)
+        }
     };
     let geometry = Geometry {
         frame: &frame,
@@ -159,9 +161,12 @@ fn stem(path: &Path) -> String {
         .unwrap_or_else(|| "molecule".into())
 }
 
-fn file_stem(path: &Path) -> String {
-    stem(path)
-        .chars()
+fn file_stem(path: &Path, program: qc_input::Program) -> String {
+    let stem = stem(path);
+    if program == qc_input::Program::Orca {
+        return stem;
+    }
+    stem.chars()
         .map(|c| {
             if c.is_whitespace() || c.is_control() {
                 '_'

@@ -213,6 +213,7 @@ fn gamess_title_fits_eighty_columns_with_all_energies_and_the_complex_reference(
         "Long reactant name → first product + second product".into(),
     );
     settings.job = Job::TransitionState;
+    settings.basis = "6-31G(d)".into();
     let output = source
         .output(&settings, "test", "ReShiki test", EnergyUnit::default())
         .unwrap();
@@ -524,7 +525,11 @@ fn path_job_changes_update_the_file_suffix_and_preserve_the_reaction_title() {
 #[test]
 fn orca_neb_companions_follow_chosen_names_when_reactant_stems_collide() {
     let directory = tempfile::tempdir().unwrap();
-    for (name, z) in [("sample_a", 0.2), ("sample-a", 0.6), ("sample a", 1.)] {
+    for (name, stem, z) in [
+        ("sample_a", "sample_a", 0.2),
+        ("sample-a", "sample-a", 0.6),
+        ("sample  a", "sample__a", 1.),
+    ] {
         let mut source = source();
         source.name = name.into();
         source.stem = reaction_stem(name, "H2");
@@ -547,7 +552,7 @@ fn orca_neb_companions_follow_chosen_names_when_reactant_stems_collide() {
             ("product", "NEB_End_XYZFile", z + 0.2),
             ("ts", "NEB_TS_XYZFile", z),
         ] {
-            let name = format!("{name}_{suffix}.xyz");
+            let name = format!("{stem}_{suffix}.xyz");
             assert!(input.contains(&format!("{keyword} \"{name}\"")));
             let text = std::fs::read_to_string(directory.path().join(name)).unwrap();
             let frame = qc_input::parse_xyz(&text).unwrap();
@@ -573,7 +578,8 @@ fn orca_hessian_companions_follow_chosen_names_and_keep_existing_files() {
         let _ = app.open_qc_export_source(source());
         send(&mut app, ExportAction::Program(Program::Orca));
         send(&mut app, ExportAction::Job(job));
-        let path = directory.path().join(format!("{stem}.inp"));
+        let chosen_stem = stem.replace('_', "+");
+        let path = directory.path().join(format!("{chosen_stem}.inp"));
         app.qc_input().unwrap().write(&path).unwrap();
         let input = std::fs::read_to_string(&path).unwrap();
         let name = format!("{stem}_xtb.hess");
@@ -586,15 +592,16 @@ fn orca_hessian_companions_follow_chosen_names_and_keep_existing_files() {
         );
 
         std::fs::write(&companion, "keep existing Hessian").unwrap();
-        std::fs::write(&path, "keep existing input").unwrap();
+        let colliding_path = directory.path().join(format!("{stem}.inp"));
+        std::fs::write(&colliding_path, "keep existing input").unwrap();
         assert_eq!(
-            app.qc_input().unwrap().write(&path),
+            app.qc_input().unwrap().write(&colliding_path),
             Err(format!(
                 "Input not saved; {name} already exists beside it and was not replaced."
             ))
         );
         assert_eq!(
-            std::fs::read_to_string(&path).unwrap(),
+            std::fs::read_to_string(&colliding_path).unwrap(),
             "keep existing input"
         );
         assert_eq!(

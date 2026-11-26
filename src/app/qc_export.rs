@@ -433,9 +433,9 @@ impl Input {
         if self.settings.program == Program::Orca {
             self.stem = path
                 .file_stem()
-                .and_then(|stem| stem.to_str())
-                .ok_or("The input file name must be valid text.")?
-                .into();
+                .ok_or("Choose an input file name.")?
+                .to_string_lossy()
+                .into_owned();
         }
         let output = self.output()?;
         if let Some(directory) = path.parent() {
