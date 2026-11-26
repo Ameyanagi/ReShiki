@@ -17,6 +17,71 @@ use std::{
 };
 use tempfile::TempDir;
 
+/// The operation tools served by the binary this integration test built.
+pub fn operation_specs() -> &'static [reshiki_agent::tool_spec::ToolSpec] {
+    use reshiki_agent::ops::catalog::{BASE_SPECS, SPECS};
+
+    if cfg!(feature = "xtb") {
+        SPECS
+    } else {
+        BASE_SPECS
+    }
+}
+
+/// Applies this build's optional calculation capability to a base-build fixture.
+pub fn fixture_for_build(mut message: Value) -> Value {
+    if let Some(tools) = message.pointer_mut("/result/tools") {
+        let base: Vec<&str> = reshiki_agent::ops::catalog::BASE_SPECS
+            .iter()
+            .map(|spec| spec.name)
+            .collect();
+        assert_eq!(
+            *tools,
+            Value::from(base),
+            "the fixture pins the base catalog"
+        );
+        *tools = Value::from(
+            operation_specs()
+                .iter()
+                .map(|spec| spec.name)
+                .collect::<Vec<_>>(),
+        );
+    }
+    #[cfg(feature = "xtb")]
+    if let Some(calculations) = message.pointer_mut("/result/structuredContent/value/calculations")
+    {
+        use reshiki_agent::ops::{
+            budget::Budgets,
+            headless::HeadlessHost,
+            host::{Call, ToolHost},
+            wire::{Principal, RequestId},
+        };
+
+        assert!(
+            calculations.is_null(),
+            "the fixture pins the base capability"
+        );
+        let host = HeadlessHost::new(env!("CARGO_PKG_VERSION"), Budgets::default())
+            .with_calculations(Arc::new(reshiki::xtb_agent::AgentCalculations));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let info = runtime
+            .block_on(host.call(Call {
+                principal: Principal::local(),
+                request: RequestId::Int(1),
+                tool: "info".into(),
+                arguments: serde_json::json!({}),
+                progress: None,
+            }))
+            .expect("local info");
+        assert!(!info.is_error, "{:?}", info.value);
+        *calculations = info.value["value"]["calculations"].clone();
+    }
+    message
+}
+
 /// Starts the reshiki binary with `args`, piping stdout and stderr.
 pub fn spawn(args: &[&str], stdin: Stdio) -> Child {
     Command::new(env!("CARGO_BIN_EXE_reshiki"))

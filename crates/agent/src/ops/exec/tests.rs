@@ -1,9 +1,6 @@
 use super::*;
 use crate::ops::progress::Progress;
-use std::{
-    sync::{Condvar, atomic::AtomicUsize},
-    time::Duration,
-};
+use std::sync::{Condvar, atomic::AtomicUsize};
 use tokio::task::JoinHandle;
 
 /// A generous bound for every wait, so a bug fails instead of hanging.
@@ -135,7 +132,7 @@ where
     T: Send + 'static,
 {
     let exec = exec.clone();
-    tokio::spawn(async move { exec.run(who(), id(n), None, f).await })
+    tokio::spawn(async move { exec.run(who(), id(n), None, BOUND, f).await })
 }
 
 /// Two barriers a blocking job waits on: `started`, then `release`.
@@ -188,7 +185,7 @@ fn executor_and_its_futures_are_send() {
     send_sync::<Executor>();
     send_sync::<Context>();
     let exec = executor(1, 1);
-    let run = exec.run(who(), id(1), None, |mut ctx| async move {
+    let run = exec.run(who(), id(1), None, BOUND, |mut ctx| async move {
         ctx.blocking(|| Ok(())).await?;
         ctx.effect(|| Ok(())).await
     });
@@ -256,7 +253,9 @@ async fn a_job_whose_future_was_dropped_keeps_the_call_until_it_ends() {
         wait(&gate.started).await;
         // The operation has ended, but its job still holds the call.
         assert_eq!((permits(&exec), live(&exec)), (1, 1), "{case}");
-        let duplicate = exec.run(who(), id(1), None, |_| async { Ok(()) }).await;
+        let duplicate = exec
+            .run(who(), id(1), None, BOUND, |_| async { Ok(()) })
+            .await;
         assert_eq!(duplicate, Err(busy("request id already in use")), "{case}");
         let drain = tokio::spawn({
             let exec = exec.clone();
@@ -275,10 +274,12 @@ async fn a_job_whose_future_was_dropped_keeps_the_call_until_it_ends() {
 async fn cancelling_an_unknown_or_completed_request_is_a_no_op() {
     let exec = executor(2, 8);
     exec.cancel(&who(), &id(1));
-    let first = exec.run(who(), id(1), None, |_| async { Ok(1) }).await;
+    let first = exec
+        .run(who(), id(1), None, BOUND, |_| async { Ok(1) })
+        .await;
     assert_eq!(first, Ok(1));
     exec.cancel(&who(), &id(1));
-    let again = exec.run(who(), id(1), None, |ctx| async move {
+    let again = exec.run(who(), id(1), None, BOUND, |ctx| async move {
         ctx.checkpoint()?;
         Ok(2)
     });
@@ -305,7 +306,9 @@ async fn a_full_queue_is_busy_and_leaves_no_registry_entry() {
     let queued = spawn_flagged(&exec, 2, &ran);
     until(|| exec.queued() == 1).await;
 
-    let refused = exec.run(who(), id(3), None, |_| async { Ok(()) }).await;
+    let refused = exec
+        .run(who(), id(3), None, BOUND, |_| async { Ok(()) })
+        .await;
     assert_eq!(refused, Err(busy("server busy; retry later")));
     assert_eq!(refused.unwrap_err().kind, ErrorKind::Busy);
     assert!(!admitted(&exec, 3));
@@ -325,30 +328,35 @@ async fn a_duplicate_in_flight_id_is_busy_and_reusable_after_completion() {
     let first = spawn_gated(&exec, 1, &gate);
     wait(&gate.started).await;
 
-    let duplicate = exec.run(who(), id(1), None, |_| async { Ok(()) }).await;
+    let duplicate = exec
+        .run(who(), id(1), None, BOUND, |_| async { Ok(()) })
+        .await;
     assert_eq!(duplicate, Err(busy("request id already in use")));
     let other = Principal::new("other");
-    let other = exec.run(other, id(1), None, |_| async { Ok(2) }).await;
+    let other = exec
+        .run(other, id(1), None, BOUND, |_| async { Ok(2) })
+        .await;
     assert_eq!(other, Ok(2));
-    let string = exec.run(who(), RequestId::Str("1".into()), None, |_| async { Ok(3) });
+    let string = exec.run(who(), RequestId::Str("1".into()), None, BOUND, |_| async {
+        Ok(3)
+    });
     assert_eq!(string.await, Ok(3));
     assert_eq!(entries(&exec), 1);
 
     wait(&gate.release).await;
     assert_eq!(bounded(first).await.unwrap(), Ok(()));
-    let reused = exec.run(who(), id(1), None, |_| async { Ok(4) }).await;
+    let reused = exec
+        .run(who(), id(1), None, BOUND, |_| async { Ok(4) })
+        .await;
     assert_eq!(reused, Ok(4));
     assert_idle(&exec);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_passed_deadline_times_out_at_the_next_checkpoint() {
-    let exec = Executor::new(Budgets {
-        op_deadline: Duration::from_nanos(1),
-        ..Budgets::default()
-    });
+    let exec = executor(2, 8);
     let ran = Arc::new(AtomicBool::new(false));
-    let blocking = exec.run(who(), id(1), None, {
+    let blocking = exec.run(who(), id(1), None, Duration::from_nanos(1), {
         let ran = ran.clone();
         move |ctx| async move {
             // The deadline is measured from admission; wait it out.
@@ -367,7 +375,7 @@ async fn a_passed_deadline_times_out_at_the_next_checkpoint() {
     });
     assert_eq!(blocking.await.unwrap_err().kind, ErrorKind::Timeout);
 
-    let effect = exec.run(who(), id(2), None, {
+    let effect = exec.run(who(), id(2), None, BOUND, {
         let ran = ran.clone();
         move |mut ctx| async move {
             ctx.deadline = Some(Instant::now());
@@ -386,7 +394,7 @@ async fn a_passed_deadline_times_out_at_the_next_checkpoint() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_deadline_that_passes_after_the_effect_still_returns_ok() {
     let exec = executor(2, 8);
-    let result = exec.run(who(), id(1), None, |mut ctx| async move {
+    let result = exec.run(who(), id(1), None, BOUND, |mut ctx| async move {
         let value = ctx.effect(|| Ok(7)).await?;
         ctx.deadline = Some(Instant::now());
         ctx.checkpoint()?;
@@ -409,7 +417,9 @@ async fn drained_waits_for_a_running_blocking_job_and_refuses_new_calls() {
     });
     until(|| exec.shared.registry().closed).await;
 
-    let refused = exec.run(who(), id(2), None, |_| async { Ok(()) }).await;
+    let refused = exec
+        .run(who(), id(2), None, BOUND, |_| async { Ok(()) })
+        .await;
     assert_eq!(refused, Err(busy("shutting down")));
     assert!(!drain.is_finished());
     assert_eq!((permits(&exec), live(&exec)), (1, 1));
@@ -459,16 +469,15 @@ async fn an_operation_that_panics_after_its_caller_is_dropped_releases_everythin
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn panics_become_internal_errors() {
     let exec = executor(2, 8);
-    let direct = exec.run(who(), id(1), None, |_| async { bug() }).await;
+    let direct = exec
+        .run(who(), id(1), None, BOUND, |_| async { bug() })
+        .await;
     assert_eq!(direct, Err(internal()));
-    let blocking = exec.run(
-        who(),
-        id(2),
-        None,
-        |ctx| async move { ctx.blocking(bug).await },
-    );
+    let blocking = exec.run(who(), id(2), None, BOUND, |ctx| async move {
+        ctx.blocking(bug).await
+    });
     assert_eq!(blocking.await, Err(internal()));
-    let effect = exec.run(who(), id(3), None, |mut ctx| async move {
+    let effect = exec.run(who(), id(3), None, BOUND, |mut ctx| async move {
         ctx.effect(bug).await
     });
     assert_eq!(effect.await, Err(internal()));
@@ -608,7 +617,7 @@ async fn admission_racing_drain_leaves_no_call_running() {
                 tokio::spawn(async move {
                     start.wait().await;
                     let n = i64::try_from(n).unwrap();
-                    exec.run(who(), id(n), None, move |ctx| async move {
+                    exec.run(who(), id(n), None, BOUND, move |ctx| async move {
                         let _ended = Ended(ended);
                         entered.fetch_add(1, Ordering::SeqCst);
                         ctx.blocking(|| Ok(())).await?;
@@ -623,7 +632,9 @@ async fn admission_racing_drain_leaves_no_call_running() {
 
         assert_eq!(entered.load(Ordering::SeqCst), ended.load(Ordering::SeqCst));
         assert_idle(&exec);
-        let late = exec.run(who(), id(-1), None, |_| async { Ok(()) }).await;
+        let late = exec
+            .run(who(), id(-1), None, BOUND, |_| async { Ok(()) })
+            .await;
         assert_eq!(late, Err(busy("shutting down")));
         for caller in callers {
             let kind = bounded(caller).await.unwrap().map_err(|error| error.kind);
@@ -688,7 +699,7 @@ async fn progress_is_forwarded_until_the_operation_ends() {
         total: None,
         message: None,
     };
-    let progress = exec.run(who(), id(1), Some(sink), move |ctx| async move {
+    let progress = exec.run(who(), id(1), Some(sink), BOUND, move |ctx| async move {
         let progress = ctx.progress().unwrap();
         progress.report(at(1.));
         Ok(progress)
@@ -697,7 +708,7 @@ async fn progress_is_forwarded_until_the_operation_ends() {
     progress.report(at(2.));
     assert_eq!(*seen.lock().unwrap(), [1.]);
 
-    let none = exec.run(who(), id(2), None, |ctx| async move {
+    let none = exec.run(who(), id(2), None, BOUND, |ctx| async move {
         Ok(ctx.progress().is_none())
     });
     assert_eq!(none.await, Ok(true));

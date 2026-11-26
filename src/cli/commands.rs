@@ -316,6 +316,21 @@ const QC_OPTION: OptionSpec = OptionSpec {
     equivalent: None,
 };
 
+const CHARGE_OPTION: OptionSpec = OptionSpec {
+    flag: "--charge",
+    value: Some("N"),
+    help: "Set the molecular charge (default 0).",
+    default: Some(|| json!(0)),
+    ..QC_OPTION
+};
+
+const UHF_OPTION: OptionSpec = OptionSpec {
+    flag: "--uhf",
+    value: Some("N"),
+    help: "Set unpaired electrons (default from valence count).",
+    ..QC_OPTION
+};
+
 const EXPORT_INPUT: CommandSpec = CommandSpec {
     name: "export-input",
     summary: "Write a quantum-chemistry input from an XYZ structure",
@@ -329,12 +344,14 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
             flag: "--program",
             value: Some("PROGRAM"),
             help: "gaussian, orca, gamess or xyz. Required.",
+            sets: Some("export_input.program"),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--job",
             value: Some("JOB"),
             help: "single-point, optimize, opt-freq, transition-state or irc.",
+            sets: Some("export_input.job"),
             ..QC_OPTION
         },
         OptionSpec {
@@ -342,18 +359,21 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
             value: Some("N"),
             help: "Built-in template, 1 to 3.",
             default: Some(|| json!(1)),
+            sets: Some("export_input.method"),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--method",
             value: Some("M"),
             help: "Method, given with --basis.",
+            sets: Some("export_input.method"),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--basis",
             value: Some("B"),
             help: "Basis; empty for an ORCA composite method.",
+            sets: Some("export_input.basis"),
             ..QC_OPTION
         },
         OptionSpec {
@@ -361,6 +381,7 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
             value: Some("C"),
             help: "Total charge.",
             default: Some(|| json!(0)),
+            sets: Some("export_input.charge"),
             ..QC_OPTION
         },
         OptionSpec {
@@ -368,29 +389,34 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
             value: Some("M"),
             help: "2S + 1.",
             default: Some(|| json!(1)),
+            sets: Some("export_input.multiplicity"),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--cores",
             value: Some("N"),
             help: "Cores (8).",
+            sets: Some("export_input.cores"),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--memory-gb",
             value: Some("G"),
             help: "Total memory in GB (16).",
+            sets: Some("export_input.memory_gb"),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--title",
             value: Some("T"),
             help: "Title (the input file name).",
+            sets: Some("export_input.title"),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--extra",
             help: "More keywords, or GAMESS groups.",
+            sets: Some("export_input.extra"),
             ..QC_OPTION
         },
         OptionSpec {
@@ -400,11 +426,11 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
             ..QC_OPTION
         },
     ],
-    tools: &[],
+    tools: &["export_input"],
     operand: Some(Operand {
         name: "INPUT.xyz",
         help: "Read the first frame of a Cartesian XYZ file, in angstroms.",
-        sets: None,
+        sets: Some("export_input.xyz"),
     }),
     body: export_input_help,
 };
@@ -419,7 +445,127 @@ const NAME: CommandSpec = CommandSpec {
     body: name_help,
 };
 
-// Calculation sessions are deliberately outside the agent operation/MCP catalog.
+const CALCULATE: CommandSpec = CommandSpec {
+    name: "calculate",
+    summary: "Print a compact xTB calculation summary as one JSON line",
+    usage: "reshiki --cli calculate [--task energy|optimize|frequencies|opt+freq]
+    [--method gfn2|gxtb|gfnff] [--charge N] [--uhf N] [--solvent NAME]
+    [--conventions axtb|xtb-6.8] [--etemp K] [--accuracy X] [--max-iter N]
+    [--threads N] [--convergence normal|tight] [--fix N,N,...] FILE.xyz",
+    options: &[
+        OptionSpec {
+            flag: "--task",
+            value: Some("TASK"),
+            help: "Calculate energy (default), optimize, frequencies or opt+freq.",
+            default: Some(|| json!("energy")),
+            sets: Some("calculate.task"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("METHOD"),
+            help: "Use gfn2 (default), gxtb or gfnff.",
+            default: Some(|| json!("gfn2")),
+            sets: Some("calculate.method"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            sets: Some("calculate.charge"),
+            ..CHARGE_OPTION
+        },
+        OptionSpec {
+            help: "Set unpaired electrons (default 0).",
+            default: Some(|| json!(0)),
+            sets: Some("calculate.uhf"),
+            ..UHF_OPTION
+        },
+        OptionSpec {
+            flag: "--solvent",
+            value: Some("NAME"),
+            help: "Use the named ALPB solvent.",
+            sets: Some("calculate.solvent"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--conventions",
+            value: Some("MODE"),
+            help: "Use axtb (default) or xtb-6.8 conventions.",
+            default: Some(|| json!("axtb")),
+            sets: Some("calculate.conventions"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--etemp",
+            value: Some("K"),
+            help: "Set the electronic temperature in kelvin.",
+            sets: Some("calculate.electronic_temperature_k"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--accuracy",
+            value: Some("X"),
+            help: "Set a positive SCF accuracy multiplier.",
+            sets: Some("calculate.accuracy"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--max-iter",
+            value: Some("N"),
+            help: "Set a positive SCF iteration limit.",
+            sets: Some("calculate.max_iterations"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--threads",
+            value: Some("N"),
+            help: "Use 1 to 64 worker threads (default available CPUs, at most 8).",
+            sets: Some("calculate.threads"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--convergence",
+            value: Some("LEVEL"),
+            help: "Optimization convergence: normal (default) or tight.",
+            sets: Some("calculate.convergence"),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--fix",
+            value: Some("N,N,..."),
+            help: "Fix unique XYZ atom numbers during optimization, counting from 1.",
+            sets: Some("calculate.fixed_atoms"),
+            ..QC_OPTION
+        },
+    ],
+    tools: &["calculate"],
+    operand: Some(Operand {
+        name: "FILE.xyz",
+        help: "Read the first structure of an XYZ file in angstroms.",
+        sets: Some("calculate.xyz"),
+    }),
+    body: calculate_help,
+};
+
+const READ_OUTPUT: CommandSpec = CommandSpec {
+    name: "read-output",
+    summary: "Print quantum chemistry job summaries and calculated values as one JSON line",
+    usage: "reshiki --cli read-output [--job N] FILE",
+    options: &[OptionSpec {
+        flag: "--job",
+        value: Some("N"),
+        help: "Select a zero-based job index; omit for the default job.",
+        sets: Some("read_output.job"),
+        ..QC_OPTION
+    }],
+    tools: &["read_output"],
+    operand: Some(Operand {
+        name: "FILE",
+        help: "Read a quantum chemistry file; its name selects the format.",
+        sets: Some("read_output.text"),
+    }),
+    body: read_output_help,
+};
+
 const CALC: CommandSpec = CommandSpec {
     name: "calc",
     summary: "Print an xTB calculation as one JSON line",
@@ -469,22 +615,8 @@ const CALC: CommandSpec = CommandSpec {
             sets: None,
             equivalent: None,
         },
-        OptionSpec {
-            flag: "--charge",
-            value: Some("N"),
-            help: "Set the molecular charge (default 0).",
-            default: Some(|| json!(0)),
-            sets: None,
-            equivalent: None,
-        },
-        OptionSpec {
-            flag: "--uhf",
-            value: Some("N"),
-            help: "Set unpaired electrons (default from valence count).",
-            default: None,
-            sets: None,
-            equivalent: None,
-        },
+        CHARGE_OPTION,
+        UHF_OPTION,
         OptionSpec {
             flag: "--conventions",
             value: Some("MODE"),
@@ -609,19 +741,8 @@ const TS: CommandSpec = CommandSpec {
             Some("I-J"),
             "Break a bond from reactant to product (1-based atom numbers, repeatable).",
         ),
-        OptionSpec {
-            default: Some(|| json!(0)),
-            ..ts_option(
-                "--charge",
-                Some("N"),
-                "Set the molecular charge (default 0).",
-            )
-        },
-        ts_option(
-            "--uhf",
-            Some("N"),
-            "Set unpaired electrons (default from valence count).",
-        ),
+        CHARGE_OPTION,
+        UHF_OPTION,
         OptionSpec {
             default: Some(|| json!(reshiki_optimize::ts::TsOptions::default().images)),
             ..ts_option(
@@ -799,6 +920,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     COMPOSE,
     ANALYZE,
     PREDICT_NMR,
+    CALCULATE,
+    READ_OUTPUT,
     EXPORT_INPUT,
     NAME,
     CALC,
@@ -1103,8 +1226,10 @@ fn analyze_help() -> String {
 
 fn calc_help() -> String {
     let mut text = format!("Usage: {}\n\n", CALC.usage);
-    text.push_str(&option_help(&CALC));
-    text.push_str("\nSee docs/xtb-worker.md (Command line)\n");
+    text.push_str(&option_help(&CALC, 28));
+    text.push_str(
+        "\nUse calculate for the compact calculation summary.\nSee docs/xtb-worker.md (Command line)\n",
+    );
     text
 }
 
@@ -1125,20 +1250,38 @@ reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results\n  \
 reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json\n",
         TS.usage,
         reshiki_optimize::ts::MAX_ATOMS,
-        option_help(&TS),
+        option_help(&TS, 28),
     )
 }
 
-fn option_help(spec: &CommandSpec) -> String {
+fn option_help(spec: &CommandSpec, width: usize) -> String {
     let mut text = String::from("Options:\n");
     for option in spec.options {
         let label = match option.value {
             Some(value) => format!("{} {value}", option.flag),
             None => option.flag.to_string(),
         };
-        text.push_str(&format!("  {label:<28} {}\n", option.help));
+        text.push_str(&format!("  {label:<width$} {}\n", option.help));
     }
     text
+}
+
+fn calculate_help() -> String {
+    let mut text = format!(
+        "Usage: {}\n\nRuns the calculate tool and prints its labelled result as one JSON line.\nOnly available in builds with xTB. Reads at most {} bytes and 500 atoms;\nfrequencies allow at most 200 atoms. The calculation deadline is 30 minutes.\n\n",
+        CALCULATE.usage,
+        Budgets::default().max_text_bytes,
+    );
+    text.push_str(&option_help(&CALCULATE, 26));
+    text
+}
+
+fn read_output_help() -> String {
+    format!(
+        "Usage: {}\n\nRuns the read_output tool and prints its labelled result as one JSON line,\nincluding job summaries, calculated values and the selected XYZ geometry.\n\nOptions:\n  --job N  Select a zero-based job index; omit for the default job.\n\nReads at most max_text_bytes ({} bytes).\n",
+        READ_OUTPUT.usage,
+        Budgets::default().max_text_bytes,
+    )
 }
 
 fn predict_nmr_help() -> String {

@@ -45,7 +45,7 @@ with the sketch object as a plain object whose description points to the
 pinned schema states it. contract.rs checks that compose's schema, with the
 placeholder swapped for the `schema` tool's result, equals the pinned schema
 with exactly those differences, and that the whole catalog stays within
-21,500 characters.
+24,610 characters.
 
 Regenerate it only for an intentional contract change, such as a tool, title,
 description, schema or hint that is meant to change, and in the same PR as that
@@ -87,7 +87,8 @@ adds an entry there and a cases file here.
   document_close), `ops-import-cases.json`, `ops-inspect-cases.json`,
   `ops-analyze-cases.json`, `ops-render-cases.json`, `ops-export-cases.json`,
   `ops-files-cases.json` (file_open and file_save),
-  `ops-compose-cases.json` and `ops-apply-cases.json`: each operation tool's
+  `ops-compose-cases.json`, `ops-apply-cases.json`, `ops-export-input-cases.json`,
+  `ops-read-output-cases.json` and `ops-calculate-cases.json`: each operation tool's
   inputSchema against `reshiki_agent::ops::catalog::decode_check`, the decoder
   the tool host runs, on `{"tool": name, "arguments": {...}}` values. The
   compose contract uses compose's schema with the sketch placeholder swapped
