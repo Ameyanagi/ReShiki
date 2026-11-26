@@ -835,7 +835,12 @@ impl App {
             .map(|(&frequency, &intensity)| [frequency, intensity.max(0.)])
             .collect();
         let mut figure = IrFigure::with_defaults(
-            self.export_stem().unwrap_or_else(|| self.document_name()),
+            self.export_stem().unwrap_or_else(|| {
+                let name = self.document_name();
+                std::path::Path::new(&name)
+                    .file_stem()
+                    .map_or(name.clone(), |stem| stem.to_string_lossy().into_owned())
+            }),
             spectrum_method(result).into(),
             bands,
             Journal::for_style(&self.tab.doc.drawing_style),
