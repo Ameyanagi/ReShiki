@@ -563,22 +563,23 @@ impl App {
         if failed.ts().is_some() || self.xtb_selected_reaction().is_some() {
             return None;
         }
-        let belongs = if let Some((_, stored)) = self.xtb_shown_entry() {
-            !ts::is_ts(&stored.result)
-                && self
-                    .tab
-                    .doc
-                    .science
-                    .attachment(stored.attachment)?
-                    .atoms
-                    .iter()
-                    .flatten()
-                    .any(|atom| failed.atoms.contains(atom))
-        } else {
-            self.xtb_target().map_or_else(
-                || failed.atoms.is_empty(),
-                |target| target.iter().any(|atom| failed.atoms.contains(atom)),
-            )
+        // The targeted molecule decides; with none, any shown result must
+        // be this molecule's own.
+        let belongs = match (self.xtb_target(), self.xtb_shown_entry()) {
+            (Some(target), _) => target.iter().any(|atom| failed.atoms.contains(atom)),
+            (None, Some((_, stored))) => {
+                !ts::is_ts(&stored.result)
+                    && self
+                        .tab
+                        .doc
+                        .science
+                        .attachment(stored.attachment)?
+                        .atoms
+                        .iter()
+                        .flatten()
+                        .any(|atom| failed.atoms.contains(atom))
+            }
+            (None, None) => true,
         };
         belongs.then_some(failed)
     }
