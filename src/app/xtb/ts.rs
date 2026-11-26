@@ -1,4 +1,4 @@
-//! Transition-state searches from the reaction arrow, with session-only path previews.
+//! Transition-state searches and reaction-path previews from the reaction arrow.
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 use super::Action as XtbAction;
 use super::{is, state};
@@ -22,9 +22,11 @@ use std::time::Duration;
 pub(super) mod card;
 pub(super) mod energy;
 pub(in crate::app) mod export;
+pub(super) mod irc;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod job;
 pub(in crate::app) mod review;
+pub(in crate::app) mod thumbnails;
 pub(super) mod view;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -41,6 +43,10 @@ pub(crate) enum Action {
     ShowWhere(u64),
     ReachedEndpoint,
     Image(usize),
+    Profile(irc::Profile),
+    PlayIrc,
+    IrcTick,
+    ExportIrc,
     Export,
     Tick,
 }
@@ -224,8 +230,7 @@ impl Live {
     }
 }
 
-/// Data whose lifetime is the open document. The saved result carries only
-/// the energies and the three structures needed by the Path tab and export.
+/// Worker data for storing the result and previewing the NEB band in this session.
 #[derive(Clone, Debug)]
 struct Extras {
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -242,14 +247,12 @@ struct Extras {
     saddle_converged: bool,
     num_imaginary: usize,
     diagnostics: Vec<(String, String)>,
-    // Keep the search diagnostics in the session. The card uses the saved
-    // endpoint bond graphs for its distances, including after reopening.
-    #[allow(dead_code)]
-    irc_energies: [Vec<f64>; 2],
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    irc: Option<reshiki::qcdata::IrcPath>,
     connects: bool,
-    #[allow(dead_code)]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     forming: Vec<[usize; 2]>,
-    #[allow(dead_code)]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     breaking: Vec<[usize; 2]>,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     worker_frequencies: Vec<f64>,
@@ -635,6 +638,19 @@ impl App {
                 }
                 Task::none()
             }
+            Action::Profile(profile) => {
+                self.xtb_set_profile(profile);
+                Task::none()
+            }
+            Action::PlayIrc => {
+                self.xtb_play_irc();
+                Task::none()
+            }
+            Action::IrcTick => {
+                self.xtb_irc_tick();
+                Task::none()
+            }
+            Action::ExportIrc => self.xtb_export_irc(),
             Action::Export => self.xtb_ts_export(),
             Action::Tick => Task::none(),
         }
@@ -891,7 +907,7 @@ impl App {
                 let job::Report {
                     mut result,
                     frames,
-                    extras,
+                    mut extras,
                     info,
                 } = Arc::unwrap_or_clone(report);
                 result.keep_full = run.keep_full;
@@ -918,6 +934,9 @@ impl App {
                         imaginary: extras.num_imaginary,
                         imaginary_cm1: extras.engine_imaginary,
                         climbing_image: extras.climbing,
+                        irc: extras.irc.take(),
+                        forming_bonds: std::mem::take(&mut extras.forming),
+                        breaking_bonds: std::mem::take(&mut extras.breaking),
                         mapping: request.bonds.0,
                         diagnostics,
                         context: Some(request.context),

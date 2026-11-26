@@ -1296,6 +1296,7 @@ fn transition_state_drawing() -> (Document, u64) {
         finished: None,
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            irc: None,
             arrow: Some(arrow),
             free_energy: false,
             endpoint_energies_hartree: None,
@@ -1312,6 +1313,8 @@ fn transition_state_drawing() -> (Document, u64) {
             imaginary: 0,
             imaginary_cm1: None,
             climbing_image: 1,
+            forming_bonds: vec![],
+            breaking_bonds: vec![],
             mapping: TransitionStateMapping {
                 formed: vec![],
                 broken: vec![],

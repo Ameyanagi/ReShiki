@@ -109,6 +109,9 @@ pub struct RunSummary {
 /// Interpretation and audit details of one transition-state search.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransitionStateRun {
+    /// Ordered IRC geometries and scalar profile. Light saves omit only the geometries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irc: Option<crate::IrcPath>,
     /// Drawing arrow, if it still belongs to the document containing this result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arrow: Option<u64>,
@@ -134,6 +137,11 @@ pub struct TransitionStateRun {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaginary_cm1: Option<f64>,
     pub climbing_image: usize,
+    /// Planned bond changes in frame atom order, from reactant to product.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forming_bonds: Vec<[usize; 2]>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub breaking_bonds: Vec<[usize; 2]>,
     pub mapping: TransitionStateMapping,
     pub diagnostics: Vec<(String, String)>,
 }
@@ -170,6 +178,26 @@ pub struct MappedAtom {
 }
 
 impl TransitionStateRun {
+    fn light(&self) -> Self {
+        Self {
+            irc: self.irc.as_ref().map(crate::IrcPath::light),
+            arrow: self.arrow,
+            context: self.context.clone(),
+            free_energy: self.free_energy,
+            endpoint_energies_hartree: self.endpoint_energies_hartree,
+            endpoint_thermo: self.endpoint_thermo.clone(),
+            reached_positions_angstrom: self.reached_positions_angstrom.clone(),
+            saddle_converged: self.saddle_converged,
+            imaginary: self.imaginary,
+            imaginary_cm1: self.imaginary_cm1,
+            climbing_image: self.climbing_image,
+            forming_bonds: self.forming_bonds.clone(),
+            breaking_bonds: self.breaking_bonds.clone(),
+            mapping: self.mapping.clone(),
+            diagnostics: self.diagnostics.clone(),
+        }
+    }
+
     /// Optimized product minus reactant electronic energy, independent of the saddle check.
     pub fn reaction_energy_hartree(&self) -> Option<f64> {
         let [reactant, product] = self.endpoint_energies_hartree?;
@@ -188,7 +216,25 @@ impl TransitionStateRun {
         delta.is_finite().then_some(delta)
     }
 
-    fn validate(&self, result: &CalcResult, atoms: usize) -> Result<(), Error> {
+    fn validate(&self, result: &CalcResult, frame: &Frame) -> Result<(), Error> {
+        let atoms = frame.numbers.len();
+        if let Some(irc) = &self.irc {
+            irc.validate_for(frame, result.energy_hartree)?;
+            let neb = &irc.neb_arc_lengths_sqrt_amu_bohr;
+            if !neb.is_empty()
+                && (result
+                    .trajectory
+                    .as_ref()
+                    .is_none_or(|path| neb.len() != path.steps())
+                    || neb.get(self.climbing_image) != Some(&0.)
+                    || neb.first() != irc.arc_lengths_sqrt_amu_bohr.first()
+                    || neb.last() != irc.arc_lengths_sqrt_amu_bohr.last())
+            {
+                return Err(Error::Invalid(
+                    "IRC comparison does not match the NEB band".into(),
+                ));
+            }
+        }
         let valid_pairs = |pairs: &[[MappedAtom; 2]]| {
             pairs.len() <= atoms * atoms
                 && pairs.iter().flatten().all(|atom| {
@@ -241,6 +287,11 @@ impl TransitionStateRun {
                 .trajectory
                 .as_ref()
                 .is_none_or(|path| self.climbing_image >= path.energies_hartree.len())
+            || self
+                .forming_bonds
+                .iter()
+                .chain(&self.breaking_bonds)
+                .any(|&[a, b]| a >= atoms || b >= atoms || a == b)
             || !valid_pairs(&self.mapping.formed)
             || !valid_pairs(&self.mapping.broken)
             || !valid_pairs(&self.mapping.hydrogen_moves)
@@ -267,6 +318,7 @@ impl TransitionStateRun {
                     .sum::<usize>()
         };
         size_of::<Self>()
+            + self.irc.as_ref().map_or(0, crate::IrcPath::heap_bytes)
             + self.reached_positions_angstrom.capacity() * size_of::<[f64; 3]>()
             + self.endpoint_thermo.as_ref().map_or(0, |corrections| {
                 corrections
@@ -281,6 +333,8 @@ impl TransitionStateRun {
                     + context.title.len()
                     + context.reactant.len()
             })
+            + size_of_val(self.forming_bonds.as_slice())
+            + size_of_val(self.breaking_bonds.as_slice())
             + pairs(&self.mapping.formed)
             + pairs(&self.mapping.broken)
             + pairs(&self.mapping.hydrogen_moves)
@@ -711,7 +765,7 @@ impl CalcResult {
                 });
             }
             if let Some(ts) = &run.transition_state {
-                ts.validate(self, frame.numbers.len())?;
+                ts.validate(self, frame)?;
             }
         }
         let n_atoms = frame.numbers.len();
@@ -999,7 +1053,13 @@ impl CalcResult {
             }),
             keep_full: self.keep_full,
             omitted_bytes: self.omitted_bytes,
-            run: self.run.clone(),
+            run: self.run.as_ref().map(|run| RunSummary {
+                seconds: run.seconds,
+                scf_iterations: run.scf_iterations.clone(),
+                finished: run.finished.clone(),
+                search: run.search.clone(),
+                transition_state: run.transition_state.as_ref().map(|ts| Box::new(ts.light())),
+            }),
         }
     }
 

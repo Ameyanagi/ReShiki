@@ -796,10 +796,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .collect(),
         neb_converged: report.neb_converged,
         reached_positions_angstrom: reached_endpoint(&report),
-        irc_energies: report.irc.as_ref().map_or_else(
-            || [Vec::new(), Vec::new()],
-            |branches| branches.each_ref().map(|branch| branch.energies.clone()),
-        ),
+        irc: ordered_irc(&report, &transition)?,
         connects: report.connects,
         forming: changes.form.iter().map(|&(a, b)| [a, b]).collect(),
         breaking: changes.break_.iter().map(|&(a, b)| [a, b]).collect(),
@@ -821,6 +818,59 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         extras,
         info,
     })
+}
+
+/// Order the negative branch toward the reactant independently of the arbitrary
+/// eigenvector sign used to launch the engine's two branches.
+fn ordered_irc(report: &TsReport, frame: &Frame) -> Result<Option<qcdata::IrcPath>, Failure> {
+    let Some(branches) = &report.irc else {
+        return Ok(None);
+    };
+    use ts::Reached::{Product, Reactant};
+    let [plus, minus] = branches;
+    let ordered = match (plus.reached, minus.reached) {
+        (Reactant, _) => [plus, minus],
+        (_, Reactant) | (Product, _) => [minus, plus],
+        _ => [plus, minus],
+    };
+    let points: Vec<_> = std::iter::once(&ordered[0].end)
+        .chain(ordered[0].path.iter().rev())
+        .chain(std::iter::once(&report.ts))
+        .chain(ordered[1].path.iter())
+        .chain(std::iter::once(&ordered[1].end))
+        .collect();
+    let trajectory = |points: &[&ts::Minimum]| qcdata::Trajectory {
+        numbers: frame.numbers.clone(),
+        isotopes: frame.isotopes.clone(),
+        masses_amu: frame.masses_amu.clone(),
+        charge: frame.charge,
+        multiplicity: frame.multiplicity,
+        positions_angstrom: points
+            .iter()
+            .flat_map(|point| point.positions.iter().map(|x| x * ANGSTROM_PER_BOHR))
+            .collect(),
+        energies_hartree: points.iter().map(|point| point.energy).collect(),
+        labels: Vec::new(),
+        minimizer_energies_hartree: Vec::new(),
+        cluster_sizes: Vec::new(),
+        rmsd_to_best_angstrom: Vec::new(),
+    };
+    let reached = ordered.map(|branch| match branch.reached {
+        ts::Reached::Reactant => qcdata::IrcEndpoint::Reactant,
+        ts::Reached::Product => qcdata::IrcEndpoint::Product,
+        ts::Reached::Other => qcdata::IrcEndpoint::Other,
+    });
+    let mut path = qcdata::IrcPath::new(
+        trajectory(&points),
+        ordered[0].path.len() + 1,
+        reached,
+        ordered.map(|branch| branch.completed),
+    )
+    .map_err(|error| Failure::Other(error.to_string()))?;
+    let neb = trajectory(&report.path.iter().collect::<Vec<_>>());
+    path.project_neb(&neb, report.climbing_image)
+        .map_err(|error| Failure::Other(error.to_string()))?;
+    Ok(Some(path))
 }
 
 fn reached_endpoint(report: &TsReport) -> Vec<[f64; 3]> {

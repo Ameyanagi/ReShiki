@@ -183,6 +183,7 @@ fn gamess_title_fits_eighty_columns_with_all_energies_and_the_complex_reference(
         finished: None,
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            irc: None,
             arrow: None,
             context: None,
             free_energy: true,
@@ -193,6 +194,8 @@ fn gamess_title_fits_eighty_columns_with_all_energies_and_the_complex_reference(
             imaginary: 1,
             imaginary_cm1: Some(-350.),
             climbing_image: 1,
+            forming_bonds: vec![],
+            breaking_bonds: vec![],
             mapping: TransitionStateMapping {
                 formed: vec![],
                 broken: vec![],
@@ -433,6 +436,7 @@ fn late_cached_name_updates_a_fresh_export_stem_and_keeps_the_saved_title() {
         finished: None,
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            irc: None,
             arrow: Some(arrow),
             context: Some(context),
             free_energy: false,
@@ -443,6 +447,8 @@ fn late_cached_name_updates_a_fresh_export_stem_and_keeps_the_saved_title() {
             imaginary: 1,
             imaginary_cm1: Some(-350.),
             climbing_image: 1,
+            forming_bonds: vec![],
+            breaking_bonds: vec![],
             mapping,
             diagnostics: vec![],
         })),

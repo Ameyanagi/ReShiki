@@ -626,11 +626,12 @@ impl App {
     }
 
     /// The model preview while a run is current, else a previewed step,
-    /// else an animated vibration.
+    /// else an animated IRC, vibration or orbital preview.
     pub(super) fn xtb_preview(&self) -> Option<&Document> {
         let Some(run) = self.tab.xtb.run.as_ref() else {
             return self
                 .xtb_step_preview()
+                .or_else(|| self.xtb_irc_preview())
                 .or_else(|| self.xtb_vibration_preview())
                 .or_else(|| self.xtb_orbital_preview());
         };

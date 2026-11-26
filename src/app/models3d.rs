@@ -17,6 +17,8 @@ use reshiki::models3d::{
 };
 use std::sync::Arc;
 
+pub(in crate::app) mod thumbnail;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Key {
     tab: TabId,

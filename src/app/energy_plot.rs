@@ -6,6 +6,8 @@ use super::Message;
 use iced::widget::canvas::{self, Frame, Path, Stroke, Text};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 
+pub(crate) mod profile;
+
 /// How the items are laid out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Layout {

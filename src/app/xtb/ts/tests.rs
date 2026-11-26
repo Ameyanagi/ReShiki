@@ -216,7 +216,7 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         climbing: 1,
         engine_imaginary: Some(-387.),
         worker_frequencies: vec![-387.],
-        irc_energies: [vec![], vec![]],
+        irc: None,
         forming: vec![],
         breaking: vec![],
     };
@@ -996,14 +996,13 @@ async fn running_reaction_keeps_molecule_summary_until_show_live_path_is_chosen(
         assert_eq!(app.xtb_live_ts().unwrap().energies, energies);
     }
     let snapshot = inspect(&app);
-    assert!(
-        snapshot
-            .semantics
-            .nodes
-            .iter()
-            .any(|node| node.id == "xtb-ts-path-profile"
-                && node.name == "Live reaction path energy profile · 3 images")
-    );
+    assert!(snapshot.semantics.nodes.iter().any(|node| {
+        node.id == "xtb-ts-path-profile"
+            && node
+                .name
+                .starts_with("Live reaction path energy profile · 3 images")
+            && node.name.contains("ΔE (kcal/mol)")
+    }));
     complete(&mut app);
     let snapshot = inspect(&app);
     assert!(
@@ -2243,3 +2242,5 @@ fn cancel_drops_generation_and_a_late_finish_cannot_attach() {
     assert!(app.tab.doc.science.results.is_empty());
     assert_eq!(model(&app.tab.doc), model_before);
 }
+
+mod irc_profile;
