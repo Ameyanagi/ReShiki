@@ -1,4 +1,7 @@
 //! Heavy-atom RMSD under a proper rotation using Horn's quaternion matrix.
+//!
+//! Horn, J. Opt. Soc. Am. A 4, 629 (1987) \[Horn1987Quaternion\]. Full references:
+//! docs/references/xtb.md.
 
 use std::array::from_fn;
 

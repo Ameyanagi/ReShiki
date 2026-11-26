@@ -1,4 +1,8 @@
 //! Closed surfaces of a signed scalar field, in model coordinates (Å).
+//!
+//! Each lattice cube is cut into six tetrahedra (marching tetrahedra, Doi & Koide 1991), a
+//! variant of marching cubes (Lorensen & Cline 1987) \[Lorensen1987MarchingCubes\]. Full
+//! references: docs/references/xtb.md.
 
 // Lattice strides, tetrahedron corners and triangle indices all refer to the
 // corresponding bounded arrays. A collapse retains these indices until compaction.
@@ -394,7 +398,7 @@ pub fn refine(mesh: &Mesh, field: impl Fn([f32; 3]) -> f32, iso: f32, step: f32)
         }
     }
 
-    // Taubin (1995), eqs. 6–8. Each directed edge occurs once on a closed,
+    // Taubin (1995) [Taubin1995Smoothing], eqs. 6–8. Each directed edge occurs once on a closed,
     // oriented mesh, so this sums the one-ring without storing it separately.
     let mut sums = vec![[0.; 3]; mesh.positions.len()];
     for weight in [0.5, -0.53].into_iter().cycle().take(8) {
@@ -631,7 +635,8 @@ fn rollback_groups(mesh: &Mesh, positions: &[[f32; 3]], shapes: &[([f64; 3], f64
     parent
 }
 
-/// Reduce a closed surface with area-weighted Garland–Heckbert quadrics.
+/// Reduce a closed surface with area-weighted Garland–Heckbert quadrics
+/// \[Garland1997Simplification\].
 /// Geometry and topology checks may leave the result above the requested budget.
 pub fn simplify(mesh: &Mesh, target: usize) -> Mesh {
     if mesh.triangles.len() <= target {
