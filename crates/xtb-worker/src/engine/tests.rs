@@ -24,6 +24,320 @@ fn water(method: Method, conventions: Conventions) -> Open {
     .unwrap()
 }
 
+const THERMO_WATER: &str = "3
+water
+O 0 0 0.119262
+H 0 0.763239 -0.477047
+H 0 -0.763239 -0.477047
+";
+const THERMO_CO2: &str = "3
+linear carbon dioxide
+O -1.16 0 0
+C 0 0 0
+O 1.16 0 0
+";
+const THERMO_WATER_DIMER: &str = "6
+unoptimized water dimer
+O 0 0 0.119262
+H 0 0.763239 -0.477047
+H 0 -0.763239 -0.477047
+O 3.5 0.2 0.519262
+H 3.5 0.963239 -0.077047
+H 3.5 -0.563239 -0.077047
+";
+const THERMO_PLANAR_AMMONIA: &str = "4
+planar ammonia
+N 0 0 0
+H 0.94 0 0
+H -0.47 0.8140638795573723 0
+H -0.47 -0.8140638795573723 0
+";
+const THERMO_SMALL_IMAGINARY_AMMONIA: &str = "4
+small imaginary ammonia
+N 0 0 0
+H 0.94 0 0.2434640824794769
+H -0.47 0.8140638795573723 0.2434640824794769
+H -0.47 -0.8140638795573723 0.2434640824794769
+";
+
+fn thermo_xyz(xyz: &str) -> Open {
+    let mut lines = xyz.lines();
+    let count: usize = lines.next().unwrap().parse().unwrap();
+    lines.next().unwrap();
+    let mut numbers = Vec::new();
+    let mut positions = Vec::new();
+    for line in lines {
+        let mut fields = line.split_whitespace();
+        numbers.push(match fields.next().unwrap() {
+            "H" => 1,
+            "C" => 6,
+            "N" => 7,
+            "O" => 8,
+            symbol => panic!("unsupported thermochemistry fixture atom {symbol}"),
+        });
+        positions.push(std::array::from_fn(|_| {
+            fields.next().unwrap().parse::<f64>().unwrap()
+        }));
+        assert!(fields.next().is_none());
+    }
+    assert_eq!(numbers.len(), count);
+    Open {
+        numbers,
+        positions,
+        ..water(Method::Gfn2, Conventions::Axtb)
+    }
+}
+
+fn public_thermo_errors(open: &Open, computed: &Computed) -> [f64; 5] {
+    use reshiki_qcdata::vibrational::{ThermoInput, thermochemistry};
+
+    let vibrations = computed.vibrations.as_ref().unwrap();
+    let expected = computed.thermo.as_ref().unwrap();
+    let actual = thermochemistry(&ThermoInput {
+        frequencies_cm1: &vibrations.frequencies_cm1,
+        masses_amu: &vibrations.masses_amu,
+        positions_angstrom: &open.positions,
+        symmetry_number: expected.symmetry_number,
+        linear: None,
+        temperature_k: expected.temperature_k,
+        pressure_pa: expected.pressure_pa,
+        frequency_scale: expected.frequency_scale,
+        rotor_cutoff_cm1: expected.rotor_cutoff_cm1,
+        imaginary_cutoff_cm1: expected.imaginary_cutoff_cm1,
+    });
+    [
+        actual.zero_point_energy_hartree - expected.zero_point_energy_hartree,
+        actual.enthalpy_correction_hartree - expected.enthalpy_correction_hartree,
+        actual.gibbs_correction_hartree - expected.gibbs_correction_hartree,
+        actual.entropy_hartree_per_k - expected.entropy_hartree_per_k,
+        actual.heat_capacity_hartree_per_k.unwrap() - expected.heat_capacity_hartree_per_k.unwrap(),
+    ]
+    .map(f64::abs)
+}
+
+fn assert_thermo_maximum_errors(errors: &[(String, [f64; 5])]) {
+    let quantities = ["ZPVE", "H", "G", "S", "heat capacity"];
+    let tolerances = [1e-7, 1e-7, 1e-7, 1e-10, 1e-10];
+    let mut maxima = [0.0_f64; 5];
+    let mut cases = [""; 5];
+    for (case, errors) in errors {
+        for ((&error, quantity), (maximum, maximum_case)) in errors
+            .iter()
+            .zip(quantities)
+            .zip(maxima.iter_mut().zip(&mut cases))
+        {
+            assert!(error.is_finite(), "{quantity} is nonfinite: {case}");
+            if error >= *maximum {
+                *maximum = error;
+                *maximum_case = case;
+            }
+        }
+    }
+    for ((quantity, maximum), case) in quantities.into_iter().zip(maxima).zip(cases) {
+        eprintln!(
+            "maximum {} absolute error = {:.12e} ({})",
+            quantity, maximum, case
+        );
+    }
+    for (((quantity, maximum), tolerance), case) in quantities
+        .into_iter()
+        .zip(maxima)
+        .zip(tolerances)
+        .zip(cases)
+    {
+        assert!(
+            maximum <= tolerance,
+            "{} error {:.12e} exceeds {}: {}",
+            quantity,
+            maximum,
+            tolerance,
+            case
+        );
+    }
+}
+
+#[test]
+fn public_thermochemistry_matches_the_worker_over_temperature_and_pressure() {
+    let mut errors = Vec::new();
+    for (name, xyz) in [
+        ("water", THERMO_WATER),
+        ("linear CO2", THERMO_CO2),
+        ("unoptimized water dimer", THERMO_WATER_DIMER),
+        ("planar ammonia", THERMO_PLANAR_AMMONIA),
+        ("small imaginary ammonia", THERMO_SMALL_IMAGINARY_AMMONIA),
+    ] {
+        let open = thermo_xyz(xyz);
+        let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+        for temperature_k in [298.15, 150.0, 600.0] {
+            for pressure_pa in [101_325.0, 100_000.0] {
+                let computed = session
+                    .compute(Compute {
+                        hessian: Some(protocol::HessianRequest {
+                            thermo: protocol::ThermoRequest {
+                                temperature_k: Some(temperature_k),
+                                pressure_pa: Some(pressure_pa),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                        ..Compute::default()
+                    })
+                    .unwrap();
+                let vibrations = computed.vibrations.as_ref().unwrap();
+                let frequencies = &vibrations.frequencies_cm1;
+                let thermo = computed.thermo.as_ref().unwrap();
+                assert_eq!(thermo.temperature_k, temperature_k, "{name}: temperature");
+                assert_eq!(thermo.pressure_pa, pressure_pa, "{name}: pressure");
+                assert_eq!(vibrations.linear, name == "linear CO2", "{name}: linearity");
+                assert_eq!(
+                    frequencies.len(),
+                    3 * open.numbers.len() - if vibrations.linear { 5 } else { 6 },
+                    "{name}: vibrational mode count"
+                );
+                match name {
+                    "unoptimized water dimer" => {
+                        assert!(
+                            frequencies.iter().any(|&f| f > 1.0 && f < 50.0),
+                            "{name}: expected a positive mode below 50 cm^-1"
+                        );
+                        assert_eq!(thermo.symmetry_number, 1, "{name}: asymmetric rotor");
+                    }
+                    "planar ammonia" => {
+                        assert!(
+                            frequencies.iter().any(|&f| f < -20.0),
+                            "{name}: large imaginary mode"
+                        );
+                    }
+                    "small imaginary ammonia" => {
+                        assert!(
+                            frequencies.iter().any(|&f| f > -20.0 && f < -1.0),
+                            "{name}: small imaginary mode"
+                        );
+                        assert!(
+                            frequencies.iter().all(|&f| f > -20.0),
+                            "{name}: no large imaginary mode"
+                        );
+                    }
+                    _ => assert!(
+                        frequencies.iter().all(|&f| f > 100.0),
+                        "{name}: positive modes"
+                    ),
+                }
+                errors.push((
+                    format!("{name}, T={temperature_k} K, p={pressure_pa} Pa"),
+                    public_thermo_errors(&open, &computed),
+                ));
+            }
+        }
+    }
+    assert_thermo_maximum_errors(&errors);
+}
+
+#[test]
+fn public_thermochemistry_matches_frequency_scaling_and_sub_wavenumber_modes() {
+    let mut errors = Vec::new();
+    for (name, xyz, frequency_scale, masses_amu) in [
+        ("water scaled across 1 cm-1", THERMO_WATER, 0.0003, None),
+        ("water scale 1e-6", THERMO_WATER, 1e-6, None),
+        ("water scale 1e-10", THERMO_WATER, 1e-10, None),
+        (
+            "planar ammonia scaled across imaginary cutoff",
+            THERMO_PLANAR_AMMONIA,
+            0.01,
+            None,
+        ),
+        (
+            "water analysis masses multiplied by 1e8",
+            THERMO_WATER,
+            1.0,
+            Some(vec![15.999e8, 1.008e8, 1.008e8]),
+        ),
+    ] {
+        let open = thermo_xyz(xyz);
+        let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+        let computed = session
+            .compute(Compute {
+                hessian: Some(protocol::HessianRequest {
+                    thermo: protocol::ThermoRequest {
+                        frequency_scale: Some(frequency_scale),
+                        symmetry_number: Some(if xyz == THERMO_WATER { 2 } else { 6 }),
+                        ..Default::default()
+                    },
+                    masses_amu,
+                }),
+                ..Compute::default()
+            })
+            .unwrap();
+        let frequencies = &computed.vibrations.as_ref().unwrap().frequencies_cm1;
+        match name {
+            "water scaled across 1 cm-1" => {
+                assert!(frequencies.iter().all(|&f| f > 1.0));
+                assert!(frequencies.iter().any(|&f| f * frequency_scale < 1.0));
+                assert!(frequencies.iter().any(|&f| f * frequency_scale > 1.0));
+            }
+            "planar ammonia scaled across imaginary cutoff" => {
+                assert!(
+                    frequencies
+                        .iter()
+                        .any(|&f| f < -20.0 && f * frequency_scale > -20.0)
+                );
+            }
+            "water analysis masses multiplied by 1e8" => {
+                assert_eq!(frequencies.len(), 3);
+                assert!(frequencies.iter().all(|&f| f > 0.0 && f < 1.0));
+            }
+            "water scale 1e-6" | "water scale 1e-10" => {
+                assert!(frequencies.iter().all(|&f| f * frequency_scale < 0.01));
+            }
+            _ => unreachable!(),
+        }
+        errors.push((name.to_owned(), public_thermo_errors(&open, &computed)));
+    }
+    assert_thermo_maximum_errors(&errors);
+}
+
+#[test]
+fn public_thermochemistry_matches_the_imaginary_cutoff_boundary() {
+    let open = thermo_xyz(THERMO_SMALL_IMAGINARY_AMMONIA);
+    let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+    let baseline = session
+        .compute(Compute {
+            hessian: Some(Default::default()),
+            ..Compute::default()
+        })
+        .unwrap();
+    let cutoff = baseline
+        .vibrations
+        .as_ref()
+        .unwrap()
+        .frequencies_cm1
+        .first()
+        .unwrap()
+        .abs();
+    assert!(cutoff > 1.0 && cutoff < 20.0);
+    let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+    let computed = session
+        .compute(Compute {
+            hessian: Some(protocol::HessianRequest {
+                thermo: protocol::ThermoRequest {
+                    imaginary_cutoff_cm1: Some(cutoff),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            ..Compute::default()
+        })
+        .unwrap();
+    assert_eq!(
+        computed.vibrations.as_ref().unwrap().frequencies_cm1,
+        baseline.vibrations.as_ref().unwrap().frequencies_cm1
+    );
+    assert_thermo_maximum_errors(&[(
+        "imaginary mode at cutoff".to_owned(),
+        public_thermo_errors(&open, &computed),
+    )]);
+}
+
 #[test]
 fn angstrom_conversion_matches_the_driver_bit_for_bit() {
     for xyz in [
@@ -136,7 +450,7 @@ fn water_matches_the_pinned_driver_for_every_method_and_conventions() {
                     .flat_map(|a| {
                         let matrix = &matrix;
                         (a + 1..3).filter_map(move |b| {
-                            let order = matrix.data[a * 3 + b];
+                            let order = *matrix.data.get(a * 3 + b).unwrap();
                             (order >= 0.1).then_some(BondOrder {
                                 a: a as u32,
                                 b: b as u32,
@@ -164,6 +478,8 @@ fn water_analytic_hessian_frequencies_match_the_driver() {
     let actual = session
         .compute(Compute {
             hessian: Some(Default::default()),
+            bond_orders: true,
+            orbitals: protocol::OrbitalOutput::Levels,
             ..Compute::default()
         })
         .unwrap();
@@ -176,6 +492,7 @@ fn water_analytic_hessian_frequencies_match_the_driver() {
         restart: Some("previous".into()),
         hessian: true,
         hessian_method: Some("analytic".into()),
+        bond_orders: true,
         ..Request::default()
     })
     .unwrap();
@@ -185,6 +502,19 @@ fn water_analytic_hessian_frequencies_match_the_driver() {
         expected.hessian.as_ref().unwrap().hessian.data
     );
     assert_eq!(actual.hessian_method.as_deref(), Some("analytic"));
+    assert!(!actual.bond_orders.as_ref().unwrap().is_empty());
+    let levels = &actual.orbitals.as_ref().unwrap().alpha.energies_hartree;
+    assert!(!levels.is_empty());
+    let frame = open.admit(None, None, protocol::MAX_ATOMS).unwrap();
+    let result = actual
+        .to_calc_result(
+            &frame,
+            reshiki_qcdata::Task::Hessian,
+            &hello().engine.unwrap(),
+            None,
+        )
+        .unwrap();
+    assert_eq!(result.thermo.unwrap().point_group.as_deref(), Some("C2v"));
     let vibration = actual.vibrations.unwrap();
     let reference = expected.vibrations.unwrap();
     assert_eq!(vibration.frequencies_cm1, reference.frequencies);
@@ -242,7 +572,7 @@ fn explicit_isotope_masses_lower_water_frequencies() {
     heavy
         .to_calc_result(&frame, reshiki_qcdata::Task::Hessian, &engine, None)
         .unwrap();
-    frame.masses_amu[1] = 2.0;
+    *frame.masses_amu.get_mut(1).unwrap() = 2.0;
     assert!(matches!(
         heavy.to_calc_result(&frame, reshiki_qcdata::Task::Hessian, &engine, None),
         Err(reshiki_qcdata::Error::Invalid(message))
@@ -389,7 +719,7 @@ fn scf_restarts_and_refused_gfnff_requests_leave_geometry_intact() {
     let first = session.compute(Compute::default()).unwrap();
     let retained = session.positions.clone();
     let mut replacement = retained.clone();
-    replacement[1][0] += 0.7;
+    replacement.get_mut(1).unwrap()[0] += 0.7;
     for compute in [
         Compute {
             positions: Some(replacement.clone()),
@@ -489,7 +819,7 @@ fn worker_streams_the_computed_arrays_in_announced_order() {
     assert_eq!(computed.arrays.len(), expected.arrays.len());
     for array in computed.arrays {
         let mut values = Vec::new();
-        let count = array.shape[0] as usize * array.shape[1] as usize;
+        let count = *array.shape.first().unwrap() as usize * *array.shape.get(1).unwrap() as usize;
         for index in 0..array.chunks {
             let mut header = [0; protocol::HEADER_LEN];
             reader.read_exact(&mut header).unwrap();

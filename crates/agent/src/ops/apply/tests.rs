@@ -324,7 +324,7 @@ fn spawn_hooked(
     });
     let exec = host.exec().clone();
     tokio::spawn(async move {
-        exec.run(who(), id, None, move |ctx| {
+        exec.run(who(), id, None, BOUND, move |ctx| {
             apply(ctx, store, who(), Versions::current("9.8.7"), decoded)
         })
         .await

@@ -203,7 +203,8 @@ impl App {
                 self.status_style_open,
                 self.help_open,
                 self.settings.open,
-                self.qc_export.is_some(),
+                // Modal sheets over the workspace.
+                self.qc_export.is_some() || self.frames_import.is_some(),
                 self.commands.open,
                 self.updates.open,
                 self.assistant.viewed_image.is_some(),

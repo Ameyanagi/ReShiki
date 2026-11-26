@@ -620,7 +620,7 @@ pub struct Hello {
     pub max_hessian_atoms: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Engine {
     pub name: String,
@@ -815,7 +815,10 @@ impl Computed {
                 reduced_masses_amu: v.reduced_masses_amu.clone(),
                 masses_amu: v.masses_amu.clone(),
             }),
-            thermo: self.thermo.clone(),
+            thermo: self.thermo.as_ref().map(|thermo| Thermo {
+                point_group: self.vibrations.as_ref().and_then(|v| v.point_group.clone()),
+                ..thermo.clone()
+            }),
             trajectory: None,
             keep_full: false,
             omitted_bytes: None,

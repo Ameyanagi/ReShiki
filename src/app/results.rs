@@ -733,12 +733,12 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Exported(..) | Message::QcExport(super::qc_export::Action::Saved(..)) => {
             Some(Completion::Export)
         }
-        Message::QcExport(_) => None,
+        Message::QcExport(_) | Message::FramesImport(_) => None,
         Message::Xtb(action) => {
             use super::xtb::Action;
             match action {
                 #[cfg(not(target_arch = "wasm32"))]
-                Action::Event(..) => Some(Completion::Xtb),
+                Action::Event(..) | Action::Search(..) => Some(Completion::Xtb),
                 Action::Page(..)
                 | Action::Task(..)
                 | Action::Charge(..)
@@ -762,7 +762,12 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::ApplyAnyway
                 | Action::Discard => None,
                 Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
-                Action::Palette(..) => None,
+                Action::Conformers(..) | Action::Palette(..) => None,
+                #[cfg(not(target_arch = "wasm32"))]
+                Action::Vibrations(super::xtb::VibrationsAction::Recomputed(..)) => {
+                    Some(Completion::Xtb)
+                }
+                Action::Vibrations(..) => None,
             }
         }
         Message::FigureExported(..) => Some(Completion::FigureExport),
