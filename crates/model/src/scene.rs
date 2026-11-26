@@ -2423,10 +2423,10 @@ pub fn vector_primitives(doc: &Document) -> Vec<Primitive> {
     let opacity = crate::rear_opacity::Paint::new(&flat);
     primitives_with_tables(
         doc,
+        doc,
         &flat,
         &opacity,
         &Default::default(),
-        false,
         Resolve::Scene,
         true,
     )
@@ -2445,16 +2445,17 @@ pub fn primitives_with_opacity(
     }
     primitives_with_tables(
         raw,
+        raw,
         flat,
         opacity,
         &Default::default(),
-        false,
         Resolve::Scene,
         false,
     )
 }
 
 fn primitives_in_cell(
+    source: &Document,
     doc: &Document,
     backdrop: crate::canvas_theme::FillBackdrop<'_>,
     lines: bool,
@@ -2462,25 +2463,26 @@ fn primitives_in_cell(
     let flat = crate::models3d::drawn(doc);
     let opacity = crate::rear_opacity::Paint::new(&flat);
     primitives_with_tables(
+        source,
         doc,
         &flat,
         &opacity,
         &Default::default(),
-        true,
         Resolve::SceneOn(backdrop),
         lines,
     )
 }
 
 fn primitives_with_tables(
+    source: &Document,
     raw: &Document,
     flat: &Document,
     opacity: &crate::rear_opacity::Paint,
     tables: &std::collections::HashMap<u64, Vec<Primitive>>,
-    cell_text: bool,
     resolve: Resolve<'_>,
     lines: bool,
 ) -> Vec<Primitive> {
+    let cell_text = matches!(&resolve, Resolve::SceneOn(_));
     let inputs = BondInputs::prepare(flat, opacity, resolve);
     let doc = inputs.doc();
     let style = &doc.drawing_style;
@@ -2506,7 +2508,7 @@ fn primitives_with_tables(
             halos.atoms.push((id, None));
         }
     }
-    push_underlays(&mut out, doc, &graphics, shaded, opacity, tables);
+    push_underlays(&mut out, doc, source, &graphics, shaded, opacity, tables);
     out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
@@ -2556,7 +2558,9 @@ fn primitives_with_tables(
         })
         .collect();
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
-        out.extend(table_graphic_primitive(graphic, doc, shaded, tables));
+        out.extend(table_graphic_primitive(
+            graphic, doc, source, shaded, tables,
+        ));
         if let Some(text) = graphic.text.and_then(|t| held.get(&t)) {
             push_annotation(&mut out, text, cell_text);
         }
@@ -2570,13 +2574,14 @@ fn primitives_with_tables(
 fn table_graphic_primitive(
     g: &&crate::graphics::Graphic,
     doc: &Document,
+    source: &Document,
     shaded: usize,
     tables: &std::collections::HashMap<u64, Vec<Primitive>>,
 ) -> Vec<Primitive> {
     tables
         .get(&g.id)
         .cloned()
-        .unwrap_or_else(|| graphic_primitive(g, doc, shaded))
+        .unwrap_or_else(|| graphic_primitive(g, doc, source, shaded))
 }
 
 /// Orbitals keep complete lobes. The labels they reach are drawn above the
@@ -2666,10 +2671,11 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
 fn graphic_primitive(
     g: &&crate::graphics::Graphic,
     doc: &Document,
+    source: &Document,
     shaded: usize,
 ) -> Vec<Primitive> {
     let diagram = if let Some(mo) = &g.mo {
-        Some(mo.draw(g, doc))
+        Some(mo.draw(g, &doc.drawing_style, source))
     } else if g.kind == crate::graphics::GraphicKind::TlcPlate {
         Some((g.parts(), g.tlc_labels(), vec![]))
     } else {
@@ -2988,6 +2994,7 @@ fn cycle_primitives(g: &crate::graphics::Graphic, doc: &Document) -> Vec<Primiti
 fn push_underlays(
     out: &mut Vec<Primitive>,
     doc: &Document,
+    source: &Document,
     graphics: &[&crate::graphics::Graphic],
     shaded: usize,
     opacity: &crate::rear_opacity::Paint,
@@ -2997,7 +3004,7 @@ fn push_underlays(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|g| table_graphic_primitive(g, doc, shaded, tables)),
+            .flat_map(|g| table_graphic_primitive(g, doc, source, shaded, tables)),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -3378,7 +3385,7 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document, cell_te
             if let Some(gradient) = &mut p.style.effects.gradient {
                 gradient.from = drawn_paper(doc, a.id);
                 let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
-                out.extend(graphic_primitive(&&shape, doc, 1));
+                out.extend(graphic_primitive(&&shape, doc, doc, 1));
             } else {
                 out.push(Primitive::Path {
                     commands: p.commands,

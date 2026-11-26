@@ -579,6 +579,43 @@ fn mo_diagram_picture_toggles_from_the_tab_and_canvas_without_editing_the_main_s
     );
 }
 
+#[test]
+fn mo_diagram_places_and_selects_beta_when_alpha_levels_are_missing() {
+    let mut partial = worker_orbitals();
+    let mut beta = partial.alpha.clone();
+    beta.occupations = vec![1., 1., 1., 1., 0., 0.];
+    partial.beta = Beta::Unrestricted(beta);
+    partial.alpha.energies_hartree.clear();
+    partial.alpha.occupations.clear();
+    partial.alpha.rows.clear();
+    partial.alpha.coefficients.clear();
+    let (mut app, _) = water(CalcTask::Energy);
+    finish_energy(&mut app, Method::Gfn2, -5.07, partial.clone());
+    let key = key(&app);
+    act(&mut app, Action::Computed(key, Ok(Arc::new(partial))));
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    assert!(!app.error, "{}", app.status);
+    let graphic = &app.tab.doc.graphics[0];
+    let id = graphic.id;
+    let mo = graphic.mo.as_deref().unwrap();
+    assert!(mo.columns[0].energies_ev.is_empty());
+    assert_eq!(mo.columns[1].label, "β");
+    assert_eq!(mo.pictures.len(), 2);
+    assert!(mo.pictures.iter().all(|picture| picture.column == 1));
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::MoLevelClick(id, 1, 4)));
+    let target = app.xtb_orbital_target().unwrap();
+    let choice = app.xtb_orbital_choice(&target);
+    assert_eq!((choice.column, choice.index), (0, 4));
+    let mo = app.tab.doc.graphics[0].mo.as_deref().unwrap();
+    assert_eq!(mo.pictures.len(), 1);
+}
+
 #[cfg(all(feature = "xtb", not(windows)))]
 #[test]
 fn an_empty_mo_diagram_waits_for_multiple_requested_rows_and_pins_each_on_arrival() {

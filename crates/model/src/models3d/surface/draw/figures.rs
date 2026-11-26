@@ -205,6 +205,121 @@ fn mo_diagram_pictures_draw_live_and_saved_after_reopening() {
 }
 
 #[test]
+fn mo_diagram_pictures_survive_an_unrelated_3d_only_model() {
+    let _guard = lock_registry();
+    let mut doc = mo_diagram_document();
+    register_mo_picture(&doc, 0);
+    assert_eq!(mo_surfaces(&doc), 1);
+
+    let atom = doc.add_atom("O", Point::new(-200., 0.));
+    let mut other = Model3d::new(
+        &doc,
+        vec![crate::models3d::Placed {
+            id: atom,
+            xyz: [0.; 3],
+        }],
+        vec![],
+        crate::models3d::ForceField::Mmff94s,
+    );
+    other.display = crate::models3d::Display::ThreeD;
+    doc.models.push(other);
+    assert!(crate::models3d::drawn(&doc).models.is_empty());
+
+    for layer in [-1, 0] {
+        doc.graphics[0].layer = layer;
+        assert_eq!(mo_surfaces(&doc), 1);
+        assert_eq!(
+            crate::scene::vector_primitives(&doc)
+                .iter()
+                .filter(|primitive| matches!(primitive, Primitive::Surface { .. }))
+                .count(),
+            1
+        );
+    }
+    let saved = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    assert_eq!(mo_surfaces(&saved), 1);
+}
+
+#[test]
+fn mo_diagram_pictures_survive_an_unrelated_table_and_stay_clipped_in_a_cell() {
+    use crate::graphics::{
+        GraphicKind,
+        table::{Cell, Table},
+    };
+
+    let _guard = lock_registry();
+    let mut doc = mo_diagram_document();
+    register_mo_picture(&doc, 0);
+    assert_eq!(mo_surfaces(&doc), 1);
+
+    let mut table = Graphic::dragged(
+        doc.next_id(),
+        GraphicKind::Table,
+        Point::new(100., -200.),
+        Point::new(1000., 500.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    table.table = Some(Box::new(Table {
+        cells: vec![Cell {
+            id: 1,
+            lo: Point::default(),
+            hi: Point::new(1., 1.),
+            members: vec![],
+            borders: vec![],
+        }],
+    }));
+    doc.graphics.push(table);
+    for layer in [-1, 0] {
+        doc.graphics[0].layer = layer;
+        assert_eq!(mo_surfaces(&doc), 1);
+        assert_eq!(
+            crate::scene::vector_primitives(&doc)
+                .iter()
+                .filter(|primitive| matches!(primitive, Primitive::Surface { .. }))
+                .count(),
+            1
+        );
+    }
+    let mut saved = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    assert_eq!(mo_surfaces(&saved), 1);
+
+    let diagram = saved.graphics[0].id;
+    saved.graphics[1].table.as_mut().unwrap().cells[0]
+        .members
+        .push(diagram);
+    saved.validate().unwrap();
+    for layer in [-1, 0] {
+        saved.graphics[0].layer = layer;
+        for drawing in [
+            crate::scene::primitives(&saved),
+            crate::scene::vector_primitives(&saved),
+        ] {
+            assert!(
+                !drawing
+                    .iter()
+                    .any(|p| matches!(p, Primitive::Surface { .. }))
+            );
+            assert_eq!(
+                drawing
+                    .iter()
+                    .filter_map(|primitive| match primitive {
+                        Primitive::Clip { primitives, .. } => Some(primitives),
+                        _ => None,
+                    })
+                    .flatten()
+                    .filter(|primitive| matches!(primitive, Primitive::Surface { .. }))
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
 fn mo_diagram_current_refreshes_each_picture_in_its_own_slot() {
     let _guard = lock_registry();
     let mut doc = mo_diagram_document();
