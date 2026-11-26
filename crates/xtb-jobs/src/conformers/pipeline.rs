@@ -150,6 +150,10 @@ impl Search {
 #[derive(Clone, Debug)]
 pub struct Found {
     pub engine: Engine,
+    /// Effective start minimizer, including MMFF-to-UFF fallback.
+    pub minimizer: Minimizer,
+    /// Algorithms selected for the converged representatives, including fallbacks.
+    pub optimizers: Vec<reshiki_optimize::Method>,
     /// The report at exactly the final positions of `ranked[0]`.
     pub best: Arc<run::Report>,
     /// Lowest first, aligned onto the best.
@@ -161,8 +165,6 @@ pub struct Found {
     pub reranked: usize,
     pub planned: usize,
     pub search: SearchSummary,
-    /// The minimizer actually used (UFF if the requested force field could not type the molecule).
-    pub minimizer: Minimizer,
     /// Cancellation during re-ranking kept only completed representatives.
     pub stopped: bool,
     pub notes: Vec<String>,
@@ -357,8 +359,18 @@ pub fn search_conformers(
         reranked: if reranking { reports.len() } else { 0 },
         kept: ranked.len().min(MAX_SAVED_CONFORMERS),
     };
+    let mut optimizers = Vec::new();
+    for (_, report) in &reports {
+        for &method in &report.optimizers {
+            if !optimizers.contains(&method) {
+                optimizers.push(method);
+            }
+        }
+    }
     Ok(Found {
         engine,
+        minimizer,
+        optimizers,
         best,
         ranked,
         starts: counts.minimized,
@@ -366,7 +378,6 @@ pub fn search_conformers(
         reranked: reports.len(),
         planned,
         search: counts,
-        minimizer,
         stopped: reranking && cancel.is_cancelled(),
         notes,
         seconds: began.elapsed().as_secs_f64(),
@@ -396,15 +407,11 @@ fn sample(
     notes: &mut Vec<String>,
 ) -> Result<Sampled, Failure> {
     on_event(Phase::Starts);
-    let mut minimizer = search.config.minimizer;
+    let minimizer = search.config.minimizer;
     let embedded = minimizer.xtb().is_some();
-    let mut field = starting_force_field(minimizer);
-    if field != ForceField::Uff && !search.prepared.mmff_available() {
-        field = ForceField::Uff;
-        if !embedded {
-            minimizer = Minimizer::Uff;
-            notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
-        }
+    let (field, effective) = sampling_minimizer(minimizer, search.prepared.mmff_available());
+    if effective != minimizer {
+        notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
     }
     let mode = if embedded {
         Ensemble::Embedded
@@ -479,9 +486,23 @@ fn sample(
     Ok(Sampled {
         starts,
         made: count,
-        minimizer,
+        minimizer: effective,
         used_unconverged_starts,
     })
+}
+
+fn sampling_minimizer(minimizer: Minimizer, mmff_available: bool) -> (ForceField, Minimizer) {
+    let field = starting_force_field(minimizer);
+    if field != ForceField::Uff && !mmff_available {
+        let effective = if minimizer.xtb().is_some() {
+            minimizer
+        } else {
+            Minimizer::Uff
+        };
+        (ForceField::Uff, effective)
+    } else {
+        (field, minimizer)
+    }
 }
 
 fn frame_positions(
@@ -778,6 +799,27 @@ mod tests {
         ] {
             assert_eq!(starting_force_field(minimizer), expected, "{minimizer}");
         }
+    }
+
+    #[test]
+    fn unavailable_mmff_records_uff_but_keeps_xtb_start_minimizers() {
+        for minimizer in [Minimizer::Mmff94s, Minimizer::Mmff94] {
+            assert_eq!(
+                sampling_minimizer(minimizer, false),
+                (ForceField::Uff, Minimizer::Uff)
+            );
+            assert_eq!(sampling_minimizer(minimizer, true).1, minimizer);
+        }
+        for minimizer in [Minimizer::GfnFf, Minimizer::Gfn2] {
+            assert_eq!(
+                sampling_minimizer(minimizer, false),
+                (ForceField::Uff, minimizer)
+            );
+        }
+        assert_eq!(
+            sampling_minimizer(Minimizer::Uff, true),
+            (ForceField::Uff, Minimizer::Uff)
+        );
     }
 
     fn water_search(minimizer: Minimizer, geometry: Client) -> Search {
@@ -1112,6 +1154,7 @@ mod tests {
             converged: true,
             positions: vec![[0.0; 3]],
             steps: 0,
+            optimizers: vec![],
             energies: vec![-1.0],
             path: vec![],
             evaluations: vec![],

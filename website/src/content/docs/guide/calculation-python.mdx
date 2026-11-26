@@ -1,0 +1,86 @@
+---
+title: xTB from Python
+description: Run xTB energies, optimizations, frequencies and conformer searches from Python, read Gaussian, ORCA, Molden and fchk files, and write DFT inputs.
+---
+
+:::caution[Not released yet]
+The Python calculation API is on the `xtb/next` branch. The `reshiki` and `reshiki-xtb` packages with it are not on PyPI yet; [build them from source](#build-from-source).
+:::
+
+The `reshiki` package reads quantum-chemistry output files and writes DFT inputs. Calculations need the separate `reshiki-xtb` package, which holds the xTB engine (its licence is LGPL-3.0-or-later, so it is kept out of `reshiki` itself). Once both are published, one command installs them:
+
+```sh
+pip install "reshiki[xtb]"
+```
+
+`reshiki-xtb` has wheels for macOS (Apple silicon and Intel) and Linux (x86-64 and ARM64); Windows is not supported yet. Without it, `xtb.available()` is `False` and every calculation raises `xtb.XtbNotInstalled`, which says how to install it. The file functions also need NumPy, which `reshiki[xtb]` installs.
+
+## Calculate
+
+```python
+from reshiki import qc, xtb
+
+water = qc.Geometry.from_symbols(
+    ["O", "H", "H"],
+    [[0.0, 0.0, 0.117], [0.0, 0.757, -0.469], [0.0, -0.757, -0.469]],
+)
+
+single = xtb.energy(water, gradient=True, solvent="water")
+print(single.energy, single.homo_lumo_gap)
+
+opt = xtb.optimize(water)
+freq = xtb.frequencies(opt.geometry)
+print(freq.frequencies, freq.thermo.free_energy)
+```
+
+- `xtb.energy()` returns a `qc.Result`: the energy in hartree, and on request the gradient, bond orders and orbital energies.
+- `xtb.optimize()` relaxes with the same optimizer as the app and returns an `Optimization`: the final result plus every accepted step.
+- `xtb.frequencies()` returns harmonic frequencies in cm⁻¹ (imaginary modes are negative), IR intensities, normal modes and the thermochemistry at `temperature` and `pressure`. For a geometry with isotope labels, pass `symmetry_number` yourself.
+- All three take `method` (`"gfn2"`, `"gxtb"` or `"gfnff"`), `charge`, `multiplicity` or `unpaired`, `solvent` with `solvent_model` (`"alpb"` or `"gbsa"`), SCF settings, `conventions` (`"axtb"` or `"xtb-6.8"`) and `threads`.
+
+Arrays are read-only NumPy arrays in the units the docstrings give. A failed calculation raises `xtb.XtbError`. Settings that ReShiki checks before starting the engine, such as an unknown method, raise `reshiki.ReShikiError` with the code `invalid_arguments`. Ctrl+C stops a calculation running on Python's main thread.
+
+## Search conformers
+
+`xtb.conformers()` runs the app's [conformer search](/guide/calculation-conformers/) with the same settings and results. Pass a `reshiki.Molecule` or anything `reshiki.parse()` accepts, such as a SMILES string:
+
+```python
+from pathlib import Path
+from reshiki import xtb
+
+search = xtb.conformers("NCCCC[C@H](N)C(=O)O")
+print(search.method)
+for conformer in search.conformers[:3]:
+    print(conformer.rank, conformer.delta, conformer.population)
+Path("lysine.xyz").write_text(search.to_xyz(), encoding="utf-8")
+```
+
+Each `Conformer` has its geometry, energy, ΔE in kcal/mol (and ΔE of the force field that minimized it), Boltzmann population, RMSD to the best and cluster size. `search.best` is the lowest conformer's full optimization. `threads` sets how many xTB jobs run at once (1 to 8; `None` uses the app's Auto setting).
+
+## Read and write files
+
+```python
+from reshiki import qc
+
+log = qc.read("CH2O.log")
+job = log.default_job
+print(job.result.energy, job.result.frequencies)
+
+qc.write_input("CH2O_opt.inp", job.geometry, program="orca", job="opt-freq")
+```
+
+`qc.read()` reads the same Gaussian, ORCA, Molden and fchk files as the app and returns every job with its steps and result. `qc.write_input()` writes the same Gaussian, ORCA, GAMESS and XYZ inputs as the app's [export dialog](/guide/calculation-files/). It infers the program from `.gjf`, `.com` and `.xyz`; for `.inp`, shared by ORCA and GAMESS, pass `program`.
+
+## Build from source
+
+Until the packages are on PyPI, build both wheels from a checkout of the `xtb/next` branch, on macOS or Linux with Rust and uv installed:
+
+```sh
+uv run --no-project python scripts/license_notices.py
+uvx maturin@1.15.0 build --manifest-path crates/python/Cargo.toml --release --locked --out dist
+uv run --no-project python scripts/license_notices.py --manifest-path crates/xtb-worker/Cargo.toml --features engine --destination crates/python-xtb/wheel-licenses
+(cd crates/python-xtb && uvx maturin@1.15.0 build --release --locked --out ../../dist)
+pip install dist/reshiki-*.whl dist/reshiki_xtb-*.whl numpy
+```
+
+The two wheels must come from the same checkout: `reshiki` accepts only the `reshiki-xtb` of its own version.

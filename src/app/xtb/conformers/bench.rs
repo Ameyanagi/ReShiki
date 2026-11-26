@@ -331,7 +331,7 @@ async fn run_search(search: Search) -> Result<(Found, Phases), state::Failure> {
             Event::Tick => {}
             Event::Done(found) => {
                 phases.done = Some(elapsed);
-                return Ok((std::sync::Arc::unwrap_or_clone(found?), phases));
+                return Ok((*found?, phases));
             }
         }
     }

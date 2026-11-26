@@ -795,17 +795,37 @@ impl App {
         stale
     }
 
-    fn update_model_button(&self, id: &'static str) -> Element<'_, Message> {
-        accessible_command(
-            id,
-            "Update the model from the current structure",
-            "Update model",
-        )
-        .on_press_maybe(
-            (self.idle() && self.tab.model_job.is_none())
-                .then_some(Message::Models3d(Action::Update)),
-        )
-        .into()
+    /// Linked atom IDs identify the shown outdated models in canvas previews.
+    pub(super) fn outdated_models(&self) -> Vec<&[u64]> {
+        self.tab
+            .doc
+            .models
+            .iter()
+            .enumerate()
+            .filter(|(index, model)| model.display != Display::TwoD && self.model_stale(*index))
+            .map(|(_, model)| model.linked_atoms.as_slice())
+            .collect()
+    }
+
+    fn update_model_button(&self, id: &'static str, recalculate: bool) -> Element<'_, Message> {
+        let (name, label, message) = if recalculate {
+            (
+                "Recalculate xTB, rebuilding the 3D model first",
+                "Recalculate (rebuilds the 3D model)",
+                Message::Xtb(super::xtb::Action::Palette(
+                    super::xtb::palette::Action::RecalculateMolecule,
+                )),
+            )
+        } else {
+            (
+                "Update the model from the current structure",
+                "Update model",
+                Message::Models3d(Action::Update),
+            )
+        };
+        accessible_command(id, name, label)
+            .on_press_maybe((self.idle() && self.tab.model_job.is_none()).then_some(message))
+            .into()
     }
 
     /// The old Show-as chooser is gone; only a stale model needs a floating action.
@@ -814,29 +834,57 @@ impl App {
         base: Element<'a, Message>,
     ) -> Element<'a, Message> {
         use iced::widget::{container, pin, stack};
-        let notice: Option<Element<'_, Message>> = self.stale_model().and_then(|model| {
-            self.pending(&model.linked_ids(&self.tab.doc))
-                .is_none()
-                .then(|| {
-                    container(
-                        row![
-                            text("Structure changed ·").size(12),
-                            self.update_model_button("model-floating-update")
-                        ]
-                        .spacing(6)
-                        .align_y(Alignment::Center),
-                    )
-                    .padding([4, 8])
-                    .style(super::workspace::panel)
-                    .into()
-                })
-        });
+        let base = stack![base];
+        let Some(model) = self.stale_model() else {
+            return base.into();
+        };
+        let atoms = model.linked_ids(&self.tab.doc);
+        if self.pending(&atoms).is_some()
+            || (super::xtb::available() && self.xtb_palette_can_repeat_stale(&atoms))
+        {
+            return base.into();
+        }
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        let at = self
-            .stale_model()
-            .and_then(|model| {
-                reshiki::scene::selection_bounds(&self.tab.doc, &model.linked_ids(&self.tab.doc))
-            })
+        let recalculate = self.xtb_can_recalculate_molecule();
+        let prefix = if recalculate {
+            "Outdated ·"
+        } else {
+            "Structure changed ·"
+        };
+        let label = if recalculate {
+            "Recalculate (rebuilds the 3D model)"
+        } else {
+            "Update model"
+        };
+        let width = (super::text_width(prefix, 12.) + super::text_width(label, 12.) + 40.)
+            .min((paper.width - 12.).max(0.));
+        let id = if !recalculate {
+            "model-floating-update"
+        } else if self.inspector_open
+            && self.inspector_tab == super::InspectorTab::Properties
+            && self
+                .tab
+                .inspector_ui
+                .expanded(Section::Structure)
+                .unwrap_or(true)
+        {
+            // The Structure section can show the same action at the same time.
+            "model-floating-recalculate"
+        } else {
+            "model-recalculate"
+        };
+        let notice = container(
+            row![
+                text(prefix).size(12),
+                self.update_model_button(id, recalculate)
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        )
+        .width(width)
+        .padding([4, 8])
+        .style(super::workspace::panel);
+        let at = reshiki::scene::selection_bounds(&self.tab.doc, &atoms)
             .map(|(lo, hi)| {
                 self.tab.camera.screen(
                     reshiki::document::Point::new((lo.x + hi.x) / 2., lo.y),
@@ -844,15 +892,15 @@ impl App {
                 )
             })
             .unwrap_or_default();
-        let x = (paper.x + at.x - 135.).clamp(
+        let x = (paper.x + at.x - width / 2.).clamp(
             paper.x + 6.,
-            (paper.x + paper.width - 276.).max(paper.x + 6.),
+            (paper.x + paper.width - width - 6.).max(paper.x + 6.),
         );
         let y = (paper.y + at.y - 48.).clamp(
             paper.y + 6.,
             (paper.y + paper.height - 40.).max(paper.y + 6.),
         );
-        stack![base, pin(column(notice)).x(x).y(y)].into()
+        base.push(pin(notice).x(x).y(y)).into()
     }
 
     fn reveal_model(&mut self, atoms: &[u64], display: Display) {
@@ -941,11 +989,25 @@ impl App {
             .style(muted_text),
         ]
         .spacing(6);
-        if self.stale_model().is_some() {
+        if stale {
+            let recalculate = self.xtb_can_recalculate_molecule();
             body = body.push(
                 row![
-                    text("Structure changed ·").size(11).style(muted_text),
-                    self.update_model_button("structure-update-model"),
+                    text(if recalculate {
+                        "Outdated ·"
+                    } else {
+                        "Structure changed ·"
+                    })
+                    .size(11)
+                    .style(muted_text),
+                    self.update_model_button(
+                        if recalculate {
+                            "model-recalculate"
+                        } else {
+                            "structure-update-model"
+                        },
+                        recalculate,
+                    ),
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
@@ -1252,11 +1314,11 @@ impl App {
                 .on_press_maybe(set(Setting::ResetView))
                 .into(),
         ]);
-        if stale {
+        if stale && !self.xtb_can_recalculate_molecule() {
             body = column![
                 row![
                     text("Structure changed ·").size(11).style(muted_text),
-                    self.update_model_button("model-update")
+                    self.update_model_button("model-update", false)
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
