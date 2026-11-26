@@ -155,9 +155,13 @@ def test_version_mismatch(worker, monkeypatch):
 
 
 _INTERRUPT_SCRIPT = """
-import _thread, sys, threading, time
+import _thread, signal, sys, threading, time
 import numpy as np
 from reshiki import qc, xtb
+
+# A shell's background job starts with SIGINT ignored, and then interrupt_main()
+# does nothing; Ctrl+C in a terminal arrives with the default handler.
+signal.signal(signal.SIGINT, signal.default_int_handler)
 
 caffeine = qc.Geometry.from_xyz(open(sys.argv[1]).read())
 distorted = qc.Geometry(
