@@ -94,6 +94,11 @@ struct Sizes {
 }
 
 impl Palette {
+    /// The shown result's identity, to notice another result shown.
+    pub(super) fn shown_id(&self) -> usize {
+        self.result.first().map_or(0, |weak| weak.as_ptr() as usize)
+    }
+
     /// Open on `result`'s Summary.
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) {
         // The same result again keeps its lighter copies' identities.
@@ -137,6 +142,11 @@ impl Shown<'_> {
 }
 
 impl App {
+    /// Open the palette on this result's Summary.
+    pub(in crate::app) fn xtb_show_result(&mut self, result: &Arc<CalcResult>) {
+        self.tab.xtb.palette.show(result);
+    }
+
     /// The result the palette follows, while the document holds it.
     pub(super) fn xtb_shown(&self) -> Option<Shown<'_>> {
         let science = &self.tab.doc.science;
@@ -344,7 +354,7 @@ impl App {
                 let newest = self.xtb_newest();
                 let shown = self.xtb_shown().map(|shown| shown.stored.result.clone());
                 if let Some(result) = newest.or(shown) {
-                    self.tab.xtb.palette.show(&result);
+                    self.xtb_show_result(&result);
                 }
             }
             Action::Close => {

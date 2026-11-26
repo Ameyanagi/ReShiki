@@ -214,6 +214,10 @@ explains how the crates and modules fit together.
 - `src/app/xtb/conformers/pipeline.rs`: Desktop conformer sampling, clustering and xTB ranking.
 - `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
 - `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
+- `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
+- `src/app/xtb/orbitals/compute.rs`: Work off the UI thread
+- `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
+- `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
 - `src/app/xtb/palette.rs`: The xTB results palette
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced

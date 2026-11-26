@@ -31,6 +31,9 @@ pub(super) struct SceneCache {
     /// Keyed by the objects a preview redraws itself.
     remainder: Option<(Vec<u64>, Option<Rc<super::paper::Remainder>>)>,
     pub(super) preview: Option<Rc<super::paper::PreviewMemo>>,
+    /// Orbital meshes registered when the scene was made: a new mesh
+    /// changes the picture of an unchanged drawing.
+    meshes: u64,
     /// A [`Frame`] compared the drawing and still holds it.
     compared: bool,
     #[cfg(test)]
@@ -118,7 +121,9 @@ impl SceneCache {
         {
             self.comparisons += 1;
         }
-        if self.document.as_ref() != Some(doc) {
+        let meshes = reshiki::models3d::surface::draw::generation();
+        if self.document.as_ref() != Some(doc) || self.meshes != meshes {
+            self.meshes = meshes;
             self.document = Some(doc.clone());
             self.scene = None;
             self.stretch = None;
