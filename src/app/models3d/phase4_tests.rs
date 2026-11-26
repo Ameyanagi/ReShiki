@@ -1,4 +1,5 @@
 use super::*;
+use reshiki::geometry::GENERATION_SEED_MAX;
 
 fn drag_selected_model(app: &App) -> Edit {
     use crate::canvas::{Camera, MoleculeCanvas, PreviewStyles, State};
@@ -101,6 +102,7 @@ fn updating_replaces_only_the_conformer_and_is_one_undo_step() {
     model.background = Background::Card;
     model.layout = Layout::View;
     model.force_field = models3d::ForceField::Uff;
+    model.seed = 91_337;
     app.changed(before);
     let before = app.tab.doc.clone();
     app.tab.doc.atom_mut(atoms[2]).unwrap().element = "N".into();
