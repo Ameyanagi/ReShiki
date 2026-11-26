@@ -1,21 +1,27 @@
 //! Predict controls and results for a single selected reaction arrow.
 use super::{Action as TsAction, review, view};
-use crate::app::workspace::{accessible_checkbox, accessible_command, horizontal_line, muted_text};
+use crate::app::workspace::{
+    accessible_checkbox, accessible_command, horizontal_line, hover_hint, muted_text,
+};
 use crate::app::xtb::tone::{Tone, line, toned_text};
 use crate::app::xtb::{self, Action as XtbAction, EnergyUnit, Outcome};
 use crate::app::{App, Message};
-use iced::widget::{canvas, column, container, progress_bar, rich_text, row, span, text};
+use crate::canvas::{BondChangeKind, BondChangeMark};
+use iced::widget::{
+    canvas, column, container, mouse_area, progress_bar, rich_text, row, span, text, tooltip,
+};
 use iced::{Element, Length, Point, Rectangle, Renderer, Task, Theme, mouse};
 use reshiki::document::Document;
 use reshiki::palette::{Color, Palette};
-use reshiki::qcdata::{CalcResult, MappedAtom, TransitionStateMapping};
-use reshiki::reactions::Reaction;
+use reshiki::qcdata::{CalcResult, MappedAtom, TransitionStateMapping, TransitionStateRun};
 use reshiki::reactions::ts_plan::{Side, TsPlan, TsPlanError};
+use reshiki::reactions::{Reaction, Role};
 use std::cell::Cell;
 use std::sync::Arc;
 
 type Scope = (u64, u64);
 type StereoCacheEntry = ((Scope, u64), Option<&'static str>);
+type BondHover = (u64, BondChangeKind, [u32; 2]);
 
 pub(in crate::app::xtb) struct State {
     pub(super) reaction_energy: bool,
@@ -24,6 +30,7 @@ pub(in crate::app::xtb) struct State {
     pub(in crate::app::xtb) status: Option<(u64, Status, String)>,
     automatic_maps: Vec<(Scope, TsPlan)>,
     target_stereo: Cell<Option<StereoCacheEntry>>,
+    hovered_bond: Option<BondHover>,
 }
 
 pub(in crate::app::xtb) enum Status {
@@ -40,6 +47,7 @@ impl Default for State {
             status: None,
             automatic_maps: Vec::new(),
             target_stereo: Cell::new(None),
+            hovered_bond: None,
         }
     }
 }
@@ -87,24 +95,43 @@ fn send(action: Action) -> Message {
 }
 
 pub(in crate::app::xtb) struct ReactionLabel {
-    reactants: Vec<(u16, String)>,
-    products: Vec<(u16, String)>,
+    reactants: Vec<SpeciesLabel>,
+    products: Vec<SpeciesLabel>,
     target_stereo_note: Option<&'static str>,
+}
+
+struct SpeciesLabel {
+    coefficient: u16,
+    name: String,
+    formula: String,
 }
 
 impl ReactionLabel {
     pub(in crate::app::xtb) fn title(&self) -> String {
-        let side = |species: &[(u16, String)], empty: &str| {
+        self.line(false)
+    }
+
+    fn formula(&self) -> String {
+        self.line(true)
+    }
+
+    fn line(&self, formula: bool) -> String {
+        let side = |species: &[SpeciesLabel], empty: &str| {
             if species.is_empty() {
                 return empty.to_owned();
             }
             species
                 .iter()
-                .map(|(coefficient, name)| {
-                    if *coefficient == 1 {
+                .map(|species| {
+                    let name = if formula {
+                        &species.formula
+                    } else {
+                        &species.name
+                    };
+                    if species.coefficient == 1 {
                         name.clone()
                     } else {
-                        format!("{coefficient} {name}")
+                        format!("{} {name}", species.coefficient)
                     }
                 })
                 .collect::<Vec<_>>()
@@ -118,8 +145,31 @@ impl ReactionLabel {
     }
 
     pub(super) fn first_reactant(&self) -> Option<&str> {
-        self.reactants.first().map(|(_, name)| name.as_str())
+        self.reactants.first().map(|species| species.name.as_str())
     }
+
+    pub(super) fn first_reactant_formula(&self) -> Option<&str> {
+        self.reactants
+            .first()
+            .map(|species| species.formula.as_str())
+    }
+}
+
+fn drawn_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
+    reshiki::compound_numbers::label(doc, atoms)
+        .and_then(|label| {
+            doc.annotations
+                .iter()
+                .find(|annotation| annotation.id == label.annotation)
+        })
+        .and_then(|label| nonempty(&label.text))
+        .or_else(|| {
+            reshiki::linked_properties::caption(doc, atoms)
+                .and_then(|link| nonempty(&link.custom_name))
+        })
+        .or_else(|| {
+            reshiki::molecule_names::label(doc, atoms).and_then(|name| nonempty(&name.text))
+        })
 }
 
 #[derive(Clone)]
@@ -172,6 +222,43 @@ impl BondChanges {
         })
     }
 
+    fn marks(
+        &self,
+        doc: &Document,
+        reaction: &Reaction,
+        hovered: Option<BondHover>,
+    ) -> Vec<BondChangeMark> {
+        let resolve = |mapped: &MappedAtom| {
+            let mut matches = reaction
+                .reactants
+                .iter()
+                .flat_map(|p| &p.atoms)
+                .filter_map(|&id| doc.atom(id))
+                .filter(|atom| atom.map_num == mapped.number && atom.element == mapped.element);
+            let id = matches.next()?.id;
+            matches.next().is_none().then_some(id)
+        };
+        [
+            (BondChangeKind::Form, &self.0.formed),
+            (BondChangeKind::Break, &self.0.broken),
+        ]
+        .into_iter()
+        .flat_map(|(kind, bonds)| {
+            bonds.iter().filter_map(move |[a, b]| {
+                let atoms = [resolve(a)?, resolve(b)?];
+                let joined = doc
+                    .bond_between(atoms[0], atoms[1])
+                    .is_some_and(|(_, bond)| bond.order != 0);
+                (joined == (kind == BondChangeKind::Break)).then_some(BondChangeMark {
+                    kind,
+                    atoms,
+                    highlighted: hovered == Some((reaction.arrow, kind, [a.number, b.number])),
+                })
+            })
+        })
+        .collect()
+    }
+
     fn view(&self, doc: &Document, arrow: u64, current_only: bool) -> Element<'static, Message> {
         let palette = Palette::of(doc);
         let reaction = reshiki::reactions::preview(doc, arrow).ok();
@@ -182,35 +269,64 @@ impl BondChanges {
             span(format!("{}{}", atom.element, atom.number))
                 .color(crate::appearance::from_rgb(palette.rgb(color)))
         };
-        let mut spans = vec![];
+        let mut content = row![].spacing(3);
         if current_only {
-            spans.push(span("Current map · "));
+            content = content.push(text("Current map ·").size(12));
         }
-        for (heading, separator, bonds, side) in [
-            ("Bonds formed: ", "–", &self.0.formed, Side::Product),
-            (" · broken: ", "–", &self.0.broken, Side::Reactant),
+        for (heading, separator, bonds, side, kind) in [
             (
-                " · Hydrogen moves: ",
+                "Bonds formed:",
+                "–",
+                &self.0.formed,
+                Side::Product,
+                Some(BondChangeKind::Form),
+            ),
+            (
+                "· broken:",
+                "–",
+                &self.0.broken,
+                Side::Reactant,
+                Some(BondChangeKind::Break),
+            ),
+            (
+                "· Hydrogen moves:",
                 " → ",
                 &self.0.hydrogen_moves,
                 Side::Reactant,
+                None,
             ),
         ] {
-            if bonds.is_empty() && separator == " → " {
+            if bonds.is_empty() && kind.is_none() {
                 continue;
             }
-            spans.push(span(heading));
+            content = content.push(text(heading).size(12));
             if bonds.is_empty() {
-                spans.push(span("none"));
+                content = content.push(text("none").size(12));
             }
             for (index, [a, b]) in bonds.iter().enumerate() {
-                if index != 0 {
-                    spans.push(span(", "));
-                }
-                spans.extend([label(a, side), span(separator), label(b, side)]);
+                let suffix = if index + 1 == bonds.len() { "" } else { "," };
+                let pair = rich_text::<(), _, _, _>([
+                    label(a, side),
+                    span(separator),
+                    label(b, side),
+                    span(suffix),
+                ])
+                .size(12);
+                let pair: Element<'_, Message> = if let Some(kind) = kind {
+                    let hover = |entered| {
+                        Message::ReactionBondHover(arrow, kind, [a.number, b.number], entered)
+                    };
+                    mouse_area(pair)
+                        .on_enter(hover(true))
+                        .on_exit(hover(false))
+                        .into()
+                } else {
+                    pair.into()
+                };
+                content = content.push(pair);
             }
         }
-        rich_text::<(), _, _, _>(spans).size(12).into()
+        content.wrap().vertical_spacing(3).into()
     }
 }
 
@@ -228,6 +344,136 @@ impl App {
         review::reaction_arrow(&self.tab.doc, arrow).then_some(arrow)
     }
 
+    pub(in crate::app) fn xtb_reaction_bond_marks(&self) -> Vec<BondChangeMark> {
+        let Some(arrow) = self.xtb_reaction_card_arrow() else {
+            return vec![];
+        };
+        let doc = &self.tab.doc;
+        let Ok(reaction) = reshiki::reactions::preview(doc, arrow) else {
+            return vec![];
+        };
+        let search = match self.xtb_ts_card_result(arrow) {
+            ArrowResult::Found(result) => super::saved_search(result),
+            _ => None,
+        };
+        let drawn = review::scheme_plan(doc, arrow)
+            .ok()
+            .map(|plan| BondChanges::from_plan(doc, &plan));
+        self.xtb_card_bonds(arrow, search, drawn)
+            .map_or_else(Vec::new, |(bonds, _)| {
+                bonds.marks(doc, &reaction, self.tab.xtb.ts_card.hovered_bond)
+            })
+    }
+
+    pub(in crate::app) fn xtb_keep_bond_hover(&mut self, visible: Option<u64>) {
+        if let Some((arrow, ..)) = self.tab.xtb.ts_card.hovered_bond
+            && visible != Some(arrow)
+        {
+            self.tab.xtb.ts_card.hovered_bond = None;
+        }
+    }
+
+    pub(in crate::app) fn xtb_hover_bond(&mut self, bond: BondHover, entered: bool) {
+        if entered && self.xtb_reaction_card_arrow() == Some(bond.0) {
+            self.tab.xtb.ts_card.hovered_bond = Some(bond);
+        } else if self.tab.xtb.ts_card.hovered_bond == Some(bond) {
+            self.tab.xtb.ts_card.hovered_bond = None;
+        }
+    }
+
+    fn xtb_card_bonds(
+        &self,
+        arrow: u64,
+        search: Option<&TransitionStateRun>,
+        drawn: Option<BondChanges>,
+    ) -> Option<(BondChanges, bool)> {
+        let request = self
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .and_then(|run| run.ts.as_ref())
+            .map(|live| &live.request)
+            .filter(|request| request.arrow == arrow)
+            .or_else(|| match &self.tab.xtb.outcome {
+                Some(Outcome::Failed(failed)) => {
+                    failed.ts().filter(|request| request.arrow == arrow)
+                }
+                _ => None,
+            });
+        let previous = request
+            .map(|request| (&request.bonds.0, Some(&request.context)))
+            .or_else(|| search.map(|search| (&search.mapping, search.context.as_ref())));
+        if let Some((mapping, context)) = previous {
+            let matches = if let Some(drawn) = &drawn {
+                drawn.0.formed == mapping.formed
+                    && drawn.0.broken == mapping.broken
+                    && drawn.0.hydrogen_moves == mapping.hydrogen_moves
+            } else {
+                // Place saved pairs if the reactant map and chemistry are intact,
+                // even when the product map is incomplete.
+                context.is_some_and(|context| {
+                    let doc = &self.tab.doc;
+                    reshiki::reaction_mapping::reaction(doc, arrow).is_ok_and(|reaction| {
+                        context.reactant_chemistry
+                            == super::endpoint_chemistry(doc, reaction, Role::Reactant)
+                    })
+                })
+            };
+            if matches {
+                return Some((BondChanges(mapping.clone()), false));
+            }
+        }
+        drawn.map(|bonds| (bonds, true))
+    }
+
+    /// The reaction card actually shown in the front drawing's Predict tab.
+    pub(in crate::app) fn xtb_reaction_card_arrow(&self) -> Option<u64> {
+        (self.tabs.temporary_depth == 0
+            && self.inspector_open
+            && self.inspector_tab == crate::app::InspectorTab::Predict
+            && self.xtb.page == xtb::Page::Xtb
+            && !self.tube_bend_active()
+            && self.tab.equipment_authoring.is_none())
+        .then(|| self.xtb_selected_reaction())
+        .flatten()
+    }
+
+    fn xtb_reaction_species_name<'a>(&'a self, atoms: &[u64]) -> Option<&'a str> {
+        drawn_name(&self.tab.doc, atoms)
+            .or_else(|| {
+                reshiki::linked_properties::caption(&self.tab.doc, atoms)
+                    .filter(|link| !link.needs_name())
+                    .and_then(|link| nonempty(&link.name))
+            })
+            .or_else(|| self.xtb_existing_molecule_name(atoms))
+    }
+
+    /// Share Properties' naming queue; only the visible card asks for names.
+    pub(in crate::app) fn xtb_reaction_name_request(&self) -> Option<(String, Vec<u64>)> {
+        let arrow = self.xtb_reaction_card_arrow()?;
+        let reaction = reshiki::reactions::preview(&self.tab.doc, arrow).ok()?;
+        reaction
+            .reactants
+            .iter()
+            .chain(&reaction.products)
+            .flat_map(|participant| {
+                reshiki::reactions::molecules(&self.tab.doc, &participant.atoms)
+            })
+            .find_map(|atoms| {
+                if self.xtb_reaction_species_name(&atoms).is_some() {
+                    return None;
+                }
+                let smiles = reshiki::naming::selected_identity(&self.tab.doc, &atoms)
+                    .ok()?
+                    .smiles;
+                let state = &self.tab.naming;
+                (!state.caption_failed.contains_key(&smiles)
+                    && !state.caption_names.contains_key(&smiles))
+                .then_some((smiles, atoms))
+            })
+    }
+
     pub(in crate::app::xtb) fn xtb_reaction_label(&self, arrow: u64) -> ReactionLabel {
         let doc = &self.tab.doc;
         let names = |participants: &[reshiki::reactions::Participant]| {
@@ -237,22 +483,16 @@ impl App {
                     reshiki::reactions::molecules(doc, &participant.atoms)
                         .into_iter()
                         .map(|atoms| {
-                            let link = reshiki::linked_properties::caption(doc, &atoms);
-                            let name = link
-                                .and_then(|link| nonempty(&link.custom_name))
-                                .or_else(|| {
-                                    reshiki::molecule_names::label(doc, &atoms)
-                                        .and_then(|name| nonempty(&name.text))
-                                })
-                                .or_else(|| self.xtb_existing_molecule_name(&atoms))
-                                .or_else(|| {
-                                    link.filter(|link| !link.needs_name())
-                                        .and_then(|link| nonempty(&link.name))
-                                })
-                                .map(str::to_owned)
-                                .or_else(|| review::species_formula(doc, &atoms))
+                            let formula = review::species_formula(doc, &atoms)
                                 .unwrap_or_else(|| "Unnamed molecule".into());
-                            (participant.coefficient, name)
+                            let name = self
+                                .xtb_reaction_species_name(&atoms)
+                                .map_or_else(|| formula.clone(), str::to_owned);
+                            SpeciesLabel {
+                                coefficient: participant.coefficient,
+                                name,
+                                formula,
+                            }
                         })
                 })
                 .collect()
@@ -428,10 +668,11 @@ impl App {
             )
         });
         let failed = match &self.tab.xtb.outcome {
-            Some(Outcome::Failed(failed)) => failed
-                .ts()
-                .filter(|request| request.arrow == arrow)
-                .map(|request| (failed, request)),
+            Some(Outcome::Failed(failed))
+                if failed.ts().is_some_and(|request| request.arrow == arrow) =>
+            {
+                Some(failed)
+            }
             _ => None,
         };
         let idle = self.tab.xtb.run.is_none()
@@ -460,8 +701,12 @@ impl App {
                     ),
             );
         }
-        let mut content =
-            column![column![text(label.title()).size(14), subtitle].spacing(3)].spacing(8);
+        let title = hover_hint(
+            text(label.title()).size(14),
+            label.formula(),
+            tooltip::Position::Top,
+        );
+        let mut content = column![column![title, subtitle].spacing(3)].spacing(8);
         let barrier = presentation
             .as_ref()
             .and_then(|view| view.refined_kcal)
@@ -503,10 +748,9 @@ impl App {
                 .spacing(12),
             )
         };
-        if let Some((failed, request)) = failed {
+        if let Some(failed) = failed {
             let (reason, detail) = failed.explain(self.xtb_can_retry(failed));
             content = content
-                .push(request.bonds.view(doc, arrow, false))
                 .push(line("No reliable transition state found.", Tone::Warning))
                 .push(line(
                     if detail.is_empty() { reason } else { detail },
@@ -643,6 +887,13 @@ impl App {
                 content = content.push(line(format!("{reason} · {title}"), Tone::Warning));
             }
         }
+        let drawn = plan
+            .as_ref()
+            .ok()
+            .map(|plan| BondChanges::from_plan(doc, plan));
+        if let Some((bonds, current)) = self.xtb_card_bonds(arrow, search, drawn) {
+            content = content.push(bonds.view(doc, arrow, current && result.is_some()));
+        }
         if let Some(reason) = xtb::unavailable() {
             return crate::app::inspector::card(
                 container(content.push(line(reason, Tone::Muted)))
@@ -660,7 +911,6 @@ impl App {
             .filter(|live| live.request.arrow == arrow)
         {
             content = content
-                .push(live.request.bonds.view(doc, arrow, false))
                 .push(line(live.line(), Tone::Muted))
                 .push(progress_bar(0.0..=1.0, live.fraction().unwrap_or(0.)).girth(3))
                 .push(
@@ -681,11 +931,6 @@ impl App {
                 .is_some_and(|session| session.arrow == arrow)
         {
             content = content.push(xtb::view::outcome_view(self, outcome));
-        } else if let Some(search) = search {
-            content = content.push(BondChanges(search.mapping.clone()).view(doc, arrow, false));
-        } else if let Ok(plan) = &plan {
-            content =
-                content.push(BondChanges::from_plan(doc, plan).view(doc, arrow, result.is_some()));
         }
         let supports_barrier = self.xtb_reaction_supports_barrier(arrow);
         if supports_barrier {

@@ -312,10 +312,86 @@ fn reopened_palette_export_uses_the_reactant_formula_without_a_linked_name() {
 }
 
 #[test]
+fn late_cached_name_updates_a_fresh_export_stem_and_keeps_the_saved_title() {
+    use reshiki::qcdata::{RunSummary, TransitionStateContext, TransitionStateRun};
+    use reshiki::reactions::Role;
+    let (mut app, arrow) = reaction_app(false);
+    app.inspector_open = false;
+    let doc = &app.tab.doc;
+    let reaction = &doc.reactions[0];
+    let atoms = reaction.reactants[0].atoms.clone();
+    let smiles = reshiki::naming::selected_identity(doc, &atoms)
+        .unwrap()
+        .smiles;
+    let plan = reshiki::reactions::ts_plan::plan(doc, arrow).unwrap();
+    let title = app.xtb_reaction_label(arrow).title();
+    let context = TransitionStateContext {
+        reactant_chemistry: super::super::endpoint_chemistry(doc, reaction, Role::Reactant),
+        product_chemistry: super::super::endpoint_chemistry(doc, reaction, Role::Product),
+        title: title.clone(),
+        reactant: "C5H8O".into(),
+    };
+    let mapping = super::super::card::BondChanges::from_plan(doc, &plan).0;
+    Arc::make_mut(&mut app.tab.doc.science.results[0].result).run = Some(RunSummary {
+        seconds: 1.,
+        scf_iterations: vec![],
+        finished: None,
+        search: None,
+        transition_state: Some(Box::new(TransitionStateRun {
+            arrow: Some(arrow),
+            context: Some(context),
+            free_energy: false,
+            endpoint_energies_hartree: None,
+            endpoint_thermo: None,
+            saddle_converged: true,
+            imaginary: 1,
+            imaginary_cm1: Some(-350.),
+            climbing_image: 1,
+            mapping,
+            diagnostics: vec![],
+        })),
+    });
+    app.tab
+        .naming
+        .caption_names
+        .insert(smiles, "Allyl vinyl ether".into());
+    assert_eq!(
+        app.xtb_reaction_label(arrow).first_reactant(),
+        Some("Allyl vinyl ether")
+    );
+    assert_eq!(
+        app.start_caption_names().units(),
+        0,
+        "a hidden card only reads known names"
+    );
+    let _ = app.xtb_ts_export_arrow(arrow);
+    let output = app.qc_output().unwrap();
+    assert_eq!(output.main.name, "allyl-vinyl-ether-ts.gjf");
+    assert!(output.main.text.contains(&title));
+    assert!(app.tab.naming.caption_pending.is_none());
+    let saved = super::super::saved_search(&app.tab.doc.science.results[0].result)
+        .unwrap()
+        .context
+        .as_ref()
+        .unwrap();
+    assert_eq!(saved.title, title);
+    assert_eq!(saved.reactant, "C5H8O");
+
+    app.tab.doc.atom_mut(atoms[0]).unwrap().map_num = 0;
+    let _ = app.xtb_ts_export_arrow(arrow);
+    let output = app.qc_output().unwrap();
+    assert_eq!(
+        output.main.name, "c5h8o-ts.gjf",
+        "stale geometry keeps its saved reactant name"
+    );
+    assert!(output.main.text.contains(&title));
+}
+
+#[test]
 fn path_job_changes_update_the_file_suffix_and_preserve_the_reaction_title() {
     let mut source = source();
     source.name = "Allyl vinyl ether → pent-4-enal".into();
-    source.stem = reaction_stem("  Allyl   vinyl ether  ");
+    source.stem = reaction_stem("  Allyl   vinyl ether  ", "C5H8O");
     let (mut app, _) = App::new();
     let _ = app.open_qc_export_source(source);
     for (job, suffix) in [
@@ -351,10 +427,17 @@ fn path_job_changes_update_the_file_suffix_and_preserve_the_reaction_title() {
 
 #[test]
 fn reaction_file_stems_keep_formula_digits_and_cannot_contain_path_segments() {
-    assert_eq!(reaction_stem("C5H8O"), "c5h8o");
+    assert_eq!(reaction_stem("C5H8O", "C5H8O"), "c5h8o");
     assert_eq!(
-        reaction_stem("../Allyl vinyl ether\\input"),
+        reaction_stem("../Allyl vinyl ether\\input", "C5H8O"),
         "allyl-vinyl-ether-input"
     );
-    assert_eq!(reaction_stem(" / "), "reaction");
+    assert_eq!(
+        reaction_stem("  Allyl...__vinyl---ether  ", "C5H8O"),
+        "allyl-vinyl-ether"
+    );
+    assert_eq!(reaction_stem(" / ", "C5H8O"), "c5h8o");
+    assert_eq!(reaction_stem(&"a".repeat(65), "C5H8O"), "c5h8o");
+    assert_eq!(reaction_stem(&"碳".repeat(22), "C5H8O"), "c5h8o");
+    assert_eq!(reaction_stem(" / ", ""), "reaction");
 }

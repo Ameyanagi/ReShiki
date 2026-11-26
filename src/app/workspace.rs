@@ -319,6 +319,7 @@ impl App {
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             result_label: self.xtb_label(),
+            bond_changes: self.xtb_reaction_bond_marks(),
             outdated_models: self.outdated_models(),
             element: self.atom_tool_element(),
             atom_label: (self.element == super::palettes::R_GROUP)

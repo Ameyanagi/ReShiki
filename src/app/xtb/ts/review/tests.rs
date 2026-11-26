@@ -1,6 +1,6 @@
 //! Scheme review through the same messages as the row, menu and palette.
 use super::*;
-use crate::app::xtb::ts::card::tests::claisen;
+use crate::app::xtb::ts::card::tests::{claisen, diels_alder};
 use reshiki::document::{Arrow, Point};
 use reshiki::reactions::{Participant, Reaction};
 
@@ -293,13 +293,14 @@ fn sure_auto_map_starts_silently_and_commits_inferred_roles_and_maps_together() 
     });
     assert_eq!(
         Changes::from_plan(&app.tab.doc, &scheme_plan(&app.tab.doc, arrow).unwrap()).bonds,
-        "Bonds formed: C1–C6 · broken: O3–C4"
+        "forms C1–C6 · breaks O3–C4"
     );
     assert!(!app.ts_review_open());
     assert!(!app.xtb_automatic_mapping_pending(arrow));
     assert!(app.xtb_running());
     assert_eq!(app.tab.doc.reactions.len(), 1);
     assert_eq!(app.tab.doc.reactions[0].agents.len(), 1);
+    assert_eq!(app.xtb_reaction_bond_marks().len(), 2);
     assert!(
         app.tab.doc.reactions[0].reactants[0]
             .atoms
@@ -459,11 +460,214 @@ fn mapper_ties_and_unfinished_searches_require_review_before_applying() {
         let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
         assert!(dialog.needs_review());
         assert!(dialog.validate().is_ok());
+        assert_eq!(dialog.subtitle().starts_with("Several atom maps fit"), tied);
+        assert!(dialog.preview.is_some());
+        let changes = dialog.changes.as_ref().unwrap();
+        assert!(!changes.marks.is_empty());
+        assert_eq!(
+            changes.marks.len(),
+            dialog.plan.as_ref().unwrap().form.len() + dialog.plan.as_ref().unwrap().break_.len()
+        );
         let _ = app.update(send(Action::Accept));
         assert!(!app.ts_review_open());
         assert!(app.xtb_running());
         assert_eq!(app.tab.history.undo_frames().len(), 1);
     }
+}
+
+#[test]
+fn review_picture_and_run_action_describe_the_same_bonds() {
+    let (doc, arrow) = claisen();
+    let plan = ts_plan::plan_for_review(&doc, arrow).unwrap();
+    let changes = Changes::from_plan(&doc, &plan);
+    assert_eq!(changes.bonds, "forms C1–C6 · breaks O3–C4");
+    assert_eq!(changes.action, "form C1–C6, break O3–C4");
+    assert_eq!(changes.marks.len(), 2);
+    assert!(matches!(changes.marks[0].kind, BondChangeKind::Form));
+    assert!(matches!(changes.marks[1].kind, BondChangeKind::Break));
+    for mark in &changes.marks {
+        assert!(mark.atoms.iter().all(|id| plan.start_atoms.contains(id)));
+        assert!(!mark.highlighted);
+    }
+}
+
+#[test]
+fn product_side_picture_keeps_the_caption_and_marks_in_arrow_direction() {
+    let (doc, arrow) = diels_alder();
+    let plan = ts_plan::plan_for_review(&doc, arrow).unwrap();
+    assert_eq!(plan.start, Side::Product);
+    let changes = Changes::from_plan(&doc, &plan);
+    assert_eq!(changes.bonds, "forms C1–C6, C4–C5");
+    assert_eq!(changes.action, "form C1–C6, C4–C5");
+    assert_eq!(changes.marks.len(), 2);
+    assert!(matches!(changes.marks[0].kind, BondChangeKind::Form));
+    assert!(
+        changes.marks[0]
+            .atoms
+            .iter()
+            .all(|id| plan.start_atoms.contains(id))
+    );
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn review_settings_start_folded_and_the_summary_tracks_edits() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(
+        dialog.state_summary(),
+        "All species neutral, no unpaired electrons"
+    );
+    assert_eq!(dialog.run_label(), "Run: form C1–C6, break O3–C4");
+    assert!(!dialog.edit_species);
+    assert!(!dialog.advanced);
+    let _ = app.update(send(Action::EditSpecies));
+    let _ = app.update(send(Action::Advanced));
+    let _ = app.update(send(Action::Charge(0, "−2".into())));
+    let _ = app.update(send(Action::Unpaired(0, "2".into())));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert!(dialog.edit_species);
+    assert!(dialog.advanced);
+    assert_eq!(
+        dialog.state_summary(),
+        "1 charged species, 1 species with unpaired electrons"
+    );
+    let _ = app.update(send(Action::EditSpecies));
+    let _ = app.update(send(Action::Advanced));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert!(!dialog.edit_species);
+    assert!(!dialog.advanced);
+    assert!(
+        dialog.validate().is_err(),
+        "folding does not bypass charge balance"
+    );
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[tokio::test]
+async fn accepting_or_canceling_the_review_returns_focus_to_the_drawing() {
+    use iced::advanced::widget::operation::Focusable;
+    use iced::futures::StreamExt;
+
+    struct Focus(bool);
+    impl Focusable for Focus {
+        fn is_focused(&self) -> bool {
+            self.0
+        }
+        fn focus(&mut self) {
+            self.0 = true;
+        }
+        fn unfocus(&mut self) {
+            self.0 = false;
+        }
+    }
+
+    for action in [Action::Accept, Action::Cancel] {
+        let accept = matches!(action, Action::Accept);
+        let (doc, arrow) = claisen();
+        let mut app = app(doc, arrow);
+        let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+        let task = app.xtb_review_action(action);
+        assert!(!app.ts_review_open());
+        assert_eq!(app.xtb_running(), accept);
+        let mut stream = iced_runtime::task::into_stream(task).expect("focus task");
+        let Some(iced_runtime::Action::Widget(mut operation)) = stream.next().await else {
+            panic!("closing the review must first restore drawing focus");
+        };
+        let mut field = Focus(true);
+        operation.focusable(None, iced::Rectangle::default(), &mut field);
+        assert!(!field.is_focused(), "the next key must reach the drawing");
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
+async fn review_shows_the_proposal_and_reveals_settings_only_when_opened() {
+    use crate::app::xtb::ts::card::tests::ViewHarness;
+    use iced::widget::text;
+
+    let ui = ViewHarness::new().await;
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    let snapshot = ui.inspect(app.with_ts_review(text("").into()));
+    for expected in [
+        "Which bonds change?",
+        "Check the bonds that change.",
+        "forms C1–C6 · breaks O3–C4",
+        "All species neutral, no unpaired electrons",
+        "Run: form C1–C6, break O3–C4",
+    ] {
+        assert!(
+            snapshot.texts.iter().any(|text| text == expected),
+            "{expected}"
+        );
+    }
+    assert!(snapshot.semantics.duplicate_ids.is_empty());
+    assert!(
+        snapshot
+            .semantics
+            .nodes
+            .iter()
+            .all(|node| { node.id != "ts.review.path-points" && node.id != "ts.review.0.Charge" })
+    );
+    for id in ["ts.review.state", "ts.review.advanced"] {
+        let action = ui
+            .activate(app.with_ts_review(text("").into()), id)
+            .unwrap();
+        let _ = app.update(action);
+    }
+    let opened = ui.inspect(app.with_ts_review(text("").into()));
+    for id in [
+        "ts.review.path-points",
+        "ts.review.0.Charge",
+        "ts.review.0.Unpaired electrons",
+    ] {
+        assert!(
+            opened.semantics.nodes.iter().any(|node| node.id == id),
+            "{id}"
+        );
+    }
+    assert!(opened.texts.iter().any(|text| text == "Unpaired electrons"));
+    assert!(matches!(
+        ui.activate(app.with_ts_review(text("").into()), "ts.review.accept"),
+        Some(Message::Xtb(XtbAction::Ts(TsAction::ReviewSheet(
+            Action::Accept
+        ))))
+    ));
+
+    let (doc, arrow) = drawn_claisen();
+    let mut tied = self::app(doc, arrow);
+    let _ = tied.xtb_review_show(Mode::TransitionState, Some(arrow));
+    finish_mapping_with(&mut tied, |proposal| proposal.multiple_best = true);
+    let proposal = ui.inspect(tied.with_ts_review(text("").into()));
+    assert_eq!(
+        proposal
+            .texts
+            .iter()
+            .filter(|text| *text == "Proposed changes")
+            .count(),
+        1
+    );
+    assert!(
+        proposal
+            .texts
+            .iter()
+            .any(|text| text.starts_with("Several atom maps fit"))
+    );
+    assert!(
+        ui.activate(tied.with_ts_review(text("").into()), "ts.review.edit")
+            .is_some()
+    );
+    assert!(
+        proposal
+            .texts
+            .iter()
+            .all(|text| !text.contains("Two mechanisms"))
+    );
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]

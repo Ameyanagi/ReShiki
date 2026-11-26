@@ -1,7 +1,7 @@
 //! Thumbnail, inspector, palette and proposal canvas programs; they render through the same scene path as the paper.
 
 use super::render::{draw_document, draw_document_with_minimum_stroke};
-use super::{Camera, Document, World, layered};
+use super::{BondChangeMark, Camera, Document, World, draw_bond_changes, layered};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, mouse};
 
@@ -9,6 +9,24 @@ use iced::{Color, Event, Point, Rectangle, Renderer, Theme, mouse};
 /// With a focus, it frames that part of the document, such as the reaction
 /// under review, and clips the rest.
 pub struct TemplateThumbnail<'a>(pub &'a Document, pub Option<(World, World)>);
+
+fn thumbnail_camera(
+    document: &Document,
+    focus: Option<(World, World)>,
+    bounds: Rectangle,
+) -> Camera {
+    let (lo, hi) = focus.unwrap_or_else(|| {
+        reshiki::scene::selection_bounds(document, &document.all_ids())
+            .unwrap_or_else(|| document.bounds())
+    });
+    Camera {
+        center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+        zoom: ((bounds.width - (bounds.width * 0.16).min(24.0)) / (hi.x - lo.x).max(60.0))
+            .min((bounds.height - (bounds.height * 0.14).min(20.0)) / (hi.y - lo.y).max(50.0))
+            .min(0.85),
+    }
+}
+
 impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
     type State = PreviewState;
     fn draw(
@@ -23,22 +41,51 @@ impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
             let mut frame =
                 layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
             frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
-            let (lo, hi) = self.1.unwrap_or_else(|| {
-                reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
-                    .unwrap_or_else(|| self.0.bounds())
-            });
-            let camera = Camera {
-                center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
-                zoom: ((bounds.width - (bounds.width * 0.16).min(24.0)) / (hi.x - lo.x).max(60.0))
-                    .min(
-                        (bounds.height - (bounds.height * 0.14).min(20.0))
-                            / (hi.y - lo.y).max(50.0),
-                    )
-                    .min(0.85),
-            };
+            let camera = thumbnail_camera(self.0, self.1, bounds);
             draw_document(&mut frame, self.0, camera, bounds);
             frame.finish()
         })
+    }
+}
+
+/// Temporary reaction changes over the same cached drawing as other thumbnails.
+/// Marks are drawn separately so changing a proposal cannot reuse old marks.
+pub(crate) struct BondChangeThumbnail<'a> {
+    pub document: &'a Document,
+    pub focus: Option<(World, World)>,
+    pub marks: &'a [BondChangeMark],
+}
+
+impl<Message> canvas::Program<Message> for BondChangeThumbnail<'_> {
+    type State = PreviewState;
+
+    fn draw(
+        &self,
+        state: &Self::State,
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut geometry = <TemplateThumbnail<'_> as canvas::Program<Message>>::draw(
+            &TemplateThumbnail(self.document, self.focus),
+            state,
+            renderer,
+            theme,
+            bounds,
+            cursor,
+        );
+        let mut frame =
+            layered::Frame::new(renderer, bounds.size()).with_canvas(self.document.canvas_theme);
+        draw_bond_changes(
+            &mut frame,
+            self.document,
+            self.marks,
+            thumbnail_camera(self.document, self.focus, bounds),
+            bounds,
+        );
+        geometry.extend(frame.finish());
+        geometry
     }
 }
 

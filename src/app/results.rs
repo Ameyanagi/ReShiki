@@ -856,6 +856,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::AtomSinglet(..)
         | Message::ToggleInspector
         | Message::Inspector(..)
+        | Message::ReactionBondHover(..)
         | Message::InsertInput
         | Message::ToggleHelp
         | Message::Help(..)
