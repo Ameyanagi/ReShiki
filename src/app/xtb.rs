@@ -11,9 +11,11 @@ use super::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
+#[cfg(any(test, not(target_arch = "wasm32")))]
+use reshiki::science::isotope_masses;
 use reshiki::science::{self, Freshness, Launch};
 use results::RunInfo;
-use state::{Progress, Settings};
+use state::{FailureDetails, Progress, Settings};
 use std::sync::{Arc, Weak};
 
 mod conformers;
@@ -270,9 +272,11 @@ impl Failed {
                 self.numbers.len()
             ));
         }
-        let reason = match &self.failure {
+        let reason = match self.failure.reason() {
             state::Failure::Scf(message)
-            | state::Failure::Crashed(message)
+            | state::Failure::Crashed {
+                summary: message, ..
+            }
             | state::Failure::Other(message) => message.clone(),
             _ => self.explain().0,
         };
@@ -1014,45 +1018,12 @@ impl Run {
     }
 }
 
-/// Masses (u) for a frame with isotope labels: labelled atoms take their
-/// isotope's mass, the others the standard atomic weight; `None` without labels.
-fn isotope_masses(frame: &Frame) -> Option<Vec<f64>> {
-    use reshiki::chemistry::{ELEMENTS, ISOTOPES};
-    if frame.isotopes.iter().all(|&isotope| isotope == 0) {
-        return None;
-    }
-    Some(
-        frame
-            .numbers
-            .iter()
-            .enumerate()
-            .map(
-                |(index, &z)| match frame.isotopes.get(index).copied().unwrap_or(0) {
-                    0 => ELEMENTS
-                        .get(usize::from(z))
-                        .map_or(0., |element| element.average_mass_amu()),
-                    isotope => ISOTOPES
-                        .binary_search_by_key(&(z, isotope), |&(n, i, _)| (n, i))
-                        .ok()
-                        .and_then(|found| ISOTOPES.get(found))
-                        .map_or(f64::from(isotope), |&(_, _, mass)| mass),
-                },
-            )
-            .collect(),
-    )
-}
-
 /// The worker job for `config` on `frame`, holding frame atoms `fixed`.
 #[cfg(not(target_arch = "wasm32"))]
 fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
-    use reshiki_xtb_worker::protocol::{
-        Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
-    };
-    let method = match config.method {
-        qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
-        qcdata::XtbMethod::GXtb => Method::Gxtb,
-        qcdata::XtbMethod::GfnFf => Method::Gfnff,
-    };
+    use reshiki_xtb_jobs::{method, run::worker_method};
+    use reshiki_xtb_worker::protocol::{Conventions, ScfSettings, SolventModel};
+
     let isotope_labels = if frame.masses_amu.is_empty() {
         Vec::new()
     } else {
@@ -1075,7 +1046,7 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
         positions: frame.positions_angstrom.clone(),
         charge: config.charge,
         uhf: config.unpaired,
-        method,
+        method: worker_method(config.method),
         conventions: if config.xtb68 {
             Conventions::Xtb68
         } else {
@@ -1087,16 +1058,16 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
             max_iterations: config.max_iterations,
             retries: vec![],
         },
-        solvent: config.solvent.map(|name| Solvent {
-            model: SolventModel::Alpb,
-            name: name.to_lowercase(),
-            state: Default::default(),
-            correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-        }),
+        solvent: config
+            .solvent
+            .map(|name| method::solvent(SolventModel::Alpb, name)),
         threads: config.threads,
         fixed,
         tight: config.tight,
         topology: None,
+        max_steps: None,
+        properties: None,
+        thermo: Default::default(),
     }
 }
 
@@ -1226,6 +1197,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         labels: vec![],
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     });
     result.input_frame = optimized.then_some(input);
     result.status = status;

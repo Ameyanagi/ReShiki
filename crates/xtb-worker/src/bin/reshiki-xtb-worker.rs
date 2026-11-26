@@ -10,6 +10,10 @@ fn main() {
         if argument.as_deref() == Some(std::ffi::OsStr::new("--xtb-worker")) {
             std::process::exit(reshiki_xtb_worker::serve());
         }
+        if argument.as_deref() == Some(std::ffi::OsStr::new("--geometry-worker")) {
+            reshiki_io::geometry::worker::run();
+            return;
+        }
         if argument.as_deref() == Some(std::ffi::OsStr::new("--version")) {
             println!(
                 "reshiki-xtb-worker {} (axtb {}, LGPL-3.0-or-later, source {}/tree/{})",
@@ -22,6 +26,6 @@ fn main() {
         }
     }
     eprintln!("This is the xTB worker of the reshiki Python package, started by reshiki.xtb.");
-    eprintln!("Usage: reshiki-xtb-worker --xtb-worker | --version");
+    eprintln!("Usage: reshiki-xtb-worker --xtb-worker | --geometry-worker | --version");
     std::process::exit(2);
 }

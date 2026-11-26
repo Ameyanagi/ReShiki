@@ -8,6 +8,7 @@ on:
       - "Cargo.lock"
       - "crates/python/**"
       - "crates/python-xtb/**"
+      - "crates/xtb-jobs/**"
       - "crates/xtb-worker/**"
       - "crates/optimize/**"
       - "crates/qcdata/**"

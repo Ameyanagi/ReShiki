@@ -6,6 +6,8 @@
 //! recomputes them with the stored settings when the tab opens.
 use super::palette::Shown;
 use super::results::View;
+#[cfg(not(target_arch = "wasm32"))]
+use super::state::FailureDetails;
 use super::{Page, Request, Start, is, state};
 use crate::app::figure_export::{Kind, Prepared};
 use crate::app::{App, InspectorTab, Message};

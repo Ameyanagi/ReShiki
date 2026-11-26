@@ -4598,6 +4598,7 @@ dependencies = [
  "reshiki-process-heap",
  "reshiki-qcdata",
  "reshiki-windows",
+ "reshiki-xtb-jobs",
  "reshiki-xtb-worker",
  "resvg",
  "rfd",
@@ -4831,9 +4832,9 @@ dependencies = [
  "rayon",
  "reshiki-io",
  "reshiki-model",
- "reshiki-optimize",
  "reshiki-process-heap",
  "reshiki-qcdata",
+ "reshiki-xtb-jobs",
  "reshiki-xtb-worker",
  "resvg",
  "serde",
@@ -4897,10 +4898,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "reshiki-xtb-jobs"
+version = "0.17.1"
+dependencies = [
+ "reshiki-io",
+ "reshiki-model",
+ "reshiki-optimize",
+ "reshiki-qcdata",
+ "reshiki-xtb-worker",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "reshiki-xtb-worker"
 version = "0.17.1"
 dependencies = [
  "axtb-driver",
+ "reshiki-io",
  "reshiki-process",
  "reshiki-process-heap",
  "reshiki-qcdata",
