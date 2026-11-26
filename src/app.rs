@@ -1202,13 +1202,20 @@ impl App {
         let document = (self.tab.id, self.tab.file_epoch);
         let vibration_context = |app: &Self| (app.tab.id, app.tab.file_epoch, app.tab.revision);
         let vibrations = vibration_context(self);
-        let vibration_result = self.xtb_vibration_result().map(Arc::downgrade);
+        let vibration_result = self
+            .xtb_vibration_entry()
+            .map(|stored| (stored.attachment, Arc::downgrade(&stored.result)));
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
-        let shown = self.xtb_vibration_result().map(Arc::as_ptr);
-        if vibration_result.as_ref().map(Weak::as_ptr) != shown
+        let shown = self
+            .xtb_vibration_entry()
+            .map(|stored| (stored.attachment, Arc::as_ptr(&stored.result)));
+        if vibration_result
+            .as_ref()
+            .map(|(attachment, result)| (*attachment, Weak::as_ptr(result)))
+            != shown
             || (shown.is_some() && vibrations != vibration_context(self))
         {
             task = Task::batch([task, tagged(self.xtb_vibrations_resume(), self.tab.id)]);
