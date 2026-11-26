@@ -337,3 +337,46 @@ fn a_reopened_placed_orbital_waits_for_its_new_level() {
         .unwrap();
     assert_eq!(stored.alpha.rows, vec![3, 4]);
 }
+
+#[test]
+fn the_frontier_figure_places_homo_and_lumo_under_the_molecule() {
+    let mut app = tab();
+    answer(&mut app);
+    let frames = app.tab.history.frames();
+    act(&mut app, Action::PlaceFrontier);
+    assert_eq!(app.tab.history.frames(), frames + 1, "one Undo step");
+    let model = &app.tab.doc.models[0];
+    let captions: Vec<_> = model.panels.iter().map(|p| p.caption.as_str()).collect();
+    assert_eq!(captions, ["HOMO (−8.16 eV)", "LUMO (5.44 eV)"]);
+    assert_eq!(
+        model
+            .panels
+            .iter()
+            .map(|p| p.figure.orbital.index)
+            .collect::<Vec<_>>(),
+        [3, 4]
+    );
+    // Both rows stay with the result, so the figure reopens unchanged.
+    let stored = app.tab.doc.science.results[0]
+        .result
+        .orbitals
+        .clone()
+        .unwrap();
+    assert_eq!(stored.alpha.rows, vec![3, 4]);
+    // The captions are drawn, under the model's frame.
+    let (_, hi) = reshiki::models3d::frame(&app.tab.doc, model).unwrap();
+    let texts: Vec<_> = reshiki::scene::primitives(&app.tab.doc)
+        .into_iter()
+        .filter_map(|p| match p {
+            Primitive::Text { text, position, .. } if text.ends_with("eV)") => Some(position),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), 2);
+    assert!(texts.iter().all(|p| p.y > hi.y));
+    assert!(texts[0].x < texts[1].x, "side by side");
+    let target = app.xtb_orbital_target().unwrap();
+    assert!(target.frontier);
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.models[0].panels.is_empty());
+}

@@ -10,7 +10,7 @@ pub mod snapshot;
 pub mod visible;
 
 pub use draw::demo_on_this_thread;
-pub use figure::{Figure, OrbitalRef, Snapshot};
+pub use figure::{Figure, OrbitalRef, Panel, Snapshot};
 pub use look::{Fill, Look};
 
 /// Export size above which the export dialog warns (owner: 5 MB).

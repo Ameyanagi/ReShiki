@@ -91,7 +91,11 @@ pub enum Arrange {
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     let mut part = selection_part(doc, ids);
-    if part.models.iter().any(|model| model.surface.is_some()) {
+    if part
+        .models
+        .iter()
+        .any(|model| model.figures().next().is_some())
+    {
         part.science = doc.science.clone();
         part.science = crate::science::for_figures(&part);
     }

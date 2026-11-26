@@ -1,5 +1,5 @@
 //! The Predict tab's NMR · xTB switch and the Calculate card.
-use super::state::{self, LATER_TASKS, METHODS, SOLVENTS};
+use super::state::{self, METHODS, SOLVENTS};
 use super::tone::{Tone, line};
 use super::{Action, CalcTask, Outcome, Page};
 use crate::app::inspector::Section;
@@ -115,7 +115,7 @@ impl App {
 
         // Task and method: what the worker runs now, then what comes later.
         // Three per row, with available tasks first.
-        let mut segments: Vec<Element<'_, Message>> = CalcTask::ALL
+        let segments: Vec<Element<'_, Message>> = CalcTask::ALL
             .map(|(task, name)| {
                 segment(
                     format!("xtb-task-{}", name.to_lowercase()),
@@ -126,9 +126,6 @@ impl App {
                 )
             })
             .into();
-        segments.extend(LATER_TASKS.map(|(name, reason)| {
-            segment(format!("xtb-task-{name}"), name, false, None, Some(reason))
-        }));
         let mut segments = segments.into_iter();
         let tasks = column(
             std::iter::from_fn(|| {
@@ -303,19 +300,7 @@ impl App {
         if let Some(show) = self.xtb_show_results() {
             body = body.push(show);
         }
-        body = body.push(
-            column![
-                label("Task"),
-                tasks,
-                line(
-                    "Every run shows its orbitals in the results' Orbitals tab.",
-                    Tone::Muted
-                ),
-                label("Method"),
-                methods,
-            ]
-            .spacing(6),
-        );
+        body = body.push(column![label("Task"), tasks, label("Method"), methods,].spacing(6));
         if let Some(note) =
             state::method_note(settings.method, settings.solvent.is_some() && solvent_ok)
         {

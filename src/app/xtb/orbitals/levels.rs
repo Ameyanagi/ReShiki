@@ -189,8 +189,8 @@ impl Diagram {
     const AXIS: f32 = 30.;
     const TOP: f32 = 18.;
     const BOTTOM: f32 = 8.;
-    const LINE: f32 = 40.;
-    const COLUMN: f32 = 54.;
+    const LINE: f32 = 48.;
+    const COLUMN: f32 = 62.;
 
     /// The diagram's width for `columns` spin columns.
     pub(crate) fn width(columns: usize) -> f32 {
@@ -229,10 +229,12 @@ impl Diagram {
         move |e: f64| Self::TOP + ((hi - e) / (hi - lo).max(1e-9)) as f32 * height
     }
 
-    /// Each level on the axis: levels closer than a line's spacing sit side
-    /// by side, as degenerate ones do.
+    /// Each level on the axis. A degenerate group sits side by side on one
+    /// line; groups closer than a line's spacing are moved apart upward, so
+    /// every level and its electron arrows stay readable.
     fn place(&self, bounds: Rectangle) -> Vec<Placed> {
-        const SPACING: f32 = 9.;
+        const SPACING: f32 = 12.;
+        const GAP: f32 = 6.;
         let (lo, hi) = self.range();
         let y = self.y(bounds);
         let mut placed = Vec::new();
@@ -240,39 +242,26 @@ impl Diagram {
             let left = Self::AXIS + 12. + c as f32 * Self::COLUMN;
             let selected = self.selected.filter(|s| s.0 == c).map(|s| s.1);
             let window = column.window(selected);
-            // The list's levels, as far as the axis reaches.
-            let shown: Vec<(usize, f32)> = (column.energies_ev.iter().enumerate())
-                .filter(|(i, e)| window.contains(i) && (lo..=hi).contains(*e))
-                .map(|(i, e)| (i, y(*e)))
-                .collect();
-            // Runs of levels each within the spacing of the last.
-            let mut runs: Vec<Vec<(usize, f32)>> = vec![];
-            for level in shown {
-                match runs.last_mut() {
-                    Some(run) if run.last().is_some_and(|l| (l.1 - level.1).abs() < SPACING) => {
-                        run.push(level);
-                    }
-                    _ => runs.push(vec![level]),
+            // The list's levels as far as the axis reaches, lowest first,
+            // in degenerate groups.
+            let mut groups: Vec<Vec<usize>> = vec![];
+            for (index, energy) in column.energies_ev.iter().enumerate() {
+                if !window.contains(&index) || !(lo..=hi).contains(energy) {
+                    continue;
+                }
+                match groups.last_mut() {
+                    Some(group) if column.group(index).contains(&group[0]) => group.push(index),
+                    _ => groups.push(vec![index]),
                 }
             }
-            for run in runs {
-                // A slot takes the next level once its last is a spacing away.
-                let mut slots: Vec<f32> = vec![];
-                let mut slot_of = vec![];
-                for &(_, at) in &run {
-                    let slot = slots.iter().position(|last| (last - at).abs() >= SPACING);
-                    let slot = slot.unwrap_or_else(|| {
-                        slots.push(at);
-                        slots.len() - 1
-                    });
-                    slots[slot] = at;
-                    slot_of.push(slot);
-                }
-                let count = slots.len() as f32;
-                let gap = (Self::LINE / (2. * count)).min(4.);
-                let width = (Self::LINE - gap * (count - 1.)) / count;
-                for (&(index, at), slot) in run.iter().zip(slot_of) {
-                    let x0 = left + slot as f32 * (width + gap);
+            let mut below = f32::INFINITY;
+            for group in groups {
+                let at = y(column.energies_ev[group[0]]).min(below - SPACING);
+                below = at;
+                let count = group.len() as f32;
+                let width = (Self::LINE - GAP * (count - 1.)) / count;
+                for (k, index) in group.into_iter().enumerate() {
+                    let x0 = left + k as f32 * (width + GAP);
                     placed.push(Placed {
                         column: c,
                         index,
@@ -602,25 +591,29 @@ mod tests {
 
     #[test]
     fn the_diagram_spreads_close_levels_and_leaves_far_virtuals_off_the_axis() {
-        // Formaldehyde-like: crowded occupied levels, a virtual at 98 eV.
-        let energies = [-0.70, -0.66, -0.65, -0.53, -0.441, 0.113, 1.47, 3.61];
+        // Crowded occupied levels with a degenerate pair, a virtual at 98 eV.
+        let energies = [-0.70, -0.66, -0.65, -0.441, -0.441, 0.113, 1.47, 3.61];
         let occupations = [2., 2., 2., 2., 2., 0., 0., 0.];
-        let hartree: Vec<f64> = energies.to_vec();
         let diagram = Diagram {
-            columns: columns(&closed(&hartree, &occupations)),
+            columns: columns(&closed(&energies, &occupations)),
             selected: Some((0, 4)),
             live: true,
         };
         let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(200., 228.));
         let placed = diagram.place(bounds);
+        let at = |i: usize| placed.iter().find(|p| p.index == i).unwrap();
         assert!(placed.iter().all(|p| p.index != 7), "98 eV is off the axis");
-        // Levels 1 and 2 (0.27 eV apart) share a row side by side.
-        let [a, b] = [1, 2].map(|i| placed.iter().find(|p| p.index == i).unwrap());
-        assert!((a.y - b.y).abs() < 9.);
-        assert!(a.x1 <= b.x0 || b.x1 <= a.x0, "side by side, not on top");
+        // Levels 0.27 eV apart get lines of their own, a spacing apart.
+        assert!((at(1).y - at(2).y).abs() >= 12.);
+        assert!(at(2).y < at(1).y, "the higher level stays above");
+        // The degenerate HOMO pair shares one line, side by side, with room
+        // for arrows on each.
+        let (a, b) = (at(3), at(4));
+        assert_eq!(a.y, b.y);
+        assert!(b.x0 - a.x1 >= 6. && a.x1 - a.x0 >= 20.);
         assert_eq!(
             diagram.hit(bounds, Point::new((b.x0 + b.x1) / 2., b.y)),
-            Some((0, 2))
+            Some((0, 4))
         );
     }
 }
