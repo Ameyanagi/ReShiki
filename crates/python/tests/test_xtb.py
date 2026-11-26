@@ -9,7 +9,7 @@ from threading import Timer
 import numpy as np
 import pytest
 import reshiki
-from reshiki import qc, xtb
+from reshiki import ReShikiError, qc, xtb
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests/fixtures/xtb"
 
@@ -91,7 +91,7 @@ def test_deuterated_water_lowers_frequencies(worker):
     water = xtb.optimize(geometry("water")).geometry
     heavy_water = qc.Geometry.from_symbols(water.symbols, water.positions, isotopes=[0, 2, 2])
     light = xtb.frequencies(water)
-    heavy = xtb.frequencies(heavy_water)
+    heavy = xtb.frequencies(heavy_water, symmetry_number=2)
     np.testing.assert_array_equal(heavy.geometry.isotopes, [0, 2, 2])
     assert light.frequencies.shape == heavy.frequencies.shape == (3,)
     assert np.all(heavy.frequencies < light.frequencies)
@@ -102,13 +102,14 @@ def test_isotopologue_thermochemistry_symmetry(worker):
     water = xtb.optimize(geometry("water")).geometry
     d2o = qc.Geometry.from_symbols(water.symbols, water.positions, isotopes=[0, 2, 2])
     hdo = qc.Geometry.from_symbols(water.symbols, water.positions, isotopes=[0, 2, 0])
-    default = xtb.frequencies(d2o).thermo
+    with pytest.raises(ReShikiError, match="symmetry_number") as caught:
+        xtb.frequencies(d2o)
+    assert caught.value.code == "invalid_arguments"
     symmetric = xtb.frequencies(d2o, symmetry_number=2).thermo
     asymmetric = xtb.frequencies(hdo, symmetry_number=1).thermo
-    assert default is not None and symmetric is not None and asymmetric is not None
-    assert all(thermo.free_energy is not None for thermo in (default, symmetric, asymmetric))
-    assert default.free_energy == pytest.approx(symmetric.free_energy, rel=0, abs=1e-12)
-    assert default.free_energy != pytest.approx(asymmetric.free_energy, rel=0, abs=1e-6)
+    assert symmetric is not None and asymmetric is not None
+    assert symmetric.free_energy is not None and asymmetric.free_energy is not None
+    assert symmetric.free_energy != pytest.approx(asymmetric.free_energy, rel=0, abs=1e-6)
 
 
 def test_cef3_can_set_valence_spin_independently(worker):

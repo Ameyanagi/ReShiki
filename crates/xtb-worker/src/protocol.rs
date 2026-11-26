@@ -411,6 +411,12 @@ impl Open {
                     ));
                 }
                 let thermo = &hessian.thermo;
+                if hessian.masses_amu.is_some() && thermo.symmetry_number.is_none() {
+                    return Err(ResponseError::new(
+                        ErrorKind::Input,
+                        "give thermo.symmetry_number with explicit masses; automatic symmetry ignores isotopes",
+                    ));
+                }
                 if [
                     thermo.temperature_k,
                     thermo.pressure_pa,
@@ -564,7 +570,6 @@ pub struct ThermoRequest {
     pub imaginary_cutoff_cm1: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frequency_scale: Option<f64>,
-    /// Defaults to the engine's symmetry number from the geometry, independent of masses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symmetry_number: Option<u32>,
 }
