@@ -1193,7 +1193,12 @@ async fn failed_irc_reports_failure_and_opens_the_saved_candidate() {
         text == "The reaction-path check could not finish: the endpoint optimization reached its step limit."
     }));
     assert!(texts.iter().any(|text| text == "Show what was found"));
-    assert!(texts.iter().all(|text| !text.contains("ΔE‡")));
+    // Only the Calculate tick names the barrier; no barrier value is shown.
+    assert!(
+        texts
+            .iter()
+            .all(|text| !text.contains("ΔE‡") || text == "Barrier ΔE‡ (transition state)")
+    );
     let action = ui
         .activate(app.xtb_reaction_card(arrow), "xtb-ts-card-path")
         .unwrap();
