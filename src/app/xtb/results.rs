@@ -100,23 +100,13 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
     let method = provenance.method.as_deref().and_then(nonblank);
     let program = program_label(&provenance.program, provenance.program_version.as_deref());
-    if let Source::Imported { file_name, .. } = &provenance.source {
-        let basis = provenance.basis.as_deref().and_then(nonblank);
-        let level = match (method, basis) {
-            (Some(method), Some(basis)) => Some(format!("{method}/{basis}")),
-            (Some(level), None) | (None, Some(level)) => Some(level.to_owned()),
-            (None, None) => None,
-        };
-        let from = format!("from {file_name}");
-        let source = level
-            .as_ref()
-            .is_none_or(|level| !level.ends_with(&from))
-            .then_some(from);
-        return [Some(program), level, source]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(" · ");
+    if let Some(source) = imported_source(result) {
+        // Copy table and Export carry the electronic state only here.
+        return format!(
+            "{source} · charge {} · multiplicity {}",
+            signed(f64::from(frame.charge), 0),
+            frame.multiplicity
+        );
     }
     // Files from other programs may not name their method.
     let mut parts: Vec<String> = method
@@ -140,6 +130,34 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
         parts.push(finished.format("%-d %b %Y %H:%M").to_string());
     }
     parts.join(" · ")
+}
+
+/// "Gaussian 09 · RB3LYP/6-31G · from CH2O_CO2.log" for a result read from a file.
+fn imported_source(result: &CalcResult) -> Option<String> {
+    let provenance = &result.provenance;
+    let Source::Imported { file_name, .. } = &provenance.source else {
+        return None;
+    };
+    let program = program_label(&provenance.program, provenance.program_version.as_deref());
+    let method = provenance.method.as_deref().and_then(nonblank);
+    let basis = provenance.basis.as_deref().and_then(nonblank);
+    let level = match (method, basis) {
+        (Some(method), Some(basis)) => Some(format!("{method}/{basis}")),
+        (Some(level), None) | (None, Some(level)) => Some(level.to_owned()),
+        (None, None) => None,
+    };
+    let from = format!("from {file_name}");
+    let source = level
+        .as_ref()
+        .is_none_or(|level| !level.ends_with(&from))
+        .then_some(from);
+    Some(
+        [Some(program), level, source]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" · "),
+    )
 }
 
 pub(in crate::app) fn title(result: Option<&CalcResult>) -> String {
@@ -181,7 +199,7 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
             },
         ),
         // The program, level and file the numbers come from.
-        Settings::Imported { .. } => (method_line(result, frame), String::new()),
+        Settings::Imported { .. } => (imported_source(result).unwrap_or_default(), String::new()),
     };
     let charge = match frame.charge {
         0 => "neutral".into(),
