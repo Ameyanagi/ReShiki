@@ -10,6 +10,7 @@ use reshiki::{
 };
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::sync::{Arc, Weak};
 mod abbreviations;
 mod accessibility;
 mod arcs;
@@ -69,6 +70,7 @@ mod import;
 mod inline_text;
 mod inspector;
 mod inspector_pages;
+mod ir_figure;
 mod joining;
 mod keyboard_drawing;
 mod label_refresh;
@@ -251,6 +253,7 @@ pub enum Message {
     Arc(arcs::Action),
     Graphics(graphics::Action),
     Tlc(tlc::Action),
+    IrFigure(ir_figure::Action),
     /// Figure panels and lasting layouts.
     Figure(figure_panels::Action),
     /// Catalytic cycles.
@@ -1041,6 +1044,7 @@ impl App {
         self.sync_figure();
         self.sync_cycle();
         self.sync_tlc();
+        self.sync_ir_figure();
     }
     /// What every recorded change of the drawing needs, whether an edit made
     /// it or Undo or Redo restored it. Results for the previous revision are
@@ -1214,12 +1218,11 @@ impl App {
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
         let xtb_page_was_shown = self.nmr_xtb_page_shown();
-        let vibration_context = |app: &Self| {
-            app.xtb_vibrations_visible()
-                .then_some((app.tab.revision, app.xtb_running()))
-        };
-        let vibrations = vibration_context(self);
-        let was_failed = self.tab.xtb.failed();
+        let revision = self.tab.revision;
+        let vibrations_were_running = self.xtb_running() && self.xtb_vibrations_visible();
+        let vibration_result = self
+            .xtb_vibration_entry()
+            .map(|stored| (stored.attachment, Arc::downgrade(&stored.result)));
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.xtb_clear_selection_hint();
@@ -1229,11 +1232,17 @@ impl App {
         }
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
-        let resumed_vibrations = vibration_context(self);
-        if vibrations != resumed_vibrations || (document_changed && resumed_vibrations.is_some()) {
-            // A failure can expand the old result's palette to show recovery actions.
-            let reveal = (vibrations.is_none() || document_changed)
-                && (was_failed || !self.tab.xtb.failed());
+        let shown = self
+            .xtb_vibration_entry()
+            .map(|stored| (stored.attachment, Arc::as_ptr(&stored.result)));
+        let result_changed = vibration_result
+            .as_ref()
+            .map(|(attachment, result)| (*attachment, Weak::as_ptr(result)))
+            != shown;
+        if result_changed
+            || (shown.is_some() && (document_changed || revision != self.tab.revision))
+        {
+            let reveal = document_changed || (result_changed && !vibrations_were_running);
             task = Task::batch([
                 task,
                 tagged(self.xtb_vibrations_resume(reveal), self.tab.id),

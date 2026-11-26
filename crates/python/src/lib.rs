@@ -296,5 +296,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(qc::qc_write_input, module)?)?;
     module.add_function(wrap_pyfunction!(xtb::xtb_engine, module)?)?;
     module.add_function(wrap_pyfunction!(xtb::xtb_calculate, module)?)?;
+    module.add_function(wrap_pyfunction!(xtb::xtb_conformers, module)?)?;
     Ok(())
 }

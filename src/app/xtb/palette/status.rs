@@ -8,22 +8,34 @@ pub(in crate::app) enum StatusKind {
 }
 
 impl App {
-    pub(super) fn xtb_palette_exported(&mut self, result: Result<Option<PathBuf>, String>) {
+    pub(super) fn xtb_palette_exported(
+        &mut self,
+        result: Result<Option<PathBuf>, String>,
+        ir: bool,
+    ) {
         if !self.tab.xtb.palette.open || self.tabs.temporary_depth != 0 {
             return;
         }
         match result {
             Ok(Some(path)) => {
-                if let Some(name) = path.file_name() {
-                    self.xtb_set_palette_status(
-                        StatusKind::Palette,
-                        format!("Exported {}", name.to_string_lossy()),
-                        false,
-                    );
-                }
+                let text = if ir {
+                    format!("Exported the IR spectrum\n{}", path.display())
+                } else if let Some(name) = path.file_name() {
+                    format!("Exported {}", name.to_string_lossy())
+                } else {
+                    return;
+                };
+                self.xtb_set_palette_status(StatusKind::Palette, text, false);
             }
             Ok(None) => {}
-            Err(error) => self.xtb_set_palette_status(StatusKind::Palette, error, true),
+            Err(error) => {
+                let text = if ir {
+                    format!("Could not export the IR spectrum\n{error}")
+                } else {
+                    error
+                };
+                self.xtb_set_palette_status(StatusKind::Palette, text, true);
+            }
         }
     }
 

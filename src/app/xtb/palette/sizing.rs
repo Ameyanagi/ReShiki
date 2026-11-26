@@ -25,7 +25,7 @@ impl App {
     pub(in crate::app) fn xtb_palette_opened(&mut self) {
         if self.tab.xtb.palette.open
             && !self.xtb.dock.inspector
-            && !self.tab.xtb.failed()
+            && self.xtb_failed().is_none()
             && self.window_size.height < SHORT_WINDOW_HEIGHT
         {
             self.tab.xtb.palette.collapsed = true;
@@ -39,7 +39,7 @@ impl App {
             && size.height < SHORT_WINDOW_HEIGHT
             && self.tab.xtb.palette.open
             && !self.xtb.dock.inspector
-            && !self.tab.xtb.failed()
+            && self.xtb_failed().is_none()
         {
             self.tab.xtb.palette.collapsed = true;
         }

@@ -5,7 +5,10 @@ use super::{
     Diversity, Event, Found, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer, Phase, Search, Settings,
     pipeline, search,
 };
-use crate::app::{App, xtb::state};
+use crate::app::{
+    App,
+    xtb::state::{self, FailureDetails},
+};
 use iced::futures::{StreamExt, executor::block_on};
 use reshiki::{
     engine::{LocalEngine, Request},
@@ -184,10 +187,12 @@ fn benchmark(args: Args) -> Result<Value, String> {
         vec![],
     )?;
     let settings = args.search.config(Some(numbers.len()))?;
-    let failure_message = |failure: state::Failure| match failure {
+    let failure_message = |failure: state::Failure| match failure.reason() {
         state::Failure::Other(message)
         | state::Failure::Scf(message)
-        | state::Failure::Crashed(message) => message,
+        | state::Failure::Crashed {
+            summary: message, ..
+        } => message.clone(),
         failure => {
             let (message, detail) = failure.explain(calc.method, numbers);
             format!("{message} {detail}")
@@ -204,7 +209,7 @@ fn benchmark(args: Args) -> Result<Value, String> {
         // The pipeline's private BASE_SEED has the same value as DEFAULT_SEED.
         let embedded = runtime
             .block_on(Client::default().conformer_starts_with(
-                &search.prepared,
+                search.prepared(),
                 ForceField::Mmff94s,
                 settings.starts,
                 DEFAULT_SEED,
