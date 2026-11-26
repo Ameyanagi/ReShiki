@@ -1,6 +1,11 @@
 use std::f64::consts::PI;
 
 use crate::Thermo;
+use glam::DVec3;
+
+mod symmetry;
+#[cfg(test)]
+mod symmetry_tests;
 
 // SI definitions and CODATA 2022 recommended values.
 const PLANCK_J_S: f64 = 6.626_070_15e-34;
@@ -61,16 +66,52 @@ fn linear_inertia(trace: f64, determinant: f64) -> bool {
     determinant <= 1e-10 * (trace / 2.0).powi(3)
 }
 
-// Trace and determinant give the sum and product of the three principal moments
-// (in amu Å²) without diagonalizing the symmetric inertia tensor.
-fn inertia_invariants(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> (f64, f64) {
+fn center_of_mass(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> [f64; 3] {
     let mut center = [0.0; 3];
     for (&mass, position) in masses.iter().zip(positions) {
         for (sum, coordinate) in center.iter_mut().zip(position) {
             *sum += mass * coordinate;
         }
     }
-    let center = center.map(|sum| sum / total_mass);
+    center.map(|sum| sum / total_mass)
+}
+
+/// Rotational symmetry number for an isotope-labelled equilibrium geometry.
+///
+/// Proper rotations about the centre of mass must map each atom to an atom
+/// with the same label within a Cartesian distance of 1e-3 Å. Use labels
+/// `Z * 1000 + isotope`, with isotope 0 for natural atoms. The search tests
+/// axes of orders 2 through 12. The search can undercount when distortions
+/// approach the tolerance. Well-converged geometries typically have much
+/// smaller deviations. A linear rotor has symmetry number 2 if
+/// its ends can be exchanged, and 1 otherwise. A single atom returns 1.
+/// Supply finite positions and positive finite masses, one per label.
+pub fn rotational_symmetry_number(
+    labels: &[u32],
+    positions_angstrom: &[[f64; 3]],
+    masses_amu: &[f64],
+) -> u32 {
+    assert_eq!(labels.len(), positions_angstrom.len());
+    assert_eq!(labels.len(), masses_amu.len());
+    if labels.len() <= 1 {
+        return 1;
+    }
+    let center = DVec3::from(center_of_mass(
+        masses_amu,
+        positions_angstrom,
+        masses_amu.iter().sum(),
+    ));
+    let positions: Vec<_> = positions_angstrom
+        .iter()
+        .map(|&p| DVec3::from(p) - center)
+        .collect();
+    symmetry::count(labels, &positions, masses_amu)
+}
+
+// Trace and determinant give the sum and product of the three principal moments
+// (in amu Å²) without diagonalizing the symmetric inertia tensor.
+fn inertia_invariants(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> (f64, f64) {
+    let center = center_of_mass(masses, positions, total_mass);
     let (mut xx, mut yy, mut zz, mut xy, mut xz, mut yz) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     let [cx, cy, cz] = center;
     for (&mass, &[px, py, pz]) in masses.iter().zip(positions) {

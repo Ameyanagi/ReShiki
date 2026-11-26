@@ -52,6 +52,7 @@ impl WorkerSettings {
             optimize: false,
             frequencies: false,
             masses: None,
+            isotope_labels: Vec::new(),
             numbers: geometry.numbers.clone(),
             positions: geometry.positions.clone(),
             charge: geometry.charge,
@@ -163,6 +164,17 @@ pub fn xtb_calculate(py: Python<'_>, executable: PathBuf, request_json: &str) ->
         } => {
             job.frequencies = true;
             job.masses = isotope_masses(&geometry.to_frame());
+            if job.masses.is_some() {
+                job.isotope_labels = geometry
+                    .numbers
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &number)| {
+                        u32::from(number) * 1000
+                            + u32::from(geometry.isotopes.get(index).copied().unwrap_or(0))
+                    })
+                    .collect();
+            }
             job.thermo = ThermoRequest {
                 temperature_k: Some(temperature),
                 pressure_pa: Some(pressure),

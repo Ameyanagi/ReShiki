@@ -5,7 +5,7 @@ pub use crate::Failure;
 use reshiki_optimize::{
     ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
 };
-use reshiki_qcdata::XtbMethod;
+use reshiki_qcdata::{XtbMethod, vibrational::rotational_symmetry_number};
 use reshiki_xtb_worker::{
     client::{Cancel, Error, Limits, Session},
     protocol::{
@@ -26,6 +26,8 @@ pub struct Job {
     pub frequencies: bool,
     /// Analysis masses (u) for isotope-labelled molecules; standard masses otherwise.
     pub masses: Option<Vec<f64>>,
+    /// Atom labels encoded as Z * 1000 + isotope (0 for natural), when masses are explicit.
+    pub isotope_labels: Vec<u32>,
     pub numbers: Vec<u8>,
     pub positions: Vec<[f64; 3]>,
     pub charge: i32,
@@ -285,13 +287,14 @@ fn final_request(job: &Job, positions: Option<&[f64]>) -> Compute {
         gradient: properties.gradient,
         hessian: job.frequencies.then(|| HessianRequest {
             masses_amu: job.masses.clone(),
-            // Keep the desktop default for isotope substitutions when the caller
-            // did not supply a symmetry number.
             thermo: protocol::ThermoRequest {
-                symmetry_number: job
-                    .thermo
-                    .symmetry_number
-                    .or_else(|| job.masses.is_some().then_some(1)),
+                symmetry_number: job.thermo.symmetry_number.or_else(|| {
+                    job.masses.as_ref().map(|masses| {
+                        let final_angstrom = positions.map(angstroms);
+                        let geometry = final_angstrom.as_deref().unwrap_or(&job.positions);
+                        rotational_symmetry_number(&job.isotope_labels, geometry, masses)
+                    })
+                }),
                 ..job.thermo.clone()
             },
         }),
@@ -512,6 +515,7 @@ mod tests {
             optimize: true,
             frequencies: false,
             masses: None,
+            isotope_labels: Vec::new(),
             numbers: vec![8, 1, 1],
             positions: vec![[0.; 3]; 3],
             charge: 0,
@@ -528,6 +532,40 @@ mod tests {
             properties: None,
             thermo: Default::default(),
         }
+    }
+
+    fn d2o_job() -> Job {
+        Job {
+            frequencies: true,
+            masses: Some(vec![15.999, 2.014101778, 2.014101778]),
+            isotope_labels: vec![8000, 1002, 1002],
+            positions: vec![[0., 0., 0.], [0.7586, 0., 0.5043], [-0.7586, 0., 0.5043]],
+            ..job()
+        }
+    }
+
+    #[test]
+    fn d2o_hessian_uses_the_symmetry_of_its_geometry() {
+        let mut job = d2o_job();
+        let final_bohr: Vec<_> = job
+            .positions
+            .iter()
+            .map(|xyz| xyz.map(|coordinate| coordinate / ANGSTROM_PER_BOHR))
+            .collect();
+        job.positions[1][0] = 0.8586;
+
+        let start = final_request(&job, None);
+        assert!(start.positions.is_none());
+        let start_hessian = start.hessian.expect("frequency request");
+        assert_eq!(start_hessian.masses_amu, job.masses);
+        assert_eq!(start_hessian.thermo.symmetry_number, Some(1));
+
+        let optimized = final_request(&job, Some(final_bohr.as_flattened()));
+        assert_eq!(optimized.positions.as_deref(), Some(final_bohr.as_slice()));
+        assert_eq!(optimized.units, Units::Bohr);
+        let optimized_hessian = optimized.hessian.expect("frequency request");
+        assert_eq!(optimized_hessian.masses_amu, job.masses);
+        assert_eq!(optimized_hessian.thermo.symmetry_number, Some(2));
     }
 
     #[test]
@@ -557,7 +595,9 @@ mod tests {
         let request = final_request(&job, None);
         assert!(request.positions.is_none());
         assert!(!request.gradient);
-        assert!(request.hessian.is_some());
+        let hessian = request.hessian.expect("frequency request");
+        assert!(hessian.masses_amu.is_none());
+        assert!(hessian.thermo.symmetry_number.is_none());
 
         job.frequencies = false;
         let request = final_request(&job, None);
@@ -589,13 +629,11 @@ mod tests {
 
     #[test]
     fn job_can_override_the_step_limit_properties_and_thermochemistry() {
-        let mut job = job();
+        let mut job = d2o_job();
         job.max_steps = Some(12);
         assert_eq!(options(&job).max_steps, 12);
 
         job.optimize = false;
-        job.frequencies = true;
-        job.masses = Some(vec![16.0, 2.0, 2.0]);
         job.thermo.temperature_k = Some(310.0);
         job.thermo.pressure_pa = Some(101_000.0);
         job.properties = Some(Properties {
@@ -611,11 +649,11 @@ mod tests {
         assert_eq!(hessian.masses_amu, job.masses);
         assert_eq!(hessian.thermo.temperature_k, Some(310.0));
         assert_eq!(hessian.thermo.pressure_pa, Some(101_000.0));
-        assert_eq!(hessian.thermo.symmetry_number, Some(1));
-
-        job.thermo.symmetry_number = Some(2);
-        let hessian = final_request(&job, None).hessian.unwrap();
         assert_eq!(hessian.thermo.symmetry_number, Some(2));
+
+        job.thermo.symmetry_number = Some(1);
+        let hessian = final_request(&job, None).hessian.unwrap();
+        assert_eq!(hessian.thermo.symmetry_number, Some(1));
     }
 
     #[test]

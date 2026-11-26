@@ -1083,7 +1083,7 @@ fn manual_write_evidence_files() {
 
 #[test]
 fn isotope_labels_give_explicit_analysis_masses() {
-    let frame = Frame {
+    let mut frame = Frame {
         numbers: vec![8, 1, 1],
         positions_angstrom: START.to_vec(),
         isotopes: vec![0, 2, 0],
@@ -1095,6 +1095,15 @@ fn isotope_labels_give_explicit_analysis_masses() {
     let masses = isotope_masses(&frame).expect("a labelled atom");
     assert!((masses[1] - 2.014101778).abs() < 1e-9, "deuterium");
     assert!((masses[0] - 15.999).abs() < 0.01 && (masses[2] - 1.008).abs() < 0.001);
+    frame.masses_amu = masses;
+    let settings = Settings {
+        task: CalcTask::OptFreq,
+        ..Settings::default()
+    };
+    let config = settings.config((0, 0), false, vec![]).unwrap();
+    let job = job(&config, &frame, vec![]);
+    assert_eq!(job.isotope_labels, [8000, 1002, 1000]);
+    assert_eq!(job.masses.as_deref(), Some(frame.masses_amu.as_slice()));
     assert!(
         isotope_masses(&Frame {
             isotopes: vec![],
