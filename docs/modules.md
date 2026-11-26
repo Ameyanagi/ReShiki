@@ -223,6 +223,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
 - `src/app/xtb/run.rs`: One xTB job on its own thread
+- `src/app/xtb/selection.rs`: Guidance when the drawing does not identify one molecule to calculate.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
