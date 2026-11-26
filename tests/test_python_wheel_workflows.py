@@ -77,7 +77,7 @@ class PythonWheelWorkflowTests(unittest.TestCase):
     def test_engine_tests_install_only_the_local_matching_candidates(self):
         engine = workflow_jobs("python-wheels.yml")["xtb_wheel"]
         self.assertIn("needs: [scope, wheel]", engine)
-        self.assertIn("name: python-wheel-${{ matrix.artifact }}", engine)
+        self.assertIn("pattern: python-wheel-${{ matrix.artifact }}", engine)
         self.assertIn("uv venv --clear .venv-xtb-pair", engine)
         self.assertIn(
             'uv pip install --python .venv-xtb-pair/bin/python "numpy>=1.24" "pytest>=8,<10"',
