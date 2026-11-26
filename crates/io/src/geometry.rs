@@ -247,6 +247,12 @@ pub struct Starts {
     pub stopped: Option<String>,
 }
 
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct StereoPinning {
+    pub pinned: Vec<u64>,
+    pub unpinned: Vec<u64>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Prepared {
     source: Document,
@@ -494,13 +500,13 @@ impl Prepared {
     /// leaves undefined. Wavy single bonds leave both endpoints undefined.
     /// The inferred tags use this prepared graph's native neighbour order;
     /// neither the drawing nor already defined configurations are changed.
-    /// Inversion applies only to these newly pinned centres. Errors leave the
-    /// prepared molecule unchanged.
+    /// Centres with no readable winding remain undefined. Inversion applies
+    /// only to newly pinned centres. Errors leave the prepared molecule unchanged.
     pub fn pin_undefined_stereo(
         &mut self,
         positions: &HashMap<u64, Point3>,
         invert: bool,
-    ) -> Result<Vec<u64>, Error> {
+    ) -> Result<StereoPinning, Error> {
         use crate::chemistry::{
             kekulize::Direction,
             stereo::{self, SpatialAnnotations, SpatialOptions, perception},
@@ -551,7 +557,7 @@ impl Prepared {
             })
             .collect::<HashSet<_>>();
         if undefined.is_empty() {
-            return Ok(Vec::new());
+            return Ok(StereoPinning::default());
         }
         // Unknown markers describe the drawing, while this pass explicitly
         // reads the current model. Clear them only in the detached input.
@@ -589,7 +595,7 @@ impl Prepared {
         )
         .map_err(|error| Error::Invalid(error.to_string()))?;
         let mut metadata = self.molecule.state.metadata.clone();
-        let mut pinned = Vec::new();
+        let mut pinning = StereoPinning::default();
         for (i, (meta, spatial)) in metadata
             .atoms
             .iter_mut()
@@ -599,23 +605,22 @@ impl Prepared {
             if !undefined.contains(&i) {
                 continue;
             }
+            let id = *self
+                .ids
+                .get(i)
+                .ok_or(Error::Coordinates("Missing stereocenter atom"))?;
             let tag = spatial.chiral_tag;
-            if !matches!(tag, 1 | 2) {
-                return Err(Error::Coordinates(
-                    "Model stereocenter is planar or degenerate",
-                ));
+            if matches!(tag, 1 | 2) {
+                meta.chiral_tag = if invert { tag ^ 3 } else { tag };
+                pinning.pinned.push(id);
+            } else {
+                meta.chiral_tag = 0;
+                pinning.unpinned.push(id);
             }
-            meta.chiral_tag = if invert { tag ^ 3 } else { tag };
             meta.chiral_permutation = None;
-            pinned.push(
-                *self
-                    .ids
-                    .get(i)
-                    .ok_or(Error::Coordinates("Missing stereocenter atom"))?,
-            );
         }
         self.molecule.state.metadata = metadata;
-        Ok(pinned)
+        Ok(pinning)
     }
     /// The same molecule without the drawing's retained depth, so ordinary
     /// generation embeds fresh conformers. Relaxed metal coordination can still

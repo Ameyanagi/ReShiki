@@ -29,7 +29,14 @@ fn conformer_headers_show_units_and_fit_the_inspector_subset() {
             "Stereo",
         ]
     );
-    assert_eq!(labels(&result, true), ["#", "ΔE", "Pop.", "Stereo"]);
+    assert_eq!(
+        labels(&result, true),
+        ["#", "ΔE (kcal/mol)", "Pop.", "Stereo"]
+    );
+    assert_eq!(
+        view::headers(&result, true).last().unwrap().1,
+        iced::Length::Fill
+    );
     result.settings = QcSettings::Imported { keywords: vec![] };
     result.provenance.method = None;
     assert_eq!(
@@ -62,12 +69,12 @@ fn funnel_describes_the_stored_minimizer_and_skips_absent_data() {
             clusters: 4,
             rerank_planned: 4,
             reranked: 4,
-            kept: 4,
+            kept: 3,
         }),
     });
     assert_eq!(
         view::search_funnel(&result).unwrap(),
-        "100 starts · 98 minimized with MMFF94s · 33 distinct · 4 clusters · GFN2-xTB re-ranked 4 · 4 kept",
+        "100 starts · 98 minimized with MMFF94s · 33 distinct · 4 clusters · GFN2-xTB re-ranked 4 · 3 kept",
     );
     result.provenance.method = Some("GFN2-xTB ETKDG 100 starts · Butina 0.75 Å".into());
     let counts = result.run.as_mut().unwrap().search.as_mut().unwrap();
@@ -76,10 +83,43 @@ fn funnel_describes_the_stored_minimizer_and_skips_absent_data() {
     counts.rerank_planned = 0;
     assert_eq!(
         view::search_funnel(&result).unwrap(),
-        "99 of 100 starts made · 98 minimized with GFN2-xTB · 33 distinct · 4 clusters · 4 kept",
+        "99 of 100 starts made · 98 minimized with GFN2-xTB · 33 distinct · 4 clusters · 3 kept",
     );
     result.settings = QcSettings::Imported { keywords: vec![] };
     assert_eq!(view::search_funnel(&result), None);
+}
+
+#[test]
+fn stereo_cells_show_all_descriptors_and_distinguish_unassigned_cip() {
+    let mut row = Row {
+        step: 0,
+        delta_kcal: 0.,
+        start_kcal: None,
+        percent: 100.,
+        rmsd: None,
+        cluster: None,
+        stereo: None,
+        tetrahedral: None,
+        mirror_step: None,
+    };
+    assert_eq!(view::stereo_text(&row).0, "—");
+    row.tetrahedral = Some(TetrahedralStereo {
+        has_defined: false,
+        undefined: ["R", "R", "S", "R"]
+            .into_iter()
+            .enumerate()
+            .map(|(atom, cip)| UndefinedCentre {
+                atom: atom as u64,
+                cip: Some(cip.into()),
+                winding: Some(1),
+            })
+            .collect(),
+    });
+    row.mirror_step = Some(1);
+    row.stereo = Some(false);
+    assert_eq!(view::stereo_text(&row).0, "R,R,S,R/S,S,R,S · changed");
+    row.tetrahedral.as_mut().unwrap().undefined[0].cip = None;
+    assert_eq!(view::stereo_text(&row).0, "?,R,S,R/?,S,R,S · changed");
 }
 
 /// A water "search" with three kept conformers, the lowest first.
@@ -557,10 +597,37 @@ mod app {
         let path = result.trajectory.as_mut().unwrap();
         // First pair is too far apart in energy. The other has matching
         // energies but its terminal carbon has moved in the mirror frame.
-        path.energies_hartree[1] += 0.06 / super::KCAL_PER_HARTREE;
+        path.energies_hartree[1] += 0.04 / super::KCAL_PER_HARTREE;
         path.positions_angstrom[3 * path.numbers.len() * 3] += 2.;
         let atoms: Vec<_> = ids.into_iter().map(Some).collect();
         assert_eq!(super::super::rows(&doc, &atoms, &result, false).len(), 4);
+    }
+
+    #[test]
+    fn mirror_pair_uses_the_smallest_reflected_rmsd() {
+        let (doc, ids, _, mut result) = chiral_ensemble(false);
+        let atoms: Vec<_> = ids.into_iter().map(Some).collect();
+        let path = result.trajectory.as_mut().unwrap();
+        let frame_len = path.numbers.len() * 3;
+        let exact_mirror = path.positions_angstrom[frame_len..2 * frame_len].to_vec();
+        path.positions_angstrom.truncate(2 * frame_len);
+        path.energies_hartree.truncate(2);
+        path.positions_angstrom[frame_len] += 0.15;
+
+        let rows = super::super::rows(&doc, &atoms, &result, false);
+        assert_eq!(rows[0].mirror_step, Some(1));
+
+        let path = result.trajectory.as_mut().unwrap();
+        path.positions_angstrom.extend(exact_mirror);
+        path.energies_hartree
+            .push(path.energies_hartree[0] + 0.004 / super::KCAL_PER_HARTREE);
+        let rows = super::super::rows(&doc, &atoms, &result, false);
+        assert_eq!(
+            rows.iter()
+                .map(|r| (r.step, r.mirror_step))
+                .collect::<Vec<_>>(),
+            [(0, Some(2)), (1, None)]
+        );
     }
 
     #[test]
@@ -586,6 +653,54 @@ mod app {
         app.tab.revision += 1;
         let (_, labels) = app.xtb_conformer_stereo(&ids, true).unwrap();
         assert_eq!(labels, ["As in the 3D model", "Inverted at C4"]);
+    }
+
+    #[test]
+    fn stereo_note_names_an_unreadable_centre_in_the_starting_model() {
+        let (mut doc, ids, frame, mut result) = chiral_ensemble(false);
+        for atom in &mut doc.models[0].atoms {
+            atom.xyz[2] = 0.;
+        }
+        let launch = reshiki::science::launch(&doc, ids[0], 0, 1).unwrap();
+        result.input_frame = Some(launch.frame.hash());
+        reshiki::science::attach(&mut doc, &launch, vec![frame], result).unwrap();
+        let mut app = App::new().0;
+        app.tab.doc = doc;
+        app.xtb_show_result(&app.tab.doc.science.results[0].result.clone());
+        let shown = app.xtb_shown().unwrap();
+        let note =
+            "C4 has no wedge and its 3D configuration could not be read. Both forms may appear.";
+        assert_eq!(app.xtb_conformer_stereo(&ids, true).unwrap().0, note);
+        assert_eq!(
+            app.xtb_conformer_table(&shown).stereo_note.as_deref(),
+            Some(note)
+        );
+    }
+
+    #[test]
+    fn stereo_note_compares_to_the_starting_model_after_applying_a_mirror() {
+        let (mut doc, ids, _, mut result) = chiral_ensemble(false);
+        let launch = reshiki::science::launch(&doc, ids[0], 0, 1).unwrap();
+        let path = result.trajectory.as_mut().unwrap();
+        let mirror = path.frame(1).unwrap();
+        path.positions_angstrom = mirror.positions_angstrom.as_flattened().to_vec();
+        path.energies_hartree.truncate(1);
+        result.frame = mirror.hash();
+        result.input_frame = Some(launch.frame.hash());
+        let attached = reshiki::science::attach(&mut doc, &launch, vec![mirror], result).unwrap();
+        let result = doc.science.results[0].result.clone();
+        reshiki::science::apply_geometry(&mut doc, attached.attachment, &result.frame).unwrap();
+        let mut app = App::new().0;
+        app.tab.doc = doc;
+        app.xtb_show_result(&result);
+        let shown = app.xtb_shown().unwrap();
+        assert!(
+            app.xtb_conformer_table(&shown)
+                .stereo_note
+                .as_ref()
+                .unwrap()
+                .contains("the mirror image of the starting 3D model")
+        );
     }
 
     #[test]
@@ -658,7 +773,9 @@ mod app {
         let (cell, _) = super::super::view::stereo_text(&rows[0]);
         assert!(matches!(cell.as_str(), "R" | "S"));
         assert_eq!(choices[0], format!("As in the 3D model ({cell})"));
-        assert!(note.contains(&format!("searched the ({cell}) form, as in the 3D model.")));
+        assert!(note.contains(&format!(
+            "searched the ({cell}) form, as in the starting 3D model."
+        )));
         println!(
             "Ibuprofen with model: {card} | {} | {}\nIbuprofen before model: {without_model}\nIbuprofen tab: {note} | Stereo {cell}",
             choices[0], choices[1]
@@ -668,6 +785,45 @@ mod app {
     fn search(app: &mut App, event: Event) {
         let serial = app.tab.xtb.run.as_ref().expect("a search in flight").serial;
         let _ = app.update(Message::Xtb(XtbAction::Search(serial, event)));
+    }
+
+    #[test]
+    fn mirror_image_choice_is_consumed_by_a_run_and_discarded_on_retarget() {
+        let (mut app, oxygen) = water(CalcTask::Conformers);
+        search(&mut app, found(false));
+        let invert = XtbAction::Conformers(Action::InvertUndefinedStereo(true));
+        send(&mut app, invert.clone());
+        assert!(app.xtb.conformers.invert_undefined_stereo);
+        send(&mut app, XtbAction::Run);
+        let configured = |app: &App| {
+            app.tab
+                .xtb
+                .run
+                .as_ref()
+                .unwrap()
+                .search
+                .as_ref()
+                .unwrap()
+                .config
+                .invert_undefined_stereo
+        };
+        assert!(configured(&app));
+        assert!(!app.xtb.conformers.invert_undefined_stereo);
+        search(&mut app, found(false));
+
+        send(&mut app, XtbAction::Run);
+        assert!(!configured(&app));
+        search(&mut app, found(false));
+
+        let other = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        send(&mut app, invert);
+        assert!(app.xtb.conformers.invert_undefined_stereo);
+        let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![other])));
+        assert_eq!(app.xtb_target(), Some(vec![other]));
+        assert!(!app.xtb.conformers.invert_undefined_stereo);
+        let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![oxygen])));
+        send(&mut app, XtbAction::Run);
+        assert!(!configured(&app));
     }
 
     fn ranked(positions: [[f64; 3]; 3], energy: f64, cluster_size: u32, rmsd: f64) -> Ranked {
@@ -898,6 +1054,38 @@ mod app {
     }
 
     #[test]
+    fn the_search_summary_counts_only_saved_conformers() {
+        let (mut app, _) = water(CalcTask::Conformers);
+        let Event::Done(Ok(mut found)) = found(false) else {
+            unreachable!()
+        };
+        let found_mut = Arc::make_mut(&mut found);
+        found_mut.ranked.resize(40, ranked(C, -5.065176, 1, 0.5));
+        found_mut.search.kept = found_mut.ranked.len();
+        search(&mut app, Event::Done(Ok(found)));
+
+        let result = &app.tab.doc.science.results[0].result;
+        let saved = result.trajectory.as_ref().unwrap().steps();
+        assert_eq!(saved, 32);
+        assert_eq!(
+            result.run.as_ref().unwrap().search.as_ref().unwrap().kept,
+            saved
+        );
+        assert!(
+            super::view::search_funnel(result)
+                .unwrap()
+                .ends_with("32 kept")
+        );
+        let mut legacy = (**result).clone();
+        legacy.run.as_mut().unwrap().search.as_mut().unwrap().kept = 40;
+        assert!(
+            super::view::search_funnel(&legacy)
+                .unwrap()
+                .ends_with("32 kept")
+        );
+    }
+
+    #[test]
     fn export_uses_the_results_caption_then_saved_stem_then_hill_formula() {
         use super::Format;
         use std::path::PathBuf;
@@ -920,7 +1108,9 @@ mod app {
                 .starts_with("H2O conformer 1")
         );
         app.tab.path = Some("Untitled.rshk".into());
-        assert_eq!(prepare(&app, Format::Sdf).name, "H2O-conformers.sdf");
+        let sdf = prepare(&app, Format::Sdf);
+        assert_eq!(sdf.name, "Untitled-conformers.sdf");
+        assert!(sdf.bytes.starts_with(b"Untitled conformer 1\n"));
 
         app.tab.path = Some("/tmp/Saved Water.rshk".into());
         let sdf = prepare(&app, Format::Sdf);
@@ -952,6 +1142,24 @@ mod app {
             app.status,
             "Exported Water-sample-1-conformers.sdf · 3 conformers\n/tmp/Water-sample-1-conformers.sdf",
         );
+
+        reshiki::molecule_names::show(
+            &mut app.tab.doc,
+            &[oxygen],
+            " / : ? ".into(),
+            "O".into(),
+            Default::default(),
+            false,
+        )
+        .unwrap();
+        let sdf = prepare(&app, Format::Sdf);
+        assert_eq!(sdf.name, "Saved-Water-conformers.sdf");
+        assert!(sdf.bytes.starts_with(b"Saved Water conformer 1\n"));
+
+        app.tab.path = Some("???.rshk".into());
+        let sdf = prepare(&app, Format::Sdf);
+        assert_eq!(sdf.name, "H2O-conformers.sdf");
+        assert!(sdf.bytes.starts_with(b"H2O conformer 1\n"));
     }
 
     #[tokio::test]

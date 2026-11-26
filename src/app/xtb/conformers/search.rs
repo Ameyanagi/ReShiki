@@ -29,7 +29,14 @@ impl App {
             Action::Window(text) => settings.window = text,
             Action::Representatives(text) => settings.representatives = text,
             Action::Three(three) => settings.three = three,
-            Action::InvertUndefinedStereo(invert) => settings.invert_undefined_stereo = invert,
+            Action::InvertUndefinedStereo(invert) => {
+                self.xtb.conformer_inversion_target = invert
+                    .then(|| self.xtb_target())
+                    .flatten()
+                    .map(|atoms| (self.tab.id.0, self.tab.file_epoch, atoms));
+                self.xtb.conformers.invert_undefined_stereo =
+                    self.xtb.conformer_inversion_target.is_some();
+            }
             Action::Overlay(on) => {
                 self.tab.xtb.palette.ensemble.overlay = on;
                 // Off only takes the ghosts away from a preview.
@@ -196,7 +203,7 @@ impl App {
             self.xtb_fail(failure);
             return Task::none();
         }
-        let search = match search_for(
+        let mut search = match search_for(
             &self.tab.doc,
             &run.atoms,
             &launch,
@@ -209,6 +216,13 @@ impl App {
                 return Task::none();
             }
         };
+        search.describe_unpinned_stereo(|ids| {
+            let names: Vec<_> = ids
+                .iter()
+                .map(|&id| self.xtb_atom_name(&launch.atoms, id).0)
+                .collect();
+            super::view::unpinned_stereo_note(&names)
+        });
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = self.tab.xtb.run.as_mut() else {
             return Task::none();
@@ -373,13 +387,15 @@ pub(super) fn pending_for(
             .map(|evaluation| evaluation.scf_iterations as u32)
             .collect(),
         finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
-        search: Some(found.search.clone()),
+        search: Some(qcdata::SearchSummary {
+            kept,
+            ..found.search.clone()
+        }),
     });
     let mut notes = found.notes.clone();
     if found.stopped {
         notes.push(format!(
-            "Canceled. {} re-ranked conformers are kept and usable.",
-            found.reranked
+            "Canceled. {kept} re-ranked conformers are kept and usable."
         ));
     }
     if computed.near_degenerate {

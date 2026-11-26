@@ -393,34 +393,41 @@ fn merge_mirrors(
         };
         let a = row.undefined();
         if let Some(frame) = path.frame(row.step).filter(|_| !a.is_empty()) {
-            let pair = pending.as_mut_slice().iter_mut().find(|entry| {
-                let Some(other) = entry.as_ref() else {
-                    return false;
-                };
-                let b = other.undefined();
-                (row.delta_kcal - other.delta_kcal).abs() <= 0.05
-                    && a.len() == b.len()
-                    && a.iter().zip(b).all(|(a, b)| {
-                        a.atom == b.atom
-                            && matches!(
-                                (a.winding, b.winding),
-                                (Some(1), Some(2)) | (Some(2), Some(1))
-                            )
-                    })
-                    && path.frame(other.step).is_some_and(|mut mirror| {
-                        for [x, _, _] in &mut mirror.positions_angstrom {
-                            *x = -*x;
-                        }
-                        rmsd(
-                            &topology,
-                            &autos,
-                            &frame.positions_angstrom,
-                            &mirror.positions_angstrom,
-                        )
-                        .is_ok_and(|r| r <= 0.1)
-                    })
-            });
-            row.mirror_step = pair.and_then(Option::take).map(|other| other.step);
+            let best = pending
+                .as_mut_slice()
+                .iter_mut()
+                .filter_map(|entry| {
+                    let other = entry.as_ref()?;
+                    let b = other.undefined();
+                    let matches = (row.delta_kcal - other.delta_kcal).abs() <= 0.005
+                        && a.len() == b.len()
+                        && a.iter().zip(b).all(|(a, b)| {
+                            a.atom == b.atom
+                                && matches!(
+                                    (a.winding, b.winding),
+                                    (Some(1), Some(2)) | (Some(2), Some(1))
+                                )
+                        });
+                    if !matches {
+                        return None;
+                    }
+                    let mut mirror = path.frame(other.step)?;
+                    for [x, _, _] in &mut mirror.positions_angstrom {
+                        *x = -*x;
+                    }
+                    let distance = rmsd(
+                        &topology,
+                        &autos,
+                        &frame.positions_angstrom,
+                        &mirror.positions_angstrom,
+                    )
+                    .ok()?;
+                    (distance <= 0.1).then_some((distance, entry))
+                })
+                .min_by(|(a, _), (b, _)| a.total_cmp(b));
+            row.mirror_step = best
+                .and_then(|(_, entry)| entry.take())
+                .map(|other| other.step);
         }
         kept.push(row);
     }

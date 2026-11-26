@@ -651,11 +651,15 @@ impl App {
             return Task::none();
         };
         config.fixed.retain(|id| self.tab.doc.atom(*id).is_some());
+        let atoms = reshiki::molecule_names::component(&self.tab.doc, first);
         // A search runs again with the card's Conformers fields.
         let search = match config.task {
             super::CalcTask::Conformers => {
                 match super::conformers::recalculation(&mut config, &self.xtb.conformers) {
-                    Ok(search) => Some(search),
+                    Ok(mut search) => {
+                        search.invert_undefined_stereo &= self.xtb_inverts_for(&atoms);
+                        Some(search)
+                    }
                     Err(reason) => {
                         self.status = reason;
                         self.error = true;
@@ -666,7 +670,7 @@ impl App {
             _ => None,
         };
         let request = Request {
-            atoms: reshiki::molecule_names::component(&self.tab.doc, first),
+            atoms,
             search,
             config,
             keep_full: shown.stored.keep_full,

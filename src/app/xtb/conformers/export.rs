@@ -20,24 +20,16 @@ impl App {
     ) -> Result<Prepared, String> {
         let result = &shown.stored.result;
         let atoms: Vec<_> = shown.atoms.iter().flatten().copied().collect();
-        let formula = || state::formula(&shown.frame.numbers);
-        let title = reshiki::molecule_names::label(&self.tab.doc, &atoms)
+        let (title, stem) = reshiki::molecule_names::label(&self.tab.doc, &atoms)
             .map(|caption| caption.text.trim().to_owned())
-            .or_else(|| {
-                self.export_stem()
-                    .filter(|stem| !stem.eq_ignore_ascii_case("Untitled"))
-            })
-            .unwrap_or_else(formula);
+            .and_then(export_name)
+            .or_else(|| self.export_stem().and_then(export_name))
+            .or_else(|| export_name(state::formula(&shown.frame.numbers)))
+            .unwrap_or_else(|| ("Molecule".into(), "Molecule".into()));
         let (text, extension) = match format {
             Format::Sdf => (sdf(&self.tab.doc, shown.atoms, result, &title)?, "sdf"),
             Format::Xyz => (xyz(result, &title)?, "xyz"),
         };
-        let stem = title
-            .chars()
-            .filter(|c| (!c.is_control() || c.is_whitespace()) && !r#"<>:"/\|?*"#.contains(*c))
-            .collect::<String>();
-        let stem = stem.split_whitespace().collect::<Vec<_>>().join("-");
-        let stem = if stem.is_empty() { formula() } else { stem };
         let count = result.trajectory.as_ref().map_or(0, |path| path.steps());
         let detail = format!("{count} conformer{}", if count == 1 { "" } else { "s" });
         Ok(Prepared::new(
@@ -48,6 +40,15 @@ impl App {
             Kind::Xtb,
         ))
     }
+}
+
+fn export_name(title: String) -> Option<(String, String)> {
+    let stem = title
+        .chars()
+        .filter(|c| (!c.is_control() || c.is_whitespace()) && !r#"<>:"/\|?*"#.contains(*c))
+        .collect::<String>();
+    let stem = stem.split_whitespace().collect::<Vec<_>>().join("-");
+    (!stem.is_empty()).then_some((title, stem))
 }
 
 /// Export every saved conformer as XYZ, lowest energy first.
