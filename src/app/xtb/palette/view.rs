@@ -3,7 +3,6 @@
 use super::super::results::{self, View};
 use super::super::tone::{Tone, line};
 use super::super::{Action as XtbAction, Failed, state};
-use super::sizing::body_height;
 use super::{Action, Shown};
 use crate::app::workspace::{accessible_command, control, muted_text, panel};
 use crate::app::{App, Message};
@@ -13,6 +12,8 @@ use iced::widget::{
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
 const FOOTER_LINE_HEIGHT: f32 = 32.;
+/// Failure details and the previous result scroll within this height.
+const DETAILS_HEIGHT: f32 = 150.;
 const LABEL_WIDTH: f32 = 130.;
 
 fn send(action: Action) -> Message {
@@ -84,14 +85,19 @@ impl App {
             return None;
         }
         let content = self.xtb_palette_content(false)?;
+        // Expanded, the dock has one height for every tab, at most 40 % of
+        // the window; its middle scrolls between the pinned header and footer.
+        let height = if self.tab.xtb.palette.collapsed {
+            Length::Shrink
+        } else {
+            Length::Fixed(super::sizing::dock_height(self.window_size.height))
+        };
         Some(
-            // The body uses a chrome estimate for its usual height. The
-            // outer scrollable also bounds wrapped notes and warning cards.
-            container(scrollable(content).height(Length::Shrink))
+            container(content)
                 .id("xtb-results-bottom")
                 .padding([10, 16])
                 .width(Length::Fill)
-                .max_height(self.window_size.height * super::sizing::MAX_HEIGHT_FRACTION)
+                .height(height)
                 .style(panel)
                 .into(),
         )
@@ -115,10 +121,17 @@ impl App {
             return Some(if collapsed {
                 header
             } else {
-                column![header, self.xtb_failure_card(failed, inspector)]
-                    .extend(self.xtb_previous_result(failed, inspector))
-                    .spacing(8)
-                    .into()
+                {
+                    let card = column![self.xtb_failure_card(failed, inspector)]
+                        .extend(self.xtb_previous_result(failed, inspector))
+                        .spacing(8);
+                    let card: Element<'_, Message> = if inspector {
+                        card.into()
+                    } else {
+                        scrollable(card).height(Length::Fill).into()
+                    };
+                    column![header, card].spacing(8).into()
+                }
             });
         }
         let Some(shown) = self.xtb_shown() else {
@@ -146,11 +159,8 @@ impl App {
             return Some(header);
         }
 
-        let mut content = column![
-            header,
-            text(results::headline(&shown.stored.result, shown.frame)).size(12)
-        ]
-        .spacing(4);
+        let mut content =
+            column![text(results::headline(&shown.stored.result, shown.frame)).size(12)].spacing(4);
         content = content.extend(key_tiles(&shown, inspector, false));
         // The semi-empirical caveat is about xTB, not imported results.
         if matches!(
@@ -173,17 +183,20 @@ impl App {
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Log => log(&shown, &shown.method()),
         };
-        let body: Element<'_, Message> = if inspector {
-            body
+        content = content.push(container(body).padding([6, 0]));
+        let middle: Element<'_, Message> = if inspector {
+            content.into()
         } else {
-            scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
+            scrollable(container(content).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(body_height(self.window_size.height))
+                .height(Length::Fill)
                 .into()
         };
-        content = content.push(container(body).padding([6, 0]));
-        content = content.push(self.xtb_footer(&shown, view, inspector));
-        Some(content.into())
+        Some(
+            column![header, middle, self.xtb_footer(&shown, view, inspector)]
+                .spacing(4)
+                .into(),
+        )
     }
 
     /// "xTB results", the tabs `views` with `view` chosen, and the dock commands.
@@ -323,7 +336,7 @@ impl App {
                     .id("xtb-failure-body")
                     .height(Length::Shrink),
             )
-            .max_height(body_height(self.window_size.height))
+            .max_height(DETAILS_HEIGHT)
             .into()
         }
     }
@@ -363,9 +376,7 @@ impl App {
             previous = if inspector {
                 previous.push(body)
             } else {
-                previous.push(
-                    container(scrollable(body)).max_height(body_height(self.window_size.height)),
-                )
+                previous.push(container(scrollable(body)).max_height(DETAILS_HEIGHT))
             };
         }
         Some(previous.into())
@@ -455,11 +466,6 @@ impl App {
         let shows = (live && selected.is_none())
             .then(|| self.xtb_model_step(shown))
             .flatten();
-        let chart_height = if inspector {
-            140.
-        } else {
-            body_height(self.window_size.height).min(140.)
-        };
         let chart = canvas(StepChart {
             energies: energies.clone(),
             selected: selected.or(shows).unwrap_or(last),
@@ -470,7 +476,7 @@ impl App {
         } else {
             Length::Fixed(420.)
         })
-        .height(chart_height);
+        .height(140.);
         let list = Column::with_children(energies.iter().enumerate().map(|(index, energy)| {
             let delta = index
                 .checked_sub(1)

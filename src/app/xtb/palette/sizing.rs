@@ -3,15 +3,12 @@ use crate::app::App;
 
 pub(super) const MAX_HEIGHT_FRACTION: f32 = 0.4;
 const SHORT_WINDOW_HEIGHT: f32 = 800.;
-const BODY_HEIGHT: f32 = 150.;
-const MIN_BODY_HEIGHT: f32 = 60.;
-/// Header, method/caveat lines, footer, spacing and the dock's outer padding.
-/// The outer scrollable also caps unusually tall warnings and wrapped notes.
-const CHROME_HEIGHT_ESTIMATE: f32 = 150.;
+/// The expanded dock in a tall window: about a 150 pt body with its rows.
+const DOCK_HEIGHT: f32 = 360.;
 
-pub(super) fn body_height(window_height: f32) -> f32 {
-    BODY_HEIGHT
-        .min((window_height * MAX_HEIGHT_FRACTION - CHROME_HEIGHT_ESTIMATE).max(MIN_BODY_HEIGHT))
+/// The expanded bottom dock's height: at most 40 % of the window.
+pub(super) fn dock_height(window_height: f32) -> f32 {
+    DOCK_HEIGHT.min(window_height * MAX_HEIGHT_FRACTION)
 }
 
 impl App {
@@ -234,11 +231,9 @@ mod tests {
     }
 
     #[test]
-    fn the_body_budget_keeps_the_default_height_and_a_usable_floor() {
-        assert_eq!(body_height(900.), BODY_HEIGHT);
-        let height = body_height(712.);
-        assert!(height >= MIN_BODY_HEIGHT);
-        assert!(height + CHROME_HEIGHT_ESTIMATE <= 712. * MAX_HEIGHT_FRACTION);
-        assert_eq!(body_height(400.), MIN_BODY_HEIGHT);
+    fn the_dock_keeps_its_height_in_tall_windows_and_40_percent_in_short_ones() {
+        assert_eq!(dock_height(1200.), DOCK_HEIGHT);
+        assert_eq!(dock_height(900.), DOCK_HEIGHT);
+        assert!((dock_height(712.) - 712. * MAX_HEIGHT_FRACTION).abs() < 1e-3);
     }
 }
