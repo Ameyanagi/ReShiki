@@ -1,5 +1,5 @@
 //! Mass-weighted steepest descent on a local quadratic surface
-//! (Page & McIver, J. Chem. Phys. 88, 922, 1988). With dq/dt = −g − Hq,
+//! (Page & McIver, J. Chem. Phys. 88, 922, 1988 [PageMcIver1988IRC]). With dq/dt = −g − Hq,
 //! the displacement along Hessian mode i is gᵢ (exp(−λᵢt) − 1)/λᵢ.
 //! Choose t by the mass-weighted arc length along this curve. Keep the final,
 //! shorter step when the remaining arc to a quadratic minimum fits in it.

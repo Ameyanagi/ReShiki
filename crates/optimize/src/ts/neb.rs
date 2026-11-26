@@ -1,10 +1,10 @@
-//! Climbing-image NEB with the improved tangent of Henkelman & Jónsson,
-//! J. Chem. Phys. 113, 9978 (2000), and climbing force of Henkelman, Uberuaga
-//! & Jónsson, J. Chem. Phys. 113, 9901 (2000). The band is relaxed with FIRE
-//! (Bitzek et al., Phys. Rev. Lett. 97, 170201, 2006), using unit artificial
-//! masses and a 0.2-bohr per-atom step cap. A fixed initial force scale sets
-//! the fictitious time unit and scales equal springs from 0.1 Eh/bohr² upward
-//! on unusually stiff surfaces (including unscaled analytic test potentials).
+//! Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J. Chem. Phys. 113, 9978
+//! (2000) [Henkelman2000Tangent], and climbing force of Henkelman, Uberuaga & Jónsson, J. Chem.
+//! Phys. 113, 9901 (2000) [Henkelman2000CINEB]. The band is relaxed with FIRE (Bitzek et al., Phys.
+//! Rev. Lett. 97, 170201, 2006 [Bitzek2006FIRE]), using unit artificial masses and a 0.2-bohr
+//! per-atom step cap. A fixed initial force scale sets the fictitious time unit and scales equal
+//! springs from 0.1 Eh/bohr² upward on unusually stiff surfaces (including unscaled analytic test
+//! potentials).
 
 use std::ops::ControlFlow;
 

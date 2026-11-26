@@ -1,6 +1,7 @@
-//! Proper rigid fits (Horn, J. Opt. Soc. Am. A 4, 629, 1987) and atom assignment
-//! (Kuhn, Naval Research Logistics Quarterly 2, 83, 1955, and Munkres, Journal of
-//! the Society for Industrial and Applied Mathematics 5, 32, 1957).
+//! Proper rigid fits (Horn, J. Opt. Soc. Am. A 4, 629, 1987 [Horn1987Quaternion]) and atom
+//! assignment (Kuhn, Naval Research Logistics Quarterly 2, 83, 1955 [Kuhn1955Hungarian], and
+//! Munkres, Journal of the Society for Industrial and Applied Mathematics 5, 32, 1957
+//! [Munkres1957Assignment]).
 
 use std::array::from_fn;
 
