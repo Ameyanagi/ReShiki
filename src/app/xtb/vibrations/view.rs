@@ -690,11 +690,17 @@ impl canvas::Program<Message> for Spectrum {
             return None;
         };
         let point = cursor.position_in(bounds)?;
-        let (index, _, _) = self.data.sticks.iter().min_by(|a, b| {
-            (self.x(a.1, bounds) - point.x)
-                .abs()
-                .total_cmp(&(self.x(b.1, bounds) - point.x).abs())
-        })?;
+        let (index, _, _) = self
+            .data
+            .sticks
+            .iter()
+            .filter(|stick| stick.2 > 0.)
+            .min_by(|a, b| {
+                (self.x(a.1, bounds) - point.x)
+                    .abs()
+                    .total_cmp(&(self.x(b.1, bounds) - point.x).abs())
+                    .then_with(|| b.2.total_cmp(&a.2))
+            })?;
         Some(canvas::Action::publish(send(Action::Mode(*index))).and_capture())
     }
 
@@ -704,7 +710,7 @@ impl canvas::Program<Message> for Spectrum {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if !self.data.sticks.is_empty() && cursor.is_over(bounds) {
+        if cursor.is_over(bounds) && self.data.sticks.iter().any(|stick| stick.2 > 0.) {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::default()
@@ -903,6 +909,33 @@ mod tests {
             .computed
             .to_calc_result(&frame, Task::Hessian, &report.engine, None)
             .unwrap()
+    }
+
+    #[test]
+    fn clicking_coincident_sticks_selects_the_strongest_ir_active_mode() {
+        use canvas::Program;
+
+        let mut result = spectrum_result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.frequencies_cm1 = vec![1500.; 3];
+        let bounds = Rectangle::with_size(iced::Size::new(480., 150.));
+        let click = iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        for (intensities, expected) in [([0., 5., 80.], Some(2)), ([0.; 3], None)] {
+            result.vibrations.as_mut().unwrap().ir_intensities_km_mol = intensities.to_vec();
+            let spectrum = Spectrum::new(&Arc::new(result.clone()), &State::default(), 0);
+            let cursor = mouse::Cursor::Available(Point::new(spectrum.x(1500., bounds), 50.));
+            let selected = spectrum
+                .update(&mut (), &click, bounds, cursor)
+                .map(|action| {
+                    let (Some(Message::Xtb(XtbAction::Vibrations(Action::Mode(mode)))), _, _) =
+                        action.into_inner()
+                    else {
+                        panic!("a peak click selects its mode");
+                    };
+                    mode
+                });
+            assert_eq!(selected, expected);
+        }
     }
 
     #[test]

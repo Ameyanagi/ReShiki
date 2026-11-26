@@ -192,6 +192,7 @@ pub enum InspectorTab {
 #[derive(Debug, Clone)]
 pub enum Message {
     ModifiersChanged(iced::keyboard::Modifiers),
+    WindowSize(iced::Size),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
     Accessibility(accessibility::Action),
@@ -563,6 +564,8 @@ pub struct App {
     xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
+    /// The complete window in logical points, independent of the drawing viewport.
+    window_size: iced::Size,
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
@@ -587,6 +590,16 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
 /// Leaves the focused field or control, so the next key reaches the drawing.
 fn focus_drawing() -> Task<Message> {
     iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
+}
+
+/// Logical window dimensions share the always-on input path on every platform.
+fn window_size_event(event: &iced::window::Event) -> Option<Message> {
+    match event {
+        iced::window::Event::Opened { size, .. } | iced::window::Event::Resized(size) => {
+            Some(Message::WindowSize(*size))
+        }
+        _ => None,
+    }
 }
 
 impl App {
@@ -701,6 +714,7 @@ impl App {
             xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
+            window_size: iced::Size::new(1280.0, 820.0),
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
@@ -817,6 +831,9 @@ impl App {
                     return Some(Message::ModifiersChanged(modifiers));
                 }
                 if let iced::Event::Window(event) = &event {
+                    if let Some(message) = window_size_event(event) {
+                        return Some(message);
+                    }
                     // Back in the window: may read-only repositories be sent to now?
                     #[cfg(not(target_arch = "wasm32"))]
                     if matches!(event, iced::window::Event::Focused) {
@@ -1198,13 +1215,11 @@ impl App {
         let document = (self.tab.id, self.tab.file_epoch);
         let xtb_page_was_shown = self.nmr_xtb_page_shown();
         let vibration_context = |app: &Self| {
-            (app.xtb_vibrations_visible() && app.tab.xtb.run.is_none()).then_some((
-                app.tab.id,
-                app.tab.file_epoch,
-                app.tab.revision,
-            ))
+            app.xtb_vibrations_visible()
+                .then_some((app.tab.revision, app.xtb_running()))
         };
         let vibrations = vibration_context(self);
+        let was_failed = self.tab.xtb.failed();
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.xtb_clear_selection_hint();
@@ -1214,8 +1229,15 @@ impl App {
         }
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
-        if vibrations != vibration_context(self) {
-            task = Task::batch([task, tagged(self.xtb_vibrations_resume(), self.tab.id)]);
+        let resumed_vibrations = vibration_context(self);
+        if vibrations != resumed_vibrations || (document_changed && resumed_vibrations.is_some()) {
+            // A failure can expand the old result's palette to show recovery actions.
+            let reveal = (vibrations.is_none() || document_changed)
+                && (was_failed || !self.tab.xtb.failed());
+            task = Task::batch([
+                task,
+                tagged(self.xtb_vibrations_resume(reveal), self.tab.id),
+            ]);
         }
         // The canvas forgets the pointer when a context menu closes
         // (canvas::reset_menu_pointer), so the hovered atom or bond goes too:
@@ -1299,6 +1321,11 @@ impl App {
     /// tasks must not acquire a document tag.
     fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
         let message = match message {
+            Message::WindowSize(size) => {
+                self.xtb_palette_resized(size);
+                self.window_size = size;
+                return ControlFlow::Break(Task::none());
+            }
             Message::Recovery(action) if recovery_manager::completion(&action) => {
                 let task = self.recovery_action(action);
                 return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));

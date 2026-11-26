@@ -121,6 +121,25 @@ fn palette_status_clears_on_tab_switch_and_preserves_other_feedback() {
 }
 
 #[test]
+fn returning_to_a_document_keeps_its_expanded_palette_in_a_short_window() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    let _ = app.update(Message::WindowSize(iced::Size::new(1040., 712.)));
+    event(&mut app, optimized(&START, &MOVED));
+    assert!(app.tab.xtb.palette.collapsed);
+    palette(&mut app, Action::Collapse);
+    let doc = app.tab.doc.clone();
+    app.add_tab();
+    app.tab.doc = doc;
+    palette(&mut app, Action::Show);
+    assert!(app.tab.xtb.palette.open && app.tab.xtb.palette.collapsed);
+
+    app.select_tab(0);
+    assert!(app.tab.xtb.palette.open && !app.tab.xtb.palette.collapsed);
+    app.select_tab(1);
+    assert!(app.tab.xtb.palette.collapsed);
+}
+
+#[test]
 fn a_reopened_light_optfreq_result_shows_the_vibrations_tab() {
     let (mut app, _) = water(CalcTask::OptFreq);
     event(&mut app, Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))));

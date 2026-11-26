@@ -31,6 +31,8 @@ mod view;
 
 #[cfg(test)]
 pub(super) use results::{Evaluation, View};
+#[cfg(test)]
+pub(super) use state::Failure;
 pub(crate) use state::Task as CalcTask;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) use vibrations::Action as VibrationsAction;
@@ -140,6 +142,10 @@ pub(crate) struct State {
 }
 
 impl State {
+    pub(super) fn failed(&self) -> bool {
+        matches!(self.outcome, Some(Outcome::Failed(_)))
+    }
+
     /// The run information of a result the document holds.
     fn info(&self, result: &Arc<CalcResult>) -> Option<&RunInfo> {
         self.infos
@@ -386,11 +392,14 @@ impl App {
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
+                let was_visible = self.xtb_vibrations_visible();
                 let task = self.xtb_palette(action);
                 if opened {
-                    return Task::batch([task, self.xtb_vibrations_opened()]);
+                    return Task::batch([task, self.xtb_vibrations_opened(was_visible)]);
                 }
-                self.xtb_vibrations_sync();
+                if was_visible == self.xtb_vibrations_visible() {
+                    self.xtb_vibrations_sync();
+                }
                 return task;
             }
             Action::Vibrations(action) => return self.xtb_vibrations_action(action),
@@ -837,10 +846,7 @@ impl App {
         self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;
         self.tab.xtb.palette.open = true;
-        if self.tabs.temporary_depth == 0 {
-            self.xtb.dock.collapsed = false;
-        }
-        self.xtb_palette_opened();
+        self.tab.xtb.palette.collapsed = false;
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
@@ -1267,10 +1273,6 @@ impl App {
     pub(super) fn xtb_answer(&mut self, event: run::Event) {
         let serial = self.tab.xtb.run.as_ref().expect("a run in flight").serial;
         let _ = self.update(Message::Xtb(Action::Event(serial, event)));
-    }
-
-    pub(super) fn xtb_failed_answer(&mut self, detail: String) {
-        self.xtb_answer(run::Event::Done(Err(state::Failure::Other(detail))));
     }
 }
 

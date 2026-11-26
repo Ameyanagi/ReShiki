@@ -792,6 +792,7 @@ fn completion(message: &Message) -> Option<Completion> {
         // Controls, view/window lifecycle and sub-enums without completion variants.
         Message::ContextMenu(..)
         | Message::ModifiersChanged(..)
+        | Message::WindowSize(..)
         | Message::Star(..)
         | Message::CopyFrame(..)
         | Message::StyleMenu(..)

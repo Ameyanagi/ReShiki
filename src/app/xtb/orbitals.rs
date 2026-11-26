@@ -246,7 +246,7 @@ impl App {
                     && self.inspector_tab == crate::app::InspectorTab::Predict
                     && self.xtb.page == super::Page::Xtb
             } else {
-                !self.xtb.dock.collapsed
+                !self.tab.xtb.palette.collapsed
             }
     }
 
