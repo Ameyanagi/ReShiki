@@ -391,6 +391,7 @@ impl App {
             .rev()
             .find(|(_, stored)| {
                 matches!(stored.result.status, reshiki::qcdata::Status::Converged)
+                    && !super::ts::is_ts(&stored.result)
                     && self.xtb_result_belongs(stored, &target)
             })?;
         self.xtb_result(entry)

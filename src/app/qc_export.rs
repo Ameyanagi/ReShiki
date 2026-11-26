@@ -378,10 +378,11 @@ impl Dialog {
     }
 
     fn file_stem(&self) -> String {
-        self.ts_source.as_ref().map_or_else(
-            || qc_input::default_stem(&stem(&self.name), self.program),
-            |source| source.stem(self.job),
-        )
+        let stem = self
+            .ts_source
+            .as_ref()
+            .map_or_else(|| stem(&self.name), |source| source.stem(self.job));
+        qc_input::default_stem(&stem, self.program)
     }
 }
 

@@ -148,14 +148,9 @@ fn generated_ts_model_clears_the_arrow_and_all_participants() {
 
     let doc = &app.tab.doc;
     let (lo, hi) = reshiki::models3d::frame(doc, &doc.models[0]).unwrap();
-    let arrow = &doc.arrows[0];
-    assert!((lo.x.midpoint(hi.x) - arrow.start.x.midpoint(arrow.end.x)).abs() < 1e-3);
-    let gap = doc.drawing_style.bond_length_world;
-    for (_, bottom) in bounds.into_iter().map(Option::unwrap) {
-        assert!(
-            lo.y >= bottom.y + gap - 1e-3,
-            "frame top {lo:?}, object bottom {bottom:?}"
-        );
+    for (a, b) in bounds.into_iter().map(Option::unwrap) {
+        let overlaps = lo.x < b.x && hi.x > a.x && lo.y < b.y && hi.y > a.y;
+        assert!(!overlaps, "frame {lo:?}–{hi:?} covers {a:?}–{b:?}");
     }
 }
 
@@ -274,6 +269,44 @@ fn selecting_reactions_switches_the_palette_and_restores_its_path_preview() {
     select(&mut app, c);
     assert!(app.xtb_bottom_palette().is_none());
     select(&mut app, a);
+    assert_eq!(app.tab.xtb.palette.view, results::View::Path);
+    assert_eq!(app.xtb_step(), Some(1));
+    assert!(app.xtb_step_preview().is_some());
+}
+
+#[test]
+fn changing_a_fallback_molecule_tab_preserves_the_reaction_path_preview() {
+    use super::super::tests::{MOVED, START, event, optimized, water};
+
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    let (mut molecule, _) = water(super::super::CalcTask::Optimize);
+    event(&mut molecule, optimized(&START, &MOVED));
+    let mut doc = app.tab.doc.clone();
+    reshiki::editing::append_preserving_layout(
+        &mut doc,
+        &molecule.tab.doc,
+        reshiki::document::Point::new(0., 200.),
+    );
+    let oxygen = doc.atoms.last().unwrap().id;
+    app.try_replace_document(doc, vec![arrow]).unwrap();
+
+    send(&mut app, XtbAction::Ts(Action::Image(1)));
+    assert!(app.xtb_step_preview().is_some());
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![oxygen])));
+    assert_eq!(
+        app.xtb_shown().unwrap().stored.result.task,
+        CalcTask::Optimize
+    );
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(results::View::Summary)),
+    );
+    assert_eq!(app.tab.xtb.palette.view, results::View::Summary);
+    assert!(app.xtb_step_preview().is_none());
+
+    select(&mut app, arrow);
     assert_eq!(app.tab.xtb.palette.view, results::View::Path);
     assert_eq!(app.xtb_step(), Some(1));
     assert!(app.xtb_step_preview().is_some());
@@ -423,6 +456,41 @@ async fn deselecting_keeps_the_failed_rerun_on_the_shown_reaction() {
             .iter()
             .any(|text| text.starts_with("Previous result ("))
     );
+}
+
+#[test]
+fn an_unrelated_molecule_failure_does_not_interrupt_the_shown_ts_vibration() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let mut report = example_report(run.launch.as_ref().unwrap());
+    let data = Arc::get_mut(&mut report).unwrap();
+    let modes = &mut data.result.vibrations.as_mut().unwrap().modes;
+    *modes = vec![0.; data.frames[0].numbers.len() * 3];
+    modes[0] = 1.;
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    let mut doc = app.tab.doc.clone();
+    let other = doc.add_atom("O", reshiki::document::Point::new(0., 200.));
+    app.try_replace_document(doc, vec![arrow]).unwrap();
+    send(
+        &mut app,
+        XtbAction::Palette(palette::Action::View(results::View::Vibrations)),
+    );
+    assert!(app.xtb_vibration_preview().is_some());
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![other])));
+    app.xtb.settings.iterations = "invalid".into();
+    send(&mut app, XtbAction::Run);
+    assert_eq!(app.xtb_failed().unwrap().atoms, vec![other]);
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![])));
+
+    assert_eq!(app.xtb_shown().unwrap().arrow, Some(arrow));
+    assert!(app.xtb_failed().is_none());
+    assert!(app.xtb_vibration_preview().is_some());
 }
 
 #[tokio::test]

@@ -618,6 +618,12 @@ impl App {
                 self.expect_inspector_width_change(old_width);
             }
             Action::View(view) => {
+                if let Some((_, shown)) = self.xtb_shown_entry()
+                    && !self.tab.xtb.palette.follows(&shown.result)
+                {
+                    let result = Arc::clone(&shown.result);
+                    self.xtb_show_result(&result);
+                }
                 self.tab.xtb.palette.view = view;
                 if !matches!(view, View::Steps | View::Conformers | View::Path) {
                     self.xtb_end_preview();
