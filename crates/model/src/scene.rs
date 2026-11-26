@@ -1633,8 +1633,14 @@ fn selections_bounds_with_indicators(
     }
     // Only selected objects are measured, so one small selection stays cheap.
     for g in doc.graphics.iter().filter(|g| owners.contains_key(&g.id)) {
-        let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
-        grow(g.id, &mut [lo, hi].into_iter());
+        if g.kind == crate::graphics::GraphicKind::MoDiagram {
+            for corner in g.frame_corners() {
+                grow(g.id, &mut std::iter::once(corner));
+            }
+        } else {
+            let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
+            grow(g.id, &mut [lo, hi].into_iter());
+        }
     }
     // A moved repeat label counts with its bracket. Automatic labels keep the
     // measurement older drawings were laid out with.
@@ -2662,9 +2668,15 @@ fn graphic_primitive(
     doc: &Document,
     shaded: usize,
 ) -> Vec<Primitive> {
-    if g.kind == crate::graphics::GraphicKind::TlcPlate {
-        let mut out: Vec<_> = g
-            .parts()
+    let diagram = if let Some(mo) = &g.mo {
+        Some(mo.draw(g, doc))
+    } else if g.kind == crate::graphics::GraphicKind::TlcPlate {
+        Some((g.parts(), g.tlc_labels(), vec![]))
+    } else {
+        None
+    };
+    if let Some((parts, labels, pictures)) = diagram {
+        let mut out: Vec<_> = parts
             .into_iter()
             .map(|p| Primitive::Path {
                 commands: p.commands,
@@ -2672,9 +2684,10 @@ fn graphic_primitive(
                 filled: p.filled,
             })
             .collect();
-        for label in g.tlc_labels() {
+        for label in labels {
             push_annotation(&mut out, &label, false);
         }
+        out.extend(pictures);
         return out
             .into_iter()
             .map(|p| see_through(p, g.style.effects.opacity))

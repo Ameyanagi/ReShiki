@@ -172,6 +172,7 @@ impl Graphic {
             self.kind,
             GraphicKind::Picture
                 | GraphicKind::TlcPlate
+                | GraphicKind::MoDiagram
                 | GraphicKind::Symbol(_)
                 | GraphicKind::Orbital(_)
                 | GraphicKind::Icon

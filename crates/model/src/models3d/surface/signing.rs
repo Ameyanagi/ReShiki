@@ -6,6 +6,7 @@ use crate::models3d::panel_model;
 enum SnapshotSlot {
     Surface(usize),
     Panel(usize, usize),
+    MoPicture(usize, usize),
 }
 
 impl SnapshotSlot {
@@ -22,6 +23,14 @@ impl SnapshotSlot {
                 let snapshot = figure.snapshot.as_ref()?;
                 Some((snapshot, view_signature(doc, &panel_model(model, figure))))
             }
+            Self::MoPicture(index, picture) => {
+                let mo = doc.graphics.get(index)?.mo.as_deref()?;
+                let snapshot = mo.pictures.get(picture)?.snapshot.as_ref()?;
+                Some((
+                    snapshot,
+                    view_signature(doc, &mo.picture_model(doc, picture)?),
+                ))
+            }
         }
     }
 
@@ -31,6 +40,13 @@ impl SnapshotSlot {
             Self::Panel(index, panel) => {
                 &mut doc.models.get_mut(index)?.panels.get_mut(panel)?.figure
             }
+            Self::MoPicture(index, picture) => doc
+                .graphics
+                .get_mut(index)?
+                .mo
+                .as_deref_mut()?
+                .pictures
+                .get_mut(picture)?,
         };
         figure.snapshot.as_mut()
     }
@@ -47,6 +63,15 @@ pub(crate) fn keep_signed<R>(doc: &mut Document, renumber: impl FnOnce(&mut Docu
             std::iter::once(SnapshotSlot::Surface(index))
                 .chain((0..model.panels.len()).map(move |panel| SnapshotSlot::Panel(index, panel)))
         })
+        .chain(
+            doc.graphics
+                .iter()
+                .enumerate()
+                .flat_map(|(index, graphic)| {
+                    let count = graphic.mo.as_deref().map_or(0, |mo| mo.pictures.len());
+                    (0..count).map(move |picture| SnapshotSlot::MoPicture(index, picture))
+                }),
+        )
         .filter(|slot| {
             slot.snapshot_and_view(doc)
                 .is_some_and(|(snapshot, view)| snapshot.view == view)

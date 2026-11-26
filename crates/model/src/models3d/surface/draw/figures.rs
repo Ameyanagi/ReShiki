@@ -1,11 +1,14 @@
 use super::*;
 use crate::canvas_theme::CanvasTheme;
 use crate::document::CALCULATIONS;
+use crate::graphics::{Graphic, GraphicStyle, MoDiagram};
 use crate::models3d::{
     Labels, balls_and_sticks, frame, primitives,
     surface::{Figure, OrbitalRef, Snapshot, snapshot},
 };
-use reshiki_qcdata::{CalcResult, Frame, Spin, Task};
+use reshiki_qcdata::{
+    BasisSet, Beta, CalcResult, Frame, OrbitalSet, Orbitals, Shell, Source, Spin, Task,
+};
 use serde_json::json;
 
 static REGISTRY_TEST: Mutex<()> = Mutex::new(());
@@ -67,6 +70,344 @@ fn two_lobes() -> Meshes {
     };
     let mesh = mesh::isosurface(field, grid, 0.05);
     Arc::new([mesh.clone(), mesh])
+}
+
+fn mo_diagram_document() -> Document {
+    let mut doc = tests::ethylene();
+    // The diagram supplies its own small model even when the molecule is 2D.
+    doc.models[0].display = crate::models3d::Display::TwoD;
+    let atom = doc.atoms[0].id;
+    let launch = science::launch(&doc, atom, 0, 1).unwrap();
+    let mut result = energy_result(&launch.frame);
+    result.settings = serde_json::from_value(json!({"xtb": {"method": "gfn2_xtb"}})).unwrap();
+    result.provenance.source = Source::Calculated {
+        engine_revision: "test".into(),
+    };
+    result.orbitals = Some(Orbitals {
+        basis: Some(BasisSet {
+            shells: vec![Shell {
+                atom: 0,
+                l: 0,
+                pure: false,
+                exponents_per_bohr2: vec![1.],
+                coefficients: vec![1.],
+            }],
+        }),
+        core_electrons: vec![],
+        alpha: OrbitalSet {
+            energies_hartree: vec![-0.4, -0.2, 0.1],
+            occupations: vec![2., 0., 0.],
+            symmetries: vec![],
+            rows: vec![0, 1, 2],
+            coefficients: vec![0.25, 0.5, 0.75],
+        },
+        beta: Beta::Restricted,
+    });
+    result.validate(&launch.frame).unwrap();
+    let columns = crate::orbital_levels::columns(result.orbitals.as_ref().unwrap());
+    place(&mut doc.models[0], &result);
+    let figure = doc.models[0].surface.take().unwrap();
+    let mut mo = MoDiagram::new(atom, science::result_key(&result), columns);
+    mo.pictures = (0..2)
+        .map(|index| Figure {
+            orbital: OrbitalRef {
+                index,
+                ..figure.orbital.clone()
+            },
+            ..figure.clone()
+        })
+        .collect();
+    let (width, height) = mo.natural_size(&doc.drawing_style);
+    doc.graphics.push(Graphic::mo_diagram(
+        doc.next_id(),
+        Point::new(180., -120.),
+        Point::new(width, height),
+        mo,
+        GraphicStyle::default(),
+    ));
+    science::attach(&mut doc, &launch, vec![], result).unwrap();
+    doc
+}
+
+fn mo_surfaces(doc: &Document) -> usize {
+    crate::scene::primitives(doc)
+        .iter()
+        .filter(|primitive| matches!(primitive, Primitive::Surface { .. }))
+        .count()
+}
+
+fn register_mo_picture(doc: &Document, index: usize) {
+    let figure = &doc.graphics[0].mo.as_ref().unwrap().pictures[index];
+    let small = crate::models3d::panel_model(&doc.models[0], figure);
+    register(key(doc, &small).unwrap(), two_lobes());
+}
+
+#[test]
+fn mo_diagram_pictures_draw_live_and_saved_after_reopening() {
+    let _guard = lock_registry();
+    let doc = mo_diagram_document();
+    assert_eq!(doc.file_version(), CALCULATIONS);
+    assert_eq!(mo_surfaces(&doc), 0);
+    register_mo_picture(&doc, 0);
+    assert_eq!(mo_surfaces(&doc), 1);
+    let stroke_widths = |doc: &Document| {
+        crate::scene::primitives(doc)
+            .into_iter()
+            .flat_map(|primitive| match primitive {
+                Primitive::Surface { groups } => groups
+                    .into_iter()
+                    .flat_map(|g| g.strokes)
+                    .map(|s| s.outline.width)
+                    .collect(),
+                _ => vec![],
+            })
+            .collect::<Vec<_>>()
+    };
+    let live_widths = stroke_widths(&doc);
+
+    let saved = doc.current();
+    let pictures = &saved.graphics[0].mo.as_ref().unwrap().pictures;
+    assert!(pictures[0].snapshot.is_some());
+    assert!(pictures[1].snapshot.is_none());
+    assert!(
+        doc.graphics[0].mo.as_ref().unwrap().pictures[0]
+            .snapshot
+            .is_none()
+    );
+    let bytes = doc.file_json().unwrap();
+    REGISTERED.lock().unwrap().clear();
+    assert_eq!(mo_surfaces(&saved), 1, "the saved picture needs no mesh");
+    assert!(!live_widths.is_empty());
+    assert_eq!(stroke_widths(&saved), live_widths);
+
+    let reopened = Document::from_json(&bytes).unwrap();
+    assert_eq!(reopened.graphics[0].mo, saved.graphics[0].mo);
+    assert_eq!(mo_surfaces(&reopened), 1);
+    let mut resized = reopened.clone();
+    resized.graphics[0].axis_x.x *= 0.7;
+    resized.graphics[0].axis_y.y *= 0.7;
+    assert_eq!(mo_surfaces(&resized), 1, "resizing keeps the saved surface");
+    let origin = resized.graphics[0].origin;
+    resized.graphics[0].map_positions(|p| p.turned(origin, 45.));
+    assert_eq!(mo_surfaces(&resized), 1, "turning keeps the saved surface");
+    let mut stale = reopened.clone();
+    stale.atoms[0].isotope = 13;
+    assert_eq!(mo_surfaces(&stale), 0);
+    assert!(crate::scene::primitives(&stale).iter().any(|primitive| {
+        matches!(primitive, Primitive::Text { text, .. } if text.starts_with("HOMO"))
+    }));
+    let mut missing = reopened;
+    missing.science.results.clear();
+    assert_eq!(mo_surfaces(&missing), 0);
+}
+
+#[test]
+fn mo_diagram_current_refreshes_each_picture_in_its_own_slot() {
+    let _guard = lock_registry();
+    let mut doc = mo_diagram_document();
+    let stale = &mut doc.graphics[0].mo.as_mut().unwrap().pictures[0];
+    stale.orbital.result = "stale".into();
+    stale.snapshot = Some(Snapshot {
+        view: "stale".into(),
+        reach: 3.,
+        shapes: "the first slot is retained".into(),
+    });
+    let original = stale.clone();
+    register_mo_picture(&doc, 1);
+    assert_eq!(mo_surfaces(&doc), 1);
+
+    let saved = doc.current();
+    let pictures = &saved.graphics[0].mo.as_ref().unwrap().pictures;
+    assert_eq!(pictures[0], original);
+    assert_eq!(pictures[1].orbital.index, 1);
+    assert!(pictures[1].snapshot.is_some());
+    assert!(
+        doc.graphics[0].mo.as_ref().unwrap().pictures[1]
+            .snapshot
+            .is_none()
+    );
+    REGISTERED.lock().unwrap().clear();
+    assert_eq!(mo_surfaces(&saved), 1);
+}
+
+#[test]
+fn mo_diagram_pictures_pin_rows_and_carry_referenced_science() {
+    let _guard = lock_registry();
+    let doc = mo_diagram_document();
+    let mo = doc.graphics[0].mo.as_ref().unwrap();
+    assert_eq!(
+        doc.orbital_pins().get(&mo.result),
+        Some(&vec![(Spin::Alpha, 0), (Spin::Alpha, 1)])
+    );
+    let original = doc.science.results[0].result.orbitals.as_ref().unwrap();
+    let saved = doc.current();
+    let orbitals = saved.science.results[0].result.orbitals.as_ref().unwrap();
+    assert_eq!(orbitals.basis, original.basis);
+    assert_eq!(orbitals.alpha.rows, [0, 1]);
+    assert_eq!(orbitals.alpha.coefficients, [0.25, 0.5]);
+    assert_eq!(original.alpha.rows, [0, 1, 2]);
+
+    let science = science::for_figures(&doc);
+    assert_eq!(science.results.len(), 1);
+    assert_eq!(science.attachments.len(), 1);
+    let orbitals = science.results[0].result.orbitals.as_ref().unwrap();
+    assert_eq!(orbitals.alpha.rows, [0, 1]);
+    assert_eq!(orbitals.alpha.coefficients, [0.25, 0.5]);
+    Document {
+        science,
+        ..doc.clone()
+    }
+    .validate()
+    .unwrap();
+
+    let mut levels_only = doc.clone();
+    levels_only.graphics[0]
+        .mo
+        .as_mut()
+        .unwrap()
+        .pictures
+        .clear();
+    let science = science::for_figures(&levels_only);
+    assert_eq!(
+        science.results.len(),
+        1,
+        "the diagram references its result"
+    );
+    let orbitals = science.results[0].result.orbitals.as_ref().unwrap();
+    assert!(orbitals.alpha.rows.is_empty());
+    assert!(orbitals.basis.is_none());
+    let mut without_science = levels_only;
+    without_science.science = Default::default();
+    assert_eq!(without_science.file_version(), CALCULATIONS);
+}
+
+#[test]
+fn mo_diagram_copy_keeps_saved_pictures_with_a_remapped_molecule() {
+    let _guard = lock_registry();
+    let doc = mo_diagram_document();
+    register_mo_picture(&doc, 0);
+    let source = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    assert_eq!(mo_surfaces(&source), 1);
+    let part = crate::editing::selection(&source, &source.all_ids());
+    assert_eq!(part.science.results.len(), 1);
+    assert_eq!(
+        part.science.results[0]
+            .result
+            .orbitals
+            .as_ref()
+            .unwrap()
+            .alpha
+            .rows,
+        [0, 1]
+    );
+    let mut pasted = source.clone();
+    let inserted = crate::editing::append(&mut pasted, &part, Point::new(400., 0.));
+    let copy = pasted.graphics[1].mo.as_ref().unwrap();
+    let molecule = copy.molecule.unwrap();
+    assert!(inserted.contains(&molecule));
+    assert_ne!(
+        copy.molecule,
+        source.graphics[0].mo.as_ref().unwrap().molecule
+    );
+    assert!(pasted.models[1].contains(molecule));
+    assert!(copy.linked);
+    assert_eq!(mo_surfaces(&pasted), 2);
+    pasted.validate().unwrap();
+    let reopened = Document::from_json(&pasted.file_json().unwrap()).unwrap();
+    assert_eq!(mo_surfaces(&reopened), 2);
+}
+
+#[test]
+fn mo_diagram_copied_alone_becomes_static_without_pictures() {
+    let _guard = lock_registry();
+    let doc = mo_diagram_document();
+    register_mo_picture(&doc, 0);
+    let source = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    let part = crate::editing::selection(&source, &[source.graphics[0].id]);
+    assert!(part.models.is_empty());
+    assert!(part.atoms.is_empty());
+    let mut pasted = Document::default();
+    assert!(!crate::editing::append(&mut pasted, &part, Point::new(20., 30.)).is_empty());
+    let copy = pasted.graphics[0].mo.as_ref().unwrap();
+    assert_eq!(copy.molecule, None);
+    assert!(!copy.linked);
+    assert_eq!(
+        copy.columns,
+        source.graphics[0].mo.as_ref().unwrap().columns
+    );
+    assert_eq!(copy.pictures.len(), 2);
+    assert_eq!(mo_surfaces(&pasted), 0);
+    assert!(crate::scene::primitives(&pasted).iter().any(|primitive| {
+        matches!(primitive, Primitive::Text { text, .. } if text.starts_with("HOMO"))
+    }));
+    pasted.validate().unwrap();
+}
+
+#[test]
+fn mo_diagram_generic_tiles_keep_signed_pictures() {
+    use crate::{atom_text, generic};
+
+    let _guard = lock_registry();
+    let mut doc = mo_diagram_document();
+    let site = doc.add_atom("*", Point::new(1000., 0.));
+    doc = atom_text::apply(&doc, site, "[Cl,Br]", atom_text::Mode::Auto).unwrap();
+    register_mo_picture(&doc, 0);
+    let saved = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    let expanded = generic::prepare_expansion(&saved, generic::Limits::default())
+        .unwrap()
+        .take()
+        .unwrap();
+    let molecules: std::collections::HashSet<_> = expanded
+        .graphics
+        .iter()
+        .filter_map(|g| g.mo.as_ref()?.molecule)
+        .collect();
+    assert_eq!(molecules.len(), 2);
+    assert_eq!(mo_surfaces(&expanded), 2);
+}
+
+#[test]
+fn mo_diagram_keeps_pictures_when_moving_its_molecule_to_attach() {
+    use crate::joining::Prepared;
+    use crate::templates::{Anchor, Connection};
+
+    let _guard = lock_registry();
+    let mut doc = mo_diagram_document();
+    let atom = doc.atoms[0].id;
+    let diagram = doc.graphics[0].id;
+    doc.translate(&doc.models[0].linked_atoms.clone(), 400., 200.);
+    let source = doc.add_atom("C", Point::new(180., 0.));
+    let source_end = doc.add_atom("O", Point::new(222., 0.));
+    doc.add_bond(source, source_end, 1, "plain");
+    let target = doc.add_atom("C", Point::default());
+    let target_end = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(target, target_end, 1, "plain");
+    register_mo_picture(&doc, 0);
+    let saved = doc.current();
+    REGISTERED.lock().unwrap().clear();
+    for move_diagram in [false, true] {
+        let mut moving = vec![source, atom];
+        if move_diagram {
+            moving.push(diagram);
+        }
+        let (joined, _) = Prepared::new(&saved, &moving)
+            .unwrap()
+            .place(
+                Point::default(),
+                None,
+                5.,
+                Anchor::Atom(source),
+                Connection::Connect,
+            )
+            .unwrap();
+        let mo = joined.graphics[0].mo.as_ref().unwrap();
+        assert_eq!(mo.molecule, Some(atom));
+        assert!(mo.linked);
+        assert_eq!(mo_surfaces(&joined), 1);
+    }
 }
 
 #[test]

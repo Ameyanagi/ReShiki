@@ -90,15 +90,16 @@ pub enum Arrange {
 /// The selected part as its own document: [`crate::attachments::selection`],
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
+    selection_with_diagrams(doc, ids, &[])
+}
+
+pub(crate) fn selection_with_diagrams(
+    doc: &Document,
+    ids: &[u64],
+    stationary: &[&crate::graphics::MoDiagram],
+) -> Document {
     let mut part = selection_part(doc, ids);
-    if part
-        .models
-        .iter()
-        .any(|model| model.figures().next().is_some())
-    {
-        part.science = doc.science.clone();
-        part.science = crate::science::for_figures(&part);
-    }
+    part.science = crate::science::for_figures_from(&part, &doc.science, stationary);
     part
 }
 
@@ -251,6 +252,12 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
     part.annotations.retain(|a| ids.contains(&a.id));
     part.arrows.retain(|a| ids.contains(&a.id));
     part.graphics.retain(|g| ids.contains(&g.id));
+    for mo in part.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
+        if mo.molecule.is_some_and(|id| !ids.contains(&id)) {
+            mo.molecule = None;
+            mo.linked = false;
+        }
+    }
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
     part.abbreviations
@@ -639,6 +646,12 @@ fn rename_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
         crate::leaders::remap(g, mapping);
         crate::cycles::remap(g, mapping);
         crate::graphics::table::remap(g, mapping)?;
+        if let Some(mo) = &mut g.mo {
+            mo.molecule = mo.molecule.and_then(|id| mapping.get(&id).copied());
+            if mo.molecule.is_none() {
+                mo.linked = false;
+            }
+        }
         if let Some(text) = &mut g.text {
             map(text)?;
         }
