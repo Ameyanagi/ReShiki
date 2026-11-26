@@ -25,6 +25,8 @@ mod generic;
 mod groups;
 mod labels;
 mod ligands;
+#[cfg(test)]
+mod mo_diagram_tests;
 mod objects;
 #[cfg(test)]
 mod panel_tests;
@@ -68,6 +70,16 @@ pub const FISCHER_EXPORT_ADVICE: &str = "CDXML/CDX cannot preserve Fischer proje
 /// Generic advice transported by the engine; the application names its Copy shortcut.
 pub const TEXT_LABEL_COPY_ADVICE: &str =
     "Try Copy for an editable copy · Save as .rsk keeps everything";
+
+pub const MO_DIAGRAM_EXPORT_NOTICE: &str = "CDXML/CDX exports MO diagrams as grouped lines and text, without orbital pictures or calculation links. Save a .rsk file to retain the complete diagram.";
+
+pub(crate) fn mo_diagram_export_notice(document: &Document) -> Option<String> {
+    document
+        .graphics
+        .iter()
+        .any(|g| g.mo.is_some())
+        .then(|| MO_DIAGRAM_EXPORT_NOTICE.into())
+}
 
 fn label_excerpt(label: &str) -> String {
     let mut excerpt = String::new();
@@ -197,8 +209,9 @@ struct Writer<'a> {
     split_fragments: bool,
 }
 
-/// Serialize a complete drawing without mutating it. Reject unrepresentable
-/// appearances and ownership rather than detaching or flattening objects.
+/// Serialize a complete drawing without mutating it. MO diagrams travel as
+/// grouped lines and text, omitting orbital pictures and calculation links.
+/// Reject other unrepresentable appearances and ownership.
 /// Mechanism-arrow curves retain their resolved geometry; their optional editor
 /// links cannot be represented. Callers display `arrow_anchors::export_notice`.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {

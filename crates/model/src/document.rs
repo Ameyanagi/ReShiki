@@ -689,17 +689,32 @@ impl Document {
         for model in &mut saved.models {
             crate::models3d::refresh_surface_snapshot(self, model);
         }
+        for mo in saved
+            .graphics
+            .iter_mut()
+            .filter_map(|g| g.mo.as_deref_mut())
+        {
+            mo.refresh_snapshots(self);
+        }
         saved
+    }
+
+    fn orbital_figures(&self) -> impl Iterator<Item = &crate::models3d::surface::Figure> {
+        self.models
+            .iter()
+            .flat_map(crate::models3d::Model3d::figures)
+            .chain(
+                self.graphics
+                    .iter()
+                    .filter_map(|g| g.mo.as_deref())
+                    .flat_map(|mo| &mo.pictures),
+            )
     }
 
     /// Orbital rows needed by the drawing, grouped by result key.
     pub fn orbital_pins(&self) -> HashMap<String, Vec<(reshiki_qcdata::Spin, u32)>> {
         let mut pins: HashMap<_, Vec<_>> = HashMap::new();
-        for figure in self
-            .models
-            .iter()
-            .flat_map(crate::models3d::Model3d::figures)
-        {
+        for figure in self.orbital_figures() {
             let orbital = &figure.orbital;
             pins.entry(orbital.result.clone())
                 .or_default()
@@ -711,10 +726,8 @@ impl Document {
     pub fn file_version(&self) -> u32 {
         use crate::graphics::{GraphicKind, LinePattern};
         if !self.science.is_empty()
-            || self
-                .models
-                .iter()
-                .any(|model| model.figures().next().is_some())
+            || self.orbital_figures().next().is_some()
+            || self.graphics.iter().any(|g| g.mo.is_some())
         {
             CALCULATIONS
         } else if self.graphics.iter().any(|g| {
@@ -976,6 +989,12 @@ impl Document {
         crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
+        for mo in self.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
+            if mo.molecule.is_some_and(|id| ids.contains(&id)) {
+                mo.molecule = None;
+                mo.linked = false;
+            }
+        }
         crate::equipment::solve::prune(self);
         crate::arrow_labels::prune(self);
         crate::shape_text::prune(self);
@@ -1567,6 +1586,26 @@ fn frame_bytes(doc: &Document) -> usize {
         })
         .sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let mos: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.mo.as_deref())
+        .map(|mo| {
+            size_of::<crate::graphics::MoDiagram>()
+                + mo.result.len()
+                + bytes(mo.columns.as_slice())
+                + mo.columns
+                    .iter()
+                    .map(|c| {
+                        c.label.len()
+                            + bytes(c.energies_ev.as_slice())
+                            + bytes(c.occupations.as_slice())
+                    })
+                    .sum::<usize>()
+                + bytes(mo.pictures.as_slice())
+                + mo.pictures.iter().map(figure_bytes).sum::<usize>()
+        })
+        .sum();
     let ir: usize = doc
         .graphics
         .iter()
@@ -1609,15 +1648,7 @@ fn frame_bytes(doc: &Document) -> usize {
                         + bytes(&g.sources[..])
                 })
                 + m.panels.iter().map(|p| p.caption.len()).sum::<usize>()
-                + m.figures()
-                    .map(|figure| {
-                        figure.orbital.result.len()
-                            + figure
-                                .snapshot
-                                .as_ref()
-                                .map_or(0, |s| s.view.len() + s.shapes.len())
-                    })
-                    .sum::<usize>()
+                + m.figures().map(figure_bytes).sum::<usize>()
         })
         .sum();
     size_of::<Document>()
@@ -1643,11 +1674,20 @@ fn frame_bytes(doc: &Document) -> usize {
         + text
         + paths
         + ir
+        + mos
         + tables
         + tlc
         + nodes
         + models
         + doc.science.container_bytes()
+}
+
+fn figure_bytes(figure: &crate::models3d::surface::Figure) -> usize {
+    figure.orbital.result.len()
+        + figure
+            .snapshot
+            .as_ref()
+            .map_or(0, |s| s.view.len() + s.shapes.len())
 }
 impl History {
     /// Undo steps kept however large the drawing.

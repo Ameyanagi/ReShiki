@@ -124,7 +124,12 @@ impl Prepared {
             return Err(crate::generic::JOIN_NOTICE.into());
         }
         shown_in_3d(doc, &moving)?;
-        let fragment = editing::selection(doc, &moving);
+        let stationary: Vec<_> = doc
+            .graphics
+            .iter()
+            .filter_map(|g| g.mo.as_deref().filter(|_| !moving.contains(&g.id)))
+            .collect();
+        let fragment = editing::selection_with_diagrams(doc, &moving, &stationary);
         if fragment.atoms.is_empty() {
             return Err("Select a molecule or atom to move and attach.".into());
         }
@@ -352,6 +357,12 @@ impl Prepared {
             result
         })
         .ok_or("The fragment could not be joined.")?;
+        let joined_mapping: HashMap<_, _> = self
+            .original
+            .atoms
+            .iter()
+            .map(|atom| (atom.id, merged.get(&atom.id).copied().unwrap_or(atom.id)))
+            .collect();
         // Preparation deletes moving atoms only from a detached preview base.
         // An unselected arrow still belongs to the original document and must
         // follow the moved/shared target rather than lose its attachment.
@@ -373,14 +384,13 @@ impl Prepared {
             // A cycle keeps every part, moved or not; the join remaps its atoms.
             if let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id) {
                 graphic.cycle = original.cycle.clone();
+                // A diagram's molecule may be on the other side of the move.
+                if let Some((mo, old)) = graphic.mo.as_deref_mut().zip(original.mo.as_deref()) {
+                    mo.molecule = old.molecule.and_then(|id| joined_mapping.get(&id).copied());
+                    mo.linked = mo.molecule.is_some() && old.linked;
+                }
             }
         }
-        let joined_mapping: HashMap<_, _> = self
-            .original
-            .atoms
-            .iter()
-            .map(|atom| (atom.id, merged.get(&atom.id).copied().unwrap_or(atom.id)))
-            .collect();
         // Shared attachment sites cannot carry positioned marks. Other moved
         // marks retain their original host identity after temporary-ID restore.
         crate::arrow_anchors::remap_for_join(&mut placed, &self.original.atoms, &joined_mapping);

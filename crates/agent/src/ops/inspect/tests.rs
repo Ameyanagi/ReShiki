@@ -195,6 +195,34 @@ fn listed_ids(summary: &Value, list: &str) -> Value {
         .collect()
 }
 
+#[tokio::test]
+async fn inspect_names_mo_diagrams() {
+    use crate::graphics::{Graphic, MoDiagram};
+    let mut doc = Document::default();
+    let molecule = doc.add_atom("C", Point::default());
+    let column = serde_json::from_value(json!({
+        "spin": "alpha",
+        "label": "",
+        "energies_ev": [-10., -5.],
+        "occupations": [2., 0.],
+        "occupied": 1,
+    }))
+    .unwrap();
+    let id = doc.next_id();
+    doc.graphics.push(Graphic::mo_diagram(
+        id,
+        Point::new(40., 20.),
+        Point::new(360., 300.),
+        MoDiagram::new(molecule, "0123456789abcdef".into(), vec![column]),
+        Default::default(),
+    ));
+    let (host, handle) = hosting(doc, Budgets::default());
+    let summary = inspect_ok(&host, &handle, Value::Null).await;
+    assert_eq!(summary["counts"]["graphics"], 1);
+    assert_eq!(summary["graphics"][0]["kind"], "mo_diagram");
+    assert_eq!(summary["graphics"][0]["picture"], Value::Null);
+}
+
 /// The keys numbers appear under, outside the top-level `counts`.
 fn numeric_keys(value: &Value, key: &str, found: &mut BTreeSet<String>) {
     match value {
