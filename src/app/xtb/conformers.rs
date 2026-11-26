@@ -8,6 +8,7 @@
 //! `Task::Conformers` result: the lowest conformer is its frame and the
 //! ranked conformers (at most 32) its trajectory, saved as compact frames.
 use reshiki::qcdata::{self, CalcResult, XtbMethod};
+use reshiki::science::{self, TetrahedralStereo, UndefinedCentre};
 
 #[cfg(all(feature = "conformer-bench", not(target_arch = "wasm32")))]
 mod bench;
@@ -43,6 +44,7 @@ pub(crate) struct Settings {
     pub representatives: String,
     /// Lowest 3 per cluster instead of the lowest 1.
     pub three: bool,
+    pub invert_undefined_stereo: bool,
 }
 
 impl Default for Settings {
@@ -54,6 +56,7 @@ impl Default for Settings {
             window: "15".into(),
             representatives: "20".into(),
             three: false,
+            invert_undefined_stereo: false,
         }
     }
 }
@@ -61,7 +64,7 @@ impl Default for Settings {
 impl Settings {
     /// The search these fields describe, with hydrogens counted when known.
     pub(crate) fn config(&self, atoms: Option<usize>) -> Result<Config, String> {
-        let config = Config::new(
+        let mut config = Config::new(
             self.starts.trim().parse().unwrap_or_default(),
             self.minimizer,
             self.diversity,
@@ -73,6 +76,7 @@ impl Settings {
             },
             if self.three { 3 } else { 1 },
         )?;
+        config.invert_undefined_stereo = self.invert_undefined_stereo;
         if let Some(count) = atoms {
             config.check_atoms(count).map_err(|failure| match failure {
                 super::state::Failure::Other(message) => format!("{message}."),
@@ -230,6 +234,7 @@ pub(crate) enum Action {
     Window(String),
     Representatives(String),
     Three(bool),
+    InvertUndefinedStereo(bool),
     /// Draw the other kept conformers faint behind the shown one.
     Overlay(bool),
     Export(Format),
@@ -248,19 +253,31 @@ pub(crate) struct Ensemble {
     pub overlay: bool,
     /// Rows for one result and document state; the stereo check and the
     /// symmetry-aware RMSDs are too slow for every frame.
-    table: std::cell::RefCell<Option<Table>>,
+    table: std::cell::RefCell<Table>,
 }
 
 /// The table rows of one result, measured once.
+#[derive(Default)]
 pub(crate) struct Table {
     result: std::sync::Weak<CalcResult>,
     revision: (u64, u64),
     pub rows: Vec<Row>,
+    pub stereo_note: Option<String>,
+}
+
+impl Table {
+    pub fn rank(&self, step: usize) -> Option<usize> {
+        self.rows
+            .iter()
+            .position(|row| row.step == step || row.mirror_step == Some(step))
+    }
 }
 
 /// One kept conformer as the tab lists it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Row {
+    /// Index in the saved trajectory, independent of the displayed rank.
+    pub step: usize,
     pub delta_kcal: f64,
     /// ΔE by the minimizer that made the start, when it was a force field.
     pub start_kcal: Option<f64>,
@@ -271,6 +288,24 @@ pub(crate) struct Row {
     /// Whether the drawing's stereocentres and double bonds hold; `None`
     /// when the check cannot run (a stale result, an error).
     pub stereo: Option<bool>,
+    pub tetrahedral: Option<TetrahedralStereo>,
+    pub mirror_step: Option<usize>,
+}
+
+impl Row {
+    pub fn undefined(&self) -> &[UndefinedCentre] {
+        self.tetrahedral
+            .as_ref()
+            .map_or(&[], |stereo| &stereo.undefined)
+    }
+}
+
+pub(super) fn opposite_cip(cip: Option<&str>) -> Option<&'static str> {
+    match cip {
+        Some("R") => Some("S"),
+        Some("S") => Some("R"),
+        _ => None,
+    }
 }
 
 /// Rows for a stored conformer search on `doc`; `atoms` maps frame atoms to
@@ -288,25 +323,117 @@ pub(crate) fn rows(
         return vec![];
     };
     let field = start_field(result).is_some();
-    reshiki_xtb_jobs::conformers::trajectory_rows(doc, atoms, path, reference_energy)
-        .into_iter()
-        .enumerate()
-        .map(|(i, row)| {
-            let frame = path.frame(i);
-            Row {
-                delta_kcal: row.delta_kcal,
-                start_kcal: row.start_kcal.filter(|_| field),
-                percent: row.percent,
-                rmsd: row.rmsd,
-                cluster: row.cluster,
-                stereo: frame.filter(|_| !stale).and_then(|frame| {
-                    reshiki::science::stereo_changes(doc, atoms, &frame)
-                        .ok()
-                        .map(|changes| changes.is_empty())
-                }),
-            }
-        })
-        .collect()
+    let ids: Vec<_> = atoms.iter().flatten().copied().collect();
+    let rows: Vec<_> =
+        reshiki_xtb_jobs::conformers::trajectory_rows(doc, atoms, path, reference_energy)
+            .into_iter()
+            .enumerate()
+            .map(|(i, row)| {
+                let frame = (!stale).then(|| path.frame(i)).flatten();
+                Row {
+                    step: i,
+                    delta_kcal: row.delta_kcal,
+                    start_kcal: row.start_kcal.filter(|_| field),
+                    percent: row.percent,
+                    rmsd: row.rmsd,
+                    cluster: row.cluster,
+                    stereo: frame.as_ref().and_then(|frame| {
+                        science::stereo_changes(doc, atoms, frame)
+                            .ok()
+                            .map(|changes| changes.is_empty())
+                    }),
+                    tetrahedral: frame.as_ref().and_then(|frame| {
+                        let mut stereo =
+                            science::tetrahedral_stereo(doc, &ids, Some((atoms, frame))).ok()?;
+                        stereo.undefined.sort_by_key(|centre| {
+                            atoms.iter().position(|&id| id == Some(centre.atom))
+                        });
+                        Some(stereo)
+                    }),
+                    mirror_step: None,
+                }
+            })
+            .collect();
+    #[cfg(not(target_arch = "wasm32"))]
+    let rows = merge_mirrors(doc, atoms, path, rows);
+    rows
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn merge_mirrors(
+    doc: &reshiki::document::Document,
+    atoms: &[Option<u64>],
+    path: &qcdata::Trajectory,
+    rows: Vec<Row>,
+) -> Vec<Row> {
+    use reshiki_optimize::conformers::rmsd;
+    use reshiki_xtb_jobs::conformers::{KCAL_PER_HARTREE, populations, trajectory_alignment};
+
+    if rows.len() < 2
+        || rows.iter().all(|r| r.undefined().is_empty())
+        || rows
+            .iter()
+            .any(|r| r.tetrahedral.as_ref().is_some_and(|s| s.has_defined))
+    {
+        return rows;
+    }
+    let Some((topology, autos)) = path
+        .frame(0)
+        .and_then(|first| trajectory_alignment(doc, atoms, &first))
+    else {
+        return rows;
+    };
+    let count = rows.len();
+    let mut kept = Vec::with_capacity(count);
+    let mut pending = rows.into_iter().map(Some).collect::<Vec<_>>().into_iter();
+    while let Some(next) = pending.next() {
+        let Some(mut row) = next else {
+            continue;
+        };
+        let a = row.undefined();
+        if let Some(frame) = path.frame(row.step).filter(|_| !a.is_empty()) {
+            let pair = pending.as_mut_slice().iter_mut().find(|entry| {
+                let Some(other) = entry.as_ref() else {
+                    return false;
+                };
+                let b = other.undefined();
+                (row.delta_kcal - other.delta_kcal).abs() <= 0.05
+                    && a.len() == b.len()
+                    && a.iter().zip(b).all(|(a, b)| {
+                        a.atom == b.atom
+                            && matches!(
+                                (a.winding, b.winding),
+                                (Some(1), Some(2)) | (Some(2), Some(1))
+                            )
+                    })
+                    && path.frame(other.step).is_some_and(|mut mirror| {
+                        for [x, _, _] in &mut mirror.positions_angstrom {
+                            *x = -*x;
+                        }
+                        rmsd(
+                            &topology,
+                            &autos,
+                            &frame.positions_angstrom,
+                            &mirror.positions_angstrom,
+                        )
+                        .is_ok_and(|r| r <= 0.1)
+                    })
+            });
+            row.mirror_step = pair.and_then(Option::take).map(|other| other.step);
+        }
+        kept.push(row);
+    }
+    if kept.len() < count {
+        // Boltzmann fractions depend only on relative energies.
+        let energies: Vec<_> = kept
+            .iter()
+            .map(|r| r.delta_kcal / KCAL_PER_HARTREE)
+            .collect();
+        for (row, population) in kept.iter_mut().zip(populations(&energies)) {
+            row.percent = population * 100.0;
+        }
+    }
+    kept
 }
 
 /// Give the previewed model of `doc` the other kept conformers of `shown`,
@@ -314,18 +441,20 @@ pub(crate) fn rows(
 pub(crate) fn overlay(
     doc: &mut reshiki::document::Document,
     shown: &super::palette::Shown<'_>,
-    index: usize,
+    step: usize,
+    rows: &[Row],
 ) {
     let result = &shown.stored.result;
     let Some(path) = result.trajectory.as_ref().filter(|_| is_search(result)) else {
         return;
     };
-    let Some(reference) = path.frame(index) else {
+    let Some(reference) = path.frame(step) else {
         return;
     };
-    let ghosts: Vec<Vec<[f32; 3]>> = (0..path.steps())
-        .filter(|&i| i != index)
-        .filter_map(|i| superposed(&reference, &path.frame(i)?))
+    let ghosts: Vec<Vec<[f32; 3]>> = rows
+        .iter()
+        .filter(|row| row.step != step && row.mirror_step != Some(step))
+        .filter_map(|row| superposed(&reference, &path.frame(row.step)?))
         .map(|positions| positions.iter().map(|p| p.map(|x| x as f32)).collect())
         .collect();
     let Some(atom) = shown.atoms.iter().flatten().next() else {

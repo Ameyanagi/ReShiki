@@ -1,7 +1,7 @@
 //! A conformer search as the app runs it: the card's fields, the start
 //! from the molecule's 3D model, progress, Cancel (keeping what is
 //! re-ranked), the stored result and the tab's overlay and export.
-use super::{Action, Format, Row, Table};
+use super::{Action, Format, Table};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::app::xtb::{Action as XtbAction, Pending, results::RunInfo, state};
 use crate::app::{App, Message};
@@ -20,6 +20,7 @@ impl App {
             Action::Window(text) => settings.window = text,
             Action::Representatives(text) => settings.representatives = text,
             Action::Three(three) => settings.three = three,
+            Action::InvertUndefinedStereo(invert) => settings.invert_undefined_stereo = invert,
             Action::Overlay(on) => {
                 self.tab.xtb.palette.ensemble.overlay = on;
                 // Off only takes the ghosts away from a preview.
@@ -50,30 +51,32 @@ impl App {
 
     /// The Conformers tab's rows for the shown result, measured once per
     /// result and document state.
-    pub(in crate::app::xtb) fn xtb_conformer_rows(
+    pub(in crate::app::xtb) fn xtb_conformer_table(
         &self,
         shown: &crate::app::xtb::palette::Shown<'_>,
-    ) -> Vec<Row> {
+    ) -> std::cell::Ref<'_, Table> {
         let revision = (self.tab.file_epoch, self.tab.revision);
-        let mut cache = self.tab.xtb.palette.ensemble.table.borrow_mut();
-        let fresh = cache.as_ref().is_some_and(|table| {
+        let cache = &self.tab.xtb.palette.ensemble.table;
+        let fresh = {
+            let table = cache.borrow();
             table.revision == revision && crate::app::xtb::is(&table.result, &shown.stored.result)
-        });
+        };
         if !fresh {
-            *cache = Some(Table {
+            let rows = super::rows(
+                &self.tab.doc,
+                shown.atoms,
+                &shown.stored.result,
+                shown.stale,
+            );
+            let stereo_note = self.xtb_conformer_stereo_note(shown, &rows);
+            *cache.borrow_mut() = Table {
                 result: Arc::downgrade(&shown.stored.result),
                 revision,
-                rows: super::rows(
-                    &self.tab.doc,
-                    shown.atoms,
-                    &shown.stored.result,
-                    shown.stale,
-                ),
-            });
+                rows,
+                stereo_note,
+            };
         }
-        cache
-            .as_ref()
-            .map_or_else(Vec::new, |table| table.rows.clone())
+        cache.borrow()
     }
 
     fn xtb_export_conformers(&mut self, format: Format) -> Task<Message> {

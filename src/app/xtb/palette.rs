@@ -478,6 +478,12 @@ impl App {
         if index >= count {
             return;
         }
+        let table = super::conformers::is_search(&shown.stored.result)
+            .then(|| self.xtb_conformer_table(&shown));
+        let (rank, displayed_count) = table
+            .as_ref()
+            .and_then(|table| Some((table.rank(index)?, table.rows.len())))
+            .unwrap_or((index, count));
         let mut failure = None;
         let preview = shown.step_positions(index).and_then(|positions| {
             let mut doc = self.tab.doc.clone();
@@ -497,19 +503,22 @@ impl App {
             if let Some(model) = model {
                 reshiki::models3d::set_display(&mut doc, model, reshiki::models3d::Display::Both);
             }
-            if self.tab.xtb.palette.ensemble.overlay {
-                super::conformers::overlay(&mut doc, &shown, index);
+            if self.tab.xtb.palette.ensemble.overlay
+                && let Some(table) = &table
+            {
+                super::conformers::overlay(&mut doc, &shown, index, &table.rows);
             }
             Some(doc)
         });
-        let name = super::conformers::step_name(&shown.stored.result, index);
+        drop(table);
+        let name = super::conformers::step_name(&shown.stored.result, rank);
         self.status = if let Some(error) = failure {
             format!("{name} cannot be shown: {error}")
         } else if preview.is_some() {
             super::conformers::previewing(
                 &shown.stored.result,
-                index,
-                count,
+                rank,
+                displayed_count,
                 self.tab.xtb.palette.ensemble.overlay,
             )
         } else {
@@ -541,6 +550,13 @@ impl App {
         let Some(positions) = shown.step_positions(index) else {
             return;
         };
+        let rank = if super::conformers::is_search(&shown.stored.result) {
+            self.xtb_conformer_table(&shown)
+                .rank(index)
+                .unwrap_or(index)
+        } else {
+            index
+        };
         let atoms = shown.atoms.to_vec();
         let frame = Frame {
             positions_angstrom: positions,
@@ -555,7 +571,7 @@ impl App {
                             "Optimization changed",
                             &format!(
                                 "{} changes",
-                                super::conformers::step_name(&shown.stored.result, index)
+                                super::conformers::step_name(&shown.stored.result, rank)
                             ),
                             1,
                         )
@@ -581,10 +597,7 @@ impl App {
         if !self.error {
             self.status = match self.xtb_shown() {
                 Some(shown) if super::conformers::is_search(&shown.stored.result) => {
-                    format!(
-                        "Applied conformer {} to the 3D model · ⌘Z undoes",
-                        index + 1
-                    )
+                    format!("Applied conformer {} to the 3D model · ⌘Z undoes", rank + 1)
                 }
                 _ => format!("Applied xTB geometry of step {index} · ⌘Z undoes"),
             };

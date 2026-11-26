@@ -85,6 +85,7 @@ fn settings_check_every_field_and_the_atom_limits() {
         (100, 15., 20)
     );
     assert_eq!(config.diversity.angstrom(), 0.75);
+    assert!(!config.invert_undefined_stereo);
 
     let typed = |f: fn(&mut Settings)| {
         let mut settings = Settings::default();
@@ -98,6 +99,11 @@ fn settings_check_every_field_and_the_atom_limits() {
     assert!(typed(|s| s.window = "abc".into()).is_err());
     assert!(typed(|s| s.representatives = "61".into()).is_err());
     assert!(typed(|s| s.representatives = "60".into()).is_ok());
+    assert!(
+        typed(|s| s.invert_undefined_stereo = true)
+            .unwrap()
+            .invert_undefined_stereo
+    );
 
     assert!(settings.config(Some(MAX_ATOMS)).is_ok());
     let too_many = settings.config(Some(MAX_ATOMS + 1)).unwrap_err();
@@ -283,8 +289,284 @@ mod app {
     use crate::app::xtb::{Action as XtbAction, CalcTask, Outcome};
     use crate::app::{App, Message};
     use reshiki::qcdata;
+    use reshiki::{
+        document::{Document, Point},
+        models3d::{Model3d, Placed},
+    };
     use reshiki_optimize::conformers::Ranked;
     use std::sync::Arc;
+
+    /// Two conformations of 2-butanol, each followed by its translated mirror.
+    /// An optional wedged OH creates a second, defined centre at C2.
+    fn chiral_ensemble(
+        defined_at_c2: bool,
+    ) -> (Document, Vec<u64>, qcdata::Frame, qcdata::CalcResult) {
+        let mut doc = Document::default();
+        let a = [
+            [-2., -1., 1.],
+            [-1., -1., 1.],
+            [1., 1., 1.],
+            [0., 0., 0.],
+            [1., -1., -1.],
+        ];
+        let mut a = a.to_vec();
+        let mut elements = vec!["C", "C", "O", "C", "C"];
+        if defined_at_c2 {
+            a.push([-1., -2., 2.]);
+            elements.push("O");
+        }
+        let ids: Vec<_> = elements
+            .iter()
+            .zip(&a)
+            .map(|(&element, &[x, y, _])| {
+                doc.add_atom(element, Point::new(x as f32 * 26., -y as f32 * 26.))
+            })
+            .collect();
+        for (i, j) in [(0, 1), (1, 3), (3, 2), (3, 4)] {
+            doc.add_bond(ids[i], ids[j], 1, "plain");
+        }
+        if defined_at_c2 {
+            doc.add_bond(ids[1], ids[5], 1, "wedge");
+        }
+        let frame = qcdata::Frame {
+            numbers: elements
+                .iter()
+                .map(|&e| if e == "C" { 6 } else { 8 })
+                .collect(),
+            positions_angstrom: a.clone(),
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            drawing_atoms: vec![],
+        };
+        let mirror = |xyz: &[[f64; 3]]| {
+            xyz.iter()
+                .map(|&[x, y, z]| [2. - x, y + 1., z - 1.])
+                .collect::<Vec<_>>()
+        };
+        let mut b = a.clone();
+        b[0] = [-1., -1., 2.];
+        let mut result =
+            super::searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+        result.frame = frame.hash();
+        result.trajectory = Some(qcdata::Trajectory {
+            numbers: frame.numbers.clone(),
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            positions_angstrom: [a.clone(), mirror(&a), b.clone(), mirror(&b)]
+                .concat()
+                .as_flattened()
+                .to_vec(),
+            energies_hartree: vec![-5.070176, -5.070176, -5.069176, -5.069176],
+            labels: vec![],
+            minimizer_energies_hartree: vec![],
+            cluster_sizes: vec![],
+            rmsd_to_best_angstrom: vec![],
+        });
+        let placed = ids
+            .iter()
+            .zip(&a)
+            .map(|(&id, &xyz)| Placed {
+                id,
+                xyz: xyz.map(|p| p as f32),
+            })
+            .collect();
+        doc.models
+            .push(Model3d::new(&doc, placed, vec![], Default::default()));
+        (doc, ids, frame, result)
+    }
+
+    #[test]
+    fn mirror_pairs_keep_their_steps_for_preview_overlay_and_use() {
+        use super::super::view::stereo_text;
+        let (doc, ids, frame, mut result) = chiral_ensemble(false);
+        let mut app = App::new().0;
+        app.tab.doc = doc;
+        let launch = reshiki::science::launch(&app.tab.doc, ids[0], 0, 1).unwrap();
+        result.input_frame = Some(launch.frame.hash());
+        let trajectory = result.trajectory.as_ref().unwrap();
+        let second = trajectory.frame(2).unwrap();
+        let mirror = trajectory.frame(1).unwrap();
+        reshiki::science::attach(&mut app.tab.doc, &launch, vec![frame], result).unwrap();
+        app.xtb_show_result(&app.tab.doc.science.results[0].result.clone());
+
+        let shown = app.xtb_shown().unwrap();
+        let table = app.xtb_conformer_table(&shown);
+        assert_eq!(
+            table
+                .rows
+                .iter()
+                .map(|r| (r.step, r.mirror_step))
+                .collect::<Vec<_>>(),
+            [(0, Some(1)), (2, Some(3))]
+        );
+        assert!((table.rows.iter().map(|r| r.percent).sum::<f64>() - 100.).abs() < 1e-10);
+        assert!(table.rows[0].percent > 50.);
+        assert_eq!(stereo_text(&table.rows[0]).0, "S/R");
+        assert_eq!(table.rank(2), Some(1));
+        assert_eq!(table.rank(3), Some(1));
+        assert_eq!(
+            table.stereo_note.as_deref(),
+            Some("C4 has no wedge. The Stereo column lists the configurations.")
+        );
+        assert_eq!(shown.stored.result.trajectory.as_ref().unwrap().steps(), 4);
+        assert_eq!(
+            super::super::export::xyz(&shown.stored.result, "2-butanol")
+                .unwrap()
+                .lines()
+                .filter(|l| *l == "5")
+                .count(),
+            4
+        );
+        drop(table);
+
+        send(&mut app, XtbAction::Palette(PaletteAction::Step(2)));
+        assert_eq!(
+            model(app.display_document()),
+            f32s(&second.positions_angstrom)
+        );
+        assert!(app.status.starts_with("Conformer 2 of 2"), "{}", app.status);
+        send(&mut app, XtbAction::Conformers(Action::Overlay(true)));
+        assert_eq!(app.display_document().models[0].overlay.len(), 1);
+        send(&mut app, XtbAction::Palette(PaletteAction::UseStep));
+        assert_eq!(model(&app.tab.doc), f32s(&second.positions_angstrom));
+        assert_eq!(app.xtb_model_step(&app.xtb_shown().unwrap()), Some(2));
+        assert!(
+            app.status.starts_with("Applied conformer 2"),
+            "{}",
+            app.status
+        );
+
+        // An imported model may already show the hidden half of a pair.
+        reshiki::science::move_model(&mut app.tab.doc, &launch.atoms, &mirror).unwrap();
+        send(&mut app, XtbAction::Conformers(Action::Overlay(true)));
+        assert_eq!(app.xtb_step(), Some(1));
+        assert_eq!(
+            model(app.display_document()),
+            f32s(&mirror.positions_angstrom)
+        );
+        assert_eq!(app.display_document().models[0].overlay.len(), 1);
+    }
+
+    #[test]
+    fn stereo_with_a_defined_centre_prevents_merging_and_displays_changes() {
+        let (doc, ids, _, result) = chiral_ensemble(true);
+        let atoms: Vec<_> = ids.into_iter().map(Some).collect();
+        let rows = super::super::rows(&doc, &atoms, &result, false);
+        assert_eq!(rows.len(), 4);
+        assert!(
+            rows.iter()
+                .all(|r| r.tetrahedral.as_ref().unwrap().has_defined)
+        );
+        let cells: Vec<_> = rows
+            .iter()
+            .map(|r| super::super::view::stereo_text(r).0)
+            .collect();
+        assert!(
+            cells
+                .iter()
+                .all(|cell| matches!(cell.as_str(), "R" | "S" | "R · changed" | "S · changed")),
+            "{cells:?}"
+        );
+        assert!(
+            cells.iter().any(|cell| cell.ends_with(" · changed")),
+            "{cells:?}"
+        );
+    }
+
+    #[test]
+    fn opposite_configurations_need_both_energy_and_geometry_agreement_to_merge() {
+        let (doc, ids, _, mut result) = chiral_ensemble(false);
+        let path = result.trajectory.as_mut().unwrap();
+        // First pair is too far apart in energy. The other has matching
+        // energies but its terminal carbon has moved in the mirror frame.
+        path.energies_hartree[1] += 0.06 / super::KCAL_PER_HARTREE;
+        path.positions_angstrom[3 * path.numbers.len() * 3] += 2.;
+        let atoms: Vec<_> = ids.into_iter().map(Some).collect();
+        assert_eq!(super::super::rows(&doc, &atoms, &result, false).len(), 4);
+    }
+
+    #[test]
+    fn unwedged_card_shows_the_model_and_mirror_choices() {
+        let (doc, ids, _, _) = chiral_ensemble(false);
+        let mut app = App::new().0;
+        app.tab.doc = doc;
+        let (info, labels) = app.xtb_conformer_stereo(&ids, true).unwrap();
+        assert_eq!(info, "C4 has no wedge. The search keeps one configuration:");
+        assert!(
+            labels == ["As in the 3D model (R)", "Mirror image (S)"]
+                || labels == ["As in the 3D model (S)", "Mirror image (R)"],
+            "{labels:?}"
+        );
+        let (info, labels) = app.xtb_conformer_stereo(&ids, false).unwrap();
+        assert_eq!(
+            info,
+            "C4 has no wedge. The search keeps one configuration (the 3D model is made first):"
+        );
+        assert_eq!(labels, ["As in the 3D model", "Mirror image"]);
+        let (doc, ids, _, _) = chiral_ensemble(true);
+        app.tab.doc = doc;
+        let (_, labels) = app.xtb_conformer_stereo(&ids, true).unwrap();
+        assert_eq!(labels, ["As in the 3D model", "Inverted at C4"]);
+    }
+
+    #[tokio::test]
+    async fn named_ibuprofen_card_and_tab_use_the_generated_models_cip() {
+        use reshiki::engine::{LocalEngine, Request};
+        use reshiki::geometry::{Client, ForceField, Limits, Prepared};
+        let Some(executable) = std::env::var_os("RESHIKI_NAMING_HELPER") else {
+            return;
+        };
+        let record = reshiki::naming::resolve_name("ibuprofen", Default::default())
+            .await
+            .unwrap();
+        let request = record.prepared.map_or_else(
+            || Request::import("naming_smiles", &record.smiles),
+            Request::import_prepared,
+        );
+        let mut doc = LocalEngine::in_process()
+            .request(request)
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        let ids: Vec<_> = doc.atoms.iter().map(|atom| atom.id).collect();
+        let prepared = Prepared::new(&doc, &ids).unwrap().without_retained_depth();
+        let model = Client::new(executable.into(), Limits::default())
+            .unwrap()
+            .generate(&prepared, ForceField::Mmff94s)
+            .await
+            .unwrap();
+        doc.models.push(prepared.model(&model).unwrap());
+        let mut app = App::new().0;
+        app.tab.doc = doc;
+        let launch = reshiki::science::launch(&app.tab.doc, ids[0], 0, 1).unwrap();
+        let (card, choices) = app.xtb_conformer_stereo(&ids, true).unwrap();
+        let (without_model, _) = app.xtb_conformer_stereo(&ids, false).unwrap();
+        let mut result =
+            super::searched("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank");
+        let path = result.trajectory.as_mut().unwrap();
+        path.numbers.clone_from(&launch.frame.numbers);
+        path.positions_angstrom = launch.frame.positions_angstrom.as_flattened().to_vec();
+        path.energies_hartree.truncate(1);
+        let rows = super::super::rows(&app.tab.doc, &launch.atoms, &result, false);
+        let stereo = rows[0].tetrahedral.as_ref().unwrap();
+        let note = super::super::view::stereo_note(&rows, Some(stereo), |id| {
+            app.xtb_atom_name(&launch.atoms, id).0
+        })
+        .unwrap();
+        let (cell, _) = super::super::view::stereo_text(&rows[0]);
+        assert!(matches!(cell.as_str(), "R" | "S"));
+        assert_eq!(choices[0], format!("As in the 3D model ({cell})"));
+        assert!(note.contains(&format!("searched the ({cell}) form, as in the 3D model.")));
+        println!(
+            "Ibuprofen with model: {card} | {} | {}\nIbuprofen before model: {without_model}\nIbuprofen tab: {note} | Stereo {cell}",
+            choices[0], choices[1]
+        );
+    }
 
     fn search(app: &mut App, event: Event) {
         let serial = app.tab.xtb.run.as_ref().expect("a search in flight").serial;
@@ -391,10 +673,12 @@ mod app {
         );
 
         let shown = app.xtb_shown().unwrap();
-        let rows = app.xtb_conformer_rows(&shown);
+        let table = app.xtb_conformer_table(&shown);
+        let rows = &table.rows;
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].stereo, Some(true));
         assert_eq!(rows[1].rmsd, Some(0.35));
+        drop(table);
 
         send(&mut app, XtbAction::Palette(PaletteAction::Step(1)));
         assert_eq!(model(app.display_document()), f32s(&B));
