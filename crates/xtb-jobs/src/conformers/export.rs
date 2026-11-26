@@ -49,6 +49,7 @@ pub fn xyz(path: Option<&Trajectory>, title: &str) -> Result<String, String> {
             .collect(),
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     };
     write_xyz_trajectory(&labeled, title).map_err(|error| error.to_string())
 }
@@ -72,10 +73,11 @@ pub fn ranked_trajectory(
     if energies.is_empty() {
         return Err("This result has no saved conformer energies.".into());
     }
+    let minimum = energies.iter().copied().fold(f64::INFINITY, f64::min);
     let mut ranked = energies
         .iter()
         .copied()
-        .zip(statistics(path))
+        .zip(statistics(path, minimum))
         .enumerate()
         .map(|(step, (energy, statistics))| {
             Ok(RankedConformer {

@@ -263,7 +263,7 @@ pub(crate) struct Row {
     /// ΔE by the minimizer that made the start, when it was a force field.
     pub start_kcal: Option<f64>,
     pub percent: f64,
-    /// Symmetry-aware heavy-atom RMSD to the lowest, Å.
+    /// Symmetry-aware heavy-atom RMSD to the first conformer, Å.
     pub rmsd: Option<f64>,
     pub cluster: Option<u32>,
     /// Whether the drawing's stereocentres and double bonds hold; `None`
@@ -282,8 +282,11 @@ pub(crate) fn rows(
     let Some(path) = result.trajectory.as_ref() else {
         return vec![];
     };
+    let Some(&reference_energy) = path.energies_hartree.first() else {
+        return vec![];
+    };
     let field = start_field(result).is_some();
-    reshiki_xtb_jobs::conformers::trajectory_rows(doc, atoms, path)
+    reshiki_xtb_jobs::conformers::trajectory_rows(doc, atoms, path, reference_energy)
         .into_iter()
         .enumerate()
         .map(|(i, row)| {

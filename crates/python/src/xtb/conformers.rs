@@ -163,12 +163,11 @@ impl Request {
         let path = found.trajectory(&launch.frame)?;
         let (_, ranked) =
             conformers::ranked_trajectory(Some(&path)).map_err(SearchError::Failed)?;
-        let statistics = conformers::trajectory_rows(&doc, &launch.atoms, &path);
         let rows: Vec<_> = ranked
             .into_iter()
             .enumerate()
             .map(|(index, conformer)| {
-                let row = &statistics[conformer.step];
+                let row = &conformer.statistics;
                 let stereo = science::stereo_changes(&doc, &launch.atoms, &conformer.frame)
                     .ok()
                     .map(|changes| changes.is_empty());
