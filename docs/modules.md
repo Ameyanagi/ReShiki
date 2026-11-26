@@ -1019,6 +1019,7 @@ explains how the crates and modules fit together.
 - `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
 - `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
 - `crates/qcdata/src/vibrational.rs`
+- `crates/qcdata/src/vibrational/symmetry.rs`
 
 ## reshiki-web
 

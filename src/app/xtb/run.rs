@@ -3,6 +3,7 @@
 use super::results::Evaluation;
 use super::state::Failure;
 use iced::futures::{Stream, channel::mpsc};
+use reshiki::qcdata::vibrational::rotational_symmetry_number;
 use reshiki_optimize::{
     ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
 };
@@ -26,8 +27,8 @@ pub(crate) struct Job {
     pub frequencies: bool,
     /// Analysis masses (u) for isotope-labelled molecules; standard masses otherwise.
     pub masses: Option<Vec<f64>>,
-    /// Proper rotational symmetry with isotope labels, when masses are explicit.
-    pub symmetry_number: Option<u32>,
+    /// Atom labels encoded as Z * 1000 + isotope (0 for natural), when masses are explicit.
+    pub isotope_labels: Vec<u32>,
     pub numbers: Vec<u8>,
     pub positions: Vec<[f64; 3]>,
     pub charge: i32,
@@ -273,12 +274,19 @@ fn final_request(job: &Job, positions: Option<&[f64]>) -> Compute {
         positions: positions.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
         units: Units::Bohr,
         gradient: positions.is_some(),
-        hessian: job.frequencies.then(|| HessianRequest {
-            masses_amu: job.masses.clone(),
-            thermo: protocol::ThermoRequest {
-                symmetry_number: job.symmetry_number,
-                ..Default::default()
-            },
+        hessian: job.frequencies.then(|| {
+            let symmetry_number = job.masses.as_ref().map(|masses| {
+                let final_angstrom = positions.map(angstroms);
+                let geometry = final_angstrom.as_deref().unwrap_or(&job.positions);
+                rotational_symmetry_number(&job.isotope_labels, geometry, masses)
+            });
+            HessianRequest {
+                masses_amu: job.masses.clone(),
+                thermo: protocol::ThermoRequest {
+                    symmetry_number,
+                    ..Default::default()
+                },
+            }
         }),
         bond_orders: electronic,
         orbitals: if electronic {
@@ -485,7 +493,7 @@ mod tests {
             optimize: true,
             frequencies: false,
             masses: None,
-            symmetry_number: None,
+            isotope_labels: Vec::new(),
             numbers: vec![8, 1, 1],
             positions: vec![[0.; 3]; 3],
             charge: 0,
@@ -502,12 +510,12 @@ mod tests {
     }
 
     #[test]
-    fn d2o_frequency_job_forwards_its_isotope_symmetry() {
+    fn d2o_hessian_uses_the_symmetry_of_its_geometry() {
         use super::super::{Frame, Settings, state};
 
         let mut frame = Frame {
             numbers: vec![8, 1, 1],
-            positions_angstrom: vec![[0., 0., 0.], [0.7586, 0., 0.5043], [-0.7586, 0., 0.5043]],
+            positions_angstrom: vec![[0., 0., 0.], [0.8586, 0., 0.5043], [-0.7586, 0., 0.5043]],
             isotopes: vec![0, 2, 2],
             masses_amu: vec![],
             charge: 0,
@@ -516,16 +524,29 @@ mod tests {
         };
         frame.masses_amu = super::super::isotope_masses(&frame).expect("deuterium masses");
         let settings = Settings {
-            task: state::Task::Frequencies,
+            task: state::Task::OptFreq,
             ..Settings::default()
         };
         let config = settings.config((0, 0), false, vec![]).unwrap();
         let job = super::super::job(&config, &frame, vec![]);
-        assert_eq!(job.symmetry_number, Some(2));
-        let request = final_request(&job, None);
-        let hessian = request.hessian.expect("frequency request");
-        assert_eq!(hessian.masses_amu, Some(frame.masses_amu));
-        assert_eq!(hessian.thermo.symmetry_number, Some(2));
+        assert_eq!(job.isotope_labels, [8000, 1002, 1002]);
+        let start = final_request(&job, None);
+        assert!(start.positions.is_none());
+        let start_hessian = start.hessian.expect("frequency request");
+        assert_eq!(
+            start_hessian.masses_amu.as_deref(),
+            Some(frame.masses_amu.as_slice())
+        );
+        assert_eq!(start_hessian.thermo.symmetry_number, Some(1));
+
+        let final_bohr = [[0., 0., 0.], [0.7586, 0., 0.5043], [-0.7586, 0., 0.5043]]
+            .map(|xyz| xyz.map(|coordinate| coordinate / ANGSTROM_PER_BOHR));
+        let optimized = final_request(&job, Some(final_bohr.as_flattened()));
+        assert_eq!(optimized.positions.as_deref(), Some(final_bohr.as_slice()));
+        assert_eq!(optimized.units, Units::Bohr);
+        let optimized_hessian = optimized.hessian.expect("frequency request");
+        assert_eq!(optimized_hessian.masses_amu, Some(frame.masses_amu));
+        assert_eq!(optimized_hessian.thermo.symmetry_number, Some(2));
     }
 
     #[test]
@@ -555,7 +576,9 @@ mod tests {
         let request = final_request(&job, None);
         assert!(request.positions.is_none());
         assert!(!request.gradient);
-        assert!(request.hessian.is_some());
+        let hessian = request.hessian.expect("frequency request");
+        assert!(hessian.masses_amu.is_none());
+        assert!(hessian.thermo.symmetry_number.is_none());
 
         job.frequencies = false;
         let request = final_request(&job, None);

@@ -180,7 +180,7 @@ fn cubic_symmetry_is_independent_of_coordinate_axes() {
 
 #[test]
 fn higher_order_axes_include_every_distinct_power() {
-    for n in [5, 7, 8] {
+    for n in [5, 7, 8, 12] {
         let positions: Vec<_> = (0..n)
             .map(|k| {
                 let (s, c) = (std::f64::consts::TAU * f64::from(k) / f64::from(n)).sin_cos();
@@ -189,6 +189,18 @@ fn higher_order_axes_include_every_distinct_power() {
             .collect();
         check(&vec![C; positions.len()], &positions, 2 * n);
     }
+}
+
+#[test]
+fn alternating_ninefold_ring_has_eighteen_proper_rotations() {
+    let sector = std::f64::consts::TAU / 9.0;
+    let positions: [_; 18] = std::array::from_fn(|i| {
+        // Each repeat spans one sector with successive gaps of 45% and 55%.
+        let angle = ((i / 2) as f64 + 0.45 * (i % 2) as f64) * sector;
+        let (sin, cos) = angle.sin_cos();
+        [4.0 * cos, 4.0 * sin, 0.0]
+    });
+    check(&[C; 18], &positions, 18);
 }
 
 #[test]
@@ -221,7 +233,7 @@ fn staggered_ethane_has_six_proper_rotations() {
 }
 
 #[test]
-fn methane_tolerates_one_ten_thousandth_angstrom_noise() {
+fn methane_isotopologues_tolerate_one_ten_thousandth_angstrom_noise() {
     // Each atom is displaced by at most 1e-4 Å from METHANE.
     let positions = [
         [0.000_02, -0.000_01, 0.000_03],
@@ -231,6 +243,7 @@ fn methane_tolerates_one_ten_thousandth_angstrom_noise() {
         [-0.630_05, -0.630_04, 0.630_02],
     ];
     check(&[C, H, H, H, H], &positions, 12);
+    check(&[C, D, D, D, D], &positions, 12);
 }
 
 #[test]

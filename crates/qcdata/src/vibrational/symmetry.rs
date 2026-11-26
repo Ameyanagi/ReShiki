@@ -164,8 +164,9 @@ pub(super) fn count(labels: &[u32], positions: &[DVec3], masses: &[f64]) -> u32 
     for axis in half_turns {
         test_axis(axis, 2);
     }
+    let higher_orders = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     for axis in radial_axes() {
-        for order in 3..=8 {
+        for order in higher_orders {
             test_axis(axis, order);
         }
     }
@@ -173,7 +174,7 @@ pub(super) fn count(labels: &[u32], positions: &[DVec3], masses: &[f64]) -> u32 
     // Under Cn (n >= 3) the outermost atom is fixed or traces a regular
     // polygon. Its two neighbours in that orbit are equidistant from it.
     // Only triples through this atom are needed, even for a spherical top.
-    let chords = [3, 4, 5, 6, 7, 8].map(|n| (n, 2.0 * (PI / f64::from(n)).cos()));
+    let chords = higher_orders.map(|n| (n, 2.0 * (PI / f64::from(n)).cos()));
     let shell = &shells[a];
     for (i, &j) in shell.iter().enumerate() {
         let edge = positions[j] - positions[a];
