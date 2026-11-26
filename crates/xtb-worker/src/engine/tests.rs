@@ -36,6 +36,45 @@ O -1.16 0 0
 C 0 0 0
 O 1.16 0 0
 ";
+const THERMO_AMMONIA: &str = "4
+pyramidal ammonia
+N 0 0 0.2
+H 0.94 0 -0.2
+H -0.47 0.8140638795573723 -0.2
+H -0.47 -0.8140638795573723 -0.2
+";
+const THERMO_METHANE: &str = "5
+tetrahedral methane
+C 0 0 0
+H 0.63 0.63 0.63
+H 0.63 -0.63 -0.63
+H -0.63 0.63 -0.63
+H -0.63 -0.63 0.63
+";
+const THERMO_BENZENE: &str = "12
+planar benzene
+C 1.4 0 0
+C 0.7 1.212435565298214 0
+C -0.7 1.212435565298214 0
+C -1.4 0 0
+C -0.7 -1.212435565298214 0
+C 0.7 -1.212435565298214 0
+H 2.48 0 0
+H 1.24 2.147743001385408 0
+H -1.24 2.147743001385408 0
+H -2.48 0 0
+H -1.24 -2.147743001385408 0
+H 1.24 -2.147743001385408 0
+";
+const THERMO_ETHYLENE: &str = "6
+planar ethylene
+C -0.67 0 0
+C 0.67 0 0
+H -1.235 0.932 0
+H -1.235 -0.932 0
+H 1.235 0.932 0
+H 1.235 -0.932 0
+";
 const THERMO_WATER_DIMER: &str = "6
 unoptimized water dimer
 O 0 0 0.119262
@@ -152,6 +191,41 @@ fn assert_thermo_maximum_errors(errors: &[(String, [f64; 5])]) {
             maximum,
             tolerance,
             case
+        );
+    }
+}
+
+#[test]
+fn public_rotational_symmetry_matches_the_unlabelled_worker() {
+    use reshiki_qcdata::vibrational::rotational_symmetry_number;
+
+    for (name, xyz, expected) in [
+        ("water", THERMO_WATER, 2),
+        ("ammonia", THERMO_AMMONIA, 3),
+        ("methane", THERMO_METHANE, 12),
+        ("benzene", THERMO_BENZENE, 12),
+        ("ethylene", THERMO_ETHYLENE, 4),
+        ("CO2", THERMO_CO2, 2),
+    ] {
+        let open = thermo_xyz(xyz);
+        let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+        // Leave masses and the symmetry override unset so the worker supplies
+        // its ordinary, unlabelled thermochemistry symmetry number.
+        let computed = session
+            .compute(Compute {
+                hessian: Some(Default::default()),
+                ..Compute::default()
+            })
+            .unwrap();
+        let engine_symmetry = computed.thermo.as_ref().unwrap().symmetry_number;
+        let masses = &computed.vibrations.as_ref().unwrap().masses_amu;
+        let labels: Vec<_> = open.numbers.iter().map(|&z| u32::from(z) * 1000).collect();
+        let public_symmetry = rotational_symmetry_number(&labels, &open.positions, masses);
+
+        assert_eq!(engine_symmetry, expected, "{name}: worker symmetry");
+        assert_eq!(
+            public_symmetry, engine_symmetry,
+            "{name}: public symmetry versus worker"
         );
     }
 }
@@ -578,6 +652,174 @@ fn explicit_isotope_masses_lower_water_frequencies() {
         Err(reshiki_qcdata::Error::Invalid(message))
             if message == "frame masses differ from the vibrational analysis masses"
     ));
+}
+
+#[test]
+fn isotopologue_symmetry_numbers_fix_the_entropy() {
+    use reshiki_qcdata::vibrational::rotational_symmetry_number;
+
+    // xTB 6.8.0 optimized geometries.
+    const OPTIMIZED_WATER: &str = "3
+water, E = -5.070544442589 Eh
+O 0 0 0.10571016604457
+H 0 0.77208696468061 -0.46340508302229
+H 0 -0.77208696468061 -0.46340508302229
+";
+    const OPTIMIZED_METHANE: &str = "5
+methane, E = -4.175218521783 Eh
+C 0 0 0
+H 0.624789300332 0.624789300332 0.624789300332
+H -0.624789300332 -0.624789300332 0.624789300332
+H -0.624789300332 0.624789300332 -0.624789300332
+H 0.624789300332 -0.624789300332 -0.624789300332
+";
+    const DEUTERIUM_MASS: f64 = 2.014_101_778;
+    const TEMPERATURE_K: f64 = 298.15;
+    const BOLTZMANN_HARTREE_PER_K: f64 = 1.380_649e-23 / 4.359_744_722_206e-18;
+    const KCAL_PER_MOL_PER_HARTREE: f64 = 627.509_474;
+
+    struct Isotopologue {
+        name: &'static str,
+        xyz: &'static str,
+        isotopes_and_masses: &'static [(u16, f64)],
+        symmetry: u32,
+        xtb_gibbs_correction_hartree: f64,
+    }
+
+    // The raw xTB comparison is informational because xTB 6.8.0 uses the
+    // original masses for rigid-body projection in its isotope runs.
+    println!(
+        "{:<8} {:>2}  {:>14}  {:>14}  {:>14}  {:>20}  {:>20}  {:>20}",
+        "Molecule",
+        "σ",
+        "ZPVE (Eh)",
+        "G ours (Eh)",
+        "G xTB raw (Eh)",
+        "ΔG vs xTB (kcal/mol)",
+        "ΔG vs σ=1 (kcal/mol)",
+        "S ours (cal/(mol·K))"
+    );
+    for isotope in [
+        Isotopologue {
+            name: "D2O",
+            xyz: OPTIMIZED_WATER,
+            isotopes_and_masses: &[(0, 15.999), (2, DEUTERIUM_MASS), (2, DEUTERIUM_MASS)],
+            symmetry: 2,
+            xtb_gibbs_correction_hartree: -0.004_106_040_027,
+        },
+        Isotopologue {
+            name: "HDO",
+            xyz: OPTIMIZED_WATER,
+            isotopes_and_masses: &[(0, 15.999), (2, DEUTERIUM_MASS), (0, 1.008)],
+            symmetry: 1,
+            xtb_gibbs_correction_hartree: -0.000_824_325_779,
+        },
+        Isotopologue {
+            name: "CD4",
+            xyz: OPTIMIZED_METHANE,
+            isotopes_and_masses: &[
+                (0, 12.011),
+                (2, DEUTERIUM_MASS),
+                (2, DEUTERIUM_MASS),
+                (2, DEUTERIUM_MASS),
+                (2, DEUTERIUM_MASS),
+            ],
+            symmetry: 12,
+            xtb_gibbs_correction_hartree: 0.009_036_700_801,
+        },
+    ] {
+        let name = isotope.name;
+        let open = Open {
+            conventions: Conventions::Xtb68,
+            ..thermo_xyz(isotope.xyz)
+        };
+        let labels: Vec<_> = open
+            .numbers
+            .iter()
+            .zip(isotope.isotopes_and_masses)
+            .map(|(&z, &(isotope, _))| u32::from(z) * 1000 + u32::from(isotope))
+            .collect();
+        let masses: Vec<_> = isotope
+            .isotopes_and_masses
+            .iter()
+            .map(|&(_, mass)| mass)
+            .collect();
+        let symmetry = rotational_symmetry_number(&labels, &open.positions, &masses);
+        assert_eq!(symmetry, isotope.symmetry, "{name}: rotational symmetry");
+
+        let heap_budget = open.heap_budget().unwrap();
+        let (mut session, _) = Session::open(open, heap_budget).unwrap();
+        let mut compute = |masses_amu, symmetry_number| {
+            session
+                .compute(Compute {
+                    hessian: Some(protocol::HessianRequest {
+                        masses_amu,
+                        thermo: protocol::ThermoRequest {
+                            temperature_k: Some(TEMPERATURE_K),
+                            symmetry_number,
+                            ..Default::default()
+                        },
+                    }),
+                    ..Compute::default()
+                })
+                .unwrap()
+        };
+        let computed = compute(Some(masses.clone()), Some(symmetry));
+        let thermo = computed.thermo.unwrap();
+        let unit_symmetry = compute(Some(masses), Some(1)).thermo.unwrap();
+        assert_eq!(thermo.symmetry_number, symmetry, "{name}: worker symmetry");
+
+        let delta_entropy = thermo.entropy_hartree_per_k - unit_symmetry.entropy_hartree_per_k;
+        let expected_delta_entropy = -BOLTZMANN_HARTREE_PER_K * f64::from(symmetry).ln();
+        assert!(
+            (delta_entropy - expected_delta_entropy).abs() <= 1e-12,
+            "{name}: entropy shift {delta_entropy:.12e} Eh/K, expected {expected_delta_entropy:.12e} Eh/K"
+        );
+
+        let zpve = thermo.zero_point_energy_hartree;
+        let gibbs = thermo.gibbs_correction_hartree;
+        let delta_gibbs = gibbs - unit_symmetry.gibbs_correction_hartree;
+        // The symmetry correction lowers S, so G = H - T*S increases.
+        let expected_delta_gibbs = -TEMPERATURE_K * expected_delta_entropy;
+        assert!(
+            (delta_gibbs - expected_delta_gibbs).abs() <= 1e-9,
+            "{name}: Gibbs correction shift {delta_gibbs:.12} Eh, expected {expected_delta_gibbs:.12} Eh"
+        );
+
+        let xtb_gibbs = isotope.xtb_gibbs_correction_hartree;
+        let entropy_cal_per_mol_k =
+            thermo.entropy_hartree_per_k * KCAL_PER_MOL_PER_HARTREE * 1000.0;
+        let delta_g_vs_xtb = (gibbs - xtb_gibbs) * KCAL_PER_MOL_PER_HARTREE;
+        let delta_g_vs_unit_symmetry = delta_gibbs * KCAL_PER_MOL_PER_HARTREE;
+        println!(
+            "{name:<8} {symmetry:>2}  {zpve:>14.10}  {gibbs:>14.10}  {xtb_gibbs:>14.10}  {delta_g_vs_xtb:>20.6}  {delta_g_vs_unit_symmetry:>20.6}  {entropy_cal_per_mol_k:>20.6}"
+        );
+
+        if name == "D2O" {
+            let d2o: [f64; 3] = computed
+                .vibrations
+                .unwrap()
+                .frequencies_cm1
+                .try_into()
+                .expect("three D2O frequencies");
+            let h2o: [f64; 3] = compute(None, None)
+                .vibrations
+                .unwrap()
+                .frequencies_cm1
+                .try_into()
+                .expect("three H2O frequencies");
+            for (mode, (heavy, light)) in ["bend", "lower stretch", "upper stretch"]
+                .into_iter()
+                .zip(d2o.into_iter().zip(h2o))
+            {
+                let ratio = heavy / light;
+                assert!(
+                    light > 0.0 && (0.70..=0.76).contains(&ratio),
+                    "{mode}: D2O/H2O frequency ratio was {ratio:.6} ({heavy:.2}/{light:.2} cm^-1)"
+                );
+            }
+        }
+    }
 }
 
 #[test]
