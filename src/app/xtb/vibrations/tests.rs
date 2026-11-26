@@ -1398,11 +1398,12 @@ async fn spectrum_exports_use_publication_for_svg_and_pdf() {
         assert_eq!(standalone.groups.len(), 1);
         assert_eq!(standalone.graphics[0].ir.as_ref().unwrap().name, "water");
         assert!(standalone.annotations.iter().any(|a| a.text == "1590"));
-        let path = std::path::Path::new("/saved/calculations").join(format!("water-ir.{format}"));
+        let file_name = format!("water-ir.{format}");
+        let path = std::path::Path::new("/saved/calculations").join(&file_name);
         let _ = app.update(export.completed(Ok(Some(path.clone()))));
         assert_eq!(
             app.status,
-            format!("Exported the IR spectrum\n{}", path.display())
+            format!("Exported {file_name}\n{}", path.display())
         );
     }
     assert_eq!(app.tab.doc, before);
