@@ -161,7 +161,7 @@ fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
     let branches = report.irc.as_mut().unwrap();
     branches[0].path = vec![point(-1.5, 2.75), point(-2., 2.5)];
     branches[0].energies = vec![-1., -1.5, -2., -3.];
-    branches[0].completed = false;
+    branches[0].reason = ts::IrcReason::LengthCap;
     branches[1].path = vec![point(-1.25, 3.25)];
     branches[1].energies = vec![-1., -1.25, -2.];
     let frame = Frame {
@@ -272,14 +272,18 @@ fn ts_report() -> TsReport {
             IrcBranch {
                 energies: vec![-1., -3.],
                 path: Vec::new(),
-                completed: true,
+                reason: ts::IrcReason::Converged,
+                gradient_calls: 0,
+                path_length: 0.,
                 end: reactant,
                 reached: Reached::Reactant,
             },
             IrcBranch {
                 energies: vec![-1., -2.],
                 path: Vec::new(),
-                completed: true,
+                reason: ts::IrcReason::Converged,
+                gradient_calls: 0,
+                path_length: 0.,
                 end: product,
                 reached: Reached::Product,
             },
@@ -405,6 +409,12 @@ fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
     done.trace.saddle_steps = Some(7);
     done.trace.times = vec![("CI-NEB".into(), 1.25), ("Worker check".into(), 0.5)];
     done.report.saddle_diagnostics = vec!["candidate recovered after Hessian rebuild".into()];
+    let branch = &mut done.report.irc.as_mut().unwrap()[0];
+    branch.path = vec![point(-2., 2.5)];
+    branch.energies = vec![-1., -2., -3.];
+    branch.reason = ts::IrcReason::LengthCap;
+    branch.gradient_calls = 7;
+    branch.path_length = 2.12654;
     let report = complete(&launch, done).unwrap();
     let value = |label| {
         report
@@ -420,8 +430,14 @@ fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
     assert_eq!(value("NEB"), "34 iterations · converged");
     assert_eq!(value("Saddle"), "7 steps · converged · stationary");
     assert!(value("Worker check").contains("imaginary modes: engine 1 · worker 1 · agree"));
-    assert!(value("IRC +mode").starts_with("reactant"));
-    assert!(value("IRC −mode").starts_with("product"));
+    assert_eq!(
+        value("IRC +mode"),
+        "reactant · length cap · accepted steps: 1 · gradient calls: 7 · path length: 2.126540 amu½·bohr"
+    );
+    assert_eq!(
+        value("IRC −mode"),
+        "product · converged · accepted steps: 0 · gradient calls: 0 · path length: 0.000000 amu½·bohr"
+    );
     assert_eq!(value("Evaluations"), "12");
     assert_eq!(value("Hessians"), "2");
     assert_eq!(

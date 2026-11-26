@@ -593,6 +593,192 @@ mod presentation_tests {
         result
     }
 
+    fn irc_path_mut(result: &mut CalcResult) -> &mut reshiki::qcdata::IrcPath {
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc
+            .as_mut()
+            .unwrap()
+    }
+
+    fn set_irc_step_counts(result: &mut CalcResult, steps: [usize; 2]) {
+        let saddle_energy = result.energy_hartree.unwrap();
+        let path = irc_path_mut(result);
+        path.ts_index = steps[0];
+        path.trajectory.energies_hartree = vec![-5.; steps[0] + steps[1] + 1];
+        path.trajectory.energies_hartree[path.ts_index] = saddle_energy;
+        path.arc_lengths_sqrt_amu_bohr = (0..path.steps())
+            .map(|index| index as f64 - path.ts_index as f64)
+            .collect();
+        path.validate().unwrap();
+    }
+
+    #[test]
+    fn short_irc_detail_reports_actual_steps_and_the_side_that_stopped() {
+        let mut result = gxtb_result();
+        set_irc_step_counts(&mut result, [4, 2]);
+        let path = irc_path_mut(&mut result);
+        path.completed = [false, true];
+        assert_eq!(
+            irc_path_detail(&result, None).as_deref(),
+            Some(
+                "The path stopped after 4 steps on the reactant side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        irc_path_mut(&mut result).completed = [true, false];
+        assert_eq!(
+            irc_path_detail(&result, None).as_deref(),
+            Some(
+                "The path stopped after 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        // The trace counts exclude the saddle and the separately relaxed ends.
+        let card = presentation(&result, None);
+        assert!(card.verification.contains("✓ one imaginary frequency"));
+        assert!(
+            card.verification
+                .contains("✓ path connects reactant and product")
+        );
+        assert!(!card.verification.contains("steps"));
+        assert!(!card.verification.contains("gradient"));
+    }
+
+    #[test]
+    fn two_short_irc_branches_keep_each_actual_step_count() {
+        let mut result = gxtb_result();
+        irc_path_mut(&mut result).completed = [false; 2];
+        assert_eq!(
+            irc_path_detail(&result, None).as_deref(),
+            Some(
+                "The path was followed for 1 step in each direction. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        set_irc_step_counts(&mut result, [4, 2]);
+        assert_eq!(
+            irc_path_detail(&result, None).as_deref(),
+            Some(
+                "The path was followed for 4 steps on the reactant side and 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        irc_path_mut(&mut result).completed = [true; 2];
+        assert_eq!(irc_path_detail(&result, None), None);
+    }
+
+    #[test]
+    fn short_irc_detail_states_the_observed_endpoint_match() {
+        use reshiki::qcdata::IrcEndpoint::{Other, Product, Reactant};
+        let mut result = gxtb_result();
+        for (reached, expected) in [
+            (
+                [Reactant, Reactant],
+                "Both endpoints match the drawn reactant.",
+            ),
+            (
+                [Product, Product],
+                "Both endpoints match the drawn product.",
+            ),
+            (
+                [Reactant, Other],
+                "One end matches the drawn reactant. The other could not be matched.",
+            ),
+            (
+                [Other, Product],
+                "One end matches the drawn product. The other could not be matched.",
+            ),
+            (
+                [Other, Other],
+                "Neither end could be matched to a drawn endpoint.",
+            ),
+        ] {
+            let path = irc_path_mut(&mut result);
+            path.completed = [false; 2];
+            path.reached = reached;
+            let detail = irc_path_detail(&result, None).unwrap();
+            assert!(detail.ends_with(expected), "{detail}");
+            assert!(!detail.contains("The endpoints match the drawn reactant and product"));
+        }
+        let path = irc_path_mut(&mut result);
+        path.completed = [true, false];
+        path.reached = [Reactant, Other];
+        assert!(
+            irc_path_detail(&result, None)
+                .unwrap()
+                .contains("1 step in the positive direction")
+        );
+    }
+
+    #[test]
+    fn short_irc_detail_does_not_invent_unsaved_relaxation_or_legacy_counts() {
+        let mut result = gxtb_result();
+        let path = irc_path_mut(&mut result);
+        path.completed = [false, true];
+        path.relaxed_ends = None;
+        assert_eq!(
+            irc_path_detail(&result, None).as_deref(),
+            Some(
+                "The path stopped after 1 step on the reactant side. The endpoints match the drawn reactant and product."
+            )
+        );
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.irc = None;
+        search.diagnostics.push((
+            "IRC +mode".into(),
+            "reactant · downhill trace not converged · 10 points".into(),
+        ));
+        // A legacy log row supplies its original count but no relaxed geometry.
+        assert_eq!(
+            irc_path_detail(&result, None).as_deref(),
+            Some("The path stopped after 10 steps on the reactant side.")
+        );
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics[0]
+            .1 = "reactant · downhill trace not converged · count not saved".into();
+        assert_eq!(irc_path_detail(&result, None), None);
+    }
+
+    #[test]
+    fn short_irc_detail_keeps_technical_stop_metadata_in_the_log() {
+        let mut result = gxtb_result();
+        irc_path_mut(&mut result).completed = [false, true];
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics
+            .push((
+                "IRC +mode".into(),
+                "reactant · length cap · accepted steps: 1 · gradient calls: 7 · path length: 2.126540 amu½·bohr".into(),
+            ));
+        let detail = irc_path_detail(&result, None).unwrap();
+        let checks = presentation(&result, None).verification;
+        let log = search_log(&result, None, EnergyUnit::default());
+        for technical in ["length cap", "gradient calls", "path length"] {
+            assert!(log.contains(technical));
+            assert!(!detail.contains(technical));
+            assert!(!checks.contains(technical));
+        }
+    }
+
     #[test]
     fn gxtb_barriers_require_observed_irc_ends_and_the_actual_worker_spectrum() {
         use reshiki::qcdata::IrcEndpoint;
@@ -1006,7 +1192,6 @@ mod presentation_tests {
             };
             let presentation = presentation(&result, None);
             assert_eq!(presentation.refined_kcal, None);
-            assert_eq!(presentation.warning, None);
             assert_eq!(
                 presentation.reason,
                 Some(format!(

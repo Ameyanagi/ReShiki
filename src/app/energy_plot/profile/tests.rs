@@ -154,8 +154,8 @@ fn thumbnails_fit_startup_dock_and_inspector_and_hide_only_in_small_figures() {
     for size in [(259., 260.), (560., 139.), (259., 139.)] {
         assert!(profile.layout(bounds(size.0, size.1)).models.is_empty());
     }
-    // A 1280 × 820 window gives its bottom-dock chart 180 logical pixels;
-    // the inspector is fixed to 320 pixels wide.
+    // Compact embedded figures retain the smaller thumbnails. The normal
+    // dock and inspector use the larger sizes checked below.
     for size in [
         (980., 180.),
         (320., 180.),
@@ -172,6 +172,7 @@ fn thumbnails_fit_startup_dock_and_inspector_and_hide_only_in_small_figures() {
                 .collect::<Vec<_>>(),
             [0, 1, 2]
         );
+        assert!(layout.models.iter().all(|model| model.bounds.y == 1.));
         for pair in layout.models.windows(2) {
             assert!(!overlaps(pair[0].bounds, pair[1].bounds));
         }
@@ -195,6 +196,105 @@ fn thumbnails_fit_startup_dock_and_inspector_and_hide_only_in_small_figures() {
             .collect::<Vec<_>>(),
         [0, 2]
     );
+}
+
+#[test]
+fn normal_path_dock_and_320px_inspector_keep_large_models_and_full_annotation_rows() {
+    let mut profile = fixture(&[0., 12., 20., 5., -8.], 19.5);
+    profile.markers[1].note = Some("Forming C1···C6 2.10 Å · C2···C5 2.15 Å · 393i cm⁻¹".into());
+    profile.markers[0].connector_from = Some(Sample { x: 0., energy: 1.5 });
+    profile.markers[2].connector_from = Some(Sample { x: 4., energy: -7. });
+    profile.overlay = profile.samples.clone();
+    profile.x_ticks = true;
+    // A 1280 × 820 window gives Path a 451 px dock, with 303 px for the
+    // figure. Its side-by-side details leave approximately 728 px of width;
+    // the inspector has 320 px, or 288 px after its 16 px side padding,
+    // and adds 76 px for its second model row. A narrow dock does the same.
+    for (width, height) in [
+        (728., 303.),
+        (560., 303.),
+        (320., 396.),
+        (288., 396.),
+        (288., 379.),
+    ] {
+        let layout = profile.layout(bounds(width, height));
+        assert_eq!(layout.models.len(), 3, "{width}×{height}: {layout:?}");
+        assert!(layout.plot.height >= 80., "{width}×{height}: {layout:?}");
+        assert!(!layout.footer_legend);
+        let legend = Rectangle::new(
+            Point::new(layout.plot.x, layout.legend_y.unwrap()),
+            Size::new(layout.plot.width, layout.legend_rows as f32 * LINE),
+        );
+        let mut occupied = vec![layout.plot, legend];
+        for model in &layout.models {
+            assert!(model.bounds.width >= 128. && model.bounds.height >= 72.);
+            occupied.push(model.bounds);
+        }
+        if width < 424. {
+            let [reactant, transition, product] = layout.models.as_slice() else {
+                unreachable!()
+            };
+            assert_eq!(transition.bounds.center_x(), width / 2.);
+            assert!(transition.bounds.y + transition.bounds.height < reactant.bounds.y);
+            assert_eq!(reactant.bounds.y, product.bounds.y);
+        } else {
+            assert!(layout.models.iter().all(|model| model.bounds.y == 1.));
+        }
+        let saddle = layout
+            .labels
+            .iter()
+            .find(|label| label.text.starts_with("TS‡"))
+            .unwrap();
+        let notes: Vec<_> = layout
+            .labels
+            .iter()
+            .filter(|label| label.marker.is_none())
+            .collect();
+        assert!(!notes.is_empty());
+        assert!(notes[0].bounds.y >= saddle.bounds.y + saddle.bounds.height);
+        assert!(notes.iter().all(|label| !label.text.ends_with('…')));
+        let note = notes
+            .iter()
+            .map(|label| label.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(note, profile.markers[1].note.as_deref().unwrap());
+        occupied.extend(layout.labels.iter().map(|label| label.bounds));
+        for (index, region) in occupied.iter().enumerate() {
+            assert!(region.x >= 0. && region.y >= 0.);
+            assert!(region.x + region.width <= width + 0.01);
+            assert!(region.y + region.height <= height + 0.01);
+            for other in occupied.iter().skip(index + 1) {
+                assert!(
+                    !overlaps(*region, *other),
+                    "{width}×{height}: {region:?} overlaps {other:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn annotation_text_renders_in_the_same_top_aligned_rows_used_by_layout() {
+    for size in [9., 10., FONT] {
+        let text = text_line("TS‡ 26.5".into(), Point::new(52., 80.), Color::BLACK, size);
+        assert_eq!(text.align_y, iced::alignment::Vertical::Top);
+        assert_eq!(text.line_height.to_absolute(text.size), iced::Pixels(LINE));
+        // Wrapping happens before layout so canvas text cannot silently grow
+        // a second row beyond the rectangle allocated to this annotation.
+        assert_eq!(text.max_width, f32::INFINITY);
+        assert!(text.size.0 <= LINE);
+    }
+}
+
+#[test]
+fn leaders_stop_at_the_plot_edge_and_leave_annotation_rows_clear() {
+    let plot = Rectangle::new(Point::new(0., 30.), Size::new(100., 40.));
+    let inside = Point::new(50., 50.);
+    let above = leader_edge(Point::new(20., 0.), inside, plot);
+    let below = leader_edge(Point::new(80., 100.), inside, plot);
+    assert!((above.x - 38.).abs() < 0.001 && above.y == plot.y);
+    assert!((below.x - 62.).abs() < 0.001 && below.y == plot.y + plot.height);
 }
 
 #[test]

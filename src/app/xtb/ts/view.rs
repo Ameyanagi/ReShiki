@@ -92,7 +92,6 @@ pub(in crate::app::xtb) struct Presentation {
     pub refined_kcal: Option<f64>,
     pub reason: Option<String>,
     pub(super) recovery: Recovery,
-    pub warning: Option<String>,
     pub highest_path_kcal: Option<f64>,
     pub verification: String,
 }
@@ -274,28 +273,123 @@ pub(in crate::app::xtb) fn presentation(
     } else {
         frequency_check
     };
-    let diagnostics = saved
-        .map(|search| search.diagnostics.as_slice())
-        .or_else(|| session.map(|s| s.extras.diagnostics.as_slice()));
-    let warning = (reliable
-        && diagnostics.is_some_and(|rows| {
-            rows.iter().any(|(label, detail)| {
-                label.starts_with("IRC ") && detail.contains(" · downhill trace not converged · ")
-            })
-        }))
-    .then(|| "Reaction-path descent ended before gradient convergence.".into());
     Presentation {
         method: method_name(result).to_owned(),
         refined_kcal,
         reason,
         recovery,
-        warning,
         highest_path_kcal: deltas
             .into_iter()
             .filter(|value| value.is_finite())
             .reduce(f64::max),
         verification,
     }
+}
+
+/// Explain a short trace beside its profile, separately from the card's checks.
+/// A saved relaxed end exists only after its minimization has converged.
+pub(super) fn irc_path_detail(result: &CalcResult, session: Option<&Session>) -> Option<String> {
+    use reshiki::qcdata::IrcEndpoint::{Other, Product, Reactant};
+
+    let Some(path) = irc::saved(result) else {
+        return legacy_irc_path_detail(result, session);
+    };
+    let negative_steps = path.ts_index;
+    let positive_steps = path.steps().checked_sub(negative_steps + 1)?;
+    let [negative, positive] = path.reached;
+    let branch = |steps, endpoint, other, direction| {
+        let side = match endpoint {
+            Reactant if other != Reactant => "on the reactant side",
+            Product if other != Product => "on the product side",
+            _ => direction,
+        };
+        format!("{} {side}", step_count(steps))
+    };
+    let negative_branch = || {
+        branch(
+            negative_steps,
+            negative,
+            positive,
+            "in the negative direction",
+        )
+    };
+    let positive_branch = || {
+        branch(
+            positive_steps,
+            positive,
+            negative,
+            "in the positive direction",
+        )
+    };
+    let traced = match path.completed {
+        [true, true] => return None,
+        [false, true] => format!("The path stopped after {}.", negative_branch()),
+        [true, false] => format!("The path stopped after {}.", positive_branch()),
+        [false, false] if negative_steps == positive_steps => {
+            format!(
+                "The path was followed for {} in each direction.",
+                step_count(negative_steps)
+            )
+        }
+        [false, false] => format!(
+            "The path was followed for {} and {}.",
+            negative_branch(),
+            positive_branch()
+        ),
+    };
+    let matching = match path.reached {
+        [Reactant, Product] | [Product, Reactant] => {
+            "The endpoints match the drawn reactant and product."
+        }
+        [Reactant, Reactant] => "Both endpoints match the drawn reactant.",
+        [Product, Product] => "Both endpoints match the drawn product.",
+        [Reactant, Other] | [Other, Reactant] => {
+            "One end matches the drawn reactant. The other could not be matched."
+        }
+        [Product, Other] | [Other, Product] => {
+            "One end matches the drawn product. The other could not be matched."
+        }
+        [Other, Other] => "Neither end could be matched to a drawn endpoint.",
+    };
+    let relaxation = if path.relaxed_ends.is_some() {
+        " Both ends were then relaxed to the nearest minimum."
+    } else {
+        ""
+    };
+    Some(format!("{traced}{relaxation} {matching}"))
+}
+
+fn step_count(steps: usize) -> String {
+    format!("{steps} {}", if steps == 1 { "step" } else { "steps" })
+}
+
+/// Older results retained branch diagnostics but no ordered path or relaxed ends.
+/// Keep their known side and step count without inventing missing geometries.
+fn legacy_irc_path_detail(result: &CalcResult, session: Option<&Session>) -> Option<String> {
+    let diagnostics = super::saved_search(result)
+        .map(|search| search.diagnostics.as_slice())
+        .or_else(|| session.map(|s| s.extras.diagnostics.as_slice()))?;
+    let traced = diagnostics
+        .iter()
+        .filter_map(|(label, detail)| {
+            if !matches!(label.as_str(), "IRC +mode" | "IRC −mode") {
+                return None;
+            }
+            let (endpoint, points) = detail.split_once(" · downhill trace not converged · ")?;
+            let steps = points.strip_suffix(" points")?.parse::<usize>().ok()?;
+            let side = match endpoint {
+                "reactant" => "on the reactant side",
+                "product" => "on the product side",
+                _ if label == "IRC +mode" => "in the +mode direction",
+                _ => "in the −mode direction",
+            };
+            Some(format!("{} {side}", step_count(steps)))
+        })
+        .collect::<Vec<_>>();
+    if traced.is_empty() {
+        return None;
+    }
+    Some(format!("The path stopped after {}.", traced.join(" and ")))
 }
 
 /// Technical search detail belongs in Log, including after the file is reopened.
@@ -832,13 +926,24 @@ impl App {
         if inspector {
             profile = profile.push(self.xtb_profile_controls(shown));
         }
-        let height = if inspector {
+        let has_models = !chart.thumbnails.is_empty();
+        // Narrow figures place TS above R/P. The extra model row is 76 px.
+        // Below about 780 px window width the dock's 3:2 columns also need it.
+        let narrow_models = has_models
+            && chart.refined_delta.is_some()
+            && (inspector || self.window_size.width < 780.);
+        let height = if inspector && has_models {
+            320.
+        } else if inspector {
             232.
-        } else {
+        } else if has_models {
             // Space remaining between the dock header and its pinned Path controls.
+            (crate::app::xtb::palette::path_dock_height(self.window_size.height) - 148.)
+                .clamp(240., 320.)
+        } else {
             (crate::app::xtb::palette::dock_height(self.window_size.height) - 148.)
                 .clamp(146., 212.)
-        };
+        } + if narrow_models { 76. } else { 0. };
         profile = profile.push(chart.widget_height(height));
         if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
             profile = profile.push(text(selection_label(delta, unit)).size(12));
@@ -950,8 +1055,8 @@ impl App {
         }
         details = details
             .push(reaction_gibbs_unavailable(result).map(|reason| line(reason, Tone::Warning)));
-        if let Some(warning) = &presentation.warning {
-            details = details.push(line(warning.clone(), Tone::Muted));
+        if let Some(detail) = irc_path_detail(result, shown.ts) {
+            details = details.push(line(detail, Tone::Muted));
         }
         if super::card::imaginary_mode(result).is_some() {
             details = details.push(

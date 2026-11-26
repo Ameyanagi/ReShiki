@@ -1073,9 +1073,13 @@ read with ORCA's `InHess Read`. It uses the worker's Cartesian Hessian when
 available and the engine's Cartesian Hessian if the worker computation fails.
 The version 2 JSON report includes spectra, IRC branch labels and energies, convergence,
 work counts and the hydrogen mapping review. `irc_error` and `worker_check_error`
-record verification failures when present. Each branch’s `completed` field
-records whether the downhill trace reached its gradient tolerance before final
-relaxation.
+record verification failures when present. For each of `irc.plus` and `irc.minus`,
+`completed` records gradient convergence before endpoint relaxation. The
+`stop_reason` gives `converged`, `length cap`, `step budget`, or `step size exhausted`
+if a downhill step could no longer be resolved. `steps` counts accepted steps,
+`path_length_sqrt_amu_bohr` sums their mass-weighted arcs, and `gradient_calls`
+counts all descent evaluations, including rejected trials. The run-wide
+`evaluations` also includes endpoint relaxation and the other search stages.
 The `methods` object names the method used for endpoint and TS energies,
 barriers, saddle, spectra, Hessian, IRC, path and work. Energy and barrier
 objects and each IRC branch also carry their method and units. `structures`

@@ -85,12 +85,16 @@ impl App {
             return None;
         }
         let content = self.xtb_palette_content(false)?;
-        // Expanded, the dock has one height for every tab, at most 40 % of
-        // the window; its middle scrolls between the pinned header and footer.
+        // The Path figure needs a taller budget for molecular thumbnails;
+        // the middle still scrolls between the pinned header and footer.
         let height = if self.tab.xtb.palette.collapsed {
             Length::Shrink
         } else {
-            Length::Fixed(super::sizing::dock_height(self.window_size.height))
+            Length::Fixed(if self.tab.xtb.palette.view == View::Path {
+                super::sizing::path_dock_height(self.window_size.height)
+            } else {
+                super::sizing::dock_height(self.window_size.height)
+            })
         };
         Some(
             container(content)

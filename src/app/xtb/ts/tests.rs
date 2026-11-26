@@ -1062,10 +1062,8 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     let shown = app.xtb_shown().unwrap();
     assert!(!shown.stale);
     assert_eq!(
-        view::presentation(&shown.stored.result, shown.ts)
-            .warning
-            .as_deref(),
-        Some("Reaction-path descent ended before gradient convergence.")
+        view::irc_path_detail(&shown.stored.result, shown.ts).as_deref(),
+        Some("The path stopped after 10 steps on the reactant side.")
     );
     assert_eq!(
         results::View::available(&shown.stored.result),
@@ -1111,8 +1109,8 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     let presentation = view::presentation(&shown.stored.result, None);
     assert!(presentation.reliable());
     assert_eq!(
-        presentation.warning.as_deref(),
-        Some("Reaction-path descent ended before gradient convergence.")
+        view::irc_path_detail(&shown.stored.result, None).as_deref(),
+        Some("The path stopped after 10 steps on the reactant side.")
     );
     let search = saved_search(&shown.stored.result).unwrap();
     assert_eq!(search.arrow, Some(arrow));
