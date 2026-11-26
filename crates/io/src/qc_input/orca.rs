@@ -2,8 +2,8 @@
 use std::fmt::Write;
 
 use super::{
-    Dispersion, Error, File, Frame, Geometry, Job, Method, Settings, single_line, write_atoms,
-    write_orca_hess, xyz,
+    Dispersion, Error, File, Frame, Geometry, Job, Method, Program, Settings, single_line,
+    write_atoms, write_orca_hess, xyz,
 };
 
 pub(super) fn maxcore(settings: &Settings) -> u64 {
@@ -109,12 +109,22 @@ pub(super) fn write(
     }
     let _ = writeln!(text, "%maxcore {}", maxcore(settings));
 
+    let companion_stem: String = stem
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
     let mut files = Vec::new();
     let frame = geometry.frame;
     if matches!(settings.job, Job::TransitionState | Job::Irc) {
         let hess_name = if let Some(hessian) = geometry.hessian() {
             // ORCA writes its own `{stem}.hess` after Freq; keep the xTB one apart.
-            let name = format!("{stem}_xtb.hess");
+            let name = format!("{companion_stem}_xtb.hess");
             files.push(File {
                 name: name.clone(),
                 text: write_orca_hess(frame, hessian)?,
@@ -140,8 +150,8 @@ pub(super) fn write(
     }
 
     let inline = if let Some((reactant, product)) = endpoints {
-        let product_name = format!("{stem}_product.xyz");
-        let ts_name = format!("{stem}_ts.xyz");
+        let product_name = format!("{companion_stem}_product.xyz");
+        let ts_name = format!("{companion_stem}_ts.xyz");
         let _ = writeln!(
             text,
             "%neb\n  NEB_End_XYZFile \"{product_name}\"\n  NEB_TS_XYZFile \"{ts_name}\"\n  NImages {}\nend",
@@ -164,7 +174,7 @@ pub(super) fn write(
         "\n* xyz {} {}",
         settings.charge, settings.multiplicity
     );
-    write_atoms(&mut text, inline, "  ");
+    write_atoms(&mut text, inline, Program::Orca);
     text.push_str("*\n");
     Ok((text, files))
 }

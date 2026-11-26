@@ -1418,8 +1418,11 @@ fn layout_bounds(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     }))
 }
 
+type InkBox = (Point, Point);
+
 /// Show the molecule of model `index` as `display`; returns whether it changed.
-/// Beside the drawing the frame sits one bond length right of the atoms.
+/// Show both to the right when there is room, otherwise below the scheme,
+/// leaving a bond length between the model and nearby drawing ink.
 pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     let Some(model) = doc.models.get(index) else {
         return false;
@@ -1435,23 +1438,38 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
                 offset: Point::default(),
                 ..model.clone()
             };
-            let Some((left, _)) = frame(doc, &centered) else {
+            let Some((start, end)) = frame(doc, &centered) else {
                 return false;
             };
-            // A crystal's 2D drawing reaches as far as its cell box and the
-            // copies of a repeat.
-            let flat = Model3d {
-                display: Display::TwoD,
-                ..model.clone()
+            let (molecule, obstacles) = placement_bounds(doc, index, model);
+            let right = molecule.map_or(hi.x, |(_, hi)| hi.x);
+            let bond = doc.drawing_style.bond_length_world;
+            let mut offset = Point::new(right + bond - start.x, 0.);
+            let overlaps = |offset: Point, (lo, hi): InkBox| {
+                let margin = bond / 4.;
+                start.x + offset.x - margin < hi.x
+                    && end.x + offset.x + margin > lo.x
+                    && start.y + offset.y - margin < hi.y
+                    && end.y + offset.y + margin > lo.y
             };
-            let cells = flat_cells(std::slice::from_ref(&flat), doc);
-            let ink = [cells.behind, cells.front, cells.above].concat();
-            let right = if ink.is_empty() {
-                hi.x
-            } else {
-                hi.x.max(crate::scene::bounds(&ink).1.x)
-            };
-            Point::new(right + doc.drawing_style.bond_length_world - left.x, 0.)
+            if obstacles.iter().any(|&bounds| overlaps(offset, bounds)) {
+                let ink_bottom = molecule.map_or(hi.y, |(_, hi)| hi.y);
+                offset = Point::new(0., ink_bottom + bond - start.y);
+                // Each move clears at least one obstacle permanently.
+                for _ in 0..=obstacles.len() {
+                    let Some(lowest) = obstacles
+                        .iter()
+                        .copied()
+                        .filter(|&bounds| overlaps(offset, bounds))
+                        .map(|(_, hi)| hi.y)
+                        .reduce(f32::max)
+                    else {
+                        break;
+                    };
+                    offset.y = lowest + bond - start.y;
+                }
+            }
+            offset
         }
         _ if model.display == Display::Both => Point::default(),
         Display::TwoD | Display::ThreeD => model.offset,
@@ -1466,6 +1484,88 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
         require_version(doc);
     }
     changed
+}
+
+/// Measure molecules and drawing objects together, with this model's own
+/// molecule and linked captions kept apart from the obstacles.
+fn placement_bounds(
+    doc: &Document,
+    index: usize,
+    model: &Model3d,
+) -> (Option<InkBox>, Vec<InkBox>) {
+    let sources = model.ids();
+    let mut remaining: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
+    for bond in &doc.bonds {
+        adjacent.entry(bond.a).or_default().push(bond.b);
+        adjacent.entry(bond.b).or_default().push(bond.a);
+    }
+    let mut own = Vec::new();
+    let mut selections = Vec::new();
+    for atom in &doc.atoms {
+        if !remaining.remove(&atom.id) {
+            continue;
+        }
+        let mut component = vec![atom.id];
+        let mut pending = vec![atom.id];
+        while let Some(id) = pending.pop() {
+            for &other in adjacent.get(&id).into_iter().flatten() {
+                if remaining.remove(&other) {
+                    component.push(other);
+                    pending.push(other);
+                }
+            }
+        }
+        if component.iter().any(|id| sources.contains(id)) {
+            own.extend(component);
+        } else {
+            selections.push(component);
+        }
+    }
+    let own = crate::molecule_names::include_annotations(doc, &own);
+    let own_ids: HashSet<_> = own.iter().copied().collect();
+    selections.insert(0, own);
+    selections.extend(
+        doc.arrows
+            .iter()
+            .map(|a| a.id)
+            .chain(doc.graphics.iter().map(|g| g.id))
+            .chain(doc.annotations.iter().map(|a| a.id))
+            .filter(|id| !own_ids.contains(id))
+            .map(|id| vec![id]),
+    );
+    let mut flat;
+    let drawing = if model.display == Display::ThreeD {
+        flat = doc.clone();
+        if let Some(model) = flat.models.get_mut(index) {
+            model.display = Display::TwoD;
+        }
+        &flat
+    } else {
+        doc
+    };
+    let measured = crate::scene::selections_ink_bounds(drawing, &selections);
+    let molecule = measured.first().copied().flatten();
+    let mut obstacles: Vec<_> = measured.into_iter().skip(1).flatten().collect();
+    obstacles.extend(
+        doc.models
+            .iter()
+            .enumerate()
+            .filter(|(i, model)| *i != index && model.display != Display::TwoD)
+            .filter_map(|(_, model)| frame(doc, model)),
+    );
+    // A disconnected crystal's atoms belong to separate selections, so their
+    // individual bounds omit the whole cell and its repeat copies.
+    for (_, model) in drawing.models.iter().enumerate().filter(|(i, model)| {
+        *i != index && model.display != Display::ThreeD && model.cell.is_some()
+    }) {
+        let cells = flat_cells(std::slice::from_ref(model), drawing);
+        let ink = [cells.behind, cells.front, cells.above].concat();
+        if !ink.is_empty() {
+            obstacles.push(crate::scene::bounds(&ink));
+        }
+    }
+    (molecule, obstacles)
 }
 
 /// The document version a drawing's models need: none without models,

@@ -28,6 +28,37 @@ fn drawing() -> (Document, Vec<u64>) {
 }
 
 #[test]
+fn outdated_frame_tracks_the_move_preview() {
+    let (doc, atoms) = drawing();
+    let canvas = MoleculeCanvas {
+        tool: Tool::Select,
+        selected: &atoms,
+        smart_guides: false,
+        outdated_models: vec![doc.models[0].linked_atoms.as_slice()],
+        ..chain_canvas(&doc, reshiki::chains::ChainMode::Straight)
+    };
+    let bounds = Rectangle::with_size(iced::Size::new(800., 600.));
+    let start = World::default();
+    let delta = World::new(128., 64.);
+    let state = State {
+        cursor: Some(canvas.camera.screen(delta, bounds)),
+        gesture: Some(crate::canvas::Gesture::Move {
+            start,
+            ids: atoms.clone(),
+            clicked: atoms.clone(),
+        }),
+        ..Default::default()
+    };
+    let mut draft = Draft::new(&doc);
+    canvas.preview_move(&mut draft, &state, bounds);
+
+    let (lo, hi) = canvas.outdated_frames(&doc).next().unwrap();
+    let (preview_lo, preview_hi) = canvas.outdated_frames(&draft.preview).next().unwrap();
+    assert!(preview_lo.distance(lo.offset(delta.x, delta.y)) < 1e-3);
+    assert!(preview_hi.distance(hi.offset(delta.x, delta.y)) < 1e-3);
+}
+
+#[test]
 fn selected_shown_model_explains_gestures_before_pressing_anywhere_on_canvas() {
     let (mut doc, atoms) = drawing();
     let caption = reshiki::molecule_names::show(

@@ -4,23 +4,30 @@
 //!
 //! Normal modes are not saved (light results); a reopened result
 //! recomputes them with the stored settings when the tab opens.
-use super::palette::Shown;
+use super::palette::{Shown, StatusKind};
 use super::results::View;
-use super::{Page, Request, Start, is, state};
+#[cfg(not(target_arch = "wasm32"))]
+use super::state::FailureDetails;
+use super::{Request, Start, is, state};
 use crate::app::figure_export::{Kind, Prepared};
-use crate::app::{App, InspectorTab, Message};
+use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::{Document, Point};
-use reshiki::graphics::Graphic;
+use reshiki::graphics::{Graphic, IrFigure, Journal, YAxis};
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
+use reshiki::science::Stored;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-mod figure;
+pub(crate) mod figure;
+mod mode_list;
+mod motion;
 mod view;
+
+use mode_list::Sort;
 
 /// Frames in one period; a period lasts one second at speed 1×.
 const FRAMES: usize = 24;
@@ -41,17 +48,23 @@ const PA_PER_ATM: f64 = 101_325.;
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Mode(usize),
+    Sort(Sort),
     Play(bool),
     Amplitude(f32),
     Speed(f32),
     Arrows(bool),
     /// Add the shown arrows to the drawing, as one Undo step.
     PlaceArrows,
+    Y(YAxis),
+    From(String),
+    To(String),
     Shape(BandShape),
     Fwhm(f32),
     Scale(String),
     PlaceSpectrum,
     ExportSpectrum(&'static str),
+    CopyCaption,
+    CaptionCopied(u64, Result<(), String>),
     Thermo,
     Temperature(String),
     Pressure(String),
@@ -66,10 +79,17 @@ pub(crate) enum Action {
 pub(crate) struct State {
     pub mode: usize,
     pub playing: bool,
+    sort: Sort,
+    opened: Option<(u64, Weak<CalcResult>)>,
+    /// Last choices for other attached results, without keeping them alive.
+    selections: Vec<Selection>,
     /// Largest atomic excursion of the animation, Å.
     pub amplitude: f32,
     pub speed: f32,
     pub arrows: bool,
+    pub y: YAxis,
+    pub from: String,
+    pub to: String,
     pub shape: BandShape,
     pub fwhm: f32,
     pub scale: String,
@@ -78,6 +98,7 @@ pub(crate) struct State {
     /// Atmospheres, as typed.
     pub pressure: String,
     spectrum: RefCell<Option<(view::SpectrumKey, Arc<view::SpectrumData>)>>,
+    motion: RefCell<Vec<MotionNames>>,
     animation: Option<Animation>,
     /// Normal modes recomputed for results the file kept light.
     modes: Vec<(Weak<CalcResult>, Arc<Vec<f64>>)>,
@@ -91,17 +112,24 @@ impl Default for State {
     fn default() -> Self {
         Self {
             mode: 0,
-            playing: true,
+            playing: false,
+            sort: Sort::default(),
+            opened: None,
+            selections: Vec::new(),
             amplitude: 0.3,
             speed: 1.,
             arrows: false,
+            y: YAxis::Transmittance,
+            from: "4000".into(),
+            to: "400".into(),
             shape: BandShape::Lorentzian,
-            fwhm: 15.,
-            scale: "1.00".into(),
+            fwhm: 20.,
+            scale: "1.000".into(),
             thermo: false,
             temperature: "298.15".into(),
             pressure: "1".into(),
             spectrum: RefCell::new(None),
+            motion: RefCell::new(Vec::new()),
             animation: None,
             modes: Vec::new(),
             recompute: None,
@@ -109,6 +137,18 @@ impl Default for State {
             problem: None,
         }
     }
+}
+
+struct MotionNames {
+    result: Weak<CalcResult>,
+    names: Arc<[String]>,
+}
+
+struct Selection {
+    attachment: u64,
+    result: Weak<CalcResult>,
+    mode: usize,
+    playing: bool,
 }
 
 struct Recompute {
@@ -130,7 +170,6 @@ impl Drop for Recompute {
 /// What the frames show; any change builds them again.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Key {
-    result: *const CalcResult,
     mode: usize,
     amplitude: f32,
     arrows: bool,
@@ -140,6 +179,8 @@ struct Key {
 /// One preview document; each frame swaps in the model (and its arrows), so
 /// a large drawing is copied once, not once per frame.
 struct Animation {
+    attachment: u64,
+    result: Weak<CalcResult>,
     key: Key,
     doc: Document,
     /// The animated model in `doc`, and how many graphics `doc` has without arrows.
@@ -153,6 +194,10 @@ struct Animation {
 }
 
 impl Animation {
+    fn is_for(&self, stored: &Stored) -> bool {
+        self.attachment == stored.attachment && is(&self.result, &stored.result)
+    }
+
     /// Put the frame for the current phase into the preview document.
     fn show(&mut self) {
         let index = ((self.phase * self.frames.len() as f32) as usize)
@@ -176,6 +221,11 @@ impl State {
     /// The typed scale factor, if it is a sensible one.
     pub(super) fn scale(&self) -> Option<f64> {
         typed(&self.scale).filter(|s| (0.5..=1.5).contains(s))
+    }
+
+    pub(super) fn range(&self) -> Option<(f64, f64)> {
+        let (from, to) = (typed(&self.from)?, typed(&self.to)?);
+        IrFigure::valid_range(from, to).then_some((from, to))
     }
 
     /// Temperature (K) and pressure (Pa) as typed, if valid.
@@ -205,6 +255,7 @@ fn spectrum_method(result: &CalcResult) -> &str {
         .provenance
         .method
         .as_deref()
+        .map(super::results::method_without_optimizer)
         .unwrap_or(match &result.settings {
             Settings::Xtb(settings) => settings.method.label(),
             Settings::Imported { .. } => "xTB",
@@ -327,6 +378,23 @@ impl App {
             .map(|(_, modes)| modes.as_slice())
     }
 
+    /// Stored or recomputed mode vectors stay with their result for the session.
+    fn xtb_motion_names(&self, shown: &Shown<'_>) -> Option<Arc<[String]>> {
+        let result = &shown.stored.result;
+        let modes = self.xtb_modes(result)?;
+        let mut cache = self.tab.xtb.vibrations.motion.borrow_mut();
+        if let Some(entry) = cache.iter().find(|entry| is(&entry.result, result)) {
+            return Some(Arc::clone(&entry.names));
+        }
+        let names: Arc<[String]> = motion::describe(shown.frame, &result.bond_orders, modes).into();
+        cache.retain(|entry| entry.result.strong_count() > 0);
+        cache.push(MotionNames {
+            result: Arc::downgrade(result),
+            names: Arc::clone(&names),
+        });
+        Some(names)
+    }
+
     /// The document showing the current animation frame, while it belongs
     /// to this document state.
     pub(super) fn xtb_vibration_preview(&self) -> Option<&Document> {
@@ -340,9 +408,19 @@ impl App {
             .animation
             .as_ref()
             .filter(|animation| {
-                self.xtb_vibrations_visible()
-                    && animation.key.revision == (self.tab.file_epoch, self.tab.revision)
+                animation.key.revision == (self.tab.file_epoch, self.tab.revision)
+                    && self
+                        .xtb_vibration_entry()
+                        .is_some_and(|stored| animation.is_for(stored))
             })
+    }
+
+    pub(in crate::app) fn xtb_vibration_entry(&self) -> Option<&Stored> {
+        if !self.xtb_vibrations_visible() || self.tab.xtb.run.is_some() {
+            return None;
+        }
+        let (_, stored) = self.xtb_shown_entry()?;
+        stored.result.vibrations.is_some().then_some(stored)
     }
 
     /// Ticks while a mode animates.
@@ -358,15 +436,9 @@ impl App {
     pub(in crate::app) fn xtb_vibrations_visible(&self) -> bool {
         let palette = &self.tab.xtb.palette;
         self.tabs.temporary_depth == 0
-            && palette.open
             && palette.view == View::Vibrations
-            && if self.xtb.dock.inspector {
-                self.inspector_open
-                    && self.inspector_tab == InspectorTab::Predict
-                    && self.xtb.page == Page::Xtb
-            } else {
-                !self.xtb.dock.collapsed
-            }
+            && self.xtb_palette_body_visible()
+            && self.xtb_failed().is_none()
     }
 
     fn xtb_vibrations_live(&self) -> Option<Shown<'_>> {
@@ -376,8 +448,11 @@ impl App {
         {
             return None;
         }
-        self.xtb_shown()
-            .filter(|shown| !shown.stale && self.xtb_model_at_result(shown))
+        self.xtb_shown().filter(|shown| {
+            shown.stored.result.vibrations.is_some()
+                && !shown.stale
+                && self.xtb_model_at_result(shown)
+        })
     }
 
     pub(in crate::app) fn xtb_vibrations_leave(&mut self) {
@@ -400,16 +475,19 @@ impl App {
             .as_ref()
             .map_or(0, |v| v.frequencies_cm1.len());
         let key = Key {
-            result: Arc::as_ptr(result),
             mode: self.xtb_mode(count),
             amplitude: settings.amplitude,
             arrows: settings.arrows,
             revision,
         };
-        if settings.animation.as_ref().is_some_and(|a| a.key == key) {
+        let previous = settings
+            .animation
+            .as_ref()
+            .filter(|a| a.is_for(shown.stored));
+        if previous.is_some_and(|a| a.key == key) {
             return;
         }
-        let phase = settings.animation.as_ref().map_or(0., |a| a.phase);
+        let phase = previous.map_or(0., |a| a.phase);
         let mut animation = self
             .xtb_modes(result)
             .and_then(|modes| vector(modes, shown.frame, key.mode))
@@ -461,6 +539,8 @@ impl App {
         }
         *doc.models.get_mut(index)? = rest;
         Some(Animation {
+            attachment: shown.stored.attachment,
+            result: Arc::downgrade(&shown.stored.result),
             key,
             graphics: doc.graphics.len(),
             doc,
@@ -474,9 +554,11 @@ impl App {
 
     pub(super) fn xtb_vibrations_action(&mut self, action: Action) -> Task<Message> {
         let tick = matches!(action, Action::Tick);
+        let reveal = matches!(action, Action::Mode(_) | Action::Sort(_));
         let settings = &mut self.tab.xtb.vibrations;
         match action {
             Action::Mode(mode) => settings.mode = mode,
+            Action::Sort(sort) => settings.sort = sort,
             Action::Play(on) => settings.playing = on,
             Action::Amplitude(value) => settings.amplitude = value,
             Action::Speed(value) => settings.speed = value,
@@ -487,6 +569,9 @@ impl App {
                 return Task::none();
             }
             Action::Shape(shape) => settings.shape = shape,
+            Action::Y(y) => settings.y = y,
+            Action::From(value) => settings.from = value,
+            Action::To(value) => settings.to = value,
             Action::Fwhm(value) => settings.fwhm = value,
             Action::Scale(value) => settings.scale = value,
             Action::PlaceSpectrum => {
@@ -500,15 +585,36 @@ impl App {
                     .map(|result| match result {
                         Ok(export) => Message::ExportReady(export),
                         Err(error) => Message::Xtb(super::Action::Palette(
-                            super::palette::Action::Exported(Err(error)),
+                            super::palette::Action::IrExported(Err(error)),
                         )),
                     });
+            }
+            Action::CopyCaption => {
+                #[cfg(not(target_arch = "wasm32"))]
+                let write = reshiki::clipboard::write_text;
+                #[cfg(target_arch = "wasm32")]
+                let write = crate::web::write_text;
+                return self.xtb_copy_caption_with(write);
+            }
+            Action::CaptionCopied(epoch, result) => {
+                self.copy_as_busy = false;
+                if self.tab.file_epoch == epoch && self.tab.xtb.palette.open {
+                    let error = result.is_err();
+                    let text = result.map_or_else(
+                        |error| format!("Could not copy the IR caption\n{error}"),
+                        |()| "Copied the IR caption".into(),
+                    );
+                    self.xtb_set_palette_status(StatusKind::Palette, text, error);
+                }
+                return Task::none();
             }
             Action::Thermo => settings.thermo = !settings.thermo,
             Action::Temperature(value) => settings.temperature = value,
             Action::Pressure(value) => settings.pressure = value,
             Action::Tick => {
-                if let Some(animation) = &mut settings.animation {
+                if settings.playing
+                    && let Some(animation) = &mut settings.animation
+                {
                     let step = settings.speed * TICK.as_secs_f32();
                     animation.phase = (animation.phase + step).fract();
                     animation.show();
@@ -521,6 +627,9 @@ impl App {
                 // Its status (a frequency drift) stays in front of the mode line.
                 self.xtb_recomputed(epoch, serial, outcome);
                 self.xtb_vibrations_sync();
+                if self.xtb_mode_status_is_current() {
+                    self.xtb_vibrations_status();
+                }
                 return Task::none();
             }
         }
@@ -529,12 +638,16 @@ impl App {
         if !tick {
             self.xtb_vibrations_status();
         }
-        Task::none()
+        if reveal {
+            self.xtb_reveal_mode()
+        } else {
+            Task::none()
+        }
     }
 
-    /// "Bend · 1590 cm⁻¹ · animating" for the selected mode.
+    /// "Mode 49 · 1788 cm⁻¹ · C=O stretch · paused" for the selected mode.
     fn xtb_vibrations_status(&mut self) {
-        if self.tab.xtb.vibrations.animation.is_none() {
+        if self.xtb_vibration_entry().is_none() {
             return;
         }
         let Some(shown) = self.xtb_shown() else {
@@ -547,36 +660,124 @@ impl App {
         let Some(frequency) = vibrations.frequencies_cm1.get(mode) else {
             return;
         };
-        let state = if self.tab.xtb.vibrations.playing {
+        let settings = &self.tab.xtb.vibrations;
+        let state = if settings.playing && settings.animation.is_some() {
             "animating"
         } else {
             "paused"
         };
-        self.status = format!(
-            "Mode {} · {} · {state}",
-            mode + 1,
-            view::wavenumber(*frequency)
-        );
-        self.error = false;
-    }
-
-    /// The tab opened: recompute missing modes, then animate.
-    pub(super) fn xtb_vibrations_opened(&mut self) -> Task<Message> {
-        if let Some(result) = self.xtb_shown().map(|shown| shown.stored.result.clone()) {
-            self.tab
-                .xtb
-                .vibrations
-                .problem
-                .take_if(|(weak, _)| is(weak, &result));
+        let mut text = format!("Mode {} · {}", mode + 1, view::wavenumber(*frequency));
+        if let Some(names) = self.xtb_motion_names(&shown)
+            && let Some(name) = names.get(mode).filter(|name| !name.is_empty())
+        {
+            text.push_str(" · ");
+            text.push_str(name);
         }
-        let task = self.xtb_vibrations_resume();
-        self.xtb_vibrations_status();
-        task
+        text.push_str(" · ");
+        text.push_str(state);
+        self.xtb_set_palette_status(StatusKind::Mode, text, false);
     }
 
-    pub(in crate::app) fn xtb_vibrations_resume(&mut self) -> Task<Message> {
+    fn xtb_vibrations_select_on_open(&mut self) {
+        let Some(stored) = self.xtb_vibration_entry() else {
+            return;
+        };
+        let (attachment, result) = (stored.attachment, stored.result.clone());
+        if self
+            .tab
+            .xtb
+            .vibrations
+            .opened
+            .as_ref()
+            .is_some_and(|(id, weak)| *id == attachment && is(weak, &result))
+        {
+            return;
+        }
+        let settings = &mut self.tab.xtb.vibrations;
+        settings
+            .selections
+            .retain(|entry| entry.result.strong_count() > 0);
+        let (mode, playing) = if let Some(index) = settings
+            .selections
+            .iter()
+            .position(|entry| entry.attachment == attachment && is(&entry.result, &result))
+        {
+            let selected = settings.selections.swap_remove(index);
+            (selected.mode, selected.playing)
+        } else {
+            let Some(mode) = result.vibrations.as_ref().and_then(|vibrations| {
+                mode_list::order(vibrations, Sort::Intensity)
+                    .first()
+                    .copied()
+            }) else {
+                return;
+            };
+            (mode, false)
+        };
+        if let Some((attachment, result)) = settings
+            .opened
+            .replace((attachment, Arc::downgrade(&result)))
+            && result.strong_count() > 0
+        {
+            settings.selections.push(Selection {
+                attachment,
+                result,
+                mode: settings.mode,
+                playing: settings.playing,
+            });
+        }
+        settings.mode = mode;
+        settings.playing = playing;
+    }
+
+    fn xtb_reveal_mode(&self) -> Task<Message> {
+        if let Some(stored) = self.xtb_vibration_entry()
+            && let Some(vibrations) = &stored.result.vibrations
+            && !vibrations.frequencies_cm1.is_empty()
+        {
+            return mode_list::reveal(self.xtb_mode(vibrations.frequencies_cm1.len()));
+        }
+        Task::none()
+    }
+
+    /// Explicitly choosing the tab retries a previous mode-recovery problem.
+    /// The app's visibility transition handles selection, status and reveal.
+    pub(super) fn xtb_vibrations_opened(&mut self, was_visible: bool) -> Task<Message> {
+        let Some(result) = self
+            .xtb_vibration_entry()
+            .map(|stored| stored.result.clone())
+        else {
+            return Task::none();
+        };
+        let retry = self
+            .tab
+            .xtb
+            .vibrations
+            .problem
+            .take_if(|(weak, _)| is(weak, &result))
+            .is_some();
+        if retry && was_visible {
+            self.xtb_vibrations_resume(true)
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(in crate::app) fn xtb_vibrations_resume(&mut self, first_visible: bool) -> Task<Message> {
+        if self.xtb_vibration_entry().is_none() {
+            self.xtb_vibrations_leave();
+            self.xtb_clear_palette_status(Some(StatusKind::Mode));
+            return Task::none();
+        }
+        self.xtb_vibrations_select_on_open();
         self.xtb_vibrations_sync();
-        self.xtb_recompute_modes()
+        let task = self.xtb_recompute_modes();
+        if first_visible {
+            self.xtb_vibrations_status();
+            Task::batch([task, self.xtb_reveal_mode()])
+        } else {
+            task
+        }
     }
 
     /// Recompute the shown result's normal modes with its stored settings,
@@ -718,14 +919,17 @@ impl App {
             ));
             return;
         }
-        if drift > DRIFT_CM1 {
-            self.status = format!("Recomputed modes differ by up to {drift:.1} cm⁻¹");
-            self.error = false;
-        }
         vibrations.modes.retain(|(weak, _)| weak.strong_count() > 0);
         vibrations
             .modes
             .push((Arc::downgrade(&result), Arc::new(modes.clone())));
+        if drift > DRIFT_CM1 {
+            self.xtb_set_palette_status(
+                StatusKind::Palette,
+                format!("Recomputed modes differ by up to {drift:.1} cm⁻¹"),
+                false,
+            );
+        }
     }
 
     /// "Show arrows" → "Add arrows to drawing": the arrows of the selected
@@ -767,7 +971,11 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if !self.error {
-            self.status = format!("Added {count} displacement arrows · ⌘Z undoes");
+            self.xtb_set_palette_status(
+                StatusKind::Palette,
+                format!("Added {count} displacement arrows · ⌘Z undoes"),
+                false,
+            );
             // The drawing has them now at equilibrium: stop there, so the
             // preview neither draws them twice nor moves atoms out from under them.
             let settings = &mut self.tab.xtb.vibrations;
@@ -780,14 +988,71 @@ impl App {
         }
     }
 
+    fn xtb_ir_figure(&self) -> Option<(Shown<'_>, IrFigure)> {
+        let shown = self.xtb_shown()?;
+        let result = &shown.stored.result;
+        let settings = &self.tab.xtb.vibrations;
+        let (from, to) = settings.range()?;
+        let scale = settings.scale()?;
+        if !view::SpectrumData::cached(result, settings).can_plot() {
+            return None;
+        }
+        let vibrations = result.vibrations.as_ref()?;
+        let bands = vibrations
+            .frequencies_cm1
+            .iter()
+            .zip(&vibrations.ir_intensities_km_mol)
+            .filter(|&(&frequency, _)| frequency >= 0.)
+            .map(|(&frequency, &intensity)| [frequency, intensity.max(0.)])
+            .collect();
+        let mut figure = IrFigure::with_defaults(
+            self.export_stem().unwrap_or_else(|| {
+                let name = self.document_name();
+                std::path::Path::new(&name)
+                    .file_stem()
+                    .map_or(name.clone(), |stem| stem.to_string_lossy().into_owned())
+            }),
+            spectrum_method(result).into(),
+            bands,
+            Journal::for_style(&self.tab.doc.drawing_style),
+        );
+        (figure.y, figure.from, figure.to) = (settings.y, from, to);
+        (figure.shape, figure.fwhm, figure.scale) =
+            (settings.shape, f64::from(settings.fwhm), scale);
+        Some((shown, figure))
+    }
+
+    fn xtb_copy_caption_with<Write, Pending>(&mut self, write: Write) -> Task<Message>
+    where
+        Write: FnOnce(String) -> Pending + iced_runtime::futures::MaybeSend + 'static,
+        Pending: std::future::Future<Output = Result<(), String>>
+            + iced_runtime::futures::MaybeSend
+            + 'static,
+    {
+        let Some((_, figure)) = self.xtb_ir_figure() else {
+            return Task::none();
+        };
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        let epoch = self.tab.file_epoch;
+        self.copy_as_busy = true;
+        self.xtb_set_palette_status(StatusKind::Palette, "Copying the IR caption…", false);
+        Task::perform(write(figure.caption()), move |result| {
+            Message::Xtb(super::Action::Vibrations(Action::CaptionCopied(
+                epoch, result,
+            )))
+        })
+    }
+
     fn xtb_place_spectrum(&mut self) {
-        let Some(shown) = self.xtb_shown() else {
+        let Some((shown, mut spectrum)) = self.xtb_ir_figure() else {
             return;
         };
-        let result = &shown.stored.result;
-        let spectrum = view::SpectrumData::cached(result, &self.tab.xtb.vibrations);
-        if !spectrum.can_plot() {
-            return;
+        if spectrum.bands.len() > IrFigure::MAX_BANDS {
+            spectrum.bands.sort_by(|a, b| b[1].total_cmp(&a[1]));
+            spectrum.bands.truncate(IrFigure::MAX_BANDS);
         }
         let doc = &self.tab.doc;
         let mut component_atoms = HashSet::new();
@@ -825,27 +1090,44 @@ impl App {
             return;
         };
         let at = Point::new(hi.x + doc.drawing_style.bond_length_world, lo.y);
-        let figure = figure::spectrum(doc, &spectrum, spectrum_method(result), at);
+        let figure = figure::spectrum(doc, &spectrum, at);
         let before = doc.clone();
         let members = figure.group.members.clone();
         figure.add_to(&mut self.tab.doc);
         self.changed(before);
         if !self.error {
+            let inspector_width = self.inspector_width();
+            let viewport = self.viewport;
             self.set_selection(members);
+            // Properties can open when the figure is selected. Use the canvas
+            // size after that change for both the fit check and the reveal.
+            self.preserve_inspector_page_position(inspector_width, viewport);
+            if let Some((lo, hi)) =
+                reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
+            {
+                let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+                let zoom = self.tab.camera.zoom;
+                // A figure that fits needs only a scroll, even if there is
+                // less spare room than the usual reveal margin.
+                if (hi.x - lo.x) * zoom <= paper.width && (hi.y - lo.y) * zoom <= paper.height {
+                    self.pan_to_show(lo, hi);
+                } else {
+                    self.reveal_if_clipped(lo, hi);
+                }
+            }
             self.tool = crate::canvas::Tool::Select;
-            self.status = "Placed the IR spectrum · ⌘Z undoes".into();
+            self.xtb_set_palette_status(
+                StatusKind::Palette,
+                "Placed the IR spectrum · ⌘Z undoes",
+                false,
+            );
         }
     }
 
     fn xtb_prepare_spectrum(&self, format: &'static str) -> Task<Result<Prepared, String>> {
-        let Some(shown) = self.xtb_shown() else {
+        let Some((_, spectrum)) = self.xtb_ir_figure() else {
             return Task::none();
         };
-        let result = &shown.stored.result;
-        let spectrum = view::SpectrumData::cached(result, &self.tab.xtb.vibrations);
-        if !spectrum.can_plot() {
-            return Task::none();
-        }
         let source = &self.tab.doc;
         let mut doc = Document {
             drawing_style: source.drawing_style.clone(),
@@ -854,11 +1136,10 @@ impl App {
             custom_theme: source.custom_theme.clone(),
             ..Document::default()
         };
-        figure::spectrum(&doc, &spectrum, spectrum_method(result), Point::default())
-            .add_to(&mut doc);
+        let figure = figure::spectrum(&doc, &spectrum, Point::default());
+        figure.add_to(&mut doc);
         let engine = self.engine.clone();
-        let name = self.export_stem().unwrap_or_else(|| self.document_name());
-        let stem = Some(format!("{name} IR spectrum"));
+        let stem = Some(format!("{} IR spectrum", spectrum.name));
         let appearance = &self.appearance;
         let render_format = if format == "svg" && !appearance.export_svg_live_text {
             "svg-office"
@@ -866,10 +1147,10 @@ impl App {
             format
         };
         let editable = appearance.export_editable_drawing;
+        let dpi = appearance.export_dpi.get();
         let background = appearance
             .export_background
             .paper(appearance.custom_background);
-        let dpi = appearance.export_dpi.get();
         Task::perform(
             async move {
                 #[cfg(target_arch = "wasm32")]
@@ -893,8 +1174,8 @@ impl App {
                     exported.bytes,
                     format,
                     stem,
-                    vec![],
-                    Kind::Xtb,
+                    exported.details,
+                    Kind::Ir,
                 ))
             },
             std::convert::identity,
@@ -915,8 +1196,11 @@ impl App {
             .xtb_modes(&shown.stored.result)
             .and_then(|modes| vector(modes, shown.frame, mode))
         else {
-            self.status = "The normal modes are not available yet".into();
-            self.error = true;
+            self.xtb_set_palette_status(
+                StatusKind::Palette,
+                "The normal modes are not available yet",
+                true,
+            );
             return Task::none();
         };
         let frequency = vibrations
@@ -962,8 +1246,11 @@ impl App {
             return Task::none();
         };
         if !self.xtb_model_at_result(&shown) {
-            self.status = "The 3D model moved after this calculation".into();
-            self.error = true;
+            self.xtb_set_palette_status(
+                StatusKind::Palette,
+                "The 3D model moved after this calculation",
+                true,
+            );
             return Task::none();
         }
         let result = shown.stored.result.clone();
@@ -986,8 +1273,11 @@ impl App {
             .xtb_modes(&result)
             .and_then(|modes| vector(modes, shown.frame, mode))
         else {
-            self.status = "Computing normal modes first; push again after".into();
-            self.error = false;
+            self.xtb_set_palette_status(
+                StatusKind::Palette,
+                "Computing normal modes first; push again after",
+                false,
+            );
             return self.xtb_recompute_modes();
         };
         let Some(mut config) = super::results::config(
@@ -996,8 +1286,11 @@ impl App {
             shown.atoms,
             self.xtb.settings.threads(),
         ) else {
-            self.status = "The Calculate card cannot repeat this calculation".into();
-            self.error = true;
+            self.xtb_set_palette_status(
+                StatusKind::Palette,
+                "The Calculate card cannot repeat this calculation",
+                true,
+            );
             return Task::none();
         };
         config.task = state::Task::OptFreq;

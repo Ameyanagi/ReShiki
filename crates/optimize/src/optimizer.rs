@@ -1,4 +1,6 @@
 //! Molecular geometry minimization with TRIC or ANC RFO and Cartesian L-BFGS.
+//!
+//! Full references: docs/references/xtb.md.
 
 mod anc;
 mod coordinates;
@@ -24,21 +26,22 @@ pub use trust::{Rebuild, Trust};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Method {
     /// Translation–rotation–internal coordinates (TRIC), delocalized for RFO
-    /// (Wang & Song 2016, Baker et al. 1996, Banerjee et al. 1985).
+    /// (Wang & Song 2016, Baker et al. 1996, Banerjee et al. 1985)
+    /// \[Wang2016TRIC\] \[Baker1996DLC\] \[Banerjee1985PRFO\].
     /// Falls back to ANC if the local primitive count exceeds 128 times the
     /// atom count, before allocating dense Wilson rows.
     #[default]
     Internal,
     /// RFO in approximate normal coordinates from a Cartesian Hessian
-    /// (Grimme et al. 2017, Banerjee et al. 1985).
+    /// (Grimme et al. 2017, Banerjee et al. 1985) \[Grimme2017ANCopt\] \[Banerjee1985PRFO\].
     AncRfo,
     /// Limited-memory BFGS in free Cartesian coordinates with Armijo
-    /// backtracking (Liu & Nocedal 1989, Armijo 1966).
+    /// backtracking (Liu & Nocedal 1989, Armijo 1966) \[Liu1989LBFGS\] \[Armijo1966LineSearch\].
     Lbfgs,
 }
 
 /// Starting curvature for RFO. Rebuilds use the new coordinate basis and carry
-/// the learned curvature (Lindh et al., Chem. Phys. Lett. 241, 423, 1995).
+/// the learned curvature (Lindh et al., Chem. Phys. Lett. 241, 423, 1995) \[Lindh1995Hessian\].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum InitialHessian {
     /// Construct the Lindh model at the input geometry.
@@ -52,7 +55,7 @@ pub enum InitialHessian {
     /// and retains relative fragment motion. Internal assigns
     /// curvature_floor to those global rigid directions before transforming to
     /// DLC, without the gradient-weighted coordinate second derivatives (Peng
-    /// et al., J. Comput. Chem. 17, 49, 1996).
+    /// et al., J. Comput. Chem. 17, 49, 1996) \[Peng1996Redundant\].
     Potential,
     /// Use `Potential` up to and including `max_atoms`, counting fixed atoms too.
     Auto { max_atoms: usize },
@@ -61,29 +64,34 @@ pub enum InitialHessian {
 /// Secant update of the RFO Hessian after an accepted displacement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Update {
-    /// Direct BFGS with a positive-curvature test (Nocedal & Wright, §6.1).
+    /// Direct BFGS with a positive-curvature test (Nocedal & Wright, §6.1) \[Nocedal2006Numerical\].
     #[default]
     Bfgs,
-    /// Powell's damping enforces sᵀr ≥ 0.2 sᵀHs (Nocedal & Wright, 2nd ed., Procedure 18.2).
+    /// Powell's damping enforces sᵀr ≥ 0.2 sᵀHs (Nocedal & Wright, 2nd ed., Procedure 18.2)
+    /// \[Powell1978Damping\] \[Nocedal2006Numerical\].
     DampedBfgs,
-    /// Blend SR1 and BFGS for minimization (Farkas & Schlegel, JCP 111, 10806, 1999).
+    /// Blend SR1 and BFGS for minimization (Farkas & Schlegel, JCP 111, 10806, 1999)
+    /// \[Farkas1999Update\]. Not Bofill's SR1/PSB update, which only the
+    /// transition-state search uses.
     /// The model may become indefinite, in which case RFO uses the lowest augmented root.
-    Bofill,
+    FarkasSchlegel,
 }
 
 /// Extrapolate from up to five accepted points in a single model frame so errors,
 /// gradients and the trust radius share the same projected coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Acceleration {
-    /// Use the usual RFO step (Banerjee et al., J. Phys. Chem. 89, 52, 1985).
+    /// Use the usual RFO step (Banerjee et al., J. Phys. Chem. 89, 52, 1985) \[Banerjee1985PRFO\].
     #[default]
     None,
     /// Minimize the interpolated quasi-Newton error (Császár & Pulay, J. Mol. Struct.
-    /// 114, 31, 1984) with safeguards from Farkas & Schlegel (PCCP 4, 11, 2002).
+    /// 114, 31, 1984) with safeguards from Farkas & Schlegel (PCCP 4, 11, 2002)
+    /// \[Csaszar1984GDIIS\] \[Farkas2002GDIIS\].
     Gdiis,
     /// Li & Frisch's hybrid (JCTC 2, 835, 2006) uses RFO above an RMS force of
     /// 0.001 Eh/bohr, then energy DIIS and finally GDIIS below an RMS step of
-    /// 0.0025 bohr (switches reported by Sanz García, Toulouse, 2016, pp. 53–54).
+    /// 0.0025 bohr (switches reported by Sanz García, Toulouse, 2016, pp. 53–54)
+    /// \[Li2006GEDIIS\] \[SanzGarcia2016Thesis\].
     Gediis,
 }
 
@@ -174,7 +182,7 @@ pub struct Options {
     /// Starting RFO Hessian. Defaults to the Lindh model. A GFN2 Hessian seed
     /// cost more to compute than it saved in gradient evaluations.
     pub initial_hessian: InitialHessian,
-    /// RFO Hessian update. Defaults to BFGS. Bofill saved a few calls on the
+    /// RFO Hessian update. Defaults to BFGS. The SR1/BFGS blend saved a few calls on the
     /// GFN2 benchmark but took longer overall.
     pub update: Update,
     /// DIIS-family trial steps in the active RFO coordinates. Off by default,
@@ -271,7 +279,11 @@ pub struct Outcome {
     pub evaluations: usize,
     /// Calls to [`Potential::hessian`], including errors and unavailability probes.
     pub hessian_evaluations: usize,
+    /// Last active method; the requested method if no search was attempted.
     pub method: Method,
+    /// Algorithms whose searches were attempted, in order, including failed
+    /// searches and fallback attempts. Empty if no search step was attempted.
+    pub methods: Vec<Method>,
     /// One energy per accepted geometry, including the input. A successful
     /// accuracy change replaces the entry at the same geometry.
     pub energies: Vec<f64>,
@@ -457,6 +469,7 @@ impl<P: Potential + ?Sized> Evaluator<'_, P> {
 struct Engine<'a> {
     options: &'a Options,
     method: Method,
+    methods: Vec<Method>,
     anc: Option<Anc>,
     internal: Option<InternalModel>,
     internal_built_at: usize,
@@ -471,6 +484,7 @@ impl<'a> Engine<'a> {
         Self {
             options,
             method: options.method,
+            methods: Vec::new(),
             anc: None,
             internal: None,
             internal_built_at: 0,
@@ -662,6 +676,9 @@ impl<'a> Engine<'a> {
         accuracy_changed: bool,
     ) -> Result<(Point, Motion, Diagnostics), Status> {
         let (next, diagnostics) = loop {
+            if self.methods.last() != Some(&self.method) {
+                self.methods.push(self.method);
+            }
             match self.method {
                 Method::Internal => {
                     if let Some(trial) =
@@ -781,6 +798,7 @@ pub fn optimize<P: Potential + ?Sized>(
         evaluations: 0,
         hessian_evaluations: 0,
         method: options.method,
+        methods: Vec::new(),
         energies: Vec::new(),
     };
     let coords = match Coordinates::new(numbers, positions, &options.fixed_atoms) {
@@ -944,6 +962,7 @@ pub fn optimize<P: Potential + ?Sized>(
     out.evaluations = eval.count;
     out.hessian_evaluations = eval.hessian_count;
     out.method = engine.method;
+    out.methods = engine.methods;
     out
 }
 

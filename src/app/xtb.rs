@@ -11,27 +11,34 @@ use super::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
+#[cfg(any(test, not(target_arch = "wasm32")))]
+use reshiki::science::isotope_masses;
 use reshiki::science::{self, Freshness, Launch};
 use results::RunInfo;
-use state::{Progress, Settings};
+use state::{FailureDetails, Progress, Settings};
 use std::sync::{Arc, Weak};
 
 mod conformers;
+mod history;
 pub(super) mod orbitals;
 pub(super) use conformers::superposed;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
+mod selection;
+mod source;
+pub(super) use source::Source;
 mod state;
 mod tone;
-mod vibrations;
+pub(crate) mod vibrations;
 mod view;
 
 #[cfg(test)]
 pub(super) use results::{Evaluation, View};
+#[cfg(test)]
+pub(super) use state::Failure;
 pub(crate) use state::Task as CalcTask;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use vibrations::Action as VibrationsAction;
 
 /// The Predict tab's two pages.
@@ -65,6 +72,8 @@ pub(crate) enum Action {
     Retry,
     /// A failed run again, unchanged.
     RunAgain,
+    /// A failed SCF run again with the default iteration limit.
+    ResetRetry,
     /// Copy a failed run's details.
     CopyDetails,
     Cancel,
@@ -87,8 +96,10 @@ pub(crate) enum Action {
 pub(crate) enum Entry {
     /// A task from the right-click Calculate (xTB) menu.
     Task(CalcTask),
-    /// The context row's "Optimize with GFN2-xTB".
+    /// Optimize the geometry with GFN2-xTB.
     OptimizeGfn2,
+    /// Calculate energy with a method that gives molecular orbitals.
+    Orbitals,
     /// ⌘R: the last calculation again, on the selected molecule.
     Rerun,
 }
@@ -96,6 +107,14 @@ pub(crate) enum Entry {
 /// ⌘R, as menus and tooltips show it.
 pub(super) fn rerun_keys() -> String {
     super::shortcuts::label(&Message::Xtb(Action::Entry(Entry::Rerun))).unwrap_or_default()
+}
+
+/// Choose xTB before showing Predict so opening its settings does not start NMR.
+pub(super) fn settings_messages() -> [Message; 2] {
+    [
+        Message::Xtb(Action::Page(Page::Xtb)),
+        Message::Inspector(super::InspectorTab::Predict),
+    ]
 }
 
 /// Whether this build can calculate; the entry points hide otherwise.
@@ -119,6 +138,7 @@ pub(crate) struct Window {
 pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
+    selection_hint: Option<String>,
     serial: u64,
     pub(super) palette: palette::Palette,
     pub(super) orbitals: orbitals::Orbitals,
@@ -203,6 +223,7 @@ impl Drop for Run {
 /// What the card shows after a run.
 pub(crate) enum Outcome {
     Done {
+        atoms: Vec<u64>,
         line: String,
         notes: Vec<String>,
     },
@@ -214,6 +235,8 @@ pub(crate) enum Outcome {
 /// A failed run and what Retry and Run again need.
 pub(crate) struct Failed {
     pub failure: state::Failure,
+    /// The molecule that failed, including errors before a run started.
+    pub atoms: Vec<u64>,
     /// The run's request; `None` when no run had started.
     pub request: Option<Box<Request>>,
     /// The frame's atomic numbers, once the 3D model existed.
@@ -231,9 +254,26 @@ impl Failed {
             .map_or(qcdata::XtbMethod::Gfn2Xtb, |r| r.config.method)
     }
 
+    fn scf_iteration_limit(&self) -> Option<u32> {
+        self.request.as_ref()?.config.max_iterations.filter(|&n| {
+            matches!(self.failure.reason(), state::Failure::Scf(_))
+                && n < state::DEFAULT_SCF_ITERATIONS
+        })
+    }
+
     /// The error card's sentence and its second line.
-    pub(crate) fn explain(&self) -> (String, String) {
-        self.failure.explain(self.method(), &self.numbers)
+    fn explain(&self, retry: bool) -> (String, String) {
+        let (title, detail) = self.failure.explain(self.method(), &self.numbers);
+        if retry && let Some(n) = self.scf_iteration_limit() {
+            return (
+                format!(
+                    "The electronic structure (SCF) did not converge within {n} iteration{}, the Max SCF iterations you set.",
+                    if n == 1 { "" } else { "s" }
+                ),
+                detail,
+            );
+        }
+        (title, detail)
     }
 
     /// Copy details: versions, what ran and why it stopped; no structure.
@@ -270,11 +310,13 @@ impl Failed {
                 self.numbers.len()
             ));
         }
-        let reason = match &self.failure {
+        let reason = match self.failure.reason() {
             state::Failure::Scf(message)
-            | state::Failure::Crashed(message)
+            | state::Failure::Crashed {
+                summary: message, ..
+            }
             | state::Failure::Other(message) => message.clone(),
-            _ => self.explain().0,
+            _ => self.explain(false).0,
         };
         parts.push(format!("{reason} (after {:.1} s)", self.seconds));
         parts.join(" · ")
@@ -329,7 +371,7 @@ impl App {
         match action {
             Action::Run => return self.xtb_run(),
             Action::Entry(entry) => return self.xtb_entry(entry),
-            Action::Retry | Action::RunAgain => {
+            Action::Retry | Action::RunAgain | Action::ResetRetry => {
                 let Some(Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
                     return Task::none();
                 };
@@ -348,8 +390,16 @@ impl App {
                     };
                     request.config = hotter;
                 }
+                let reset = matches!(action, Action::ResetRetry);
+                if reset && failed.scf_iteration_limit().is_none() {
+                    return Task::none();
+                }
                 if !self.xtb_can_start() {
                     return Task::none();
+                }
+                if reset {
+                    self.xtb.settings.iterations.clear();
+                    request.config.max_iterations = None;
                 }
                 return self.xtb_begin(request);
             }
@@ -374,27 +424,14 @@ impl App {
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
-                let showing = matches!(action, palette::Action::Show);
-                let before = showing
-                    .then(|| {
-                        self.xtb_shown()
-                            .map(|shown| Arc::clone(&shown.stored.result))
-                    })
-                    .flatten();
+                let was_visible = self.xtb_vibrations_visible();
                 let task = self.xtb_palette(action);
-                if showing
-                    && self.xtb_shown().is_some_and(|shown| {
-                        before
-                            .as_ref()
-                            .is_none_or(|before| !Arc::ptr_eq(before, &shown.stored.result))
-                    })
-                {
-                    self.tab.xtb.vibrations.mode = 0;
-                }
                 if opened {
-                    return Task::batch([task, self.xtb_vibrations_opened()]);
+                    return Task::batch([task, self.xtb_vibrations_opened(was_visible)]);
                 }
-                self.xtb_vibrations_sync();
+                if was_visible == self.xtb_vibrations_visible() {
+                    self.xtb_vibrations_sync();
+                }
                 return task;
             }
             Action::Vibrations(action) => return self.xtb_vibrations_action(action),
@@ -447,6 +484,35 @@ impl App {
         let first = doc.atoms.first()?.id;
         let atoms = reshiki::molecule_names::component(doc, first);
         (self.tab.selected.is_empty() && atoms.len() == doc.atoms.len()).then_some(atoms)
+    }
+
+    /// The last outcome, if it describes the card's molecule.
+    fn xtb_outcome(&self) -> Option<&Outcome> {
+        let outcome = self.tab.xtb.outcome.as_ref()?;
+        let Some(target) = self.xtb_target() else {
+            return Some(outcome);
+        };
+        let intersects = |atoms: &[u64]| atoms.iter().any(|id| target.contains(id));
+        let belongs = match outcome {
+            Outcome::Done { atoms, .. } => intersects(atoms),
+            Outcome::Failed(failed) => intersects(&failed.atoms),
+            Outcome::Review(review) => review
+                .pending
+                .launch
+                .atoms
+                .iter()
+                .flatten()
+                .any(|atom| target.contains(atom)),
+        };
+        belongs.then_some(outcome)
+    }
+
+    /// The failure that belongs on the card and in the palette.
+    fn xtb_failed(&self) -> Option<&Failed> {
+        let Outcome::Failed(failed) = self.tab.xtb.outcome.as_ref()? else {
+            return None;
+        };
+        self.xtb_outcome().map(|_| failed.as_ref())
     }
 
     /// The current 3D model of the molecule of `atom`, by index.
@@ -524,8 +590,7 @@ impl App {
             return Task::none();
         }
         if self.xtb_target().is_none() {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         }
         match entry {
@@ -533,6 +598,12 @@ impl App {
             Entry::OptimizeGfn2 => {
                 self.xtb.settings.task = CalcTask::Optimize;
                 self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+            }
+            Entry::Orbitals => {
+                self.xtb.settings.task = CalcTask::Energy;
+                if !self.xtb.settings.method.capabilities().orbitals {
+                    self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+                }
             }
             Entry::Rerun => {}
         }
@@ -549,8 +620,7 @@ impl App {
             .xtb_target()
             .and_then(|atoms| Some((atoms.clone(), *atoms.first()?)))
         else {
-            self.status = "Select a molecule to calculate".into();
-            self.error = true;
+            self.xtb_show_selection_hint();
             return Task::none();
         };
         let settings = &conformers::effective(&self.xtb.settings, &self.xtb.conformers);
@@ -808,6 +878,10 @@ impl App {
     /// results palette show it, keeping the request for Retry and Run again.
     fn xtb_fail(&mut self, failure: state::Failure) {
         let run = self.tab.xtb.run.take();
+        let atoms = run.as_ref().map_or_else(
+            || self.xtb_target().unwrap_or_default(),
+            |run| run.atoms.clone(),
+        );
         let numbers = run
             .as_ref()
             .and_then(|run| run.launch.as_ref())
@@ -829,16 +903,21 @@ impl App {
         });
         let failed = Failed {
             failure,
+            atoms,
             request,
             numbers,
             seconds,
             revision,
         };
-        self.status = format!("xTB calculation failed: {}", failed.explain().0);
+        self.status = format!(
+            "xTB calculation failed: {}",
+            failed.explain(self.xtb_can_retry(&failed)).0
+        );
         self.error = true;
         self.tab.xtb.palette.open = true;
+        self.tab.xtb.palette.previous = false;
         // The card's actions must show, so a collapsed dock opens.
-        self.xtb.dock.collapsed = false;
+        self.tab.xtb.palette.collapsed = false;
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
@@ -964,8 +1043,7 @@ impl App {
             .map(|s| s.result.clone())
         {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
-            self.tab.xtb.palette.show(&result);
-            self.tab.xtb.vibrations.mode = 0;
+            self.xtb_show_result(&result);
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
                 self.tab.xtb.palette.view = results::View::Vibrations;
@@ -977,11 +1055,10 @@ impl App {
             format!("xTB · {}", pending.line)
         };
         self.tab.xtb.outcome = Some(Outcome::Done {
+            atoms: pending.launch.atoms.into_iter().flatten().collect(),
             line: pending.line,
             notes,
         });
-        // A fresh result holds its modes, so nothing needs recomputing.
-        self.xtb_vibrations_sync();
     }
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
@@ -1014,54 +1091,35 @@ impl Run {
     }
 }
 
-/// Masses (u) for a frame with isotope labels: labelled atoms take their
-/// isotope's mass, the others the standard atomic weight; `None` without labels.
-fn isotope_masses(frame: &Frame) -> Option<Vec<f64>> {
-    use reshiki::chemistry::{ELEMENTS, ISOTOPES};
-    if frame.isotopes.iter().all(|&isotope| isotope == 0) {
-        return None;
-    }
-    Some(
+/// The worker job for `config` on `frame`, holding frame atoms `fixed`.
+#[cfg(not(target_arch = "wasm32"))]
+fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
+    use reshiki_xtb_jobs::{method, run::worker_method};
+    use reshiki_xtb_worker::protocol::{Conventions, ScfSettings, SolventModel};
+
+    let isotope_labels = if frame.masses_amu.is_empty() {
+        Vec::new()
+    } else {
         frame
             .numbers
             .iter()
             .enumerate()
-            .map(
-                |(index, &z)| match frame.isotopes.get(index).copied().unwrap_or(0) {
-                    0 => ELEMENTS
-                        .get(usize::from(z))
-                        .map_or(0., |element| element.average_mass_amu()),
-                    isotope => ISOTOPES
-                        .binary_search_by_key(&(z, isotope), |&(n, i, _)| (n, i))
-                        .ok()
-                        .and_then(|found| ISOTOPES.get(found))
-                        .map_or(f64::from(isotope), |&(_, _, mass)| mass),
-                },
-            )
-            .collect(),
-    )
-}
-
-/// The worker job for `config` on `frame`, holding frame atoms `fixed`.
-#[cfg(not(target_arch = "wasm32"))]
-fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
-    use reshiki_xtb_worker::protocol::{
-        Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
-    };
-    let method = match config.method {
-        qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
-        qcdata::XtbMethod::GXtb => Method::Gxtb,
-        qcdata::XtbMethod::GfnFf => Method::Gfnff,
+            .map(|(index, &number)| {
+                u32::from(number) * 1000
+                    + u32::from(frame.isotopes.get(index).copied().unwrap_or(0))
+            })
+            .collect()
     };
     run::Job {
         optimize: config.task.optimizes(),
         frequencies: config.task.frequencies(),
         masses: (!frame.masses_amu.is_empty()).then(|| frame.masses_amu.clone()),
+        isotope_labels,
         numbers: frame.numbers.clone(),
         positions: frame.positions_angstrom.clone(),
         charge: config.charge,
         uhf: config.unpaired,
-        method,
+        method: worker_method(config.method),
         conventions: if config.xtb68 {
             Conventions::Xtb68
         } else {
@@ -1073,16 +1131,16 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
             max_iterations: config.max_iterations,
             retries: vec![],
         },
-        solvent: config.solvent.map(|name| Solvent {
-            model: SolventModel::Alpb,
-            name: name.to_lowercase(),
-            state: Default::default(),
-            correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-        }),
+        solvent: config
+            .solvent
+            .map(|name| method::solvent(SolventModel::Alpb, name)),
         threads: config.threads,
         fixed,
         tight: config.tight,
         topology: None,
+        max_steps: None,
+        properties: None,
+        thermo: Default::default(),
     }
 }
 
@@ -1099,15 +1157,21 @@ fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) ->
     doc.models
         .iter()
         .find(|m| m.linked_atoms.contains(atom))
-        .is_some_and(|model| {
-            let mut sources = model.geometry_sources();
-            sources.resize(model.atoms.len() + model.hydrogens.len(), None);
-            let now = model.atoms.iter().map(|a| a.xyz);
-            let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
-            atoms.len() == positions.len()
-                && sources == atoms
-                && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
-        })
+        .is_some_and(|model| model_matches(model, atoms, positions))
+}
+
+fn model_matches(
+    model: &reshiki::models3d::Model3d,
+    atoms: &[Option<u64>],
+    positions: &[[f64; 3]],
+) -> bool {
+    let mut sources = model.geometry_sources();
+    sources.resize(model.atoms.len() + model.hydrogens.len(), None);
+    let now = model.atoms.iter().map(|a| a.xyz);
+    let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
+    atoms.len() == positions.len()
+        && sources == atoms
+        && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
 }
 
 /// The document with the model of `atom`'s molecule at `positions` (Å,
@@ -1173,6 +1237,12 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
     let mut result = computed
         .to_calc_result(frame, task, &report.engine, gfnff_reference)
         .map_err(|error| state::Failure::Other(error.to_string()))?;
+    if optimized {
+        result.provenance.method = Some(run::optimizer_provenance(
+            result.provenance.method.as_deref().unwrap_or("xTB"),
+            &report.optimizers,
+        ));
+    }
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
         settings.threads = Some(run.config.threads);
         settings.convergence =
@@ -1212,6 +1282,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         labels: vec![],
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     });
     result.input_frame = optimized.then_some(input);
     result.status = status;

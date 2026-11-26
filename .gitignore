@@ -2,6 +2,8 @@
 /.venv/
 /crates/python/.venv/
 /crates/python/wheel-licenses/
+/crates/python-xtb/.venv/
+/crates/python-xtb/wheel-licenses/
 __pycache__/
 *.pyc
 .DS_Store
@@ -25,3 +27,7 @@ __pycache__/
 
 # Swift Package Manager build cache
 .build/
+
+# Built Python extension (maturin develop)
+/crates/python/python/reshiki/_native*.so
+/crates/python/python/reshiki/_native*.pyd

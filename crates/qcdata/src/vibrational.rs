@@ -1,8 +1,15 @@
+use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 
 use crate::Thermo;
+use glam::DVec3;
 
-// SI definitions and CODATA 2022 recommended values.
+mod symmetry;
+#[cfg(test)]
+mod symmetry_tests;
+
+// SI definitions and CODATA 2022 recommended values [Mohr2025CODATA]. Full
+// references: docs/references/xtb.md.
 const PLANCK_J_S: f64 = 6.626_070_15e-34;
 const BOLTZMANN_J_PER_K: f64 = 1.380_649e-23;
 const LIGHT_CM_PER_S: f64 = 2.997_924_58e10;
@@ -61,16 +68,53 @@ fn linear_inertia(trace: f64, determinant: f64) -> bool {
     determinant <= 1e-10 * (trace / 2.0).powi(3)
 }
 
-// Trace and determinant give the sum and product of the three principal moments
-// (in amu Å²) without diagonalizing the symmetric inertia tensor.
-fn inertia_invariants(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> (f64, f64) {
+fn center_of_mass(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> [f64; 3] {
     let mut center = [0.0; 3];
     for (&mass, position) in masses.iter().zip(positions) {
         for (sum, coordinate) in center.iter_mut().zip(position) {
             *sum += mass * coordinate;
         }
     }
-    let center = center.map(|sum| sum / total_mass);
+    center.map(|sum| sum / total_mass)
+}
+
+/// Rotational symmetry number for an isotope-labelled equilibrium geometry.
+///
+/// Proper rotations about the centre of mass must map each atom to an atom
+/// with the same label within a Cartesian distance of 1e-3 Å. Use labels
+/// `Z * 1000 + isotope`, with isotope 0 for natural atoms. The search tests
+/// axes of orders 2 through 12. The search can undercount when distortions
+/// approach the tolerance. Well-converged geometries typically have much
+/// smaller deviations. A linear rotor has symmetry number 2 if
+/// its ends can be exchanged, and 1 otherwise. A single atom returns 1.
+/// See Fernández-Ramos et al. (2007) \[FernandezRamos2007Symmetry\].
+/// Supply finite positions and positive finite masses, one per label.
+pub fn rotational_symmetry_number(
+    labels: &[u32],
+    positions_angstrom: &[[f64; 3]],
+    masses_amu: &[f64],
+) -> u32 {
+    assert_eq!(labels.len(), positions_angstrom.len());
+    assert_eq!(labels.len(), masses_amu.len());
+    if labels.len() <= 1 {
+        return 1;
+    }
+    let center = DVec3::from(center_of_mass(
+        masses_amu,
+        positions_angstrom,
+        masses_amu.iter().sum(),
+    ));
+    let positions: Vec<_> = positions_angstrom
+        .iter()
+        .map(|&p| DVec3::from(p) - center)
+        .collect();
+    symmetry::count(labels, &positions, masses_amu)
+}
+
+// Trace and determinant give the sum and product of the three principal moments
+// (in amu Å²) without diagonalizing the symmetric inertia tensor.
+fn inertia_invariants(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> (f64, f64) {
+    let center = center_of_mass(masses, positions, total_mass);
     let (mut xx, mut yy, mut zz, mut xy, mut xz, mut yz) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     let [cx, cy, cz] = center;
     for (&mass, &[px, py, pz]) in masses.iter().zip(positions) {
@@ -91,7 +135,7 @@ fn inertia_invariants(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -
 ///
 /// Uses classical translation and rigid rotation, harmonic vibrational enthalpies,
 /// and the quasi-RRHO entropy of Grimme, Chem. Eur. J. 18, 9955 (2012),
-/// <https://doi.org/10.1002/chem.201200497>. The heat-capacity field holds
+/// <https://doi.org/10.1002/chem.201200497> \[Grimme2012QRRHO\]. The heat-capacity field holds
 /// the worker's constant-pressure value. Supply finite positive masses,
 /// temperature, pressure and scale, a nonempty geometry, and nonnegative cutoffs.
 pub fn thermochemistry(input: &ThermoInput<'_>) -> Thermo {
@@ -184,9 +228,11 @@ pub fn thermochemistry(input: &ThermoInput<'_>) -> Thermo {
 }
 
 /// Area-normalized line shape used to broaden infrared transitions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BandShape {
     /// Lorentzian profile, whose half width at half maximum is `fwhm / 2`.
+    #[default]
     Lorentzian,
     /// Gaussian profile with the specified full width at half maximum.
     Gaussian,

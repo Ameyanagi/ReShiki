@@ -5,7 +5,10 @@ use super::{
     io,
 };
 use reshiki_agent::ops::budget::Budgets;
-use reshiki_io::qc_input::{self, Geometry, Settings};
+use reshiki_io::{
+    qc_input::{self, Geometry, Settings},
+    qcdata::{self, CalcResult, Frame, Provenance, Source, Status, Task},
+};
 use std::{fs, io::Write, path::Path};
 
 pub(crate) fn run(
@@ -13,11 +16,26 @@ pub(crate) fn run(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<(), CliError> {
-    let bytes = io::read_input(Some(&command.input), Budgets::default().max_text_bytes)
+    let limit = Budgets::default().max_text_bytes;
+    let frame = Frame {
+        charge: command.charge,
+        multiplicity: command.multiplicity,
+        ..read_xyz(&command.input, limit).map_err(CliError::Failed)?
+    };
+    let read_endpoint = |flag, path: Option<&Path>| {
+        path.map(|path| {
+            read_xyz(path, limit).map_err(|error| CliError::Failed(format!("{flag}: {error}")))
+        })
+        .transpose()
+    };
+    let reactant = read_endpoint("--reactant", command.reactant.as_deref())?;
+    let product = read_endpoint("--product", command.product.as_deref())?;
+    let result = command
+        .hessian
+        .as_deref()
+        .map(|path| read_hessian(path, &frame, limit))
+        .transpose()
         .map_err(CliError::Failed)?;
-    let text = String::from_utf8(bytes)
-        .map_err(|_| CliError::Failed("The XYZ input must be UTF-8.".into()))?;
-    let frame = qc_input::parse_xyz(&text).map_err(CliError::Failed)?;
     let title = command.title.unwrap_or_else(|| stem(&command.input));
     let settings = Settings {
         program: command.program,
@@ -35,13 +53,13 @@ pub(crate) fn run(
     };
     let file_stem = match &command.output {
         Output::File(path) => file_stem(path),
-        Output::Stdout => file_stem(&command.input),
+        Output::Stdout => qc_input::default_stem(&file_stem(&command.input), command.program),
     };
     let geometry = Geometry {
         frame: &frame,
-        reactant: None,
-        product: None,
-        result: None,
+        reactant: reactant.as_ref(),
+        product: product.as_ref(),
+        result: result.as_ref(),
     };
     let generator = format!("ReShiki {}", crate::updates::CURRENT_VERSION);
     let output = qc_input::write(&settings, &geometry, &file_stem, &generator)
@@ -56,6 +74,53 @@ pub(crate) fn run(
             .map_err(CliError::Stdout),
         Output::File(path) => write_files(&path, &main.text, &companions).map_err(CliError::Failed),
     }
+}
+
+fn read_hessian(path: &Path, frame: &Frame, limit: usize) -> Result<CalcResult, String> {
+    let bytes = io::read_input(Some(path), limit)?;
+    let text = String::from_utf8(bytes)
+        .map_err(|_| format!("{}: the ORCA Hessian must be UTF-8", path.display()))?;
+    let hessian = qc_input::read_orca_hess(&text, frame)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    let file_name = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .into_owned();
+    Ok(CalcResult {
+        frame: frame.hash(),
+        input_frame: None,
+        task: Task::Hessian,
+        endpoints: None,
+        settings: qcdata::Settings::Imported { keywords: vec![] },
+        provenance: Provenance {
+            program: "unknown".into(),
+            program_version: None,
+            method: Some(format!("the Hessian file {file_name}")),
+            basis: None,
+            source: Source::Imported {
+                format: "orca-hess".into(),
+                file_name,
+                file_sha256: None,
+                job: 0,
+            },
+        },
+        status: Status::Converged,
+        energy_hartree: None,
+        energy_terms: Default::default(),
+        gradient_hartree_per_bohr: vec![],
+        hessian_hartree_per_bohr2: hessian,
+        charges: vec![],
+        dipole_e_bohr: None,
+        bond_orders: vec![],
+        orbitals: None,
+        vibrations: None,
+        thermo: None,
+        trajectory: None,
+        keep_full: false,
+        omitted_bytes: None,
+        run: None,
+    })
 }
 
 pub(super) fn write_files(
@@ -105,4 +170,10 @@ fn file_stem(path: &Path) -> String {
             }
         })
         .collect()
+}
+
+fn read_xyz(path: &Path, limit: usize) -> Result<Frame, String> {
+    let bytes = io::read_input(Some(path), limit)?;
+    let text = String::from_utf8(bytes).map_err(|_| "The XYZ input must be UTF-8.")?;
+    qc_input::parse_xyz(&text)
 }

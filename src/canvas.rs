@@ -753,8 +753,10 @@ pub struct MoleculeCanvas<'a> {
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
-    /// xTB "Show as labels": a result's value under its molecule.
+    /// On-screen xTB energy and partial charges.
     pub(crate) result_label: Option<ResultLabel>,
+    /// Linked atoms of outdated models, for editing aids absent from exports.
+    pub(crate) outdated_models: Vec<&'a [u64]>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -819,6 +821,7 @@ impl<'a> MoleculeCanvas<'a> {
             morph: None,
             model_generation: None,
             result_label: None,
+            outdated_models: vec![],
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,

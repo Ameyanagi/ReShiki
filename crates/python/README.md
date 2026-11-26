@@ -43,6 +43,24 @@ numbers, by default the bare value journals print (`1.28`; `format` also
 offers `#3`, `1.28 ppm` or `#3 · 1.28 ppm`), which `.rsk`, SVG, PNG, PDF,
 CDXML and CDX output keep.
 
+## Calculations (xTB)
+
+Install with `pip install "reshiki[xtb]"` on macOS or Linux. Geometry positions
+are in ångströms, energies in hartree and frequencies in cm⁻¹.
+
+```python
+from reshiki import qc, xtb
+
+water = qc.Geometry.from_symbols(
+    ["O", "H", "H"],
+    [[0, 0, 0], [0.757, 0, 0.586], [-0.757, 0, 0.586]],
+)
+initial = xtb.energy(water)
+relaxed = xtb.optimize(water)
+modes = xtb.frequencies(relaxed.geometry)
+print(initial.energy, relaxed.energy, modes.frequencies)
+```
+
 ## Reuse a style
 
 Create a style context once and reuse its constructors and export functions:

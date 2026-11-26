@@ -292,6 +292,7 @@ impl App {
         }
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
+        self.xtb_clear_palette_status(None);
         self.retire_assistant(self.tab.id);
         let old = std::mem::replace(
             &mut self.tab,
@@ -343,6 +344,7 @@ impl App {
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
         self.xtb_vibrations_leave();
+        self.xtb_clear_palette_status(None);
         self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();
@@ -593,7 +595,11 @@ impl App {
                 }
                 Message::CopyAsPrepared(..)
                 | Message::CopyAsWritten(..)
+                | Message::IrFigure(super::ir_figure::Action::CaptionCopied(..))
                 | Message::Equipment(super::equipment::Action::PartsListCopied { .. })
+                | Message::Xtb(super::xtb::Action::Vibrations(
+                    super::xtb::VibrationsAction::CaptionCopied(..),
+                ))
                 | Message::InspectorAction(super::inspector::Action::IdentityCopied(..)) => {
                     self.copy_as_busy = false;
                     Task::none()
