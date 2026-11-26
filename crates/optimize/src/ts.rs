@@ -311,7 +311,19 @@ fn emit(on_event: &mut impl FnMut(Event) -> ControlFlow<()>, event: Event) -> Re
 pub fn search<P: Potential + Send>(
     potentials: &mut [P],
     search: &Search,
+    on_event: impl FnMut(Event) -> ControlFlow<()>,
+) -> Result<TsReport, TsError> {
+    search_with_cancel(potentials, search, on_event, || ControlFlow::Continue(()))
+}
+
+/// Like [`search`], with additional cancellation polling during IDPP interpolation.
+/// `on_cancel` runs before the first IDPP iteration and at most 20 iterations
+/// apart thereafter. Return `ControlFlow::Break(())` to cancel the search.
+pub fn search_with_cancel<P: Potential + Send>(
+    potentials: &mut [P],
+    search: &Search,
     mut on_event: impl FnMut(Event) -> ControlFlow<()>,
+    mut on_cancel: impl FnMut() -> ControlFlow<()>,
 ) -> Result<TsReport, TsError> {
     search.validate()?;
     if potentials.is_empty() {
@@ -359,6 +371,7 @@ pub fn search<P: Potential + Send>(
         &product.positions,
         masses,
         options.images,
+        &mut on_cancel,
     )?;
     emit(&mut on_event, Event::Stage(Stage::Neb))?;
     let band = neb::run(
