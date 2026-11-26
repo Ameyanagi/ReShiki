@@ -52,6 +52,7 @@ fn imported() -> (Frame, CalcResult) {
         labels: vec!["start".into(), "final".into()],
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     };
     let basis = BasisSet {
         shells: [(0, 0, false), (1, 1, false), (0, 2, true), (2, 3, false)]

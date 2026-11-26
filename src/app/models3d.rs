@@ -11,9 +11,7 @@ use crate::canvas::Edit;
 use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::{Document, Point};
-use reshiki::geometry::{
-    Client, DEFAULT_SEED, ForceField, GENERATION_SEED_MAX, Optimized, Prepared,
-};
+use reshiki::geometry::{Client, ForceField, ModelGeneration, Optimized, Prepared};
 use reshiki::models3d::{
     self, Background, Display, Hydrogens, Labels, Layout, Look, Probability, Style,
 };
@@ -357,14 +355,7 @@ impl App {
             }
             return Task::none();
         }
-        self.generate_model(
-            atoms,
-            display,
-            None,
-            ForceField::Mmff94s,
-            DEFAULT_SEED,
-            None,
-        )
+        self.generate_model(atoms, display, ModelGeneration::default(), None)
     }
 
     fn regenerate_model(&mut self, fresh: bool) -> Task<Message> {
@@ -374,58 +365,35 @@ impl App {
         let Some((_, Some(index))) = self.selected_model() else {
             return Task::none();
         };
-        self.regenerate_model_at(index, fresh)
+        let Some(generation) = ModelGeneration::for_model(&self.tab.doc, index, fresh) else {
+            return Task::none();
+        };
+        self.regenerate_saved_model(generation)
     }
 
-    /// Generate a model for the calculation, or update it if out of date.
-    /// A reaction arrow places a new model below the scheme.
+    /// A model for a calculation on `atoms`: a new one shown beside the
+    /// drawing (below the scheme for a reaction arrow), or an Update of an
+    /// out-of-date one. Starts nothing on error; the status says why.
     pub(super) fn model_for_calculation(
         &mut self,
         atoms: Vec<u64>,
         below_reaction: Option<u64>,
     ) -> Task<Message> {
-        let first = atoms.first().copied();
-        let index = self
-            .tab
-            .doc
-            .models
-            .iter()
-            .position(|model| first.is_some_and(|id| model.linked_atoms.contains(&id)));
-        match index {
-            Some(index) => self.regenerate_model_at(index, false),
-            None => self.generate_model(
-                atoms,
-                Display::Both,
-                None,
-                ForceField::Mmff94s,
-                DEFAULT_SEED,
-                below_reaction,
-            ),
+        let Some(generation) = ModelGeneration::for_calculation(&self.tab.doc, &atoms) else {
+            return Task::none();
+        };
+        match generation.target {
+            Some(_) => self.regenerate_saved_model(generation),
+            None => self.generate_model(atoms, Display::Both, generation, below_reaction),
         }
     }
 
-    fn regenerate_model_at(&mut self, index: usize, fresh: bool) -> Task<Message> {
+    fn regenerate_saved_model(&mut self, generation: ModelGeneration) -> Task<Message> {
+        let Some(index) = generation.target else {
+            return Task::none();
+        };
         let Some(model) = self.tab.doc.models.get(index) else {
             return Task::none();
-        };
-        if model.is_file_derived() || !fresh && !model.is_stale(&self.tab.doc) {
-            return Task::none();
-        }
-        let force_field = match model.force_field {
-            models3d::ForceField::Mmff94 => ForceField::Mmff94,
-            models3d::ForceField::Mmff94s => ForceField::Mmff94s,
-            models3d::ForceField::Uff => ForceField::Uff,
-        };
-        let seed = if model.seed == 0 {
-            DEFAULT_SEED
-        } else {
-            model.seed
-        };
-        // ETKDG samples consecutive seeds; a wide stride avoids overlapping batches.
-        let seed = if fresh {
-            ((i64::from(seed) + 1_000_003) % i64::from(GENERATION_SEED_MAX)) as i32
-        } else {
-            seed
         };
         let atoms = model.chemistry_ids(&self.tab.doc);
         if atoms.first().is_some_and(|id| {
@@ -438,18 +406,21 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        self.generate_model(atoms, model.display, Some(index), force_field, seed, None)
+        self.generate_model(atoms, model.display, generation, None)
     }
 
     fn generate_model(
         &mut self,
         atoms: Vec<u64>,
         display: Display,
-        target: Option<usize>,
-        force_field: ForceField,
-        seed: i32,
+        generation: ModelGeneration,
         below_reaction: Option<u64>,
     ) -> Task<Message> {
+        let ModelGeneration {
+            target,
+            force_field,
+            seed,
+        } = generation;
         if target.is_some()
             && self
                 .tab

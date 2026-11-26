@@ -61,6 +61,33 @@ fn edit(app: &mut App, o: u64) {
 }
 
 #[test]
+fn ir_export_completion_has_a_short_summary_and_path_details() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    let path = std::path::PathBuf::from(format!("/tmp/{}/spectrum.svg", "journal-".repeat(12)));
+    let receipt = crate::app::figure_export::Prepared::new(
+        vec![],
+        "svg",
+        None,
+        vec![],
+        crate::app::figure_export::Kind::Ir,
+    )
+    .completed(Ok(Some(path.clone())));
+    let _ = app.update(receipt);
+    let (summary, details) = app.status.split_once('\n').unwrap();
+    assert_eq!(summary, "Exported the IR spectrum");
+    assert!(summary.chars().count() <= 60);
+    assert_eq!(details, path.to_string_lossy());
+    assert!(!app.error);
+
+    let error = format!("Could not create a temporary file at {}", path.display());
+    palette(&mut app, Action::IrExported(Err(error.clone())));
+    let (summary, details) = app.status.split_once('\n').unwrap();
+    assert_eq!(summary, "Could not export the IR spectrum");
+    assert_eq!(details, error);
+    assert!(app.error);
+}
+
+#[test]
 fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     let (mut app, _) = water(CalcTask::Optimize);
     event(&mut app, optimized(&START, &MOVED));
