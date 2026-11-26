@@ -117,7 +117,9 @@ impl App {
             Message::AtomSinglet(value) => self.set_singlet(value),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
-                if tab == InspectorTab::Predict {
+                if tab == InspectorTab::Predict
+                    && !(super::xtb::available() && self.xtb.page == super::xtb::Page::Xtb)
+                {
                     return Some(self.nmr_action(super::nmr::Action::Dock));
                 }
                 if let Some(task) = self.show_inspector_tab(tab) {
