@@ -135,6 +135,9 @@ fn finish(
 ) -> Result<bool, CliError> {
     summary.write_table(out)?;
     summary.write_files().map_err(CliError::Failed)?;
+    for diagnostic in &summary.report.saddle_diagnostics {
+        let _ = writeln!(err, "Saddle refinement: {diagnostic}");
+    }
     if let Some(reason) = summary.failure_reason() {
         out.flush().map_err(CliError::Stdout)?;
         let _ = writeln!(err, "reshiki: {reason}");
@@ -227,12 +230,17 @@ struct Progress {
 }
 
 #[cfg(feature = "xtb")]
+fn trace_enabled(value: Option<&str>) -> bool {
+    matches!(value, Some("1" | "true"))
+}
+
+#[cfg(feature = "xtb")]
 impl Default for Progress {
     fn default() -> Self {
         Self {
             iterations: 0,
             steps: 0,
-            trace: std::env::var_os("RESHIKI_TS_TRACE").is_some(),
+            trace: trace_enabled(std::env::var("RESHIKI_TS_TRACE").as_deref().ok()),
         }
     }
 }
@@ -260,9 +268,12 @@ impl Progress {
             } => {
                 if self.trace {
                     let peak = energies.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    let climbing_energy = climbing
+                        .and_then(|index| energies.get(index))
+                        .map_or_else(|| "pending".into(), |value| format!("{value:.12}"));
                     let _ = writeln!(
                         err,
-                        "NEB trace: iteration={iteration} peak_energy={peak:.12}"
+                        "NEB trace: iteration={iteration} band_peak_energy={peak:.12} climbing_image_energy={climbing_energy}"
                     );
                 }
                 if iteration > 0 && iteration.is_multiple_of(10) {
@@ -304,13 +315,15 @@ impl Progress {
                 max_gradient,
                 rms_gradient,
                 length,
-                ratio,
+                energy_ratio,
+                force_ratio,
                 decision,
+                ..
             } => {
                 if self.trace {
                     let _ = writeln!(
                         err,
-                        "Saddle trial: energy={energy:.12} max_gradient={max_gradient:.8e} rms_gradient={rms_gradient:.8e} length={length:.8} ratio={ratio:.6} decision={decision}"
+                        "Saddle trial: energy={energy:.12} max_gradient={max_gradient:.8e} rms_gradient={rms_gradient:.8e} length={length:.8} energy_ratio={energy_ratio:.6} force_ratio={force_ratio:.6} decision={decision}"
                     );
                 }
             }
