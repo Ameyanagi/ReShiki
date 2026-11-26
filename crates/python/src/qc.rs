@@ -111,18 +111,28 @@ fn orbital_gap(orbitals: &Orbitals, frame: &Frame) -> Option<f64> {
     let mut channel = |energies: &[f64], occupations: &[f64], count: usize, capacity: f64| {
         // Smearing preserves the electron count and occupations decrease as energy rises.
         const OCCUPATION_TOLERANCE: f64 = 1e-6;
+        const ENERGY_TOLERANCE: f64 = 1e-9;
         if occupations.is_empty()
+            || energies.len() != occupations.len()
             || (occupations.iter().sum::<f64>() - count as f64 * capacity).abs()
                 > OCCUPATION_TOLERANCE
         {
             return None;
         }
         let mut minimum = f64::INFINITY;
-        for &occupation in occupations {
+        let mut group_minimum = f64::INFINITY;
+        let mut group_energy = energies[0];
+        for (&energy, &occupation) in energies.iter().zip(occupations) {
+            if energy - group_energy > ENERGY_TOLERANCE {
+                minimum = minimum.min(group_minimum);
+                group_minimum = f64::INFINITY;
+                group_energy = energy;
+            }
+            // Equal-energy orbitals can be recorded in any occupation order.
             if occupation - minimum > OCCUPATION_TOLERANCE {
                 return None;
             }
-            minimum = minimum.min(occupation);
+            group_minimum = group_minimum.min(occupation);
         }
         let (occupied, virtuals) = energies.split_at_checked(count)?;
         if let Some(&energy) = occupied.last() {

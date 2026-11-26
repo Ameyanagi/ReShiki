@@ -988,6 +988,7 @@ jobs:
       # A version belongs to its tag's commit, so a manual run cannot publish
       # main's later code under an already released version.
       - name: Check that main's version is unreleased
+        id: manual_version
         if: github.event_name == 'workflow_dispatch'
         env:
           REPOSITORY: ${{ inputs.pypi_repository }}
@@ -1003,11 +1004,16 @@ jobs:
             echo "::error::v$version is tagged at $tagged, not at this commit, so main is not the $version release. Publish with the next version tag."
             exit 1
           fi
+          printf 'tag=v%s\n' "$version" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: python-wheel-*
           path: dist
           merge-multiple: true
+      - name: Check base wheel release versions
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || steps.manual_version.outputs.tag }}
+        run: python3 scripts/check_python_wheel_notices.py --release-tag "$RELEASE_TAG" "dist/reshiki-*.whl"
       # Trusted publishing (OIDC); a version already on the index is skipped,
       # so rerunning a release is safe.
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

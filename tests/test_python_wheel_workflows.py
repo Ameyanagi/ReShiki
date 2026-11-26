@@ -155,6 +155,26 @@ class PythonWheelWorkflowTests(unittest.TestCase):
             if "pattern: python-xtb-wheel-*" in job:
                 self.assertEqual(name, "xtb_wheels_check")
 
+    def test_base_wheel_versions_are_checked_before_upload(self):
+        pypi = workflow_jobs("release.yml")["pypi"]
+        download = "pattern: python-wheel-*"
+        check = (
+            'scripts/check_python_wheel_notices.py --release-tag "$RELEASE_TAG" '
+            '"dist/reshiki-*.whl"'
+        )
+        upload = "uses: pypa/gh-action-pypi-publish@"
+        self.assertIn(
+            "id: manual_version\n        if: github.event_name == 'workflow_dispatch'", pypi
+        )
+        self.assertIn('printf \'tag=v%s\\n\' "$version" >> "$GITHUB_OUTPUT"', pypi)
+        self.assertIn(
+            "RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name "
+            "|| steps.manual_version.outputs.tag }}",
+            pypi,
+        )
+        self.assertLess(pypi.index(download), pypi.index(check))
+        self.assertLess(pypi.index(check), pypi.index(upload))
+
 
 if __name__ == "__main__":
     unittest.main()
