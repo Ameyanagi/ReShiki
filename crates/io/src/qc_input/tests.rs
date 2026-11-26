@@ -24,7 +24,24 @@ fn parse_xyz_keeps_only_the_first_frame_and_respects_extended_columns() {
         [[1.0, -2.0, 3.0], [4.0, 5.0, -6.0]]
     );
     assert_eq!((frame.charge, frame.multiplicity), (0, 1));
+    assert!(frame.isotopes.is_empty());
     assert_eq!(parse_xyz("1\nname\nH 0 0 0\n").unwrap().numbers, [1]);
+}
+
+#[test]
+fn parse_xyz_preserves_written_d2o_isotopes() {
+    let mut frame = water();
+    frame.isotopes = vec![0, 2, 2];
+    let output = write(
+        &settings(Program::Xyz, Job::SinglePoint),
+        &geometry(&frame),
+        "D2O",
+        GENERATOR,
+    )
+    .unwrap();
+    let restored = parse_xyz(&output.main.text).unwrap();
+    assert_eq!(restored.numbers, frame.numbers);
+    assert_eq!(restored.isotopes, [0, 2, 2]);
 }
 
 #[test]

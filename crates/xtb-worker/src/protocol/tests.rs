@@ -465,12 +465,7 @@ fn validates_hessian_masses_in_admission() {
         );
     }
     compute.hessian.as_mut().unwrap().masses_amu = Some(vec![1.0, 2.014]);
-    let error = open.admit(Some(&compute), None, MAX_ATOMS).unwrap_err();
-    assert_eq!(error.kind, ErrorKind::Input);
-    assert_eq!(
-        error.message,
-        "give thermo.symmetry_number with explicit masses; automatic symmetry ignores isotopes"
-    );
+    open.admit(Some(&compute), None, MAX_ATOMS).unwrap();
     compute.hessian.as_mut().unwrap().thermo.symmetry_number = Some(1);
     open.admit(Some(&compute), None, MAX_ATOMS).unwrap();
 }

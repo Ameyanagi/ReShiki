@@ -62,6 +62,7 @@ enum Request {
     Frequencies {
         temperature: f64,
         pressure: f64,
+        symmetry_number: Option<u32>,
     },
 }
 
@@ -207,22 +208,19 @@ impl Calculation {
             Request::Frequencies {
                 temperature,
                 pressure,
-            } => {
-                let masses_amu = isotope_masses(&geometry);
-                Compute {
-                    hessian: Some(HessianRequest {
-                        thermo: ThermoRequest {
-                            temperature_k: Some(temperature),
-                            pressure_pa: Some(pressure),
-                            // The engine's automatic symmetry ignores isotopes.
-                            symmetry_number: masses_amu.as_ref().map(|_| 1),
-                            ..ThermoRequest::default()
-                        },
-                        masses_amu,
-                    }),
-                    ..Compute::default()
-                }
-            }
+                symmetry_number,
+            } => Compute {
+                hessian: Some(HessianRequest {
+                    thermo: ThermoRequest {
+                        temperature_k: Some(temperature),
+                        pressure_pa: Some(pressure),
+                        symmetry_number,
+                        ..ThermoRequest::default()
+                    },
+                    masses_amu: isotope_masses(&geometry),
+                }),
+                ..Compute::default()
+            },
             Request::Optimize {
                 level,
                 max_steps,

@@ -26,6 +26,7 @@ class PythonWheelWorkflowTests(unittest.TestCase):
             "crates/xtb-worker/**",
             "crates/optimize/**",
             "crates/qcdata/**",
+            "crates/io/**",
             "native/process/**",
             "crates/process-heap/**",
         ):

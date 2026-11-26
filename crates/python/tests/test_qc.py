@@ -47,6 +47,7 @@ def test_read_reader_fixture_values(
         assert len(job.geometry) == atoms
         result = job.result
         assert result is not None
+        assert result.unpaired is None
         assert len(result.geometry) == atoms
         assert result.energy == energy
         assert (len(result.frequencies) if result.frequencies is not None else 0) == frequencies
@@ -120,6 +121,22 @@ def test_fractional_occupations_preserve_electron_count_gap(fixtures: Path) -> N
     ambiguous = smeared.replace("Occup=   0.010000", "Occup=   0.020000", 1)
     with pytest.warns(UserWarning, match="Charge and spin are not recorded"):
         result = qc.read(ambiguous.encode(), name=path.name).default_job.result
+    assert result.homo_lumo_gap is None
+    assert not result.near_degenerate
+
+
+def test_inverted_occupations_leave_gap_unset(fixtures: Path) -> None:
+    path = fixtures / "qc/cclib/molden5.7_water_mp2.molden"
+    occupied, virtual = path.read_text().rsplit("Occup=   2.000000", 1)
+    inverted = (
+        occupied
+        + "Occup=   0.010000"
+        + virtual.replace("Occup=   0.000000", "Occup=   1.990000", 1)
+    )
+    with pytest.warns(UserWarning, match="restricted MO occupations"):
+        result = qc.read(inverted.encode(), name=path.name).default_job.result
+    assert result.occupations.sum() == 10
+    np.testing.assert_array_equal(result.occupations[4:6], [0.01, 1.99])
     assert result.homo_lumo_gap is None
     assert not result.near_degenerate
 
@@ -225,6 +242,14 @@ def test_xyz_round_trip_and_first_frame(water: qc.Geometry) -> None:
     with pytest.warns(UserWarning, match="Charge and spin are not recorded in XYZ"):
         file = qc.read(b"1\noxygen\nO 0 0 0\n", name="oxygen.xyz")
     assert file.default_job.geometry.charge == 0
+
+
+@pytest.mark.parametrize(("title", "multiplicity"), [("charge=9", None), ("multiplicity=4", 1)])
+def test_xyz_electronic_state_overrides_title(title: str, multiplicity: int | None) -> None:
+    helium = qc.Geometry.from_symbols(["He"], [[0, 0, 0]], title=title)
+    restored = qc.Geometry.from_xyz(helium.to_xyz(), charge=0, multiplicity=multiplicity)
+    assert restored.charge == 0 and restored.multiplicity == 1
+    assert restored.title == title
 
 
 def test_isotopes_round_trip_through_xyz_and_gaussian(tmp_path: Path) -> None:
