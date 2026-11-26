@@ -76,9 +76,10 @@ measured Hessian/gradient time ratio.
   standard for minimization.
 - **Damped BFGS** (Powell 1978; Nocedal & Wright 2006, Procedure 18.2): always applies an
   update, mixing y with Hs so curvature stays positive. Helps when many updates would be skipped.
-- **SR1/BFGS blend** (Bofill 1994; Farkas & Schlegel 1999 for minimization,
-  φ = √φ_Bofill): SR1 learns negative/soft curvature faster; Farkas & Schlegel found it
-  better than pure BFGS for large molecules.
+- **SR1/BFGS blend** (Farkas & Schlegel 1999): for minimization, the SR1 weight is the
+  square root of the weight in Bofill's 1994 SR1/PSB update (φ = √φ_Bofill), and the rest
+  is BFGS. SR1 learns negative/soft curvature faster; Farkas & Schlegel found it better
+  than pure BFGS for large molecules.
 - **Multi-pair / model-corrected updates** (AutoSella-F, Tsypin et al. 2026): keep the last
   few pairs and re-apply them on a refreshed model Hessian. Related to our ANC rebuild,
   which carries curvature over.
