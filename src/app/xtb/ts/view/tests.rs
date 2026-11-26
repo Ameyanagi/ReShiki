@@ -356,7 +356,7 @@ mod presentation_tests {
                 chart.refined_ts_marker().unwrap().1,
                 format!("TS‡ {saddle}")
             );
-            assert_eq!(chart.endpoint_marker(2).unwrap(), format!("P {product}"));
+            assert_eq!(chart.endpoint_marker(1), Some(format!("P {product}")));
             assert!(
                 chart
                     .accessible_name()
