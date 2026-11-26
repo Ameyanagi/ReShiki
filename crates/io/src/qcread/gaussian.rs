@@ -149,6 +149,12 @@ fn read_job(
     program: &QcProgram,
     warnings: &mut Vec<String>,
 ) -> Result<Job, Error> {
+    if index >= super::MAX_JOBS {
+        return Err(Error::Unsupported(format!(
+            "The file holds more than {} Gaussian jobs",
+            super::MAX_JOBS
+        )));
+    }
     let completion = completion(lines);
     let partial = completion != Completion::Normal;
     let keywords = route(lines);

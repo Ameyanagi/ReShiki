@@ -977,6 +977,26 @@ fn mismatched_calculation_opens_the_geometry_with_a_warning() {
 }
 
 #[tokio::test]
+async fn molden_atoms_only_reports_no_calculated_results() {
+    let (mut app, _) = App::new();
+    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0.74\n";
+    let opened = prepare_contents("hydrogen.molden".into(), Ok(molden.to_vec())).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models[0].atoms.len(), 2);
+    assert!(
+        app.status.contains("The file has no calculated results."),
+        "{}",
+        app.status
+    );
+    assert!(
+        !app.status.contains("results in the palette"),
+        "{}",
+        app.status
+    );
+}
+
+#[tokio::test]
 async fn orca_molden_and_fchk_open_directly_with_their_results() {
     let (mut app, _) = App::new();
     let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/qc/cclib/");

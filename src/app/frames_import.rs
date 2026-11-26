@@ -17,6 +17,17 @@ use reshiki::qcdata::{
 use reshiki::qcread::{self, Format, QcFile};
 use std::path::PathBuf;
 
+/// Geometry used when opening a whole job.
+pub(super) fn job_step(job: &qcread::Job) -> Option<&qcread::Step> {
+    job.result_step().or_else(|| job.steps.last())
+}
+
+pub(super) fn result_step_index(steps: &[qcread::Step], result: &CalcResult) -> Option<usize> {
+    steps
+        .iter()
+        .rposition(|step| step.frame.hash() == result.frame)
+}
+
 pub(super) fn molecule(frame: &Frame) -> String {
     const DIGITS: [char; 10] = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
     super::xtb::formula(&frame.numbers)
@@ -180,10 +191,17 @@ impl File {
 
     fn step(&self, index: usize) -> Option<&qcread::Step> {
         if self.job_rows() {
-            self.file.jobs.get(index)?.steps.last()
+            job_step(self.file.jobs.get(index)?)
         } else {
             self.steps().get(index)
         }
+    }
+
+    fn result_step_index(&self) -> Option<usize> {
+        let [job] = self.file.jobs.as_slice() else {
+            return None;
+        };
+        result_step_index(&job.steps, job.result.as_ref()?)
     }
 
     fn subtitle(&self) -> String {
@@ -271,12 +289,15 @@ impl File {
 
 impl Dialog {
     fn new(path: PathBuf, file: File) -> Self {
-        // An ensemble opens its lowest member; a trajectory its last frame.
-        let keep = file.layout() == Some(Layout::Levels);
+        let ensemble = file.layout() == Some(Layout::Levels);
+        // Opening an SD record preserves its chemistry unless keeping the ensemble is requested.
+        let keep = ensemble && file.file.format == Format::Xyz;
         let choice = if file.job_rows() {
             Choice::Frame(file.file.default_job().unwrap_or(0))
-        } else if keep {
+        } else if ensemble {
             Choice::Lowest
+        } else if let Some(step) = file.result_step_index().filter(|&i| i + 1 < file.count()) {
+            Choice::Frame(step)
         } else {
             Choice::Last
         };
@@ -624,22 +645,23 @@ impl App {
             .spacing(10),
         )
         .padding([2, 8]);
+        let result_step = file.result_step_index();
         let rows = Column::with_children(steps.iter().enumerate().map(|(i, step)| {
             let active = i == index;
-            let comment: String = step
-                .label
-                .as_deref()
-                .unwrap_or("")
-                .chars()
-                .take(60)
-                .collect();
+            let has_results = result_step == Some(i);
+            let comment = step_comment(step, has_results);
+            let label = if has_results {
+                format!("{frame_name} {} · Results", i + 1)
+            } else {
+                format!("{frame_name} {}", i + 1)
+            };
             let energy = file.step_energy(step);
             let delta = energy
                 .zip(lowest)
                 .map(|(e, low)| (e - low) * KCAL_PER_HARTREE);
             reshiki::accessibility::button(
                 format!("frames-row-{i}"),
-                format!("{frame_name} {}", i + 1),
+                label,
                 row![
                     cell((i + 1).to_string(), Length::Fixed(40.)),
                     cell(comment, Length::Fill),
@@ -844,16 +866,33 @@ fn eh(energy: Option<f64>, calculation: bool) -> String {
     energy.map_or_else(|| "—".into(), |e| minus(format!("{e:.decimals$}")))
 }
 
+fn step_comment(step: &qcread::Step, has_results: bool) -> String {
+    let comment: String = step
+        .label
+        .as_deref()
+        .unwrap_or("")
+        .chars()
+        .take(60)
+        .collect();
+    if has_results && comment.is_empty() {
+        "Results".into()
+    } else if has_results {
+        format!("Results · {comment}")
+    } else {
+        comment
+    }
+}
+
 fn job_cells(job: &qcread::Job) -> [String; 5] {
-    let last = job.steps.last();
+    let step = job_step(job);
     let energy = job
         .result
         .as_ref()
         .and_then(|result| result.energy_hartree)
-        .or_else(|| last.and_then(|step| step.energy_hartree));
+        .or_else(|| step.and_then(|step| step.energy_hartree));
     [
         (job.index + 1).to_string(),
-        last.map_or_else(|| "—".into(), |step| molecule(&step.frame)),
+        step.map_or_else(|| "—".into(), |step| molecule(&step.frame)),
         job.title(),
         job.completion
             .as_ref()
