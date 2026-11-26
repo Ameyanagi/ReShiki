@@ -644,6 +644,9 @@ impl App {
     }
 
     pub(super) fn xtb_show_reaction_path(&mut self, arrow: u64) -> bool {
+        if self.xtb_show_live_path(arrow) {
+            return true;
+        }
         let ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
             return false;
         };
@@ -665,6 +668,7 @@ impl App {
             ArrowResult::Found(result) => Some(result),
             _ => None,
         };
+        let stale = result.is_some_and(|result| self.xtb_ts_result_stale(result));
         let endpoint_energy = result.and_then(|result| view::reaction_energy_kcal(result));
         let (batch, batch_refusal) =
             self.xtb_energy_result(arrow, result.filter(|_| endpoint_energy.is_some()));
@@ -678,12 +682,8 @@ impl App {
             })
             .flatten();
         let search = result.and_then(|result| super::saved_search(result));
-        let presentation = result.map(|result| {
-            view::presentation(
-                result,
-                self.tab.xtb.ts_sessions.get(result).map(AsRef::as_ref),
-            )
-        });
+        let presentation =
+            result.map(|result| view::presentation(result, self.xtb_ts_refinement_session(result)));
         let failed = match &self.tab.xtb.outcome {
             Some(Outcome::Failed(failed))
                 if failed.ts().is_some_and(|request| request.arrow == arrow) =>
@@ -793,7 +793,7 @@ impl App {
                 ))
                 .push(
                     xtb::available()
-                        .then(|| failure_actions(view::Recovery::FinerPath, arrow, idle)),
+                        .then(|| failure_actions(view::Recovery::FinerPath, arrow, idle, false)),
                 );
             if let Some(result) = result {
                 content = content.push(line(xtb::results::previous_result(result), Tone::Muted));
@@ -803,7 +803,14 @@ impl App {
                 content = content
                     .push(line("No reliable transition state found.", Tone::Warning))
                     .push(line(reason.clone(), Tone::Muted))
-                    .push(xtb::available().then(|| failure_actions(view.recovery, arrow, idle)));
+                    .push(xtb::available().then(|| {
+                        failure_actions(
+                            view.recovery,
+                            arrow,
+                            idle && (view.recovery != view::Recovery::ShowWhere || !stale),
+                            result.is_some_and(|result| view::has_reached_endpoint(result)),
+                        )
+                    }));
                 if let Some(highest) = view.highest_path_kcal {
                     content = content.push(line(
                         format!(
@@ -897,24 +904,14 @@ impl App {
         {
             content = content.push(line(reason, Tone::Warning));
         }
-        if let Some(result) = result {
-            let stale = doc
-                .science
-                .results
-                .iter()
-                .find(|stored| Arc::ptr_eq(result, &stored.result))
-                .and_then(|stored| doc.science.attachment(stored.attachment))
-                .is_some_and(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
-                || self.xtb_ts_search_stale(result);
-            if stale {
-                let title = self.xtb_saved_reaction_title(result, Some(arrow));
-                let reason = if super::not_verified(result) {
-                    "Reaction freshness not verified"
-                } else {
-                    "The reaction changed after this search"
-                };
-                content = content.push(line(format!("{reason} · {title}"), Tone::Warning));
-            }
+        if let Some(result) = result.filter(|_| stale) {
+            let title = self.xtb_saved_reaction_title(result, Some(arrow));
+            let reason = if super::not_verified(result) {
+                "Reaction freshness not verified"
+            } else {
+                "The reaction changed after this search"
+            };
+            content = content.push(line(format!("{reason} · {title}"), Tone::Warning));
         }
         let drawn = plan
             .as_ref()
@@ -933,8 +930,21 @@ impl App {
 
         if let Some(live) = live {
             let small = live.small_reaction();
+            let mut steps = column![stepper(live)].spacing(4);
+            if self.xtb_palette_live_ts().is_none() || !self.xtb_palette_body_visible() {
+                steps = steps.push(
+                    accessible_command(
+                        "xtb-ts-show-live-path",
+                        "Show the running reaction's live path",
+                        "Show live path",
+                    )
+                    .padding([1, 4])
+                    .style(iced::widget::button::text)
+                    .on_press(send(Action::ShowPath)),
+                );
+            }
             content = content
-                .push(stepper(live))
+                .push(steps)
                 .push(progress_bar(0.0..=1.0, live.fraction().unwrap_or(0.)).girth(3))
                 .push(
                     row![
@@ -1056,6 +1066,11 @@ fn stepper(live: &Live) -> Element<'static, Message> {
                     StepState::Todo => (
                         toned_text("○", Tone::Muted),
                         toned_text(label, Tone::Muted),
+                        None,
+                    ),
+                    StepState::Skipped => (
+                        toned_text("–", Tone::Muted),
+                        toned_text(format!("{label} · skipped"), Tone::Muted),
                         None,
                     ),
                 };
@@ -1200,9 +1215,14 @@ fn nonempty(value: &str) -> Option<&str> {
     (!value.trim().is_empty()).then_some(value)
 }
 
-fn failure_actions(recovery: view::Recovery, arrow: u64, idle: bool) -> Element<'static, Message> {
+fn failure_actions(
+    recovery: view::Recovery,
+    arrow: u64,
+    idle: bool,
+    has_endpoint: bool,
+) -> Element<'static, Message> {
     row![
-        recovery.button("xtb-ts-rerun", Some(arrow), idle),
+        recovery.button("xtb-ts-rerun", Some(arrow), idle, has_endpoint),
         accessible_command(
             "xtb-ts-card-path",
             "Show what was found",

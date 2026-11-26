@@ -172,6 +172,18 @@ impl Fit {
             .collect()
     }
 
+    /// Rotate a Cartesian displacement without translating it.
+    pub(super) fn rotate_vector(&self, vector: &[f64]) -> Vec<f64> {
+        vector
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|atom| {
+                from_fn::<_, 3, _>(|i| self.rotation[i].iter().zip(atom).map(|(r, v)| r * v).sum())
+            })
+            .collect()
+    }
+
     /// Rotate each Cartesian 3×3 atom-pair block as R H_ab Rᵀ into the fitted
     /// frame. Translating the positions has no effect on the force constants.
     pub(super) fn rotate_hessian(&self, h: &[f64], n: usize) -> Vec<f64> {

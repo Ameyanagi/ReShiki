@@ -1,11 +1,11 @@
 //! Transition-state path profile and the saved saddle's details.
 use super::{Action, Session};
-use crate::app::workspace::{accessible_command, control, panel};
+use crate::app::workspace::{accessible_command, control, hover_hint, panel};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
 use crate::app::xtb::tone::{Tone, line};
 use crate::app::xtb::{Action as XtbAction, EnergyUnit, state};
 use crate::app::{App, Message};
-use iced::widget::{canvas, column, container, row, text};
+use iced::widget::{canvas, column, container, row, text, tooltip};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 use reshiki::qcdata::{CalcResult, Frame, KCAL_PER_HARTREE, Status};
 
@@ -29,6 +29,7 @@ impl Recovery {
         id: &'static str,
         arrow: Option<u64>,
         enabled: bool,
+        has_endpoint: bool,
     ) -> Element<'static, Message> {
         let label = match self {
             Self::CheckMap => "Check the atom map",
@@ -36,9 +37,10 @@ impl Recovery {
             Self::ShowWhere => "Show where it leads",
             Self::FinerPath => "Try again with a finer path",
         };
-        accessible_command(id, label, label)
+        let missing_endpoint = self == Self::ShowWhere && !has_endpoint;
+        let command: Element<'static, Message> = accessible_command(id, label, label)
             .style(crate::appearance::primary)
-            .on_press_maybe(arrow.filter(|_| enabled).map(|arrow| {
+            .on_press_maybe(arrow.filter(|_| enabled && !missing_endpoint).map(|arrow| {
                 send(match self {
                     Self::CheckMap => Action::ReviewMap(arrow),
                     Self::RefineHighest => Action::Retry(arrow, super::Retry::RefineHighest),
@@ -46,7 +48,17 @@ impl Recovery {
                     Self::FinerPath => Action::Retry(arrow, super::Retry::FinerPath),
                 })
             }))
+            .into();
+        if missing_endpoint {
+            hover_hint(
+                command,
+                "This result has no saved endpoint",
+                tooltip::Position::Top,
+            )
             .into()
+        } else {
+            command
+        }
     }
 }
 
@@ -91,6 +103,17 @@ fn wrong_endpoints(reason: &str) -> bool {
     reason.starts_with("IRC reaches ") || reason.starts_with("IRC did not connect ")
 }
 
+fn disagreement_counts(reason: &str) -> Option<(usize, usize)> {
+    let counts =
+        reason.strip_prefix("engine/worker imaginary frequency counts disagree: engine ")?;
+    let (engine, worker) = counts.split_once(", worker ")?;
+    Some((engine.parse().ok()?, worker.parse().ok()?))
+}
+
+pub(super) fn has_reached_endpoint(result: &CalcResult) -> bool {
+    super::saved_search(result).is_some_and(|search| !search.reached_positions_angstrom.is_empty())
+}
+
 fn readable_reason(reason: &str) -> String {
     if reason == IRC_RETURNS_TO_REACTANT {
         "The path returned to the reactant on both sides. The bonds that should change may not match this drawing.".into()
@@ -100,8 +123,6 @@ fn readable_reason(reason: &str) -> String {
         reason.replacen("IRC reaches", "The reaction path reaches", 1) + "."
     } else if wrong_endpoints(reason) {
         reason.replacen("IRC", "The reaction path", 1) + "."
-    } else if reason.starts_with("engine/worker imaginary frequency counts disagree") {
-        "The two frequency checks disagree about the number of imaginary frequencies.".into()
     } else if let Some(reason) = reason.strip_prefix("worker check failed: ") {
         format!("The independent frequency check failed: {reason}.")
     } else if let Some(reason) = reason.strip_prefix("IRC failed: ") {
@@ -135,6 +156,11 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| session.map(|s| s.extras.num_imaginary))
         .or(saved_count);
     let reported = reported_reason(result);
+    let disagreement = reported.and_then(disagreement_counts).or_else(|| {
+        count
+            .zip(saved_count)
+            .filter(|(engine, worker)| engine != worker)
+    });
     // Converged results passed both the endpoint and independent frequency checks.
     let accepted = matches!(result.status, Status::Converged);
     let saddle_converged = saved
@@ -142,16 +168,21 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| session.map(|s| s.extras.saddle_converged))
         .unwrap_or(accepted);
     let connects = session.map_or(accepted, |s| s.extras.connects);
-    let reliable =
-        super::is_ts(result) && saddle_converged && count == Some(1) && connects && accepted;
+    let reliable = super::is_ts(result)
+        && saddle_converged
+        && count == Some(1)
+        && disagreement.is_none()
+        && connects
+        && accepted;
     let energies = super::path_energies(result);
     let (deltas, candidate) = relative_energies(energies, result.energy_hartree);
     let refined_kcal = candidate.filter(|value| reliable && value.is_finite());
     let recovery = match reported {
+        _ if disagreement.is_some() => Recovery::FinerPath,
         Some(IRC_RETURNS_TO_REACTANT) => Recovery::CheckMap,
         Some(reason) if wrong_endpoints(reason) => Recovery::ShowWhere,
         _ if count.is_some_and(|count| count >= 2)
-            || saved_count.is_some_and(|count| count >= 2) =>
+            && session.is_some_and(|session| session.can_refine(result)) =>
         {
             Recovery::RefineHighest
         }
@@ -159,10 +190,13 @@ pub(in crate::app::xtb) fn presentation(
     };
     let reason = if refined_kcal.is_some() {
         None
+    } else if let Some((engine, worker)) = disagreement {
+        Some(format!(
+            "The two frequency checks disagree (engine {engine}, worker {worker})."
+        ))
     } else if matches!(recovery, Recovery::CheckMap | Recovery::ShowWhere) {
         reported.map(readable_reason)
-    } else if recovery == Recovery::RefineHighest {
-        let count = count.into_iter().chain(saved_count).max().unwrap_or(2);
+    } else if let Some(count) = count.filter(|&count| count >= 2) {
         Some(if count == 2 {
             "The search ended at a point with two imaginary frequencies.".into()
         } else {
@@ -514,7 +548,8 @@ impl App {
     ) -> Element<'a, Message> {
         let result = &shown.stored.result;
         let energies = super::path_energies(result);
-        let presentation = presentation(result, shown.ts);
+        let presentation =
+            presentation(result, self.xtb_ts_refinement_session(&shown.stored.result));
         let chart = self.xtb_ts_path_chart(shown, presentation.refined_kcal);
         let selected = chart.selected;
         let deltas = chart.deltas.clone();
@@ -560,9 +595,7 @@ impl App {
             profile = profile.push(line("No path energy profile was saved.", Tone::Muted));
         }
         let reached = self.xtb_reached_endpoint_selected();
-        if super::saved_search(result)
-            .is_some_and(|search| !search.reached_positions_angstrom.is_empty())
-        {
+        if has_reached_endpoint(result) {
             profile = profile.push(
                 accessible_command(
                     "xtb-ts-reached-endpoint",
@@ -684,7 +717,9 @@ impl App {
             details = details.push(presentation.recovery.button(
                 "xtb-ts-rerun-20",
                 shown.arrow,
-                self.xtb_ts_can_rerun(shown),
+                self.xtb_ts_can_rerun(shown)
+                    && (presentation.recovery != Recovery::ShowWhere || !shown.stale),
+                has_reached_endpoint(result),
             ));
         }
         details = details.push(line(

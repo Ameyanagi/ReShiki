@@ -74,7 +74,33 @@ fn muller_brown_ci_neb_between_outer_minima() {
         })
         .collect();
     let ends = [A, B].map(|x| evaluate(&mut MullerBrown, &x).unwrap().0);
-    let result = neb::run(&mut [MullerBrown], band, ends, &[], &options, &mut proceed).unwrap();
+    let mut final_band = Vec::new();
+    let mut terminal_events = 0;
+    let result = neb::run(
+        &mut [MullerBrown],
+        band,
+        ends,
+        &[],
+        &options,
+        &mut |event| {
+            if let Event::Neb {
+                finished: true,
+                energies,
+                ..
+            } = event
+            {
+                terminal_events += 1;
+                final_band = energies.to_vec();
+            }
+            ControlFlow::Continue(())
+        },
+    )
+    .unwrap();
+    assert_eq!(terminal_events, 1);
+    assert_eq!(
+        final_band,
+        result.path.iter().map(|p| p.energy).collect::<Vec<_>>()
+    );
     let highest = &result.path[result.climbing];
     assert!(result.converged);
     assert!(
@@ -82,6 +108,45 @@ fn muller_brown_ci_neb_between_outer_minima() {
         "{highest:?}"
     );
     assert!((highest.energy + 40.665).abs() < 0.005, "{highest:?}");
+}
+
+#[test]
+fn exhausted_neb_publishes_the_last_evaluated_band() {
+    let options = TsOptions {
+        images: 5,
+        neb_max_iterations: 0,
+        ..Default::default()
+    };
+    let band: Vec<Vec<_>> = (0..options.images)
+        .map(|i| {
+            let t = i as f64 / (options.images - 1) as f64;
+            A.iter().zip(B).map(|(a, b)| a + t * (b - a)).collect()
+        })
+        .collect();
+    let ends = [A, B].map(|x| evaluate(&mut MullerBrown, &x).unwrap().0);
+    let mut events = Vec::new();
+    let result = neb::run(
+        &mut [MullerBrown],
+        band,
+        ends,
+        &[],
+        &options,
+        &mut |event| {
+            if let Event::Neb {
+                finished, energies, ..
+            } = event
+            {
+                events.push((finished, energies.to_vec()));
+            }
+            ControlFlow::Continue(())
+        },
+    )
+    .unwrap();
+    assert!(!result.converged);
+    assert_eq!(
+        events,
+        [(true, result.path.iter().map(|p| p.energy).collect())]
+    );
 }
 
 #[test]
@@ -306,6 +371,192 @@ fn saved_band_refines_directly_and_verifies_both_irc_destinations() {
         assert!(reached.contains(&Reached::Product));
         assert_eq!(report.evaluations, potential.evaluations);
         assert_eq!(report.hessians, potential.hessians);
+    }
+}
+
+#[test]
+fn independent_frequency_check_precedes_and_can_veto_irc() {
+    use std::cell::Cell;
+    let checked = Cell::new(false);
+    let irc_started = Cell::new(false);
+    let mut pool = [Triangle {
+        analytic: true,
+        ..Default::default()
+    }];
+    let options = TsOptions::default();
+    let a = triangle(1.1);
+    let b = triangle(2.3);
+    let (report, ()) = search_with_verification(
+        &mut pool,
+        &Search {
+            numbers: &[1; 3],
+            masses_amu: &[1., 2., 4.],
+            reactant: &a,
+            product: &b,
+            options: &options,
+        },
+        |event| {
+            if matches!(event, Event::Stage(Stage::Irc)) {
+                assert!(checked.get(), "IRC started before independent frequencies");
+                irc_started.set(true);
+            }
+            ControlFlow::Continue(())
+        },
+        || ControlFlow::Continue(()),
+        |potential, positions, imaginary| {
+            assert!(!irc_started.get());
+            let exact = saddle::hessian(potential, positions)?;
+            let (frequencies, _) = modes::frequencies(positions, &exact, &[1., 2., 4.])?;
+            assert_eq!(
+                imaginary,
+                frequencies.iter().filter(|f| **f < -IMAGINARY_CM1).count()
+            );
+            checked.set(true);
+            Ok((false, ()))
+        },
+    )
+    .unwrap();
+    assert!(checked.get() && !irc_started.get());
+    assert!(report.saddle_converged && report.imaginary == 1);
+    assert!(report.irc.is_none() && !report.connects);
+}
+
+/// Triangle specified by all three side lengths, with atom order preserved.
+fn triangle_sides(a: f64, b: f64, c: f64) -> Vec<f64> {
+    let x = (a * a + b * b - c * c) / (2.0 * a);
+    vec![0., 0., 0., a, 0., 0., x, (b * b - x * x).sqrt(), 0.]
+}
+
+#[test]
+fn saved_second_order_candidate_recovers_a_nearby_first_order_connection() {
+    // The saved band already passes a first-order saddle (spectator side in
+    // its lower well), while the actual failed candidate has both sides at
+    // their barriers. Recovery must begin at the latter, not rerun that band.
+    let mut potential = Triangle {
+        analytic: true,
+        second_bistable_side: true,
+        ..Default::default()
+    };
+    let path: Vec<_> = [1.1, 1.4, 1.7, 2.0, 2.3]
+        .into_iter()
+        .map(|r| {
+            let positions = triangle_sides(r, 1.7, 2.3);
+            let energy = evaluate(&mut potential, &positions).unwrap().0;
+            Minimum { positions, energy }
+        })
+        .collect();
+    let positions = triangle_sides(1.7, 2.3, 2.3);
+    let hessian = saddle::hessian(&mut potential, &positions).unwrap();
+    let (frequencies, _) = modes::frequencies(&positions, &hessian, &[1.; 3]).unwrap();
+    assert_eq!(
+        frequencies.iter().filter(|f| **f < -IMAGINARY_CM1).count(),
+        2
+    );
+    let options = TsOptions {
+        images: path.len(),
+        ..Default::default()
+    };
+    let search = Search {
+        numbers: &[1; 3],
+        masses_amu: &[1.; 3],
+        reactant: &path[0].positions,
+        product: &path[path.len() - 1].positions,
+        options: &options,
+    };
+    struct Tracked {
+        inner: Triangle,
+        hessian_points: Vec<Vec<f64>>,
+        origin: Vec<f64>,
+        seed_starts: usize,
+        fault: Option<(usize, EvalError)>,
+    }
+    impl Potential for Tracked {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], a: Accuracy) -> Result<f64, EvalError> {
+            self.inner.evaluate(x, g, a)
+        }
+        fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            self.hessian_points.push(x.to_vec());
+            if (distance(x, &self.origin) - 0.1).abs() < 1e-10 {
+                self.seed_starts += 1;
+                if let Some((seed, error)) = &self.fault
+                    && self.seed_starts == *seed
+                {
+                    return Some(Err(error.clone()));
+                }
+            }
+            self.inner.hessian(x, h)
+        }
+    }
+    for (veto, fault) in [
+        (false, None),
+        (true, None),
+        (
+            false,
+            Some((1, EvalError::Failed("first seed unavailable".into()))),
+        ),
+        (
+            false,
+            Some((2, EvalError::Failed("alternate seed unavailable".into()))),
+        ),
+        (false, Some((2, EvalError::Cancelled))),
+    ] {
+        potential.evaluations = 0;
+        potential.hessians = 0;
+        let mut potential = Tracked {
+            inner: potential.clone(),
+            hessian_points: Vec::new(),
+            origin: positions.clone(),
+            seed_starts: 0,
+            fault: fault.clone(),
+        };
+        let mut checks = Vec::new();
+        let result = refine_from_candidate(
+            &mut potential,
+            &search,
+            &path,
+            false,
+            &SaddleCandidate {
+                positions: positions.clone(),
+                hessian: hessian.clone(),
+            },
+            proceed,
+            |_, x, imaginary| {
+                checks.push((x.to_vec(), imaginary));
+                Ok((!veto, x.to_vec()))
+            },
+        );
+        if matches!(fault, Some((_, EvalError::Cancelled))) {
+            assert_eq!(result.unwrap_err(), TsError::Cancelled);
+            continue;
+        }
+        let (report, checked_positions) = result.unwrap();
+        assert_eq!(checks.len(), if fault.is_some() { 1 } else { 2 });
+        assert!(
+            report.saddle_converged && report.imaginary == 1,
+            "{report:?}"
+        );
+        assert_eq!(report.connects, !veto, "{report:?}");
+        assert_eq!(checked_positions, report.ts.positions);
+        if veto {
+            assert!(report.irc.is_none());
+        }
+        assert_eq!(report.path, path);
+        assert!(!report.neb_converged);
+        assert_eq!(report.evaluations, potential.inner.evaluations);
+        assert_eq!(report.hessians, potential.hessian_points.len());
+        let seeds: Vec<_> = potential
+            .hessian_points
+            .iter()
+            .filter(|x| (distance(x, &positions) - 0.1).abs() < 1e-10)
+            .collect();
+        assert_eq!(
+            seeds.len(),
+            2,
+            "each sign starts 0.1 bohr from saved candidate"
+        );
+        for i in 0..positions.len() {
+            assert!((seeds[0][i] + seeds[1][i] - 2.0 * positions[i]).abs() < 1e-12);
+        }
     }
 }
 

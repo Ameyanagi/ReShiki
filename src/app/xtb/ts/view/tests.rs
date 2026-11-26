@@ -601,6 +601,7 @@ mod presentation_tests {
         }
         let mut result = result();
         result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-120., -60.];
+        assert_eq!(presentation(&result, None).recovery, Recovery::FinerPath);
         assert!(
             presentation(&result, None)
                 .reason
@@ -612,6 +613,49 @@ mod presentation_tests {
             reason: "saddle refinement did not converge".into(),
         };
         assert_eq!(presentation(&result, None).refined_kcal, None);
+    }
+
+    #[test]
+    fn persisted_frequency_disagreement_keeps_the_counts_and_finer_recovery() {
+        for (engine, worker) in [(1, 2), (2, 1), (0, 2)] {
+            let mut result = result_with_gibbs();
+            result
+                .run
+                .as_mut()
+                .unwrap()
+                .transition_state
+                .as_mut()
+                .unwrap()
+                .imaginary = engine;
+            result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-100.; worker];
+            result.status = Status::NotConverged {
+                reason: format!(
+                    "engine/worker imaginary frequency counts disagree: engine {engine}, worker {worker}"
+                ),
+            };
+            let shown = presentation(&result, None);
+            assert_eq!(shown.refined_kcal, None);
+            assert_eq!(shown.recovery, Recovery::FinerPath);
+            assert_eq!(
+                shown.reason,
+                Some(format!(
+                    "The two frequency checks disagree (engine {engine}, worker {worker})."
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn contradictory_saved_counts_cannot_verify_a_transition_state() {
+        let mut result = result_with_gibbs();
+        result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-387., -100.];
+        let shown = presentation(&result, None);
+        assert_eq!(shown.refined_kcal, None);
+        assert_eq!(shown.recovery, Recovery::FinerPath);
+        assert_eq!(
+            shown.reason.as_deref(),
+            Some("The two frequency checks disagree (engine 1, worker 2).")
+        );
     }
 
     #[test]

@@ -622,7 +622,13 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
         })),
     });
     result.validate(&frame).unwrap();
+    let empty_heap = result.heap_bytes();
+    details(&mut result).reached_positions_angstrom = frame.positions_angstrom.clone();
     let baseline_heap = result.heap_bytes();
+    assert_eq!(
+        baseline_heap - empty_heap,
+        frame.numbers.len() * 3 * size_of::<f64>()
+    );
     let context = TransitionStateContext {
         reactant_chemistry: "ab".repeat(32),
         product_chemistry: "cd".repeat(32),
@@ -680,12 +686,14 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
     search.remove("free_energy");
     search.remove("endpoint_energies_hartree");
     search.remove("endpoint_thermo");
+    search.remove("reached_positions_angstrom");
     let decoded: CalcResult = serde_json::from_value(old.clone()).unwrap();
     decoded.validate(&frame).unwrap();
     let search = decoded.run.unwrap().transition_state.unwrap();
     assert_eq!(search.arrow, Some(123));
     assert_eq!(search.context, None);
     assert!(!search.free_energy);
+    assert!(search.reached_positions_angstrom.is_empty());
     assert_eq!(search.reaction_energy_hartree(), None);
     assert_eq!(search.reaction_gibbs_hartree(), None);
 

@@ -108,6 +108,7 @@ reshiki-chemistry = { path = "crates/chemistry" }
 reshiki-model = { path = "crates/model" }
 reshiki-io = { path = "crates/io" }
 reshiki-xtb-jobs = { path = "crates/xtb-jobs" }
+reshiki-optimize = { path = "crates/optimize" }
 # Explicitly request the acknowledgment frame before preparing clipboard PDFs.
 iced_runtime = "0.14"
 iced = { version = "0.14", default-features = false, features = [
@@ -158,7 +159,6 @@ reshiki-process = { path = "native/process" }
 reshiki-agent = { path = "crates/agent" }
 reshiki-mcp = { path = "crates/mcp" }
 reshiki-xtb-worker = { path = "crates/xtb-worker" }
-reshiki-optimize = { path = "crates/optimize" }
 tokio = { version = "1", features = [
   "process",
   "fs",
