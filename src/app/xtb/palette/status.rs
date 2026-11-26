@@ -18,13 +18,14 @@ impl App {
         }
         match result {
             Ok(Some(path)) => {
-                let text = if ir {
-                    format!("Exported the IR spectrum\n{}", path.display())
-                } else if let Some(name) = path.file_name() {
-                    format!("Exported {}", name.to_string_lossy())
-                } else {
+                let Some(name) = path.file_name() else {
                     return;
                 };
+                // The file name leads; the IR figure's folder is in the details.
+                let mut text = format!("Exported {}", name.to_string_lossy());
+                if ir {
+                    text = format!("{text}\n{}", path.display());
+                }
                 self.xtb_set_palette_status(StatusKind::Palette, text, false);
             }
             Ok(None) => {}
