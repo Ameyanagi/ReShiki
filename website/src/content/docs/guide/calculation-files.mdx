@@ -51,8 +51,8 @@ GAMESS runs one task per job and uses its built-in basis sets: `6-31G(d)` (or `6
 | Gaussian `.log`, `.out`                        | Every job: geometries, energies, frequencies, orbital energies, how it ended |
 | ORCA `.out`                                    | The same                                                                     |
 | Gaussian `.fchk`, Molden `.molden`             | Geometry, orbitals, frequencies                                              |
-| XYZ                                            | The first frame; the status bar says when the file has more                  |
-| SDF                                            | Every record, laid out side by side as space allows                          |
+| XYZ, extended XYZ                              | One frame, or every frame as an ensemble (below)                             |
+| SDF                                            | Conformers of one molecule as frames (below); other records side by side     |
 | Gaussian `.gjf`/`.com`, ORCA and GAMESS `.inp` | The geometry in the input                                                    |
 
 For a Gaussian or ORCA output, ReShiki opens the final geometry of the last job that has a geometry and ended normally, as a 3D model in a new, unsaved drawing named after the file. If there is none, it opens the last job that has a geometry, even a failed or cut-off one. The status bar names the job, its method and how it ended, for example `Final geometry of job 3 of 3: Frequencies · RB3LYP/6-31G, Normal termination`, so you can tell which one you got.
@@ -63,5 +63,20 @@ For a Gaussian or ORCA output, ReShiki opens the final geometry of the last job 
 />
 
 :::note[In progress]
-Opening a file shows the geometry only for now (`Results can't be shown yet`). Showing the file's energies, frequencies and orbitals in the results palette, and choosing among several jobs, comes with the next steps of the calculation work.
+Opening a Gaussian, ORCA, Molden or fchk file shows the geometry only for now (`Results can't be shown yet`). Showing the file's energies, frequencies and orbitals in the results palette, and choosing among several jobs, comes with the next steps of the calculation work.
 :::
+
+## Open a file with several frames
+
+When an XYZ file has more than one frame, or an SDF file holds several 3D records of the same molecule (conformers from CREST, xtb, ORCA, RDKit or ReShiki's own export), **Open** asks **Choose what to import**:
+
+<Screenshot
+  src="/manual/xtb-frames.webp"
+  alt="The Choose what to import sheet for crest_conformers.xyz (XYZ, 19 frames, 24 atoms): First, Last and Lowest energy (selected), a list of frames with comment, energy in Eh and ΔE in kcal/mol, a preview of the chosen frame, an energy-level diagram, Keep all frames as an ensemble (Conformers tab), and Cancel and Import."
+/>
+
+- Pick **First**, **Last** or **Lowest energy**, or click a frame in the list (↑ and ↓ move, ⌘Return imports). The preview turns with a drag.
+- Energies are read from the comment line (CREST and xtb write the energy in hartree there) and from ReShiki's own XYZ and SDF exports.
+- **Keep all frames as an ensemble (Conformers tab)** keeps up to 32 frames, lowest energy first, with the molecule, and opens them in the [Conformers tab](/guide/calculation-conformers/#read-the-results) for preview, overlay and export. It needs an energy for every frame.
+
+XYZ files do not record charge or spin; ReShiki assumes a neutral molecule in its lowest spin state and says so.
