@@ -71,17 +71,18 @@ impl Source {
     }
 
     pub(in crate::app) fn label(&self) -> String {
+        let method = super::view::method_name(&self.result);
         let hessian = if self.result.hessian_hartree_per_bohr2.is_empty() {
-            ""
+            String::new()
         } else {
-            " · xTB Hessian available"
+            format!(" · {method} Hessian available")
         };
         let structure = if super::view::presentation(&self.result, None).reliable() {
             "Saved transition state"
         } else {
             "Saved transition-state candidate"
         };
-        format!("{structure}{hessian}")
+        format!("{structure} · {method}{hessian}")
     }
 
     pub(in crate::app) fn output(
@@ -95,7 +96,7 @@ impl Source {
         const GAMESS_TITLE_BYTES: usize = 78;
         let mut settings = settings.clone();
         let gamess = settings.program == qc_input::Program::Gamess;
-        let mut energies = Vec::new();
+        let mut energies = vec![super::view::method_name(&self.result).to_owned()];
         let barrier = super::view::presentation(&self.result, None).barrier_line(unit);
         let include_reaction = !gamess || barrier.is_none();
         if let Some(barrier) = barrier {
@@ -210,7 +211,7 @@ impl App {
 
     /// Export this card's result without changing which result the palette shows.
     pub(in crate::app::xtb) fn xtb_ts_export_arrow(&mut self, arrow: u64) -> Task<Message> {
-        let super::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
+        let super::card::ArrowResult::Found(result) = self.xtb_ts_card_display_result(arrow) else {
             return Task::none();
         };
         let Some(source) = self.xtb_ts_export_source(result, Some(arrow)) else {

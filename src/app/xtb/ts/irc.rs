@@ -37,6 +37,9 @@ impl App {
         let Some(path) = saved(result) else {
             return Profile::Neb;
         };
+        if saved_search(result).is_some_and(|search| search.refined_from.is_some()) {
+            return Profile::Irc;
+        }
         if let Some(profile) = self.tab.xtb.palette.profile {
             return profile;
         }
@@ -53,6 +56,9 @@ impl App {
         if self.xtb_shown().is_some_and(|shown| {
             super::is_ts(&shown.stored.result)
                 && (profile == Profile::Neb || saved(&shown.stored.result).is_some())
+                && (profile != Profile::Neb
+                    || !saved_search(&shown.stored.result)
+                        .is_some_and(|search| search.refined_from.is_some()))
         }) {
             self.xtb_end_preview();
             self.tab.xtb.palette.profile = Some(profile);
@@ -152,11 +158,19 @@ impl App {
         let stem = source.stem(reshiki::qc_input::Job::Irc);
         let unit = self.appearance.energy_unit;
         Some(
-            reshiki::qc_input::write_irc_xyz(
-                path,
-                reference,
-                unit.convert_kcal(KCAL_PER_HARTREE),
-                unit.label(),
+            reshiki::qc_input::write_xyz_trajectory_with_comments(
+                &path.trajectory,
+                path.arc_lengths_sqrt_amu_bohr
+                    .iter()
+                    .zip(&path.trajectory.energies_hartree)
+                    .map(|(s, energy)| {
+                        let delta = unit.convert_kcal((energy - reference) * KCAL_PER_HARTREE);
+                        format!(
+                            "{} · E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {}",
+                            super::view::method_name(result),
+                            unit.label()
+                        )
+                    }),
             )
             .map(|xyz| Prepared::new(xyz.into_bytes(), "xyz", Some(stem), vec![], Kind::Irc))
             .map_err(|error| error.to_string()),

@@ -1,0 +1,520 @@
+# Command line
+
+## Overview
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli <command> [options]
+
+Commands:
+  convert       Convert a structure or drawing to another file format
+  render        Render a preview image of a structure or drawing
+  compose       Lay out an assistant Proposal (JSON) and write it as a file
+  analyze       Print molecular properties as one JSON line
+  predict-nmr   Print predicted NMR shifts as one JSON line
+  calculate     Print a compact xTB calculation summary as one JSON line
+  read-output   Print quantum chemistry job summaries and calculated values as one JSON line
+  export-input  Write a quantum-chemistry input from an XYZ structure
+  name          Print the systematic name of a structure
+  calc          Print an xTB calculation as one JSON line
+  ts            Search for or refine a transition state with xTB
+  pieces        Check or render equipment piece files
+  info          Print versions, limits and formats as one JSON line
+  tools         Print the agent tool catalog as one JSON line
+  schema        Print a JSON Schema: reshiki --cli schema proposal
+  skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
+  help          Show this help, or a command's help: reshiki --cli help <command>
+
+Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.
+
+Examples:
+  reshiki --cli convert --smiles 'CCO' -o ethanol.mol
+  reshiki --cli convert scheme.rsk -o figure.pdf
+  reshiki --cli render scheme.rsk -o preview.png
+  reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli predict-nmr --smiles 'CCOC(C)=O' --nucleus 13C
+  reshiki --cli name --smiles 'CC(=O)O'
+  reshiki --cli compose proposal.json -o scheme.svg
+
+Output:
+  stdout carries only the result: a file, a text report, one JSON line, or one receipt
+  line with --receipt. With -o FILE and no --receipt it stays empty.
+  Warnings and errors go to stderr.
+
+Exit status:
+  0   success
+  1   the operation failed, or reading the input or writing the output failed
+  2   usage error
+  75  the memory ceiling was reached (see RESHIKI_AGENT_HEAP_MB)
+
+Environment:
+  RESHIKI_AGENT_HEAP_MB  memory ceiling in MiB, 256-16384
+                         (default 2048); an invalid value exits 2
+
+Files named on the command line are read and written with your own
+permissions. On Windows, release builds cannot write to a console window:
+redirect the output, for example `reshiki --cli info > info.json`.
+
+Documentation: https://reshiki.com/guide/agents/
+```
+
+## reshiki --cli convert
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli convert (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
+                             [-o OUTPUT|-] [--svg-text MODE] [--pages]
+                             [--force] [--receipt]
+                             [--nucleus NUCLEUS --labels FORMAT [--decimals N]]
+
+Converts a structure or drawing, making the file as the app's Export does.
+
+Input, exactly one of:
+  INPUT          A file. Without --from, its extension picks the format:
+                 .rsk, .reshiki and .moruno are ReShiki drawings; .mol, .rxn,
+                 .rsmi, .cdxml, .cdx, .cds and .inchi are read as such. Crystal files
+                 (.cif, .pdb, .ent, .vasp, .poscar, .contcar, .xyz, .extxyz,
+                 or POSCAR/CONTCAR names without a molecular extension)
+                 are not supported by the CLI, including with --from auto.
+                 Other names are read as SMILES.
+  -              Standard input; needs --from.
+  --smiles TEXT  SMILES text; cannot be combined with --from.
+
+Options:
+  --from FORMAT  The input format: auto, smiles, mol, rxn, rsmi, inchi, cdxml, cdx, reshiki, rsk, name.
+                 rsk is another name for reshiki. name reads a chemical
+                 name, parsed offline:
+                 echo caffeine | reshiki --cli convert - --from name --to smiles
+  --to FORMAT    The output format: svg, pdf, png, cdxml, cdx, mol, rxn, smiles, rsmi, inchi.
+                 rsmi is reaction SMILES; rxn and rsmi need a reaction.
+                 Without --to, the extension of OUTPUT picks it (.smi is smiles).
+  -o OUTPUT      Write the file to OUTPUT. Without -o, or with -o -, the file
+                 goes to stdout and needs --to; pdf, png and cdx are never
+                 written to a terminal.
+  --pages        Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+                 Draw svg text as outlines (outline, the default), the same
+                 in every viewer, or keep it as text (live).
+  --force        Replace OUTPUT if it exists; otherwise that is an error.
+  --receipt      With -o OUTPUT, print one JSON line to stdout:
+                 {"receipt": {"format", "byte_len", "detail"}, "api": {…}}.
+  --nucleus NUCLEUS --labels FORMAT
+                 Predict 1H or 13C shifts as predict-nmr does and write
+                 them as atom numbers, replacing any on those atoms.
+                 Choose value (1.28), numbers (#3), ppm (1.28 ppm)
+                 or both (#3 · 1.28 ppm). Only for svg, png, pdf, cdxml, cdx.
+                 Cite predict-nmr's credit with published values.
+  --decimals N   With --labels, the ppm decimal places, 0 to 4: by default
+                 2 for 1H (7.26 ppm) and 1 for 13C (128.4 ppm).
+
+Inputs are at most 16777216 bytes (16777218 for cdx), so a ReShiki drawing with
+large embedded pictures that the app opens can be too large here. rsk and
+emf files cannot be written.
+
+Export details, such as PNG size and dpi, are printed to stderr as a
+`reshiki: warning:` line; this does not mean the command failed.
+```
+
+## reshiki --cli render
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli render (INPUT | - | --smiles TEXT) [--from FORMAT] [--to FORMAT]
+                            [-o OUTPUT|-] [--svg-text MODE] [--width N]
+                            [--height N] [--force]
+
+Renders the preview the assistant looks at: png on white, scaled to fit
+--width × --height, or svg with a transparent surround. For figures to
+publish, use convert. The input is read as for convert
+(reshiki --cli help convert).
+
+Options:
+  --to FORMAT  The image format: png, svg.
+               Without --to, the extension of OUTPUT picks it.
+  -o OUTPUT    Write the image to OUTPUT. Without -o, or with -o -, it goes
+               to stdout and needs --to; png is never written to a terminal.
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
+  --width N    The widest a png may be, in pixels (default 1600).
+  --height N   The tallest a png may be, in pixels (default 1000).
+               Each is 1 to 8192, and a png has at most 16000000 pixels.
+  --force      Replace OUTPUT if it exists; otherwise that is an error.
+```
+
+## reshiki --cli compose
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli compose (PROPOSAL | -) [--to FORMAT] [-o OUTPUT|-] [--pages]
+                             [--svg-text MODE] [--force] [--receipt]
+
+Lays out a Proposal as ReShiki's assistant composes its drafts, in the
+default style, then writes the drawing as convert does.
+
+PROPOSAL is a JSON file, or - for standard input, of at most 16777216 bytes;
+its replace_ids must be empty. The Proposal schema and an example are at
+https://reshiki.com/developer/agent-reference/#proposal
+Run `reshiki --cli schema proposal` for the schema.
+
+Options:
+  --to FORMAT  The output format: svg, pdf, png, cdxml, cdx, mol, rxn, smiles, rsmi, inchi.
+               Without --to, the extension of OUTPUT picks it (.smi is smiles).
+  -o OUTPUT    Write the file to OUTPUT. Without -o, or with -o -, the file
+               goes to stdout and needs --to; pdf, png and cdx are never
+               written to a terminal.
+  --pages      Export every publication page as one PDF (pdf only).
+  --svg-text MODE
+               Draw svg text as outlines (outline, the default), the same
+               in every viewer, or keep it as text (live).
+  --force      Replace OUTPUT if it exists; otherwise that is an error.
+  --receipt    With -o OUTPUT, print one receipt JSON line to stdout, as
+               convert does.
+
+A ReShiki drawing (.rsk) cannot be written.
+
+Export details, such as PNG size and dpi, are printed to stderr as a
+`reshiki: warning:` line; this does not mean the command failed.
+```
+
+## reshiki --cli analyze
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli analyze (INPUT | - | --smiles TEXT) [--from FORMAT]
+
+Prints the molecular properties of a structure or drawing as one JSON line:
+SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and
+acceptors, rings, unpaired electrons, InChI and InChIKey, under
+value.analysis. The input is read as for convert (reshiki --cli help convert).
+```
+
+## reshiki --cli predict-nmr
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli predict-nmr (INPUT | - | --smiles TEXT) [--from FORMAT] --nucleus NUCLEUS
+
+Predicts 1H or 13C NMR chemical shifts offline, as the app's Predict NMR
+does, and prints them as one JSON line. The input is read as for convert
+(reshiki --cli help convert) and must be exactly one molecule.
+
+Options:
+  --nucleus NUCLEUS  1H or 13C. Required.
+
+value.rows has one row per site, in drawing order. atom is the drawing's
+atom ID: for SMILES, the atom's position counting from 1 after explicit H
+are removed as RDKit does, which is RDKit MolFromSmiles index atom - 1;
+for a MOL file, its position in the atom block, counting from 1. A 1H row
+names the heavy atom that carries the H. ppm, shell, references, sd, min
+and max are null for a site without reference data, and note says why.
+value also carries the method, data version, conditions, limitations and
+credit; cite credit with published values.
+
+A molecule with no sites for the nucleus, or with metals, charges,
+radicals or isotope labels, is an error.
+```
+
+## reshiki --cli calculate
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calculate [--task energy|optimize|frequencies|opt+freq]
+    [--method gfn2|gxtb|gfnff] [--charge N] [--uhf N] [--solvent NAME]
+    [--conventions axtb|xtb-6.8] [--etemp K] [--accuracy X] [--max-iter N]
+    [--threads N] [--convergence normal|tight] [--fix N,N,...] FILE.xyz
+
+Runs the calculate tool and prints its labelled result as one JSON line.
+Only available in builds with xTB. Reads at most 16777216 bytes and 500 atoms;
+frequencies allow at most 200 atoms. The calculation deadline is 30 minutes.
+
+Options:
+  --task TASK                Calculate energy (default), optimize, frequencies or opt+freq.
+  --method METHOD            Use gfn2 (default), gxtb or gfnff.
+  --charge N                 Set the molecular charge (default 0).
+  --uhf N                    Set unpaired electrons (default 0).
+  --solvent NAME             Use the named ALPB solvent.
+  --conventions MODE         Use axtb (default) or xtb-6.8 conventions.
+  --etemp K                  Set the electronic temperature in kelvin.
+  --accuracy X               Set a positive SCF accuracy multiplier.
+  --max-iter N               Set a positive SCF iteration limit.
+  --threads N                Use 1 to 64 worker threads (default available CPUs, at most 8).
+  --convergence LEVEL        Optimization convergence: normal (default) or tight.
+  --fix N,N,...              Fix unique XYZ atom numbers during optimization, counting from 1.
+```
+
+## reshiki --cli read-output
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli read-output [--job N] FILE
+
+Runs the read_output tool and prints its labelled result as one JSON line,
+including job summaries, calculated values and the selected XYZ geometry.
+
+Options:
+  --job N  Select a zero-based job index; omit for the default job.
+
+Reads at most max_text_bytes (16777216 bytes).
+```
+
+## reshiki --cli export-input
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--reactant R.xyz] [--product P.xyz] [--hessian H.hess]
+                                  [--out PATH]
+
+Writes input for another program from the first frame of INPUT.xyz (Å).
+Without --out, the input goes to stdout. With --out, the main file is
+replaced and new companions go beside it. An existing companion file
+stops the export. Warnings go to stderr.
+
+Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts. They must
+list the same elements as INPUT.xyz in the same order. Corresponding atoms
+must have the same index in every structure.
+
+Options:
+  --program PROGRAM   gaussian, orca, gamess or xyz. Required.
+  --job JOB           single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts.
+  --template N        Built-in template, 1 to 3.
+  --method M          Method, given with --basis.
+  --basis B           Basis; empty for an ORCA composite method.
+  --charge C          Total charge.
+  --multiplicity M    2S + 1.
+  --cores N           Cores (8).
+  --memory-gb G       Total memory in GB (16).
+  --title T           Title (the input file name).
+  --extra TEXT        More keywords, or GAMESS groups.
+  --reactant R.xyz    First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
+  --product P.xyz     First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
+  --hessian H.hess    ORCA Cartesian Hessian. Requires --program orca with --job ts or irc.
+  --out PATH          Main file. Required for ORCA neb-ts or when using --hessian.
+
+Templates:
+  1  B3LYP-D3BJ/def2-SVP opt+freq
+  2  r2SCAN-3c opt+freq (ORCA only)
+  3  HF/6-31G(d) single point
+
+Example:
+  reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz
+```
+
+## reshiki --cli name
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--isotope-style STYLE] [--json] [--locants]
+
+Prints the systematic name of one molecule or charge-balanced salt. The
+input is read as for convert (reshiki --cli help convert). The name is
+generated locally by the openclatura port and printed only after the OPSIN
+port reconstructs the same structure (for a radical ion, its neutral parent).
+
+Options:
+  --isotope-style STYLE  iupac (default), as in (2H3)methanol, or boughton,
+                         as in methanol-d3.
+  --json                 Print the name, status, alternatives and curated
+                         aliases as one JSON line.
+  --locants              Print JSON with parent locants in input atom order.
+
+Without --json or --locants, prints only the name followed by a newline. With either,
+prints one JSON line with value, the import's warnings and versions.
+value contains name, preferred, status, reason, detail, alternatives and aliases:
+  preferred      true only when status is preferred.
+  status         preferred = the preferred IUPAC name (IUPAC 2013);
+                 not_preferred = systematic, known not to be the preferred
+                 IUPAC name, with the reason;
+                 unverified = systematic, preference not verified.
+  reason         The snake_case naming-rule reason, or null for preferred.
+  detail         The status detail sentence.
+  aliases        Curated names matching the exact isomeric graph, or [].
+  alternatives   Other verified names, each with name, status and reason.
+With --locants, value also contains locants: one string or null per imported
+atom, in input atom order. Atoms outside the principal parent have null.
+```
+
+## reshiki --cli calc
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
+
+Options:
+  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
+  --method METHOD              Use gfn2 (default), gfnff or gxtb.
+  --energy                     Accepted for compatibility. Energy is always included.
+  --gradient                   Include the Cartesian energy gradient.
+  --wbo                        Include Mayer–Wiberg bond orders.
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
+  --alpb NAME                  Use the ALPB solvent model.
+  --gbsa NAME                  Use the GBSA solvent model.
+  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
+  --etemp K                    Set the electronic temperature in kelvin.
+  --thermo-temperature K       Thermochemistry temperature in kelvin (default 298.15)
+  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N                 Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
+  --threads N                  Use 1 to 64 worker threads (default 1).
+
+Use calculate for the compact calculation summary.
+See docs/xtb-worker.md (Command line)
+```
+
+## reshiki --cli ts
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--method gfn2|gxtb] [--refine gxtb (--ts TS.xyz | --from DIR)]
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]
+
+Search using gas-phase GFN2-xTB (default) or g-xTB with axtb conventions.
+g-xTB is closer to DFT energies; slower for large molecules. Requires the xtb feature.
+Supply two atom-mapped XYZ files or one XYZ file with the bond changes.
+Each structure must have 2 to 120 atoms. With two files, atom order
+defines the map. --remap-hydrogens requires two files and keeps heavy atoms
+mapped by order.
+For --refine gxtb, supply --ts with endpoint inputs, or --from a verified
+GFN2-xTB output directory. All refinement checks and endpoints use g-xTB.
+Unverified g-xTB candidates never report a barrier. Output files must be new.
+
+Options:
+  --method METHOD              Use GFN2-xTB (default) or g-xTB for the entire search and verification.
+  --refine gxtb                Refine a TS with a g-xTB Hessian, saddle search, relaxed endpoints and IRC.
+  --ts TS.xyz                  Start --refine from this TS and the usual endpoint or bond-change inputs.
+  --from DIR                   Read a verified GFN2-xTB --out-dir; without report.json, use XYZ geometry seeds only.
+  --reactant R.xyz             Read the reactant from the first XYZ frame in angstroms.
+  --product P.xyz              Read the product from the first XYZ frame in angstroms.
+  --form I-J                   Form a bond from reactant to product (1-based atom numbers, repeatable).
+  --break I-J                  Break a bond from reactant to product (1-based atom numbers, repeatable).
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --images N                   Use 5 to 24 NEB images including endpoints (default 15).
+  --workers N                  Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).
+  --remap-hydrogens            Reassign product hydrogens by least motion and list changed heavy-atom neighbors.
+  --keep-endpoints             Skip relaxation of the search endpoints.
+  --out-dir DIR                Write endpoint, TS, path and IRC XYZ files, an ORCA Hessian and report.json.
+  --json FILE                  Write a JSON report.
+
+Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both
+checks, and IRC branches whose relaxed ends match both endpoints. Progress
+and the hydrogen mapping review go to stderr.
+
+Examples:
+  reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+  reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+  reshiki --cli ts --method gxtb --reactant hcn.xyz --product hnc.xyz
+  reshiki --cli ts --refine gxtb --from results --out-dir refined
+```
+
+## reshiki --cli pieces
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli pieces (check FILE...
+                           | render FILE [--to svg|png] [-o OUTPUT|-] [--dark] [--force])
+
+check validates lab equipment piece files (.reshiki-piece). It checks the
+format, limits, references between shapes, joints, parts and parameters,
+and whether each joint sits on the rim of its opening. It prints one JSON line,
+{"pieces": [{"file", "ok", "id", "revision", "hash"} or
+{"file", "ok": false, "error"}]}, and exits 1 when any file fails. The
+hash is the piece's content identity.
+
+render validates one piece and draws it alone in the default line style.
+  --to FORMAT    Choose svg (default) or png.
+  -o OUTPUT      Write to OUTPUT. Omit -o or use -o - for stdout.
+                 PNG output to a terminal is refused.
+  --dark         Use dark canvas colors.
+  --force        Replace OUTPUT if it exists.
+```
+
+## reshiki --cli info
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli info
+
+Prints ReShiki's versions, the limits it enforces and the input and output
+formats as one JSON line.
+
+grants and files describe the file tools of reshiki --mcp; the command line
+uses neither.
+```
+
+## reshiki --cli tools
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli tools
+
+Prints one JSON line with the experimental notice, the data-not-instructions
+rule, the guide URL and every operation tool reshiki --mcp serves, including
+its title, description, inputSchema and hints. The catalog is versioned by
+api.operation_api. Run `reshiki --cli help --json` for the commands as JSON.
+```
+
+## reshiki --cli schema
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli schema NAME
+
+NAME is proposal: the Proposal JSON Schema compose reads. reshiki --mcp
+publishes a shorter form of it, without explanation and replace_ids, which
+compose fills in. It is printed as one JSON line without the experimental
+label, so it can be saved and used as a schema file.
+```
+
+## reshiki --cli skill
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli skill -o FOLDER [--name NAME] [--executable PATH]
+                           [--force] [--receipt]
+
+Writes an Agent Skill that teaches AI agents to use ReShiki: the folder
+FOLDER/NAME with SKILL.md, references/cli.md, references/mcp-tools.md,
+references/limits-and-errors.md, references/setup.md,
+assets/proposal-schema.json and assets/examples/esterification.json.
+Review the files before you install the skill. Nothing is sent over the
+network.
+
+Options:
+  -o FOLDER          The folder that holds skills, such as ~/.claude/skills,
+                     .claude/skills, ~/.agents/skills or .agents/skills. It
+                     must exist; it is never created.
+  --name NAME        The skill's name and folder name (default reshiki):
+                     1 to 64 lowercase letters, digits and hyphens, with no
+                     leading, trailing or double hyphen. It must not contain
+                     claude or anthropic.
+  --executable PATH  The absolute path of the ReShiki executable that the
+                     recipes and setup snippets run (default: this
+                     executable, as the system reports its path).
+  --force            Replace the generated files if FOLDER/NAME exists; other
+                     files in it are kept. A symbolic link in place of
+                     FOLDER/NAME or one of its generated folders is refused.
+  --receipt          Print one JSON line to stdout after writing:
+                     {"skill": {"path", "name", "files"}, "api": {…}}.
+
+Without --force, an existing FOLDER/NAME is an error and nothing is
+written. A failure part-way leaves the files already written. Without
+--receipt, stdout stays empty.
+```
+
+## reshiki --cli help
+
+Prints the [overview](#overview).
+

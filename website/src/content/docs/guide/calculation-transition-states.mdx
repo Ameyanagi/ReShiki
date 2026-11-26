@@ -1,6 +1,6 @@
 ---
 title: Transition states
-description: Find a transition state with GFN2-xTB from a drawn reaction or the command line, check it, and export it as a starting point for Gaussian or ORCA.
+description: Find a transition state with GFN2-xTB or g-xTB from a drawn reaction or the command line, check it, and export it as a starting point for Gaussian or ORCA.
 ---
 
 import Screenshot from "../../../components/Screenshot.astro";
@@ -45,6 +45,14 @@ Otherwise the card says **No reliable transition state found** and why, for exam
 
 _This failure came from a build without the conformer fold described below: the search started from a stretched 3D model and found only a bond rotation. The same drawing now gives the card above._
 
+## Method choice and refinement
+
+In the reaction card’s Calculate settings, choose **GFN2-xTB** (the default) or **g-xTB**. The selection applies to the reaction energy and the entire barrier search. g-xTB aims for energies closer to DFT and is slower for large molecules.
+
+After a verified GFN2-xTB search, **Refine with g-xTB** starts at the saved saddle with a fresh g-xTB Hessian and relaxes both endpoints in g-xTB. The card keeps the GFN2-xTB result and shows a second barrier only after g-xTB finds a converged saddle, both frequency checks find one significant imaginary mode, and the IRC reaches both endpoints. Use **Path** to inspect each result.
+
+The IRC always uses the method of its saddle and its relaxed endpoints. ReShiki never mixes methods in a connectivity check or reports g-xTB single points on GFN2-xTB geometries as a barrier.
+
 ## From the command line
 
 Give the reactant and the product as XYZ files with the same atoms in the same order (the order is the atom map):
@@ -59,19 +67,27 @@ Or give one side and the bonds that change, numbered from 1. ReShiki builds the 
 reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
 ```
 
-- GFN2-xTB in the gas phase only, 2 to 120 atoms. Set `--charge` and `--uhf` (unpaired electrons) when they are not 0.
+- Choose the gas-phase method with `--method gfn2` or `--method gxtb` for 2 to 120 atoms. Set `--charge` and `--uhf` (unpaired electrons) when they are not 0.
 - `--remap-hydrogens` (with two files) reassigns the product's hydrogens by least motion and lists any hydrogen that moved to another heavy atom.
 - `--images N` sets the number of path images, 5 to 24 (default 15); `--workers N` runs 1 to 8 calculations at once.
-- `--keep-endpoints` uses your reactant and product as they are instead of optimizing (or folding) them first.
+- A GFN2-xTB search accepts `--keep-endpoints` to use your supplied endpoints. Refinement requires relaxed endpoints in the target method.
 
-The four test reactions (HCN → HNC, an identity SN2, a Claisen and a Diels–Alder) take 4 to 10 seconds each on an Apple M4.
+To refine the saved GFN2-xTB result above, run:
+
+```sh
+reshiki --cli ts --refine gxtb --from results --out-dir refined
+```
+
+Alternatively, pass `--refine gxtb --ts TS.xyz` with the mapped endpoints or one endpoint and its bond changes.
+
+The four GFN2-xTB test reactions (HCN → HNC, an identity SN2, a Claisen and a Diels–Alder) take 4 to 10 seconds each on an Apple M4.
 
 ## How it works
 
 1. From one structure, fold it first when it is stretched: soft restraints pull the atoms of each forming bond within twice their covalent radii without changing any bond, then it relaxes freely. The fold is kept only if those atoms stay closer; the report lists it (`reactive_start` in the JSON, "Folded the starting conformer" in the app's Log). Then build the other side from the bond changes.
 1. Optimize both ends and superpose them by the atom map.
 1. Interpolate a path between them (IDPP) and relax it with a climbing-image nudged elastic band.
-1. Refine the highest image inside the band to a saddle with the analytic GFN2-xTB Hessian (P-RFO).
+1. Refine the highest image inside the band to a saddle with the selected method’s analytic Hessian (P-RFO).
 1. Check it: the saddle must be converged with exactly one frequency below −50 cm⁻¹, both in ReShiki's own analysis and in the xTB engine's.
 1. Follow the IRC both ways and optimize each end. The IRC **connects** when the ends have the reactant's and the product's bonds, even as another conformer. When reactant and product have the same bonds, each end must also lie within 0.5 Å RMSD of its own endpoint.
 
@@ -86,7 +102,7 @@ _Plotted from the JSON reports of four runs. The Claisen run started from a stre
 
 ## What it writes
 
-With `--out-dir`: `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz` (the final band), `irc.xyz` and `ts.hess`, the Hessian at the saddle in ORCA's format. `--json` writes a report with the energies, barriers, frequencies and checks.
+The output directory contains `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz`, the ORCA-format Hessian `ts.hess`, and `report.json`. The report records the method for the endpoint energies, verified barriers, frequencies and IRC. Use `--json` to choose a separate report path.
 
 ## Export to Gaussian, ORCA and GAMESS
 

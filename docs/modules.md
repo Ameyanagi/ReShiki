@@ -242,6 +242,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
 - `src/app/xtb/ts/irc.rs`: Select the saved reaction path, preview its geometries, and export its XYZ trajectory.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
+- `src/app/xtb/ts/refine.rs`: Resolve a saved saddle and its endpoint frames on the originating reaction.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
 - `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
 - `src/app/xtb/ts/review/view.rs`: Review both reaction sides while keeping uncommon calculation settings folded.
@@ -335,6 +336,7 @@ explains how the crates and modules fit together.
 - `src/cli/ts.rs`: Gas-phase transition-state searches using the isolated xTB worker.
 - `src/cli/ts/geometry.rs`: XYZ admission and atom mapping before a transition-state search.
 - `src/cli/ts/output.rs`: Transition-state table and optional machine-readable outputs.
+- `src/cli/ts/source.rs`: Admit a previous, verified GFN2 result without guessing legacy provenance.
 - `src/cli/ts/worker.rs`: Shared thread-affine workers used by CLI and desktop TS searches.
 - `src/clipboard.rs`: Explicit native Copy/Paste with editable and image representations.
 - `src/clipboard/browser.rs`: The browser's clipboard.
@@ -1041,7 +1043,7 @@ explains how the crates and modules fit together.
 - `crates/optimize/src/ts/modes.rs`: Eckart translation/rotation projection and harmonic normal modes.
 - `crates/optimize/src/ts/neb.rs`: Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J.
 - `crates/optimize/src/ts/reactive_start.rs`: Graph-preserving preparation of a reactive starting conformer.
-- `crates/optimize/src/ts/recovery.rs`: Extra-mode displacement followed by ordinary index-one refinement.
+- `crates/optimize/src/ts/recovery.rs`: Geometry-seeded and extra-mode saddle refinement.
 - `crates/optimize/src/ts/saddle.rs`: Partitioned rational-function saddle refinement.
 - `crates/optimize/src/ts/saddle_regressions.rs`: Analytic counterexamples for trust-model recovery and force-only acceptance.
 

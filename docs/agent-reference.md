@@ -23,7 +23,7 @@ Commands:
   export-input  Write a quantum-chemistry input from an XYZ structure
   name          Print the systematic name of a structure
   calc          Print an xTB calculation as one JSON line
-  ts            Search for a transition state with GFN2-xTB
+  ts            Search for or refine a transition state with xTB
   pieces        Check or render equipment piece files
   info          Print versions, limits and formats as one JSON line
   tools         Print the agent tool catalog as one JSON line
@@ -382,16 +382,25 @@ See docs/xtb-worker.md (Command line)
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 Usage: reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--method gfn2|gxtb] [--refine gxtb (--ts TS.xyz | --from DIR)]
     [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
     [--out-dir DIR] [--json FILE]
 
-Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.
+Search using gas-phase GFN2-xTB (default) or g-xTB with axtb conventions.
+g-xTB is closer to DFT energies; slower for large molecules. Requires the xtb feature.
 Supply two atom-mapped XYZ files or one XYZ file with the bond changes.
 Each structure must have 2 to 120 atoms. With two files, atom order
 defines the map. --remap-hydrogens requires two files and keeps heavy atoms
 mapped by order.
+For --refine gxtb, supply --ts with endpoint inputs, or --from a verified
+GFN2-xTB output directory. All refinement checks and endpoints use g-xTB.
+Unverified g-xTB candidates never report a barrier. Output files must be new.
 
 Options:
+  --method METHOD              Use GFN2-xTB (default) or g-xTB for the entire search and verification.
+  --refine gxtb                Refine a TS with a g-xTB Hessian, saddle search, relaxed endpoints and IRC.
+  --ts TS.xyz                  Start --refine from this TS and the usual endpoint or bond-change inputs.
+  --from DIR                   Read a verified GFN2-xTB --out-dir; without report.json, use XYZ geometry seeds only.
   --reactant R.xyz             Read the reactant from the first XYZ frame in angstroms.
   --product P.xyz              Read the product from the first XYZ frame in angstroms.
   --form I-J                   Form a bond from reactant to product (1-based atom numbers, repeatable).
@@ -402,7 +411,7 @@ Options:
   --workers N                  Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).
   --remap-hydrogens            Reassign product hydrogens by least motion and list changed heavy-atom neighbors.
   --keep-endpoints             Skip relaxation of the search endpoints.
-  --out-dir DIR                Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.
+  --out-dir DIR                Write endpoint, TS, path and IRC XYZ files, an ORCA Hessian and report.json.
   --json FILE                  Write a JSON report.
 
 Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both
@@ -412,6 +421,8 @@ and the hydrogen mapping review go to stderr.
 Examples:
   reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
   reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+  reshiki --cli ts --method gxtb --reactant hcn.xyz --product hnc.xyz
+  reshiki --cli ts --refine gxtb --from results --out-dir refined
 ```
 
 ### reshiki --cli pieces

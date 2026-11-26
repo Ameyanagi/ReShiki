@@ -204,6 +204,8 @@ pub(crate) type Scf = (Option<f64>, Option<f64>, Option<u32>);
 pub(crate) struct Settings {
     pub task: Task,
     pub method: XtbMethod,
+    /// Last barrier-search choice, shared by reaction cards in this window.
+    pub barrier_method: XtbMethod,
     pub charge: String,
     pub unpaired: String,
     /// One of [`SOLVENTS`]; `None` is the gas phase.
@@ -226,6 +228,7 @@ impl Default for Settings {
         Self {
             task: Task::default(),
             method: XtbMethod::Gfn2Xtb,
+            barrier_method: XtbMethod::Gfn2Xtb,
             charge: String::new(),
             unpaired: String::new(),
             solvent: None,

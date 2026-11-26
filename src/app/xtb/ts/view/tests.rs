@@ -381,6 +381,93 @@ mod presentation_tests {
     }
 
     #[test]
+    fn method_labels_follow_saved_settings_in_status_log_and_copied_path_values() {
+        let mut result = gxtb_result();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut result.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        // Stale descriptive provenance cannot relabel the numerical method.
+        result.provenance.method = Some("GFN2-xTB · optimizer P-RFO".into());
+        let saved = presentation(&result, None);
+        assert_eq!(saved.method, "g-xTB");
+        assert_eq!(
+            saved.status_line(EnergyUnit::KcalPerMol),
+            "Transition state · g-xTB · ΔE‡ 26.5 kcal/mol"
+        );
+        assert!(
+            search_log(&result, None, EnergyUnit::default()).contains("Electronic method: g-xTB")
+        );
+        assert_eq!(
+            path_rows(&result, None, EnergyUnit::default(), None)[0],
+            ("Electronic method".into(), "g-xTB".into())
+        );
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert_eq!(
+            presentation(&result, None).status_line(EnergyUnit::KcalPerMol),
+            "g-xTB · No reliable transition state found."
+        );
+        result.settings = reshiki::qcdata::Settings::Imported { keywords: vec![] };
+        assert_eq!(method_name(&result), "g-xTB");
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
+    async fn linked_barriers_keep_each_methods_checks_and_the_source_on_failed_refine() {
+        let mut source = result();
+        source.energy_hartree = Some(-5. + 25.6 / KCAL_PER_HARTREE);
+        source.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-315.];
+        let source = Arc::new(source);
+        let ui = ViewHarness::new().await.at_width(330.);
+        let both = ui.inspect(crate::app::xtb::ts::card::linked_barriers(
+            [&source, &Arc::new(gxtb_result())],
+            EnergyUnit::KjPerMol,
+        ));
+        for expected in ["GFN2-xTB", "g-xTB", "107.1", "110.9"] {
+            assert!(both.texts.iter().any(|text| text == expected));
+        }
+        for frequency in ["315i", "387i"] {
+            assert!(
+                both.texts.iter().any(|line| line.contains(frequency)
+                    && line.contains("connects reactant and product"))
+            );
+        }
+        let mut refined = result();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut refined.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        refined.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        refined.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-120., -60.];
+        let refined = Arc::new(refined);
+        let view = ui.inspect(crate::app::xtb::ts::card::linked_barriers(
+            [&source, &refined],
+            EnergyUnit::KcalPerMol,
+        ));
+        assert!(view.texts.iter().any(|text| text == "GFN2-xTB"));
+        assert!(view.texts.iter().any(|text| text == "g-xTB"));
+        assert!(view.texts.iter().any(|text| text == "25.6"));
+        assert!(!view.texts.iter().any(|text| text == "26.5"));
+        assert_eq!(
+            view.texts
+                .iter()
+                .filter(|text| text.contains("connects reactant and product"))
+                .count(),
+            1
+        );
+        assert!(
+            view.texts
+                .iter()
+                .any(|text| text.contains("g-xTB refinement failed")
+                    && text.contains("two imaginary frequencies"))
+        );
+    }
+
+    #[test]
     fn old_saved_path_keeps_optimized_reaction_energy_even_if_saddle_verification_failed() {
         let mut result = result();
         result.status = Status::NotConverged {
@@ -426,6 +513,8 @@ mod presentation_tests {
             product: frame.hash(),
         });
         let search = TransitionStateRun {
+            method: Default::default(),
+            refined_from: None,
             irc: None,
             arrow: None,
             context: None,
@@ -456,6 +545,112 @@ mod presentation_tests {
         });
         result.validate(&frame).unwrap();
         result
+    }
+
+    /// A light saved g-xTB result keeps its own spectrum and observed IRC ends.
+    fn gxtb_result() -> CalcResult {
+        use reshiki::qcdata::{IrcEndpoint, IrcPath, IrcRelaxedEnd};
+        let mut result = result_with_gibbs();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut result.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        let mut frame = frame();
+        frame.masses_amu = vec![7., 35., 4.];
+        result.frame = frame.hash();
+        result.endpoints = Some(Endpoints {
+            reactant: frame.hash(),
+            product: frame.hash(),
+        });
+        let mut trajectory = result.trajectory.take().unwrap();
+        trajectory.masses_amu = frame.masses_amu.clone();
+        trajectory.energies_hartree[1] = result.energy_hartree.unwrap();
+        let ends = [
+            trajectory.energies_hartree[0],
+            trajectory.energies_hartree[2],
+        ];
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.method = XtbMethod::GXtb;
+        search.irc = Some(IrcPath {
+            trajectory,
+            arc_lengths_sqrt_amu_bohr: vec![-1., 0., 1.],
+            neb_arc_lengths_sqrt_amu_bohr: vec![],
+            ts_index: 1,
+            reached: [IrcEndpoint::Reactant, IrcEndpoint::Product],
+            relaxed_ends: Some(ends.map(|energy_hartree| IrcRelaxedEnd {
+                energy_hartree,
+                positions_angstrom: vec![],
+            })),
+            completed: [true; 2],
+        });
+        result.validate(&frame).unwrap();
+        result
+    }
+
+    #[test]
+    fn gxtb_barriers_require_observed_irc_ends_and_the_actual_worker_spectrum() {
+        use reshiki::qcdata::IrcEndpoint;
+        let mut result = gxtb_result();
+        assert!(presentation(&result, None).reliable());
+        result.vibrations = None;
+        assert!(!presentation(&result, None).reliable());
+        assert!(
+            !presentation(&result, None)
+                .verification
+                .contains("✓ one imaginary")
+        );
+        let mut result = gxtb_result();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc
+            .as_mut()
+            .unwrap()
+            .reached = [IrcEndpoint::Reactant; 2];
+        assert!(!presentation(&result, None).reliable());
+        assert!(
+            !presentation(&result, None)
+                .verification
+                .contains("✓ path connects")
+        );
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc = None;
+        assert!(!presentation(&result, None).reliable());
+    }
+
+    #[test]
+    fn refined_path_copy_keeps_its_own_endpoint_energies_without_a_neb_band() {
+        let mut result = gxtb_result();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .refined_from = result_with_gibbs().transition_state_id();
+        assert!(result.trajectory.is_none());
+        let rows = path_rows(&result, None, EnergyUnit::KjPerMol, None);
+        assert!(rows.contains(&("R ΔE".into(), "0.0 kJ/mol".into())));
+        assert!(rows.contains(&("P ΔE".into(), "−34.3 kJ/mol".into())));
+        assert!(rows.contains(&("TS‡ ΔE".into(), "110.9 kJ/mol".into())));
+        assert!(!rows.iter().any(|(label, _)| label.starts_with("Image ")));
     }
 
     #[test]
@@ -820,7 +1015,7 @@ mod presentation_tests {
             );
             assert_eq!(
                 presentation.status_line(EnergyUnit::KcalPerMol),
-                "xTB · No reliable transition state found."
+                "GFN2-xTB · No reliable transition state found."
             );
         }
     }

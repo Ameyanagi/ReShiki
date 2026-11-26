@@ -10,10 +10,11 @@ use crate::{
 };
 
 /// An xTB engine method.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum XtbMethod {
     /// GFN2-xTB (Bannwarth et al. 2019) \[Bannwarth2019GFN2\].
+    #[default]
     Gfn2Xtb,
     /// GFN-FF (Spicher & Grimme 2020) \[Spicher2020GFNFF\].
     GfnFf,
@@ -77,7 +78,7 @@ impl XtbMethod {
             optimize: true,
             hessian: true,
             conformers: true,
-            transition_state: matches!(self, Self::Gfn2Xtb),
+            transition_state: electronic,
             orbitals: electronic,
             bond_orders: electronic,
             open_shell: electronic,
@@ -398,7 +399,7 @@ mod tests {
                     optimize: true,
                     hessian: true,
                     conformers: true,
-                    transition_state: method == XtbMethod::Gfn2Xtb,
+                    transition_state: method != XtbMethod::GfnFf,
                     orbitals,
                     bond_orders,
                     open_shell,
@@ -428,24 +429,15 @@ mod tests {
     }
 
     #[test]
-    fn transition_states_need_gfn2() {
-        for method in [XtbMethod::GfnFf, XtbMethod::GXtb] {
-            let mut settings = settings(method);
-            if method == XtbMethod::GfnFf {
-                settings.gfnff = Some(GfnFfTopology {
-                    reference: frame(3).hash(),
-                    fragment_charges: vec![],
-                });
-            }
-            assert!(matches!(
-                check_calculation(
-                    Task::TransitionState,
-                    &settings,
-                    &frame(3),
-                    OrbitalRequest::None
-                ),
-                Err(Error::Unsupported(_))
-            ));
+    fn transition_states_accept_both_electronic_methods() {
+        for method in [XtbMethod::Gfn2Xtb, XtbMethod::GXtb, XtbMethod::GfnFf] {
+            let admitted = check_calculation(
+                Task::TransitionState,
+                &settings(method),
+                &frame(3),
+                OrbitalRequest::None,
+            );
+            assert_eq!(admitted.is_ok(), method != XtbMethod::GfnFf);
         }
     }
 

@@ -8,24 +8,29 @@ use std::fmt::Write as _;
 
 use super::geometry::symbol;
 
-fn xyz(text: &mut String, numbers: &[u8], positions: &[f64], comment: &str) {
-    let _ = writeln!(text, "{}\n{comment}", numbers.len());
+fn xyz(text: &mut String, numbers: &[u8], positions: &[f64], comment: &str, annotation: &str) {
+    let _ = writeln!(text, "{}\n{comment}{annotation}", numbers.len());
     for (&number, &[x, y, z]) in numbers.iter().zip(positions.as_chunks::<3>().0) {
         let [x, y, z] = [x, y, z].map(|coordinate| coordinate * ANGSTROM_PER_BOHR);
         let _ = writeln!(text, "{:<2} {x:.10} {y:.10} {z:.10}", symbol(number));
     }
 }
 
-fn path_xyz(numbers: &[u8], path: &[Minimum]) -> String {
+fn path_xyz(numbers: &[u8], path: &[Minimum], annotation: &str) -> String {
     let mut text = String::new();
     for (i, point) in path.iter().enumerate() {
         let comment = format!("image {} E={:.8} Eh", i + 1, point.energy);
-        xyz(&mut text, numbers, &point.positions, &comment);
+        xyz(&mut text, numbers, &point.positions, &comment, annotation);
     }
     text
 }
 
-fn irc_xyz(numbers: &[u8], ts: &Minimum, branches: Option<&[IrcBranch; 2]>) -> String {
+fn irc_xyz(
+    numbers: &[u8],
+    ts: &Minimum,
+    branches: Option<&[IrcBranch; 2]>,
+    annotation: &str,
+) -> String {
     let mut text = String::new();
     let Some([plus, minus]) = branches else {
         xyz(
@@ -33,6 +38,7 @@ fn irc_xyz(numbers: &[u8], ts: &Minimum, branches: Option<&[IrcBranch; 2]>) -> S
             numbers,
             &ts.positions,
             &format!("TS E={:.8} Eh", ts.energy),
+            annotation,
         );
         return text;
     };
@@ -48,6 +54,7 @@ fn irc_xyz(numbers: &[u8], ts: &Minimum, branches: Option<&[IrcBranch; 2]>) -> S
             numbers,
             &point.positions,
             &format!("{label} E={:.8} Eh", point.energy),
+            annotation,
         );
     };
     frame(&left.end, left_mode);
@@ -68,7 +75,7 @@ mod report {
     use crate::cli::{args::Ts, host::CliError, io};
     use reshiki_io::{qc_input::write_orca_hess, qcdata::Frame};
     use reshiki_optimize::ts::{IMAGINARY_CM1, ReactiveStart, SaddleReason, TsReport};
-    use reshiki_xtb_worker::protocol::Engine;
+    use reshiki_xtb_worker::protocol::{Engine, Method};
     use serde_json::json;
     use std::{
         fs,
@@ -78,13 +85,14 @@ mod report {
 
     use crate::cli::ts::{geometry::MovingHydrogen, worker::HessianAnalysis};
 
-    const XYZ_AND_HESS: [&str; 6] = [
+    const OUTPUTS: [&str; 7] = [
         "reactant.xyz",
         "product.xyz",
         "ts.xyz",
         "path.xyz",
         "irc.xyz",
         "ts.hess",
+        "report.json",
     ];
 
     fn resolve_destination(path: &Path) -> std::io::Result<PathBuf> {
@@ -112,6 +120,12 @@ mod report {
         }
     }
 
+    fn resolve(path: &Path) -> Result<PathBuf, String> {
+        std::path::absolute(path)
+            .and_then(|path| resolve_destination(&path))
+            .map_err(|error| format!("cannot resolve {}: {error}", path.display()))
+    }
+
     pub(in crate::cli::ts) fn check_destinations(command: &Ts) -> Result<(), String> {
         let vacant = |path: &Path| match fs::symlink_metadata(path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -119,18 +133,14 @@ mod report {
             Ok(_) => Err(format!("{} already exists", path.display())),
         };
         if let Some(dir) = &command.out_dir {
-            let targets = XYZ_AND_HESS.map(|name| dir.join(name));
+            let targets = OUTPUTS.map(|name| dir.join(name));
             if let Some(json) = &command.json {
-                let resolve = |path: &Path| {
-                    std::path::absolute(path)
-                        .and_then(|path| resolve_destination(&path))
-                        .map_err(|error| format!("cannot resolve {}: {error}", path.display()))
-                };
                 let json = resolve(json)?;
+                let report = resolve(&dir.join("report.json"))?;
                 for target in
                     std::iter::once(dir.as_path()).chain(targets.iter().map(PathBuf::as_path))
                 {
-                    if json != resolve(target)? {
+                    if json != resolve(target)? || json == report {
                         continue;
                     }
                     return Err(format!(
@@ -163,6 +173,7 @@ mod report {
         pub seconds: f64,
         pub moving_hydrogens: Vec<MovingHydrogen>,
         pub reactive_start: Option<ReactiveStart>,
+        pub source_report: Option<&'a serde_json::Value>,
     }
 
     fn imaginary(frequencies: &[f64]) -> usize {
@@ -211,6 +222,30 @@ mod report {
         }
     }
 
+    pub(in crate::cli::ts) fn write_retained(
+        source: &serde_json::Value,
+        out: &mut dyn Write,
+    ) -> Result<(), CliError> {
+        if let (Some(reactant), Some(product), Some(ts)) = (
+            source
+                .pointer("/energies/reactant")
+                .and_then(serde_json::Value::as_f64),
+            source
+                .pointer("/energies/product")
+                .and_then(serde_json::Value::as_f64),
+            source
+                .pointer("/energies/ts")
+                .and_then(serde_json::Value::as_f64),
+        ) {
+            let forward = (ts - reactant) * reshiki_optimize::KCAL_PER_HARTREE;
+            let reverse = (ts - product) * reshiki_optimize::KCAL_PER_HARTREE;
+            writeln!(out,
+                "Retained GFN2-xTB · forward {forward:.2} kcal/mol · reverse {reverse:.2} kcal/mol · one imaginary mode in both checks · IRC connects reactant and product"
+            ).map_err(CliError::Stdout)?;
+        }
+        Ok(())
+    }
+
     impl Summary<'_> {
         fn worker_failure_reason(&self) -> Option<String> {
             match &self.worker_check {
@@ -243,9 +278,25 @@ mod report {
                     )
                 })
                 .or_else(|| {
-                    (!self.report.connects)
-                        .then(|| "IRC did not connect the reactant and product".into())
+                    let reached = self
+                        .report
+                        .irc
+                        .as_ref()
+                        .map(|[plus, minus]| (plus.reached, minus.reached));
+                    (!self.report.connects
+                        || !matches!(
+                            reached,
+                            Some(
+                                (Reached::Reactant, Reached::Product)
+                                    | (Reached::Product, Reached::Reactant)
+                            )
+                        ))
+                    .then(|| "IRC did not connect the reactant and product".into())
                 })
+        }
+
+        fn barriers_allowed(&self) -> bool {
+            self.command.target_method() != Method::Gxtb || self.failure_reason().is_none()
         }
 
         pub fn write_table(&self, out: &mut dyn Write) -> Result<(), CliError> {
@@ -300,17 +351,40 @@ mod report {
             } else {
                 "unconverged after"
             };
+            if let Some(source) = self.source_report {
+                write_retained(source, out)?;
+            }
+            let barrier = if self.barriers_allowed() {
+                format!(
+                    "forward {:.2} kcal/mol · reverse {:.2} kcal/mol",
+                    report.forward_barrier_kcal(),
+                    report.reverse_barrier_kcal()
+                )
+            } else {
+                "unavailable · g-xTB candidate is unverified".into()
+            };
+            let path = if self.command.refine.is_some() {
+                format!("R / TS / P profile · saddle {saddle} {} steps", self.steps)
+            } else {
+                format!(
+                    "{} images · NEB {neb} {} iterations · saddle {saddle} {} steps",
+                    report.path.len(),
+                    self.iterations,
+                    self.steps
+                )
+            };
             writeln!(
                 out,
-                "Transition state · GFN2-xTB · {} {}/{} · charge {} · uhf {}\n\
+                "Transition state · {} · {} {}/{} · charge {} · uhf {}\n\
 Reactant      {:.8} Eh\n\
 Product       {:.8} Eh\n\
 TS            {:.8} Eh\n\
-Barrier       forward {:.2} kcal/mol · reverse {:.2} kcal/mol\n\
+Barrier       {barrier}\n\
 Imaginary     {} · {} ({worker_check})\n\
 IRC           {irc}\n\
-Path          {} images · NEB {neb} {} iterations · saddle {saddle} {} steps\n\
+Path          {path}\n\
 Work          {} gradients · {} Hessians · {:.1} s",
+                self.command.method_label(),
                 self.engine.name,
                 self.engine.version,
                 self.engine.rev,
@@ -319,13 +393,8 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 report.reactant.energy,
                 report.product.energy,
                 report.ts.energy,
-                report.forward_barrier_kcal(),
-                report.reverse_barrier_kcal(),
                 report.imaginary,
                 lowest(&report.frequencies_cm1),
-                report.path.len(),
-                self.iterations,
-                self.steps,
                 grouped(self.evaluations),
                 grouped(report.hessians + 1),
                 self.seconds,
@@ -336,13 +405,27 @@ Work          {} gradients · {} Hessians · {:.1} s",
         pub fn write_files(&self) -> Result<(), String> {
             if let Some(dir) = &self.command.out_dir {
                 self.write_structures(dir)?;
+                self.write_json(&dir.join("report.json"))?;
             }
             if let Some(path) = &self.command.json {
-                let mut text = self.json().to_string();
-                text.push('\n');
-                io::write_output(path, text.as_bytes(), false)?;
+                let already_written = self
+                    .command
+                    .out_dir
+                    .as_ref()
+                    .map(|dir| resolve(&dir.join("report.json")))
+                    .transpose()?
+                    == Some(resolve(path)?);
+                if !already_written {
+                    self.write_json(path)?;
+                }
             }
             Ok(())
+        }
+
+        fn write_json(&self, path: &Path) -> Result<(), String> {
+            let mut text = self.json().to_string();
+            text.push('\n');
+            io::write_output(path, text.as_bytes(), false)
         }
 
         fn write_structures(&self, dir: &Path) -> Result<(), String> {
@@ -368,9 +451,24 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 .as_ref()
                 .map_or(&report.hessian, |analysis| &analysis.hessian);
             let hessian = write_orca_hess(&frame, hessian).map_err(|error| error.to_string())?;
+            let annotation = format!(
+                " method={} verification={}",
+                self.command.method_key(),
+                if self.failure_reason().is_none() {
+                    "verified"
+                } else {
+                    "unverified-candidate"
+                }
+            );
             let single = |geometry: &Minimum, comment: String| {
                 let mut text = String::new();
-                xyz(&mut text, self.numbers, &geometry.positions, &comment);
+                xyz(
+                    &mut text,
+                    self.numbers,
+                    &geometry.positions,
+                    &comment,
+                    &annotation,
+                );
                 text
             };
             let imaginary = report
@@ -391,13 +489,13 @@ Work          {} gradients · {} Hessians · {:.1} s",
                     &report.ts,
                     format!("TS E={:.8} Eh imaginary={imaginary}", report.ts.energy),
                 ),
-                path_xyz(self.numbers, &report.path),
-                irc_xyz(self.numbers, &report.ts, report.irc.as_ref()),
+                path_xyz(self.numbers, &report.path, &annotation),
+                irc_xyz(self.numbers, &report.ts, report.irc.as_ref(), &annotation),
                 hessian,
             ];
             fs::create_dir_all(dir)
                 .map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
-            for (name, text) in XYZ_AND_HESS.into_iter().zip(outputs) {
+            for (name, text) in OUTPUTS.into_iter().zip(outputs) {
                 io::write_output(&dir.join(name), text.as_bytes(), false)?;
             }
             Ok(())
@@ -405,23 +503,29 @@ Work          {} gradients · {} Hessians · {:.1} s",
 
         fn json(&self) -> serde_json::Value {
             let report = &self.report;
+            let method = self.command.method_key();
             let branch = |branch: &IrcBranch| {
                 json!({
+                    "method": method,
+                    "energy_units": "hartree",
                     "reached": reached(branch.reached),
                     "completed": branch.completed,
                     "energies": branch.energies,
                 })
             };
             json!({
+                "schema_version": 2,
+                "verified": self.failure_reason().is_none(),
+                "operation": if self.command.refine.is_some() { "refine" } else { "search" },
                 "engine": self.engine,
                 "settings": {
-                    "method": "gfn2",
+                    "method": method,
                     "conventions": "axtb",
                     "solvent": null,
                     "charge": self.command.charge,
                     "uhf": self.uhf,
                     "images": self.command.images,
-                    "workers": self.command.workers,
+                    "workers": if self.command.refine.is_some() { 1 } else { self.command.workers },
                     "threads_per_worker": 1,
                     "optimize_endpoints": !self.command.keep_endpoints,
                     "remap_hydrogens": self.command.remap_hydrogens,
@@ -429,14 +533,47 @@ Work          {} gradients · {} Hessians · {:.1} s",
                     "break": self.command.break_,
                 },
                 "energies": {
+                    "method": method,
+                    "units": "hartree",
                     "reactant": report.reactant.energy,
                     "product": report.product.energy,
                     "ts": report.ts.energy,
                 },
                 "barriers": {
-                    "forward": report.forward_barrier_kcal(),
-                    "reverse": report.reverse_barrier_kcal(),
+                    "method": method,
+                    "units": "kcal/mol",
+                    "verified": self.failure_reason().is_none(),
+                    "forward": self.barriers_allowed().then(|| report.forward_barrier_kcal()),
+                    "reverse": self.barriers_allowed().then(|| report.reverse_barrier_kcal()),
                 },
+                "methods": {
+                    "energies": method,
+                    "barriers": method,
+                    "endpoint_relaxation": method,
+                    "saddle": method,
+                    "frequencies": method,
+                    "worker_frequencies": method,
+                    "hessian": method,
+                    "irc": method,
+                    "path": method,
+                    "reactive_start": method,
+                    "work": method,
+                },
+                "structures": {
+                    "numbers": self.numbers,
+                    "position_units": "bohr",
+                    "method": method,
+                    "reactant": report.reactant.positions,
+                    "product": report.product.positions,
+                    "ts": report.ts.positions,
+                },
+                "source_result": self.source_report,
+                "source_seed": (self.command.from.is_some() && self.source_report.is_none()).then(|| json!({
+                    "directory": self.command.from.as_ref().map(|path| path.display().to_string()),
+                    "geometry_only": true,
+                    "method": null,
+                    "verified": false,
+                })),
                 "frequencies_cm1": report.frequencies_cm1,
                 "worker_frequencies_cm1": self.worker_check.as_ref().ok().map(|analysis| &analysis.frequencies_cm1),
                 "worker_imaginary_count": self.worker_check.as_ref().ok().map(|analysis| imaginary(&analysis.frequencies_cm1)),
@@ -446,13 +583,15 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 "failure_reason": self.failure_reason(),
                 "irc_error": report.irc_error,
                 "irc": report.irc.as_ref().map(|[plus, minus]| json!({
+                    "method": method,
                     "plus": branch(plus),
                     "minus": branch(minus),
                 })),
                 "connects": report.connects,
                 "path_energies_eh": report.path.iter().map(|image| image.energy).collect::<Vec<_>>(),
-                "neb": {"converged": report.neb_converged, "iterations": self.iterations},
+                "neb": {"method": method, "performed": self.command.refine.is_none(), "converged": report.neb_converged, "iterations": self.iterations},
                 "saddle": {
+                    "method": method,
                     "converged": report.saddle_converged,
                     "steps": self.steps,
                     "reason": report.saddle_reason.to_string(),
@@ -499,7 +638,7 @@ Work          {} gradients · {} Hessians · {:.1} s",
 }
 
 #[cfg(feature = "xtb")]
-pub(super) use report::{Summary, check_destinations};
+pub(super) use report::{Summary, check_destinations, write_retained};
 
 #[cfg(test)]
 mod tests {
@@ -532,7 +671,7 @@ mod tests {
             reached: Reached::Product,
             completed: true,
         };
-        let path = path_xyz(&numbers, &[reactant, ts.clone(), product]);
+        let path = path_xyz(&numbers, &[reactant, ts.clone(), product], "");
         assert_eq!(
             path.lines().skip(1).step_by(4).collect::<Vec<_>>(),
             [
@@ -545,7 +684,7 @@ mod tests {
         assert_eq!(read.numbers, numbers);
         assert_eq!(read.positions, [[0., 0., 0.], [0., 0., 1.0583544211]]);
         let branches = [plus, minus];
-        let irc = irc_xyz(&numbers, &ts, Some(&branches));
+        let irc = irc_xyz(&numbers, &ts, Some(&branches), "");
         assert_eq!(
             irc.lines().skip(1).step_by(4).collect::<Vec<_>>(),
             [
@@ -567,9 +706,9 @@ mod tests {
                 ..minus
             },
         ];
-        let irc = irc_xyz(&numbers, &ts, Some(&unlabelled));
+        let irc = irc_xyz(&numbers, &ts, Some(&unlabelled), "");
         assert_eq!(irc.lines().nth(1), Some("-mode E=-2.00000000 Eh"));
         assert_eq!(irc.lines().count(), 20);
-        assert_eq!(irc_xyz(&numbers, &ts, None).lines().count(), 4);
+        assert_eq!(irc_xyz(&numbers, &ts, None, "").lines().count(), 4);
     }
 }

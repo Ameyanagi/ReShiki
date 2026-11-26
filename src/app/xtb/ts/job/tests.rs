@@ -173,7 +173,7 @@ fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
         multiplicity: 1,
         drawing_atoms: vec![],
     };
-    let path = ordered_irc(&report, &frame).unwrap().unwrap();
+    let path = ordered_irc(&report, &frame, true).unwrap().unwrap();
     assert_eq!(path.steps(), 4);
     assert_eq!(path.ts_index, 2);
     assert_eq!(path.trajectory.energies_hartree, [-2., -1.5, -1., -1.25]);
@@ -209,7 +209,7 @@ fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
     // Reversing the arbitrary mode sign must not reverse the displayed reaction.
     report.irc.as_mut().unwrap().swap(0, 1);
     assert_eq!(
-        ordered_irc(&report, &path.frame(path.ts_index).unwrap()).unwrap(),
+        ordered_irc(&report, &path.frame(path.ts_index).unwrap(), true).unwrap(),
         Some(path)
     );
 }
@@ -235,13 +235,13 @@ fn ordered_irc_keeps_unknown_end_classes_and_handles_missing_branches() {
         for (branch, reached) in report.irc.as_mut().unwrap().iter_mut().zip(reached) {
             branch.reached = reached;
         }
-        let path = ordered_irc(&report, &frame).unwrap().unwrap();
+        let path = ordered_irc(&report, &frame, true).unwrap().unwrap();
         assert_ne!(path.reached[0], qcdata::IrcEndpoint::Product);
         assert_ne!(path.reached[1], qcdata::IrcEndpoint::Reactant);
         assert!(path.reached.contains(&qcdata::IrcEndpoint::Other));
     }
     report.irc = None;
-    assert_eq!(ordered_irc(&report, &frame).unwrap(), None);
+    assert_eq!(ordered_irc(&report, &frame, true).unwrap(), None);
 }
 
 fn point(energy: f64, distance: f64) -> Minimum {
@@ -325,6 +325,7 @@ fn completion() -> (Launch, Completion) {
         report: ts_report(),
         checked: Ok(checked),
         endpoint_thermo: None,
+        method: qcdata::XtbMethod::Gfn2Xtb,
         engine: crate::app::xtb::run::example_engine(),
         changes: Changes {
             form: vec![(0, 1)],
@@ -652,6 +653,109 @@ fn failed_worker_check_keeps_engine_candidate_and_cancellation_discards_it() {
     assert!(
         matches!(complete(&launch, done), Err(Failure::Other(message)) if message == "Calculation canceled")
     );
+}
+
+#[test]
+fn target_method_records_checks_and_fallback_without_relabelling_source_data() {
+    use reshiki_xtb_worker::protocol::Method;
+
+    for method in [qcdata::XtbMethod::Gfn2Xtb, qcdata::XtbMethod::GXtb] {
+        for failed_check in [false, true] {
+            let (launch, mut done) = completion();
+            done.method = method;
+            done.checked.as_mut().unwrap().method = reshiki_xtb_jobs::run::worker_method(method);
+            if failed_check {
+                done.checked = Err(ts::TsError::Failed("frequency worker timed out".into()));
+            }
+            let report = complete(&launch, done).unwrap();
+            let qcdata::Settings::Xtb(settings) = &report.result.settings else {
+                panic!("xTB settings must be retained");
+            };
+            assert_eq!(settings.method, method);
+            assert_eq!(
+                report.result.provenance.method.as_deref(),
+                Some(method.label())
+            );
+            assert!(
+                report
+                    .extras
+                    .diagnostics
+                    .iter()
+                    .any(|(key, value)| key == "Electronic method" && value == method.label())
+            );
+            assert_eq!(
+                report.result.status == qcdata::Status::Converged,
+                !failed_check
+            );
+            if failed_check {
+                assert!(!super::super::view::presentation(&report.result, None).reliable());
+            }
+        }
+    }
+
+    // An unexpected response from another method is a failed independent check;
+    // neither its Hessian nor its frequencies become the target result.
+    let (launch, mut done) = completion();
+    done.method = qcdata::XtbMethod::GXtb;
+    assert_eq!(done.checked.as_ref().unwrap().method, Method::Gfn2);
+    let report = complete(&launch, done).unwrap();
+    assert!(
+        matches!(&report.result.status, qcdata::Status::NotConverged { reason }
+        if reason.contains("GFN2-xTB for a g-xTB calculation"))
+    );
+    assert_eq!(report.result.hessian_hartree_per_bohr2, [0.25; 36]);
+    assert!(report.extras.worker_frequencies.is_empty());
+    assert!(!super::super::view::presentation(&report.result, None).reliable());
+}
+
+#[test]
+fn method_refinement_keeps_target_endpoints_and_irc_without_inventing_a_neb_band() {
+    for failed_check in [false, true] {
+        let (launch, mut done) = completion();
+        done.method = qcdata::XtbMethod::GXtb;
+        done.checked.as_mut().unwrap().method = reshiki_xtb_worker::protocol::Method::Gxtb;
+        done.trace.retry = Some(Retry::Gxtb(
+            complete(&launch, completion().1)
+                .unwrap()
+                .result
+                .transition_state_id()
+                .unwrap(),
+        ));
+        done.report.neb_converged = false;
+        if failed_check {
+            done.checked = Err(ts::TsError::Failed("target check failed".into()));
+        }
+        let report = complete(&launch, done).unwrap();
+        assert!(report.result.trajectory.is_none());
+        assert!(report.extras.image_positions.is_empty());
+        assert!(!report.extras.neb_converged);
+        let irc = report.extras.irc.as_ref().unwrap();
+        assert!(irc.neb_arc_lengths_sqrt_amu_bohr.is_empty());
+        assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
+        assert_eq!(report.result.energy_hartree, Some(-1.));
+        assert!(
+            report
+                .extras
+                .diagnostics
+                .iter()
+                .any(|(key, value)| key == "NEB" && value.starts_with("not run"))
+        );
+        assert!(
+            report
+                .extras
+                .diagnostics
+                .iter()
+                .any(|(key, value)| key == "Method" && value.contains("fresh Hessian"))
+        );
+        assert_eq!(
+            report.result.status == qcdata::Status::Converged,
+            !failed_check
+        );
+        if failed_check {
+            assert!(!super::super::view::presentation(&report.result, None).reliable());
+        }
+        report.result.validate(&report.frames[0]).unwrap();
+    }
 }
 
 #[test]
