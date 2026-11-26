@@ -253,3 +253,18 @@ fn xyz_limits_kept_frames_and_atoms_per_frame() {
         )))
     );
 }
+
+#[test]
+fn a_comment_that_is_one_number_is_the_frame_energy_in_hartree() {
+    // CREST's crest_conformers.xyz writes each conformer's energy alone.
+    let water = "3\n   -5.07017600\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n\
+                 3\n -5.06901\nO 0 0 0\nH 0.97 0 0\nH -0.30 0.90 0\n\
+                 3\nwater, frame 3\nO 0 0 0\nH 0.95 0.1 0\nH -0.20 0.95 0.1\n";
+    let file = read("crest_conformers.xyz", water.as_bytes()).unwrap();
+    let energies: Vec<_> = file.jobs[0]
+        .steps
+        .iter()
+        .map(|s| s.energy_hartree)
+        .collect();
+    assert_eq!(energies, [Some(-5.070176), Some(-5.06901), None]);
+}

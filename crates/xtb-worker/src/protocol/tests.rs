@@ -255,6 +255,7 @@ fn scientific_result_has_session_settings_and_provenance() {
     assert_eq!(settings.accuracy, Some(0.5));
     assert_eq!(settings.max_iterations, Some(500));
     assert_eq!(settings.scf_retries, computed.settings.scf.retries);
+    assert_eq!(settings.threads, Some(computed.settings.threads));
 
     // The rung that converged replaces the ladder in the saved settings.
     // An iteration-only rung keeps the reported temperature and the accuracy.
@@ -279,6 +280,47 @@ fn scientific_result_has_session_settings_and_provenance() {
     assert_eq!(settings.max_iterations, Some(900));
     assert_eq!(settings.accuracy, Some(0.5));
     assert!(settings.scf_retries.is_empty());
+}
+
+#[test]
+fn scientific_result_takes_the_raw_point_group_from_vibrations() {
+    let frame = open(Method::Gfn2, 2).admit(None, None, MAX_ATOMS).unwrap();
+    let mut computed = computed();
+    computed.vibrations = Some(VibrationsReport {
+        conventions: "xtb".into(),
+        frequencies_cm1: vec![100.0],
+        ir_intensities_km_mol: Some(vec![1.0]),
+        reduced_masses_amu: vec![2.0],
+        force_constants_mdyn_per_angstrom: vec![1.0],
+        masses_amu: vec![4.0, 4.0],
+        linear: true,
+        point_group: Some("Dinfh".into()),
+    });
+    computed.thermo = Some(Thermo {
+        temperature_k: 300.0,
+        pressure_pa: 101_325.0,
+        zero_point_energy_hartree: 0.01,
+        enthalpy_correction_hartree: 0.02,
+        entropy_hartree_per_k: 0.000_01,
+        gibbs_correction_hartree: 0.017,
+        heat_capacity_hartree_per_k: None,
+        frequency_scale: 1.0,
+        rotor_cutoff_cm1: 50.0,
+        imaginary_cutoff_cm1: 20.0,
+        symmetry_number: 2,
+        point_group: None,
+    });
+    let engine = Engine {
+        name: "axtb".into(),
+        version: "0.2.0".into(),
+        license: crate::AXTB_LICENSE.into(),
+        source: crate::AXTB_SOURCE.into(),
+        rev: crate::AXTB_REV.into(),
+    };
+    let result = computed
+        .to_calc_result(&frame, Task::Hessian, &engine, None)
+        .unwrap();
+    assert_eq!(result.thermo.unwrap().point_group.as_deref(), Some("Dinfh"));
 }
 
 #[test]

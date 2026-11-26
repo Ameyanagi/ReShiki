@@ -59,6 +59,7 @@ fn run_fixture(name: &str, transcript: &str) {
         } else if let Some(expected) = line.strip_prefix("< ") {
             let expected: Value = serde_json::from_str(expected)
                 .unwrap_or_else(|error| panic!("{context}: bad golden: {error}"));
+            let expected = headless::fixture_for_build(expected);
             let actual = session.recv_for(expected.get("id"), LINE_TIMEOUT);
             assert_eq!(McpSession::normalize(actual), expected, "{context}");
         } else {
@@ -447,7 +448,7 @@ fn the_rmcp_client_interoperates() {
             assert_eq!(server.version, env!("CARGO_PKG_VERSION"));
             let tools = client.list_tools(None).await.expect("tools/list");
             let names: Vec<&str> = tools.tools.iter().map(|tool| tool.name.as_ref()).collect();
-            let catalog: Vec<&str> = reshiki_agent::ops::catalog::SPECS
+            let catalog: Vec<&str> = headless::operation_specs()
                 .iter()
                 .map(|spec| spec.name)
                 .collect();

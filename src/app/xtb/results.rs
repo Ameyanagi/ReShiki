@@ -2,11 +2,13 @@
 //! Summary rows, the optimization steps, the log and file sizes, built from
 //! a stored result and what this session still knows about its run.
 use super::state::{
-    Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, formula, scientific, signed, symbol,
+    Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, capitalized, formula, scientific, signed,
+    symbol,
 };
 use reshiki::qcdata;
 use reshiki::qcdata::{
-    Beta, CalcResult, Frame, OrbitalSet, Orbitals, Settings, Status, Task, XtbConventions,
+    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Status, Task,
+    XtbConventions,
 };
 
 /// Always shown under the method line.
@@ -17,25 +19,34 @@ const NEAR_DEGENERATE_EV: f64 = 0.1;
 const EV_PER_HARTREE: f64 = 27.211386245981;
 /// Debye per e·bohr.
 const DEBYE_PER_E_BOHR: f64 = 2.541746473;
+const KCAL_PER_MOL_PER_HARTREE: f64 = 627.509474;
 /// Bond orders listed from this order up: what the worker reports and a
 /// saved file keeps.
 pub(crate) const BOND_ORDER_MIN: f64 = reshiki::qcdata::LIGHT_BOND_ORDER_MIN;
 
-/// The palette's tabs. Orbitals and Vibrations join them once the worker
-/// returns orbitals and frequencies.
+/// The palette's tabs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum View {
     #[default]
     Summary,
+    /// A conformer search's ranked conformers.
+    Conformers,
+    Vibrations,
     Steps,
     Log,
 }
 
 impl View {
-    /// The tabs `result` has: Steps only for an optimization with steps.
+    /// The tabs supported by the stored data.
     pub(crate) fn available(result: &CalcResult) -> Vec<Self> {
         let mut views = vec![Self::Summary];
-        if energies(result).len() > 1 {
+        if result.task == Task::Conformers {
+            views.push(Self::Conformers);
+        }
+        if result.vibrations.is_some() {
+            views.push(Self::Vibrations);
+        }
+        if result.task == Task::Optimize && energies(result).len() > 1 {
             views.push(Self::Steps);
         }
         views.push(Self::Log);
@@ -45,6 +56,8 @@ impl View {
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Summary => "Summary",
+            Self::Conformers => "Conformers",
+            Self::Vibrations => "Vibrations",
             Self::Steps => "Steps",
             Self::Log => "Log",
         }
@@ -59,25 +72,17 @@ pub(crate) struct Evaluation {
     pub seconds: f64,
 }
 
-/// What this session knows about a run beyond the stored result. The file
-/// does not keep it, so a reopened result shows less.
+/// What this session knows about a run beyond the stored result.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct RunInfo {
     pub gap_ev: Option<f64>,
     pub near_degenerate: bool,
     pub evaluations: Vec<Evaluation>,
     pub numerics: String,
-    pub tight: bool,
-    pub threads: u32,
-    /// Drawing atoms the optimizer held fixed.
-    pub fixed: Vec<u64>,
-    /// When the run finished, e.g. "25 Nov 2026 14:03".
-    pub finished: String,
-    pub seconds: f64,
 }
 
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
-pub(crate) fn method_line(result: &CalcResult, frame: &Frame, info: Option<&RunInfo>) -> String {
+pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
     let mut parts = vec![provenance.method.clone().unwrap_or_else(|| "xTB".into())];
     parts.push(match &provenance.program_version {
@@ -95,8 +100,18 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame, info: Option<&RunI
     }
     parts.push(format!("charge {}", signed(f64::from(frame.charge), 0)));
     parts.push(format!("multiplicity {}", frame.multiplicity));
-    if let Some(info) = info.filter(|info| !info.finished.is_empty()) {
-        parts.push(info.finished.clone());
+    if let Some(finished) = result
+        .run
+        .as_ref()
+        .and_then(|run| run.finished.as_deref())
+        .and_then(|finished| chrono::DateTime::parse_from_rfc3339(finished).ok())
+    {
+        parts.push(
+            finished
+                .with_timezone(&chrono::Local)
+                .format("%-d %b %Y %H:%M")
+                .to_string(),
+        );
     }
     parts.join(" · ")
 }
@@ -120,12 +135,13 @@ fn solvent(result: &CalcResult) -> String {
     }
 }
 
-/// The energy of each optimization step, the start included.
+/// The energy of each optimization step, the start included, or of each
+/// kept conformer, the lowest first.
 pub(crate) fn energies(result: &CalcResult) -> &[f64] {
     result
         .trajectory
         .as_ref()
-        .filter(|_| result.task == Task::Optimize)
+        .filter(|_| matches!(result.task, Task::Optimize | Task::Conformers))
         .map_or(&[], |path| path.energies_hartree.as_slice())
 }
 
@@ -141,6 +157,10 @@ pub(crate) fn step_positions(
     let count = energies(result).len();
     let atoms = output.numbers.len();
     let path = result.trajectory.as_ref()?;
+    // A conformer is never the input or the result frame by position.
+    if result.task == Task::Conformers {
+        return path.frame(step).map(|frame| frame.positions_angstrom);
+    }
     if path.positions_angstrom.len() == count * atoms * 3 {
         let block = path
             .positions_angstrom
@@ -162,17 +182,17 @@ pub(crate) fn summary_rows(
     input: &Frame,
     output: &Frame,
     info: Option<&RunInfo>,
-) -> Vec<(&'static str, String)> {
+) -> Vec<(String, String)> {
     let mut rows = Vec::new();
     if let Some(energy) = result.energy_hartree {
-        rows.push(("Total energy", format!("{} Eh", signed(energy, 6))));
+        rows.push(("Total energy".into(), format!("{} Eh", signed(energy, 6))));
     }
     if let Some(gap) = gap_ev(result, info) {
-        rows.push(("HOMO–LUMO gap", format!("{gap:.2} eV")));
+        rows.push(("HOMO–LUMO gap".into(), format!("{gap:.2} eV")));
     }
     if let Some(dipole) = result.dipole_e_bohr {
         let debye = dipole.iter().map(|x| x * x).sum::<f64>().sqrt() * DEBYE_PER_E_BOHR;
-        rows.push(("Dipole", format!("{debye:.2} D")));
+        rows.push(("Dipole".into(), format!("{debye:.2} D")));
     }
     if let Some(charges) = result.charges.first() {
         let scheme = format!("{:?}", charges.scheme);
@@ -192,7 +212,10 @@ pub(crate) fn summary_rows(
                 });
             format!("{} to {}", signed_charge(low), signed_charge(high))
         };
-        rows.push(("Charges", format!("{text} ({})", scheme.to_lowercase())));
+        rows.push((
+            "Charges".into(),
+            format!("{text} ({})", scheme.to_lowercase()),
+        ));
     }
     if result.task == Task::Optimize {
         let steps = energies(result).len().saturating_sub(1);
@@ -204,28 +227,87 @@ pub(crate) fn summary_rows(
         if let Some(rmsd) = rmsd(&input.positions_angstrom, &output.positions_angstrom) {
             outcome.push_str(&format!(" · RMSD from start {rmsd:.2} Å"));
         }
-        rows.push(("Optimization", outcome));
+        rows.push(("Optimization".into(), outcome));
+    }
+    if result.task == Task::Conformers {
+        let kept = energies(result).len();
+        let mut text = format!(
+            "{kept} kept · the lowest is shown here{}",
+            match &result.status {
+                Status::NotConverged { reason } => format!(" · {reason}"),
+                _ => String::new(),
+            }
+        );
+        if kept > 1 {
+            text.push_str(" · see the Conformers tab");
+        }
+        rows.push(("Conformers".into(), text));
     }
     let gradient = &result.gradient_hartree_per_bohr;
     if !gradient.is_empty() {
         let rms = (gradient.iter().map(|g| g * g).sum::<f64>() / gradient.len() as f64).sqrt();
-        rows.push(("RMS gradient", format!("{} Eh/bohr", scientific(rms))));
+        rows.push((
+            "RMS gradient".into(),
+            format!("{} Eh/bohr", scientific(rms)),
+        ));
+    }
+    if let Some(vibrations) = &result.vibrations {
+        let frequencies = &vibrations.frequencies_cm1;
+        let imaginary = vibrations.imaginary_count();
+        let lowest_real = frequencies.get(imaginary);
+        let summary = if let Some(&lowest) = frequencies.first().filter(|&&f| f < 0.0) {
+            let mut text = format!("{imaginary} imaginary ({}i cm⁻¹)", signed(lowest, 0));
+            if let Some(real) = lowest_real {
+                text.push_str(&format!(" · lowest real {real:.0} cm⁻¹"));
+            }
+            text
+        } else if let Some(real) = lowest_real {
+            format!("lowest {real:.0} cm⁻¹")
+        } else {
+            "No vibrational modes".into()
+        };
+        rows.push(("Frequencies".into(), summary));
+    }
+    if let Some(thermo) = &result.thermo {
+        let zpve = thermo.zero_point_energy_hartree;
+        rows.push((
+            "ZPVE".into(),
+            format!(
+                "{} Eh ({} kcal/mol)",
+                signed(zpve, 6),
+                signed(zpve * KCAL_PER_MOL_PER_HARTREE, 2)
+            ),
+        ));
+        if let Some(energy) = result.energy_hartree {
+            for (quantity, correction) in [
+                ("H", thermo.enthalpy_correction_hartree),
+                ("G", thermo.gibbs_correction_hartree),
+            ] {
+                rows.push((
+                    format!("{quantity} ({:.2} K)", thermo.temperature_k),
+                    format!("{} Eh", signed(energy + correction, 6)),
+                ));
+            }
+        }
+        if let Some(group) = &thermo.point_group {
+            rows.push(("Point group".into(), point_group(group)));
+        }
     }
     rows.push((
-        "Molecule",
+        "Molecule".into(),
         format!(
             "{} · {} atoms",
             formula(&output.numbers),
             output.numbers.len()
         ),
     ));
-    if let Some(info) = info.filter(|info| info.seconds > 0.) {
+    if let Some(run) = result.run.as_ref().filter(|run| run.seconds > 0.) {
         rows.push((
-            "Run time",
+            "Run time".into(),
             format!(
                 "{:.1} s · {} {}",
-                info.seconds,
-                info.evaluations.len(),
+                run.seconds,
+                run.scf_iterations.len(),
                 // GFN-FF has no SCF.
                 if matches!(&result.settings, Settings::Xtb(s) if !super::state::electronic(s.method)) {
                     "calculations"
@@ -236,6 +318,15 @@ pub(crate) fn summary_rows(
         ));
     }
     rows
+}
+
+/// "C2v", "D∞h": the engine's label as chemists write it.
+pub(crate) fn point_group(group: &str) -> String {
+    match group.to_ascii_lowercase().as_str() {
+        "cinfv" | "c∞v" => "C∞v".into(),
+        "dinfh" | "d∞h" => "D∞h".into(),
+        _ => capitalized(group),
+    }
 }
 
 /// The near-degenerate warning, when the gap calls for it.
@@ -355,22 +446,24 @@ fn around(levels: &[f64], n: usize, spin: &str) -> Vec<(String, f64)> {
     rows
 }
 
-/// A stored result's settings, to calculate it again; what the file
-/// does not keep comes from `info` (this session's run), else defaults.
+/// A stored result's settings, to calculate it again.
 /// `None` when the card cannot reproduce it: imported results, other
 /// tasks, GBSA or a solvent the card does not list.
 pub(crate) fn config(
     result: &qcdata::CalcResult,
     frame: &qcdata::Frame,
-    info: Option<&RunInfo>,
+    atoms: &[Option<u64>],
     threads: u32,
 ) -> Option<Config> {
     let qcdata::Settings::Xtb(settings) = &result.settings else {
         return None;
     };
     let task = match result.task {
+        qcdata::Task::Optimize if result.vibrations.is_some() => CardTask::OptFreq,
         qcdata::Task::Optimize => CardTask::Optimize,
+        qcdata::Task::Hessian => CardTask::Frequencies,
         qcdata::Task::Energy => CardTask::Energy,
+        qcdata::Task::Conformers => CardTask::Conformers,
         _ => return None,
     };
     // Settings the card cannot send: a retry ladder, GFN-FF fragment
@@ -402,9 +495,13 @@ pub(crate) fn config(
         accuracy: settings.accuracy,
         temperature_k: settings.electronic_temperature_k,
         max_iterations: settings.max_iterations,
-        threads: info.map_or(threads, |info| info.threads),
-        tight: info.is_some_and(|info| info.tight),
-        fixed: info.map_or_else(Vec::new, |info| info.fixed.clone()),
+        threads: settings.threads.unwrap_or(threads),
+        tight: settings.convergence == Some(Convergence::Tight),
+        fixed: settings
+            .fixed_atoms
+            .iter()
+            .filter_map(|&index| atoms.get(index as usize).copied().flatten())
+            .collect(),
     })
 }
 
@@ -428,12 +525,17 @@ pub(crate) fn bond_orders(result: &CalcResult, frame: &Frame) -> Vec<(String, St
 }
 
 /// Copy table and Export…: tab-separated, with a header row.
-pub(crate) fn tsv(method: &str, rows: &[(&str, String)]) -> String {
+pub(crate) fn tsv(method: &str, rows: &[(String, String)]) -> String {
     let mut text = format!("# {method}\nQuantity\tValue\n");
     for (label, value) in rows {
         text.push_str(&format!("{label}\t{value}\n"));
     }
     text
+}
+
+/// Whether the stored quasi-RRHO cutoffs are xtb's defaults.
+pub(super) fn thermo_defaults(thermo: &qcdata::Thermo) -> bool {
+    thermo.rotor_cutoff_cm1 == 50. && thermo.imaginary_cutoff_cm1 == 20.
 }
 
 /// The Log tab: settings, then each SCF the worker ran, then the result.
@@ -454,10 +556,14 @@ pub(crate) fn log(
         frame.numbers.iter().map(|&z| i64::from(z)).sum::<i64>() - i64::from(frame.charge)
     ));
     let task = match result.task {
+        Task::Optimize if result.vibrations.is_some() => "opt+freq",
         Task::Optimize => "optimize",
+        Task::Hessian => "frequencies",
         Task::Energy => "energy",
+        Task::Conformers => "conformer search",
         _ => "other",
     };
+    let mut task_line = format!("task {task}");
     if let Settings::Xtb(settings) = &result.settings {
         let scf: Vec<String> = [
             settings.accuracy.map(|a| format!("SCF accuracy {a}")),
@@ -471,43 +577,48 @@ pub(crate) fn log(
         if !scf.is_empty() {
             lines.push(scf.join(" · "));
         }
-    }
-    match info {
-        Some(info) => {
-            let mut settings = format!("task {task} · {} threads", info.threads);
-            if result.task == Task::Optimize {
-                settings.push_str(if info.tight {
-                    " · tight convergence"
-                } else {
-                    " · normal convergence"
-                });
-                if !info.fixed.is_empty() {
-                    settings.push_str(&format!(" · {} atoms held fixed", info.fixed.len()));
-                }
-            }
-            lines.push(settings);
-            if !info.numerics.is_empty() {
-                lines.push(format!("numerics {}", info.numerics));
-            }
-            lines.push(String::new());
-            lines.push(" calc        energy (Eh)    SCF iterations    time (s)".into());
-            for (index, e) in info.evaluations.iter().enumerate() {
-                lines.push(format!(
-                    "{:>5}  {:>17.8}  {:>16}  {:>10.3}",
-                    index + 1,
-                    e.energy,
-                    e.scf_iterations,
-                    e.seconds
+        if let Some(threads) = settings.threads {
+            task_line.push_str(&format!(" · {threads} threads"));
+        }
+        if result.task == Task::Optimize {
+            // Files from before it was recorded say nothing rather than Normal.
+            task_line.push_str(match settings.convergence {
+                Some(Convergence::Tight) => " · tight convergence",
+                Some(Convergence::Normal) => " · normal convergence",
+                None => "",
+            });
+            if !settings.fixed_atoms.is_empty() {
+                task_line.push_str(&format!(
+                    " · {} atoms held fixed",
+                    settings.fixed_atoms.len()
                 ));
             }
         }
-        None => {
-            lines.push(format!("task {task}"));
-            lines.push(String::new());
-            lines.push(
-                "SCF details are kept only while the app is open; recalculate to see them.".into(),
-            );
+    }
+    lines.push(task_line);
+    if let Some(info) = info.filter(|info| !info.numerics.is_empty()) {
+        lines.push(format!("numerics {}", info.numerics));
+    }
+    lines.push(String::new());
+    if let Some(info) = info {
+        lines.push(" calc        energy (Eh)    SCF iterations    time (s)".into());
+        for (index, e) in info.evaluations.iter().enumerate() {
+            lines.push(format!(
+                "{:>5}  {:>17.8}  {:>16}  {:>10.3}",
+                index + 1,
+                e.energy,
+                e.scf_iterations,
+                e.seconds
+            ));
         }
+    } else if let Some(run) = &result.run {
+        lines.push(" calc    SCF iterations".into());
+        for (index, iterations) in run.scf_iterations.iter().enumerate() {
+            lines.push(format!("{:>5}    {iterations:>14}", index + 1));
+        }
+        lines.push(format!("run time {:.1} s", run.seconds));
+    } else {
+        lines.push("SCF details were not saved with this result; recalculate to see them.".into());
     }
     lines.push(String::new());
     if let Some(energy) = result.energy_hartree {
@@ -525,6 +636,46 @@ pub(crate) fn log(
             Status::NotConverged { reason } => format!("optimization not converged: {reason}"),
             Status::Failed { reason } => format!("failed: {reason}"),
         });
+    }
+    if let Some(vibrations) = &result.vibrations {
+        lines.push("frequencies (cm⁻¹)".into());
+        for chunk in vibrations.frequencies_cm1.chunks(6) {
+            lines.push(
+                chunk
+                    .iter()
+                    .map(|f| format!("{f:8.2}"))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+        }
+        lines.push(format!("imaginary modes {}", vibrations.imaginary_count()));
+    }
+    if let Some(thermo) = &result.thermo {
+        lines.push(format!("ZPVE  {:.6} Eh", thermo.zero_point_energy_hartree));
+        if let Some(energy) = result.energy_hartree {
+            lines.push(format!(
+                "H(T)  {:.6} Eh",
+                energy + thermo.enthalpy_correction_hartree
+            ));
+        }
+        lines.push(format!("S  {:.8} Eh/K", thermo.entropy_hartree_per_k));
+        if let Some(energy) = result.energy_hartree {
+            lines.push(format!(
+                "G(T)  {:.6} Eh",
+                energy + thermo.gibbs_correction_hartree
+            ));
+        }
+        if let Some(group) = &thermo.point_group {
+            lines.push(format!("point group {}", point_group(group)));
+        }
+        lines.push(format!(
+            "thermochemistry: quasi-RRHO (Grimme 2012), free-rotor interpolation below {} cm⁻¹, imaginary modes above −{} cm⁻¹ inverted{}, T {:.2} K, p {} Pa",
+            thermo.rotor_cutoff_cm1,
+            thermo.imaginary_cutoff_cm1.abs(),
+            if thermo_defaults(thermo) { " (xtb's defaults)" } else { "" },
+            thermo.temperature_k,
+            thermo.pressure_pa,
+        ));
     }
     lines.join("\n")
 }

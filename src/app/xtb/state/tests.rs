@@ -96,17 +96,57 @@ fn progress_line_follows_the_steps_and_replaces_repeats() {
 }
 
 #[test]
+fn frequency_tasks_have_the_hessian_atom_limit() {
+    assert_eq!(Task::default(), Task::Optimize);
+    assert_eq!(
+        Task::ALL.map(|(task, _)| task.limit()),
+        [500, 500, 200, 200, 200]
+    );
+    let settings = Settings {
+        task: Task::OptFreq,
+        hold_fixed: true,
+        ..Settings::default()
+    };
+    assert!(
+        settings
+            .config((0, 0), false, vec![7])
+            .unwrap()
+            .fixed
+            .is_empty()
+    );
+}
+
+#[test]
+fn frequency_progress_follows_optimization_then_hessian() {
+    let mut progress = Progress::default();
+    assert_eq!(
+        progress.line(Task::Frequencies, 3.21),
+        "Computing frequencies · 3.2 s"
+    );
+    progress.push(0, &[-5.0, -5.01]);
+    assert_eq!(
+        progress.line(Task::OptFreq, 3.21),
+        progress.line(Task::Optimize, 3.21)
+    );
+    progress.hessian = true;
+    assert_eq!(
+        progress.line(Task::OptFreq, 3.21),
+        "Computing frequencies · 3.2 s"
+    );
+}
+
+#[test]
 fn summary_reads_energy_gap_and_convergence() {
     assert_eq!(
-        summary(-5.070176, Some(14.01), None),
+        summary(-5.070176, Some(14.01), None, None),
         "E −5.070176 Eh · gap 14.01 eV"
     );
     assert_eq!(
-        summary(-5.0701, None, Some((true, 1))),
+        summary(-5.0701, None, Some((true, 1)), None),
         "E −5.070100 Eh · converged in 1 step"
     );
     assert_eq!(
-        summary(-5.0, Some(1.0), Some((false, 500))),
+        summary(-5.0, Some(1.0), Some((false, 500)), None),
         "E −5.000000 Eh · gap 1.00 eV · not converged after 500 steps"
     );
 }
