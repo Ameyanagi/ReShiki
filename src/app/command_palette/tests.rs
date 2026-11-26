@@ -2209,6 +2209,10 @@ fn reaction_commands_use_the_reaction_chosen_in_roles_with_only_a_product_select
 
 #[test]
 fn xtb_reaction_commands_are_found_by_energy_and_barrier_keywords() {
+    // Builds without the engine list no xTB commands at all.
+    if !crate::app::xtb::available() {
+        return;
+    }
     let mut app = app();
     for (query, name) in [
         ("barrier", "Find transition state (xTB)"),
@@ -2235,6 +2239,10 @@ fn xtb_reaction_commands_are_discoverable_and_use_shared_target_and_build_availa
         .into_iter()
         .filter(|command| command.need == Need::XtbReaction)
         .collect();
+    if !xtb::available() {
+        assert!(commands.is_empty(), "Builds without the engine hide them");
+        return;
+    }
     assert_eq!(
         commands
             .iter()
