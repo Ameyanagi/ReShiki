@@ -3,6 +3,7 @@
 import _thread
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from threading import Timer
 
@@ -29,6 +30,8 @@ def test_missing_engine(monkeypatch):
     with pytest.raises(xtb.XtbNotInstalled, match=r'pip install "reshiki\[xtb\]"') as caught:
         xtb.energy(geometry("water"))
     assert caught.value.code == "xtb_not_installed"
+    with pytest.raises(xtb.XtbNotInstalled, match=r'pip install "reshiki\[xtb\]"'):
+        xtb.conformers("CCCC")
     assert not xtb.available()
 
 
@@ -151,3 +154,66 @@ def test_keyboard_interrupt(worker):
             timer.cancel()
             timer.join()
     assert xtb.energy(geometry("water")).energy is not None
+
+
+def test_butane_conformers(worker):
+    result = xtb.conformers("CCCC")
+    repeated = xtb.conformers("CCCC")
+    np.testing.assert_equal(asdict(result), asdict(repeated))
+    assert result.conformers
+    energies = [conformer.energy for conformer in result.conformers]
+    assert energies == sorted(energies)
+    assert sum(conformer.population for conformer in result.conformers) == pytest.approx(
+        1.0, rel=0, abs=1e-9
+    )
+    lowest = result.conformers[0]
+    assert result.best.energy == lowest.energy
+    assert lowest.rank == 1
+    assert lowest.delta == lowest.rmsd == 0.0
+    np.testing.assert_array_equal(result.best.geometry.positions, lowest.geometry.positions)
+    lines = result.to_xyz().splitlines()
+    frame_length = len(lowest.geometry) + 2
+    assert len(lines) == len(result.conformers) * frame_length
+    for conformer, comment in zip(result.conformers, lines[1::frame_length], strict=True):
+        assert f"conformer {conformer.rank} · ΔE {conformer.delta:.2f} kcal/mol" in comment
+        assert comment.endswith(f"E = {conformer.energy:.10f} Eh")
+
+
+def test_lysine_conformers_preserve_stereo(worker):
+    lysine = reshiki.Molecule.from_smiles("NCCCC[C@H](N)C(=O)O")
+    result = xtb.conformers(lysine)
+    assert len(result.conformers) > 1
+    assert all(conformer.stereo is True for conformer in result.conformers)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"starts": 0},
+        {"starts": 301},
+        {"window": 0.09},
+        {"window": 100.1},
+        {"representatives": 0},
+        {"representatives": 61},
+        {"per_cluster": 2},
+        {"minimizer": "unknown"},
+        {"diversity": "unknown"},
+        {"accuracy": 1001.0},
+        {"electronic_temperature": -1.0},
+        {"max_iterations": 10001},
+    ],
+)
+def test_conformer_argument_validation(worker, options):
+    with pytest.raises(reshiki.ReShikiError) as caught:
+        xtb.conformers("CCCC", **options)
+    assert caught.value.code == "invalid_arguments"
+
+
+@pytest.mark.parametrize(
+    ("limit", "minimizer"),
+    [(200, "mmff94s"), (120, "gfn2")],
+)
+def test_conformer_atom_limits(worker, limit, minimizer):
+    with pytest.raises(reshiki.ReShikiError, match=f"up to {limit} atoms") as caught:
+        xtb.conformers("C" * (limit + 1), minimizer=minimizer)
+    assert caught.value.code == "invalid_arguments"
