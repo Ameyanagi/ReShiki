@@ -18,6 +18,17 @@ pub struct Figure {
     pub snapshot: Option<Snapshot>,
 }
 
+/// A small copy of the model under it, showing one orbital with a caption
+/// such as "HOMO (−11.33 eV)": the frontier figure.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Panel {
+    // Nested, not flattened: `Figure` flattens its look already, and nested
+    // flattening with unknown fields denied cannot be read back.
+    pub figure: Figure,
+    pub caption: String,
+}
+
 /// A zero-based orbital index in a stored result's spin spectrum.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

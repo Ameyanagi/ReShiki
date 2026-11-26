@@ -339,3 +339,119 @@ fn mesh_registry_keeps_twenty_four_recent_figures() {
     assert!(registered(1).is_none());
     REGISTERED.lock().unwrap().clear();
 }
+
+#[test]
+fn panels_draw_small_models_with_captions_and_keep_their_snapshots() {
+    let _guard = lock_registry();
+    let mut doc = tests::ethylene();
+    let atom = doc.atoms[0].id;
+    let launch = science::launch(&doc, atom, 0, 1).unwrap();
+    let result = energy_result(&launch.frame);
+    place(&mut doc.models[0], &result);
+    let figure = doc.models[0].surface.take().unwrap();
+    doc.models[0].panels = ["HOMO (−11.33 eV)", "LUMO (−7.66 eV)"]
+        .into_iter()
+        .enumerate()
+        .map(|(k, caption)| crate::models3d::surface::Panel {
+            figure: Figure {
+                orbital: OrbitalRef {
+                    index: k as u32,
+                    ..figure.orbital.clone()
+                },
+                ..figure.clone()
+            },
+            caption: caption.into(),
+        })
+        .collect();
+    assert_eq!(doc.file_version(), CALCULATIONS);
+    science::attach(&mut doc, &launch, vec![], result).unwrap();
+    let model = &doc.models[0];
+    let (lo, hi) = frame(&doc, model).unwrap();
+    let panels = crate::models3d::panels(&doc, model);
+    assert_eq!(panels.len(), 2);
+    let frames: Vec<_> = panels
+        .iter()
+        .map(|(small, _)| frame(&doc, small).unwrap())
+        .collect();
+    // Under the model's frame, side by side, smaller, not overlapping.
+    assert!(frames.iter().all(|(plo, _)| plo.y > hi.y));
+    assert!(frames[0].1.x <= frames[1].0.x);
+    // Captions keep at least one and a half of their size between them.
+    let span = |caption: &Primitive| match caption {
+        Primitive::Text {
+            position,
+            text,
+            size,
+            style,
+            ..
+        } => (
+            position.x,
+            position.x + crate::style::styled_text_width(text, *size, style),
+            *size,
+        ),
+        _ => unreachable!("a caption is text"),
+    };
+    let ((_, end, size), (start, _, _)) = (span(&panels[0].1), span(&panels[1].1));
+    assert!(start - end >= size * 1.5 - 1e-3, "{end} {start}");
+    assert!(frames[0].1.x - frames[0].0.x < hi.x - lo.x);
+    // A click on a panel picks the molecule, as one on the frame does.
+    let (plo, phi) = frames[1];
+    let centre = Point::new((plo.x + phi.x) / 2., (plo.y + phi.y) / 2.);
+    assert_eq!(
+        crate::models3d::frame_hit(&doc, centre),
+        Some(model.linked_ids(&doc))
+    );
+    let pins = doc.orbital_pins();
+    assert_eq!(
+        pins.values().next().unwrap(),
+        &[(Spin::Alpha, 0), (Spin::Alpha, 1)]
+    );
+
+    // A registered mesh draws its panel, and saving keeps its snapshot.
+    let key = key(&doc, &panels[0].0).unwrap();
+    register(key, two_lobes());
+    assert!(groups(&doc).is_some());
+    let saved = doc.current();
+    // The file reads back with both panels.
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models[0].panels.len(), 2);
+    assert_eq!(reopened.models[0].panels[1].caption, "LUMO (−7.66 eV)");
+    assert!(saved.models[0].panels[0].figure.snapshot.is_some());
+    assert!(saved.models[0].panels[1].figure.snapshot.is_none());
+    REGISTERED.lock().unwrap().clear();
+    assert!(
+        groups(&saved).is_some(),
+        "the snapshot draws without the mesh"
+    );
+    let texts = primitives(&saved)
+        .into_iter()
+        .filter(|p| matches!(p, Primitive::Text { text, .. } if text.ends_with("eV)")))
+        .count();
+    assert_eq!(texts, 2);
+
+    // A pasted copy gets new IDs and still draws its saved panel.
+    let surfaces = |doc: &Document| {
+        primitives(doc)
+            .iter()
+            .filter(|p| matches!(p, Primitive::Surface { .. }))
+            .count()
+    };
+    assert_eq!(surfaces(&saved), 1);
+    let part = crate::editing::selection(&saved, &saved.all_ids());
+    let mut pasted = saved.clone();
+    assert!(!crate::editing::append(&mut pasted, &part, Point::new(200., 0.)).is_empty());
+    assert_eq!(surfaces(&pasted), 2);
+
+    // A stale first panel keeps its own figure when the second is refreshed.
+    let mut mixed = doc.clone();
+    mixed.models[0].panels[0].figure.orbital.result = "stale".into();
+    let shown = crate::models3d::panels(&mixed, &mixed.models[0]);
+    assert_eq!(shown.len(), 1);
+    register(super::key(&mixed, &shown[0].0).unwrap(), two_lobes());
+    let saved = mixed.current();
+    let kept = &saved.models[0].panels;
+    assert_eq!(kept[0].figure.orbital.result, "stale");
+    assert_eq!(kept[1].figure.orbital.index, 1);
+    assert!(kept[1].figure.snapshot.is_some());
+    REGISTERED.lock().unwrap().clear();
+}
