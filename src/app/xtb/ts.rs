@@ -4,6 +4,7 @@ use super::Action as XtbAction;
 use super::{is, state};
 use crate::app::{App, Message};
 use iced::Task;
+use iced::time::Instant;
 use reshiki::document::Document;
 use reshiki::qcdata::{
     CalcResult, Frame, Task as CalcTask, TransitionStateContext, TransitionStateRun,
@@ -16,6 +17,7 @@ use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 
 pub(super) mod card;
 pub(super) mod energy;
@@ -31,24 +33,35 @@ pub(super) use job::Event;
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Card(card::Action),
+    Calculate(u64),
     Review(review::Mode, Option<u64>),
     ReviewMap(u64),
     ReviewSheet(review::Action),
-    EnergyTask(state::Task),
+    Retry(u64, Retry),
+    ShowWhere(u64),
+    ReachedEndpoint,
     Image(usize),
-    Rerun,
     Export,
+    Tick,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Retry {
+    FinerPath,
+    RefineHighest,
 }
 
 #[derive(Clone)]
 pub(super) struct Request {
     pub arrow: u64,
+    pub free_energy: bool,
     bonds: card::BondChanges,
     pub context: TransitionStateContext,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     plan: TsPlan,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     pub images: usize,
+    retry: Option<Retry>,
 }
 
 #[cfg_attr(
@@ -63,11 +76,45 @@ pub(crate) enum Stage {
     Neb,
     Saddle,
     Irc,
+    Thermochemistry,
+}
+
+impl Stage {
+    fn step_index(self) -> usize {
+        match self {
+            Self::Endpoints => 0,
+            Self::Idpp | Self::Neb => 1,
+            Self::Saddle => 2,
+            Self::Irc => 3,
+            Self::Thermochemistry => 4,
+        }
+    }
+}
+
+const STEP_LABELS: [&str; 5] = [
+    "Building both ends",
+    "Finding a path",
+    "Refining the transition state",
+    "Checking where it leads",
+    "Frequencies at both ends",
+];
+
+#[derive(Debug, PartialEq, Eq)]
+enum StepState {
+    Done(Option<Duration>),
+    Current(Duration),
+    Skipped,
+    Todo,
 }
 
 pub(super) struct Live {
     pub request: Request,
+    pub energies: Vec<f64>,
+    reused_path: bool,
+    irc_skipped: bool,
     stage: Stage,
+    stage_started: Instant,
+    finished_steps: [Option<Duration>; STEP_LABELS.len()],
     iteration: Option<usize>,
     step: Option<usize>,
     forward: bool,
@@ -80,30 +127,84 @@ impl Live {
     const IRC_LIMIT: usize = 60;
 
     pub(super) fn new(request: Request) -> Self {
+        let reused_path = request.retry == Some(Retry::RefineHighest);
         Self {
             request,
-            stage: Stage::Endpoints,
+            energies: Vec::new(),
+            reused_path,
+            irc_skipped: false,
+            stage: if reused_path {
+                Stage::Saddle
+            } else {
+                Stage::Endpoints
+            },
+            stage_started: Instant::now(),
+            finished_steps: [None; STEP_LABELS.len()],
             iteration: None,
             step: None,
             forward: true,
         }
     }
 
-    pub fn line(&self) -> String {
-        [
-            (Stage::Endpoints, "Building endpoints"),
-            (Stage::Neb, "Finding a path"),
-            (Stage::Saddle, "Refining the transition state"),
-            (Stage::Irc, "Checking the reaction path"),
-        ]
-        .map(|(stage, label)| {
-            if self.stage > stage {
-                format!("✓ {label}")
-            } else {
-                label.to_owned()
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    fn advance(&mut self, stage: Stage, now: Instant) {
+        if self.stage.step_index() != stage.step_index() {
+            if let Some(elapsed) = self.finished_steps.get_mut(self.stage.step_index()) {
+                *elapsed.get_or_insert(Duration::ZERO) +=
+                    now.saturating_duration_since(self.stage_started);
             }
-        })
-        .join(" · ")
+            self.stage_started = now;
+            self.step = None;
+        }
+        self.stage = stage;
+    }
+
+    fn steps(&self, now: Instant) -> impl Iterator<Item = (&'static str, StepState)> + '_ {
+        let len = 4 + usize::from(self.request.free_energy);
+        STEP_LABELS
+            .into_iter()
+            .zip(self.finished_steps)
+            .take(len)
+            .enumerate()
+            .map(move |(index, (label, elapsed))| {
+                let state = if index == self.stage.step_index() {
+                    StepState::Current(
+                        elapsed.unwrap_or_default()
+                            + now.saturating_duration_since(self.stage_started),
+                    )
+                } else if index == Stage::Irc.step_index() && self.irc_skipped && elapsed.is_none()
+                {
+                    StepState::Skipped
+                } else if let Some(elapsed) = elapsed {
+                    StepState::Done(Some(elapsed))
+                } else if index < Stage::Saddle.step_index() && self.reused_path {
+                    StepState::Done(None)
+                } else {
+                    StepState::Todo
+                };
+                (label, state)
+            })
+    }
+
+    pub fn line(&self) -> String {
+        let label = STEP_LABELS
+            .get(self.stage.step_index())
+            .copied()
+            .unwrap_or_default();
+        if self.stage == Stage::Neb
+            && let Some(iteration) = self.iteration
+        {
+            format!("{label} · iteration {iteration}")
+        } else {
+            label.into()
+        }
+    }
+
+    fn small_reaction(&self) -> bool {
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        return self.request.plan.atoms <= 30;
+        #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
+        false
     }
 
     pub fn fraction(&self) -> Option<f32> {
@@ -118,6 +219,7 @@ impl Live {
                 let branch = if self.forward { 0.8 } else { 0.9 };
                 branch + 0.1 * part(self.step, Self::IRC_LIMIT)
             }
+            Stage::Thermochemistry => 0.99,
         })
     }
 }
@@ -126,7 +228,17 @@ impl Live {
 /// the energies and the three structures needed by the Path tab and export.
 #[derive(Clone, Debug)]
 struct Extras {
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    endpoint_energies_hartree: [f64; 2],
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    endpoint_thermo: Option<[Option<reshiki::qcdata::Thermo>; 2]>,
     image_positions: Vec<Vec<[f64; 3]>>,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    neb_converged: bool,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    candidate: Option<reshiki_optimize::ts::SaddleCandidate>,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    reached_positions_angstrom: Vec<[f64; 3]>,
     saddle_converged: bool,
     num_imaginary: usize,
     diagnostics: Vec<(String, String)>,
@@ -165,6 +277,48 @@ impl Session {
 
     pub(super) fn image(&self, index: usize) -> Option<Vec<[f64; 3]>> {
         self.extras.image_positions.get(index).cloned()
+    }
+
+    fn can_refine(&self, result: &CalcResult) -> bool {
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        return self.refinement_candidate(result).is_some();
+        #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
+        {
+            let _ = result;
+            false
+        }
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    fn refinement_candidate(
+        &self,
+        result: &CalcResult,
+    ) -> Option<&reshiki_optimize::ts::SaddleCandidate> {
+        if matches!(
+            &result.status,
+            reshiki::qcdata::Status::NotConverged { reason }
+                | reshiki::qcdata::Status::Failed { reason }
+                if reason.starts_with("engine/worker imaginary frequency counts disagree")
+        ) {
+            return None;
+        }
+        let candidate = self.extras.candidate.as_ref()?;
+        let energies = path_energies(result);
+        let atoms = result.trajectory.as_ref()?.numbers.len();
+        let dimensions = atoms.checked_mul(3)?;
+        (self.extras.num_imaginary >= 2
+            && atoms > 0
+            && saved_search(result).is_none_or(|search| search.arrow == Some(self.arrow))
+            && (5..=24).contains(&energies.len())
+            && self.extras.image_positions.len() == energies.len()
+            && self
+                .extras
+                .image_positions
+                .iter()
+                .all(|image| image.len() == atoms)
+            && candidate.positions.len() == dimensions
+            && candidate.hessian.len() == dimensions.checked_mul(dimensions)?)
+        .then_some(candidate)
     }
 }
 
@@ -261,6 +415,20 @@ impl App {
         }
     }
 
+    pub(super) fn xtb_ts_reference(
+        &self,
+        result: &Arc<CalcResult>,
+        arrow: Option<u64>,
+    ) -> Option<&'static str> {
+        let complex = saved_search(result)
+            .and_then(|search| search.context.as_ref()?.endpoint_complex)
+            .or_else(|| {
+                let arrow = arrow.filter(|_| !self.xtb_ts_search_stale(result))?;
+                Some(self.xtb_reaction_label(arrow).has_multiple_species())
+            });
+        (complex == Some(true)).then_some(view::OPTIMIZED_COMPLEX)
+    }
+
     pub(super) fn xtb_saved_reaction_title(
         &self,
         result: &CalcResult,
@@ -317,14 +485,23 @@ pub(super) fn unique_matching_plan(doc: &Document, atoms: &[Option<u64>]) -> Opt
     candidates.next().is_none().then_some(candidate)
 }
 
-/// Copy a path image's coordinates into the canvas preview. The model keeps
-/// its existing bond topology, including the original parents of added H.
+/// Copy a NEB path image's coordinates, retaining the starting topology.
+/// Reached endpoints use their own perceived graph instead.
 pub(super) fn preview_image(
     doc: &mut Document,
     atoms: &[Option<u64>],
     input: &Frame,
     image: &Frame,
 ) -> Result<(), ScienceError> {
+    preview_model(doc, atoms, input, image).map(|_| ())
+}
+
+fn preview_model<'a>(
+    doc: &'a mut Document,
+    atoms: &[Option<u64>],
+    input: &Frame,
+    image: &Frame,
+) -> Result<&'a mut reshiki::models3d::Model3d, ScienceError> {
     let anchor = atoms.iter().flatten().next().ok_or(ScienceError::NoModel)?;
     let model = doc
         .models
@@ -359,20 +536,94 @@ pub(super) fn preview_image(
     {
         *position = xyz;
     }
+    Ok(model)
+}
+
+/// An endpoint uses the search's covalent graph, including transferred or
+/// disconnected hydrogens. Geometry-only atoms let the preview render every
+/// perceived pair without forcing each added H to keep a parent bond.
+pub(super) fn preview_endpoint_image(
+    doc: &mut Document,
+    atoms: &[Option<u64>],
+    input: &Frame,
+    image: &Frame,
+) -> Result<(), ScienceError> {
+    let positions: Vec<_> = image
+        .positions_angstrom
+        .iter()
+        .flatten()
+        .map(|value| value / reshiki_optimize::ANGSTROM_PER_BOHR)
+        .collect();
+    let bonds = reshiki_optimize::ts::bonds(&image.numbers, &positions)
+        .map_err(|_| ScienceError::ModelMismatch)?;
+    let model = preview_model(doc, atoms, input, image)?;
+    let mut sources = model.geometry_sources();
+    sources.extend(std::iter::repeat_n(None, model.hydrogens.len()));
+    for hydrogen in model.hydrogens.drain(..) {
+        model.atoms.push(reshiki::models3d::Placed {
+            id: model.atoms.len() as u64,
+            xyz: hydrogen.xyz,
+        });
+    }
+    for (index, atom) in model.atoms.iter_mut().enumerate() {
+        atom.id = index as u64;
+    }
+    model.generated = Some(reshiki::models3d::Generated {
+        sources,
+        elements: image
+            .numbers
+            .iter()
+            .map(|&number| state::symbol(number).to_owned())
+            .collect(),
+        bonds: bonds.into_iter().map(|(a, b)| [a, b]).collect(),
+    });
+    // This transient geometry has its own perceived graph and geometry-only H.
+    // It is not a generated conformer awaiting an update from the drawing.
+    model.fingerprint = None;
     Ok(())
 }
 
 impl App {
+    pub(super) fn xtb_live_ts(&self) -> Option<&Live> {
+        self.tab.xtb.run.as_ref()?.ts.as_ref()
+    }
+
     pub(super) fn xtb_ts_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Card(action) => self.xtb_ts_card_action(action),
+            Action::Calculate(arrow) => self.xtb_calculate_reaction(arrow),
             Action::Review(mode, arrow) => self.xtb_review_open(mode, arrow),
             Action::ReviewMap(arrow) => {
                 self.xtb_review_show(review::Mode::TransitionState, Some(arrow))
             }
             Action::ReviewSheet(action) => self.xtb_review_action(action),
-            Action::EnergyTask(task) => {
-                self.xtb_reaction_energy_task(task);
+            Action::Retry(arrow, retry) => {
+                let retry =
+                    if retry == Retry::RefineHighest && !self.xtb_ts_refinement_available(arrow) {
+                        Retry::FinerPath
+                    } else {
+                        retry
+                    };
+                self.xtb_review_retry(arrow, retry)
+            }
+            Action::ShowWhere(arrow) => {
+                let card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
+                    return Task::none();
+                };
+                if self.xtb_running()
+                    || !view::has_reached_endpoint(result)
+                    || self.xtb_ts_result_stale(result)
+                {
+                    return Task::none();
+                }
+                if self.xtb_show_reaction_path(arrow) {
+                    self.xtb_end_preview();
+                    self.xtb_preview_reached_endpoint();
+                }
+                Task::none()
+            }
+            Action::ReachedEndpoint => {
+                self.xtb_preview_reached_endpoint();
                 Task::none()
             }
             Action::Image(index) => {
@@ -384,8 +635,8 @@ impl App {
                 }
                 Task::none()
             }
-            Action::Rerun => self.xtb_ts_rerun(),
             Action::Export => self.xtb_ts_export(),
+            Action::Tick => Task::none(),
         }
     }
 
@@ -393,11 +644,48 @@ impl App {
         super::available() && !self.xtb_running() && shown.arrow.is_some()
     }
 
-    fn xtb_ts_rerun(&mut self) -> Task<Message> {
-        let Some(arrow) = self.xtb_shown().and_then(|shown| shown.arrow) else {
-            return Task::none();
+    fn xtb_ts_result_stale(&self, result: &Arc<CalcResult>) -> bool {
+        let doc = &self.tab.doc;
+        doc.science
+            .results
+            .iter()
+            .find(|stored| Arc::ptr_eq(result, &stored.result))
+            .and_then(|stored| doc.science.attachment(stored.attachment))
+            .is_none_or(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
+            || self.xtb_ts_search_stale(result)
+    }
+
+    fn xtb_ts_refinement_available(&self, arrow: u64) -> bool {
+        let card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
+            return false;
         };
-        self.xtb_review_rerun(arrow)
+        self.xtb_ts_refinement_session(result)
+            .is_some_and(|session| {
+                view::presentation(result, Some(session)).recovery == view::Recovery::RefineHighest
+            })
+    }
+
+    fn xtb_ts_refinement_session(&self, result: &Arc<CalcResult>) -> Option<&Session> {
+        let session = self
+            .tab
+            .xtb
+            .ts_sessions
+            .get(result)
+            .filter(|session| session.can_refine(result))?;
+        if self.xtb_ts_search_stale(result) {
+            return None;
+        }
+        let doc = &self.tab.doc;
+        let stored = doc
+            .science
+            .results
+            .iter()
+            .find(|stored| Arc::ptr_eq(&stored.result, result))?;
+        let link = doc.science.attachment(stored.attachment)?;
+        let input = doc.science.frame(&link.frame)?;
+        (link.freshness(doc) == reshiki::science::Freshness::Current
+            && super::model_shows(doc, &link.atoms, &input.positions_angstrom))
+        .then_some(session.as_ref())
     }
 
     fn xtb_ts_begin(
@@ -405,8 +693,9 @@ impl App {
         arrow: u64,
         plan: TsPlan,
         images: usize,
-        charge: i32,
-        unpaired: u32,
+        (charge, unpaired): (i32, u32),
+        free_energy: bool,
+        retry: Option<Retry>,
     ) -> Task<Message> {
         #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
         let _ = images;
@@ -444,6 +733,7 @@ impl App {
             product_chemistry: endpoint_chemistry(&self.tab.doc, reaction, Role::Product),
             title: label.title(),
             reactant: label.first_reactant().unwrap_or("Reaction").to_owned(),
+            endpoint_complex: Some(plan.shape != (1, 1)),
         };
         self.xtb_begin(super::Request {
             atoms: plan.start_atoms.clone(),
@@ -453,12 +743,14 @@ impl App {
             search: None,
             ts: Some(Request {
                 arrow,
+                free_energy,
                 bonds,
                 context,
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
                 plan,
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
                 images,
+                retry,
             }),
         })
     }
@@ -469,14 +761,60 @@ mod tests;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 impl App {
+    fn xtb_ts_retry_path(
+        &self,
+        request: &Request,
+        launch: &reshiki::science::Launch,
+    ) -> job::SearchPath {
+        match request.retry {
+            None => return job::SearchPath::New(request.images),
+            Some(Retry::FinerPath) => return job::SearchPath::Finer(request.images),
+            Some(Retry::RefineHighest) => {}
+        }
+        let card::ArrowResult::Found(result) = self.xtb_ts_card_result(request.arrow) else {
+            return job::SearchPath::Finer(request.images);
+        };
+        let energies = path_energies(result);
+        let fallback = || job::SearchPath::Finer((energies.len() + 5).clamp(request.images, 24));
+        let Some(session) = self.tab.xtb.ts_sessions.get(result) else {
+            return fallback();
+        };
+        let Some(candidate) = session.refinement_candidate(result) else {
+            return fallback();
+        };
+        let images = &session.extras.image_positions;
+        if result.input_frame != Some(launch.frame.hash())
+            || self.xtb_ts_search_stale(result)
+            || !(5..=24).contains(&energies.len())
+            || images.len() != energies.len()
+            || images
+                .iter()
+                .any(|image| image.len() != launch.frame.numbers.len())
+        {
+            return fallback();
+        }
+        job::SearchPath::Saved {
+            points: images
+                .iter()
+                .zip(energies)
+                .map(|(image, &energy)| reshiki_optimize::ts::Minimum {
+                    positions: job::bohr(image),
+                    energy,
+                })
+                .collect(),
+            converged: session.extras.neb_converged,
+            candidate: candidate.clone(),
+        }
+    }
+
     pub(super) fn xtb_ts_start(&mut self, launch: reshiki::science::Launch) -> Task<Message> {
-        let Some(run) = self.tab.xtb.run.as_mut() else {
+        let Some(live) = self.xtb_live_ts() else {
             return Task::none();
         };
-        let Some(live) = &run.ts else {
-            return Task::none();
-        };
-        let Request { plan, images, .. } = live.request.clone();
+        let path = self.xtb_ts_retry_path(&live.request, &launch);
+        let Request {
+            plan, free_energy, ..
+        } = live.request.clone();
         // Hydrogen interactions (order 0) are not covalent bonds.
         let drawn_bonds: Vec<_> = self
             .tab
@@ -490,6 +828,19 @@ impl App {
             })
             .map(|bond| (bond.a, bond.b))
             .collect();
+        let Some(run) = self.tab.xtb.run.as_mut() else {
+            return Task::none();
+        };
+        if let Some(live) = &mut run.ts {
+            if let job::SearchPath::Saved { points, .. } = &path {
+                live.energies = points.iter().map(|point| point.energy).collect();
+            } else if live.reused_path {
+                // The starting frame changed between review and launch.
+                live.reused_path = false;
+                live.stage = Stage::Endpoints;
+                live.stage_started = Instant::now();
+            }
+        }
         let cancel = run.cancel.clone();
         run.label = "xTB · transition state".into();
         run.launch = Some(launch.clone());
@@ -497,7 +848,7 @@ impl App {
         run.started = iced::time::Instant::now();
         let serial = run.serial;
         let events = iced::futures::StreamExt::flatten(iced::futures::stream::once(async move {
-            job::start(launch, plan, drawn_bonds, images, cancel)
+            job::start(launch, plan, drawn_bonds, path, free_energy, cancel)
         }));
         let (task, handle) = Task::run(events, move |event| {
             Message::Xtb(XtbAction::TsEvent(serial, event))
@@ -517,13 +868,15 @@ impl App {
             return;
         };
         match event {
-            Event::Stage(stage) => {
-                if live.stage != stage {
-                    live.stage = stage;
-                    live.step = None;
-                }
+            Event::Stage(stage) => live.advance(stage, Instant::now()),
+            Event::IrcSkipped => live.irc_skipped = true,
+            Event::Neb {
+                iteration,
+                energies,
+            } => {
+                live.iteration = Some(iteration);
+                live.energies = energies;
             }
-            Event::Neb { iteration } => live.iteration = Some(iteration),
             Event::Saddle { step } => live.step = Some(step),
             Event::Irc { forward, step } => {
                 live.forward = forward;
@@ -557,6 +910,10 @@ impl App {
                     }
                     summary.transition_state = Some(Box::new(TransitionStateRun {
                         arrow: Some(request.arrow),
+                        free_energy: request.free_energy,
+                        endpoint_energies_hartree: Some(extras.endpoint_energies_hartree),
+                        endpoint_thermo: extras.endpoint_thermo.clone(),
+                        reached_positions_angstrom: extras.reached_positions_angstrom.clone(),
                         saddle_converged: extras.saddle_converged,
                         imaginary: extras.num_imaginary,
                         imaginary_cm1: extras.engine_imaginary,
@@ -571,7 +928,8 @@ impl App {
                     arrow: request.arrow,
                     freshness: Cell::new(None),
                 });
-                let line = view::presentation(&result, Some(&session)).status_line();
+                let line = view::presentation(&result, Some(&session))
+                    .status_line(self.appearance.energy_unit);
                 let pending = super::Pending {
                     pushed: false,
                     accepted: None,

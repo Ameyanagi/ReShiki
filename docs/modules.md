@@ -241,6 +241,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
 - `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
+- `src/app/xtb/ts/review/view.rs`: Review both reaction sides while keeping uncommon calculation settings folded.
 - `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
 - `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
@@ -1036,6 +1037,7 @@ explains how the crates and modules fit together.
 - `crates/optimize/src/ts/modes.rs`: Eckart translation/rotation projection and harmonic normal modes.
 - `crates/optimize/src/ts/neb.rs`: Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J.
 - `crates/optimize/src/ts/reactive_start.rs`: Graph-preserving preparation of a reactive starting conformer.
+- `crates/optimize/src/ts/recovery.rs`: Extra-mode displacement followed by ordinary index-one refinement.
 - `crates/optimize/src/ts/saddle.rs`: Partitioned rational-function saddle refinement.
 - `crates/optimize/src/ts/saddle_regressions.rs`: Analytic counterexamples for trust-model recovery and force-only acceptance.
 

@@ -1,6 +1,8 @@
 //! Scheme review through the same messages as the row, menu and palette.
 use super::*;
 use crate::app::xtb::ts::card::tests::claisen;
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+use crate::app::xtb::ts::card::tests::{diels_alder, hydrogen_transfer};
 use reshiki::document::{Arrow, Point};
 use reshiki::reactions::{Participant, Reaction};
 
@@ -71,6 +73,313 @@ fn species_title_formula_uses_plain_digits_and_the_requested_atoms() {
     );
 }
 
+#[test]
+fn barrier_support_uses_inferred_or_current_roles_without_requiring_an_atom_map() {
+    let (doc, arrow) = drawn_claisen();
+    let mut app = app(doc, arrow);
+    assert!(app.xtb_reaction_supports_barrier(arrow));
+    assert!(app.tab.doc.reactions.is_empty());
+    app.tab.doc.reactions.push(Reaction::new(arrow));
+    assert!(!app.xtb_reaction_supports_barrier(arrow));
+}
+
+#[test]
+fn barrier_support_counts_molecular_species_and_rejects_coefficients() {
+    let (mut doc, arrow) = ions(false);
+    let left: Vec<_> = doc.reactions[0]
+        .reactants
+        .iter()
+        .flat_map(|participant| participant.atoms.iter().copied())
+        .collect();
+    doc.add_bond(left[0], left[1], 1, "plain");
+    doc.reactions[0].reactants = vec![Participant {
+        atoms: left,
+        coefficient: 1,
+    }];
+    let right = doc.reactions[0]
+        .products
+        .iter()
+        .flat_map(|participant| participant.atoms.iter().copied())
+        .collect();
+    doc.reactions[0].products = vec![Participant {
+        atoms: right,
+        coefficient: 1,
+    }];
+    let mut app = app(doc, arrow);
+    assert_eq!(
+        species::shape(&app.tab.doc, &app.tab.doc.reactions[0]),
+        Ok((1, 2))
+    );
+    assert!(app.xtb_reaction_supports_barrier(arrow));
+    let reaction = &mut app.tab.doc.reactions[0];
+    std::mem::swap(&mut reaction.reactants, &mut reaction.products);
+    assert!(app.xtb_reaction_supports_barrier(arrow));
+    app.tab.doc.reactions[0].reactants[0].coefficient = 2;
+    assert!(!app.xtb_reaction_supports_barrier(arrow));
+    app.tab.doc.reactions[0].reactants[0].coefficient = 1;
+    let extra = app.tab.doc.add_atom("O", Point::new(-30., 0.));
+    app.tab.doc.reactions[0].reactants[0].atoms.push(extra);
+    assert!(!app.xtb_reaction_supports_barrier(arrow));
+}
+
+#[test]
+fn reviewed_unpaired_electrons_convert_to_internal_multiplicity_and_check_parity() {
+    let (doc, _) = ions(false);
+    let (mut inputs, _) = species::inputs(&doc, &doc.reactions[0]).unwrap();
+    assert!(inputs.iter().all(|input| input.unpaired == "0"));
+    inputs[0].unpaired = "2".into();
+    assert_eq!(species::validate(&inputs).unwrap()[0].multiplicity, 3);
+    inputs[0].unpaired = "1".into();
+    assert!(
+        species::validate(&inputs).is_err(),
+        "electron parity still applies"
+    );
+    for invalid in ["-1", "0.5", "4294967295"] {
+        inputs[0].unpaired = invalid.into();
+        assert!(
+            species::validate(&inputs)
+                .unwrap_err()
+                .contains("nonnegative whole-number")
+        );
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn unified_calculate_and_rerun_shortcut_follow_the_same_output_choices() {
+    for shortcut in [false, true] {
+        for (barrier, energy, free, transition_state) in [
+            (true, true, false, true),
+            (true, false, false, true),
+            (false, true, false, false),
+            (false, false, true, false),
+            (true, false, true, true),
+        ] {
+            let (doc, arrow) = claisen();
+            let mut app = app(doc, arrow);
+            app.tab.xtb.ts_card.barrier = barrier;
+            app.tab.xtb.ts_card.reaction_energy = energy;
+            app.tab.xtb.ts_card.free_energy = free;
+            assert!(app.xtb_can_calculate_reaction(arrow));
+            let action = if shortcut {
+                XtbAction::Entry(super::super::super::Entry::Rerun)
+            } else {
+                XtbAction::Ts(TsAction::Calculate(arrow))
+            };
+            let _ = app.update(Message::Xtb(action));
+            let run = app
+                .tab
+                .xtb
+                .run
+                .as_ref()
+                .expect("the chosen calculation starts");
+            assert_eq!(run.ts.is_some(), transition_state);
+            if let Some(ts) = &run.ts {
+                assert_eq!(ts.request.free_energy, free);
+            } else {
+                assert_eq!(
+                    run.config.task,
+                    if free {
+                        CalcTask::OptFreq
+                    } else {
+                        CalcTask::Optimize
+                    }
+                );
+            }
+            assert!(!app.xtb_can_calculate_reaction(arrow));
+        }
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn unsupported_barrier_falls_back_to_energy_and_no_effective_output_blocks_calculate() {
+    let (mut doc, arrow) = ions(false);
+    for atom in &mut doc.atoms {
+        atom.element = if atom.map_num == 1 { "O" } else { "C" }.into();
+        atom.charge = 0;
+    }
+    for (energy, free) in [(false, false), (true, false), (false, true)] {
+        let mut app = app(doc.clone(), arrow);
+        app.tab.xtb.ts_card.reaction_energy = energy;
+        app.tab.xtb.ts_card.free_energy = free;
+        assert!(!app.xtb_reaction_supports_barrier(arrow));
+        assert_eq!(app.xtb_can_calculate_reaction(arrow), energy || free);
+        let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+        assert_eq!(app.xtb_running(), energy || free);
+        if let Some(run) = &app.tab.xtb.run {
+            assert!(run.ts.is_none());
+            assert_eq!(
+                run.config.task,
+                if free {
+                    CalcTask::OptFreq
+                } else {
+                    CalcTask::Optimize
+                }
+            );
+        }
+    }
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    app.tab.xtb.ts_card.reaction_energy = false;
+    app.tab.xtb.ts_card.barrier = false;
+    assert!(!app.xtb_can_calculate_reaction(arrow));
+    let _ = app.update(Message::Xtb(XtbAction::Entry(
+        super::super::super::Entry::Rerun,
+    )));
+    assert!(!app.xtb_running());
+    assert!(!app.ts_review_open());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn refused_barrier_runs_the_energy_batch_from_calculate_and_rerun() {
+    use reshiki::reactions::Role;
+
+    for (carbons, mapped, reason) in [
+        (2, true, "no bonds forming or breaking"),
+        (41, true, "up to 120 atoms"),
+        (129, false, "up to 120 atoms"),
+    ] {
+        let (mut doc, arrow) = ions(false);
+        doc.atoms.clear();
+        for side in [Role::Reactant, Role::Product] {
+            let mut atoms = Vec::new();
+            for i in 0..carbons {
+                let id = doc.add_atom("C", Point::new(i as f32 * 24., 0.));
+                if mapped {
+                    doc.atom_mut(id).unwrap().map_num = i + 1;
+                }
+                if let Some(&previous) = atoms.last() {
+                    doc.add_bond(previous, id, 1, "plain");
+                }
+                atoms.push(id);
+            }
+            let participants = match side {
+                Role::Reactant => &mut doc.reactions[0].reactants,
+                Role::Product => &mut doc.reactions[0].products,
+                Role::Agent => unreachable!(),
+            };
+            *participants = vec![Participant {
+                atoms,
+                coefficient: 1,
+            }];
+        }
+        assert!(
+            barrier_refusal(&ts_plan::plan_for_review(&doc, arrow))
+                .unwrap()
+                .contains(reason)
+        );
+        for action in [
+            XtbAction::Ts(TsAction::Calculate(arrow)),
+            XtbAction::Entry(super::super::super::Entry::Rerun),
+        ] {
+            let mut app = app(doc.clone(), arrow);
+            let _ = app.update(Message::Xtb(action));
+            assert!(!app.ts_review_open());
+            assert!(app.tab.xtb.run.as_ref().is_some_and(|run| run.ts.is_none()));
+            assert!(app.tab.xtb.energy_state.in_progress());
+            assert!(
+                app.xtb_energy_result(arrow, None)
+                    .1
+                    .unwrap()
+                    .contains(reason)
+            );
+        }
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn failed_automatic_mapping_falls_back_only_when_reaction_energy_is_selected() {
+    let (mut doc, arrow) = claisen();
+    for atom in &mut doc.atoms {
+        atom.map_num = 0;
+    }
+    let reason = "Could not find atom correspondence";
+    for (energy, free) in [(true, false), (false, true), (false, false)] {
+        let mut app = app(doc.clone(), arrow);
+        app.tab.xtb.ts_card.reaction_energy = energy;
+        app.tab.xtb.ts_card.free_energy = free;
+        let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+        assert!(app.xtb_automatic_mapping_pending(arrow));
+        let id = app.tab.xtb.ts_review.as_ref().unwrap().id;
+        let _ = app.update(send(Action::Ready(id, Err(reason.into()))));
+        assert_eq!(app.tab.doc, doc);
+        if energy || free {
+            assert!(!app.ts_review_open());
+            let run = app.tab.xtb.run.as_ref().unwrap();
+            assert!(run.ts.is_none());
+            assert_eq!(
+                run.config.task,
+                if free {
+                    CalcTask::OptFreq
+                } else {
+                    CalcTask::Optimize
+                }
+            );
+            assert_eq!(app.xtb_energy_result(arrow, None).1, Some(reason));
+        } else {
+            let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+            assert_eq!(dialog.mode, Mode::TransitionState);
+            assert_eq!(dialog.validate().unwrap_err(), reason);
+            assert!(!app.xtb_running());
+        }
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn automatic_map_refusal_stays_with_the_energy_batch_after_species_storage() {
+    use crate::app::xtb::tests::{MOVED, START, event, optimized};
+    use reshiki::geometry::Point3;
+
+    let (mut doc, arrow) = ions(false);
+    doc.atoms.retain(|atom| atom.map_num == 1);
+    for atom in &mut doc.atoms {
+        atom.map_num = 0;
+        atom.charge = 0;
+        atom.element = "O".into();
+    }
+    doc.reactions[0].reactants.truncate(1);
+    doc.reactions[0].products.truncate(1);
+    let mut app = app(doc, arrow);
+    let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+    finish_mapping(&mut app);
+    let refusal = "The atom map shows no bonds forming or breaking and no hydrogen moves";
+    assert_eq!(app.xtb_energy_result(arrow, None).1, Some(refusal));
+    assert!(app.tab.doc.atoms.iter().all(|atom| atom.map_num == 0));
+
+    for _ in 0..2 {
+        let positions = START.iter().map(|&[x, y, z]| Point3 { x, y, z }).collect();
+        let _ = app.finish_model(positions, vec![0, 0]);
+        event(&mut app, optimized(&START, &MOVED));
+        assert_eq!(app.xtb_energy_result(arrow, None).1, Some(refusal));
+    }
+    assert_eq!(app.tab.doc.science.results.len(), 2);
+    assert!(app.xtb_energy_result(arrow, None).0.is_some());
+    app.tab.doc.atoms[0].isotope = 18;
+    assert_eq!(app.xtb_energy_result(arrow, None).1, None);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn free_energy_choice_is_kept_while_a_review_waits() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    app.tab.xtb.ts_card.free_energy = true;
+    let _ = app.xtb_review_show(Mode::Energy, Some(arrow));
+    assert!(!app.xtb_can_calculate_reaction(arrow));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(dialog.task, CalcTask::OptFreq);
+    app.tab.xtb.ts_card.free_energy = false;
+    let _ = app.update(send(Action::Accept));
+    assert_eq!(
+        app.tab.xtb.run.as_ref().unwrap().config.task,
+        CalcTask::OptFreq
+    );
+}
+
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 fn finish_mapping(app: &mut App) {
     finish_mapping_with(app, |_| {});
@@ -117,13 +426,14 @@ fn sure_auto_map_starts_silently_and_commits_inferred_roles_and_maps_together() 
     });
     assert_eq!(
         Changes::from_plan(&app.tab.doc, &scheme_plan(&app.tab.doc, arrow).unwrap()).bonds,
-        "Bonds formed: C1–C6 · broken: O3–C4"
+        "forms C1–C6 · breaks O3–C4"
     );
     assert!(!app.ts_review_open());
     assert!(!app.xtb_automatic_mapping_pending(arrow));
     assert!(app.xtb_running());
     assert_eq!(app.tab.doc.reactions.len(), 1);
     assert_eq!(app.tab.doc.reactions[0].agents.len(), 1);
+    assert_eq!(app.xtb_reaction_bond_marks().len(), 2);
     assert!(
         app.tab.doc.reactions[0].reactants[0]
             .atoms
@@ -184,7 +494,7 @@ fn edit_map_hands_off_the_inferred_proposal_without_editing_the_drawing() {
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
 fn complete_map_with_moving_hydrogen_requires_the_sheet() {
-    let (doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
+    let (doc, arrow) = hydrogen_transfer();
     let mut app = app(doc, arrow);
     open(&mut app, Mode::TransitionState);
     assert!(!app.xtb_running());
@@ -202,8 +512,33 @@ fn complete_map_with_moving_hydrogen_requires_the_sheet() {
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
+fn proton_transfer_with_barrier_off_reviews_and_runs_reaction_energy() {
+    let (doc, arrow) = hydrogen_transfer();
+    let mut app = app(doc, arrow);
+    app.tab.xtb.ts_card.barrier = false;
+    app.tab.xtb.ts_card.reaction_energy = true;
+    let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+    assert!(app.ts_review_visible());
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(dialog.changes.as_ref().unwrap().action, "transfer hydrogen");
+    assert_eq!(
+        dialog.changes.as_ref().unwrap().hydrogens,
+        ["H from C2 to O3 (least motion)"]
+    );
+    assert_eq!(dialog.heading(), "Calculate reaction energy");
+    assert_eq!(dialog.run_label(), "Calculate reaction energy");
+
+    let _ = app.update(send(Action::Accept));
+    assert!(!app.ts_review_open());
+    let run = app.tab.xtb.run.as_ref().expect("reaction energy starts");
+    assert!(run.ts.is_none());
+    assert_eq!(run.config.task, CalcTask::Optimize);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
 fn a_sure_proposal_with_moving_hydrogen_still_waits_for_review() {
-    let (mut doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
+    let (mut doc, arrow) = hydrogen_transfer();
     for atom in &mut doc.atoms {
         if atom.map_num == 1 {
             atom.map_num = 0;
@@ -283,11 +618,232 @@ fn mapper_ties_and_unfinished_searches_require_review_before_applying() {
         let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
         assert!(dialog.needs_review());
         assert!(dialog.validate().is_ok());
+        assert_eq!(dialog.subtitle().starts_with("Several atom maps fit"), tied);
+        assert!(dialog.pictures.is_some());
+        let changes = dialog.changes.as_ref().unwrap();
+        assert!(!changes.marks.is_empty());
+        assert_eq!(
+            changes.marks.len(),
+            dialog.plan.as_ref().unwrap().form.len() + dialog.plan.as_ref().unwrap().break_.len()
+        );
         let _ = app.update(send(Action::Accept));
         assert!(!app.ts_review_open());
         assert!(app.xtb_running());
         assert_eq!(app.tab.history.undo_frames().len(), 1);
     }
+}
+
+#[test]
+fn review_picture_and_run_action_describe_the_same_bonds() {
+    let (doc, arrow) = claisen();
+    let plan = ts_plan::plan_for_review(&doc, arrow).unwrap();
+    let changes = Changes::from_plan(&doc, &plan);
+    assert_eq!(changes.bonds, "forms C1–C6 · breaks O3–C4");
+    assert_eq!(changes.action, "form C1–C6, break O3–C4");
+    assert_eq!(changes.marks.len(), 2);
+    assert!(matches!(changes.marks[0].kind, BondChangeKind::Form));
+    assert!(matches!(changes.marks[1].kind, BondChangeKind::Break));
+    for mark in &changes.marks {
+        assert!(mark.atoms.iter().all(|id| plan.start_atoms.contains(id)));
+        assert!(!mark.highlighted);
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn diels_alder_review_crosses_product_bonds_and_draws_reactant_arcs() {
+    let (doc, arrow) = diels_alder();
+    let mut app = app(doc, arrow);
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(dialog.plan.as_ref().unwrap().start, Side::Product);
+    let changes = dialog.changes.as_ref().unwrap();
+    assert_eq!(changes.bonds, "forms C1–C6, C4–C5");
+    assert_eq!(changes.action, "form C1–C6, C4–C5");
+    let [start, other] = dialog.pictures.as_ref().unwrap();
+    assert_eq!(start.label, "Products (search start)");
+    assert_eq!(other.label, "Reactants");
+    let doc = &app.tab.doc;
+    let pairs = |picture: &Picture, kind| {
+        picture
+            .marks
+            .iter()
+            .map(|mark| {
+                assert_eq!(mark.kind, kind);
+                let [a, b] = mark.atoms;
+                assert_eq!(
+                    doc.bond_between(a, b).is_some(),
+                    kind == BondChangeKind::Break
+                );
+                mark.atoms.map(|id| doc.atom(id).unwrap().map_num)
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(pairs(start, BondChangeKind::Break), [[1, 6], [4, 5]]);
+    assert_eq!(pairs(other, BondChangeKind::Form), [[1, 6], [4, 5]]);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn review_settings_start_folded_and_the_summary_tracks_edits() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert_eq!(
+        dialog.state_summary(),
+        "All species neutral, no unpaired electrons"
+    );
+    assert_eq!(dialog.run_label(), "Run: form C1–C6, break O3–C4");
+    assert!(!dialog.edit_species);
+    assert!(!dialog.advanced);
+    let _ = app.update(send(Action::EditSpecies));
+    let _ = app.update(send(Action::Advanced));
+    let _ = app.update(send(Action::Charge(0, "−2".into())));
+    let _ = app.update(send(Action::Unpaired(0, "2".into())));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert!(dialog.edit_species);
+    assert!(dialog.advanced);
+    assert_eq!(
+        dialog.state_summary(),
+        "1 charged species, 1 species with unpaired electrons"
+    );
+    let _ = app.update(send(Action::EditSpecies));
+    let _ = app.update(send(Action::Advanced));
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert!(!dialog.edit_species);
+    assert!(!dialog.advanced);
+    assert!(
+        dialog.validate().is_err(),
+        "folding does not bypass charge balance"
+    );
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[tokio::test]
+async fn accepting_or_canceling_the_review_returns_focus_to_the_drawing() {
+    use iced::advanced::widget::operation::Focusable;
+    use iced::futures::StreamExt;
+
+    struct Focus(bool);
+    impl Focusable for Focus {
+        fn is_focused(&self) -> bool {
+            self.0
+        }
+        fn focus(&mut self) {
+            self.0 = true;
+        }
+        fn unfocus(&mut self) {
+            self.0 = false;
+        }
+    }
+
+    for action in [Action::Accept, Action::Cancel] {
+        let accept = matches!(action, Action::Accept);
+        let (doc, arrow) = claisen();
+        let mut app = app(doc, arrow);
+        let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+        let task = app.xtb_review_action(action);
+        assert!(!app.ts_review_open());
+        assert_eq!(app.xtb_running(), accept);
+        let mut stream = iced_runtime::task::into_stream(task).expect("focus task");
+        let Some(iced_runtime::Action::Widget(mut operation)) = stream.next().await else {
+            panic!("closing the review must first restore drawing focus");
+        };
+        let mut field = Focus(true);
+        operation.focusable(None, iced::Rectangle::default(), &mut field);
+        assert!(!field.is_focused(), "the next key must reach the drawing");
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
+async fn review_shows_the_proposal_and_reveals_settings_only_when_opened() {
+    use crate::app::xtb::ts::card::tests::ViewHarness;
+    use iced::widget::text;
+
+    let ui = ViewHarness::new().await;
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    let _ = app.xtb_review_show(Mode::TransitionState, Some(arrow));
+    let snapshot = ui.inspect(app.with_ts_review(text("").into()));
+    for expected in [
+        "Which bonds change?",
+        "Check the bonds that change.",
+        "Reactants (search start)",
+        "Products",
+        "forms C1–C6 · breaks O3–C4",
+        "All species neutral, no unpaired electrons",
+        "Run: form C1–C6, break O3–C4",
+    ] {
+        assert!(
+            snapshot.texts.iter().any(|text| text == expected),
+            "{expected}"
+        );
+    }
+    assert!(snapshot.semantics.duplicate_ids.is_empty());
+    assert!(
+        snapshot
+            .semantics
+            .nodes
+            .iter()
+            .all(|node| { node.id != "ts.review.path-points" && node.id != "ts.review.0.Charge" })
+    );
+    for id in ["ts.review.state", "ts.review.advanced"] {
+        let action = ui
+            .activate(app.with_ts_review(text("").into()), id)
+            .unwrap();
+        let _ = app.update(action);
+    }
+    let opened = ui.inspect(app.with_ts_review(text("").into()));
+    for id in [
+        "ts.review.path-points",
+        "ts.review.0.Charge",
+        "ts.review.0.Unpaired electrons",
+    ] {
+        assert!(
+            opened.semantics.nodes.iter().any(|node| node.id == id),
+            "{id}"
+        );
+    }
+    assert!(opened.texts.iter().any(|text| text == "Unpaired electrons"));
+    assert!(matches!(
+        ui.activate(app.with_ts_review(text("").into()), "ts.review.accept"),
+        Some(Message::Xtb(XtbAction::Ts(TsAction::ReviewSheet(
+            Action::Accept
+        ))))
+    ));
+
+    let (doc, arrow) = drawn_claisen();
+    let mut tied = self::app(doc, arrow);
+    let _ = tied.xtb_review_show(Mode::TransitionState, Some(arrow));
+    finish_mapping_with(&mut tied, |proposal| proposal.multiple_best = true);
+    let proposal = ui.inspect(tied.with_ts_review(text("").into()));
+    assert_eq!(
+        proposal
+            .texts
+            .iter()
+            .filter(|text| *text == "Proposed changes")
+            .count(),
+        1
+    );
+    assert!(
+        proposal
+            .texts
+            .iter()
+            .any(|text| text.starts_with("Several atom maps fit"))
+    );
+    assert!(
+        ui.activate(tied.with_ts_review(text("").into()), "ts.review.edit")
+            .is_some()
+    );
+    assert!(
+        proposal
+            .texts
+            .iter()
+            .all(|text| !text.contains("Two mechanisms"))
+    );
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
@@ -390,7 +946,7 @@ fn cancelling_silent_mapping_discards_a_late_proposal() {
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
-fn reviewed_charges_set_the_run_state_and_incompatible_multiplicities_block_it() {
+fn reviewed_charges_set_the_run_state_and_incompatible_unpaired_counts_block_it() {
     let (doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
     let mut app = app(doc, arrow);
     open(&mut app, Mode::TransitionState);
@@ -406,7 +962,7 @@ fn reviewed_charges_set_the_run_state_and_incompatible_multiplicities_block_it()
             .contains("charge +2")
     );
     let _ = app.update(send(Action::Charge(1, "-2".into())));
-    let _ = app.update(send(Action::Multiplicity(1, "3".into())));
+    let _ = app.update(send(Action::Unpaired(1, "2".into())));
     assert!(
         app.tab
             .xtb
@@ -417,7 +973,7 @@ fn reviewed_charges_set_the_run_state_and_incompatible_multiplicities_block_it()
             .unwrap_err()
             .contains("cannot share one spin state")
     );
-    let _ = app.update(send(Action::Multiplicity(1, "1".into())));
+    let _ = app.update(send(Action::Unpaired(1, "0".into())));
     let _ = app.update(send(Action::Accept));
     assert_eq!(app.tab.xtb.run.as_ref().unwrap().config.charge, -2);
     assert!(app.tab.doc.atoms.iter().all(|atom| atom.charge == 0));

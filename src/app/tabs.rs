@@ -344,6 +344,7 @@ impl App {
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
         self.xtb_vibrations_leave();
+        self.xtb_keep_bond_hover(None);
         self.xtb_clear_palette_status(None);
         self.pause_optimization();
         if self.style_menu.is_some() {

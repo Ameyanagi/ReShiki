@@ -66,6 +66,8 @@ pub(crate) struct Palette {
     pub(super) previous: bool,
     pub(super) view: View,
     pub(super) labels: bool,
+    /// The live search explicitly chosen for the dock, independently of saved results.
+    live_ts: Option<u64>,
     step: Option<Step>,
     ts_views: Vec<TsView>,
     /// Why the previewed step was not used: the stereo check's findings.
@@ -80,7 +82,7 @@ pub(crate) struct Palette {
 }
 
 struct Step {
-    index: usize,
+    point: PreviewPoint,
     attachment: u64,
     result: Weak<CalcResult>,
     /// The document state the preview belongs to; any edit ends it.
@@ -88,6 +90,12 @@ struct Step {
     /// The document with the model at this step, when the step's geometry
     /// is known.
     preview: Option<Box<Document>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PreviewPoint {
+    Step(usize),
+    ReachedEndpoint,
 }
 
 struct TsView {
@@ -145,6 +153,7 @@ impl Palette {
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) -> bool {
         self.open = true;
         self.previous = false;
+        self.live_ts = None;
         let same = self.follows(result);
         if same && ts::is_ts(result) {
             return false;
@@ -188,6 +197,7 @@ pub(super) struct Shown<'a> {
     pub arrow: Option<u64>,
     pub info: Option<&'a RunInfo>,
     pub ts: Option<&'a ts::Session>,
+    pub ts_reference: Option<&'static str>,
 }
 
 impl Shown<'_> {
@@ -195,8 +205,18 @@ impl Shown<'_> {
         results::method_line(&self.stored.result, self.frame)
     }
 
-    pub(super) fn rows(&self) -> Vec<(String, String)> {
-        results::summary_rows(&self.stored.result, self.input, self.frame, self.info)
+    pub(super) fn rows(&self, unit: Option<super::EnergyUnit>) -> Vec<(String, String)> {
+        let result = &self.stored.result;
+        let mut rows = results::summary_rows(result, self.input, self.frame, self.info);
+        if let Some(unit) = unit {
+            rows.extend(ts::view::path_rows(
+                result,
+                self.ts,
+                unit,
+                self.ts_reference,
+            ));
+        }
+        rows
     }
 
     pub(super) fn step_positions(&self, step: usize) -> Option<Vec<[f64; 3]>> {
@@ -247,6 +267,50 @@ fn is_charge_label(text: &str) -> bool {
 }
 
 impl App {
+    /// A running search occupies the dock only when that reaction chose it.
+    pub(super) fn xtb_palette_live_ts(&self) -> Option<&ts::Live> {
+        self.xtb_live_ts()
+            .filter(|live| self.xtb_palette_follows_live_ts(live.request.arrow))
+    }
+
+    pub(super) fn xtb_palette_follows_live_ts(&self, arrow: u64) -> bool {
+        self.tab.xtb.palette.open
+            && self.tab.xtb.palette.live_ts == Some(arrow)
+            && self.xtb_selected_reaction() == Some(arrow)
+    }
+
+    pub(super) fn xtb_show_live_path(&mut self, arrow: u64) -> bool {
+        if !self
+            .xtb_live_ts()
+            .is_some_and(|live| live.request.arrow == arrow)
+        {
+            return false;
+        }
+        self.xtb_end_preview();
+        let palette = &mut self.tab.xtb.palette;
+        palette.live_ts = Some(arrow);
+        palette.open = true;
+        palette.collapsed = false;
+        palette.previous = false;
+        palette.view = View::Path;
+        true
+    }
+
+    /// Keep an unrelated open result until the user chooses the live path.
+    pub(super) fn xtb_ts_palette_started(&mut self) {
+        let Some(arrow) = self.xtb_live_ts().map(|live| live.request.arrow) else {
+            return;
+        };
+        self.tab.xtb.palette.live_ts = None;
+        if !self.tab.xtb.palette.open
+            || self
+                .xtb_shown()
+                .is_none_or(|shown| shown.arrow == Some(arrow))
+        {
+            self.xtb_show_live_path(arrow);
+        }
+    }
+
     /// The result the palette follows, while the document holds it.
     fn xtb_palette_result(&self) -> Option<(usize, &Stored)> {
         self.tab
@@ -266,6 +330,9 @@ impl App {
     }
 
     pub(super) fn xtb_shown_entry(&self) -> Option<(usize, &Stored)> {
+        if self.xtb_palette_live_ts().is_some() {
+            return None;
+        }
         let palette = &self.tab.xtb.palette;
         if palette.result.is_empty() {
             return palette.open.then(|| self.xtb_newest()).flatten();
@@ -333,6 +400,7 @@ impl App {
             arrow,
             info: self.tab.xtb.info(&stored.result),
             ts,
+            ts_reference: self.xtb_ts_reference(&stored.result, arrow),
         })
     }
 
@@ -345,12 +413,12 @@ impl App {
     fn xtb_follow_result(&mut self, result: &Arc<CalcResult>) {
         self.xtb_clear_palette_status(Some(StatusKind::Mode));
         if self.tab.xtb.palette.show(result)
-            && let Some(index) = self.xtb_step()
+            && let Some(point) = self.xtb_current_step().map(|step| step.point)
         {
             let status = std::mem::take(&mut self.status);
             let error = self.error;
             let palette_status = self.tab.xtb.palette.status.take();
-            self.xtb_preview_step(index);
+            self.xtb_preview_point(point);
             self.status = status;
             self.error = error;
             self.tab.xtb.palette.status = palette_status;
@@ -359,14 +427,26 @@ impl App {
 
     pub(in crate::app) fn xtb_sync_reaction_palette(&mut self, selection_changed: bool) -> bool {
         let palette = &self.tab.xtb.palette;
-        let Some(arrow) = self.xtb_selected_reaction().filter(|_| palette.open) else {
+        let Some(arrow) = self.xtb_selected_reaction().filter(|&arrow| {
+            palette.open
+                && self
+                    .xtb_live_ts()
+                    .is_none_or(|live| live.request.arrow != arrow)
+        }) else {
             return false;
         };
         let showing_ts = palette.is_showing_ts();
         let failed = self
             .xtb_palette_failure(Some(arrow))
             .is_some_and(|failed| failed.ts().is_some());
-        if !selection_changed && !showing_ts && !failed {
+        if !selection_changed
+            && !failed
+            && (!showing_ts
+                || self
+                    .xtb_palette_result()
+                    .and_then(|(_, stored)| ts::saved_search(&stored.result)?.arrow)
+                    .is_some_and(|shown| shown != arrow))
+        {
             return false;
         }
         if let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) {
@@ -420,6 +500,12 @@ impl App {
     /// on results.
     pub(super) fn xtb_can_show(&self) -> bool {
         let open = self.tab.xtb.palette.open;
+        if self
+            .xtb_live_ts()
+            .is_some_and(|live| self.xtb_selected_reaction() == Some(live.request.arrow))
+        {
+            return !open || self.xtb_palette_live_ts().is_none();
+        }
         let reaction = self.xtb_selected_reaction();
         if self.xtb_palette_failure(reaction).is_some() {
             return !open;
@@ -503,7 +589,8 @@ impl App {
 
     /// The palette is showing a result.
     pub(super) fn xtb_palette_visible(&self) -> bool {
-        self.tab.xtb.palette.open && self.xtb_shown_entry().is_some()
+        self.tab.xtb.palette.open
+            && (self.xtb_palette_live_ts().is_some() || self.xtb_shown_entry().is_some())
     }
 
     /// The step preview, while the document has not changed since.
@@ -513,7 +600,15 @@ impl App {
 
     /// The selected step, while it is current.
     pub(super) fn xtb_step(&self) -> Option<usize> {
-        Some(self.xtb_current_step()?.index)
+        match self.xtb_current_step()?.point {
+            PreviewPoint::Step(index) => Some(index),
+            PreviewPoint::ReachedEndpoint => None,
+        }
+    }
+
+    pub(super) fn xtb_reached_endpoint_selected(&self) -> bool {
+        self.xtb_current_step()
+            .is_some_and(|step| step.point == PreviewPoint::ReachedEndpoint)
     }
 
     fn xtb_current_step(&self) -> Option<&Step> {
@@ -528,7 +623,7 @@ impl App {
 
     /// Esc ends a step preview first.
     pub(in crate::app) fn xtb_end_preview(&mut self) -> bool {
-        let previewing = self.xtb_step().is_some();
+        let previewing = self.xtb_current_step().is_some();
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
         // The overlay belongs to the preview that drew it.
@@ -699,6 +794,16 @@ impl App {
 
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::Show
+                if self.xtb_live_ts().is_some_and(|live| {
+                    self.xtb_selected_reaction() == Some(live.request.arrow)
+                }) =>
+            {
+                if let Some(arrow) = self.xtb_selected_reaction() {
+                    self.xtb_show_live_path(arrow);
+                }
+            }
+            Action::View(_) if self.xtb_palette_live_ts().is_some() => {}
             Action::Show => {
                 self.tab.xtb.palette.previous = false;
                 let reaction = self.xtb_selected_reaction();
@@ -788,11 +893,13 @@ impl App {
                         shown.info,
                         &method,
                         shown.ts,
+                        self.appearance.energy_unit,
                     );
                     self.xtb_set_palette_status(StatusKind::Palette, "Copied the xTB log", false);
                     return iced::clipboard::write(log);
                 }
-                let rows = shown.rows();
+                let unit = ts::is_ts(&shown.stored.result).then_some(self.appearance.energy_unit);
+                let rows = shown.rows(unit);
                 let table = results::tsv(&method, &rows);
                 if matches!(action, Action::CopyTable) {
                     self.xtb_set_palette_status(
@@ -867,6 +974,14 @@ impl App {
     }
 
     pub(super) fn xtb_preview_step(&mut self, index: usize) {
+        self.xtb_preview_point(PreviewPoint::Step(index));
+    }
+
+    pub(super) fn xtb_preview_reached_endpoint(&mut self) {
+        self.xtb_preview_point(PreviewPoint::ReachedEndpoint);
+    }
+
+    fn xtb_preview_point(&mut self, point: PreviewPoint) {
         let Some(shown) = self.xtb_shown() else {
             return;
         };
@@ -882,16 +997,27 @@ impl App {
             results::energies(result)
         }
         .len();
-        if index >= count {
-            return;
-        }
+        let (index, positions) = match point {
+            PreviewPoint::Step(index) if index < count => (
+                index,
+                previewable.then(|| shown.step_positions(index)).flatten(),
+            ),
+            PreviewPoint::ReachedEndpoint if path && previewable => {
+                let Some(search) = ts::saved_search(result)
+                    .filter(|search| !search.reached_positions_angstrom.is_empty())
+                else {
+                    return;
+                };
+                (0, Some(search.reached_positions_angstrom.clone()))
+            }
+            _ => return,
+        };
         let table = super::conformers::is_search(result).then(|| self.xtb_conformer_table(&shown));
         let (rank, displayed_count) = table
             .as_ref()
             .and_then(|table| Some((table.rank(index)?, table.rows.len())))
             .unwrap_or((index, count));
         let mut failure = None;
-        let positions = previewable.then(|| shown.step_positions(index)).flatten();
         let preview = positions.and_then(|positions| {
             let mut doc = self.tab.doc.clone();
             let frame = Frame {
@@ -899,7 +1025,11 @@ impl App {
                 ..(**shown.frame).clone()
             };
             let moved = if path {
-                ts::preview_image(&mut doc, shown.atoms, shown.input, &frame)
+                if point == PreviewPoint::ReachedEndpoint {
+                    ts::preview_endpoint_image(&mut doc, shown.atoms, shown.input, &frame)
+                } else {
+                    ts::preview_image(&mut doc, shown.atoms, shown.input, &frame)
+                }
             } else {
                 science::move_model(&mut doc, shown.atoms, &frame)
             };
@@ -923,7 +1053,10 @@ impl App {
             Some(doc)
         });
         drop(table);
-        let name = if path {
+        let reached = point == PreviewPoint::ReachedEndpoint;
+        let name = if reached {
+            "Reached endpoint".into()
+        } else if path {
             "Path point".into()
         } else {
             super::conformers::step_name(result, rank)
@@ -933,7 +1066,9 @@ impl App {
         let text = if let Some(error) = failure {
             format!("{name} cannot be shown: {error}")
         } else if preview.is_some() {
-            if path {
+            if reached {
+                "Previewing the reached endpoint · Esc returns".into()
+            } else if path {
                 "Previewing the reaction path · Esc returns".into()
             } else {
                 super::conformers::previewing(
@@ -951,7 +1086,7 @@ impl App {
         self.xtb_set_result_status(text, false);
         self.tab.xtb.palette.confirm.clear();
         self.tab.xtb.palette.step = Some(Step {
-            index,
+            point,
             attachment,
             result: result_id,
             revision: (self.tab.file_epoch, self.tab.revision),

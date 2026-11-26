@@ -22,19 +22,19 @@ lanthanides and actinides) and g-xTB is `Froitzheim2025gxTB`. `Bannwarth2021Xtb`
 xtb program whose conventions axtb reproduces. For results opened from another program's
 files, cite ReShiki and that program and method instead of axtb. Then add:
 
-| Feature                                                            | Also cite                                                                                                                                                                                   |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implicit solvent (ALPB or GBSA)                                    | Ehlert2021ALPB                                                                                                                                                                              |
-| Geometry optimization, default (TRIC with rational-function steps) | Wang2016TRIC, Baker1996DLC, Lindh1995Hessian, Banerjee1985PRFO                                                                                                                              |
-| Geometry optimization, ANC                                         | Grimme2017ANCopt, Lindh1995Hessian (with the default model Hessian), Banerjee1985PRFO                                                                                                       |
-| Geometry optimization, L-BFGS                                      | Liu1989LBFGS, Armijo1966LineSearch                                                                                                                                                          |
-| Conformer search                                                   | Riniker2015ETKDG, Wang2020ETKDGv3, Butina1999Clustering, and what minimized the starts: Halgren1999MMFF94s (default), Halgren1996MMFF, Rappe1992UFF, or the GFN-FF or GFN2-xTB method paper |
-| Frequencies and thermochemistry                                    | Grimme2012QRRHO, FernandezRamos2007Symmetry                                                                                                                                                 |
-| IR spectrum                                                        | nothing beyond the method                                                                                                                                                                   |
-| Orbital energies and coefficients                                  | nothing beyond the method                                                                                                                                                                   |
-| Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes, Doi1991MarchingTetrahedra (unverified), Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                                |
-| Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Bitzek2006FIRE, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC, Kolsbjerg2016AutoNEB, McIver1972TS       |
-| Results read from another program's files                          | ReShiki and that program (for ORCA 6, Neese2025ORCA6)                                                                                                                                       |
+| Feature                                                            | Also cite                                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Implicit solvent (ALPB or GBSA)                                    | Ehlert2021ALPB                                                                                                                                                                                              |
+| Geometry optimization, default (TRIC with rational-function steps) | Wang2016TRIC, Baker1996DLC, Lindh1995Hessian, Banerjee1985PRFO                                                                                                                                              |
+| Geometry optimization, ANC                                         | Grimme2017ANCopt, Lindh1995Hessian (with the default model Hessian), Banerjee1985PRFO                                                                                                                       |
+| Geometry optimization, L-BFGS                                      | Liu1989LBFGS, Armijo1966LineSearch                                                                                                                                                                          |
+| Conformer search                                                   | Riniker2015ETKDG, Wang2020ETKDGv3, Butina1999Clustering, and what minimized the starts: Halgren1999MMFF94s (default), Halgren1996MMFF, Rappe1992UFF, or the GFN-FF or GFN2-xTB method paper                 |
+| Frequencies and thermochemistry                                    | Grimme2012QRRHO, FernandezRamos2007Symmetry                                                                                                                                                                 |
+| IR spectrum                                                        | nothing beyond the method                                                                                                                                                                                   |
+| Orbital energies and coefficients                                  | nothing beyond the method                                                                                                                                                                                   |
+| Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes, Doi1991MarchingTetrahedra (unverified), Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                                                |
+| Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Bitzek2006FIRE, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC, Kolsbjerg2016AutoNEB, McIver1972TS, Heidrich1986IndexTwo |
+| Results read from another program's files                          | ReShiki and that program (for ORCA 6, Neese2025ORCA6)                                                                                                                                                       |
 
 ## Calculation methods
 
@@ -283,6 +283,9 @@ The transition-state engine (`crates/optimize/src/ts/`, GFN2-xTB only; on the
 - **Kolsbjerg2016AutoNEB**: Kolsbjerg, Groves & Hammer, J. Chem. Phys. 145, 094107 (2016),
   doi:10.1063/1.4961868. Motivation for probing the links next to the climbing image when it
   misses the saddle (`ts/neb.rs`); the two-midpoint rule is ReShiki's own.
+- **Heidrich1986IndexTwo**: Heidrich & Quapp, Theor. Chim. Acta 70, 89–98 (1986),
+  doi:10.1007/BF00532206. Escaping an index-2 saddle along its extra negative-curvature mode
+  before re-refining (`ts/recovery.rs`); the 0.1-bohr two-sided seeds are ReShiki's own.
 - **McIver1972TS**: McIver & Komornicki, J. Am. Chem. Soc. 94, 2625 (1972),
   doi:10.1021/ja00763a011. Squared force as a local merit function near a saddle
   (`ts/saddle.rs`).

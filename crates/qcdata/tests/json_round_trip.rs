@@ -595,6 +595,10 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
         transition_state: Some(Box::new(TransitionStateRun {
             arrow: Some(123),
             context: None,
+            free_energy: false,
+            endpoint_energies_hartree: None,
+            endpoint_thermo: None,
+            reached_positions_angstrom: vec![],
             saddle_converged: true,
             imaginary: 1,
             imaginary_cm1: Some(-721.3),
@@ -618,12 +622,19 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
         })),
     });
     result.validate(&frame).unwrap();
+    let empty_heap = result.heap_bytes();
+    details(&mut result).reached_positions_angstrom = frame.positions_angstrom.clone();
     let baseline_heap = result.heap_bytes();
+    assert_eq!(
+        baseline_heap - empty_heap,
+        frame.numbers.len() * 3 * size_of::<f64>()
+    );
     let context = TransitionStateContext {
         reactant_chemistry: "ab".repeat(32),
         product_chemistry: "cd".repeat(32),
         title: "Reactant → product".into(),
         reactant: "Reactant".into(),
+        endpoint_complex: Some(true),
     };
     let added_heap = context.reactant_chemistry.len()
         + context.product_chemistry.len()
@@ -632,6 +643,35 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
     details(&mut result).context = Some(context.clone());
     result.validate(&frame).unwrap();
     assert_eq!(result.heap_bytes() - baseline_heap, added_heap);
+
+    let reactant_thermo = Thermo {
+        temperature_k: 298.15,
+        pressure_pa: 101_325.,
+        zero_point_energy_hartree: 0.01,
+        enthalpy_correction_hartree: 0.02,
+        entropy_hartree_per_k: 0.00001,
+        gibbs_correction_hartree: 0.02 - 298.15 * 0.00001,
+        heat_capacity_hartree_per_k: None,
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: 20.,
+        symmetry_number: 1,
+        point_group: None,
+    };
+    let product_thermo = Thermo {
+        enthalpy_correction_hartree: reactant_thermo.enthalpy_correction_hartree + 0.005,
+        gibbs_correction_hartree: reactant_thermo.gibbs_correction_hartree + 0.005,
+        ..reactant_thermo.clone()
+    };
+    let search = details(&mut result);
+    search.free_energy = true;
+    search.endpoint_energies_hartree = Some([-117., -118.]);
+    search.endpoint_thermo = Some([Some(reactant_thermo), Some(product_thermo)]);
+    // Endpoint reaction energies remain meaningful for an unreliable saddle.
+    search.saddle_converged = false;
+    assert_eq!(search.reaction_energy_hartree(), Some(-1.));
+    assert!((search.reaction_gibbs_hartree().unwrap() + 0.995).abs() < 1e-12);
+    result.validate(&frame).unwrap();
 
     let light = result.light(&[]);
     let json = serde_json::to_vec_pretty(&light).unwrap();
@@ -643,11 +683,19 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
     let mut old: serde_json::Value = serde_json::from_slice(&json).unwrap();
     let search = old["run"]["transition_state"].as_object_mut().unwrap();
     search.remove("context");
+    search.remove("free_energy");
+    search.remove("endpoint_energies_hartree");
+    search.remove("endpoint_thermo");
+    search.remove("reached_positions_angstrom");
     let decoded: CalcResult = serde_json::from_value(old.clone()).unwrap();
     decoded.validate(&frame).unwrap();
     let search = decoded.run.unwrap().transition_state.unwrap();
     assert_eq!(search.arrow, Some(123));
     assert_eq!(search.context, None);
+    assert!(!search.free_energy);
+    assert!(search.reached_positions_angstrom.is_empty());
+    assert_eq!(search.reaction_energy_hartree(), None);
+    assert_eq!(search.reaction_gibbs_hartree(), None);
 
     old["run"]["transition_state"]
         .as_object_mut()
@@ -663,6 +711,34 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
     );
     details(&mut unbound).arrow = Some(0);
     assert!(unbound.validate(&frame).is_err());
+
+    let good_search = details(&mut result).clone();
+    for invalid in 0..5 {
+        *details(&mut result) = good_search.clone();
+        let search = details(&mut result);
+        match invalid {
+            0 => search.endpoint_energies_hartree = Some([f64::NAN, -118.]),
+            1 => search.endpoint_energies_hartree = None,
+            2 => search.free_energy = false,
+            3 => {
+                search.endpoint_thermo.as_mut().unwrap()[1]
+                    .as_mut()
+                    .unwrap()
+                    .temperature_k = 350.
+            }
+            _ => {
+                search.endpoint_thermo.as_mut().unwrap()[0]
+                    .as_mut()
+                    .unwrap()
+                    .gibbs_correction_hartree = f64::INFINITY
+            }
+        }
+        assert!(
+            result.validate(&frame).is_err(),
+            "endpoint metadata case {invalid}"
+        );
+    }
+    *details(&mut result) = good_search;
 
     // Three maximum-size drawing captions fit in a reaction title.
     details(&mut result).context = Some(TransitionStateContext {
