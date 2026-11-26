@@ -40,6 +40,15 @@ fn placed(mo: MoDiagram, style: &DrawingStyle) -> Graphic {
     )
 }
 
+fn read_native(graphic: Graphic) -> Result<Document, String> {
+    let doc = Document {
+        version: CALCULATIONS,
+        graphics: vec![graphic],
+        ..Document::default()
+    };
+    Document::from_json(&serde_json::to_vec(&doc).unwrap())
+}
+
 fn picture(result: &str, column: u8, spin: Spin, index: u32) -> MoPicture {
     MoPicture {
         column,
@@ -82,8 +91,19 @@ fn closed_shell_labels_and_orders_degenerate_bars() {
     assert_eq!(bars.len(), 2);
     assert!(bars[0].2 < bars[1].1);
     assert!((bars[0].2 - bars[0].1 - 2.5 * em).abs() < 0.001);
-    let g = placed(mo, &style::DEFAULT);
+    let mut g = placed(mo.clone(), &style::DEFAULT);
+    g.style.width_pt = 12.;
     let (parts, labels) = g.mo_parts(&style::DEFAULT);
+    for (_, left, right) in bars {
+        let y = c.groups[2].y;
+        let commands = [
+            PathCommand::Move(layout.world(&g, Point::new(left, y))),
+            PathCommand::Line(layout.world(&g, Point::new(right, y))),
+        ];
+        let bar = parts.iter().find(|part| part.commands == commands).unwrap();
+        assert_eq!(bar.style.width_pt, 12.);
+        assert!(!bar.style.round_caps());
+    }
     let texts: Vec<_> = labels.iter().map(|a| a.text.as_str()).collect();
     assert!(texts.contains(&"HOMO  −10.95 eV · 2-fold"));
     assert!(texts.contains(&"LUMO  −6.02 eV · 2-fold"));
@@ -165,6 +185,80 @@ fn open_shell_draws_two_columns_with_only_frontier_labels() {
         })
         .collect();
     assert_eq!(arrows, vec![false, false, true]);
+}
+
+#[test]
+fn open_shell_rows_keep_the_gap_and_both_columns_in_energy_order() {
+    let mo = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![
+            column(Spin::Alpha, "α", &[-7., -6., -5., -1., 2., 5.], 3),
+            column(Spin::Beta, "β", &[-8., -4.5, 6., 7., 8., 9.], 1),
+        ],
+    );
+    let layout = Layout::new(&mo, &style::DEFAULT);
+    let mut groups: Vec<_> = layout.columns.iter().flat_map(|c| &c.groups).collect();
+    groups.sort_by(|a, b| b.energy.total_cmp(&a.energy));
+    assert!(groups.windows(2).all(|pair| pair[0].y < pair[1].y));
+    let spacing = 1.45 * layout.font.size();
+    for c in &layout.columns {
+        assert!(
+            c.groups
+                .windows(2)
+                .all(|pair| pair[1].y - pair[0].y >= spacing - 0.001)
+        );
+    }
+    let homo = group_y(&layout.columns, (0, 2)).unwrap();
+    let lumo = group_y(&layout.columns, (1, 1)).unwrap();
+    assert!(lumo < homo);
+    assert!(layout.lines.iter().any(|line| {
+        matches!(line.as_slice(), [_, start, end, _] if start.y == homo && end.y == lumo)
+    }));
+    assert!(
+        layout
+            .labels
+            .iter()
+            .any(|label| label.text == "gap 0.50 eV")
+    );
+}
+
+#[test]
+fn degenerate_levels_across_spins_share_a_row() {
+    let mo = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![
+            column(Spin::Alpha, "α", &[-9., -5.008, -5., -1.], 2),
+            column(Spin::Beta, "β", &[-8., -5.004, 0.], 1),
+        ],
+    );
+    let layout = Layout::new(&mo, &style::DEFAULT);
+    let beta_row = group_y(&layout.columns, (1, 1)).unwrap();
+    assert_eq!(group_y(&layout.columns, (0, 1)), Some(beta_row));
+    assert_eq!(group_y(&layout.columns, (0, 2)), Some(beta_row));
+    let alpha = &layout.columns[0];
+    let group = alpha.groups.iter().find(|g| g.y == beta_row).unwrap();
+    let bars: Vec<_> = alpha.bars(group, layout.font.size()).collect();
+    assert!(matches!(bars.as_slice(), [(1, _, right), (2, left, _)] if right < left));
+}
+
+#[test]
+fn text_uses_the_smaller_frame_scale() {
+    let mut g = placed(benzene(), &style::DEFAULT);
+    let (_, natural) = g.mo_parts(&style::DEFAULT);
+    for (x, y) in [(0.5, 1.), (1., 0.5)] {
+        let (axis_x, axis_y) = (g.axis_x, g.axis_y);
+        g.axis_x.x *= x;
+        g.axis_y.y *= y;
+        let (_, compressed) = g.mo_parts(&style::DEFAULT);
+        assert_eq!(compressed.len(), natural.len());
+        for (a, b) in natural.iter().zip(compressed) {
+            assert_eq!(a.text, b.text);
+            assert!((a.format.style.size_pt * 0.5 - b.format.style.size_pt).abs() < 0.001);
+        }
+        (g.axis_x, g.axis_y) = (axis_x, axis_y);
+    }
 }
 
 #[test]
@@ -311,4 +405,134 @@ fn native_version_and_validation_cover_mo_diagram_data() {
     }
     doc.graphics[0].mo = None;
     assert!(doc.validate().is_err());
+}
+
+#[test]
+fn native_read_requires_closed_or_ordered_open_shell_labels() {
+    for (labels, valid) in [
+        (&[""][..], true),
+        (&["α", "β"], true),
+        (&["α"], false),
+        (&["β"], false),
+        (&["restricted"], false),
+        (&["β", "α"], false),
+        (&["α", "α"], false),
+        (&["", "β"], false),
+    ] {
+        let mut g = placed(benzene(), &style::DEFAULT);
+        g.mo.as_mut().unwrap().columns = labels
+            .iter()
+            .map(|label| column(Spin::Alpha, label, &[-6., -4.], 1))
+            .collect();
+        assert_eq!(read_native(g).is_ok(), valid, "labels {labels:?}");
+    }
+}
+
+#[test]
+fn a_partial_open_shell_keeps_both_columns_and_relinks_the_available_picture() {
+    let alpha = column(Spin::Alpha, "α", &[-7., -5., -3.], 1);
+    let beta = column(Spin::Beta, "β", &[-6., -4., -2.], 1);
+    let mut mo = MoDiagram::new(1, "old".into(), vec![beta.clone()]);
+    assert_eq!(mo.columns[0].label, "α");
+    assert!(mo.columns[0].energies_ev.is_empty());
+    assert_eq!(mo.columns[1], beta);
+    mo.pictures.push(picture("old", 1, Spin::Beta, 0));
+    mo.relink("full".into(), vec![alpha.clone(), beta.clone()]);
+    assert_eq!(mo.columns[0], alpha);
+    mo.relink("partial".into(), vec![beta]);
+    assert_eq!(mo.pictures.len(), 1);
+    assert_eq!(mo.pictures[0].column, 1);
+    assert_eq!(mo.pictures[0].figure.orbital.result, "partial");
+    assert!(read_native(placed(mo, &style::DEFAULT)).is_ok());
+}
+
+#[test]
+fn native_read_preserves_equal_energies_and_rejects_descending_ones() {
+    let mut g = placed(benzene(), &style::DEFAULT);
+    assert!(read_native(g.clone()).is_ok());
+    g.mo.as_mut().unwrap().columns[0].energies_ev = vec![-10., -5., -10.];
+    assert_eq!(read_native(g).unwrap_err(), "Invalid MO diagram columns");
+}
+
+#[test]
+fn native_read_requires_a_finite_nonsingular_frame() {
+    let mut g = placed(benzene(), &style::DEFAULT);
+    let origin = g.origin;
+    g.map_positions(|p| p.turned(origin, 37.));
+    assert!(read_native(g.clone()).is_ok());
+    g.map_positions(|p| Point::new(-p.x, p.y));
+    assert!(g.frame_determinant() < 0.);
+    assert!(read_native(g.clone()).is_ok());
+    assert!(
+        read_native(Graphic {
+            axis_x: Point::new(1., 0.),
+            axis_y: Point::new(0.8, 0.6),
+            ..g.clone()
+        })
+        .is_ok()
+    );
+
+    for (description, origin, axis_x, axis_y) in [
+        ("zero axis", origin, Point::default(), Point::new(0., 1.)),
+        (
+            "tiny axis",
+            origin,
+            Point::new(1e-4, 0.),
+            Point::new(0., 1.),
+        ),
+        (
+            "collinear",
+            origin,
+            Point::new(2., 2.),
+            Point::new(-1., -1.),
+        ),
+        (
+            "nearly parallel",
+            origin,
+            Point::new(1e4, 0.),
+            Point::new(1e4, 1e-3),
+        ),
+        (
+            "overflowing length",
+            origin,
+            Point::new(1., 0.),
+            Point::new(3e38, 3e38),
+        ),
+        (
+            "overflowing determinant",
+            origin,
+            Point::new(1e20, 0.),
+            Point::new(0., 1e20),
+        ),
+        (
+            "overflowing corner",
+            Point::new(f32::MAX, 0.),
+            Point::new(1e38, 0.),
+            Point::new(0., 1.),
+        ),
+    ] {
+        let invalid = Graphic {
+            origin,
+            axis_x,
+            axis_y,
+            ..g.clone()
+        };
+        assert!(
+            read_native(invalid)
+                .unwrap_err()
+                .contains("independent axes"),
+            "{description}"
+        );
+    }
+}
+
+#[test]
+fn a_finite_wide_frame_keeps_a_finite_picture_scale() {
+    let mut g = placed(benzene(), &style::DEFAULT);
+    g.axis_x = Point::new(3e38, 0.);
+    g.axis_y = Point::new(0., 1.);
+    assert!(read_native(g.clone()).is_ok());
+    let layout = Layout::new(g.mo.as_deref().unwrap(), &style::DEFAULT);
+    let side = layout.picture_world_side(&g);
+    assert!(side.is_finite() && side > 0.);
 }

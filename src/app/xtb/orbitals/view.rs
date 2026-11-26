@@ -314,8 +314,9 @@ impl App {
                 .iter()
                 .find(|g| g.id == id)
                 .and_then(|g| g.mo.as_deref())
+            && let Some(column) = mo.columns.iter().position(|c| c.label == column.label)
         {
-            let column = choice.column as u8;
+            let column = column as u8;
             let label = if super::diagram::has_picture(mo, column, choice.index) {
                 "Remove from MO diagram"
             } else {

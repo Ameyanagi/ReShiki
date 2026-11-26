@@ -150,7 +150,7 @@ pub struct GraphicStyle {
     pub fill: Option<crate::palette::Color>,
     pub width_pt: f32,
     pub pattern: LinePattern,
-    /// Flat ends for derived native grid strokes; ordinary graphics stay round.
+    /// Flat ends for derived strokes; ordinary graphics stay round.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub flat_caps: bool,
     #[serde(skip_serializing_if = "Effects::is_plain")]
@@ -979,7 +979,7 @@ impl Graphic {
             return Err("MO diagram data does not match the graphic kind".into());
         }
         if let Some(mo) = &self.mo {
-            mo.validate()?;
+            mo.validate(self)?;
         }
         if self.ir.is_some() && self.kind != GraphicKind::Path {
             return Err("IR figure parameters require a pen path".into());

@@ -1,5 +1,5 @@
 //! Placed MO diagram edits and the orbital rows a picture is waiting for.
-use super::{App, Choice, Figure, OrbitalRef, Settings, Stored, View, science};
+use super::{App, Choice, Figure, OrbitalRef, Settings, Stored, View, levels, science};
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{Graphic, GraphicStyle, MoDiagram, MoPicture};
 use reshiki::scene;
@@ -84,7 +84,11 @@ impl App {
         };
         let choice = self.xtb_orbital_choice(&target);
         let template = self.xtb_orbital_figure(&target, &choice);
+        let label = target.columns[choice.column].label.clone();
         let mut mo = MoDiagram::new(molecule, target.key, target.columns);
+        let Some(column) = mo.columns.iter().position(|c| c.label == label) else {
+            return;
+        };
         let mut doc = self.tab.doc.clone();
         for (index, _) in frontier {
             let mut figure = template.clone();
@@ -106,7 +110,7 @@ impl App {
                 return;
             }
             mo.pictures.push(MoPicture {
-                column: choice.column as u8,
+                column: column as u8,
                 figure,
             });
         }
@@ -182,10 +186,15 @@ impl App {
         }
         if let Some(mo) = diagram(&self.tab.doc, id)
             && let Some((_, stored)) = self.xtb_mo_result(mo, None)
+            && let Some(spectrum) = mo.columns.get(usize::from(column))
+            && let Some(orbitals) = &stored.result.orbitals
+            && let Some(tab_column) = levels::columns(orbitals)
+                .iter()
+                .position(|c| c.label == spectrum.label)
         {
             let choice = Choice {
                 result: mo.result.clone(),
-                column: column.into(),
+                column: tab_column,
                 index,
                 from_diagram: true,
             };

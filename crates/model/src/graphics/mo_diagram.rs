@@ -1,13 +1,14 @@
 //! A placed molecular orbital diagram and its vector layout.
-use std::ops::RangeInclusive;
+use std::ops::{Range, RangeInclusive};
 
+use reshiki_qcdata::Spin;
 use serde::{Deserialize, Serialize};
 
 use super::{BracketSides, Graphic, GraphicKind, GraphicStyle, LinePattern, PathCommand};
 use crate::{
     document::{Annotation, Document, Point, text_angle},
     models3d::{self, Model3d, surface::Figure},
-    orbital_levels::Column,
+    orbital_levels::{Column, DEGENERATE_EV},
     scene::Primitive,
     scientific::Part,
     style::{self, DrawingStyle},
@@ -44,18 +45,24 @@ impl MoDiagram {
             molecule: Some(molecule),
             result,
             linked: true,
-            columns,
+            columns: complete_spin_columns(columns),
             below: 2,
             above: 2,
             pictures: vec![],
         }
     }
 
-    pub(super) fn validate(&self) -> Result<(), String> {
-        if !(1..=2).contains(&self.columns.len())
+    pub(super) fn validate(&self, g: &Graphic) -> Result<(), String> {
+        let valid_labels = match self.columns.as_slice() {
+            [closed] => closed.label.is_empty(),
+            [alpha, beta] => alpha.label == "α" && beta.label == "β",
+            _ => false,
+        };
+        if !valid_labels
             || self.columns.iter().any(|c| {
                 c.energies_ev.len() > 4096
                     || c.energies_ev.iter().any(|e| !e.is_finite())
+                    || !c.energies_ev.is_sorted()
                     || (!c.occupations.is_empty() && c.occupations.len() != c.energies_ev.len())
                     || c.occupations.iter().any(|n| !n.is_finite())
                     || c.occupied.is_some_and(|n| n > c.energies_ev.len())
@@ -78,11 +85,25 @@ impl MoDiagram {
         {
             return Err("Invalid MO diagram pictures".into());
         }
+        let x = g.axis_x.x.hypot(g.axis_x.y);
+        let y = g.axis_y.x.hypot(g.axis_y.y);
+        let det = g.frame_determinant();
+        if !x.is_finite()
+            || !y.is_finite()
+            || x <= 1e-3
+            || y <= 1e-3
+            || !det.is_finite()
+            || f64::from(det.abs()) <= f64::from(x) * f64::from(y) * 1e-6
+            || !g.frame_corners().into_iter().all(Point::is_finite)
+        {
+            return Err("An MO diagram needs a finite frame with two independent axes".into());
+        }
         Ok(())
     }
 
     /// Retain the chosen frontier levels and their appearance on a new result.
     pub fn relink(&mut self, result: String, columns: Vec<Column>) {
+        let columns = complete_spin_columns(columns);
         self.pictures.retain_mut(|picture| {
             let figure = &mut picture.figure;
             let index = figure.orbital.index as usize;
@@ -187,30 +208,32 @@ impl MoDiagram {
     pub(crate) fn draw(
         &self,
         g: &Graphic,
-        doc: &Document,
+        style: &DrawingStyle,
+        source: &Document,
     ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
-        let layout = Layout::new(self, &doc.drawing_style);
+        let layout = Layout::new(self, style);
         let (mut parts, labels) = layout.ink(g);
         let mut pictures = vec![];
         let side = layout.picture_world_side(g);
         let angle = text_angle(g.axis_x, g.axis_y).to_radians();
         let (sin, cos) = angle.sin_cos();
-        if side.is_finite() && side > 0. && self.model(doc).is_some() {
+        if side.is_finite() && side > 0. && self.model(source).is_some() {
             for slot in &layout.pictures {
-                let Some(model) = self.picture_model(doc, slot.index) else {
+                let Some(model) = self.picture_model(source, slot.index) else {
                     continue;
                 };
                 let centre = layout.world(g, slot.centre);
-                if models3d::push_orbital_picture(doc, &model, centre, side, &mut pictures)
+                if models3d::push_orbital_picture(source, &model, centre, side, &mut pictures)
                     .is_none()
                 {
                     continue;
                 }
                 let from = layout.world(g, slot.connector);
-                let label_extension = slot.label_width * (layout.y_scale(g) - layout.x_scale(g));
+                let label_extension = slot.label_width * (layout.text_scale(g) - layout.x_scale(g));
                 let start = from.offset(cos * label_extension, sin * label_extension);
-                let half = side / (2. * g.axis_x.x.abs().max(g.axis_x.y.abs()));
-                let left = centre.offset(-g.axis_x.x * half, -g.axis_x.y * half);
+                let half = side / 2.;
+                let span = g.axis_x.x.abs().max(g.axis_x.y.abs());
+                let left = centre.offset(-g.axis_x.x / span * half, -g.axis_x.y / span * half);
                 if (left.x - start.x) * g.axis_x.x + (left.y - start.y) * g.axis_x.y > 0. {
                     parts.push(line_part(
                         g,
@@ -223,6 +246,28 @@ impl MoDiagram {
         }
         (parts, labels, pictures)
     }
+}
+
+/// A partial open-shell result can supply levels for just one spin.
+fn complete_spin_columns(mut columns: Vec<Column>) -> Vec<Column> {
+    if let [column] = columns.as_slice() {
+        let (index, label, spin) = match column.label.as_str() {
+            "α" => (1, "β", Spin::Beta),
+            "β" => (0, "α", Spin::Alpha),
+            _ => return columns,
+        };
+        columns.insert(
+            index,
+            Column {
+                spin,
+                label: label.into(),
+                energies_ev: vec![],
+                occupations: vec![],
+                occupied: None,
+            },
+        );
+    }
+    columns
 }
 
 impl Graphic {
@@ -270,6 +315,7 @@ impl Graphic {
 struct Group {
     levels: RangeInclusive<usize>,
     energy: f64,
+    row: usize,
     y: f32,
     labels: Vec<(usize, String)>,
 }
@@ -332,13 +378,14 @@ impl<'a> Layout<'a> {
         let closed =
             mo.columns.len() == 1 && mo.columns.first().is_some_and(|c| c.label.is_empty());
         let width_of = |text: &str, size| style::styled_text_width(text, size, &font);
+        let (column_groups, energies) = shared_rows(mo, closed);
 
         let mut columns: Vec<_> = mo
             .columns
             .iter()
+            .zip(column_groups)
             .enumerate()
-            .map(|(i, column)| {
-                let groups = groups(column, mo.below, mo.above, closed);
+            .map(|(i, (column, groups))| {
                 let slots = groups
                     .iter()
                     .map(|g| level_count(&g.levels))
@@ -366,10 +413,7 @@ impl<'a> Layout<'a> {
             })
             .collect();
 
-        let energies = columns
-            .iter()
-            .flat_map(|c| c.groups.iter().map(|g| g.energy));
-        let (ticks, unit) = axis_ticks(energies);
+        let (ticks, unit) = axis_ticks(energies.iter().copied());
         let tick_labels: Vec<_> = ticks
             .iter()
             .map(|&tick| tick_text((tick * unit).clamp(-f64::MAX, f64::MAX)))
@@ -410,22 +454,25 @@ impl<'a> Layout<'a> {
 
         let spacing = em * 1.45;
         let top = em * 2.5;
-        let plot_height = columns
-            .iter()
-            .map(|c| c.groups.len().saturating_sub(1) as f32 * spacing)
-            .fold(em * 6., f32::max);
+        let gaps = energies.len().saturating_sub(1);
+        let plot_height = (gaps as f32 * spacing).max(em * 6.);
         let pictures_height = picture_count as f32 * (picture_side + em * 0.25);
         let height = (top + plot_height + em * 1.4).max(pictures_height + em * 2.);
         let bottom = height - em * 1.4;
         let low = ticks.first().copied().unwrap_or(-1.);
         let high = ticks.last().copied().unwrap_or(1.);
         let y = |energy| top + (bottom - top) * ((high - energy) / (high - low)) as f32;
-        for c in &mut columns {
-            let count = c.groups.len();
-            let mut previous = top - spacing;
-            for (i, g) in c.groups.iter_mut().enumerate() {
-                g.y = spaced(y(g.energy / unit), previous, spacing, bottom, count - 1 - i);
-                previous = g.y;
+        let positions: Vec<_> = energies
+            .into_iter()
+            .enumerate()
+            .scan(top - spacing, |previous, (row, energy)| {
+                *previous = spaced(y(energy / unit), *previous, spacing, bottom, gaps - row);
+                Some(*previous)
+            })
+            .collect();
+        for group in columns.iter_mut().flat_map(|c| &mut c.groups) {
+            if let Some(&position) = positions.get(group.row) {
+                group.y = position;
             }
         }
 
@@ -526,15 +573,17 @@ impl<'a> Layout<'a> {
         g.axis_x.x.hypot(g.axis_x.y) / self.width
     }
 
-    fn y_scale(&self, g: &Graphic) -> f32 {
-        g.axis_y.x.hypot(g.axis_y.y) / self.height
+    fn text_scale(&self, g: &Graphic) -> f32 {
+        self.x_scale(g)
+            .min(g.axis_y.x.hypot(g.axis_y.y) / self.height)
     }
 
     /// Fit an upright square in its local slot, including after an affine turn.
     fn picture_world_side(&self, g: &Graphic) -> f32 {
-        let x = self.width * (g.axis_y.x.abs() + g.axis_y.y.abs());
-        let y = self.height * (g.axis_x.x.abs() + g.axis_x.y.abs());
-        self.picture_side * g.frame_determinant().abs() / x.max(y)
+        let span = |axis: Point| f64::from(axis.x.abs()) + f64::from(axis.y.abs());
+        let x = f64::from(self.width) * span(g.axis_y);
+        let y = f64::from(self.height) * span(g.axis_x);
+        (f64::from(self.picture_side) * f64::from(g.frame_determinant().abs()) / x.max(y)) as f32
     }
 
     fn world(&self, g: &Graphic, p: Point) -> Point {
@@ -553,7 +602,7 @@ impl<'a> Layout<'a> {
             text: label.text.clone(),
             format: TextFormat {
                 style: TextStyle {
-                    size_pt: label.size * style::DEFAULT.points_per_world() * self.y_scale(g),
+                    size_pt: label.size * style::DEFAULT.points_per_world() * self.text_scale(g),
                     color: g.style.stroke,
                     ..self.font.clone()
                 },
@@ -593,12 +642,14 @@ impl<'a> Layout<'a> {
             for group in &c.groups {
                 for (i, left, right) in c.bars(group, em) {
                     let y = group.y;
-                    parts.push(line_part(
+                    let mut bar = line_part(
                         g,
                         path(&[Point::new(left, y), Point::new(right, y)]),
                         LinePattern::Solid,
                         1.,
-                    ));
+                    );
+                    bar.style.flat_caps = true;
+                    parts.push(bar);
                     let n = c.column.occupations.get(i).copied().unwrap_or_else(|| {
                         if c.column.occupied.is_some_and(|n| i < n) {
                             if self.closed { 2. } else { 1. }
@@ -658,9 +709,9 @@ fn line_part(g: &Graphic, commands: Vec<PathCommand>, pattern: LinePattern, weig
     }
 }
 
-fn groups(c: &Column, below: u8, above: u8, closed: bool) -> Vec<Group> {
+fn shown_levels(c: &Column, below: u8, above: u8) -> Range<usize> {
     let Some(last) = c.energies_ev.len().checked_sub(1) else {
-        return vec![];
+        return 0..0;
     };
     let (first, end) = c.occupied.map_or((0, 4.min(last)), |n| {
         (
@@ -668,49 +719,78 @@ fn groups(c: &Column, below: u8, above: u8, closed: bool) -> Vec<Group> {
             n.saturating_add(usize::from(above)).min(last),
         )
     });
-    let mut index = *c.group(first).start();
-    let mut groups = vec![];
-    while index <= end {
-        let levels = c.group(index);
-        let frontiers: Vec<_> = [c.homo(), c.lumo()]
-            .into_iter()
-            .flatten()
-            .filter(|i| levels.contains(i))
-            .collect();
-        let label_index = frontiers.first().copied().unwrap_or(index);
-        let Some(&energy) = c.energies_ev.get(label_index) else {
-            break;
-        };
-        let mut labelled = frontiers;
-        if closed && labelled.is_empty() {
-            labelled.push(label_index);
+    *c.group(first).start()..c.group(end).end() + 1
+}
+
+/// Merge the shown spectra before assigning rows so a degenerate run can
+/// span both columns. Its levels within each column still draw side by side.
+fn shared_rows(mo: &MoDiagram, closed: bool) -> (Vec<Vec<Group>>, Vec<f64>) {
+    let mut levels: Vec<_> = mo
+        .columns
+        .iter()
+        .enumerate()
+        .flat_map(|(column, c)| {
+            shown_levels(c, mo.below, mo.above)
+                .filter_map(move |index| Some((*c.energies_ev.get(index)?, column, index)))
+        })
+        .collect();
+    levels.sort_unstable_by(|a, b| b.0.total_cmp(&a.0));
+    let mut columns: Vec<Vec<Group>> = mo.columns.iter().map(|_| vec![]).collect();
+    let mut energies = vec![];
+    for row in levels.chunk_by(|a, b| a.0 - b.0 < DEGENERATE_EV) {
+        let mut energy = f64::INFINITY;
+        for (column, (c, groups)) in mo.columns.iter().zip(&mut columns).enumerate() {
+            let mut indices = row
+                .iter()
+                .filter_map(|&(_, i, index)| (i == column).then_some(index));
+            let Some(first) = indices.next() else {
+                continue;
+            };
+            let (lo, hi) = indices.fold((first, first), |(lo, hi), i| (lo.min(i), hi.max(i)));
+            if let Some(group) = group(c, lo..=hi, energies.len(), closed) {
+                energy = energy.min(group.energy);
+                groups.push(group);
+            }
         }
-        let labels = labelled
-            .into_iter()
-            .enumerate()
-            .filter_map(|(i, index)| {
-                let mut text = format!(
-                    "{}  {} eV",
-                    c.name(index),
-                    signed(*c.energies_ev.get(index)?)
-                );
-                let count = level_count(&levels);
-                if i == 0 && count > 1 {
-                    text.push_str(&format!(" · {count}-fold"));
-                }
-                Some((index, text))
-            })
-            .collect();
-        index = levels.end() + 1;
-        groups.push(Group {
-            levels,
-            energy,
-            y: 0.,
-            labels,
-        });
+        energies.push(energy);
     }
-    groups.sort_by(|a, b| b.energy.total_cmp(&a.energy));
-    groups
+    (columns, energies)
+}
+
+fn group(c: &Column, levels: RangeInclusive<usize>, row: usize, closed: bool) -> Option<Group> {
+    let mut labelled: Vec<_> = [c.homo(), c.lumo()]
+        .into_iter()
+        .flatten()
+        .filter(|i| levels.contains(i))
+        .collect();
+    let label_index = labelled.first().copied().unwrap_or(*levels.start());
+    let energy = *c.energies_ev.get(label_index)?;
+    if closed && labelled.is_empty() {
+        labelled.push(label_index);
+    }
+    let count = level_count(&levels);
+    let labels = labelled
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, index)| {
+            let mut text = format!(
+                "{}  {} eV",
+                c.name(index),
+                signed(*c.energies_ev.get(index)?)
+            );
+            if i == 0 && count > 1 {
+                text.push_str(&format!(" · {count}-fold"));
+            }
+            Some((index, text))
+        })
+        .collect();
+    Some(Group {
+        levels,
+        energy,
+        row,
+        y: 0.,
+        labels,
+    })
 }
 
 fn level_count(levels: &RangeInclusive<usize>) -> usize {
