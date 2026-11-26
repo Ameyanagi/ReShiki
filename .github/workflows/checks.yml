@@ -676,8 +676,8 @@ jobs:
         with:
           shared-key: xtb
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Check the application with xTB enabled
-        run: cargo clippy --locked --features xtb --bin reshiki --all-targets -- -D warnings
+      - name: Check the application with xTB enabled (and the conformer benchmark)
+        run: cargo clippy --locked --features xtb,conformer-bench --bin reshiki --all-targets -- -D warnings
       - name: Test the xTB worker engine
         run: cargo test --locked -p reshiki-xtb-worker --features engine
       - name: Test xTB application integration

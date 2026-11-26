@@ -210,6 +210,7 @@ explains how the crates and modules fit together.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
 - `src/app/xtb.rs`: Predict → xTB
 - `src/app/xtb/conformers.rs`: Conformer search
+- `src/app/xtb/conformers/bench.rs`: Developer-only command for timing the desktop app's conformer search.
 - `src/app/xtb/conformers/export.rs`: Conformer ensembles as files
 - `src/app/xtb/conformers/pipeline.rs`: Desktop conformer sampling, clustering and xTB ranking.
 - `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
