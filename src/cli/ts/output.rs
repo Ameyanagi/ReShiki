@@ -194,8 +194,12 @@ mod report {
         text
     }
 
-    fn skipped_irc_reason(reason: SaddleReason, imaginary: usize) -> Option<String> {
-        if reason != SaddleReason::Stationary {
+    fn skipped_irc_reason(
+        converged: bool,
+        reason: SaddleReason,
+        imaginary: usize,
+    ) -> Option<String> {
+        if !converged || reason != SaddleReason::Stationary {
             Some(format!("saddle refinement did not converge ({reason})"))
         } else if imaginary != 1 {
             Some(format!(
@@ -230,7 +234,13 @@ mod report {
                         .as_ref()
                         .map(|reason| format!("IRC failed: {reason}"))
                 })
-                .or_else(|| skipped_irc_reason(self.report.saddle_reason, self.report.imaginary))
+                .or_else(|| {
+                    skipped_irc_reason(
+                        self.report.saddle_converged,
+                        self.report.saddle_reason,
+                        self.report.imaginary,
+                    )
+                })
                 .or_else(|| {
                     (!self.report.connects)
                         .then(|| "IRC did not connect the reactant and product".into())
@@ -250,8 +260,12 @@ mod report {
                 }
                 None => match &report.irc_error {
                     Some(reason) => format!("failed: {reason}"),
-                    None => skipped_irc_reason(report.saddle_reason, report.imaginary)
-                        .map_or_else(|| "skipped".into(), |reason| format!("skipped ({reason})")),
+                    None => skipped_irc_reason(
+                        report.saddle_converged,
+                        report.saddle_reason,
+                        report.imaginary,
+                    )
+                    .map_or_else(|| "skipped".into(), |reason| format!("skipped ({reason})")),
                 },
             };
             if let Some(branches) = &report.irc {
@@ -458,16 +472,21 @@ Work          {} gradients · {} Hessians · {:.1} s",
         #[test]
         fn skipped_irc_distinguishes_stationarity_from_imaginary_count() {
             assert_eq!(
-                skipped_irc_reason(SaddleReason::EnergyCeiling, 1).as_deref(),
+                skipped_irc_reason(true, SaddleReason::EnergyCeiling, 1).as_deref(),
                 Some("saddle refinement did not converge (energy ceiling exhausted)")
             );
             for count in [0, 2] {
                 assert_eq!(
-                    skipped_irc_reason(SaddleReason::Stationary, count).unwrap(),
+                    skipped_irc_reason(true, SaddleReason::Stationary, count).unwrap(),
                     format!("expected one imaginary frequency below -50 cm-1, found {count}")
                 );
             }
-            assert_eq!(skipped_irc_reason(SaddleReason::Stationary, 1), None);
+            assert_eq!(skipped_irc_reason(true, SaddleReason::Stationary, 1), None);
+            // A retained earlier candidate keeps the reason but is not converged.
+            assert!(
+                skipped_irc_reason(false, SaddleReason::Stationary, 1)
+                    .is_some_and(|reason| reason.contains("did not converge"))
+            );
         }
     }
 }
