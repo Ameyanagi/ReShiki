@@ -290,12 +290,18 @@ def frequencies(
     Specify the thermochemistry temperature in kelvin and pressure in pascals.
     Frequencies are in cm⁻¹, with imaginary modes reported as negative values.
     By default the engine chooses the rotational symmetry number from the geometry.
-    For isotopologues with lower symmetry than the geometry, such as HDO, pass
-    ``symmetry_number=1``.
+    The engine's symmetry ignores isotopes, so a geometry with isotopes needs an
+    explicit ``symmetry_number``: for example 2 for D₂O and 1 for HDO.
     ``unpaired`` sets the number of unpaired electrons in the engine's valence
     space and defaults to the multiplicity minus one. For lanthanides, pass
     ``unpaired=result.unpaired`` to follow-up calls to keep the same valence spin.
     """
+    if symmetry_number is None and geometry.isotopes is not None and geometry.isotopes.any():
+        raise ReShikiError(
+            "Pass symmetry_number for a geometry with isotopes (for example 2 for D2O, 1 for HDO); "
+            "automatic symmetry ignores isotopes.",
+            "invalid_arguments",
+        )
     request = {
         "operation": "frequencies",
         "temperature": temperature,
