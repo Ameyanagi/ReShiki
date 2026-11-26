@@ -42,6 +42,19 @@ pub(super) fn water(task: CalcTask) -> (App, u64) {
     (app, o)
 }
 
+/// Duplicate the test molecule with its own attachment to the shared result.
+pub(super) fn duplicate_molecule(app: &mut App) -> Vec<u64> {
+    let before = app.tab.doc.clone();
+    let copied = reshiki::editing::append(&mut app.tab.doc, &before, Point::new(200., 0.));
+    app.changed(before);
+    let [first, second] = app.tab.doc.science.results.as_slice() else {
+        panic!("one result per molecule");
+    };
+    assert!(Arc::ptr_eq(&first.result, &second.result));
+    assert_ne!(first.attachment, second.attachment);
+    copied
+}
+
 pub(super) fn model(doc: &Document) -> Vec<[f32; 3]> {
     let model = &doc.models[0];
     model
@@ -147,7 +160,7 @@ fn an_optimization_moves_a_preview_then_applies_as_one_undo_step() {
     );
     assert!(matches!(
         &app.tab.xtb.outcome,
-        Some(Outcome::Done { line, notes }) if line == "E −5.070176 Eh · gap 14.01 eV · converged in 1 step" && notes.is_empty()
+        Some(Outcome::Done { line, notes, .. }) if line == "E −5.070176 Eh · gap 14.01 eV · converged in 1 step" && notes.is_empty()
     ));
 
     let _ = app.update(Message::Undo);

@@ -179,10 +179,14 @@ struct Choice {
     pub index: usize,
 }
 
+/// The shown result's storage index and Arc address.
+type ResultId = (usize, usize);
+
 /// The document state and figure a preview was made for.
 #[derive(Clone, Debug, PartialEq)]
 struct Stamp {
     revision: (u64, u64),
+    shown: ResultId,
     model: usize,
     figure: Figure,
 }
@@ -192,7 +196,7 @@ struct Stamp {
 struct Synced {
     revision: (u64, u64, u64),
     visible: bool,
-    shown: usize,
+    shown: Option<ResultId>,
     choice: Option<Choice>,
     pending: Option<Choice>,
     iso: u32,
@@ -240,6 +244,7 @@ impl App {
     /// bottom and expanded, or in the inspector's xTB page.
     fn xtb_orbitals_visible(&self) -> bool {
         self.xtb_palette_visible()
+            && self.xtb_failed().is_none()
             && self.tab.xtb.palette.view == View::Orbitals
             && if self.xtb.dock.inspector {
                 self.inspector_open
@@ -391,11 +396,18 @@ impl App {
         figure
     }
 
+    fn xtb_orbital_result_id(&self) -> Option<ResultId> {
+        self.xtb_shown_entry()
+            .map(|(index, stored)| (index, Arc::as_ptr(&stored.result) as usize))
+    }
+
     /// The canvas's drawing with the previewed orbital, while the Orbitals
     /// tab is in front.
     pub(super) fn xtb_orbital_preview(&self) -> Option<&Document> {
         let (stamp, doc) = self.tab.xtb.orbitals.preview.as_ref()?;
-        (stamp.revision == (self.tab.file_epoch, self.tab.revision)).then_some(doc.as_ref())
+        (stamp.revision == (self.tab.file_epoch, self.tab.revision)
+            && Some(stamp.shown) == self.xtb_orbital_result_id())
+        .then_some(doc.as_ref())
     }
 
     /// After every message: keep the preview in step with the tab and the
@@ -403,10 +415,12 @@ impl App {
     /// nothing it reads changed.
     pub(in crate::app) fn xtb_orbitals_sync(&mut self) -> Task<Message> {
         let state = &self.tab.xtb.orbitals;
+        let visible = self.xtb_orbitals_visible();
+        let shown = self.xtb_orbital_result_id();
         let synced = Synced {
             revision: (self.tab.id.0, self.tab.file_epoch, self.tab.revision),
-            visible: self.xtb_orbitals_visible(),
-            shown: self.tab.xtb.palette.shown_id(),
+            visible,
+            shown,
             choice: state.choice.clone(),
             pending: state.pending.clone(),
             iso: state.iso.to_bits(),
@@ -426,15 +440,13 @@ impl App {
             return Task::none();
         }
         self.tab.xtb.orbitals.synced = Some(synced);
-        self.xtb_orbitals_preview_sync();
+        self.xtb_orbitals_preview_sync(shown.filter(|_| visible));
         self.xtb_orbitals_feed()
     }
 
-    fn xtb_orbitals_preview_sync(&mut self) {
+    fn xtb_orbitals_preview_sync(&mut self, shown: Option<ResultId>) {
         let wanted = (|| {
-            if !self.xtb_orbitals_visible() {
-                return None;
-            }
+            let shown = shown?;
             let target = self.xtb_orbital_target()?;
             let model = target.model.filter(|_| target.problem.is_none())?;
             // A placed figure shows itself.
@@ -445,6 +457,7 @@ impl App {
             let figure = self.xtb_orbital_figure(&target, &choice);
             Some(Stamp {
                 revision: (self.tab.file_epoch, self.tab.revision),
+                shown,
                 model,
                 figure,
             })

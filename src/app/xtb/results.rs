@@ -109,20 +109,20 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     }
     parts.push(format!("charge {}", signed(f64::from(frame.charge), 0)));
     parts.push(format!("multiplicity {}", frame.multiplicity));
-    if let Some(finished) = result
-        .run
-        .as_ref()
-        .and_then(|run| run.finished.as_deref())
-        .and_then(|finished| chrono::DateTime::parse_from_rfc3339(finished).ok())
-    {
-        parts.push(
-            finished
-                .with_timezone(&chrono::Local)
-                .format("%-d %b %Y %H:%M")
-                .to_string(),
-        );
+    if let Some(finished) = finished_local(result) {
+        parts.push(finished.format("%-d %b %Y %H:%M").to_string());
     }
     parts.join(" · ")
+}
+
+/// When the calculation finished, in the user's time zone.
+pub(super) fn finished_local(result: &CalcResult) -> Option<chrono::DateTime<chrono::Local>> {
+    let finished = result.run.as_ref()?.finished.as_deref()?;
+    Some(
+        chrono::DateTime::parse_from_rfc3339(finished)
+            .ok()?
+            .with_timezone(&chrono::Local),
+    )
 }
 
 fn solvent(result: &CalcResult) -> String {
