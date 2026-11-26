@@ -1,7 +1,7 @@
 //! Persistent, nested logical groups, represented as laminar sets of object IDs.
 use crate::document::{Document, Point};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Group {
@@ -398,14 +398,17 @@ impl Document {
         for group in &mut self.groups {
             group.members.retain(|id| ids.contains(id));
         }
-        let mut merged: Vec<Group> = Vec::new();
-        for mut group in std::mem::take(&mut self.groups) {
-            let members = &mut group.members;
-            members.sort_unstable();
-            if members.len() < 2 {
+        let mut merged = Vec::<Group>::new();
+        let mut indices = HashMap::<Vec<u64>, usize>::new();
+        for group in std::mem::take(&mut self.groups) {
+            if group.members.len() < 2 {
                 continue;
             }
-            if let Some(existing) = merged.iter_mut().find(|g| g.members == *members) {
+            // Compare memberships as sets while keeping each surviving group's order.
+            let mut members = group.members.clone();
+            members.sort_unstable();
+            let index = *indices.entry(members).or_insert(merged.len());
+            if let Some(existing) = merged.get_mut(index) {
                 existing.integral |= group.integral;
                 existing.layout = existing.layout.take().or(group.layout);
             } else {

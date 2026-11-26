@@ -1053,6 +1053,9 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::tlc::Action::AddSpot(..)
                     | super::tlc::Action::DeleteSpot(..)
             )
+            | Message::IrFigure(
+                super::ir_figure::Action::Apply(_) | super::ir_figure::Action::Edit(..)
+            )
             | Message::Graphics(
                 super::graphics::Action::Style(_)
                     | super::graphics::Action::Superscript(_)

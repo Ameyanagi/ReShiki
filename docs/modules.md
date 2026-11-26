@@ -123,6 +123,8 @@ explains how the crates and modules fit together.
 - `src/app/inspector/context.rs`: Properties follows the selection; an idle canvas shows drawing settings, while a drawing tool shows the same defaults as its context row.
 - `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
 - `src/app/inspector_pages.rs`: Chemical names and Assistant are pages within the ordinary inspector tabs.
+- `src/app/ir_figure.rs`: Properties for an infrared figure placed as a group of drawing objects.
+- `src/app/ir_figure/view.rs`: Properties for a placed IR figure, with explicit numeric drafts.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
@@ -215,6 +217,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/conformers/pipeline.rs`: Stream the shared conformer search's progress to the Calculate card.
 - `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
 - `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
+- `src/app/xtb/history.rs`: Name the calculation or attached geometry restored by drawing history.
 - `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
 - `src/app/xtb/orbitals/compute.rs`: Work off the UI thread
 - `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
@@ -222,7 +225,9 @@ explains how the crates and modules fit together.
 - `src/app/xtb/palette.rs`: The xTB results palette
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
+- `src/app/xtb/results/methods.rs`: The methods paragraph Copy methods text writes for a stored result, citing the BibTeX keys of docs/references/xtb.bib for what actually ran.
 - `src/app/xtb/run.rs`: Stream the shared xTB job's progress to the Calculate card.
+- `src/app/xtb/source.rs`: Where a molecule's 3D coordinates came from (an xTB conformer, an optimized geometry or step, the file or the force field) and the other geometries its current xTB results hold, for the input-file dialog and the Undo status.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
@@ -854,6 +859,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
 - `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
 - `crates/model/src/graphics/heads.rs`
+- `crates/model/src/graphics/ir_figure.rs`: Stored parameters for a placed, editable infrared spectrum figure.
 - `crates/model/src/graphics/panel.rs`: Figure panels, rectangles with a tint, rounded corners, titles and dividers.
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`

@@ -75,6 +75,9 @@ pub(super) fn keep_format_text(
         if reshiki::arrows::shapes_notice(doc).is_some() {
             lost.push("editable arrow looks and callouts".into());
         }
+        if matches!(format, "cdxml" | "cdx") && doc.graphics.iter().any(|g| g.ir.is_some()) {
+            lost.push("IR figure settings".into());
+        }
     }
     // ReShiki reads panels and purpose back from its own CDXML only.
     if format == "cdx" && doc.graphics.iter().any(|g| g.panel.is_some()) {
