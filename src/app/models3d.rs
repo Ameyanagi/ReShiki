@@ -863,7 +863,9 @@ impl App {
             return base.into();
         };
         let atoms = model.linked_ids(&self.tab.doc);
-        if self.pending(&atoms).is_some() {
+        if self.pending(&atoms).is_some()
+            || (super::xtb::available() && self.xtb_palette_can_repeat_stale(&atoms))
+        {
             return base.into();
         }
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));

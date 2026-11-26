@@ -214,6 +214,8 @@ pub(crate) enum Outcome {
 /// A failed run and what Retry and Run again need.
 pub(crate) struct Failed {
     pub failure: state::Failure,
+    /// The molecule that failed, including errors before a run started.
+    pub atoms: Vec<u64>,
     /// The run's request; `None` when no run had started.
     pub request: Option<Box<Request>>,
     /// The frame's atomic numbers, once the 3D model existed.
@@ -243,7 +245,7 @@ impl Failed {
         if retry && let Some(n) = self.scf_iteration_limit() {
             return (
                 format!(
-                    "The electronic structure did not converge (SCF) because Max SCF iterations is {n}."
+                    "The electronic structure (SCF) did not converge within {n} iterations, the Max SCF iterations you set."
                 ),
                 detail,
             );
@@ -480,10 +482,7 @@ impl App {
         let intersects = |atoms: &[u64]| atoms.iter().any(|id| target.contains(id));
         let belongs = match outcome {
             Outcome::Done { atoms, .. } => intersects(atoms),
-            Outcome::Failed(failed) => failed
-                .request
-                .as_ref()
-                .is_none_or(|request| intersects(&request.atoms)),
+            Outcome::Failed(failed) => intersects(&failed.atoms),
             Outcome::Review(review) => review
                 .pending
                 .launch
@@ -861,6 +860,10 @@ impl App {
     /// results palette show it, keeping the request for Retry and Run again.
     fn xtb_fail(&mut self, failure: state::Failure) {
         let run = self.tab.xtb.run.take();
+        let atoms = run.as_ref().map_or_else(
+            || self.xtb_target().unwrap_or_default(),
+            |run| run.atoms.clone(),
+        );
         let numbers = run
             .as_ref()
             .and_then(|run| run.launch.as_ref())
@@ -882,6 +885,7 @@ impl App {
         });
         let failed = Failed {
             failure,
+            atoms,
             request,
             numbers,
             seconds,

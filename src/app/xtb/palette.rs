@@ -151,17 +151,20 @@ impl App {
         self.xtb_result(self.xtb_shown_entry()?)
     }
 
-    fn xtb_shown_entry(&self) -> Option<(usize, &Stored)> {
+    pub(super) fn xtb_shown_entry(&self) -> Option<(usize, &Stored)> {
         let science = &self.tab.doc.science;
         let palette = &self.tab.xtb.palette;
         if palette.result.is_empty() {
             return palette.open.then(|| self.xtb_newest()).flatten();
         }
-        let entry = science
+        let Some(entry) = science
             .results
             .iter()
             .enumerate()
-            .find(|(_, stored)| palette.result.iter().any(|weak| is(weak, &stored.result)))?;
+            .find(|(_, stored)| palette.result.iter().any(|weak| is(weak, &stored.result)))
+        else {
+            return self.xtb_newest();
+        };
         let link = science.attachment(entry.1.attachment)?;
         if link
             .atoms
@@ -243,6 +246,29 @@ impl App {
                 .xtb_newest()
                 .and_then(|entry| self.xtb_result(entry))
                 .is_some_and(|shown| shown.repeatable())
+    }
+
+    pub(super) fn xtb_palette_body_visible(&self) -> bool {
+        self.tab.xtb.palette.open
+            && if self.xtb.dock.inspector {
+                self.inspector_open
+                    && self.inspector_tab == crate::app::InspectorTab::Predict
+                    && self.xtb.page == super::Page::Xtb
+            } else {
+                !self.xtb.dock.collapsed
+            }
+    }
+
+    /// Whether the visible palette shows a stale result it can run again.
+    pub(in crate::app) fn xtb_palette_can_repeat_stale(&self, atoms: &[u64]) -> bool {
+        self.xtb_palette_body_visible()
+            && self.tab.xtb.run.is_none()
+            && self.xtb_failed().is_none()
+            && self.xtb_shown().is_some_and(|shown| {
+                shown.stale
+                    && shown.atoms.iter().flatten().any(|id| atoms.contains(id))
+                    && shown.repeatable()
+            })
     }
 
     /// The palette is showing a result.

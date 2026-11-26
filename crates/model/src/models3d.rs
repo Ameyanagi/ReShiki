@@ -1430,22 +1430,10 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
             let Some((start, end)) = frame(doc, &centered) else {
                 return false;
             };
-            // A crystal's 2D drawing reaches as far as its cell box and the
-            // copies of a repeat.
-            let flat = Model3d {
-                display: Display::TwoD,
-                ..model.clone()
-            };
-            let cells = flat_cells(std::slice::from_ref(&flat), doc);
-            let ink = [cells.behind, cells.front, cells.above].concat();
-            let right = if ink.is_empty() {
-                hi.x
-            } else {
-                hi.x.max(crate::scene::bounds(&ink).1.x)
-            };
+            let (molecule, obstacles) = placement_bounds(doc, index, model);
+            let right = molecule.map_or(hi.x, |(_, hi)| hi.x);
             let bond = doc.drawing_style.bond_length_world;
             let mut offset = Point::new(right + bond - start.x, 0.);
-            let (molecule, obstacles) = placement_bounds(doc, index, model);
             let overlaps = |offset: Point, (lo, hi): InkBox| {
                 let margin = bond / 4.;
                 start.x + offset.x - margin < hi.x
@@ -1456,7 +1444,8 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
             if obstacles.iter().any(|&bounds| overlaps(offset, bounds)) {
                 let ink_bottom = molecule.map_or(hi.y, |(_, hi)| hi.y);
                 offset = Point::new(0., ink_bottom + bond - start.y);
-                for _ in 0..32 {
+                // Each move clears at least one obstacle permanently.
+                for _ in 0..=obstacles.len() {
                     let Some(lowest) = obstacles
                         .iter()
                         .copied()
@@ -1554,6 +1543,17 @@ fn placement_bounds(
             .filter(|(i, model)| *i != index && model.display != Display::TwoD)
             .filter_map(|(_, model)| frame(doc, model)),
     );
+    // A disconnected crystal's atoms belong to separate selections, so their
+    // individual bounds omit the whole cell and its repeat copies.
+    for (_, model) in drawing.models.iter().enumerate().filter(|(i, model)| {
+        *i != index && model.display != Display::ThreeD && model.cell.is_some()
+    }) {
+        let cells = flat_cells(std::slice::from_ref(model), drawing);
+        let ink = [cells.behind, cells.front, cells.above].concat();
+        if !ink.is_empty() {
+            obstacles.push(crate::scene::bounds(&ink));
+        }
+    }
     (molecule, obstacles)
 }
 

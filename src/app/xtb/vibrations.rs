@@ -6,9 +6,9 @@
 //! recomputes them with the stored settings when the tab opens.
 use super::palette::Shown;
 use super::results::View;
-use super::{Page, Request, Start, is, state};
+use super::{Request, Start, is, state};
 use crate::app::figure_export::{Kind, Prepared};
-use crate::app::{App, InspectorTab, Message};
+use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::{Document, Point};
 use reshiki::graphics::Graphic;
@@ -130,7 +130,6 @@ impl Drop for Recompute {
 /// What the frames show; any change builds them again.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Key {
-    result: *const CalcResult,
     mode: usize,
     amplitude: f32,
     arrows: bool,
@@ -140,6 +139,7 @@ struct Key {
 /// One preview document; each frame swaps in the model (and its arrows), so
 /// a large drawing is copied once, not once per frame.
 struct Animation {
+    result: Weak<CalcResult>,
     key: Key,
     doc: Document,
     /// The animated model in `doc`, and how many graphics `doc` has without arrows.
@@ -340,9 +340,19 @@ impl App {
             .animation
             .as_ref()
             .filter(|animation| {
-                self.xtb_vibrations_visible()
-                    && animation.key.revision == (self.tab.file_epoch, self.tab.revision)
+                animation.key.revision == (self.tab.file_epoch, self.tab.revision)
+                    && self
+                        .xtb_vibration_result()
+                        .is_some_and(|result| is(&animation.result, result))
             })
+    }
+
+    pub(in crate::app) fn xtb_vibration_result(&self) -> Option<&Arc<CalcResult>> {
+        if !self.xtb_vibrations_visible() || self.tab.xtb.run.is_some() {
+            return None;
+        }
+        let result = &self.xtb_shown_entry()?.1.result;
+        result.vibrations.is_some().then_some(result)
     }
 
     /// Ticks while a mode animates.
@@ -358,16 +368,9 @@ impl App {
     pub(in crate::app) fn xtb_vibrations_visible(&self) -> bool {
         let palette = &self.tab.xtb.palette;
         self.tabs.temporary_depth == 0
-            && palette.open
             && palette.view == View::Vibrations
+            && self.xtb_palette_body_visible()
             && self.xtb_failed().is_none()
-            && if self.xtb.dock.inspector {
-                self.inspector_open
-                    && self.inspector_tab == InspectorTab::Predict
-                    && self.xtb.page == Page::Xtb
-            } else {
-                !self.xtb.dock.collapsed
-            }
     }
 
     fn xtb_vibrations_live(&self) -> Option<Shown<'_>> {
@@ -377,8 +380,11 @@ impl App {
         {
             return None;
         }
-        self.xtb_shown()
-            .filter(|shown| !shown.stale && self.xtb_model_at_result(shown))
+        self.xtb_shown().filter(|shown| {
+            shown.stored.result.vibrations.is_some()
+                && !shown.stale
+                && self.xtb_model_at_result(shown)
+        })
     }
 
     pub(in crate::app) fn xtb_vibrations_leave(&mut self) {
@@ -401,16 +407,19 @@ impl App {
             .as_ref()
             .map_or(0, |v| v.frequencies_cm1.len());
         let key = Key {
-            result: Arc::as_ptr(result),
             mode: self.xtb_mode(count),
             amplitude: settings.amplitude,
             arrows: settings.arrows,
             revision,
         };
-        if settings.animation.as_ref().is_some_and(|a| a.key == key) {
+        let previous = settings
+            .animation
+            .as_ref()
+            .filter(|a| is(&a.result, result));
+        if previous.is_some_and(|a| a.key == key) {
             return;
         }
-        let phase = settings.animation.as_ref().map_or(0., |a| a.phase);
+        let phase = previous.map_or(0., |a| a.phase);
         let mut animation = self
             .xtb_modes(result)
             .and_then(|modes| vector(modes, shown.frame, key.mode))
@@ -462,6 +471,7 @@ impl App {
         }
         *doc.models.get_mut(index)? = rest;
         Some(Animation {
+            result: Arc::downgrade(&shown.stored.result),
             key,
             graphics: doc.graphics.len(),
             doc,

@@ -1490,25 +1490,35 @@ fn download_status(filename: &str) -> String {
     format!("Downloaded {filename}")
 }
 
-/// A native open names the file and its saved results, including each result
-/// whose attachment no longer matches the drawing.
+/// A native open names the file, its saved results, and anything outdated.
 fn opened_results_status(
     path: &std::path::Path,
     doc: &reshiki::document::Document,
 ) -> Option<String> {
     let results = doc.science.results.len();
-    if results == 0 {
+    let outdated_models = doc
+        .models
+        .iter()
+        .filter(|model| model.is_stale(doc))
+        .count();
+    if results == 0 && outdated_models == 0 {
         return None;
     }
     let name = path
         .file_name()
         .unwrap_or(path.as_os_str())
         .to_string_lossy();
+    if results == 0 {
+        let plural = if outdated_models == 1 { "" } else { "s" };
+        return Some(format!(
+            "Opened {name} · {outdated_models} outdated 3D model{plural} (the drawing changed)"
+        ));
+    }
     let mut status = format!(
         "Opened {name} · {results} calculation result{}",
         if results == 1 { "" } else { "s" },
     );
-    let outdated = doc
+    let outdated_results = doc
         .science
         .results
         .iter()
@@ -1518,6 +1528,7 @@ fn opened_results_status(
                 .is_some_and(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
         })
         .count();
+    let outdated = outdated_results + outdated_models;
     if outdated > 0 {
         status.push_str(&format!(" · {outdated} outdated (the drawing changed)"));
     }

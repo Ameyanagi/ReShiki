@@ -144,7 +144,7 @@ fn a_failure_blocks_actions_on_the_previous_result() {
     let failure_status = app.status.clone();
     assert_eq!(
         failure_status,
-        "xTB calculation failed: The electronic structure did not converge (SCF) because Max SCF iterations is 1."
+        "xTB calculation failed: The electronic structure (SCF) did not converge within 1 iterations, the Max SCF iterations you set."
     );
     let failed = app.xtb_failed().expect("the selected molecule's failure");
     assert!(app.xtb_can_retry(failed));
@@ -302,6 +302,37 @@ fn an_edit_greys_the_results_undo_restores_them_and_recalculate_reruns() {
 }
 
 #[test]
+fn the_floating_notice_yields_to_the_visible_stale_result_banner() {
+    let (mut app, o) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    edit(&mut app, o);
+    app.tab.selected = vec![o];
+    assert!(app.xtb_shown().is_some_and(|shown| shown.stale));
+    let with_banner = if super::super::available() { 1 } else { 2 };
+    let canvas_children = |app: &App| {
+        app.with_model_notice(iced::widget::Space::new().into())
+            .as_widget()
+            .children()
+            .len()
+    };
+
+    assert!(app.xtb_palette_can_repeat_stale(&[o]));
+    assert_eq!(canvas_children(&app), with_banner);
+    palette(&mut app, Action::Collapse);
+    assert!(!app.xtb_palette_can_repeat_stale(&[o]));
+    assert_eq!(canvas_children(&app), 2);
+    palette(&mut app, Action::Collapse);
+    palette(&mut app, Action::Dock);
+    assert!(app.xtb_palette_can_repeat_stale(&[o]));
+    assert_eq!(canvas_children(&app), with_banner);
+    app.inspector_tab = crate::app::InspectorTab::Properties;
+    assert!(!app.xtb_palette_can_repeat_stale(&[o]));
+    assert_eq!(canvas_children(&app), 2);
+    palette(&mut app, Action::Close);
+    assert_eq!(canvas_children(&app), 2);
+}
+
+#[test]
 fn a_result_from_a_late_run_arrives_stale() {
     let (mut app, o) = water(CalcTask::Optimize);
     edit(&mut app, o);
@@ -393,8 +424,6 @@ fn each_result_keeps_its_own_run_details_through_undo() {
         "same geometry and energy, two results"
     );
     let _ = app.update(Message::Undo);
-    assert!(app.xtb_shown().is_none(), "the undone result is not shown");
-    palette(&mut app, Action::Show);
     let shown = app.xtb_shown().expect("the first result again");
     assert!(std::sync::Arc::ptr_eq(&shown.stored.result, &first));
     assert_eq!(threads(&app), first_threads);

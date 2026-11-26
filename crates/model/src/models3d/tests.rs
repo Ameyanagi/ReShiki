@@ -74,9 +74,10 @@ fn both_placement_keeps_a_lone_molecule_to_the_right() {
     let (mut doc, atoms, methane) = drawing();
     doc.delete(&[methane]);
     let before = doc.atoms.clone();
+    let right = scene::selection_bounds(&doc, &atoms).unwrap().1.x;
+    assert!(right > doc.atom(atoms[2]).unwrap().position.x);
     assert!(set_display(&mut doc, 0, Display::Both));
     let (lo, _) = frame(&doc, &doc.models[0]).unwrap();
-    let right = doc.atom(atoms[2]).unwrap().position.x;
     assert!((lo.x - right - doc.drawing_style.bond_length_world).abs() < 1e-3);
     assert_eq!(doc.models[0].offset.y, 0.);
     assert_eq!(doc.atoms, before);
@@ -122,6 +123,117 @@ fn both_placement_moves_farther_down_past_an_obstacle_below_the_scheme() {
         "{placed:?}"
     );
     assert!(!placement_overlaps(placed, obstacle, bond / 4.));
+}
+
+#[test]
+fn both_placement_clears_more_than_32_staggered_obstacles() {
+    let (mut doc, atoms, _) = placement_scheme();
+    let ink = scene::selection_bounds(&doc, &atoms).unwrap();
+    let centered = frame(&doc, &doc.models[0]).unwrap();
+    let height = centered.1.y - centered.0.y;
+    let bond = doc.drawing_style.bond_length_world;
+    let mut top = ink.1.y + bond;
+    let mut obstacles = Vec::new();
+    for _ in 0..40 {
+        let note = crate::document::Annotation {
+            id: doc.next_id(),
+            position: Point::new(10., top + height / 2.),
+            text: "Conditions".into(),
+            format: Default::default(),
+            angle: 0.,
+        };
+        let bounds = note.bounds();
+        assert!(placement_overlaps(
+            (
+                Point::new(centered.0.x, top),
+                Point::new(centered.1.x, top + height),
+            ),
+            bounds,
+            bond / 4.,
+        ));
+        top = bounds.1.y + bond;
+        obstacles.push(bounds);
+        doc.annotations.push(note);
+    }
+    assert!(set_display(&mut doc, 0, Display::Both));
+    let placed = frame(&doc, &doc.models[0]).unwrap();
+    assert!(doc.models[0].offset.x.abs() < 1e-3);
+    assert!((placed.0.y - top).abs() < 1e-3, "{placed:?}");
+    assert!(
+        obstacles
+            .into_iter()
+            .all(|bounds| !placement_overlaps(placed, bounds, bond / 4.))
+    );
+}
+
+#[test]
+fn both_placement_avoids_a_disconnected_neighbors_visible_crystal_repeat() {
+    let (mut doc, _, methane) = drawing();
+    doc.delete(&[methane]);
+    let na = doc.add_atom("Na", Point::new(-200., 50.));
+    let cl = doc.add_atom("Cl", Point::new(-170., 50.));
+    let mut crystal = Model3d::new(
+        &doc,
+        vec![
+            Placed {
+                id: na,
+                xyz: [0.; 3],
+            },
+            Placed {
+                id: cl,
+                xyz: [1., 0., 0.],
+            },
+        ],
+        vec![],
+        ForceField::Mmff94s,
+    )
+    .with_cell(
+        &doc,
+        Some(Cell {
+            vectors: [[4., 0., 0.], [0., 4., 0.], [0., 0., 4.]],
+            crossing: vec![],
+        }),
+        vec![],
+    );
+    crystal.rotation = [1., 0., 0., 0.];
+    crystal.repeat = [4, 1, 1];
+    doc.models.push(crystal);
+    let cells = flat_cells(&doc.models[1..], &doc);
+    let ink = scene::bounds(&[cells.behind, cells.front, cells.above].concat());
+    let centered = frame(&doc, &doc.models[0]).unwrap();
+    let bond = doc.drawing_style.bond_length_world;
+    let right = layout_bounds(&doc, &doc.models[0]).unwrap().1.x + bond;
+    let candidate = (
+        Point::new(right, centered.0.y),
+        Point::new(right + centered.1.x - centered.0.x, centered.1.y),
+    );
+    assert!(placement_overlaps(candidate, ink, bond / 4.));
+    for id in [na, cl] {
+        let atom = scene::selection_bounds(&doc, &[id]).unwrap();
+        assert!(!placement_overlaps(candidate, atom, bond / 4.));
+    }
+    assert!(set_display(&mut doc, 0, Display::Both));
+    let placed = frame(&doc, &doc.models[0]).unwrap();
+    assert!(doc.models[0].offset.x.abs() < 1e-3);
+    assert!(!placement_overlaps(placed, ink, bond / 4.));
+}
+
+#[test]
+fn both_placement_keeps_its_own_crystal_repeat_and_cell_labels_to_the_left() {
+    for display in [Display::TwoD, Display::ThreeD] {
+        let (mut doc, atoms) = crystal();
+        doc.models[0].display = Display::TwoD;
+        doc.models[0].repeat = [2, 3, 1];
+        let ink = scene::selection_bounds(&doc, &atoms).unwrap();
+        doc.models[0].display = display;
+        assert!(set_display(&mut doc, 0, Display::Both));
+        let placed = frame(&doc, &doc.models[0]).unwrap();
+        let bond = doc.drawing_style.bond_length_world;
+        assert!((placed.0.x - ink.1.x - bond).abs() < 1e-3, "{placed:?}");
+        assert_eq!(doc.models[0].offset.y, 0.);
+        assert!(!placement_overlaps(placed, ink, bond / 4.));
+        assert!(!set_display(&mut doc, 0, Display::Both));
+    }
 }
 
 #[test]
@@ -240,6 +352,68 @@ fn both_placement_excludes_its_own_linked_captions_and_hidden_model_frames() {
     assert!(set_display(&mut doc, 0, Display::Both));
     assert!(doc.models[0].offset.x > 0.);
     assert_eq!(doc.models[0].offset.y, 0.);
+}
+
+#[test]
+fn both_placement_starts_right_of_its_own_linked_annotation_ink() {
+    for kind in ["name", "caption", "number"] {
+        for display in [Display::TwoD, Display::ThreeD] {
+            let (mut doc, atoms, methane) = drawing();
+            doc.delete(&[methane]);
+            let id = doc.next_id();
+            let text = "A long linked annotation across the right candidate".to_owned();
+            doc.annotations.push(crate::document::Annotation {
+                id,
+                position: Point::new(130., -10.),
+                text: text.clone(),
+                format: Default::default(),
+                angle: 0.,
+            });
+            match kind {
+                "name" => doc
+                    .molecule_names
+                    .push(crate::molecule_names::MoleculeName {
+                        annotation: id,
+                        atoms: atoms.clone(),
+                        smiles: "CCO".into(),
+                        text,
+                    }),
+                "caption" => {
+                    doc.property_captions
+                        .push(crate::linked_properties::PropertyCaption {
+                            annotation: Some(id),
+                            atoms: atoms.clone(),
+                            text,
+                            ..Default::default()
+                        });
+                }
+                _ => doc
+                    .compound_numbers
+                    .push(crate::compound_numbers::CompoundNumber {
+                        annotation: id,
+                        atoms: atoms.clone(),
+                        text,
+                        fixed: true,
+                    }),
+            }
+            let own = crate::molecule_names::include_annotations(&doc, &atoms);
+            let ink = scene::selection_bounds(&doc, &own).unwrap();
+            doc.models[0].display = display;
+            assert!(
+                set_display(&mut doc, 0, Display::Both),
+                "{kind} {display:?}"
+            );
+            let placed = frame(&doc, &doc.models[0]).unwrap();
+            let bond = doc.drawing_style.bond_length_world;
+            assert!(
+                (placed.0.x - ink.1.x - bond).abs() < 1e-3,
+                "{kind} {display:?}: {placed:?} {ink:?}",
+            );
+            assert_eq!(doc.models[0].offset.y, 0., "{kind} {display:?}");
+            assert!(!placement_overlaps(placed, ink, bond / 4.));
+            assert!(!set_display(&mut doc, 0, Display::Both));
+        }
+    }
 }
 
 #[test]
@@ -940,15 +1114,16 @@ fn hidden_atoms_are_not_picked_and_the_frame_selects_the_molecule() {
     assert!(atoms.iter().all(|id| region.contains(id)));
     assert!(shows_3d(&doc, &atoms) && !shows_3d(&doc, &[methane]));
 
-    // Beside a lone drawing, the frame sits right of the atoms.
+    // Beside a lone drawing, the frame sits right of its visible label ink.
     let (mut both, _, methane) = drawing();
     both.delete(&[methane]);
+    let right = scene::selection_bounds(&both, &atoms).unwrap().1.x;
     assert!(set_display(&mut both, 0, Display::Both));
     assert!(shows_3d(&both, &atoms));
     assert!(!shows_3d(&drawing().0, &atoms));
     let (lo, _) = frame(&both, &both.models[0]).unwrap();
     let bond = both.drawing_style.bond_length_world;
-    assert!((lo.x - (72. + bond)).abs() < 1e-3, "{lo:?}");
+    assert!((lo.x - (right + bond)).abs() < 1e-3, "{lo:?}");
     assert!(both.atom_drawn(atoms[0]));
 }
 
