@@ -5,7 +5,7 @@ pub use reshiki_qcdata::KCAL_PER_HARTREE;
 use reshiki_qcdata::{MAX_HESSIAN_ATOMS, XtbMethod};
 
 mod export;
-pub use export::{RankedConformer, ranked_trajectory, xyz};
+pub use export::{RankedConformer, ranked_trajectory, xyz, xyz_with_relative_energy};
 mod rows;
 #[cfg(not(target_arch = "wasm32"))]
 pub use rows::trajectory_alignment;

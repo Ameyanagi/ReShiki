@@ -236,14 +236,20 @@ fn unsupported_barrier_falls_back_to_energy_and_no_effective_output_blocks_calcu
 fn refused_barrier_runs_the_energy_batch_from_calculate_and_rerun() {
     use reshiki::reactions::Role;
 
-    for (carbons, reason) in [(2, "no bonds forming or breaking"), (41, "up to 120 atoms")] {
+    for (carbons, mapped, reason) in [
+        (2, true, "no bonds forming or breaking"),
+        (41, true, "up to 120 atoms"),
+        (129, false, "up to 120 atoms"),
+    ] {
         let (mut doc, arrow) = ions(false);
         doc.atoms.clear();
         for side in [Role::Reactant, Role::Product] {
             let mut atoms = Vec::new();
             for i in 0..carbons {
                 let id = doc.add_atom("C", Point::new(i as f32 * 24., 0.));
-                doc.atom_mut(id).unwrap().map_num = i + 1;
+                if mapped {
+                    doc.atom_mut(id).unwrap().map_num = i + 1;
+                }
                 if let Some(&previous) = atoms.last() {
                     doc.add_bond(previous, id, 1, "plain");
                 }
@@ -279,6 +285,45 @@ fn refused_barrier_runs_the_energy_batch_from_calculate_and_rerun() {
                     .unwrap()
                     .contains(reason)
             );
+        }
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn failed_automatic_mapping_falls_back_only_when_reaction_energy_is_selected() {
+    let (mut doc, arrow) = claisen();
+    for atom in &mut doc.atoms {
+        atom.map_num = 0;
+    }
+    let reason = "Could not find atom correspondence";
+    for (energy, free) in [(true, false), (false, true), (false, false)] {
+        let mut app = app(doc.clone(), arrow);
+        app.tab.xtb.ts_card.reaction_energy = energy;
+        app.tab.xtb.ts_card.free_energy = free;
+        let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+        assert!(app.xtb_automatic_mapping_pending(arrow));
+        let id = app.tab.xtb.ts_review.as_ref().unwrap().id;
+        let _ = app.update(send(Action::Ready(id, Err(reason.into()))));
+        assert_eq!(app.tab.doc, doc);
+        if energy || free {
+            assert!(!app.ts_review_open());
+            let run = app.tab.xtb.run.as_ref().unwrap();
+            assert!(run.ts.is_none());
+            assert_eq!(
+                run.config.task,
+                if free {
+                    CalcTask::OptFreq
+                } else {
+                    CalcTask::Optimize
+                }
+            );
+            assert_eq!(app.xtb_energy_result(arrow, None).1, Some(reason));
+        } else {
+            let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+            assert_eq!(dialog.mode, Mode::TransitionState);
+            assert_eq!(dialog.validate().unwrap_err(), reason);
+            assert!(!app.xtb_running());
         }
     }
 }

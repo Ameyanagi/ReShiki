@@ -3,7 +3,7 @@ use super::{Action, Diversity, Format, MAX_REPRESENTATIVES, MAX_STARTS, Minimize
 use crate::app::workspace::{accessible_command, control, hover_hint, muted_text};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
 use crate::app::xtb::tone::{Tone, line, toned_text};
-use crate::app::xtb::{Action as XtbAction, view::segment};
+use crate::app::xtb::{Action as XtbAction, EnergyUnit, view::segment};
 use crate::app::{App, Message};
 use iced::widget::{Column, Space, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length};
@@ -13,22 +13,27 @@ use reshiki::science::{self, TetrahedralStereo};
 const UNASSIGNED_CONFIGURATION: &str = "configuration could not be assigned";
 const FOOTNOTE: &str = "Pop. = Boltzmann population of the kept conformers at 298 K · RMSD: heavy atoms after superposition";
 
-pub(super) fn headers(result: &CalcResult, inspector: bool) -> Vec<(String, Length)> {
+pub(super) fn headers(
+    result: &CalcResult,
+    inspector: bool,
+    unit: EnergyUnit,
+) -> Vec<(String, Length)> {
+    let suffix = unit.label();
     let (delta, pop) = if inspector {
-        (("ΔE (kcal/mol)", 90.), ("Pop.", 60.))
+        ((format!("ΔE ({suffix})"), 90.), ("Pop.", 60.))
     } else {
         let label = match result.settings {
-            Settings::Xtb(_) => "ΔE xTB (kcal/mol)",
-            Settings::Imported { .. } => "ΔE (kcal/mol)",
+            Settings::Xtb(_) => format!("ΔE xTB ({suffix})"),
+            Settings::Imported { .. } => format!("ΔE ({suffix})"),
         };
         ((label, 114.), ("Pop. 298 K", 68.))
     };
     let mut columns = vec![
         ("#".into(), Length::Fixed(24.)),
-        (delta.0.into(), Length::Fixed(delta.1)),
+        (delta.0, Length::Fixed(delta.1)),
     ];
     if !inspector && let Some(field) = super::start_field(result) {
-        columns.push((format!("ΔE {field} (kcal/mol)"), Length::Fixed(144.)));
+        columns.push((format!("ΔE {field} ({suffix})"), Length::Fixed(144.)));
     }
     columns.push((pop.0.into(), Length::Fixed(pop.1)));
     if !inspector {
@@ -39,6 +44,29 @@ pub(super) fn headers(result: &CalcResult, inspector: bool) -> Vec<(String, Leng
     }
     columns.push(("Stereo".into(), Length::Fill));
     columns
+}
+
+pub(super) fn row_values(
+    row: &Row,
+    rank: usize,
+    inspector: bool,
+    field: bool,
+    unit: EnergyUnit,
+) -> Vec<String> {
+    [
+        Some(rank.to_string()),
+        Some(format!("{:.2}", unit.convert_kcal(row.delta_kcal))),
+        field.then(|| {
+            row.start_kcal
+                .map_or_else(|| "—".into(), |e| format!("{:.2}", unit.convert_kcal(e)))
+        }),
+        Some(format!("{:.1} %", row.percent)),
+        (!inspector).then(|| row.rmsd.map_or_else(|| "—".into(), |x| format!("{x:.2}"))),
+        (!inspector).then(|| row.cluster.map_or_else(|| "—".into(), |c| c.to_string())),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 pub(super) fn search_funnel(result: &CalcResult) -> Option<String> {
@@ -322,8 +350,9 @@ impl App {
         // The inspector is narrow: there the table keeps rank, ΔE, share and
         // the stereo check; the selected row's details follow below it.
         let result = &shown.stored.result;
+        let unit = self.appearance.energy_unit;
         let field = super::start_field(result).filter(|_| !inspector);
-        let headers = headers(result, inspector);
+        let headers = headers(result, inspector, unit);
         let cell = |content: String, width: Length| {
             text(content)
                 .size(12)
@@ -338,18 +367,13 @@ impl App {
         let list = Column::with_children(rows.iter().enumerate().map(|(index, r)| {
             let active = current == Some(index);
             let (stereo, tone) = stereo_text(r);
-            let values = [
-                Some((index + 1).to_string()),
-                Some(format!("{:.2}", r.delta_kcal)),
-                field.map(|_| {
-                    r.start_kcal
-                        .map_or_else(|| "—".into(), |e| format!("{e:.2}"))
-                }),
-                Some(format!("{:.1} %", r.percent)),
-                (!inspector).then(|| r.rmsd.map_or_else(|| "—".into(), |x| format!("{x:.2}"))),
-                (!inspector).then(|| r.cluster.map_or_else(|| "—".into(), |c| c.to_string())),
-            ];
-            let mut name = format!("Conformer {}, {:.2} kcal/mol", index + 1, r.delta_kcal);
+            let values = row_values(r, index + 1, inspector, field.is_some(), unit);
+            let mut name = format!(
+                "Conformer {}, {:.2} {}",
+                index + 1,
+                unit.convert_kcal(r.delta_kcal),
+                unit.label()
+            );
             if stereo != "—" {
                 name.push_str(&format!(" · Stereo {stereo}"));
             }
@@ -370,7 +394,6 @@ impl App {
             };
             let cells = row(values
                 .into_iter()
-                .flatten()
                 .zip(&headers)
                 .map(|(value, (_, width))| cell(value, *width).into()))
             .push(stereo_cell)
@@ -388,6 +411,7 @@ impl App {
         // Boltzmann shares; a click shows that conformer.
         let plot = iced::widget::canvas(crate::app::energy_plot::EnergyPlot {
             delta_kcal: rows.iter().map(|r| r.delta_kcal).collect(),
+            unit,
             layout: crate::app::energy_plot::Layout::Levels,
             selected: current,
             notes: rows.iter().map(|r| format!("{:.1}%", r.percent)).collect(),
@@ -521,7 +545,11 @@ impl App {
                     if let (Some(field), Some(start)) =
                         (super::start_field(&shown.stored.result), r.start_kcal)
                     {
-                        text.push_str(&format!(" · ΔE {field} {start:.2} kcal/mol"));
+                        text.push_str(&format!(
+                            " · ΔE {field} {:.2} {}",
+                            self.appearance.energy_unit.convert_kcal(start),
+                            self.appearance.energy_unit.label()
+                        ));
                     }
                     if let Some(rmsd) = r.rmsd.filter(|_| index > 0) {
                         text.push_str(&format!(" · RMSD to #1 {rmsd:.2} Å"));
@@ -785,14 +813,18 @@ fn duration(seconds: f64) -> String {
 /// The Conformers tab's footer: export every kept conformer.
 pub(crate) fn footer<'a>(result: &CalcResult, wrapping: text::Wrapping) -> Element<'a, Message> {
     let count = result.trajectory.as_ref().map_or(0, |path| path.steps());
-    let mut footer = row(
-        [(Format::Sdf, "sdf", "SDF"), (Format::Xyz, "xyz", "XYZ")].map(|(format, id, name)| {
-            let label = format!("Export all {count} as {name}…");
-            accessible_command(format!("xtb-export-conformers-{id}"), label.clone(), label)
-                .on_press_maybe((count > 0).then(|| send(Action::Export(format))))
-                .into()
-        }),
-    )
+    let mut footer = row([
+        (Format::Sdf, "sdf", "SDF"),
+        (Format::Xyz, "xyz", "XYZ"),
+        (Format::Tsv, "tsv", "TSV"),
+        (Format::Csv, "csv", "CSV"),
+    ]
+    .map(|(format, id, name)| {
+        let label = format!("Export all {count} as {name}…");
+        accessible_command(format!("xtb-export-conformers-{id}"), label.clone(), label)
+            .on_press_maybe((count > 0).then(|| send(Action::Export(format))))
+            .into()
+    }))
     .spacing(10)
     .align_y(Alignment::Center);
     footer = footer.push(Space::new().width(8)).push(
@@ -801,5 +833,5 @@ pub(crate) fn footer<'a>(result: &CalcResult, wrapping: text::Wrapping) -> Eleme
             .style(muted_text)
             .wrapping(wrapping),
     );
-    footer.into()
+    footer.wrap().into()
 }
