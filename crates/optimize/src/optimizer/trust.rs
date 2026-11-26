@@ -4,7 +4,8 @@ use super::{Diagnostics, Evaluator, Options, Point, Potential, Status, TrialStep
 use crate::linalg::norm;
 
 /// Trust region for both RFO methods. The ratio thresholds and boundary
-/// expansion follow Nocedal & Wright, Numerical Optimization, Algorithm 4.1.
+/// expansion follow Nocedal & Wright, Numerical Optimization, Algorithm 4.1
+/// \[Nocedal2006Numerical\].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Trust {
     /// Bound the Euclidean model-space displacement. ANC uses bohr; TRIC also

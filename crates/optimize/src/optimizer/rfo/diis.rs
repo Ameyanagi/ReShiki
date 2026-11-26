@@ -1,4 +1,6 @@
 //! DIIS interpolation in the current RFO coordinate frame.
+//!
+//! Full references: docs/references/xtb.md.
 
 use crate::linalg::{cholesky::Cholesky, dot, norm};
 use crate::optimizer::Acceleration;
@@ -67,7 +69,7 @@ pub(crate) fn diis_direction<T>(
             *value = position - *value;
         }
         let length = norm(&step);
-        // Farkas & Schlegel, PCCP 4, 11 (2002), controls (a)-(c).
+        // Farkas & Schlegel, PCCP 4, 11 (2002), controls (a)-(c) [Farkas2002GDIIS].
         let cosine = -dot(&step, reference) / (length * reference_length);
         let minimum_cosine = [0.84, 0.71, 0.67][count - MIN_POINTS];
         if length.is_finite()
@@ -94,7 +96,7 @@ fn combination(vectors: &[impl AsRef<[f64]>], coefficients: &[f64]) -> Vec<f64> 
 }
 
 pub(crate) fn residual_coefficients(errors: &[Vec<f64>]) -> Option<Vec<f64>> {
-    // Csaszar & Pulay, J. Mol. Struct. 114, 31 (1984): minimize
+    // Csaszar & Pulay, J. Mol. Struct. 114, 31 (1984) [Csaszar1984GDIIS]: minimize
     // ||sum c_i H^-1 g_i||^2 subject to sum c_i = 1.
     let scale = errors
         .iter()
@@ -137,7 +139,7 @@ pub(crate) fn energy_coefficients(
     gradients: &[&[f64]],
     energies: &[f64],
 ) -> Option<Vec<f64>> {
-    // Li & Frisch, JCTC 2, 835 (2006): the interpolated first-order
+    // Li & Frisch, JCTC 2, 835 (2006) [Li2006GEDIIS]: the interpolated first-order
     // energies give E(c) = sum c_i E_i - 1/2 sum_ij c_i c_j A_ij,
     // A_ij = (g_i-g_j).(q_i-q_j), on c_i >= 0, sum c_i = 1.
     let count = energies.len();
