@@ -22,6 +22,8 @@ mod orca;
 mod sdf;
 mod xyz;
 
+pub use xyz::read_geometry as read_xyz_geometry;
+
 #[cfg(test)]
 mod tests;
 
@@ -381,12 +383,7 @@ impl QcFile {
 
 /// Read a file of any [`Format`], told by [`detect`].
 pub fn read(file_name: &str, bytes: &[u8]) -> Result<QcFile, Error> {
-    if bytes.len() > MAX_FILE_BYTES {
-        return Err(Error::Unsupported(format!(
-            "The file is larger than {} MB",
-            MAX_FILE_BYTES / (1024 * 1024)
-        )));
-    }
+    check_file_size(bytes.len())?;
     // Program outputs may hold a stray Latin-1 byte (a localized date); it never matters.
     let text = String::from_utf8_lossy(bytes);
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
@@ -412,6 +409,16 @@ pub fn read(file_name: &str, bytes: &[u8]) -> Result<QcFile, Error> {
         Format::GamessInput => input::gamess(text)?,
     };
     finish(file)
+}
+
+fn check_file_size(bytes: usize) -> Result<(), Error> {
+    if bytes > MAX_FILE_BYTES {
+        return Err(Error::Unsupported(format!(
+            "The file is larger than {} MB",
+            MAX_FILE_BYTES / (1024 * 1024)
+        )));
+    }
+    Ok(())
 }
 
 /// Where a result came from, for its provenance.
@@ -490,6 +497,22 @@ pub(crate) fn element(symbol: &str) -> Option<(u8, u16)> {
         .skip(1)
         .position(|e| e.symbol.eq_ignore_ascii_case(symbol))?;
     Some((u8::try_from(z + 1).ok()?, 0))
+}
+
+/// An XYZ species label: an element, atomic number, or isotope such as `D` or `18O`.
+pub(crate) fn xyz_species(name: &str) -> Option<(u8, u16)> {
+    if let Ok(z) = name.parse::<u8>() {
+        (1..=118).contains(&z).then_some((z, 0))
+    } else {
+        let symbol = name.trim_start_matches(|c: char| c.is_ascii_digit());
+        let (z, isotope) = element(symbol)?;
+        let mass = name.strip_suffix(symbol)?;
+        if mass.is_empty() {
+            Some((z, isotope))
+        } else {
+            Some((z, mass.parse().ok()?))
+        }
+    }
 }
 
 /// A frame from atoms and their isotopes (empty when all natural), checked.

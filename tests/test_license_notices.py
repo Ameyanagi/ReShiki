@@ -22,6 +22,18 @@ from license_notices import (
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_axtb_notice_names_the_desktop_and_python_engine_packages(self):
+        root = Path(__file__).resolve().parents[1]
+        notice = " ".join((root / "NOTICE").read_text(encoding="utf-8").split())
+        self.assertIn("Desktop builds with the Cargo feature `xtb`", notice)
+        self.assertIn("and the `reshiki-xtb` Python package link axtb", notice)
+        self.assertIn("licenses/axtb/SOURCE", notice)
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "notices"
+            # No dependency resolution is needed to verify the copied shared notice.
+            write_notices(root, destination, {"packages": []})
+            self.assertEqual((destination / "NOTICE").read_bytes(), (root / "NOTICE").read_bytes())
+
     def test_axtb_attributions_follow_the_fork_in_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -29,7 +41,7 @@ class LicenseNoticeTests(unittest.TestCase):
             (notices / "rust").mkdir(parents=True)
             (notices / "rust/manifest.json").write_text("{}", encoding="utf-8")
             (notices / "axtb").mkdir()
-            filenames = ("COPYING", "COPYING.LESSER", "NOTICE", "SOURCE")
+            filenames = ("COPYING", "COPYING.LESSER", "NOTICE", "CHANGES-reshiki.md", "SOURCE")
             for name in filenames:
                 (notices / "axtb" / name).write_text(f"Fork {name}\n", encoding="utf-8")
 

@@ -272,7 +272,7 @@ jobs:
       - name: Check wheel license notices
         run: uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py "artifacts/python/*.whl"
       - name: Install test and integration dependencies
-        run: uv sync --project crates/python --all-extras --no-install-project
+        run: uv sync --project crates/python --extra excel --extra pandas --no-install-project
       - name: Test the built wheel
         run: uv run --project crates/python --no-sync --with ./artifacts/python/*.whl --with rdkit pytest crates/python/tests
       - run: uv run --project crates/python --no-sync ruff check crates/python/python crates/python/tests
@@ -676,8 +676,8 @@ jobs:
         with:
           shared-key: xtb
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Check the application with xTB enabled
-        run: cargo clippy --locked --features xtb --bin reshiki --all-targets -- -D warnings
+      - name: Check the application with xTB enabled (and the conformer benchmark)
+        run: cargo clippy --locked --features xtb,conformer-bench --bin reshiki --all-targets -- -D warnings
       - name: Test the xTB worker engine
         run: cargo test --locked -p reshiki-xtb-worker --features engine
       - name: Test xTB application integration

@@ -1,4 +1,6 @@
 //! Lindh's positive semidefinite model Hessian in Cartesian atomic units.
+//!
+//! Full references: docs/references/xtb.md.
 
 mod contacts;
 
@@ -7,10 +9,10 @@ pub(crate) use contacts::{BOND_FACTOR, contact_stretches, covalent_radius};
 use std::collections::HashMap;
 
 // R. Lindh et al., Chem. Phys. Lett. 241, 423–428 (1995),
-// doi:10.1016/0009-2614(95)00646-L. Parameters and the distance-weight
+// doi:10.1016/0009-2614(95)00646-L [Lindh1995Hessian]. Parameters and the distance-weight
 // convention were checked against Table I and Eqs. (37)–(41) in V. Bakken
 // and T. Helgaker, J. Chem. Phys. 117, 9160–9174 (2002),
-// doi:10.1063/1.1515483 (author copy: trygvehelgaker.no/Publications/
+// doi:10.1063/1.1515483 [Bakken2002Coordinates] (author copy: trygvehelgaker.no/Publications/
 // JChemPhys_117_09160_2002.pdf). No implementation source was used.
 pub(crate) const ALPHA: [[f64; 3]; 3] = [
     [1.0, 0.3949, 0.3949],

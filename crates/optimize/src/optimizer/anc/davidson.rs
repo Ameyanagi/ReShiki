@@ -27,7 +27,7 @@ impl AugmentedHessian<'_> {
         product
     }
 
-    // E. R. Davidson, J. Comput. Phys. 17, 87–94 (1975).
+    // E. R. Davidson, J. Comput. Phys. 17, 87–94 (1975) [Davidson1975Eigen].
     // Store each trial vector and its matrix product. Only the small projected
     // matrix needs to be diagonalized as the subspace grows.
     fn davidson(&self, max_subspace: usize, max_iterations: usize) -> Option<Vec<f64>> {

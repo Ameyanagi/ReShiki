@@ -316,6 +316,21 @@ const QC_OPTION: OptionSpec = OptionSpec {
     equivalent: None,
 };
 
+const CHARGE_OPTION: OptionSpec = OptionSpec {
+    flag: "--charge",
+    value: Some("N"),
+    help: "Set the molecular charge (default 0).",
+    default: Some(|| json!(0)),
+    ..QC_OPTION
+};
+
+const UHF_OPTION: OptionSpec = OptionSpec {
+    flag: "--uhf",
+    value: Some("N"),
+    help: "Set unpaired electrons (default from valence count).",
+    ..QC_OPTION
+};
+
 const EXPORT_INPUT: CommandSpec = CommandSpec {
     name: "export-input",
     summary: "Write a quantum-chemistry input from an XYZ structure",
@@ -323,6 +338,7 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
                                   [--job JOB] [--template N|--method M --basis B]
                                   [--charge C] [--multiplicity M] [--cores N]
                                   [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--reactant R.xyz] [--product P.xyz] [--hessian H.hess]
                                   [--out PATH]",
     options: &[
         OptionSpec {
@@ -335,7 +351,7 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--job",
             value: Some("JOB"),
-            help: "single-point, optimize, opt-freq, transition-state or irc.",
+            help: "single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts.",
             sets: Some("export_input.job"),
             ..QC_OPTION
         },
@@ -405,9 +421,27 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
             ..QC_OPTION
         },
         OptionSpec {
+            flag: "--reactant",
+            value: Some("R.xyz"),
+            help: "First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--product",
+            value: Some("P.xyz"),
+            help: "First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--hessian",
+            value: Some("H.hess"),
+            help: "ORCA Cartesian Hessian. Requires --program orca with --job ts or irc.",
+            ..QC_OPTION
+        },
+        OptionSpec {
             flag: "--out",
             value: Some("PATH"),
-            help: "Main file, replaced if it exists; companions go beside it.",
+            help: "Main file. Required for ORCA neb-ts or when using --hessian.",
             ..QC_OPTION
         },
     ],
@@ -455,20 +489,14 @@ const CALCULATE: CommandSpec = CommandSpec {
             ..QC_OPTION
         },
         OptionSpec {
-            flag: "--charge",
-            value: Some("N"),
-            help: "Set the molecular charge (default 0).",
-            default: Some(|| json!(0)),
             sets: Some("calculate.charge"),
-            ..QC_OPTION
+            ..CHARGE_OPTION
         },
         OptionSpec {
-            flag: "--uhf",
-            value: Some("N"),
             help: "Set unpaired electrons (default 0).",
             default: Some(|| json!(0)),
             sets: Some("calculate.uhf"),
-            ..QC_OPTION
+            ..UHF_OPTION
         },
         OptionSpec {
             flag: "--solvent",
@@ -606,22 +634,8 @@ const CALC: CommandSpec = CommandSpec {
             sets: None,
             equivalent: None,
         },
-        OptionSpec {
-            flag: "--charge",
-            value: Some("N"),
-            help: "Set the molecular charge (default 0).",
-            default: Some(|| json!(0)),
-            sets: None,
-            equivalent: None,
-        },
-        OptionSpec {
-            flag: "--uhf",
-            value: Some("N"),
-            help: "Set unpaired electrons (default from valence count).",
-            default: None,
-            sets: None,
-            equivalent: None,
-        },
+        CHARGE_OPTION,
+        UHF_OPTION,
         OptionSpec {
             flag: "--conventions",
             value: Some("MODE"),
@@ -710,6 +724,85 @@ const CALC: CommandSpec = CommandSpec {
         sets: None,
     }),
     body: calc_help,
+};
+
+const fn ts_option(
+    flag: &'static str,
+    value: Option<&'static str>,
+    help: &'static str,
+) -> OptionSpec {
+    OptionSpec {
+        flag,
+        value,
+        help,
+        default: None,
+        sets: None,
+        equivalent: None,
+    }
+}
+
+const TS: CommandSpec = CommandSpec {
+    name: "ts",
+    summary: "Search for a transition state with GFN2-xTB",
+    usage: "reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]",
+    options: &[
+        ts_option(
+            "--reactant",
+            Some("R.xyz"),
+            "Read the reactant from the first XYZ frame in angstroms.",
+        ),
+        ts_option(
+            "--product",
+            Some("P.xyz"),
+            "Read the product from the first XYZ frame in angstroms.",
+        ),
+        ts_option(
+            "--form",
+            Some("I-J"),
+            "Form a bond from reactant to product (1-based atom numbers, repeatable).",
+        ),
+        ts_option(
+            "--break",
+            Some("I-J"),
+            "Break a bond from reactant to product (1-based atom numbers, repeatable).",
+        ),
+        CHARGE_OPTION,
+        UHF_OPTION,
+        OptionSpec {
+            default: Some(|| json!(reshiki_optimize::ts::TsOptions::default().images)),
+            ..ts_option(
+                "--images",
+                Some("N"),
+                "Use 5 to 24 NEB images including endpoints (default 15).",
+            )
+        },
+        ts_option(
+            "--workers",
+            Some("N"),
+            "Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).",
+        ),
+        ts_option(
+            "--remap-hydrogens",
+            None,
+            "Reassign product hydrogens by least motion and list changed heavy-atom neighbors.",
+        ),
+        ts_option(
+            "--keep-endpoints",
+            None,
+            "Skip relaxation of the search endpoints.",
+        ),
+        ts_option(
+            "--out-dir",
+            Some("DIR"),
+            "Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.",
+        ),
+        ts_option("--json", Some("FILE"), "Write a JSON report."),
+    ],
+    tools: &[],
+    operand: None,
+    body: ts_help,
 };
 
 const PIECES: CommandSpec = CommandSpec {
@@ -859,6 +952,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     EXPORT_INPUT,
     NAME,
     CALC,
+    TS,
     PIECES,
     INFO,
     TOOLS,
@@ -869,9 +963,9 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
 const OPTIONS_RULE: &str =
-    "Options are allowed once each except calc's --scf-retry; -- ends the options.";
+    "Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.";
 const STDOUT_CONTRACT: &str = "\
-stdout carries only the result: the file, one JSON line, or one receipt
+stdout carries only the result: a file, a text report, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.";
 const SUCCESS_MEANING: &str = "success";
 const FAILURE_MEANING: &str =
@@ -1158,30 +1252,54 @@ fn analyze_help() -> String {
 }
 
 fn calc_help() -> String {
-    let mut text = format!("Usage: {}\n\nOptions:\n", CALC.usage);
-    for option in CALC.options {
-        let label = match option.value {
-            Some(value) => format!("{} {value}", option.flag),
-            None => option.flag.to_string(),
-        };
-        text.push_str(&format!("  {label:<28} {}\n", option.help));
-    }
+    let mut text = format!("Usage: {}\n\n", CALC.usage);
+    text.push_str(&option_help(&CALC, 28));
     text.push_str(
         "\nUse calculate for the compact calculation summary.\nSee docs/xtb-worker.md (Command line)\n",
     );
     text
 }
 
+fn ts_help() -> String {
+    format!(
+        "Usage: {}\n\n\
+Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.\n\
+Supply two atom-mapped XYZ files or one XYZ file with the bond changes.\n\
+Each structure must have 2 to {} atoms. With two files, atom order\n\
+defines the map. --remap-hydrogens requires two files and keeps heavy atoms\n\
+mapped by order.\n\n\
+{}\n\
+Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both\n\
+checks, and IRC branches whose relaxed ends match both endpoints. Progress\n\
+and the hydrogen mapping review go to stderr.\n\n\
+Examples:\n  \
+reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results\n  \
+reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json\n",
+        TS.usage,
+        reshiki_optimize::ts::MAX_ATOMS,
+        option_help(&TS, 28),
+    )
+}
+
+fn option_help(spec: &CommandSpec, width: usize) -> String {
+    let mut text = String::from("Options:\n");
+    for option in spec.options {
+        let label = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.to_string(),
+        };
+        text.push_str(&format!("  {label:<width$} {}\n", option.help));
+    }
+    text
+}
+
 fn calculate_help() -> String {
     let mut text = format!(
-        "Usage: {}\n\nRuns the calculate tool and prints its labelled result as one JSON line.\nOnly available in builds with xTB. Reads at most {} bytes and 500 atoms;\nfrequencies allow at most 200 atoms. The calculation deadline is 30 minutes.\n\nOptions:\n",
+        "Usage: {}\n\nRuns the calculate tool and prints its labelled result as one JSON line.\nOnly available in builds with xTB. Reads at most {} bytes and 500 atoms;\nfrequencies allow at most 200 atoms. The calculation deadline is 30 minutes.\n\n",
         CALCULATE.usage,
         Budgets::default().max_text_bytes,
     );
-    for option in CALCULATE.options {
-        let flag = format!("{} {}", option.flag, option.value.unwrap_or_default());
-        text.push_str(&format!("  {flag:<26} {}\n", option.help));
-    }
+    text.push_str(&option_help(&CALCULATE, 26));
     text
 }
 
@@ -1219,7 +1337,14 @@ radicals or isotope labels, is an error.
 
 fn export_input_help() -> String {
     let mut text = format!(
-        "Usage: {}\n\nWrites input for another program from the first frame of INPUT.xyz (Å);\nstdout without --out. An existing companion file stops the export.\nWarnings go to stderr.\n\nOptions:\n",
+        "Usage: {}\n\n\
+Writes input for another program from the first frame of INPUT.xyz (Å).\n\
+Without --out, the input goes to stdout. With --out, the main file is\n\
+replaced and new companions go beside it. An existing companion file\n\
+stops the export. Warnings go to stderr.\n\n\
+Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts. They must\n\
+list the same elements as INPUT.xyz in the same order. Corresponding atoms\n\
+must have the same index in every structure.\n\nOptions:\n",
         EXPORT_INPUT.usage,
     );
     for option in EXPORT_INPUT.options {
@@ -1237,6 +1362,9 @@ fn export_input_help() -> String {
             .unwrap_or_default();
         text.push_str(&format!("  {}  {}{only}\n", index + 1, template.name));
     }
+    text.push_str(
+        "\nExample:\n  reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz\n",
+    );
     text
 }
 
