@@ -1392,6 +1392,22 @@ pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     Some(View::new(doc, model)?.bounds())
 }
 
+/// [`frame`] grown by the model's orbital panels and their captions.
+fn frame_with_panels(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
+    let (mut lo, mut hi) = frame(doc, model)?;
+    for (small, caption) in panels(doc, model) {
+        let boxes = [
+            frame(doc, &small),
+            Some(crate::scene::bounds(std::slice::from_ref(&caption))),
+        ];
+        for (a, b) in boxes.into_iter().flatten() {
+            lo = Point::new(lo.x.min(a.x), lo.y.min(a.y));
+            hi = Point::new(hi.x.max(b.x), hi.y.max(b.y));
+        }
+    }
+    Some((lo, hi))
+}
+
 /// The frame's corners, clockwise from the top left.
 pub fn frame_corners(doc: &Document, model: &Model3d) -> Option<[Point; 4]> {
     let (lo, hi) = frame(doc, model)?;
@@ -1438,7 +1454,7 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
                 offset: Point::default(),
                 ..model.clone()
             };
-            let Some((start, end)) = frame(doc, &centered) else {
+            let Some((start, end)) = frame_with_panels(doc, &centered) else {
                 return false;
             };
             let (molecule, obstacles) = placement_bounds(doc, index, model);
@@ -1552,7 +1568,7 @@ fn placement_bounds(
             .iter()
             .enumerate()
             .filter(|(i, model)| *i != index && model.display != Display::TwoD)
-            .filter_map(|(_, model)| frame(doc, model)),
+            .filter_map(|(_, model)| frame_with_panels(doc, model)),
     );
     // A disconnected crystal's atoms belong to separate selections, so their
     // individual bounds omit the whole cell and its repeat copies.
@@ -1683,9 +1699,22 @@ pub fn whole_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
         .then_some(atoms)
 }
 
-/// The atoms of the models whose frame contains `p`, topmost first.
+/// The atoms of the models whose frame, or one of whose orbital panels,
+/// contains `p`, topmost first.
 pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
-    model_at(doc, p, 0.).map(|m| m.linked_ids(doc))
+    let inside = |m: &Model3d| {
+        frame(doc, m)
+            .is_some_and(|(lo, hi)| (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y))
+    };
+    model_at(doc, p, 0.)
+        .or_else(|| {
+            doc.models
+                .iter()
+                .rev()
+                .filter(|m| m.display != Display::TwoD && !m.panels.is_empty())
+                .find(|m| panels(doc, m).iter().any(|(small, _)| inside(small)))
+        })
+        .map(|m| m.linked_ids(doc))
 }
 
 /// The topmost shown model whose frame, shrunk by `inset` on every side,

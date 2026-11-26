@@ -377,6 +377,13 @@ fn panels_draw_small_models_with_captions_and_keep_their_snapshots() {
     assert!(frames.iter().all(|(plo, _)| plo.y > hi.y));
     assert!(frames[0].1.x <= frames[1].0.x);
     assert!(frames[0].1.x - frames[0].0.x < hi.x - lo.x);
+    // A click on a panel picks the molecule, as one on the frame does.
+    let (plo, phi) = frames[1];
+    let centre = Point::new((plo.x + phi.x) / 2., (plo.y + phi.y) / 2.);
+    assert_eq!(
+        crate::models3d::frame_hit(&doc, centre),
+        Some(model.linked_ids(&doc))
+    );
     let pins = doc.orbital_pins();
     assert_eq!(
         pins.values().next().unwrap(),
