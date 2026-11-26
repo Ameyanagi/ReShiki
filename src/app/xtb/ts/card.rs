@@ -821,9 +821,7 @@ impl App {
                     ));
                 }
             }
-            if let Some(warning) = &view.warning {
-                content = content.push(line(warning.clone(), Tone::Warning));
-            }
+            // An early-stopped IRC descent still connects; the Path tab notes it.
         }
         if barrier.is_some() || reaction.is_some() {
             // The two methods can optimize different endpoint geometries.
