@@ -3,6 +3,7 @@
 use super::super::results::{self, View};
 use super::super::tone::{Tone, line};
 use super::super::{Action as XtbAction, state};
+use super::sizing::body_height;
 use super::{Action, Shown};
 use crate::app::workspace::{accessible_command, control, muted_text, panel};
 use crate::app::{App, Message};
@@ -11,8 +12,6 @@ use iced::widget::{
 };
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
-/// The bottom dock's body height; the inspector shows the body in full.
-const BODY_HEIGHT: f32 = 150.;
 const LABEL_WIDTH: f32 = 130.;
 
 fn send(action: Action) -> Message {
@@ -71,9 +70,15 @@ impl App {
         }
         let content = self.xtb_palette_content(false)?;
         Some(
-            container(content)
+            // The body uses a chrome estimate for its usual height. The
+            // outer scrollable also bounds wrapped notes and warning cards.
+            container(scrollable(content).height(Length::Shrink))
+                .id("xtb-results-bottom")
                 .padding([10, 16])
                 .width(Length::Fill)
+                .max_height(
+                    self.accessibility.viewport().height * super::sizing::MAX_HEIGHT_FRACTION,
+                )
                 .style(panel)
                 .into(),
         )
@@ -92,14 +97,15 @@ impl App {
             return None;
         }
         let failure = self.xtb_failure_card();
+        let collapsed = self.xtb.dock.collapsed && !inspector;
         let Some(shown) = self.xtb_shown() else {
             return failure.map(|card| {
-                column![
-                    self.xtb_palette_header(vec![], View::Summary, inspector),
-                    card
-                ]
-                .spacing(8)
-                .into()
+                let header = self.xtb_palette_header(vec![], View::Summary, inspector);
+                if collapsed {
+                    header
+                } else {
+                    column![header, card].spacing(8).into()
+                }
             });
         };
         let palette = &self.tab.xtb.palette;
@@ -109,7 +115,6 @@ impl App {
         } else {
             View::Summary
         };
-        let collapsed = self.xtb.dock.collapsed && !inspector;
         let header = self.xtb_palette_header(views, view, inspector);
         if collapsed {
             return Some(header);
@@ -146,11 +151,7 @@ impl App {
         } else {
             scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(if view == View::Orbitals {
-                    super::super::orbitals::HEIGHT
-                } else {
-                    BODY_HEIGHT
-                })
+                .height(body_height(view, self.accessibility.viewport().height))
                 .into()
         };
         content = content.push(container(body).padding([6, 0]));
@@ -355,6 +356,11 @@ impl App {
         let shows = (live && selected.is_none())
             .then(|| self.xtb_model_step(shown))
             .flatten();
+        let chart_height = if inspector {
+            140.
+        } else {
+            body_height(View::Steps, self.accessibility.viewport().height).min(140.)
+        };
         let chart = canvas(StepChart {
             energies: energies.clone(),
             selected: selected.or(shows).unwrap_or(last),
@@ -365,7 +371,7 @@ impl App {
         } else {
             Length::Fixed(420.)
         })
-        .height(140);
+        .height(chart_height);
         let list = Column::with_children(energies.iter().enumerate().map(|(index, energy)| {
             let delta = index
                 .checked_sub(1)
@@ -705,12 +711,76 @@ struct StepChart {
 
 impl StepChart {
     const LEFT: f32 = 70.;
-    const TOP: f32 = 8.;
-    const BOTTOM: f32 = 22.;
+    const TOP: f32 = 14.;
+    const BOTTOM: f32 = 36.;
 
     fn x(&self, index: usize, bounds: Rectangle) -> f32 {
         let span = (bounds.width - Self::LEFT - 10.).max(1.);
         Self::LEFT + span * index as f32 / self.energies.len().saturating_sub(1).max(1) as f32
+    }
+
+    fn y(energy: f64, bounds: Rectangle, lo: f64, hi: f64) -> f32 {
+        let height = bounds.height - Self::TOP - Self::BOTTOM;
+        Self::TOP + 4. + ((hi - energy) / (hi - lo).max(1e-9)) as f32 * (height - 8.)
+    }
+
+    fn ticks(&self) -> Vec<usize> {
+        let last = self.energies.len().saturating_sub(1);
+        let mut ticks = vec![0, last / 2, last];
+        ticks.dedup();
+        ticks
+    }
+
+    fn axis_labels(
+        &self,
+        theme: &Theme,
+        bounds: Rectangle,
+        lo: f64,
+        hi: f64,
+    ) -> (canvas::Text, Vec<canvas::Text>) {
+        let color = Color {
+            a: 0.75,
+            ..theme.palette().text
+        };
+        let mut labels = [hi, lo]
+            .into_iter()
+            .map(|energy| canvas::Text {
+                content: state::signed(energy, 5),
+                position: Point::new(Self::LEFT - 4., Self::y(energy, bounds, lo, hi) - 6.),
+                color,
+                size: 10.into(),
+                align_x: iced::alignment::Horizontal::Right.into(),
+                ..Default::default()
+            })
+            .collect::<Vec<_>>();
+        labels.extend(self.ticks().into_iter().map(|index| canvas::Text {
+            content: index.to_string(),
+            position: Point::new(self.x(index, bounds), bounds.height - Self::BOTTOM + 4.),
+            color,
+            size: 10.into(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..Default::default()
+        }));
+        labels.push(canvas::Text {
+            content: "Optimization step".into(),
+            position: Point::new(
+                Self::LEFT + (bounds.width - Self::LEFT - 10.) / 2.,
+                bounds.height - 12.,
+            ),
+            color,
+            size: 10.into(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..Default::default()
+        });
+        let y_title = canvas::Text {
+            content: "Energy (Eh)".into(),
+            position: Point::ORIGIN,
+            color,
+            size: 10.into(),
+            align_x: iced::alignment::Horizontal::Center.into(),
+            ..Default::default()
+        };
+        (y_title, labels)
     }
 }
 
@@ -782,8 +852,7 @@ impl canvas::Program<Message> for StepChart {
             .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), e| {
                 (lo.min(*e), hi.max(*e))
             });
-        let range = (hi - lo).max(1e-9);
-        let y = |e: f64| Self::TOP + 4. + ((hi - e) / range) as f32 * (height - 8.);
+        let y = |energy| Self::y(energy, bounds, lo, hi);
         let points: Vec<Point> = self
             .energies
             .iter()
@@ -807,24 +876,59 @@ impl canvas::Program<Message> for StepChart {
             let dot = canvas::Path::circle(*point, if chosen { 4.5 } else { 2.5 });
             frame.fill(&dot, if chosen && self.live { accent } else { ink });
         }
-        for (e, label) in [(hi, hi), (lo, lo)] {
-            frame.fill_text(canvas::Text {
-                content: state::signed(label, 5),
-                position: Point::new(Self::LEFT - 4., y(e) - 6.),
-                color: muted,
-                size: 10.into(),
-                align_x: iced::alignment::Horizontal::Right.into(),
-                ..Default::default()
-            });
+        for index in self.ticks() {
+            let x = self.x(index, bounds);
+            frame.stroke(
+                &canvas::Path::line(
+                    Point::new(x, bounds.height - Self::BOTTOM),
+                    Point::new(x, bounds.height - Self::BOTTOM + 3.),
+                ),
+                canvas::Stroke::default()
+                    .with_color(Color { a: 0.4, ..muted })
+                    .with_width(1.),
+            );
         }
-        frame.fill_text(canvas::Text {
-            content: "Step (energy in Eh)".into(),
-            position: Point::new(Self::LEFT + width / 2., bounds.height - 16.),
-            color: muted,
-            size: 10.into(),
-            align_x: iced::alignment::Horizontal::Center.into(),
-            ..Default::default()
+        let (y_title, labels) = self.axis_labels(theme, bounds, lo, hi);
+        frame.with_save(|frame| {
+            frame.translate(iced::Vector::new(1., Self::TOP + height / 2.));
+            frame.rotate(-std::f32::consts::FRAC_PI_2);
+            frame.fill_text(y_title);
         });
+        for label in labels {
+            frame.fill_text(label);
+        }
         vec![frame.into_geometry()]
+    }
+}
+
+#[cfg(test)]
+mod chart_tests {
+    use super::*;
+
+    #[test]
+    fn step_axes_name_both_axes_and_use_theme_text_for_every_label() {
+        let chart = StepChart {
+            energies: vec![-20., -20.01, -20.012],
+            selected: 2,
+            live: true,
+        };
+        let bounds = Rectangle::with_size(iced::Size::new(420., 140.));
+        for theme in [Theme::Light, Theme::Dark] {
+            let (y_title, mut labels) = chart.axis_labels(&theme, bounds, -20.012, -20.);
+            labels.push(y_title);
+            for expected in ["Energy (Eh)", "Optimization step", "0", "1", "2"] {
+                assert!(labels.iter().any(|label| label.content == expected));
+            }
+            for label in labels {
+                assert_eq!(
+                    label.color,
+                    Color {
+                        a: 0.75,
+                        ..theme.palette().text
+                    }
+                );
+                assert!(label.position.y >= 0. && label.position.y <= bounds.height - 10.);
+            }
+        }
     }
 }

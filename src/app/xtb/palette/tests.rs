@@ -89,6 +89,7 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     palette(&mut app, Action::Close);
     assert!(!app.xtb_palette_visible());
     assert!(app.xtb_bottom_palette().is_none());
+    assert!(app.status.is_empty());
     palette(&mut app, Action::Show);
     assert!(app.xtb_palette_visible());
 
@@ -97,6 +98,26 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     assert!(app.xtb_bottom_palette().is_none());
     assert!(app.xtb_inspector_palette().is_some());
     assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
+}
+
+#[test]
+fn palette_status_clears_on_tab_switch_and_preserves_other_feedback() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(&mut app, optimized(&START, &MOVED));
+    palette(&mut app, Action::CopyLog);
+    assert_eq!(app.status, "Copied the xTB log");
+    app.add_tab();
+    app.select_tab(0);
+    assert!(app.status.is_empty());
+
+    palette(&mut app, Action::CopyTable);
+    app.status = "Saved the drawing".into();
+    palette(&mut app, Action::Close);
+    palette(
+        &mut app,
+        Action::Exported(Ok(Some("/folder/table.tsv".into()))),
+    );
+    assert_eq!(app.status, "Saved the drawing");
 }
 
 #[test]

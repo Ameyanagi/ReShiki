@@ -4,10 +4,11 @@ use super::super::palette::Shown;
 use super::super::state::signed;
 use super::super::tone::{Tone, line};
 use super::super::{Action as XtbAction, unavailable};
+use super::mode_list::mode_list;
 use super::{Action, State, thermo_at};
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use crate::app::{App, Message};
-use iced::widget::{Column, canvas, column, container, row, scrollable, slider, text};
+use iced::widget::{Column, canvas, column, container, row, slider, text};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Thermo};
@@ -15,7 +16,7 @@ use std::sync::{Arc, Weak};
 
 /// cal/mol per hartree.
 const CAL_PER_MOL_PER_HARTREE: f64 = 627_509.474;
-const LIST_WIDTH: f32 = 250.;
+const LIST_WIDTH: f32 = 258.;
 const CHART_WIDTH: f32 = 480.;
 const SPECTRUM_CONTROLS_WIDTH: f32 = 280.;
 /// Chart height in the inspector; the bottom dock's body is shorter.
@@ -30,7 +31,7 @@ const MAX_TICKS: usize = 40;
 const UNPLOTTABLE: &str = "Frequencies outside 0–10000 cm⁻¹ cannot be plotted";
 pub(super) const WAVENUMBER_TITLE: &str = "Wavenumber (cm⁻¹)";
 
-fn send(action: Action) -> Message {
+pub(super) fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Vibrations(action))
 }
 
@@ -59,23 +60,23 @@ impl App {
         if let Some(banner) = self.xtb_imaginary_banner(shown) {
             body = body.push(banner);
         }
-        let list = mode_list(result, selected, shown.stale);
-        let left = column![
-            container(scrollable(list).id("xtb-vibration-modes"))
-                .height(if inspector {
-                    Length::Fixed(160.)
-                } else {
-                    Length::Fixed(120.)
-                })
-                .width(Length::Fill),
-            thermochemistry(settings, shown),
-        ]
-        .spacing(8)
-        .width(if inspector {
-            Length::Fill
-        } else {
-            Length::Fixed(LIST_WIDTH)
-        });
+        let names = self.xtb_motion_names(shown);
+        let list = mode_list(
+            vibrations,
+            settings,
+            names.as_deref().unwrap_or_default(),
+            settings.recomputing(result),
+            selected,
+            shown.stale,
+            inspector,
+        );
+        let left = column![list, thermochemistry(settings, shown)]
+            .spacing(8)
+            .width(if inspector {
+                Length::Fill
+            } else {
+                Length::Fixed(LIST_WIDTH)
+            });
         let spectrum = Spectrum::new(result, settings, selected);
         let spectrum_controls = spectrum_controls(settings, spectrum.data.can_plot());
         let chart = canvas(spectrum).width(Length::Fill);
@@ -105,7 +106,7 @@ impl App {
         body.into()
     }
 
-    /// "1 imaginary frequency (−212 cm⁻¹): this is not a minimum." with
+    /// Warn about imaginary frequencies and offer
     /// "Push along mode and re-optimize".
     fn xtb_imaginary_banner(&self, shown: &Shown<'_>) -> Option<Element<'_, Message>> {
         let vibrations = shown.stored.result.vibrations.as_ref()?;
@@ -208,7 +209,9 @@ impl App {
                 .on_press_maybe((live && settings.arrows).then(|| send(Action::PlaceArrows))),
             ]
             .spacing(10)
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .wrap()
+            .vertical_spacing(4),
         );
         controls = controls.push(labelled_slider(
             "Amplitude",
@@ -247,82 +250,6 @@ fn labelled_slider<'a>(
     .spacing(6)
     .align_y(Alignment::Center)
     .into()
-}
-
-/// "1590 cm⁻¹ · IR 127.7", imaginary modes first in red with a chip.
-fn mode_list<'a>(result: &CalcResult, selected: usize, stale: bool) -> Column<'a, Message> {
-    let Some(vibrations) = &result.vibrations else {
-        return column![];
-    };
-    Column::with_children(vibrations.frequencies_cm1.iter().enumerate().map(
-        |(index, &frequency)| {
-            let imaginary = frequency < 0.;
-            let mut label = wavenumber(frequency);
-            if imaginary {
-                label.push_str(" · imaginary");
-            } else if let Some(ir) = vibrations.ir_intensities_km_mol.get(index) {
-                label.push_str(&format!(" · IR {ir:.1}"));
-            }
-            let chip: Element<'a, Message> = if imaginary {
-                container(text("not a minimum").size(10))
-                    .padding([0, 4])
-                    .style(|theme: &Theme| container::Style {
-                        text_color: Some(theme.palette().danger),
-                        background: Some(
-                            Color {
-                                a: 0.1,
-                                ..theme.palette().danger
-                            }
-                            .into(),
-                        ),
-                        border: iced::Border {
-                            radius: 3.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    })
-                    .into()
-            } else {
-                text(format!("{}", index + 1))
-                    .size(11)
-                    .style(muted_text)
-                    .into()
-            };
-            let active = index == selected;
-            reshiki::accessibility::button(
-                format!("xtb-mode-{}", index + 1),
-                format!("Mode {}, {label}", index + 1),
-                row![
-                    text(label)
-                        .size(12)
-                        .width(Length::Fill)
-                        .style(move |theme: &Theme| text::Style {
-                            color: Some(if imaginary {
-                                theme.palette().danger
-                            } else if stale {
-                                Color {
-                                    a: 0.55,
-                                    ..crate::appearance::muted(theme)
-                                }
-                            } else {
-                                theme.palette().text
-                            }),
-                        }),
-                    chip,
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-            )
-            .padding([3, 8])
-            .width(Length::Fill)
-            .checked(active)
-            .style(control(active))
-            .on_press(send(Action::Mode(index)))
-            .into()
-        },
-    ))
-    .spacing(2)
-    .padding(iced::Padding::ZERO.right(10))
 }
 
 /// The collapsed Thermochemistry block: T and p fields and the values at them.
@@ -795,6 +722,7 @@ impl canvas::Program<Message> for Spectrum {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let muted = crate::appearance::muted(theme);
         let ink = theme.palette().text;
+        let axis_text = Color { a: 0.75, ..ink };
         let accent = theme.palette().primary;
         let base = bounds.height - Self::BOTTOM;
         let height = base - Self::TOP;
@@ -835,7 +763,7 @@ impl canvas::Program<Message> for Spectrum {
                 frame.fill_text(small(
                     format!("{tick:.0}"),
                     Point::new(x, base + 6.),
-                    muted,
+                    axis_text,
                     iced::alignment::Horizontal::Center,
                 ));
             }
@@ -843,7 +771,7 @@ impl canvas::Program<Message> for Spectrum {
         frame.fill_text(small(
             WAVENUMBER_TITLE.into(),
             Point::new(Self::LEFT + width / 2., bounds.height - 12.),
-            muted,
+            axis_text,
             iced::alignment::Horizontal::Center,
         ));
         if let Some(message) = self.data.message() {

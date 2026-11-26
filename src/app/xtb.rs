@@ -386,23 +386,7 @@ impl App {
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
-                let showing = matches!(action, palette::Action::Show);
-                let before = showing
-                    .then(|| {
-                        self.xtb_shown()
-                            .map(|shown| Arc::clone(&shown.stored.result))
-                    })
-                    .flatten();
                 let task = self.xtb_palette(action);
-                if showing
-                    && self.xtb_shown().is_some_and(|shown| {
-                        before
-                            .as_ref()
-                            .is_none_or(|before| !Arc::ptr_eq(before, &shown.stored.result))
-                    })
-                {
-                    self.tab.xtb.vibrations.mode = 0;
-                }
                 if opened {
                     return Task::batch([task, self.xtb_vibrations_opened()]);
                 }
@@ -853,8 +837,10 @@ impl App {
         self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;
         self.tab.xtb.palette.open = true;
-        // The card's actions must show, so a collapsed dock opens.
-        self.xtb.dock.collapsed = false;
+        if self.tabs.temporary_depth == 0 {
+            self.xtb.dock.collapsed = false;
+        }
+        self.xtb_palette_opened();
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
@@ -980,8 +966,7 @@ impl App {
             .map(|s| s.result.clone())
         {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
-            self.tab.xtb.palette.show(&result);
-            self.tab.xtb.vibrations.mode = 0;
+            self.xtb_show_result(&result);
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
                 self.tab.xtb.palette.view = results::View::Vibrations;
@@ -996,8 +981,6 @@ impl App {
             line: pending.line,
             notes,
         });
-        // A fresh result holds its modes, so nothing needs recomputing.
-        self.xtb_vibrations_sync();
     }
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
@@ -1284,6 +1267,10 @@ impl App {
     pub(super) fn xtb_answer(&mut self, event: run::Event) {
         let serial = self.tab.xtb.run.as_ref().expect("a run in flight").serial;
         let _ = self.update(Message::Xtb(Action::Event(serial, event)));
+    }
+
+    pub(super) fn xtb_failed_answer(&mut self, detail: String) {
+        self.xtb_answer(run::Event::Done(Err(state::Failure::Other(detail))));
     }
 }
 
