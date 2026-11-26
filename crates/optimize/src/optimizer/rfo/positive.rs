@@ -8,7 +8,7 @@ const MAX_CG_ITERATIONS: usize = 100;
 const ROOT_TOLERANCE: f64 = 2e-14;
 const STEP_TOLERANCE: f64 = 1e-10;
 
-/// Banerjee et al., J. Phys. Chem. 89, 52 (1985): writing the negative
+/// Banerjee et al., J. Phys. Chem. 89, 52 (1985) \[Banerjee1985PRFO\]: writing the negative
 /// augmented eigenvalue as -t gives (H+tI)x=g, s=-x, g·x=t. With H>0,
 /// f(t)=g·(H+tI)^-1g-t is decreasing, with f'=-1-||x||², and its unique
 /// positive root lies below ||g||. This scalar equation avoids forming all
@@ -116,7 +116,7 @@ fn product(hessian: &[f64], x: &[f64], shift: f64) -> Vec<f64> {
         .collect()
 }
 
-// Golub & Van Loan, Matrix Computations: symmetric Krylov projection with
+// Golub & Van Loan, Matrix Computations [Golub2013Matrix]: symmetric Krylov projection with
 // reorthogonalization. Eight products suffice for a useful shift even when
 // they would be far from sufficient for an accurate lowest eigenvector.
 fn estimate_shift(hessian: &[f64], gradient: &[f64], gradient_norm: f64) -> Option<f64> {

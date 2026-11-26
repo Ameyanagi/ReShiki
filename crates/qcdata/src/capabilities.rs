@@ -1,4 +1,6 @@
 //! Method × task capabilities and calculation admission checks.
+//!
+//! Full references: docs/references/xtb.md.
 
 use serde::{Deserialize, Serialize};
 
@@ -11,11 +13,11 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum XtbMethod {
-    /// GFN2-xTB.
+    /// GFN2-xTB (Bannwarth et al. 2019) \[Bannwarth2019GFN2\].
     Gfn2Xtb,
-    /// GFN-FF.
+    /// GFN-FF (Spicher & Grimme 2020) \[Spicher2020GFNFF\].
     GfnFf,
-    /// g-xTB 2.0.1.
+    /// g-xTB 2.0.1 (Froitzheim et al. 2025) \[Froitzheim2025gxTB\].
     GXtb,
 }
 

@@ -1,0 +1,29 @@
+---
+title: Transition states
+description: Find a transition state from an atom-mapped reaction with GFN2-xTB, and export it as a starting point for Gaussian or ORCA.
+---
+
+:::caution[In progress]
+The transition-state search is being built and is not on the `xtb/next` branch yet. The [input export](/guide/calculation-files/) already writes transition-state inputs from a 3D model. This page describes the agreed design.
+:::
+
+The main use: get a good transition-state guess cheaply with xTB, then refine it with DFT in Gaussian or ORCA.
+
+## How it works
+
+1. Draw the reaction with an arrow and map the atoms (**Auto-map first** helps). Hydrogens that move but are not drawn are inferred and shown for you to confirm.
+2. Choose **Find transition state (xTB)…** on the arrow. GFN2-xTB only, up to 120 atoms; intramolecular reactions and one-to-two or two-to-one reactions first.
+3. ReShiki builds and optimizes both ends in 3D, interpolates a path between them, and refines it to a saddle point (climbing-image NEB, then a saddle-point search with the analytic Hessian).
+4. It checks the result: exactly one imaginary frequency, and an IRC in both directions that leads to your reactant and product. If it leads somewhere else, it says where.
+
+## What you will see
+
+A **Path** tab with the energy profile (kcal/mol, reactant at 0), the barrier forward and back with a reminder that semi-empirical barriers are rough, and the imaginary mode animated on the model with forming and breaking bonds dashed.
+
+## Export to Gaussian, ORCA and GAMESS
+
+From the result, the export dialog writes:
+
+- Gaussian: `Opt=(TS,CalcFC,NoEigenTest) Freq` on the guess, QST2 (reactant and product) and QST3 (plus the guess), or IRC.
+- ORCA: `OptTS Freq` that reads the xTB Hessian from a `.hess` file (no first Hessian to compute), NEB-TS with the product, or IRC.
+- GAMESS: `RUNTYP=SADPOINT`.

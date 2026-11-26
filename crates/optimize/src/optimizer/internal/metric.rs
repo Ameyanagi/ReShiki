@@ -54,7 +54,7 @@ enum Reciprocal {
 }
 
 impl Tangent {
-    /// Baker, Kessi & Delley, J. Chem. Phys. 105, 192 (1996).
+    /// Baker, Kessi & Delley, J. Chem. Phys. 105, 192 (1996) \[Baker1996DLC\].
     /// Diagonalizing BᵀB gives the nonzero eigenpairs of G = BBᵀ.
     pub(super) fn delocalize(rows: &[f64], nfree: usize) -> Result<(Vec<f64>, Self), String> {
         profile_phase!("delocalization");
