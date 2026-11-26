@@ -472,6 +472,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         None => qcdata::Status::Converged,
     };
     result.trajectory = Some(qcdata::Trajectory {
+        rmsd_to_best_angstrom: Vec::new(),
         numbers: transition.numbers.clone(),
         isotopes: transition.isotopes.clone(),
         masses_amu: transition.masses_amu.clone(),
