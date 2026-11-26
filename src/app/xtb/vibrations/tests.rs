@@ -171,6 +171,57 @@ fn placing_the_spectrum_selects_one_group_and_undo_removes_it() {
 }
 
 #[test]
+fn placing_the_spectrum_reveals_the_whole_figure_and_keeps_zoom_when_it_fits() {
+    for rulers in [false, true] {
+        for (viewport, zoom, fits) in [
+            (iced::Size::new(900., 600.), 1., true),
+            // It still fits with rulers, but has less than the reveal margin.
+            (iced::Size::new(720., 490.), 1., true),
+            (iced::Size::new(900., 600.), 2.5, false),
+        ] {
+            let mut app = opened();
+            app.viewport = viewport;
+            app.guides.rulers = rulers;
+            app.tab.camera.zoom = zoom;
+            app.tab.camera.center = Point::new(-2000., -1500.);
+            app.tab.fit_to_view = true;
+            let camera = app.tab.camera;
+
+            vibrations(&mut app, Action::PlaceSpectrum);
+
+            assert!(!app.error, "{}", app.status);
+            let (lo, hi) =
+                reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+            let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+            let visible = iced::Rectangle::with_size(paper.size());
+            let context = format!("{viewport:?}, zoom={zoom}, rulers={rulers}");
+            assert_eq!(
+                (hi.x - lo.x) * zoom <= paper.width && (hi.y - lo.y) * zoom <= paper.height,
+                fits,
+                "{context}"
+            );
+            assert!(
+                !visible.contains(camera.screen(lo, paper))
+                    && !visible.contains(camera.screen(hi, paper)),
+                "the placed figure starts off screen: {context}"
+            );
+            for point in [lo, hi] {
+                assert!(
+                    visible.contains(app.tab.camera.screen(point, paper)),
+                    "the whole placed figure must be visible: {context}, {point:?}"
+                );
+            }
+            if fits {
+                assert_eq!(app.tab.camera.zoom, zoom, "scroll only: {context}");
+            } else {
+                assert!(app.tab.camera.zoom < zoom, "zoom out to fit: {context}");
+            }
+            assert!(!app.tab.fit_to_view);
+        }
+    }
+}
+
+#[test]
 fn the_spectrum_clears_a_2d_component_extended_after_calculation() {
     let mut app = opened();
     let oxygen = *app
@@ -247,6 +298,122 @@ fn acetic_acid() -> IrFigure {
         ],
         Journal::Acs,
     )
+}
+
+#[test]
+fn peak_selection_reserves_weak_stretches_before_fingerprint_bands() {
+    let peaks = [
+        [1700., 100.],
+        [1200., 60.],
+        [1100., 50.],
+        [1000., 40.],
+        [900., 35.],
+        [800., 30.],
+        [700., 25.],
+        [600., 20.],
+        [3400., 3.],
+        [2950., 1.5],
+        [3000., 2.5],
+        [3050., 2.2],
+    ];
+    let expected = [
+        (peaks[0], true),
+        (peaks[8], true),
+        (peaks[10], true),
+        (peaks[1], false),
+        (peaks[2], false),
+        (peaks[3], false),
+        (peaks[4], false),
+        (peaks[5], false),
+    ];
+    let mut ordered = peaks;
+    ordered.sort_by(|a, b| f64::total_cmp(&b[0], &a[0]));
+    for count in [8, 6] {
+        let selected: Vec<_> = figure::select_labels(&ordered, 100., count, |_| true)
+            .into_iter()
+            .map(|label| (label.peak, label.required))
+            .collect();
+        assert_eq!(selected, expected[..count]);
+    }
+}
+
+#[test]
+fn weak_stretch_labels_need_a_visible_dip_at_the_printed_size() {
+    let doc = Document::default();
+    let mut ir = IrFigure {
+        bands: vec![[3060., 1.4], [3015., 0.4], [1050., 100.]],
+        ..IrFigure::default()
+    };
+    let labels = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default()).labelled_peaks;
+    assert_eq!(labels(&ir), [3060, 1050]);
+
+    // The closer stretches have shallower dips even though their tips are higher.
+    ir.bands[1] = [3037., 1.35];
+    assert_eq!(labels(&ir), [1050]);
+    ir.columns = Columns::Two;
+    assert_eq!(labels(&ir), [3059, 1050]);
+}
+
+#[test]
+fn hiding_the_strongest_label_preserves_baseline_absorbance_scaling() {
+    let doc = Document::default();
+    let mut ir = IrFigure {
+        bands: vec![[3060., 1.4], [3036., 1.35], [1050., 100.]],
+        y: YAxis::Absorbance,
+        frame: Frame::Baseline,
+        ..IrFigure::default()
+    };
+    let build = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default());
+    let visible = build(&ir);
+    assert_eq!(visible.labelled_peaks, [1050]);
+
+    ir.hidden_labels.push(1050);
+    let hidden = build(&ir);
+    assert!(hidden.labelled_peaks.is_empty());
+    assert_eq!(hidden.graphics[0].path, visible.graphics[0].path);
+}
+
+#[test]
+fn doublet_partners_can_fall_below_an_anchor_cutoff_or_cross_a_region_boundary() {
+    let doc = Document::default();
+    let mut ir = IrFigure {
+        bands: vec![[1788., 1.7], [1756., 5.], [1050., 100.]],
+        columns: Columns::Two,
+        fwhm: 2.,
+        ..IrFigure::default()
+    };
+    let labels = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default()).labelled_peaks;
+    assert_eq!(labels(&ir), [1756, 1788, 1050]);
+
+    for (anchor, partner) in [(1516, 1484), (1984, 2016)] {
+        ir.bands[0][0] = f64::from(partner);
+        ir.bands[1][0] = f64::from(anchor);
+        assert_eq!(labels(&ir), [anchor, partner, 1050]);
+    }
+}
+
+#[test]
+fn separated_doublets_take_consecutive_slots_in_reserved_and_fill_labels() {
+    let doc = Document::default();
+    let mut ir = IrFigure {
+        bands: vec![
+            [1788., 80.],
+            [1756., 90.],
+            [1300., 200.],
+            [1100., 150.],
+            [900., 120.],
+            [650., 100.],
+            [500., 93.],
+        ],
+        labels: 6,
+        ..IrFigure::default()
+    };
+    let labels = |ir: &IrFigure| figure::spectrum(&doc, ir, Point::default()).labelled_peaks;
+    assert_eq!(labels(&ir), [1756, 1788, 1300, 1100, 900, 650]);
+
+    ir.bands[0][0] = 1488.;
+    ir.bands[1][0] = 1456.;
+    assert_eq!(labels(&ir), [1456, 1488, 1300, 1100, 900, 650]);
 }
 
 #[test]
@@ -402,7 +569,11 @@ fn peak_labels_clear_labels_leaders_and_curve() {
         assert_eq!(chart, figure::spectrum(&doc, &ir, at));
         let mut peaks = chart.labelled_peaks.clone();
         peaks.sort_unstable();
-        assert_eq!(peaks, [657, 1002, 1159, 1243, 1381, 1803], "{case}");
+        assert_eq!(
+            peaks,
+            [657, 1159, 1243, 1381, 1436, 1803, 3082, 3448],
+            "{case}"
+        );
         let labels = &chart.annotations[chart.annotations.len() - chart.labelled_peaks.len()..];
         let leaders = &chart.graphics[chart.graphics.len() - labels.len()..];
         if columns == Columns::One {

@@ -135,6 +135,127 @@ pub(super) fn segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool {
     straddles(a, b, c, d) && straddles(c, d, a, b)
 }
 
+pub(super) struct PeakLabel {
+    pub(super) peak: [f64; 2],
+    pub(super) required: bool,
+    partner: Option<f64>,
+}
+
+// Peaks are ordered by descending wavenumber, as in the drawn curve.
+pub(super) fn select_labels(
+    peaks: &[[f64; 2]],
+    maximum: f64,
+    limit: usize,
+    drawn: impl Fn(usize) -> bool,
+) -> Vec<PeakLabel> {
+    let strength = |&(_, [a_number, a_value]): &(usize, [f64; 2]),
+                    &(_, [b_number, b_value]): &(usize, [f64; 2])| {
+        a_value
+            .total_cmp(&b_value)
+            .then(a_number.total_cmp(&b_number))
+    };
+    let bond_regions = [2000. ..2500., 1500. ..2000.];
+    let in_bond_region = |number| bond_regions.iter().any(|range| range.contains(&number));
+    let visible: Vec<_> = peaks
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(i, peak)| drawn(i).then_some((i, peak)))
+        .collect();
+    let candidates = || visible.iter().copied().flatten();
+    let stretches: Vec<_> = candidates()
+        .filter(|&(_, [number, value])| {
+            (2500. ..=4000.).contains(&number) && value >= maximum * 0.01
+        })
+        .collect();
+    let mut reserved: Vec<_> = stretches
+        .chunk_by(|&(_, [a, _]), &(_, [b, _])| a - b < 150.)
+        .filter_map(|group| group.iter().copied().max_by(strength))
+        .collect();
+    reserved.sort_unstable_by(|a, b| strength(b, a));
+    reserved.truncate(3);
+    for range in &bond_regions {
+        reserved.extend(
+            candidates()
+                .filter(|&(_, [number, value])| range.contains(&number) && value >= maximum * 0.02)
+                .max_by(strength),
+        );
+    }
+    reserved.sort_unstable_by(|a, b| strength(b, a));
+    let mut fill: Vec<_> = candidates()
+        .filter(|&(_, [_, value])| value >= maximum * 0.05)
+        .collect();
+    fill.sort_unstable_by(|a, b| strength(b, a));
+    let neighbour = |i: usize, [number, value]: [f64; 2]| {
+        let distance = |(_, [other, _]): (usize, [f64; 2])| (number - other).abs();
+        [i.checked_sub(1), Some(i + 1)]
+            .into_iter()
+            .flatten()
+            .filter_map(|j| visible.get(j).copied().flatten())
+            .filter(|&candidate @ (_, [_, height])| {
+                distance(candidate) <= 60. && height >= value * 0.30
+            })
+            .min_by(|&a, &b| distance(a).total_cmp(&distance(b)).then(strength(&b, &a)))
+    };
+    let mut selected = Vec::new();
+    reserved
+        .into_iter()
+        .map(|i| (i, true))
+        .chain(fill.into_iter().map(|i| (i, false)))
+        .flat_map(|((i, peak), reserved)| {
+            // A doublet takes consecutive slots at its anchor's priority.
+            let pair = if selected.contains(&i) {
+                [None, None]
+            } else {
+                selected.push(i);
+                let partner = if reserved && !in_bond_region(peak[0]) {
+                    None
+                } else {
+                    neighbour(i, peak).filter(|(j, _)| !selected.contains(j))
+                };
+                [
+                    Some(PeakLabel {
+                        peak,
+                        required: reserved || partner.is_some(),
+                        partner: partner.map(|(_, [number, _])| number),
+                    }),
+                    partner.map(|(j, other)| {
+                        selected.push(j);
+                        PeakLabel {
+                            peak: other,
+                            required: true,
+                            partner: Some(peak[0]),
+                        }
+                    }),
+                ]
+            };
+            pair.into_iter().flatten()
+        })
+        .take(limit)
+        .collect()
+}
+
+fn peak_depth(points: &[[f64; 2]], number: f64) -> f64 {
+    let index = points.partition_point(|p| p[0] > number);
+    let Some((left, right @ [[_, tip], ..])) = points.get(..=index).zip(points.get(index..)) else {
+        return 0.;
+    };
+    let tip = *tip;
+    // Follow each side downhill to the nearest trough, or the plot edge.
+    let left = left
+        .array_windows::<2>()
+        .rev()
+        .take_while(|[a, b]| a[1] <= b[1])
+        .last()
+        .map_or(tip, |[a, _]| a[1]);
+    let right = right
+        .array_windows::<2>()
+        .take_while(|[a, b]| b[1] <= a[1])
+        .last()
+        .map_or(tip, |[_, b]| b[1]);
+    tip - left.max(right)
+}
+
 /// Build the drawing with `at` at the top left of the publication box.
 pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
     let drawing = &doc.drawing_style;
@@ -285,10 +406,15 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
             relative
         }) / y_max
     };
-    peaks.sort_by(|a, b| b[1].total_cmp(&a[1]).then_with(|| b[0].total_cmp(&a[0])));
-    peaks.retain(|p| p[1] >= maximum * 0.05);
-    peaks.truncate(usize::from(figure.labels));
-    peaks.retain(|p| !figure.hidden_labels.contains(&(p[0].round() as u32)));
+    let depths: Vec<_> = peaks.iter().map(|p| peak_depth(&points, p[0])).collect();
+    let select = |height| {
+        let scale = f64::from(height) * (ordinate(maximum) - ordinate(0.)).abs();
+        select_labels(&peaks, maximum, usize::from(figure.labels), |i| {
+            depths
+                .get(i)
+                .is_some_and(|depth| depth / maximum * scale >= f64::from(pt(0.5)))
+        })
+    };
     let label_size = |text: &str| {
         let measured = layout(text, &tick_format);
         if figure.vertical_labels {
@@ -303,29 +429,28 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
     } else {
         (pad, width - pad)
     };
-    let label_fits_x = |x: f32, w| x - w / 2. >= label_left && x + w / 2. <= label_right;
     let offset = pt(3.);
     // An open baseline has no upper frame. Use the highest curve mark or its
     // label to set the top edge while keeping the curve's y scale linear.
-    let plot_height = if framed {
+    let mut plot_height = if framed {
         base - top
+    } else if transmittance {
+        let lowest = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+        (base - top) / ordinate(lowest) as f32
     } else {
-        let (extent, room) = if transmittance {
-            let lowest = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
-            (ordinate(lowest), 0.)
-        } else {
-            let room = peaks
-                .first()
-                .filter(|p| p[1] == maximum)
-                .map_or(0., |&[number, _]| {
-                    offset
-                        + label_size(&(number.round() as u32).to_string()).1
-                        + if header > 0. { clearance } else { 0. }
-                });
-            (if maximum > 0. { 1. / y_max } else { 1. }, room)
-        };
-        (base - top - room) / extent as f32
+        (base - top) * if maximum > 0. { y_max as f32 } else { 1. }
     };
+    let mut labels = select(plot_height);
+    if !framed
+        && !transmittance
+        && let Some(label) = labels.iter().find(|label| label.peak[1] == maximum)
+    {
+        let room = offset
+            + label_size(&(label.peak[0].round() as u32).to_string()).1
+            + if header > 0. { clearance } else { 0. };
+        plot_height -= room * y_max as f32;
+        labels = select(plot_height);
+    }
     let y = |value| base - plot_height * (value / y_max) as f32;
     let tip = |intensity| base - plot_height * ordinate(intensity) as f32;
     let curve_points: Vec<_> = points
@@ -471,9 +596,16 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
     let axes: Vec<_> = graphics
         .iter()
         .skip(1)
-        .map(|line| {
+        .enumerate()
+        .map(|(i, line)| {
+            // Inward ticks clear the label itself. Its padding also clears the frame.
+            let inset = if i < frame_lines {
+                -stroke
+            } else {
+                clearance - stroke
+            };
             let a = line.origin;
-            (a, a.offset(line.axis_x.x, line.axis_x.y))
+            (a, a.offset(line.axis_x.x, line.axis_x.y), inset)
         })
         .collect();
     let axis_labels: Vec<_> = annotations.iter().map(Annotation::bounds).collect();
@@ -482,6 +614,11 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
     let mut labelled_peaks = Vec::new();
     let direction = if transmittance { 1. } else { -1. };
     let angle = if figure.vertical_labels { VERTICAL } else { 0. };
+    let label_top = if framed {
+        top + stroke + clearance
+    } else {
+        pad
+    };
     let curve_between = |left, right| {
         let first = curve_points
             .partition_point(|p| p.x < left)
@@ -491,75 +628,160 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
             .skip(first)
             .take_while(move |[a, _]| a.x <= right)
     };
-    for [number, intensity] in peaks {
+    // Resolve reserved peaks and doublets before individual fills.
+    let placement_order = labels
+        .iter()
+        .filter(|label| label.required)
+        .chain(labels.iter().filter(|label| !label.required));
+    let has_doublet = labels.iter().any(|label| label.partner.is_some());
+    for &PeakLabel {
+        peak: [number, intensity],
+        required,
+        partner,
+    } in placement_order
+    {
         let rounded = number.round() as u32;
         let band_tip = p(x(number), tip(intensity));
         let text = rounded.to_string();
         let (w, h) = label_size(&text);
-        let label_top = if framed {
-            top + stroke + clearance
-        } else {
-            pad
-        };
-        let mut shifts = Vec::with_capacity(8 * 7);
-        for step in 0..8 {
-            let dy = step as f32 * (h + pt(1.5));
-            shifts.extend([0., -0.5, 0.5, -1., 1., -1.5, 1.5].map(|shift| (w * shift, dy)));
-        }
-        shifts.sort_by(|&(ax, ay), &(bx, by)| (ax * ax + ay * ay).total_cmp(&(bx * bx + by * by)));
-        for (dx, dy) in shifts {
-            let centre = band_tip.offset(dx, direction * (offset + h / 2. + dy));
+        let x_bounds = label_left + w / 2. ..=label_right - w / 2.;
+        let y_bounds = label_top + h / 2. ..=base - stroke - h / 2.;
+        let position = |dx, dy| band_tip.offset(dx, direction * (offset + h / 2. + dy));
+        let leader = |centre: Point| {
             let end = centre.offset(0., -direction * (h / 2. + pt(1.25)));
-            let length = band_tip.distance(end);
-            let start = band_tip.lerp(end, pt(0.8) / length);
+            let length = band_tip.distance(end).max(f32::EPSILON);
+            (band_tip.lerp(end, pt(0.8) / length), end, length)
+        };
+        // Leave room for the partner's first position while placing its anchor.
+        let partner_box = partner
+            .and_then(|number| labels.iter().find(|label| label.peak[0] == number))
+            .filter(|label| {
+                let rounded = label.peak[0].round() as u32;
+                !occupied.iter().any(|&(peak, _)| peak == rounded)
+            })
+            .map(|label| {
+                let [number, intensity] = label.peak;
+                let (width, height) = label_size(&(number.round() as u32).to_string());
+                let centre = p(
+                    x(number),
+                    tip(intensity) + direction * (offset + height / 2.),
+                );
+                (
+                    centre.offset(-width / 2., -height / 2.),
+                    centre.offset(width / 2., height / 2.),
+                )
+            });
+        let collisions = |centre: Point, start, end, length| {
             let clear_start = band_tip.lerp(end, pt(1.5) / length);
             let (lo, hi) = (
                 centre.offset(-w / 2. - clearance, -h / 2. - clearance),
                 centre.offset(w / 2. + clearance, h / 2. + clearance),
             );
-            let overlaps =
-                |a: Point, b: Point| lo.x <= b.x && hi.x >= a.x && lo.y <= b.y && hi.y >= a.y;
-            if !label_fits_x(centre.x, w)
-                || centre.y - h / 2. < label_top
-                || centre.y + h / 2. > base - stroke
-                || axis_labels
+            let hits_label = |a: Point, b: Point, gap: f32| {
+                (lo.x <= b.x && hi.x >= a.x && lo.y <= b.y && hi.y >= a.y)
+                    || hits_box(start, end, a.offset(-gap, -gap), b.offset(gap, gap))
+            };
+            axis_labels
+                .iter()
+                .filter(|&&(a, b)| hits_label(a, b, 0.))
+                .count()
+                + axes
                     .iter()
-                    .any(|&(a, b)| overlaps(a, b) || hits_box(start, end, a, b))
-                || axes.iter().enumerate().any(|(i, &(a, b))| {
-                    // Inward ticks clear the label itself. Its padding also clears the frame.
-                    let inset = if i < frame_lines {
-                        -stroke
-                    } else {
-                        clearance - stroke
-                    };
-                    hits_box(a, b, lo.offset(inset, inset), hi.offset(-inset, -inset))
-                })
-                || occupied.iter().any(|&(a, b)| {
-                    overlaps(a, b)
-                        || hits_box(
-                            start,
-                            end,
-                            a.offset(-clearance, -clearance),
-                            b.offset(clearance, clearance),
-                        )
-                })
-                || leaders
+                    .filter(|&&(a, b, inset)| {
+                        hits_box(a, b, lo.offset(inset, inset), hi.offset(-inset, -inset))
+                    })
+                    .count()
+                + occupied
                     .iter()
-                    .any(|&(a, b)| hits_box(a, b, lo, hi) || segments_cross(start, end, a, b))
-                || curve_between(lo.x, hi.x).any(|&[a, b]| hits_box(a, b, lo, hi))
-                || curve_between(clear_start.x.min(end.x), clear_start.x.max(end.x))
-                    .any(|&[a, b]| segments_cross(clear_start, end, a, b))
-            {
-                continue;
+                    .filter(|&&(_, (a, b))| hits_label(a, b, clearance))
+                    .count()
+                + leaders
+                    .iter()
+                    .filter(|&&(a, b)| hits_box(a, b, lo, hi) || segments_cross(start, end, a, b))
+                    .count()
+                + usize::from(curve_between(lo.x, hi.x).any(|&[a, b]| hits_box(a, b, lo, hi)))
+                + usize::from(
+                    curve_between(clear_start.x.min(end.x), clear_start.x.max(end.x))
+                        .any(|&[a, b]| segments_cross(clear_start, end, a, b)),
+                )
+        };
+        let search = |steps: u8, side_steps, pitch: f32, protect_partner, allow_overlaps| {
+            let mut shifts: Vec<_> = (0..steps)
+                .flat_map(|step| {
+                    let dy = f32::from(step) * (h + pt(1.5)) * pitch;
+                    std::iter::once(0)
+                        .chain((1..=side_steps).flat_map(|n: i16| [-n, n]))
+                        .map(move |n| (w * f32::from(n) * pitch / 2., dy))
+                })
+                .collect();
+            shifts.sort_by(|&(ax, ay), &(bx, by)| {
+                (ax * ax + ay * ay).total_cmp(&(bx * bx + by * by))
+            });
+            let mut best = None;
+            for (dx, dy) in shifts {
+                let centre = position(dx, dy);
+                if !x_bounds.contains(&centre.x) || !y_bounds.contains(&centre.y) {
+                    continue;
+                }
+                if protect_partner
+                    && partner_box.is_some_and(|(lo, hi)| {
+                        let (rx, ry) = (w / 2. + clearance, h / 2. + clearance);
+                        centre.x - rx <= hi.x
+                            && centre.x + rx >= lo.x
+                            && centre.y - ry <= hi.y
+                            && centre.y + ry >= lo.y
+                    })
+                {
+                    continue;
+                }
+                let (start, end, length) = leader(centre);
+                let count = collisions(centre, start, end, length);
+                let candidate = (centre, start, end);
+                if count == 0 {
+                    return Some(candidate);
+                }
+                if allow_overlaps && best.as_ref().is_none_or(|(fewest, _)| count < *fewest) {
+                    best = Some((count, candidate));
+                }
             }
-            leaders.push((start, end));
-            graphics.push(line(id(), start, end, line_width / 2.));
-            let label = annotation(id(), text, tick_format.clone(), centre, angle);
-            occupied.push(label.bounds());
-            annotations.push(label);
-            labelled_peaks.push(rounded);
-            break;
+            best.map(|(_, candidate)| candidate)
+        };
+        let clean = if partner.is_some() {
+            search(32, 24, 0.25, true, false)
+                .or_else(|| partner_box.and_then(|_| search(32, 24, 0.25, false, false)))
+        } else {
+            search(8, 3, 1., false, false).or_else(|| {
+                has_doublet
+                    .then(|| search(16, 12, 0.5, false, false))
+                    .flatten()
+            })
+        };
+        let Some((centre, start, end)) = clean.or_else(|| {
+            required.then(|| {
+                search(16, 6, 1., false, true).unwrap_or_else(|| {
+                    // A band near an edge can have every outward shift outside the plot.
+                    let centre = position(0., 0.);
+                    let centre = p(
+                        centre.x.clamp(*x_bounds.start(), *x_bounds.end()),
+                        centre.y.clamp(*y_bounds.start(), *y_bounds.end()),
+                    );
+                    let (start, end, _) = leader(centre);
+                    (centre, start, end)
+                })
+            })
+        }) else {
+            continue;
+        };
+        // Hidden labels still occupy their space in the layout.
+        let label = annotation(0, text, tick_format.clone(), centre, angle);
+        occupied.push((rounded, label.bounds()));
+        leaders.push((start, end));
+        if figure.hidden_labels.contains(&rounded) {
+            continue;
         }
+        graphics.push(line(id(), start, end, line_width / 2.));
+        annotations.push(Annotation { id: id(), ..label });
+        labelled_peaks.push(rounded);
     }
 
     for graphic in &mut graphics {

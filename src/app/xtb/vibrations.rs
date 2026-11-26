@@ -927,6 +927,19 @@ impl App {
         self.changed(before);
         if !self.error {
             self.set_selection(members);
+            if let Some((lo, hi)) =
+                reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
+            {
+                let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+                let zoom = self.tab.camera.zoom;
+                // A figure that fits needs only a scroll, even if there is
+                // less spare room than the usual reveal margin.
+                if (hi.x - lo.x) * zoom <= paper.width && (hi.y - lo.y) * zoom <= paper.height {
+                    self.pan_to_show(lo, hi);
+                } else {
+                    self.reveal_if_clipped(lo, hi);
+                }
+            }
             self.tool = crate::canvas::Tool::Select;
             self.status = "Placed the IR spectrum · ⌘Z undoes".into();
         }
