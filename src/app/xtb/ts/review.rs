@@ -340,18 +340,31 @@ impl Dialog {
             .ok_or_else(|| "Enter a whole number from 10 to 20 for the path points.".into())
     }
 
-    fn refresh(&mut self, source: Document) {
-        self.plan = ts_plan::plan_for_review(&source, self.arrow);
-        if self.energy_fallback && barrier_refusal(&self.plan).is_some() {
+    fn refresh(&mut self, source: &Document, candidate: &Document) {
+        self.plan = ts_plan::plan_for_review(candidate, self.arrow);
+        let source = if self.energy_fallback && self.plan.is_err() {
             self.mode = Mode::Energy;
-        }
+            source
+        } else {
+            candidate
+        };
         let plan = self
             .plan
             .as_ref()
             .ok()
             .filter(|_| self.mode == Mode::TransitionState);
-        self.changes = Changes::read(&source, self.arrow, plan);
-        self.pictures = self.pictures(&source);
+        self.changes = Changes::read(source, self.arrow, plan);
+        self.pictures = self.pictures(source);
+    }
+
+    fn barrier_refusal(&self) -> Option<String> {
+        if !self.energy_fallback || self.mode != Mode::Energy {
+            return None;
+        }
+        match &self.mapping {
+            Mapping::Failed(error) => Some(error.clone()),
+            _ => self.plan.as_ref().err().map(ToString::to_string),
+        }
     }
 
     fn can_run(&self, species: &[Species]) -> Result<(), String> {
@@ -733,18 +746,24 @@ impl App {
             {
                 let result = result.and_then(|proposal| {
                     let source = with_roles(&self.tab.doc, dialog.arrow)?;
-                    Ok((proposal.apply(&source, true)?, proposal))
+                    let candidate = proposal.apply(&source, true)?;
+                    Ok((source, candidate, proposal))
                 });
                 dialog.mapping = match result {
-                    Ok((candidate, proposal)) => {
-                        dialog.refresh(candidate);
+                    Ok((source, candidate, proposal)) => {
+                        dialog.refresh(&source, &candidate);
                         if dialog.energy_fallback && dialog.mode == Mode::Energy {
                             Mapping::Drawing
                         } else {
                             Mapping::Proposed(proposal)
                         }
                     }
-                    Err(error) => Mapping::Failed(error),
+                    Err(error) => {
+                        if dialog.energy_fallback {
+                            dialog.mode = Mode::Energy;
+                        }
+                        Mapping::Failed(error)
+                    }
                 };
                 if !dialog.needs_review()
                     && let Some(dialog) = self.tab.xtb.ts_review.take()
@@ -856,10 +875,7 @@ impl App {
                 )
             }
             Mode::Energy => {
-                let refusal = dialog
-                    .energy_fallback
-                    .then(|| barrier_refusal(&dialog.plan))
-                    .flatten();
+                let refusal = dialog.barrier_refusal();
                 self.xtb_reaction_energy_begin(arrow, species, dialog.task, refusal)
             }
         }

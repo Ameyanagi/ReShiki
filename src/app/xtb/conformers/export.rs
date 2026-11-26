@@ -1,9 +1,9 @@
-//! Conformer ensembles as files: multi-frame XYZ and SDF with energies.
+//! Conformer ensembles as files: ranked tables, multi-frame XYZ and SDF with energies.
 
 use super::Format;
 use crate::app::App;
 use crate::app::figure_export::{Kind, Prepared};
-use crate::app::xtb::{palette::Shown, state};
+use crate::app::xtb::{EnergyUnit, palette::Shown, state};
 use reshiki::document::Document;
 use reshiki::qc_input::{SdfEntry, write_sdf};
 use reshiki::qcdata::CalcResult;
@@ -26,9 +26,15 @@ impl App {
             .or_else(|| self.export_stem().and_then(export_name))
             .or_else(|| export_name(state::formula(&shown.frame.numbers)))
             .unwrap_or_else(|| ("Molecule".into(), "Molecule".into()));
+        let unit = self.appearance.energy_unit;
         let (text, extension) = match format {
-            Format::Sdf => (sdf(&self.tab.doc, shown.atoms, result, &title)?, "sdf"),
-            Format::Xyz => (xyz(result, &title)?, "xyz"),
+            Format::Sdf => (
+                sdf(&self.tab.doc, shown.atoms, result, &title, unit)?,
+                "sdf",
+            ),
+            Format::Xyz => (xyz(result, &title, unit)?, "xyz"),
+            Format::Tsv => (table(result, unit, '\t')?, "tsv"),
+            Format::Csv => (table(result, unit, ',')?, "csv"),
         };
         let count = result.trajectory.as_ref().map_or(0, |path| path.steps());
         let detail = format!("{count} conformer{}", if count == 1 { "" } else { "s" });
@@ -52,8 +58,52 @@ fn export_name(title: String) -> Option<(String, String)> {
 }
 
 /// Export every saved conformer as XYZ, lowest energy first.
-pub(crate) fn xyz(result: &CalcResult, title: &str) -> Result<String, String> {
-    conformers::xyz(result.trajectory.as_ref(), title)
+pub(crate) fn xyz(result: &CalcResult, title: &str, unit: EnergyUnit) -> Result<String, String> {
+    conformers::xyz_with_relative_energy(result.trajectory.as_ref(), title, |delta| {
+        format!("{:.2} {}", unit.convert_kcal(delta), unit.label())
+    })
+}
+
+/// Ranked saved conformers as TSV or CSV; every column has a numeric value or is empty.
+fn table(result: &CalcResult, unit: EnergyUnit, separator: char) -> Result<String, String> {
+    let (path, ranked) = ranked_trajectory(result.trajectory.as_ref())?;
+    let separator = separator.to_string();
+    let mut text = [
+        "Rank".into(),
+        "Energy (Eh)".into(),
+        format!("ΔE ({})", unit.label()),
+        format!("ΔE start ({})", unit.label()),
+        "Boltzmann (%)".into(),
+        "RMSD to first saved (Å)".into(),
+        "Cluster size".into(),
+        "Start energy (Eh)".into(),
+    ]
+    .join(&separator);
+    text.push('\n');
+    for (index, conformer) in ranked.iter().enumerate() {
+        let statistics = &conformer.statistics;
+        let values = [
+            (index + 1).to_string(),
+            format!("{:.10}", conformer.energy),
+            format!("{:.3}", unit.convert_kcal(statistics.delta_kcal)),
+            statistics.start_kcal.map_or_else(String::new, |delta| {
+                format!("{:.3}", unit.convert_kcal(delta))
+            }),
+            format!("{:.2}", statistics.percent),
+            statistics
+                .rmsd
+                .map_or_else(String::new, |rmsd| format!("{rmsd:.3}")),
+            statistics
+                .cluster
+                .map_or_else(String::new, |size| size.to_string()),
+            path.minimizer_energies_hartree
+                .get(conformer.step)
+                .map_or_else(String::new, |energy| format!("{energy:.10}")),
+        ];
+        text.push_str(&values.join(&separator));
+        text.push('\n');
+    }
+    Ok(text)
 }
 
 /// Export every saved conformer as a V3000 SDF record with drawing bonds and charges.
@@ -62,6 +112,7 @@ pub(crate) fn sdf(
     atoms: &[Option<u64>],
     result: &CalcResult,
     title: &str,
+    unit: EnergyUnit,
 ) -> Result<String, String> {
     let (path, ranked) = ranked_trajectory(result.trajectory.as_ref())?;
     let first = ranked
@@ -87,7 +138,15 @@ pub(crate) fn sdf(
             let mut items = vec![
                 ("RANK".into(), rank.to_string()),
                 ("ENERGY_HARTREE".into(), format!("{energy:.10}")),
-                ("DELTA_E_KCAL_MOL".into(), format!("{delta_kcal:.3}")),
+                (
+                    match unit {
+                        EnergyUnit::KcalPerMol => "DELTA_E_KCAL_MOL",
+                        EnergyUnit::KjPerMol => "DELTA_E_KJ_MOL",
+                        EnergyUnit::Ev => "DELTA_E_EV",
+                    }
+                    .into(),
+                    format!("{:.3}", unit.convert_kcal(delta_kcal)),
+                ),
                 ("BOLTZMANN_PERCENT".into(), format!("{percent:.2}")),
             ];
             if let Some(size) = statistics.cluster {
@@ -221,7 +280,7 @@ mod tests {
     #[test]
     fn xyz_exports_all_frames_in_energy_order() {
         let (_, _, result) = water();
-        let text = xyz(&result, "Water").unwrap();
+        let text = xyz(&result, "Water", EnergyUnit::default()).unwrap();
         let lines: Vec<_> = text.lines().collect();
         assert_eq!(lines.len(), 15);
         let (frames, _) = lines.as_chunks::<5>();
@@ -250,7 +309,7 @@ mod tests {
     fn sdf_exports_ranked_records_with_charges_and_shared_bonds() {
         let (doc, atoms, result) = water();
         let path = result.trajectory.as_ref().unwrap();
-        let text = sdf(&doc, &atoms, &result, "Water").unwrap();
+        let text = sdf(&doc, &atoms, &result, "Water", EnergyUnit::default()).unwrap();
         let records: Vec<_> = text.split_terminator("$$$$\n").collect();
         assert_eq!(records.len(), 3);
         let expected = [
@@ -315,10 +374,39 @@ mod tests {
         let path = result.trajectory.as_mut().unwrap();
         path.cluster_sizes.clear();
         path.minimizer_energies_hartree.clear();
-        let text = sdf(&doc, &atoms, &result, "Water").unwrap();
+        let text = sdf(&doc, &atoms, &result, "Water", EnergyUnit::default()).unwrap();
         assert_eq!(text.matches("$$$$\n").count(), 3);
         assert!(!text.contains("> <CLUSTER_SIZE>"));
         assert!(!text.contains("> <START_ENERGY_HARTREE>"));
+    }
+
+    #[test]
+    fn tables_rank_saved_conformers_and_leave_missing_statistics_empty() {
+        let (_, _, mut result) = water();
+        let text = table(&result, EnergyUnit::KjPerMol, '\t').unwrap();
+        let second: Vec<_> = text.lines().nth(2).unwrap().split('\t').collect();
+        assert_eq!(
+            second,
+            [
+                "2",
+                "-5.0690000000",
+                "2.625",
+                "26.255",
+                "23.64",
+                "",
+                "4",
+                "-5.1100000000"
+            ]
+        );
+        let path = result.trajectory.as_mut().unwrap();
+        path.minimizer_energies_hartree.clear();
+        path.cluster_sizes.clear();
+        let text = table(&result, EnergyUnit::KjPerMol, ',').unwrap();
+        let second: Vec<_> = text.lines().nth(2).unwrap().split(',').collect();
+        assert_eq!(
+            second,
+            ["2", "-5.0690000000", "2.625", "", "23.64", "", "", ""]
+        );
     }
 
     #[test]
@@ -331,7 +419,17 @@ mod tests {
             .positions_angstrom
             .clear();
         let message = "This result has no saved conformer positions.";
-        assert_eq!(xyz(&result, "Water").unwrap_err(), message);
-        assert_eq!(sdf(&doc, &atoms, &result, "Water").unwrap_err(), message);
+        assert_eq!(
+            xyz(&result, "Water", EnergyUnit::default()).unwrap_err(),
+            message
+        );
+        assert_eq!(
+            sdf(&doc, &atoms, &result, "Water", EnergyUnit::default()).unwrap_err(),
+            message
+        );
+        assert_eq!(
+            table(&result, EnergyUnit::KjPerMol, '\t').unwrap_err(),
+            message
+        );
     }
 }

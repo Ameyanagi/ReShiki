@@ -247,6 +247,8 @@ pub(crate) enum Action {
 pub(crate) enum Format {
     Xyz,
     Sdf,
+    Tsv,
+    Csv,
 }
 
 /// The Conformers tab's state in one document's palette.
