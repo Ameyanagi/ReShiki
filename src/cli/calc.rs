@@ -96,7 +96,7 @@ pub(super) fn run(
     use super::host::CliError;
     use reshiki_xtb_worker::{
         client::{Cancel, Limits, Session},
-        protocol::{Compute, HessianRequest, Open, OrbitalOutput, Units},
+        protocol::{Compute, HessianRequest, Open, OrbitalOutput, ThermoRequest, Units},
     };
     use serde_json::json;
 
@@ -138,8 +138,13 @@ pub(super) fn run(
                 positions: None,
                 units: Units::Angstrom,
                 gradient: command.gradient || command.task == super::args::CalcTask::Gradient,
-                hessian: (command.task == super::args::CalcTask::Hessian)
-                    .then(HessianRequest::default),
+                hessian: (command.task == super::args::CalcTask::Hessian).then(|| HessianRequest {
+                    thermo: ThermoRequest {
+                        temperature_k: command.thermo_temperature_k,
+                        ..ThermoRequest::default()
+                    },
+                    ..HessianRequest::default()
+                }),
                 bond_orders: command.bond_orders,
                 orbitals: if command.task == super::args::CalcTask::Orbitals {
                     OrbitalOutput::All

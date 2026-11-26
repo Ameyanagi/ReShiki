@@ -393,7 +393,7 @@ reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnf
     [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
     [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
     [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
-    [--gradient] [--wbo] FILE.xyz
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
 ```
 
 reads the first structure of an XYZ file (1 to 500 atoms, finite Ångström
@@ -413,6 +413,8 @@ above also apply to the CLI. Use `--alpb` or `--gbsa` to select the solvent
 model and `--solvent-correction gfn2` with a solvated g-xTB calculation.
 Each `--scf-retry K[:N]` adds a rung with electronic temperature `K` in kelvin
 and an optional iteration limit `N`. No rung may go below an explicitly given `--etemp`.
+With `--task hessian`, `--thermo-temperature K` sets the thermochemistry
+temperature (default 298.15 K). It must be greater than 0 K and at most 10000 K.
 
 When `near_degenerate` is `true`, stderr carries the warning below.
 

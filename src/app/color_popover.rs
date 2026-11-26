@@ -75,26 +75,30 @@ pub(super) struct HueEdit {
 
 /// Messages from the popover itself and background updates keep it open.
 pub(super) fn keeps_open(message: &Message) -> bool {
-    matches!(
-        message,
-        Message::StyleMenu(_)
-            | Message::ColorScope(_)
-            | Message::TextColor(_)
-            | Message::ApplyTextColor
-            | Message::ClearRingFill
-            | Message::RingEffect(_)
-            | Message::HighlightStyle(_)
-            | Message::ClearHighlights
-            | Message::TextStyle(StyleChange::Color(_))
-            | Message::Canvas(crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_))
-            | Message::InspectorScroll(_)
-            | Message::Icons(super::icon_browser::Action::Scrolled { .. })
-            | Message::Nmr(super::nmr::Action::RenderedSize(_))
-            | Message::InspectorAction(
-                super::inspector::Action::RefreshProperties
-                    | super::inspector::Action::PropertiesCalculated(..)
-            )
-    ) || super::atom_text::background(message)
+    super::xtb::is_progress(message)
+        || matches!(
+            message,
+            Message::StyleMenu(_)
+                | Message::ColorScope(_)
+                | Message::TextColor(_)
+                | Message::ApplyTextColor
+                | Message::ClearRingFill
+                | Message::RingEffect(_)
+                | Message::HighlightStyle(_)
+                | Message::ClearHighlights
+                | Message::TextStyle(StyleChange::Color(_))
+                | Message::Canvas(
+                    crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_)
+                )
+                | Message::InspectorScroll(_)
+                | Message::Icons(super::icon_browser::Action::Scrolled { .. })
+                | Message::Nmr(super::nmr::Action::RenderedSize(_))
+                | Message::InspectorAction(
+                    super::inspector::Action::RefreshProperties
+                        | super::inspector::Action::PropertiesCalculated(..)
+                )
+        )
+        || super::atom_text::background(message)
 }
 
 fn edit_keys(key: &iced::keyboard::Key) -> Option<Message> {

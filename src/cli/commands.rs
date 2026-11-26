@@ -592,7 +592,7 @@ const CALC: CommandSpec = CommandSpec {
     [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
     [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
     [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
-    [--gradient] [--wbo] FILE.xyz",
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz",
     options: &[
         OptionSpec {
             flag: "--task",
@@ -673,6 +673,14 @@ const CALC: CommandSpec = CommandSpec {
             value: Some("K"),
             help: "Set the electronic temperature in kelvin.",
             default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--thermo-temperature",
+            value: Some("K"),
+            help: "Thermochemistry temperature in kelvin (default 298.15)",
+            default: Some(|| json!(298.15)),
             sets: None,
             equivalent: None,
         },
