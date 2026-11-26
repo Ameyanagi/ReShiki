@@ -29,6 +29,8 @@ has every help text as the program prints it.
 | [compose](#compose)           | Lay out a Proposal (JSON) and write it as a file                  |
 | [analyze](#analyze)           | Print molecular properties as one JSON line                       |
 | [predict-nmr](#predict-nmr)   | Print predicted NMR shifts as one JSON line                       |
+| [calculate](#calculate)       | Print a compact xTB calculation summary as one JSON line          |
+| [read-output](#read-output)   | Print quantum-chemistry job summaries as one JSON line            |
 | [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
 | [name](#name)                 | Print the systematic name of a structure                          |
 | [calc](#calc)                 | Print an xTB calculation as one JSON line                         |
@@ -497,6 +499,60 @@ with `null` values. The result has the same fields as the MCP `predict_nmr`
 tool's [result](agent-api.md#results), plus `experimental` and `api`. When you
 publish predicted values, cite `credit` with them.
 
+## calculate
+
+```text
+reshiki --cli calculate [--task energy|optimize|frequencies|opt+freq]
+    [--method gfn2|gxtb|gfnff] [--charge N] [--uhf N] [--solvent NAME]
+    [--conventions axtb|xtb-6.8] [--etemp K] [--accuracy X] [--max-iter N]
+    [--threads N] [--convergence normal|tight] [--fix N,N,...] FILE.xyz
+```
+
+Calculates on the first XYZ frame, with coordinates in ångströms.
+
+| Option                | Commands  | Meaning                                             |
+| --------------------- | --------- | --------------------------------------------------- |
+| `--task TASK`         | calculate | Energy (default), optimize, frequencies or opt+freq |
+| `--method METHOD`     | calculate | gfn2 (default), gxtb or gfnff                       |
+| `--charge N`          | calculate | Molecular charge (default 0)                        |
+| `--uhf N`             | calculate | Unpaired electrons (default 0)                      |
+| `--solvent NAME`      | calculate | Named ALPB solvent (default none)                   |
+| `--conventions MODE`  | calculate | axtb (default) or xtb-6.8                           |
+| `--etemp K`           | calculate | Electronic temperature in kelvin                    |
+| `--accuracy X`        | calculate | Positive SCF accuracy multiplier                    |
+| `--max-iter N`        | calculate | Positive SCF iteration limit                        |
+| `--threads N`         | calculate | 1 to 64 threads (default available CPUs, up to 8)   |
+| `--convergence LEVEL` | calculate | Optimization convergence, normal (default) or tight |
+| `--fix N,N,...`       | calculate | 1-based atom numbers held fixed during optimization |
+
+The command prints the MCP `calculate` result as one labelled JSON line. The
+`value` contains the energy, available electronic properties and, for the
+requested tasks, the optimized XYZ geometry or frequencies with
+thermochemistry. The result includes any warnings.
+
+The input limit is `max_text_bytes` (16 MiB by default), with at most 500
+atoms or 200 for a task that computes frequencies. The calculation deadline
+is 30 minutes. This command requires a build with xTB. A build without it
+writes `reshiki: xTB is not included in this build` to stderr and exits 1.
+
+## read-output
+
+```text
+reshiki --cli read-output [--job N] FILE
+```
+
+Reads a quantum-chemistry output or geometry file and prints the MCP
+`read_output` result as one labelled JSON line. `value.jobs` summarizes the
+jobs in the file, and `value.job` contains available calculated values and their
+XYZ geometry. A job without calculated results uses its last retained geometry.
+
+| Option    | Commands    | Meaning                                       |
+| --------- | ----------- | --------------------------------------------- |
+| `--job N` | read-output | Zero-based job index (default chosen by file) |
+
+The input limit is `max_text_bytes` (16 MiB by default), the same limit as the
+MCP tool's `path` argument.
+
 ## export-input
 
 ```text
@@ -507,6 +563,10 @@ reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
 ```
 
 `reshiki --cli help export-input` prints the [full help](agent-reference.md#reshiki---cli-export-input).
+
+The command shares its XYZ parser and input writer with the MCP `export_input`
+tool. The command also supports XYZ output and transition-state jobs.
+`--title` defaults to the input file's stem.
 
 | Option              | Commands     | Meaning                                                                                              |
 | ------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
@@ -891,7 +951,7 @@ message. The options and output are described in
 It prints the worker's `Computed` JSON plus `engine`, with binary arrays as
 `{"shape":[rows,columns],"values":[...]}`, and no experimental envelope. A gap
 below 0.1 eV also writes a warning to stderr and leaves the exit status
-unchanged.
+unchanged. Use [`calculate`](#calculate) for a compact summary.
 
 In a build without xTB, it writes `reshiki: xTB is not included in this build`
 to stderr and exits 1.

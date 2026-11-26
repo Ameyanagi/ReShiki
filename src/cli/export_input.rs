@@ -7,9 +7,8 @@ use super::{
 use reshiki_agent::ops::budget::Budgets;
 use reshiki_io::{
     qc_input::{self, Geometry, Settings},
-    qcdata::{self, CalcResult, Frame, MAX_FRAME_ATOMS, Provenance, Source, Status, Task},
+    qcdata::{self, CalcResult, Frame, Provenance, Source, Status, Task},
 };
-use reshiki_model::chemistry::ELEMENTS;
 use std::{fs, io::Write, path::Path};
 
 pub(crate) fn run(
@@ -176,60 +175,5 @@ fn file_stem(path: &Path) -> String {
 fn read_xyz(path: &Path, limit: usize) -> Result<Frame, String> {
     let bytes = io::read_input(Some(path), limit)?;
     let text = String::from_utf8(bytes).map_err(|_| "The XYZ input must be UTF-8.")?;
-    parse_xyz(&text)
-}
-
-/// Read only the first frame; later frames may contain a different structure.
-fn parse_xyz(text: &str) -> Result<Frame, String> {
-    let mut lines = text.lines();
-    let atoms = lines
-        .next()
-        .and_then(|line| line.trim().parse::<usize>().ok())
-        .ok_or("The XYZ input needs an atom count on the first line.")?;
-    if atoms > MAX_FRAME_ATOMS {
-        return Err(format!("The XYZ input exceeds {MAX_FRAME_ATOMS} atoms."));
-    }
-    let comment = lines.next().ok_or("The XYZ input needs a comment line.")?;
-    let columns = qc_input::XyzColumns::from_comment(comment)
-        .ok_or("XYZ Properties needs species:S:1 and pos:R:3 columns.")?;
-    let mut numbers = Vec::with_capacity(atoms);
-    let mut positions_angstrom = Vec::with_capacity(atoms);
-    for atom in 0..atoms {
-        let invalid = || {
-            format!(
-                "Invalid XYZ atom {}: expected an element and finite x y z coordinates.",
-                atom + 1
-            )
-        };
-        let fields: Vec<_> = lines
-            .next()
-            .ok_or_else(invalid)?
-            .split_whitespace()
-            .collect();
-        let symbol = *fields.get(columns.species).ok_or_else(invalid)?;
-        let number = ELEMENTS
-            .iter()
-            .position(|element| element.symbol == symbol && element.symbol != "*")
-            .and_then(|number| u8::try_from(number).ok())
-            .ok_or_else(invalid)?;
-        let mut position = [0.0; 3];
-        for (offset, coordinate) in position.iter_mut().enumerate() {
-            *coordinate = fields
-                .get(columns.position + offset)
-                .and_then(|value| value.parse::<f64>().ok())
-                .filter(|value| value.is_finite())
-                .ok_or_else(invalid)?;
-        }
-        numbers.push(number);
-        positions_angstrom.push(position);
-    }
-    Ok(Frame {
-        numbers,
-        positions_angstrom,
-        isotopes: Vec::new(),
-        masses_amu: Vec::new(),
-        charge: 0,
-        multiplicity: 1,
-        drawing_atoms: Vec::new(),
-    })
+    qc_input::parse_xyz(&text)
 }

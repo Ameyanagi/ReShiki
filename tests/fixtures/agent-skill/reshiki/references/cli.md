@@ -12,6 +12,8 @@ Commands:
   compose       Lay out an assistant Proposal (JSON) and write it as a file
   analyze       Print molecular properties as one JSON line
   predict-nmr   Print predicted NMR shifts as one JSON line
+  calculate     Print a compact xTB calculation summary as one JSON line
+  read-output   Print quantum chemistry job summaries and calculated values as one JSON line
   export-input  Write a quantum-chemistry input from an XYZ structure
   name          Print the systematic name of a structure
   calc          Print an xTB calculation as one JSON line
@@ -213,6 +215,49 @@ A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
 ```
 
+## reshiki --cli calculate
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calculate [--task energy|optimize|frequencies|opt+freq]
+    [--method gfn2|gxtb|gfnff] [--charge N] [--uhf N] [--solvent NAME]
+    [--conventions axtb|xtb-6.8] [--etemp K] [--accuracy X] [--max-iter N]
+    [--threads N] [--convergence normal|tight] [--fix N,N,...] FILE.xyz
+
+Runs the calculate tool and prints its labelled result as one JSON line.
+Only available in builds with xTB. Reads at most 16777216 bytes and 500 atoms;
+frequencies allow at most 200 atoms. The calculation deadline is 30 minutes.
+
+Options:
+  --task TASK                Calculate energy (default), optimize, frequencies or opt+freq.
+  --method METHOD            Use gfn2 (default), gxtb or gfnff.
+  --charge N                 Set the molecular charge (default 0).
+  --uhf N                    Set unpaired electrons (default 0).
+  --solvent NAME             Use the named ALPB solvent.
+  --conventions MODE         Use axtb (default) or xtb-6.8 conventions.
+  --etemp K                  Set the electronic temperature in kelvin.
+  --accuracy X               Set a positive SCF accuracy multiplier.
+  --max-iter N               Set a positive SCF iteration limit.
+  --threads N                Use 1 to 64 worker threads (default available CPUs, at most 8).
+  --convergence LEVEL        Optimization convergence: normal (default) or tight.
+  --fix N,N,...              Fix unique XYZ atom numbers during optimization, counting from 1.
+```
+
+## reshiki --cli read-output
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli read-output [--job N] FILE
+
+Runs the read_output tool and prints its labelled result as one JSON line,
+including job summaries, calculated values and the selected XYZ geometry.
+
+Options:
+  --job N  Select a zero-based job index; omit for the default job.
+
+Reads at most max_text_bytes (16777216 bytes).
+```
+
 ## reshiki --cli export-input
 
 ```text
@@ -321,6 +366,7 @@ Options:
   --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
   --threads N                  Use 1 to 64 worker threads (default 1).
 
+Use calculate for the compact calculation summary.
 See docs/xtb-worker.md (Command line)
 ```
 

@@ -84,6 +84,7 @@ fn parameters_render_nullable_types_and_constraints_from_schema() {
             }]},
             "ids": {"type": "array", "maxItems": 2,
                 "items": {"type": "integer", "minimum": 1, "maximum": 9}},
+            "fixed": {"type": ["array", "null"], "items": {"type": "integer", "minimum": 1}},
             "optional": {"type": "boolean", "description": "One | two\nlines"}
         },
         "required": ["choice", "ids"]
@@ -96,6 +97,9 @@ fn parameters_render_nullable_types_and_constraints_from_schema() {
     let ids = "| `ids` | `array<integer>` | true | false | maxItems: `2`; ";
     assert!(text.contains(ids));
     assert!(text.contains("items.minimum: `1`; items.maximum: `9`"));
+    assert!(
+        text.contains("| `fixed` | `array<integer> or null` | false | true | items.minimum: `1` |")
+    );
     assert!(text.contains("| `optional` | `boolean` | false | false |  | One \\| two lines |"));
 }
 

@@ -16,6 +16,7 @@ use results::RunInfo;
 use state::{Progress, Settings};
 use std::sync::{Arc, Weak};
 
+mod conformers;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
@@ -65,8 +66,12 @@ pub(crate) enum Action {
     ApplyAnyway,
     Discard,
     Palette(palette::Action),
+    /// The card's Conformers fields and the Conformers tab.
+    Conformers(conformers::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
+    #[cfg(not(target_arch = "wasm32"))]
+    Search(u64, conformers::Event),
 }
 
 /// Ways to start a calculation without the card's Run button. Each shows
@@ -96,6 +101,8 @@ pub(super) fn available() -> bool {
 pub(crate) struct Window {
     pub(super) page: Page,
     pub(super) settings: Settings,
+    /// The card's Conformers fields.
+    pub(super) conformers: conformers::Settings,
     /// Where the results palette sits, for every document of the window.
     pub(super) dock: palette::Dock,
 }
@@ -139,6 +146,8 @@ pub(crate) struct Request {
     config: state::Config,
     /// "Keep full results in this file" for the new result.
     keep_full: bool,
+    /// The search, for a Conformers task.
+    search: Option<conformers::Config>,
 }
 
 pub(crate) struct Run {
@@ -146,6 +155,8 @@ pub(crate) struct Run {
     atoms: Vec<u64>,
     config: state::Config,
     keep_full: bool,
+    /// A conformer search's settings and progress.
+    search: Option<conformers::Live>,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -268,7 +279,10 @@ struct Pending {
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return matches!(message, Message::Xtb(Action::Event(..)));
+    return matches!(
+        message,
+        Message::Xtb(Action::Event(..) | Action::Search(..))
+    );
     #[cfg(target_arch = "wasm32")]
     false
 }
@@ -333,6 +347,9 @@ impl App {
             Action::Event(serial, event) => self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => return self.xtb_palette(action),
+            Action::Conformers(action) => return self.xtb_conformers(action),
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::Search(serial, event) => self.xtb_search_event(serial, event),
             setting => {
                 let target = self.xtb_key();
                 let settings = &mut self.xtb.settings;
@@ -480,7 +497,7 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let settings = &self.xtb.settings;
+        let settings = &conformers::effective(&self.xtb.settings, &self.xtb.conformers);
         let (charge, multiplicity) = science::drawn_state(&self.tab.doc, first);
         let drawn = (charge, multiplicity.saturating_sub(1));
         let typed = settings.molecule.is_some() && settings.molecule == self.xtb_key();
@@ -501,10 +518,21 @@ impl App {
                 return Task::none();
             }
         };
+        let search = match config.task {
+            CalcTask::Conformers => match self.xtb.conformers.config(None) {
+                Ok(search) => Some(search),
+                Err(reason) => {
+                    self.xtb_fail(state::Failure::Other(reason));
+                    return Task::none();
+                }
+            },
+            _ => None,
+        };
         let request = Request {
             atoms,
             config,
             keep_full: false,
+            search,
         };
         self.xtb_begin(request)
     }
@@ -524,6 +552,12 @@ impl App {
         self.tab.xtb.run = Some(Run {
             serial: self.tab.xtb.serial,
             atoms: request.atoms,
+            search: request.search.map(|config| conformers::Live {
+                method: request.config.method,
+                config,
+                phase: Default::default(),
+                stopping: false,
+            }),
             config: request.config,
             keep_full: request.keep_full,
             launch: None,
@@ -610,10 +644,6 @@ impl App {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn xtb_start(&mut self, launch: Launch) -> Task<Message> {
-        use reshiki_xtb_worker::protocol::{
-            Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
-        };
-
         let atoms = launch.frame.numbers.len();
         if atoms > state::MAX_ATOMS {
             self.xtb_fail(state::Failure::TooMany {
@@ -622,44 +652,20 @@ impl App {
             });
             return Task::none();
         }
+        if self
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .is_some_and(|run| run.search.is_some())
+        {
+            return self.xtb_search_start(launch);
+        }
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
         };
-        let config = &run.config;
-        let method = match config.method {
-            qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
-            qcdata::XtbMethod::GXtb => Method::Gxtb,
-            qcdata::XtbMethod::GfnFf => Method::Gfnff,
-        };
-        let job = run::Job {
-            optimize: config.task == CalcTask::Optimize,
-            numbers: launch.frame.numbers.clone(),
-            positions: launch.frame.positions_angstrom.clone(),
-            charge: config.charge,
-            uhf: config.unpaired,
-            method,
-            conventions: if config.xtb68 {
-                Conventions::Xtb68
-            } else {
-                Conventions::Axtb
-            },
-            scf: ScfSettings {
-                accuracy: config.accuracy,
-                electronic_temperature_k: config.temperature_k,
-                max_iterations: config.max_iterations,
-                retries: vec![],
-            },
-            solvent: config.solvent.map(|name| Solvent {
-                model: SolventModel::Alpb,
-                name: name.to_lowercase(),
-                state: Default::default(),
-                correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-            }),
-            threads: config.threads,
-            fixed: fixed_indices(&launch.atoms, &config.fixed).collect(),
-            tight: config.tight,
-        };
+        let job = job(&run.config, &launch);
         run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
         run.launch = Some(launch);
         run.revision = (epoch, revision);
@@ -736,6 +742,7 @@ impl App {
                 atoms: std::mem::take(&mut run.atoms),
                 config: run.config.clone(),
                 keep_full: run.keep_full,
+                search: run.search.as_ref().map(|live| live.config.clone()),
             })
         });
         let failed = Failed {
@@ -755,6 +762,9 @@ impl App {
 
     /// Cancel stops the worker (or the model generation) and applies nothing.
     pub(super) fn xtb_cancel(&mut self) {
+        if self.xtb_search_stop() {
+            return;
+        }
         let Some(run) = self.tab.xtb.run.take() else {
             return;
         };
@@ -793,7 +803,10 @@ impl App {
                 return;
             }
         };
-        let optimized = pending.result.task == qcdata::Task::Optimize;
+        let optimized = matches!(
+            pending.result.task,
+            qcdata::Task::Optimize | qcdata::Task::Conformers
+        );
         let mut notes = pending.notes.clone();
         let moved = !shows(&self.tab.doc, &pending.launch);
         if attached.freshness == Freshness::Stale {
@@ -889,11 +902,57 @@ impl Run {
         if self.launch.is_none() {
             return "xTB · making the 3D model first (MMFF94s)".into();
         }
+        if let Some(live) = &self.search {
+            return format!("{} · {}", self.label, live.line(self.seconds()));
+        }
         format!(
             "{} · {}",
             self.label,
             self.progress.line(self.config.task, self.seconds())
         )
+    }
+}
+
+/// The worker job of `config` on `launch`'s geometry.
+#[cfg(not(target_arch = "wasm32"))]
+fn job(config: &state::Config, launch: &Launch) -> run::Job {
+    use reshiki_xtb_worker::protocol::{
+        Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
+    };
+
+    let method = match config.method {
+        qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
+        qcdata::XtbMethod::GXtb => Method::Gxtb,
+        qcdata::XtbMethod::GfnFf => Method::Gfnff,
+    };
+    run::Job {
+        optimize: config.task == CalcTask::Optimize,
+        numbers: launch.frame.numbers.clone(),
+        positions: launch.frame.positions_angstrom.clone(),
+        charge: config.charge,
+        uhf: config.unpaired,
+        method,
+        conventions: if config.xtb68 {
+            Conventions::Xtb68
+        } else {
+            Conventions::Axtb
+        },
+        scf: ScfSettings {
+            accuracy: config.accuracy,
+            electronic_temperature_k: config.temperature_k,
+            max_iterations: config.max_iterations,
+            retries: vec![],
+        },
+        solvent: config.solvent.map(|name| Solvent {
+            model: SolventModel::Alpb,
+            name: name.to_lowercase(),
+            state: Default::default(),
+            correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
+        }),
+        threads: config.threads,
+        fixed: fixed_indices(&launch.atoms, &config.fixed).collect(),
+        tight: config.tight,
+        topology: None,
     }
 }
 

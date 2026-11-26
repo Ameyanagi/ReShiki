@@ -17,7 +17,7 @@ Report ReShiki's versions, the limits this server enforces (budgets), the import
 
 Parameters: none; pass `{}`.
 
-Result `value`: `{operation_api, stability, budgets, formats, grants, files}`. operation_api is the operation API version; stability is "experimental". budgets lists the enforced limits, with the render limits nested under render. formats is {import, export}. grants is {read, write}, the granted folders as the user spelled them; files is {read, write}, the extensions file_open and file_save accept.
+Result `value`: `{operation_api, stability, budgets, formats, grants, files, calculations}`. operation_api is the operation API version; stability is "experimental". budgets lists the enforced limits, with the render limits nested under render. formats is {import, export}. grants is {read, write}, the granted folders as the user spelled them; files is {read, write}, the extensions file_open and file_save accept. calculations is null without an xTB hook. With one, it is {engine, methods, max_atoms, max_frequency_atoms}. engine is {name, version, license, source, rev}; methods is [{method, label, energy, optimize, frequencies, open_shell, solvent}]. solvent is native, gfn2_correction or null.
 
 ## document_new
 
@@ -372,6 +372,88 @@ Return an input schema that the tool list leaves out to stay small. sketch is th
 | `name` | `string` | true | false | enum: `["sketch"]` |
 
 Result `value`: `{name, schema}`. name repeats the request; schema is the JSON Schema (2020-12) of that input, with its rules in the description.
+
+## export_input
+
+**Export calculation input**
+
+Write Gaussian, ORCA or GAMESS input from the first XYZ frame (Å). Null settings use CLI defaults.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints |
+| --- | --- | --- | --- | --- |
+| `basis` | `string or null` | true | true |  |
+| `charge` | `integer or null` | true | true |  |
+| `cores` | `integer or null` | true | true | minimum: `1` |
+| `extra` | `string or null` | true | true |  |
+| `job` | `string` | true | false | enum: `["single_point","optimize","opt_freq"]` |
+| `memory_gb` | `integer or null` | true | true | minimum: `1` |
+| `method` | `string or null` | true | true |  |
+| `multiplicity` | `integer or null` | true | true | minimum: `1` |
+| `program` | `string` | true | false | enum: `["gaussian","orca","gamess"]` |
+| `title` | `string or null` | true | true |  |
+| `xyz` | `string` | true | false |  |
+
+Result `value`: `{file_name, text, companions}`. The main input file name and text. companions is [{file_name, text}] for files the input references. The writer's messages become warnings. Total file text is at most max_output_bytes.
+
+## read_output
+
+**Read calculation output**
+
+Summarize quantum chemistry jobs with calculated values and XYZ geometry.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `file_name` | `string or null` | true | true |  | Format detection name; null uses path's file name. |
+| `job` | `integer or null` | true | true | minimum: `0` | Zero-based job index; null selects the default job. |
+| `path` | `string or null` | true | true | maxLength: `4096` | File in a granted READ folder, at most max_text_bytes. |
+| `text` | `string or null` | true | true |  | Inline file, at most max_text_bytes; needs file_name. Give text or path, never both. |
+
+Result `value`: `{format, program, program_version, jobs, job}`. jobs is [{index, kind, title, completion, steps, atoms, energy_hartree, frequencies, orbitals}]. job is the selected job or null. It has {index, kind, method, basis, keywords, completion, energy_hartree, homo_lumo_gap_ev, dipole_debye, frequencies_cm1, ir_intensities_km_mol, imaginary, thermo, xyz}. For unrestricted spectra, the gap uses the highest occupied and lowest empty levels across both spins. In thermo, zero_point_energy_hartree is the zero-point correction. enthalpy_hartree and gibbs_hartree are absolute energies (electronic energy plus correction). xyz is the geometry described by the result, or the last retained geometry if there is no result. File messages become warnings.
+
+## calculate
+
+**Run xTB calculation**
+
+Calculate energy, optimize or compute frequencies from the first XYZ frame (Å). Only in builds with xTB.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `accuracy` | `number or null` | true | true | minimum: `0` |  |
+| `charge` | `integer` | true | false |  |  |
+| `conventions` | `string` | true | false | enum: `["axtb","xtb-6.8"]` |  |
+| `convergence` | `string or null` | true | true | enum: `["normal","tight",null]` |  |
+| `electronic_temperature_k` | `number or null` | true | true | minimum: `0` |  |
+| `fixed_atoms` | `array<integer> or null` | true | true | items.minimum: `1` | Unique XYZ atom numbers for optimization. |
+| `max_iterations` | `integer or null` | true | true | minimum: `1` |  |
+| `method` | `string` | true | false | enum: `["gfn2","gxtb","gfnff"]` |  |
+| `solvent` | `string or null` | true | true |  | ALPB solvent name. |
+| `task` | `string` | true | false | enum: `["energy","optimize","frequencies","opt+freq"]` |  |
+| `threads` | `integer or null` | true | true | minimum: `1`; maximum: `64` |  |
+| `uhf` | `integer` | true | false | minimum: `0` | Unpaired electrons. |
+| `xyz` | `string` | true | false |  |  |
+
+Result `value`: `{task, method, engine, atoms, charge, multiplicity, energy_hartree, homo_lumo_gap_ev, dipole_debye, charges, optimization, frequencies, seconds}`. engine is {name, version, rev}. Gap, dipole and charges are null when absent. optimization is {converged, steps, rmsd_angstrom, xyz} or null. frequencies is {frequencies_cm1, ir_intensities_km_mol, imaginary, temperature_k, zero_point_energy_hartree, enthalpy_hartree, gibbs_hartree} or null. zero_point_energy_hartree is the zero-point correction. enthalpy_hartree and gibbs_hartree are absolute energies (electronic energy plus correction). Charges are rounded to four decimal places and frequencies to two. The hook's messages become warnings.
 
 ## Proposal
 
