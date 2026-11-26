@@ -136,8 +136,11 @@ impl Request {
                 config
                     .check_atoms(ids.len())
                     .map_err(|failure| SearchError::Invalid(failure.to_string()))?;
-                let generation = geometry::ModelGeneration::for_calculation(&doc, &ids)
+                let mut generation = geometry::ModelGeneration::for_calculation(&doc, &ids)
                     .ok_or_else(|| SearchError::Invalid(error.to_string()))?;
+                if generation.target.is_none() {
+                    generation.force_field = conformers::starting_force_field(config.minimizer);
+                }
                 let model = conformers::generate_model(&doc, &ids, generation, &client, cancel)?;
                 doc.models
                     .retain(|model| !ids.iter().any(|&id| model.contains(id)));

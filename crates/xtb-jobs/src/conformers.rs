@@ -10,7 +10,7 @@ pub use rows::{RowStatistics, populations, trajectory_rows};
 #[cfg(not(target_arch = "wasm32"))]
 mod pipeline;
 #[cfg(not(target_arch = "wasm32"))]
-pub use pipeline::{Found, Search, generate_model, search_conformers};
+pub use pipeline::{Found, Search, generate_model, search_conformers, starting_force_field};
 
 /// Starts ETKDG may make; the engine's limit.
 pub const MAX_STARTS: u32 = 300;
