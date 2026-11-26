@@ -240,6 +240,9 @@ pub struct Model3d {
     /// An orbital placed on this model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub surface: Option<surface::Figure>,
+    /// Small copies of the model under it, each with one captioned orbital.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub panels: Vec<surface::Panel>,
     pub force_field: ForceField,
     #[serde(default, skip_serializing_if = "is_original")]
     pub layout: Layout,
@@ -599,6 +602,13 @@ fn van_der_waals(symbol: &str) -> f32 {
 }
 
 impl Model3d {
+    /// Every orbital this model shows: its own, then its panels'.
+    pub fn figures(&self) -> impl Iterator<Item = &surface::Figure> {
+        self.surface
+            .iter()
+            .chain(self.panels.iter().map(|panel| &panel.figure))
+    }
+
     pub(crate) fn needs_ortep(&self) -> bool {
         self.style == Style::Ellipsoids
             || self.molecule_only
@@ -646,6 +656,7 @@ impl Model3d {
             manual_along: false,
             background: Background::default(),
             surface: None,
+            panels: vec![],
             force_field,
             layout: Layout::Original,
             drawn: None,
@@ -1381,6 +1392,22 @@ pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     Some(View::new(doc, model)?.bounds())
 }
 
+/// [`frame`] grown by the model's orbital panels and their captions.
+fn frame_with_panels(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
+    let (mut lo, mut hi) = frame(doc, model)?;
+    for (small, caption) in panels(doc, model) {
+        let boxes = [
+            frame(doc, &small),
+            Some(crate::scene::bounds(std::slice::from_ref(&caption))),
+        ];
+        for (a, b) in boxes.into_iter().flatten() {
+            lo = Point::new(lo.x.min(a.x), lo.y.min(a.y));
+            hi = Point::new(hi.x.max(b.x), hi.y.max(b.y));
+        }
+    }
+    Some((lo, hi))
+}
+
 /// The frame's corners, clockwise from the top left.
 pub fn frame_corners(doc: &Document, model: &Model3d) -> Option<[Point; 4]> {
     let (lo, hi) = frame(doc, model)?;
@@ -1427,7 +1454,7 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
                 offset: Point::default(),
                 ..model.clone()
             };
-            let Some((start, end)) = frame(doc, &centered) else {
+            let Some((start, end)) = frame_with_panels(doc, &centered) else {
                 return false;
             };
             let (molecule, obstacles) = placement_bounds(doc, index, model);
@@ -1541,7 +1568,7 @@ fn placement_bounds(
             .iter()
             .enumerate()
             .filter(|(i, model)| *i != index && model.display != Display::TwoD)
-            .filter_map(|(_, model)| frame(doc, model)),
+            .filter_map(|(_, model)| frame_with_panels(doc, model)),
     );
     // A disconnected crystal's atoms belong to separate selections, so their
     // individual bounds omit the whole cell and its repeat copies.
@@ -1672,9 +1699,20 @@ pub fn whole_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
         .then_some(atoms)
 }
 
-/// The atoms of the models whose frame contains `p`, topmost first.
+/// The atoms of the models whose frame, or one of whose orbital panels,
+/// contains `p`, topmost first.
 pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
-    model_at(doc, p, 0.).map(|m| m.linked_ids(doc))
+    let inside = |m: &Model3d| {
+        frame(doc, m)
+            .is_some_and(|(lo, hi)| (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y))
+    };
+    // Topmost first, each model with its panels, as they are painted.
+    doc.models
+        .iter()
+        .rev()
+        .filter(|m| m.display != Display::TwoD)
+        .find(|m| inside(m) || panels(doc, m).iter().any(|(small, _)| inside(small)))
+        .map(|m| m.linked_ids(doc))
 }
 
 /// The topmost shown model whose frame, shrunk by `inset` on every side,
@@ -2837,8 +2875,77 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let mut out = vec![];
     for model in doc.models.iter().filter(|m| m.display != Display::TwoD) {
         push_model(doc, model, &mut out);
+        for (panel, caption) in panels(doc, model) {
+            push_model(doc, &panel, &mut out);
+            out.push(caption);
+        }
     }
     out
+}
+
+/// Share of the model's frame side each panel takes.
+const PANEL_SCALE: f32 = 0.55;
+
+/// The small copy of `model` that draws one panel's `figure`, at the model's
+/// own offset; its view signature is the one the panel's snapshot keeps.
+pub(crate) fn panel_model(model: &Model3d, figure: &surface::Figure) -> Model3d {
+    let mut small = model.clone();
+    small.panels = vec![];
+    small.surface = Some(figure.clone());
+    small.size = model.size * PANEL_SCALE;
+    small
+}
+
+/// The model's panels as small models side by side under its frame, each
+/// with its orbital, and their captions centred below them.
+pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
+    if model.panels.is_empty() {
+        return vec![];
+    }
+    let Some((lo, hi)) = frame(doc, model) else {
+        return vec![];
+    };
+    let side = (hi.x - lo.x) * PANEL_SCALE;
+    let gap = side * 0.15;
+    let size = (model.size / 22.).clamp(7., 14.);
+    // Captions wider than a small model still keep clear space between them.
+    let between = gap.max(size * 1.5);
+    let style = crate::typography::TextStyle::default();
+    // Each panel is as wide as its model or its caption, whichever is wider.
+    let widths: Vec<f32> = model
+        .panels
+        .iter()
+        .map(|panel| crate::style::styled_text_width(&panel.caption, size, &style).max(side))
+        .collect();
+    let total = widths.iter().sum::<f32>() + between * (widths.len() - 1) as f32;
+    let mut left = (lo.x + hi.x) / 2. - total / 2.;
+    let centre = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    model
+        .panels
+        .iter()
+        .zip(widths)
+        .filter_map(|(panel, slot)| {
+            let x = left + slot / 2.;
+            left += slot + between;
+            let y = hi.y + gap + side / 2.;
+            let mut small = panel_model(model, &panel.figure);
+            small.offset = Point::new(model.offset.x + x - centre.x, model.offset.y + y - centre.y);
+            let width = crate::style::styled_text_width(&panel.caption, size, &style);
+            // A stale result or another geometry shows neither the panel
+            // nor its energy.
+            if !surface::draw::figure_ready(doc, &small) {
+                return None;
+            }
+            let caption = Primitive::Text {
+                position: Point::new(x - width / 2., y + side / 2. + size * 0.4),
+                text: panel.caption.clone(),
+                size,
+                color: doc.canvas_theme.color([24, 24, 24]),
+                style: style.clone(),
+            };
+            Some((small, caption))
+        })
+        .collect()
 }
 
 /// Each bond between two drawn points as a pair of indices into the model's
@@ -3265,6 +3372,25 @@ impl View<'_> {
 }
 
 pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
+    // Each panel in its own slot; a hidden (stale) panel keeps its picture.
+    let refreshed: Vec<_> = model
+        .panels
+        .iter()
+        .map(|panel| {
+            let mut small = panel_model(model, &panel.figure);
+            surface::draw::figure_ready(doc, &small)
+                .then(|| {
+                    refresh_surface_snapshot(doc, &mut small);
+                    small.surface
+                })
+                .flatten()
+        })
+        .collect();
+    for (panel, figure) in model.panels.iter_mut().zip(refreshed) {
+        if let Some(figure) = figure {
+            panel.figure = figure;
+        }
+    }
     if model.surface.is_none() {
         return;
     }

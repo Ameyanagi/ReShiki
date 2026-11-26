@@ -1203,7 +1203,7 @@ pub fn figure_result<'a>(
 pub fn for_figures(doc: &Document) -> Science {
     let mut molecules = HashMap::<&str, Vec<HashSet<u64>>>::new();
     for model in &doc.models {
-        if let Some(figure) = &model.surface {
+        for figure in model.figures() {
             molecules
                 .entry(&figure.orbital.result)
                 .or_default()
