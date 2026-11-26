@@ -168,9 +168,9 @@ distorted = qc.Geometry(
     caffeine.numbers,
     caffeine.positions + np.random.default_rng(1).normal(0, 0.15, caffeine.positions.shape),
 )
-threading.Timer(0.05, _thread.interrupt_main).start()
 start = time.perf_counter()
 try:
+    threading.Timer(0.05, _thread.interrupt_main).start()
     xtb.optimize(distorted, level="tight")
     print("finished")
 except KeyboardInterrupt:

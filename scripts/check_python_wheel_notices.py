@@ -1,4 +1,4 @@
-"""Verify wheel license files, or a release engine wheel's version and source link."""
+"""Verify wheel license files, or release versions and engine source links."""
 
 import argparse
 import glob
@@ -32,22 +32,25 @@ def release_version(tag):
 
 
 def verify_release_wheel(wheel, tag):
-    """Match both wheel versions and its concrete source-release links to the tag."""
+    """Match filename and metadata versions, and engine source links, to the tag."""
     expected = release_version(tag)
     name = Path(wheel).name
-    match = re.fullmatch(r"reshiki_xtb-([^-]+)-.+\.whl", name)
-    if match is None or match[1] != expected:
+    match = re.fullmatch(r"(reshiki|reshiki_xtb)-([^-]+)-.+\.whl", name)
+    if match is None or match[2] != expected:
         raise ValueError(f"Wheel {name} must have release version {expected}")
+    distribution = match[1].replace("_", "-")
     with zipfile.ZipFile(wheel) as archive:
         paths = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
         if len(paths) != 1:
             raise ValueError(f"Expected one wheel METADATA file in {name}")
         content = archive.read(paths[0])
     metadata = BytesParser().parsebytes(content)
-    if metadata.get("Name", "").replace("_", "-").lower() != "reshiki-xtb":
-        raise ValueError(f"Expected reshiki-xtb metadata in {name}")
+    if metadata.get("Name", "").replace("_", "-").lower() != distribution:
+        raise ValueError(f"Expected {distribution} metadata in {name}")
     if metadata.get_all("Version") != [expected]:
         raise ValueError(f"Wheel metadata must have release version {expected}: {name}")
+    if distribution == "reshiki":
+        return
     links = re.findall(re.escape(RELEASE_URL) + r"([^\s)>\]`]+)", content.decode("utf-8"))
     # The README also shows a literal v<version> template, which is not a release link.
     tags = {link for link in links if re.match(r"v[0-9]", link)}
@@ -77,12 +80,11 @@ def verify_wheel(wheel, licenses=None, *, xtb=False):
             raise ValueError(f"Missing source attribution: {name}")
     if not xtb and any(line.lstrip().startswith(b"licenses/axtb/") for line in attribution_lines):
         raise ValueError("The base reshiki wheel must not contain licenses/axtb/ notices")
+    distribution, version, _ = Path(wheel).name.split("-", 2)
+    dist_info = f"{distribution}-{version}.dist-info/"
     with zipfile.ZipFile(wheel) as archive:
-        metadata_path = next(
-            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
-        )
-        metadata = BytesParser().parsebytes(archive.read(metadata_path))
-        prefix = metadata_path.removesuffix("METADATA") + "licenses/wheel-licenses/"
+        metadata = BytesParser().parsebytes(archive.read(dist_info + "METADATA"))
+        prefix = dist_info + "licenses/wheel-licenses/"
         actual = {
             name.removeprefix(prefix)
             for name in archive.namelist()
@@ -97,16 +99,20 @@ def verify_wheel(wheel, licenses=None, *, xtb=False):
                 raise ValueError(f"Missing License-File declaration: {name}")
             if archive.read(prefix + name) != content:
                 raise ValueError(f"License file has differing bytes: {name}")
-        # The SBOM maturin writes lists the Rust crates compiled into the wheel.
-        sbom_paths = [name for name in archive.namelist() if name.endswith(".cyclonedx.json")]
-        if not sbom_paths:
-            raise ValueError("The wheel has no Rust SBOM")
-        components = []
-        for name in sbom_paths:
-            sbom = json.loads(archive.read(name))
-            if not isinstance(sbom, dict) or not isinstance(sbom.get("components"), list):
-                raise ValueError(f"The wheel has no Rust SBOM components list: {name}")
-            components.extend(sbom["components"])
+        crate = "reshiki-xtb-worker" if xtb else "reshiki-python"
+        sbom_path = f"{dist_info}sboms/{crate}.cyclonedx.json"
+        if sbom_path not in archive.namelist():
+            raise ValueError(f"The wheel has no Rust SBOM at {sbom_path}")
+        sbom = json.loads(archive.read(sbom_path))
+        components = sbom.get("components") if isinstance(sbom, dict) else None
+        if not isinstance(components, list) or not components:
+            raise ValueError(f"The wheel has no Rust SBOM component inventory: {sbom_path}")
+        # Maturin records the wheel's own crate in metadata.component and its
+        # dependencies in the top-level components list.
+        sbom_metadata = sbom.get("metadata")
+        package = sbom_metadata.get("component") if isinstance(sbom_metadata, dict) else None
+        if not isinstance(package, dict) or package.get("name") != crate:
+            raise ValueError(f"The wheel's Rust SBOM must identify {crate}: {sbom_path}")
         engine = {
             component["name"]
             for component in components
@@ -123,7 +129,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--xtb", action="store_true", help="Check engine wheel license notices")
     mode.add_argument(
-        "--release-tag", help="Check only engine wheel versions and source links for this tag"
+        "--release-tag", help="Check wheel versions and engine source links for this tag"
     )
     parser.add_argument("wheels", nargs="+", metavar="WHEEL")
     args = parser.parse_args()
@@ -132,9 +138,9 @@ def main():
         if not wheels:
             parser.error(f"No wheel files matched: {pattern}")
         for wheel in wheels:
-            if args.release_tag:
+            if args.release_tag is not None:
                 verify_release_wheel(wheel, args.release_tag)
-                print(f"Verified release version and source link: {wheel}")
+                print(f"Verified release version: {wheel}")
             else:
                 verify_wheel(wheel, xtb=args.xtb)
                 print(f"Verified license notices: {wheel}")

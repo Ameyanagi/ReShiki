@@ -141,6 +141,34 @@ def test_inverted_occupations_leave_gap_unset(fixtures: Path) -> None:
     assert not result.near_degenerate
 
 
+@pytest.mark.parametrize("reverse_records", [False, True])
+@pytest.mark.parametrize(
+    ("energy_offset", "gap_allowed"), [(0.0, True), (-5e-10, True), (-2e-9, False)]
+)
+def test_frontier_occupation_order_respects_energy_tolerance(
+    fixtures: Path, reverse_records: bool, energy_offset: float, gap_allowed: bool
+) -> None:
+    path = fixtures / "qc/cclib/molden5.7_water_mp2.molden"
+    header, *records = path.read_text().split(" Sym=")
+    # Inverting occupations is only ambiguous when the frontier energies are equal.
+    records[5] = records[5].replace("0.5707", f"{-0.3882 + energy_offset:.10f}", 1)
+    if reverse_records:
+        records[4], records[5] = records[5], records[4]
+    result = qc.read(" Sym=".join([header, *records]).encode(), name=path.name).default_job.result
+    assert result.occupations.sum() == 10
+    inverted = energy_offset < 0 or (reverse_records and energy_offset == 0)
+    expected = [0, 2] if inverted else [2, 0]
+    np.testing.assert_array_equal(result.occupations[4:6], expected)
+    if gap_allowed:
+        assert result.homo_lumo_gap == pytest.approx(
+            abs(energy_offset) * 27.211386245988, abs=1e-12
+        )
+        assert result.near_degenerate
+    else:
+        assert result.homo_lumo_gap is None
+        assert not result.near_degenerate
+
+
 def test_default_job_and_result_own_geometry(fixtures: Path) -> None:
     file = qc.read(fixtures / "qc/pymatgen/CH2O_CO2.log")
     assert len(file.jobs) == 3
