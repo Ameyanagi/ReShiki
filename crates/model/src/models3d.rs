@@ -1337,6 +1337,18 @@ pub fn viewed(doc: &Document, model: &Model3d) -> Vec<(u64, [f32; 3])> {
         .collect()
 }
 
+/// Where points in the model's own coordinates (ångström, as its atoms'
+/// `xyz`) are drawn now, in drawing units, or `None` without a linked source.
+pub fn project(doc: &Document, model: &Model3d, points: &[[f32; 3]]) -> Option<Vec<Point>> {
+    let view = View::new(doc, model)?;
+    Some(
+        points
+            .iter()
+            .map(|p| view.project(rotate(model.rotation, sub(*p, view.center))).0)
+            .collect(),
+    )
+}
+
 /// The frame's top-left and bottom-right corners in drawing units: a square
 /// that holds the model in every rotation, or `None` without a linked source.
 pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
