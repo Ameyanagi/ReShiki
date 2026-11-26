@@ -797,6 +797,7 @@ impl App {
                 .size(11)
                 .style(muted_text),
                 iced::widget::canvas(EnergyPlot {
+                    unit: crate::appearance::EnergyUnit::default(),
                     delta_kcal: energies
                         .iter()
                         .map(|e| (e - low) * KCAL_PER_HARTREE)
