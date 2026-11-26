@@ -1,10 +1,10 @@
 //! Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J. Chem. Phys. 113, 9978
-//! (2000) [Henkelman2000Tangent], and climbing force of Henkelman, Uberuaga & Jónsson, J. Chem.
-//! Phys. 113, 9901 (2000) [Henkelman2000CINEB]. The band is relaxed with FIRE (Bitzek et al., Phys.
-//! Rev. Lett. 97, 170201, 2006 [Bitzek2006FIRE]), using unit artificial masses and a 0.2-bohr
-//! per-atom step cap. A fixed initial force scale sets the fictitious time unit and scales equal
-//! springs from 0.1 Eh/bohr² upward on unusually stiff surfaces (including unscaled analytic test
-//! potentials).
+//! (2000) \[Henkelman2000Tangent\], and climbing force of Henkelman, Uberuaga & Jónsson, J. Chem.
+//! Phys. 113, 9901 (2000) \[Henkelman2000CINEB\]. The band is relaxed with FIRE (Bitzek et al.,
+//! Phys. Rev. Lett. 97, 170201, 2006 \[Bitzek2006FIRE\]), using unit artificial masses and a
+//! 0.2-bohr per-atom step cap. A fixed initial force scale sets the fictitious time unit and
+//! scales equal springs from 0.1 Eh/bohr² upward on unusually stiff surfaces (including unscaled
+//! analytic test potentials).
 
 use std::ops::ControlFlow;
 
@@ -20,6 +20,116 @@ pub(super) struct Band {
     pub(super) converged: bool,
     pub(super) climbing: usize,
     pub(super) tangent: Vec<f64>,
+}
+
+/// Optional local seeds, highest energy first. A midpoint bracketed by lower
+/// link endpoints is direct evidence of a missed peak and may raise the handoff
+/// reference above the original ceiling.
+pub(super) struct RecoveryProbe {
+    pub(super) seeds: Vec<RecoverySeed>,
+    pub(super) ceiling_exhausted: bool,
+    pub(super) diagnostics: Vec<String>,
+}
+
+pub(super) struct RecoverySeed {
+    pub(super) point: Minimum,
+    pub(super) gradient: Vec<f64>,
+    pub(super) direction: Vec<f64>,
+}
+
+impl Band {
+    /// Probe unresolved peaks next to the climbing image without changing the band.
+    /// Adaptive insertion near a transition state follows the motivation of
+    /// Kolsbjerg, Groves & Hammer, J. Chem. Phys. 145, 094107 (2016)
+    /// \[Kolsbjerg2016AutoNEB\]. The two-midpoint selection rule here is our own.
+    /// Molecular neighbors use a unit-weight fit in the climbing image's frame.
+    /// The returned unit directions follow increasing image index.
+    pub(super) fn intermediate_peaks(
+        &self,
+        p: &mut impl Potential,
+        masses: &[f64],
+        ceiling: f64,
+    ) -> Result<RecoveryProbe, TsError> {
+        let center = &self.path[self.climbing];
+        let weights = if center.positions.len() == 3 * masses.len() {
+            vec![1.0; masses.len()]
+        } else {
+            Vec::new()
+        };
+        // This exceeds ordinary SCF energy noise while remaining negligible
+        // compared with a chemical barrier. Include a roundoff floor for large
+        // constant offsets on generic analytic surfaces.
+        let tolerance = 1e-8_f64.max(64.0 * f64::EPSILON * center.energy.abs());
+        let mut result = RecoveryProbe {
+            seeds: Vec::new(),
+            ceiling_exhausted: false,
+            diagnostics: Vec::new(),
+        };
+        for neighbor in [self.climbing - 1, self.climbing + 1] {
+            let side = if neighbor < self.climbing {
+                "left"
+            } else {
+                "right"
+            };
+            let positions = &self.path[neighbor].positions;
+            let aligned = if weights.is_empty() {
+                positions.clone()
+            } else {
+                mapping::superpose(&center.positions, positions, &weights)
+            };
+            let mut direction = subtract(&aligned, &center.positions);
+            let length = norm(&direction);
+            if length <= 1e-14 {
+                continue;
+            }
+            let midpoint: Vec<_> = center
+                .positions
+                .iter()
+                .zip(&direction)
+                .map(|(position, displacement)| position + 0.5 * displacement)
+                .collect();
+            let (energy, gradient) = match evaluate(p, &midpoint) {
+                Ok(evaluated) => evaluated,
+                Err(error @ TsError::Scf(_)) => {
+                    result
+                        .diagnostics
+                        .push(format!("{side} midpoint recovery probe: {error}"));
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            if energy - center.energy <= tolerance {
+                continue;
+            }
+            let bracketed = energy - self.path[neighbor].energy > tolerance;
+            if energy > ceiling && !bracketed {
+                result.ceiling_exhausted = true;
+                result.diagnostics.push(format!(
+                    "{side} midpoint exceeds saddle energy ceiling ({energy:.12} > {ceiling:.12} Eh)"
+                ));
+                continue;
+            }
+            let sign = if neighbor < self.climbing { -1.0 } else { 1.0 };
+            direction
+                .iter_mut()
+                .for_each(|value| *value *= sign / length);
+            result.seeds.push(RecoverySeed {
+                point: Minimum {
+                    positions: midpoint,
+                    energy,
+                },
+                gradient,
+                direction,
+            });
+        }
+        // Stable sorting preserves the left-link tie break used by the original
+        // two-midpoint rule, while retaining the other link if a seed fails SCF
+        // or its exact stationary-point index disqualifies the handoff.
+        result
+            .seeds
+            .sort_by(|a, b| b.point.energy.total_cmp(&a.point.energy));
+        Ok(result)
+    }
 }
 
 /// Endpoints and their already-computed energies remain fixed. Non-Cartesian
@@ -442,6 +552,101 @@ impl Fire {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Accuracy, EvalError};
+
+    struct HiddenPeaks {
+        calls: Vec<f64>,
+    }
+
+    impl Potential for HiddenPeaks {
+        fn evaluate(
+            &mut self,
+            positions: &[f64],
+            gradient: &mut [f64],
+            _: Accuracy,
+        ) -> Result<f64, EvalError> {
+            let x = positions[0];
+            self.calls.push(x);
+            gradient[0] = -4.0 * x * (x * x - 0.25) + 0.05;
+            Ok(-(x * x - 0.25).powi(2) + 0.05 * x)
+        }
+    }
+
+    #[test]
+    fn intermediate_peak_recovers_the_highest_allowed_unbracketed_midpoint() {
+        let band = Band {
+            path: [-1.0_f64, 0.0, 1.0]
+                .into_iter()
+                .map(|x| Minimum {
+                    positions: vec![x],
+                    // Higher link endpoints do not bracket the hidden peak.
+                    energy: if x == 0.0 { -0.0625 } else { 1.0 },
+                })
+                .collect(),
+            converged: false,
+            climbing: 1,
+            tangent: vec![1.0],
+        };
+        for (ceiling, expected) in [(1.0, Some(0.5)), (0.0, Some(-0.5)), (-0.03, None)] {
+            let mut potential = HiddenPeaks { calls: Vec::new() };
+            let result = band
+                .intermediate_peaks(&mut potential, &[], ceiling)
+                .unwrap()
+                .seeds
+                .into_iter()
+                .next();
+            assert_eq!(potential.calls, [-0.5, 0.5]);
+            assert_eq!(
+                result.as_ref().map(|seed| seed.point.positions[0]),
+                expected
+            );
+            if let Some(seed) = result {
+                assert!(seed.point.energy > band.path[band.climbing].energy);
+                assert_eq!(seed.direction, [1.0]);
+            }
+        }
+        assert_eq!(band.path[1].positions, [0.0]);
+    }
+
+    #[test]
+    fn intermediate_peak_skips_links_that_only_rotate_and_translate() {
+        struct MustNotEvaluate;
+        impl Potential for MustNotEvaluate {
+            fn evaluate(
+                &mut self,
+                _: &[f64],
+                _: &mut [f64],
+                _: Accuracy,
+            ) -> Result<f64, EvalError> {
+                panic!("rigid copies do not contain an intermediate shape");
+            }
+        }
+        let center = vec![-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 2.0, 0.0];
+        let rotated: Vec<_> = center
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|p| [7.0 - p[1], -3.0 + p[0], 2.0 + p[2]])
+            .collect();
+        let band = Band {
+            path: [rotated.clone(), center, rotated]
+                .into_iter()
+                .map(|positions| Minimum {
+                    positions,
+                    energy: 0.0,
+                })
+                .collect(),
+            converged: false,
+            climbing: 1,
+            tangent: vec![0.0; 9],
+        };
+        assert!(
+            band.intermediate_peaks(&mut MustNotEvaluate, &[1.0, 12.0, 35.45], 1.0)
+                .unwrap()
+                .seeds
+                .is_empty()
+        );
+    }
 
     #[test]
     fn shape_links_exclude_rigid_motion_with_unequal_mass_reference_fit() {

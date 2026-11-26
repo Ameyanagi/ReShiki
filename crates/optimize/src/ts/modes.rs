@@ -1,8 +1,8 @@
 //! Eckart translation/rotation projection and harmonic normal modes.
 //!
 //! The mass-weighted rigid subspace follows Wilson, Decius & Cross, *Molecular Vibrations* (1955)
-//! [Wilson1955Vibrations], and Miller, Handy & Adams, J. Chem. Phys. 72, 99 (1980)
-//! [Miller1980Eckart]. Diagonalizing its orthogonal complement retains physical zero-curvature
+//! \[Wilson1955Vibrations\], and Miller, Handy & Adams, J. Chem. Phys. 72, 99 (1980)
+//! \[Miller1980Eckart\]. Diagonalizing its orthogonal complement retains physical zero-curvature
 //! modes.
 
 use crate::linalg::{dot, norm, projected_eigen};
@@ -112,6 +112,20 @@ pub(super) fn mass_weight(h: &[f64], inverse_sqrt: &[f64]) -> Vec<f64> {
     weighted
 }
 
+fn wavenumbers(eigenvalues: &[f64]) -> impl Iterator<Item = f64> {
+    let factor = wavenumber_factor();
+    eigenvalues
+        .iter()
+        .map(move |value| factor * value.abs().sqrt().copysign(*value))
+}
+
+/// Count significant imaginary modes in an already mass-weighted spectrum.
+pub(super) fn imaginary_count(eigenvalues: &[f64]) -> usize {
+    wavenumbers(eigenvalues)
+        .filter(|v| *v < -super::IMAGINARY_CM1)
+        .count()
+}
+
 /// Harmonic wavenumbers [cm^-1], ascending with imaginary values negative,
 /// and the lowest mass-weighted eigenvector converted to a unit Cartesian
 /// displacement. The Hessian is in Eh/bohr² and masses are in amu.
@@ -124,11 +138,7 @@ pub(super) fn frequencies(
     let inverse_sqrt: Vec<_> = masses.iter().flat_map(|m| [m.sqrt().recip(); 3]).collect();
     let weighted = mass_weight(h, &inverse_sqrt);
     let (eigenvalues, vectors) = spectrum(x, &weighted, masses)?;
-    let factor = wavenumber_factor();
-    let frequencies = eigenvalues
-        .iter()
-        .map(|v| factor * v.abs().sqrt().copysign(*v))
-        .collect();
+    let frequencies = wavenumbers(&eigenvalues).collect();
     let mut mode: Vec<_> = vectors
         .iter()
         .take(n)
