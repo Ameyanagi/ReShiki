@@ -32,13 +32,8 @@ impl Presentation {
     #[cfg(any(test, all(not(target_arch = "wasm32"), feature = "xtb")))]
     pub fn status_line(&self) -> String {
         match self.barrier_line() {
-            Some(barrier) => format!("Transition state · {barrier} · {}", self.verification),
-            None => format!(
-                "No reliable transition state found. {}",
-                self.reason
-                    .as_deref()
-                    .unwrap_or("The search needs another attempt.")
-            ),
+            Some(barrier) => format!("Transition state · {barrier}"),
+            None => "No reliable transition state found.".into(),
         }
     }
 
@@ -71,7 +66,18 @@ fn readable_reason(reason: &str) -> String {
     } else if let Some(reason) = reason.strip_prefix("worker check failed: ") {
         format!("The independent frequency check failed: {reason}.")
     } else if let Some(reason) = reason.strip_prefix("IRC failed: ") {
-        format!("The reaction path could not be checked: {reason}.")
+        let short = if reason.starts_with("SCF failure") {
+            "the electronic calculation did not converge"
+        } else if reason.contains("step limit") {
+            "the endpoint optimization reached its step limit"
+        } else {
+            reason
+                .lines()
+                .next()
+                .unwrap_or(reason)
+                .trim_end_matches('.')
+        };
+        format!("The reaction-path check could not finish: {short}.")
     } else {
         reason.to_owned()
     }
@@ -90,22 +96,15 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| session.map(|s| s.extras.num_imaginary))
         .or(saved_count);
     let reported = reported_reason(result);
-    // A saved warning proves convergence only when the search reached IRC:
-    // the engine starts IRC solely after convergence and one imaginary mode.
+    // Converged results passed both the endpoint and independent frequency checks.
+    let accepted = matches!(result.status, Status::Converged);
     let saddle_converged = saved
         .map(|search| search.saddle_converged)
         .or_else(|| session.map(|s| s.extras.saddle_converged))
-        .unwrap_or_else(|| {
-            matches!(result.status, Status::Converged)
-                || reported.is_some_and(|reason| reason.starts_with("IRC failed: "))
-        });
-    let accepted_status = matches!(result.status, Status::Converged)
-        || matches!(&result.status, Status::NotConverged { reason } if reason.starts_with("IRC failed: "));
-    let reliable = super::is_ts(result)
-        && saddle_converged
-        && count == Some(1)
-        && accepted_status
-        && !reported.is_some_and(wrong_endpoints);
+        .unwrap_or(accepted);
+    let connects = session.map_or(accepted, |s| s.extras.connects);
+    let reliable =
+        super::is_ts(result) && saddle_converged && count == Some(1) && connects && accepted;
     let energies = super::path_energies(result);
     let (deltas, candidate) = relative_energies(energies, result.energy_hartree);
     let refined_kcal = candidate.filter(|value| reliable && value.is_finite());
@@ -138,20 +137,25 @@ pub(in crate::app::xtb) fn presentation(
         (Some(1), None) => "One imaginary frequency".into(),
         _ => "Transition state not verified".into(),
     };
-    let connects = session.map_or(matches!(result.status, Status::Converged), |s| {
-        s.extras.connects
-    });
     let verification = if connects {
         format!("{frequency_check} · connects reactant and product ✓")
-    } else if reliable {
-        format!("{frequency_check} · reaction path not verified")
     } else {
         frequency_check
     };
+    let diagnostics = saved
+        .map(|search| search.diagnostics.as_slice())
+        .or_else(|| session.map(|s| s.extras.diagnostics.as_slice()));
+    let warning = (reliable
+        && diagnostics.is_some_and(|rows| {
+            rows.iter().any(|(label, detail)| {
+                label.starts_with("IRC ") && detail.contains(" · downhill trace not converged · ")
+            })
+        }))
+    .then(|| "Reaction-path descent ended before gradient convergence.".into());
     Presentation {
         refined_kcal,
         reason,
-        warning: reliable.then(|| reported.map(readable_reason)).flatten(),
+        warning,
         highest_path_kcal: deltas
             .into_iter()
             .filter(|value| value.is_finite())

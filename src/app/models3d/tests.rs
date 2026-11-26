@@ -192,6 +192,52 @@ fn generated_model_reveals_its_target_after_selection_changed() {
 }
 
 #[test]
+fn reaction_model_moves_below_a_molecule_under_the_scheme() {
+    use reshiki::document::Arrow;
+    use reshiki::reactions::{self, Role};
+
+    let (mut app, atoms, water) = drawing();
+    let doc = &mut app.tab.doc;
+    doc.atom_mut(water).unwrap().position = Point::new(300., 0.);
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(120., 0.),
+        Point::new(180., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(doc, arrow, &atoms, Role::Reactant).unwrap();
+    reactions::assign(doc, arrow, &[water], Role::Product).unwrap();
+    let anchor = below_reaction_anchor(doc, arrow).unwrap();
+    let gap = doc.drawing_style.bond_length_world;
+    // The molecule's bond crosses the initial frame, with both endpoints
+    // outside it, so placement must measure the whole molecule.
+    let y = anchor.y + gap / 2.;
+    let a = doc.add_atom("C", Point::new(anchor.x - 500., y));
+    let b = doc.add_atom("C", Point::new(anchor.x + 500., y));
+    doc.add_bond(a, b, 1, "plain");
+    let (_, obstacle_bottom) = reshiki::scene::selection_bounds(doc, &[a, b]).unwrap();
+    let before = doc.clone();
+
+    let _ = app.model_for_calculation(atoms, Some(arrow));
+    let (key, result) = generated(&app);
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert!(!app.error, "{}", app.status);
+    let doc = &app.tab.doc;
+    let (lo, hi) = models3d::frame(doc, &doc.models[0]).unwrap();
+    assert!(anchor.y < obstacle_bottom.y && obstacle_bottom.y < anchor.y + hi.y - lo.y);
+    assert!(lo.y > obstacle_bottom.y, "The model clears the molecule");
+    assert!((lo.y - anchor.y - (hi.y - lo.y + gap)).abs() < 1e-3);
+    assert!((lo.x.midpoint(hi.x) - anchor.x).abs() < 1e-3);
+    assert_eq!(doc.atoms, before.atoms);
+    assert_eq!(doc.bonds, before.bonds);
+    assert_eq!(frames(&app), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn delayed_generation_feedback_tracks_its_job_and_escape_really_cancels() {
     let (mut app, atoms, water) = drawing();
     let before = app.tab.doc.clone();

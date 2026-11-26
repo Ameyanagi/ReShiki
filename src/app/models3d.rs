@@ -707,11 +707,28 @@ impl App {
                 .models
                 .get(index)
                 .and_then(|model| models3d::frame(&self.tab.doc, model))
-            && let Some(model) = self.tab.doc.models.get_mut(index)
         {
-            model.offset = model
-                .offset
-                .offset(anchor.x - lo.x.midpoint(hi.x), anchor.y - lo.y);
+            // Keep whole molecules together so bonds crossing the proposed
+            // frame count too. Their bounds include existing 3D models.
+            let mut objects = reshiki::reactions::molecules(&before, &before.all_ids());
+            objects.extend(
+                before
+                    .object_ids()
+                    .skip(before.atoms.len())
+                    .map(|id| vec![id]),
+            );
+            let obstacles = reshiki::scene::selections_bounds(&before, &objects);
+            let dx = anchor.x - lo.x.midpoint(hi.x);
+            let mut dy = anchor.y - lo.y;
+            let step = hi.y - lo.y + before.drawing_style.bond_length_world;
+            while obstacles.iter().flatten().any(|(a, b)| {
+                a.x <= hi.x + dx && b.x >= lo.x + dx && a.y <= hi.y + dy && b.y >= lo.y + dy
+            }) {
+                dy += step;
+            }
+            if let Some(model) = self.tab.doc.models.get_mut(index) {
+                model.offset = model.offset.offset(dx, dy);
+            }
         }
         self.changed(before);
         if !self.error {

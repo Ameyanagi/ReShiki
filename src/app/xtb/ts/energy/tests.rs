@@ -503,6 +503,86 @@ mod execution {
         );
     }
 
+    #[tokio::test]
+    async fn completed_energy_follows_light_copies_and_keeps_its_card_summary() {
+        use crate::app::prompt::{Answer, Prompt};
+
+        let ui = crate::app::xtb::ts::card::tests::ViewHarness::new().await;
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("O", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize);
+        model(&mut app);
+        app.tab.xtb.run.as_mut().unwrap().keep_full = true;
+        event(&mut app, optimized(&START, &MOVED));
+        model(&mut app);
+        app.tab.xtb.run.as_mut().unwrap().keep_full = true;
+        let mut answer = optimized(&START, &MOVED);
+        let crate::app::xtb::run::Event::Done(Ok(report)) = &mut answer else {
+            unreachable!()
+        };
+        let report = Arc::get_mut(report).unwrap();
+        report.energy -= 0.1;
+        report.computed.energy = report.energy;
+        *report.energies.last_mut().unwrap() = report.energy;
+        event(&mut app, answer);
+        assert!(app.tab.xtb.energy_state.batch.is_none());
+        let expected = summary_totals(&app).unwrap();
+        assert!((expected.energy + 0.1 * KCAL_PER_HARTREE).abs() < 1e-10);
+        let line = expected.line();
+        assert!(
+            ui.inspect(app.xtb_reaction_energy_section(arrow))
+                .texts
+                .contains(&line)
+        );
+        let full: Vec<_> = app
+            .tab
+            .doc
+            .science
+            .results
+            .iter()
+            .map(|stored| Arc::clone(&stored.result))
+            .collect();
+        assert!(
+            full.iter()
+                .all(|result| !result.gradient_hartree_per_bohr.is_empty())
+        );
+        let prompt = Prompt::LargeResults {
+            tab: app.tab.id,
+            epoch: app.tab.file_epoch,
+            bytes: app.tab.doc.science.file_bytes(),
+            lighter: Some((2, 0)),
+            then: Box::new(Message::Cancel),
+        };
+        let _ = app.xtb_size_answer(prompt, Answer::Save);
+        for (index, stored) in app.tab.doc.science.results.iter().enumerate() {
+            assert!(!stored.keep_full);
+            assert!(!Arc::ptr_eq(&stored.result, &full[index]));
+            assert!(stored.result.gradient_hartree_per_bohr.is_empty());
+            assert!(Arc::ptr_eq(
+                &app.tab.xtb.energy_state.summaries[0].inputs[index].result,
+                &stored.result,
+            ));
+        }
+        assert_eq!(summary_totals(&app), Some(expected));
+        assert!(
+            ui.inspect(app.xtb_reaction_energy_section(arrow))
+                .texts
+                .contains(&line)
+        );
+        for action in [Message::Undo, Message::Redo] {
+            let _ = app.update(action);
+            assert_eq!(summary_totals(&app).unwrap().line(), line);
+            assert!(
+                ui.inspect(app.xtb_reaction_energy_section(arrow))
+                    .texts
+                    .contains(&line)
+            );
+        }
+    }
+
     #[test]
     fn a_reaction_edit_stops_the_queue_after_keeping_the_finished_species_result() {
         let (mut app, _) = App::new();

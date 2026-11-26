@@ -13,13 +13,16 @@ use reshiki::palette::{Color, Palette};
 use reshiki::qcdata::{CalcResult, MappedAtom, TransitionStateMapping};
 use reshiki::reactions::Reaction;
 use reshiki::reactions::ts_plan::{self, Side, TsPlan, TsPlanError};
+use std::cell::Cell;
 use std::sync::Arc;
 
 type Scope = (u64, u64);
+type StereoCacheEntry = ((Scope, u64), Option<&'static str>);
 
 #[derive(Default)]
 pub(in crate::app::xtb) struct State {
     automatic_maps: Vec<(Scope, TsPlan)>,
+    target_stereo: Cell<Option<StereoCacheEntry>>,
 }
 
 impl State {
@@ -65,6 +68,7 @@ fn send(action: Action) -> Message {
 pub(in crate::app::xtb) struct ReactionLabel {
     reactants: Vec<(u16, String)>,
     products: Vec<(u16, String)>,
+    target_stereo_note: Option<&'static str>,
 }
 
 impl ReactionLabel {
@@ -236,12 +240,56 @@ impl App {
             ReactionLabel {
                 reactants: vec![],
                 products: vec![],
+                target_stereo_note: None,
             },
-            |reaction| ReactionLabel {
-                reactants: names(&reaction.reactants),
-                products: names(&reaction.products),
+            |reaction| {
+                let reactants: Vec<_> = names(&reaction.reactants);
+                let products: Vec<_> = names(&reaction.products);
+                let target_stereo_note =
+                    self.xtb_target_stereo_note(&reaction, (reactants.len(), products.len()));
+                ReactionLabel {
+                    reactants,
+                    products,
+                    target_stereo_note,
+                }
             },
         )
+    }
+
+    pub(super) fn xtb_target_stereo_note(
+        &self,
+        reaction: &Reaction,
+        shape: (usize, usize),
+    ) -> Option<&'static str> {
+        let (target, note) = match shape {
+            (1, 1 | 2) => (
+                &reaction.products,
+                "Stereochemistry of the drawn product is not checked; compare it with the result.",
+            ),
+            (2, 1) => (
+                &reaction.reactants,
+                "Stereochemistry of the drawn reactant is not checked; compare it with the result.",
+            ),
+            _ => return None,
+        };
+        let key = ((self.tab.file_epoch, reaction.arrow), self.tab.revision);
+        let cache = &self.tab.xtb.ts_card.target_stereo;
+        if let Some((at, note)) = cache.get()
+            && at == key
+        {
+            return note;
+        }
+        let doc = &self.tab.doc;
+        let defined = target
+            .iter()
+            .flat_map(|participant| reshiki::reactions::molecules(doc, &participant.atoms))
+            .any(|atoms| {
+                reshiki::naming::selected_identity(doc, &atoms)
+                    .is_ok_and(|identity| identity.smiles.contains(['@', '/', '\\']))
+            });
+        let note = defined.then_some(note);
+        cache.set(Some((key, note)));
+        note
     }
 
     /// Follow this arrow's TS result even when another calculation is shown.
@@ -384,7 +432,7 @@ impl App {
         .spacing(3);
         let sections = responsive(move |size| {
             let energy = self.xtb_reaction_energy_section(arrow);
-            let barrier = self.xtb_ts_barrier_section(arrow, idle);
+            let barrier = self.xtb_ts_barrier_section(arrow, idle, label.target_stereo_note);
             if size.width >= 250. {
                 row![
                     container(energy).width(Length::FillPortion(1)),
@@ -424,10 +472,18 @@ impl App {
         crate::app::inspector::card(container(content).padding(10).width(Length::Fill))
     }
 
-    fn xtb_ts_barrier_section(&self, arrow: u64, idle: bool) -> Element<'_, Message> {
+    fn xtb_ts_barrier_section(
+        &self,
+        arrow: u64,
+        idle: bool,
+        target_stereo_note: Option<&'static str>,
+    ) -> Element<'_, Message> {
         let mut body = column![text("Barrier (transition state)").size(13)]
             .spacing(7)
             .width(Length::Fill);
+        if let Some(note) = target_stereo_note {
+            body = body.push(line(note, Tone::Muted));
+        }
         let doc = &self.tab.doc;
         if let Some(live) = self
             .tab

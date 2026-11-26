@@ -271,6 +271,7 @@ mod presentation_tests {
         for reason in [
             "saddle refinement did not converge",
             "IRC reaches the reactant on both sides",
+            "IRC failed: endpoint minimization reached its step limit",
             "worker check failed: timed out",
         ] {
             let mut result = result();
@@ -343,7 +344,7 @@ mod presentation_tests {
     }
 
     #[test]
-    fn wrong_endpoint_results_are_failures_while_irc_errors_keep_a_warning() {
+    fn wrong_endpoints_and_irc_errors_hide_the_barrier() {
         for reason in [
             "IRC reaches the reactant on both sides",
             "IRC reaches the product on both sides",
@@ -361,23 +362,34 @@ mod presentation_tests {
             assert!(!presentation.reliable(), "{reason}");
             assert!(!presentation.status_line().contains("26.5"), "{reason}");
         }
-        let mut result = result();
-        result.status = Status::NotConverged {
-            reason: "IRC failed: step limit reached".into(),
-        };
-        let presentation = presentation(&result, None);
-        assert!(presentation.reliable());
-        assert!(
-            presentation
-                .warning
-                .unwrap()
-                .contains("could not be checked")
-        );
-        assert!(
-            presentation
-                .verification
-                .contains("reaction path not verified")
-        );
+        for (reason, explanation) in [
+            (
+                "IRC failed: endpoint minimization reached its step limit",
+                "the endpoint optimization reached its step limit",
+            ),
+            (
+                "IRC failed: SCF failure: iteration limit",
+                "the electronic calculation did not converge",
+            ),
+        ] {
+            let mut result = result();
+            result.status = Status::NotConverged {
+                reason: reason.into(),
+            };
+            let presentation = presentation(&result, None);
+            assert_eq!(presentation.refined_kcal, None);
+            assert_eq!(presentation.warning, None);
+            assert_eq!(
+                presentation.reason,
+                Some(format!(
+                    "The reaction-path check could not finish: {explanation}."
+                ))
+            );
+            assert_eq!(
+                presentation.status_line(),
+                "No reliable transition state found."
+            );
+        }
     }
 
     #[test]
