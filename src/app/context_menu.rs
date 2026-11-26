@@ -1234,27 +1234,37 @@ impl App {
             .join(&Entry::Separator)
     }
 
+    fn context_has_model_menu(&self, page: Page) -> bool {
+        match page {
+            Page::Model3d => true,
+            Page::More(folded) => self
+                .context_commands()
+                .iter()
+                .rev()
+                .take(folded)
+                .any(super::workspace::RowCommand::model_menu),
+            _ => false,
+        }
+    }
+
     pub(super) fn context_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Close => {
-                let model = self
-                    .context_menu
-                    .as_ref()
-                    .is_some_and(|m| m.page == Page::Model3d);
-                self.context_menu = None;
-                if model {
+                if let Some(menu) = self.context_menu.take()
+                    && self.context_has_model_menu(menu.page)
+                {
                     return super::focus_drawing();
                 }
             }
             Action::Open(page, x) => {
-                let open = self
+                if self
                     .context_menu
                     .as_ref()
-                    .is_some_and(|menu| menu.page == page);
-                self.context_menu = (!open).then(|| State::new(Point::new(x, 0.), page));
-                if open && page == Page::Model3d {
-                    return super::focus_drawing();
+                    .is_some_and(|menu| menu.page == page)
+                {
+                    return self.context_action(Action::Close);
                 }
+                self.context_menu = Some(State::new(Point::new(x, 0.), page));
             }
             Action::Page(Page::Main) => {
                 if let Some(menu) = &mut self.context_menu {
@@ -1321,18 +1331,16 @@ impl App {
                 return self.context_key_action(key);
             }
             Action::Run(message) => {
-                let model = self.context_menu.as_ref().is_some_and(|m| {
-                    m.page == Page::Model3d
-                        || (matches!(m.page, Page::More(_))
-                            && super::xtb::available()
-                            && matches!(
-                                message.as_ref(),
-                                Message::Xtb(super::xtb::Action::Entry(
-                                    super::xtb::Entry::OptimizeGfn2
-                                        | super::xtb::Entry::Task(super::xtb::CalcTask::OptFreq)
-                                )) | Message::Optimization(super::optimization::Action::Begin)
-                            ))
-                });
+                use super::xtb::{Action as Xtb, CalcTask, Entry};
+                let model = matches!(
+                    message.as_ref(),
+                    Message::Xtb(Xtb::Entry(
+                        Entry::OptimizeGfn2 | Entry::Task(CalcTask::OptFreq)
+                    )) | Message::Optimization(super::optimization::Action::Begin)
+                ) && self
+                    .context_menu
+                    .as_ref()
+                    .is_some_and(|menu| self.context_has_model_menu(menu.page));
                 self.context_menu = None;
                 let task = self.update(*message);
                 return if model {
@@ -1796,6 +1804,12 @@ impl App {
                 })
             })
             .collect();
-        Element::new(cascade::Cascade::new(base, panels, menu))
+        let closes_outside_canvas = menu.is_some_and(|menu| self.context_has_model_menu(menu.page));
+        Element::new(cascade::Cascade::new(
+            base,
+            panels,
+            menu,
+            closes_outside_canvas,
+        ))
     }
 }

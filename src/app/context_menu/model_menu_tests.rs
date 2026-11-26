@@ -131,30 +131,27 @@ fn folded_model_menu_lists_four_ordinary_commands_in_place() {
 }
 
 /// Apply the emitted widget operations to a focused control, as the runtime does.
-async fn returns_focus_to_drawing(task: Task<Message>) {
-    struct Focus(bool);
+async fn focus_changes(task: Task<Message>, id: &str) -> Vec<bool> {
+    struct Focus(Vec<bool>);
     impl operation::Focusable for Focus {
         fn is_focused(&self) -> bool {
-            self.0
+            self.0.last().copied().unwrap_or(false)
         }
         fn focus(&mut self) {
-            self.0 = true;
+            self.0.push(true);
         }
         fn unfocus(&mut self) {
-            self.0 = false;
+            self.0.push(false);
         }
     }
-    let mut focus = Focus(true);
+    let mut focus = Focus(Vec::new());
+    let id = Id::from(id.to_owned());
     if let Some(mut stream) = iced_runtime::task::into_stream(task) {
         while let Some(action) = stream.next().await {
             if let iced_runtime::Action::Widget(operation) = action {
                 let mut current = Some(operation);
                 while let Some(mut operation) = current.take() {
-                    operation.focusable(
-                        Some(&Id::from("context-3d-model")),
-                        iced::Rectangle::default(),
-                        &mut focus,
-                    );
+                    operation.focusable(Some(&id), iced::Rectangle::default(), &mut focus);
                     if let operation::Outcome::Chain(next) = operation.finish() {
                         current = Some(next);
                     }
@@ -162,7 +159,7 @@ async fn returns_focus_to_drawing(task: Task<Message>) {
             }
         }
     }
-    assert!(!focus.0, "the drawing receives the next key");
+    focus.0
 }
 
 #[tokio::test]
@@ -187,7 +184,7 @@ async fn model_menu_dismissals_and_settings_return_focus_to_drawing() {
         assert!(menu.hit.is_none() && menu.at.is_none());
         let task = app.update(close);
         assert!(app.context_menu.is_none());
-        returns_focus_to_drawing(task).await;
+        assert_eq!(focus_changes(task, "context-3d-model").await, [false]);
     }
     app.inspector_open = true;
     app.inspector_tab = InspectorTab::Predict;
@@ -198,5 +195,46 @@ async fn model_menu_dismissals_and_settings_return_focus_to_drawing() {
     assert!(app.inspector_open);
     assert_eq!(app.inspector_tab, InspectorTab::Predict);
     assert_eq!(app.xtb.page, xtb::Page::Xtb);
-    returns_focus_to_drawing(task).await;
+    assert_eq!(focus_changes(task, "context-3d-model").await, [false]);
+}
+
+#[tokio::test]
+async fn folded_model_menu_dismissals_return_focus_to_drawing() {
+    let (mut app, _) = App::new();
+    app.tool = Tool::Select;
+    app.tab.busy = false;
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let open = Action::Open(Page::More(1), 240.);
+    for close in [
+        Message::ContextMenu(Action::Close),
+        Message::ContextMenu(Action::Key(Named::Escape)),
+        Message::Escape,
+        Message::ContextMenu(open.clone()),
+    ] {
+        let _ = app.update(Message::ContextMenu(open.clone()));
+        let task = app.update(close);
+        assert!(app.context_menu.is_none());
+        let changes = focus_changes(task, "context-overflow").await;
+        assert_eq!(changes.contains(&false), xtb::available());
+    }
+}
+
+#[tokio::test]
+async fn model_menu_keeps_focus_at_the_forwarded_shortcut_destination() {
+    if !xtb::available() {
+        return;
+    }
+    let (mut app, _) = App::new();
+    app.tool = Tool::Select;
+    app.tab.busy = false;
+    for page in [Page::Model3d, Page::More(1)] {
+        let _ = app.update(Message::ContextMenu(Action::Open(page, 240.)));
+        let task = app.update(Message::ContextMenu(Action::Run(Box::new(
+            Message::Inspector(InspectorTab::Import),
+        ))));
+        assert!(app.context_menu.is_none());
+        assert!(app.inspector_open);
+        assert_eq!(app.inspector_tab, InspectorTab::Import);
+        assert_eq!(focus_changes(task, app.import_input_id()).await, [true]);
+    }
 }

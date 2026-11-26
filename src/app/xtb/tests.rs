@@ -579,6 +579,34 @@ fn optimize_with_gfn2_shows_the_card_and_runs() {
 }
 
 #[test]
+fn orbitals_entry_requires_an_orbital_method_but_plain_energy_keeps_the_method() {
+    use qcdata::XtbMethod::{GXtb, Gfn2Xtb, GfnFf};
+    if !available() {
+        return;
+    }
+    for (entry, method, expected) in [
+        (Entry::Orbitals, GfnFf, Gfn2Xtb),
+        (Entry::Orbitals, GXtb, GXtb),
+        (Entry::Task(CalcTask::Energy), GfnFf, GfnFf),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let o = app.tab.doc.add_atom("O", Point::default());
+        app.tab.selected = vec![o];
+        app.xtb.settings.task = CalcTask::Optimize;
+        app.xtb.settings.method = method;
+        send(&mut app, Action::Entry(entry));
+        assert_eq!(app.xtb.settings.task, CalcTask::Energy);
+        assert_eq!(app.xtb.settings.method, expected);
+        let run = app.tab.xtb.run.as_ref().expect("the entry starts a run");
+        assert_eq!(
+            (run.config.task, run.config.method),
+            (CalcTask::Energy, expected)
+        );
+    }
+}
+
+#[test]
 fn rerun_repeats_the_cards_last_calculation() {
     let (mut app, _) = water(CalcTask::Energy);
     send(&mut app, Action::Cancel);

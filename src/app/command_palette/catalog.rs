@@ -1660,7 +1660,7 @@ fn analysis(app: &App) -> Vec<Command> {
                 "Single-point energy, HOMO and LUMO (xTB)",
                 "Calculate the selected molecule's energy and frontier molecular orbitals",
                 "energy single point sp homo lumo gap orbital orbitals frontier dipole charges quantum",
-                xtb::Entry::Task(xtb::CalcTask::Energy),
+                xtb::Entry::Orbitals,
                 Some("Molecular orbitals"),
             ),
             (

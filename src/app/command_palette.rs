@@ -665,6 +665,9 @@ impl App {
         };
         let typed = self.commands.query().to_owned();
         let prefer_selection = !typed.is_empty() && !self.tab.selected.is_empty();
+        let use_outcome_titles = super::xtb::available()
+            && prefer_selection
+            && !reshiki::editing::ELEMENTS.contains(&typed.as_str());
         let normalized = search::normalize_spelling(&typed);
         let normalized = (normalized != typed).then_some(normalized.as_str());
         let mut availability = HashMap::new();
@@ -760,7 +763,7 @@ impl App {
                     };
                 // An outcome title lets a selection's calculation compete with
                 // tools whose labels overlap its subject or abbreviation.
-                let alternate = (super::xtb::available() && prefer_selection)
+                let alternate = use_outcome_titles
                     .then_some(command.search_title)
                     .flatten()
                     .map(|title| {
