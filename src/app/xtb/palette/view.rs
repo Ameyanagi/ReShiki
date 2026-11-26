@@ -619,7 +619,10 @@ impl App {
                 actions = actions.push(self.xtb_orbitals_note(shown, text::Wrapping::default()))
             }
             View::Conformers => {
-                actions = actions.push(super::super::conformers::footer(&shown.stored.result));
+                actions = actions.push(super::super::conformers::footer(
+                    &shown.stored.result,
+                    text::Wrapping::default(),
+                ));
             }
             View::Log => {
                 actions = actions.push(

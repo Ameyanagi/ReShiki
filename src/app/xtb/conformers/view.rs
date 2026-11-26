@@ -1,11 +1,11 @@
 //! The card's Conformers fields, the Conformers tab and its footer.
 use super::{Action, Diversity, Format, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer, Row};
-use crate::app::workspace::{accessible_command, control, hover_hint};
+use crate::app::workspace::{accessible_command, control, hover_hint, muted_text};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
 use crate::app::xtb::tone::{Tone, line, toned_text};
 use crate::app::xtb::{Action as XtbAction, view::segment};
 use crate::app::{App, Message};
-use iced::widget::{Column, column, container, row, text, tooltip};
+use iced::widget::{Column, Space, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length};
 use reshiki::qcdata::{CalcResult, Settings};
 use reshiki::science::{self, TetrahedralStereo};
@@ -421,7 +421,7 @@ impl App {
             return column![notes, body, plot, side].spacing(10).into();
         }
         row![
-            container(body).width(640),
+            container(body).width(720),
             container(column![notes, side].spacing(8)).width(320),
             container(plot).width(240),
         ]
@@ -783,9 +783,9 @@ fn duration(seconds: f64) -> String {
 }
 
 /// The Conformers tab's footer: export every kept conformer.
-pub(crate) fn footer<'a>(result: &CalcResult) -> Element<'a, Message> {
+pub(crate) fn footer<'a>(result: &CalcResult, wrapping: text::Wrapping) -> Element<'a, Message> {
     let count = result.trajectory.as_ref().map_or(0, |path| path.steps());
-    row(
+    let mut footer = row(
         [(Format::Sdf, "sdf", "SDF"), (Format::Xyz, "xyz", "XYZ")].map(|(format, id, name)| {
             let label = format!("Export all {count} as {name}…");
             accessible_command(format!("xtb-export-conformers-{id}"), label.clone(), label)
@@ -794,6 +794,12 @@ pub(crate) fn footer<'a>(result: &CalcResult) -> Element<'a, Message> {
         }),
     )
     .spacing(10)
-    .align_y(Alignment::Center)
-    .into()
+    .align_y(Alignment::Center);
+    footer = footer.push(Space::new().width(8)).push(
+        text("Kept conformers are saved as compact frames (at most 32).")
+            .size(11)
+            .style(muted_text)
+            .wrapping(wrapping),
+    );
+    footer.into()
 }
