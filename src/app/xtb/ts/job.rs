@@ -149,9 +149,6 @@ fn run(
     };
     let options = ts::TsOptions {
         images,
-        // Both the accepted fold and the constructed endpoint have already
-        // converged without restraints. Keep the exact barrier reference.
-        optimize_endpoints: folded.is_none(),
         ..ts::TsOptions::default()
     };
     trace.reactive_start = folded.map(|fold| {

@@ -99,8 +99,7 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         };
         let options = TsOptions {
             images: command.images,
-            // The fold and the endpoint built from it are already relaxed.
-            optimize_endpoints: !command.keep_endpoints && reactive_start.is_none(),
+            optimize_endpoints: !command.keep_endpoints,
             ..TsOptions::default()
         };
         let search = Search {
