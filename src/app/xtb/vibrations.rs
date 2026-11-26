@@ -40,6 +40,8 @@ const PA_PER_ATM: f64 = 101_325.;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
+    /// Open the shown transition state's significant imaginary mode and play.
+    AnimateImaginary,
     Mode(usize),
     Play(bool),
     Amplitude(f32),
@@ -312,6 +314,14 @@ impl App {
         super::model_shows(&self.tab.doc, shown.atoms, &shown.frame.positions_angstrom)
     }
 
+    /// A TS remains attached to its starting model. Its saddle animates in a
+    /// preview, so the accepted model may still show that saved input geometry.
+    fn xtb_vibration_model_matches(&self, shown: &Shown<'_>) -> bool {
+        self.xtb_model_at_result(shown)
+            || super::ts::is_ts(&shown.stored.result)
+                && super::model_shows(&self.tab.doc, shown.atoms, &shown.input.positions_angstrom)
+    }
+
     /// The normal modes of `result`: stored, or recomputed this session.
     pub(super) fn xtb_modes<'a>(&'a self, result: &'a Arc<CalcResult>) -> Option<&'a [f64]> {
         let vibrations = result.vibrations.as_ref()?;
@@ -377,7 +387,7 @@ impl App {
             return None;
         }
         self.xtb_shown()
-            .filter(|shown| !shown.stale && self.xtb_model_at_result(shown))
+            .filter(|shown| !shown.stale && self.xtb_vibration_model_matches(shown))
     }
 
     pub(in crate::app) fn xtb_vibrations_leave(&mut self) {
@@ -476,6 +486,12 @@ impl App {
         let tick = matches!(action, Action::Tick);
         let settings = &mut self.tab.xtb.vibrations;
         match action {
+            Action::AnimateImaginary => {
+                let Some(result) = self.xtb_shown().map(|shown| shown.stored.result.clone()) else {
+                    return Task::none();
+                };
+                return self.xtb_ts_animate(result);
+            }
             Action::Mode(mode) => settings.mode = mode,
             Action::Play(on) => settings.playing = on,
             Action::Amplitude(value) => settings.amplitude = value,
@@ -734,6 +750,10 @@ impl App {
         let Some(shown) = self.xtb_vibrations_live() else {
             return;
         };
+        // Adding arrows must not apply a TS saddle to the accepted model.
+        if !self.xtb_model_at_result(&shown) {
+            return;
+        }
         let Some(vibrations) = &shown.stored.result.vibrations else {
             return;
         };

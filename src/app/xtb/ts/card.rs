@@ -7,7 +7,9 @@ use crate::app::{App, Message};
 use iced::widget::{Space, column, container, progress_bar, row, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
+use reshiki::qcdata::CalcResult;
 use reshiki::reactions::ts_plan::{self, Side, TsPlan, TsPlanError};
+use std::sync::Arc;
 
 const TITLE: &str = "Transition state (xTB)";
 const FIND: &str = "Find transition state (xTB)…";
@@ -48,6 +50,20 @@ pub(crate) enum Action {
     Unpaired(String),
     Reviewed(bool),
     Find,
+    Animate,
+}
+
+/// The significant imaginary mode used to inspect the saved saddle.
+pub(in crate::app::xtb) fn imaginary_mode(result: &CalcResult) -> Option<(usize, f64)> {
+    result
+        .vibrations
+        .as_ref()?
+        .frequencies_cm1
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, frequency)| *frequency < -50.)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -58,6 +74,42 @@ struct Config {
 }
 
 impl State {
+    fn plan(&self, doc: &Document, scope: Scope) -> Result<TsPlan, TsPlanError> {
+        let drawn = ts_plan::plan(doc, scope.1);
+        if drawn.is_err()
+            && self.scope == Some(scope)
+            && let Some((review, _)) = &self.review
+            && let Ok(plan) = ts_plan::plan_for_review(doc, scope.1)
+            && &plan == review
+        {
+            return Ok(plan);
+        }
+        drawn
+    }
+
+    pub(super) fn accept_review(
+        &mut self,
+        scope: Scope,
+        plan: &TsPlan,
+        charge: i32,
+        unpaired: u32,
+    ) -> usize {
+        self.retarget(scope);
+        self.open = true;
+        self.charge = charge.to_string();
+        self.unpaired = unpaired.to_string();
+        self.review = Some((plan.clone(), true));
+        let images = self
+            .images
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .filter(|images| (10..=20).contains(images))
+            .unwrap_or(15);
+        self.images = images.to_string();
+        images
+    }
+
     fn retarget(&mut self, scope: Scope) {
         if self.scope != Some(scope) {
             self.scope = Some(scope);
@@ -225,6 +277,59 @@ fn subtitle(doc: &Document, arrow: u64, plan: &Result<TsPlan, TsPlanError>) -> S
 }
 
 impl App {
+    /// Follow this arrow's TS result even when another calculation is shown.
+    fn xtb_ts_card_result(&self, arrow: u64) -> Option<&Arc<CalcResult>> {
+        self.tab
+            .doc
+            .science
+            .results
+            .iter()
+            .rev()
+            .find_map(|stored| {
+                let result = &stored.result;
+                if !super::is_ts(result) {
+                    return None;
+                }
+                let matches = self.tab.xtb.ts_sessions.get(result).map_or_else(
+                    || {
+                        self.tab
+                            .doc
+                            .science
+                            .attachment(stored.attachment)
+                            .is_some_and(|link| {
+                                super::matching_plans(&self.tab.doc, &link.atoms)
+                                    .any(|(candidate, _)| candidate == arrow)
+                            })
+                    },
+                    |session| session.arrow == arrow,
+                );
+                matches.then_some(result)
+            })
+    }
+
+    /// Open the saved saddle's imaginary mode without applying its geometry.
+    pub(in crate::app::xtb) fn xtb_ts_animate(&mut self, result: Arc<CalcResult>) -> Task<Message> {
+        if self.xtb_running() || self.tab.busy || !super::is_ts(&result) {
+            return Task::none();
+        }
+        let Some((mode, _)) = imaginary_mode(&result) else {
+            return Task::none();
+        };
+        self.tab.xtb.palette.show(&result);
+        self.tab.xtb.palette.view = crate::app::xtb::results::View::Vibrations;
+        self.tab.xtb.vibrations.mode = mode;
+        self.tab.xtb.vibrations.playing = true;
+        self.xtb.dock.collapsed = false;
+        let shown = if self.xtb.dock.inspector {
+            self.xtb.page = crate::app::xtb::Page::Xtb;
+            self.show_inspector_tab(crate::app::InspectorTab::Predict)
+                .unwrap_or_else(Task::none)
+        } else {
+            Task::none()
+        };
+        Task::batch([shown, self.xtb_vibrations_opened()])
+    }
+
     pub(in crate::app::xtb) fn xtb_ts_card_action(&mut self, action: Action) -> Task<Message> {
         if let Action::Open(open) = action {
             self.tab.xtb.ts_card.open = open;
@@ -258,12 +363,12 @@ impl App {
             Action::Charge(value) => card.charge = value,
             Action::Unpaired(value) => card.unpaired = value,
             Action::Reviewed(checked) => {
-                if let Ok(plan) = ts_plan::plan(&self.tab.doc, arrow) {
+                if let Ok(plan) = card.plan(&self.tab.doc, scope) {
                     card.review = Some((plan, checked));
                 }
             }
             Action::Find => {
-                let Ok(plan) = ts_plan::plan(&self.tab.doc, arrow) else {
+                let Ok(plan) = card.plan(&self.tab.doc, scope) else {
                     return Task::none();
                 };
                 if !card.reviewed(scope, &plan) {
@@ -277,6 +382,11 @@ impl App {
                         config.charge,
                         config.unpaired,
                     );
+                }
+            }
+            Action::Animate => {
+                if let Some(result) = self.xtb_ts_card_result(arrow).cloned() {
+                    return self.xtb_ts_animate(result);
                 }
             }
             Action::Open(_) | Action::SearchSettings => {}
@@ -295,7 +405,16 @@ impl App {
                 .width(Length::Fill)
                 .into();
         }
-        let plan = ts_plan::plan(&self.tab.doc, arrow);
+        let scope = (self.tab.file_epoch, arrow);
+        let assigned = card.plan(&self.tab.doc, scope);
+        let plan = if matches!(assigned, Err(TsPlanError::NotReaction))
+            && let Err(shape @ TsPlanError::Shape { .. }) =
+                super::review::scheme_plan(&self.tab.doc, arrow)
+        {
+            Err(shape)
+        } else {
+            assigned
+        };
         let heading = column![
             row![
                 text(TITLE).size(13).width(Length::Fill),
@@ -327,10 +446,33 @@ impl App {
         if !card.open {
             return crate::app::inspector::card(content);
         }
-        let scope = (self.tab.file_epoch, arrow);
         let idle = self.tab.xtb.run.is_none() && !self.tab.busy;
         let set = |action| idle.then(|| send(action));
         let mut body = column![].spacing(6);
+        if let Some(result) = self.xtb_ts_card_result(arrow) {
+            let imaginary = imaginary_mode(result);
+            body = body.push(match imaginary {
+                Some((_, frequency)) => row![
+                    line(
+                        format!(
+                            "Imaginary frequency {}i cm⁻¹",
+                            crate::app::xtb::state::signed(frequency, 0)
+                        ),
+                        Tone::Good,
+                    ),
+                    accessible_command(
+                        "xtb-ts-card-animate",
+                        "Animate the transition state's imaginary mode",
+                        "Animate",
+                    )
+                    .on_press_maybe(set(Action::Animate)),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .into(),
+                None => line("No significant imaginary frequency.", Tone::Warning),
+            });
+        }
         if let Some((run, live)) = self
             .tab
             .xtb
@@ -380,7 +522,14 @@ impl App {
                 ));
             }
             Err(error) => {
-                body = body.push(line(error.to_string(), Tone::Warning));
+                body = body.push(line(
+                    if matches!(error, TsPlanError::Shape { .. }) {
+                        super::review::SHAPE_NOTE.into()
+                    } else {
+                        error.to_string()
+                    },
+                    Tone::Warning,
+                ));
                 if matches!(error, TsPlanError::Unmapped { .. }) {
                     body = body.push(
                         accessible_command("xtb-ts-auto-map", "Auto-map first", "Auto-map first")

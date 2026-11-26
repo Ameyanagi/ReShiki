@@ -175,6 +175,10 @@ fn dump(app: &App, out: &mut String) {
         Page::Order,
         Page::Arrange,
     ];
+    pages.extend(
+        app.context_calculate_reaction_arrow()
+            .map(Page::CalculateReaction),
+    );
     pages.extend((0..=app.context_commands().len()).map(Page::More));
     for page in pages {
         let _ = writeln!(out, "PAGE|{page:?}");

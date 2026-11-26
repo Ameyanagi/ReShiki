@@ -92,6 +92,7 @@ fn claisen_starts_on_reactants_and_ignores_order_changes_and_agents() {
             break_: vec![(left[&3], left[&4])],
             hydrogen_moves: vec![],
             shape: (1, 1),
+            drawn_charges: (0, 0),
             atoms: 14,
         }
     );

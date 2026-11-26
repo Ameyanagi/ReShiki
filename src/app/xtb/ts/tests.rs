@@ -236,7 +236,96 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
 }
 
 #[test]
-fn saved_ts_without_modes_uses_the_vibrations_recompute() {
+fn animate_dispatch_opens_the_imaginary_mode_and_previews_the_saddle_without_applying_it() {
+    let (mut app, _) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let mut report = example_report(run.launch.as_ref().unwrap());
+    let report_data = Arc::get_mut(&mut report).unwrap();
+    let axes = report_data.frames[0].numbers.len() * 3;
+    let vibrations = report_data.result.vibrations.as_mut().unwrap();
+    vibrations.frequencies_cm1.push(1200.);
+    vibrations.ir_intensities_km_mol.push(5.);
+    vibrations.modes = vec![0.; axes * 2];
+    vibrations.modes[0] = 1.;
+    vibrations.modes[axes + 1] = 1.;
+    let saddle = report_data.frames[0].positions_angstrom.clone();
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    let result = Arc::clone(&app.xtb_shown().unwrap().stored.result);
+    let before = app.tab.doc.clone();
+    assert_ne!(
+        model(&before),
+        saddle
+            .iter()
+            .map(|p| p.map(|x| x as f32))
+            .collect::<Vec<_>>()
+    );
+
+    for (inspector, action) in [
+        (true, XtbAction::Ts(Action::Card(card::Action::Animate))),
+        (
+            false,
+            XtbAction::Vibrations(super::super::vibrations::Action::AnimateImaginary),
+        ),
+    ] {
+        send(&mut app, XtbAction::Ts(Action::Image(2)));
+        assert_eq!(app.xtb_step(), Some(2));
+        app.tab.xtb.vibrations.mode = 1;
+        app.tab.xtb.vibrations.playing = false;
+        app.tab.xtb.palette.open = false;
+        app.xtb.dock.collapsed = true;
+        app.xtb.dock.inspector = inspector;
+        app.inspector_open = false;
+        app.inspector_tab = crate::app::InspectorTab::Reactions;
+        send(&mut app, action);
+
+        assert!(app.tab.xtb.palette.open);
+        assert!(!app.xtb.dock.collapsed);
+        assert_eq!(app.tab.xtb.palette.view, results::View::Vibrations);
+        assert!(Arc::ptr_eq(
+            &app.xtb_shown().unwrap().stored.result,
+            &result
+        ));
+        assert_eq!(app.tab.xtb.vibrations.mode, 0);
+        assert!(app.tab.xtb.vibrations.playing);
+        assert_eq!(app.xtb_step(), None, "Animate ends the path preview");
+        if inspector {
+            assert!(app.inspector_open);
+            assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
+            assert_eq!(app.xtb.page, super::super::Page::Xtb);
+        }
+        assert!(app.xtb_vibration_preview().is_some(), "{}", app.status);
+        let equilibrium: Vec<_> = saddle.iter().map(|p| p.map(|x| x as f32)).collect();
+        assert_eq!(model(app.display_document()), equilibrium);
+        for _ in 0..2 {
+            send(
+                &mut app,
+                XtbAction::Vibrations(super::super::vibrations::Action::Tick),
+            );
+        }
+        assert_ne!(model(app.display_document()), equilibrium);
+        assert_eq!(app.tab.doc, before, "Animate keeps the accepted drawing");
+
+        send(
+            &mut app,
+            XtbAction::Vibrations(super::super::vibrations::Action::PlaceArrows),
+        );
+        assert_eq!(app.tab.doc, before, "arrows cannot apply the TS saddle");
+        send(
+            &mut app,
+            XtbAction::Palette(palette::Action::View(results::View::Path)),
+        );
+        assert!(app.xtb_vibration_preview().is_none());
+        assert_eq!(model(app.display_document()), model(&before));
+    }
+}
+
+#[test]
+fn saved_ts_without_modes_uses_the_vibrations_recompute_at_its_saved_input_geometry() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
     let run = app.tab.xtb.run.as_ref().unwrap();
@@ -252,18 +341,29 @@ fn saved_ts_without_modes_uses_the_vibrations_recompute() {
     send(&mut reopened, XtbAction::Palette(palette::Action::Show));
     let shown = reopened.xtb_shown().unwrap();
     let result = Arc::clone(&shown.stored.result);
-    let atoms = shown.atoms.to_vec();
-    let frame = Arc::clone(shown.frame);
     assert!(reopened.xtb_modes(&result).is_none());
+    let before = reopened.tab.doc.clone();
 
     let vibrations = XtbAction::Palette(palette::Action::View(results::View::Vibrations));
-    send(&mut reopened, vibrations.clone());
-    assert!(!reopened.tab.xtb.vibrations.recomputing(&result));
-
-    // As for other light results, recomputation requires the model at the result geometry.
-    reshiki::science::move_model(&mut reopened.tab.doc, &atoms, &frame).unwrap();
     send(&mut reopened, vibrations);
     assert!(reopened.tab.xtb.vibrations.recomputing(&result));
+
+    send(
+        &mut reopened,
+        XtbAction::Palette(palette::Action::View(results::View::Path)),
+    );
+    assert!(!reopened.tab.xtb.vibrations.recomputing(&result));
+    reopened.tab.xtb.vibrations.mode = 4;
+    reopened.tab.xtb.vibrations.playing = false;
+    send(
+        &mut reopened,
+        XtbAction::Ts(Action::Card(card::Action::Animate)),
+    );
+    assert_eq!(reopened.tab.xtb.palette.view, results::View::Vibrations);
+    assert_eq!(reopened.tab.xtb.vibrations.mode, 0);
+    assert!(reopened.tab.xtb.vibrations.playing);
+    assert!(reopened.tab.xtb.vibrations.recomputing(&result));
+    assert_eq!(reopened.tab.doc, before);
 }
 
 #[test]

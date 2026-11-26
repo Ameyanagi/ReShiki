@@ -222,8 +222,11 @@ explains how the crates and modules fit together.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/ts.rs`: Transition-state searches from the reaction arrow, with session-only path previews.
 - `src/app/xtb/ts/card.rs`: The selected reaction arrow's transition-state card and its reviewed inputs.
+- `src/app/xtb/ts/energy.rs`: Reaction energies are ordinary, sequential molecule calculations.
 - `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
+- `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
+- `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
 - `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
 - `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
