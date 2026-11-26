@@ -504,6 +504,7 @@ mod execution {
     }
 
     #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
     async fn completed_energy_follows_light_copies_and_keeps_its_card_summary() {
         use crate::app::prompt::{Answer, Prompt};
 

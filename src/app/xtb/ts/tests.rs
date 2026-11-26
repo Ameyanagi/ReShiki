@@ -309,6 +309,7 @@ fn saved_arrow_with_an_unrelated_attachment_stays_unbound() {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn worker_and_storage_failures_show_before_the_previous_reaction_result() {
     let ui = card::tests::ViewHarness::new().await;
     for storage_failure in [false, true] {
@@ -388,6 +389,7 @@ async fn worker_and_storage_failures_show_before_the_previous_reaction_result() 
 }
 
 #[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn deselecting_keeps_the_failed_rerun_on_the_shown_reaction() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
@@ -424,6 +426,7 @@ async fn deselecting_keeps_the_failed_rerun_on_the_shown_reaction() {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn reopened_legacy_result_is_labelled_not_verified() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
@@ -619,6 +622,7 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn failed_irc_reports_failure_and_opens_the_saved_candidate() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
