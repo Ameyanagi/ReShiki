@@ -388,6 +388,10 @@ fn panels_draw_small_models_with_captions_and_keep_their_snapshots() {
     register(key, two_lobes());
     assert!(groups(&doc).is_some());
     let saved = doc.current();
+    // The file reads back with both panels.
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models[0].panels.len(), 2);
+    assert_eq!(reopened.models[0].panels[1].caption, "LUMO (−7.66 eV)");
     assert!(saved.models[0].panels[0].figure.snapshot.is_some());
     assert!(saved.models[0].panels[1].figure.snapshot.is_none());
     REGISTERED.lock().unwrap().clear();

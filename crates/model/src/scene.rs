@@ -1653,6 +1653,14 @@ fn selections_bounds_with_indicators(
             && let Some(corners) = crate::models3d::frame_corners(doc, model)
         {
             grow(id, &mut corners.into_iter());
+            // The model's panels and their captions count with it.
+            for (small, caption) in crate::models3d::panels(doc, model) {
+                if let Some(corners) = crate::models3d::frame_corners(doc, &small) {
+                    grow(id, &mut corners.into_iter());
+                }
+                let (lo, hi) = self::bounds(std::slice::from_ref(&caption));
+                grow(id, &mut [lo, hi].into_iter());
+            }
         }
     }
     // A crystal drawn in 2D and wholly in one selection holds its cell box

@@ -23,7 +23,8 @@ pub struct Figure {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Panel {
-    #[serde(flatten)]
+    // Nested, not flattened: `Figure` flattens its look already, and nested
+    // flattening with unknown fields denied cannot be read back.
     pub figure: Figure,
     pub caption: String,
 }

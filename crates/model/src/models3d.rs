@@ -2770,17 +2770,24 @@ pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
     };
     let side = (hi.x - lo.x) * PANEL_SCALE;
     let gap = side * 0.15;
-    let count = model.panels.len() as f32;
-    let left = (lo.x + hi.x) / 2. - (count * side + (count - 1.) * gap) / 2.;
-    let centre = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
     let size = (model.size / 22.).clamp(7., 14.);
     let style = crate::typography::TextStyle::default();
+    // Each panel is as wide as its model or its caption, whichever is wider.
+    let widths: Vec<f32> = model
+        .panels
+        .iter()
+        .map(|panel| crate::style::styled_text_width(&panel.caption, size, &style).max(side))
+        .collect();
+    let total = widths.iter().sum::<f32>() + gap * (widths.len() - 1) as f32;
+    let mut left = (lo.x + hi.x) / 2. - total / 2.;
+    let centre = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
     model
         .panels
         .iter()
-        .enumerate()
-        .map(|(k, panel)| {
-            let x = left + side / 2. + k as f32 * (side + gap);
+        .zip(widths)
+        .filter_map(|(panel, slot)| {
+            let x = left + slot / 2.;
+            left += slot + gap;
             let y = hi.y + gap + side / 2.;
             let mut small = model.clone();
             small.panels = vec![];
@@ -2788,6 +2795,11 @@ pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
             small.size = model.size * PANEL_SCALE;
             small.offset = Point::new(model.offset.x + x - centre.x, model.offset.y + y - centre.y);
             let width = crate::style::styled_text_width(&panel.caption, size, &style);
+            // A stale result or another geometry shows neither the panel
+            // nor its energy.
+            if !surface::draw::figure_ready(doc, &small) {
+                return None;
+            }
             let caption = Primitive::Text {
                 position: Point::new(x - width / 2., y + side / 2. + size * 0.4),
                 text: panel.caption.clone(),
@@ -2795,7 +2807,7 @@ pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
                 color: doc.canvas_theme.color([24, 24, 24]),
                 style: style.clone(),
             };
-            (small, caption)
+            Some((small, caption))
         })
         .collect()
 }

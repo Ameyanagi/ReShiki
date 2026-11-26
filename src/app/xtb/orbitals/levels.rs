@@ -256,12 +256,16 @@ impl Diagram {
             }
             let mut below = f32::INFINITY;
             for group in groups {
-                let at = y(column.energies_ev[group[0]]).min(below - SPACING);
+                // Pushed up from the level below, but never off the axis.
+                let at = y(column.energies_ev[group[0]])
+                    .min(below - SPACING)
+                    .max(Self::TOP);
                 below = at;
                 let count = group.len() as f32;
-                let width = (Self::LINE - GAP * (count - 1.)) / count;
+                let gap = GAP.min(Self::LINE / (2. * count));
+                let width = (Self::LINE - gap * (count - 1.)) / count;
                 for (k, index) in group.into_iter().enumerate() {
-                    let x0 = left + k as f32 * (width + GAP);
+                    let x0 = left + k as f32 * (width + gap);
                     placed.push(Placed {
                         column: c,
                         index,
@@ -409,7 +413,15 @@ impl canvas::Program<Message> for Diagram {
                 );
             }
         }
-        for level in &self.place(bounds) {
+        let placed = self.place(bounds);
+        // Labels follow the lines, which may sit above their energies.
+        let line_y = |index: usize| {
+            placed
+                .iter()
+                .find(|p| p.column == 0 && p.index == index)
+                .map(|p| p.y)
+        };
+        for level in &placed {
             let column = &self.columns[level.column];
             let chosen = self.selected == Some((level.column, level.index));
             let occupation = column.occupations.get(level.index).copied().unwrap_or(0.);
@@ -471,7 +483,10 @@ impl canvas::Program<Message> for Diagram {
                     label(
                         &mut frame,
                         name.into(),
-                        Point::new(right - 8., y(column.energies_ev[index])),
+                        Point::new(
+                            right - 8.,
+                            line_y(index).unwrap_or_else(|| y(column.energies_ev[index])),
+                        ),
                         ink,
                         false,
                     );
@@ -480,7 +495,8 @@ impl canvas::Program<Message> for Diagram {
             // The gap of the first column, as drawn (an open shell's α).
             if let (Some(homo), Some(lumo)) = (column.homo(), column.lumo()) {
                 let gap = column.energies_ev[lumo] - column.energies_ev[homo];
-                let (top, bottom) = (y(column.energies_ev[lumo]), y(column.energies_ev[homo]));
+                let at = |i: usize| line_y(i).unwrap_or_else(|| y(column.energies_ev[i]));
+                let (top, bottom) = (at(lumo), at(homo));
                 let x = right + 30.;
                 frame.stroke(
                     &canvas::Path::line(Point::new(x, top + 2.), Point::new(x, bottom - 2.)),
