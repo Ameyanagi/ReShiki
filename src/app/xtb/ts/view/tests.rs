@@ -144,6 +144,7 @@ mod presentation_tests {
             masses_amu: vec![],
         });
         result.trajectory = Some(Trajectory {
+            rmsd_to_best_angstrom: Vec::new(),
             numbers: frame.numbers,
             isotopes: vec![],
             masses_amu: vec![],

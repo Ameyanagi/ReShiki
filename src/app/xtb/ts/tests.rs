@@ -183,6 +183,7 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         masses_amu: vec![],
     });
     result.trajectory = Some(Trajectory {
+        rmsd_to_best_angstrom: Vec::new(),
         numbers: reactant.numbers.clone(),
         isotopes: reactant.isotopes.clone(),
         masses_amu: reactant.masses_amu.clone(),
@@ -335,7 +336,10 @@ async fn worker_and_storage_failures_show_before_the_previous_reaction_result() 
                 &mut app,
                 XtbAction::TsEvent(
                     serial,
-                    Event::Done(Err(state::Failure::Crashed("worker stopped".into()))),
+                    Event::Done(Err(state::Failure::Crashed {
+                        summary: "worker stopped".into(),
+                        details: None,
+                    })),
                 ),
             );
         }
@@ -394,7 +398,10 @@ async fn deselecting_keeps_the_failed_rerun_on_the_shown_reaction() {
         &mut app,
         XtbAction::TsEvent(
             serial,
-            Event::Done(Err(state::Failure::Crashed("worker stopped".into()))),
+            Event::Done(Err(state::Failure::Crashed {
+                summary: "worker stopped".into(),
+                details: None,
+            })),
         ),
     );
 
