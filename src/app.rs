@@ -1209,6 +1209,7 @@ impl App {
         let vibrations = vibration_context(self);
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
+        self.xtb_sync_conformer_inversion();
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
         if vibrations != vibration_context(self) {

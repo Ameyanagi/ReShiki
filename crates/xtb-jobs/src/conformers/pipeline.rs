@@ -12,7 +12,7 @@ use reshiki_optimize::{
     KCAL_PER_HARTREE,
     conformers::{self, Candidate, Clustering, PerCluster, Ranked, Settings, Start, Topology},
 };
-use reshiki_qcdata::{Frame, SearchSummary, Trajectory};
+use reshiki_qcdata::{Frame, MAX_SAVED_CONFORMERS, SearchSummary, Trajectory};
 use reshiki_xtb_worker::{
     client::Cancel,
     protocol::{Engine, Method},
@@ -47,7 +47,8 @@ pub struct Search {
     /// Bonds in frame order, for clustering.
     bonds: Vec<[usize; 2]>,
     config: Config,
-    /// A failed model stereo inference leaves sampling on the drawn graph.
+    unpinned_stereo: Vec<u64>,
+    /// An inference error or a caller's note naming the unpinned centres.
     stereo_note: Option<String>,
     geometry: Client,
     executable: Option<PathBuf>,
@@ -76,14 +77,17 @@ impl Search {
             .zip(&launch.frame.positions_angstrom)
             .filter_map(|(&id, &[x, y, z])| id.map(|id| (id, geometry::Point3 { x, y, z })))
             .collect();
-        let stereo_note = prepared
+        let (unpinned_stereo, stereo_note) = match prepared
             .pin_undefined_stereo(&positions, config.invert_undefined_stereo)
-            .err()
-            .map(|error| {
-                format!(
+        {
+            Ok(pinning) => (pinning.unpinned, None),
+            Err(error) => (
+                vec![],
+                Some(format!(
                     "Could not preserve undefined stereocenters from the 3D model: {error}. Starts used the drawing's stereochemistry."
-                )
-            });
+                )),
+            ),
+        };
         let parents = science::hydrogen_parents(doc, launch).ok_or_else(|| {
             Failure::Other("The 3D model's hydrogens cannot be matched; update the 3D model".into())
         })?;
@@ -110,6 +114,7 @@ impl Search {
             parents,
             bonds,
             config,
+            unpinned_stereo,
             stereo_note,
             job,
             geometry,
@@ -120,6 +125,25 @@ impl Search {
     /// The prepared drawing component used to sample conformer starts.
     pub fn prepared(&self) -> &Prepared {
         &self.prepared
+    }
+
+    /// Describe the affected centres by name when the caller has labels for them.
+    pub fn describe_unpinned_stereo(&mut self, describe: impl FnOnce(&[u64]) -> String) {
+        if !self.unpinned_stereo.is_empty() {
+            self.stereo_note = Some(describe(&self.unpinned_stereo));
+        }
+    }
+
+    fn stereo_note(&self) -> Option<String> {
+        self.stereo_note.clone().or_else(|| match self.unpinned_stereo.len() {
+            0 => None,
+            1 => Some(
+                "1 undefined stereocentre could not be fixed from the 3D model. Both forms of it may appear among the conformers.".into(),
+            ),
+            count => Some(format!(
+                "{count} undefined stereocentres could not be fixed from the 3D model. Both forms of each may appear among the conformers."
+            )),
+        })
     }
 }
 
@@ -173,7 +197,7 @@ pub fn search_conformers(
         return Err(frame_mismatch());
     }
     let xtb_minimizer = search.config.minimizer.xtb();
-    let mut notes = search.stereo_note.iter().cloned().collect();
+    let mut notes = search.stereo_note().into_iter().collect();
     let Sampled {
         mut starts,
         made,
@@ -331,7 +355,7 @@ pub fn search_conformers(
         clusters: clustering.clusters.len(),
         rerank_planned: if reranking { planned } else { 0 },
         reranked: if reranking { reports.len() } else { 0 },
-        kept: ranked.len(),
+        kept: ranked.len().min(MAX_SAVED_CONFORMERS),
     };
     Ok(Found {
         engine,
@@ -840,7 +864,7 @@ mod tests {
             assert!(counts.minimized >= counts.distinct);
             assert!(counts.distinct >= counts.clusters);
             assert!(counts.clusters > 0);
-            assert_eq!(counts.kept, found.ranked.len());
+            assert_eq!(counts.kept, found.ranked.len().min(MAX_SAVED_CONFORMERS));
             if minimizer.xtb().is_none() {
                 assert!(counts.kept <= counts.reranked);
                 assert!(counts.reranked <= counts.rerank_planned);
@@ -935,14 +959,14 @@ mod tests {
                 .unwrap();
             assert_eq!(request.atoms[0].chiral_tag, if invert { 1 } else { 2 });
             assert!(request.atoms[1..].iter().all(|atom| atom.chiral_tag == 0));
-            assert!(search.stereo_note.is_none());
+            assert!(search.stereo_note().is_none());
             assert_eq!(search.prepared().source(), &doc);
         }
     }
 
     #[test]
-    fn undefined_stereo_search_falls_back_with_a_note_when_model_configuration_is_degenerate() {
-        let (_, search) = undefined_stereo_search(true, true);
+    fn undefined_stereo_search_reports_an_unreadable_model_configuration() {
+        let (doc, mut search) = undefined_stereo_search(true, true);
         assert!(
             search
                 .prepared()
@@ -953,9 +977,16 @@ mod tests {
                 .iter()
                 .all(|atom| atom.chiral_tag == 0)
         );
-        let note = search.stereo_note.unwrap();
-        assert!(note.starts_with("Could not preserve undefined stereocenters from the 3D model:"));
-        assert!(note.contains("planar or degenerate"));
+        let note = search.stereo_note().unwrap();
+        assert_eq!(
+            note,
+            "1 undefined stereocentre could not be fixed from the 3D model. Both forms of it may appear among the conformers."
+        );
+        search.describe_unpinned_stereo(|ids| {
+            assert_eq!(ids, [doc.atoms[0].id]);
+            "named centre".into()
+        });
+        assert_eq!(search.stereo_note().as_deref(), Some("named centre"));
     }
 
     fn conformer() -> Conformer {

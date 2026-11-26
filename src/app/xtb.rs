@@ -111,6 +111,8 @@ pub(crate) struct Window {
     pub(super) settings: Settings,
     /// The card's Conformers fields.
     pub(super) conformers: conformers::Settings,
+    /// Document, file epoch and molecule for a pending inversion.
+    conformer_inversion_target: Option<(u64, u64, Vec<u64>)>,
     /// Where the results palette sits, for every document of the window.
     pub(super) dock: palette::Dock,
 }
@@ -453,6 +455,26 @@ impl App {
         (self.tab.selected.is_empty() && atoms.len() == doc.atoms.len()).then_some(atoms)
     }
 
+    fn xtb_inverts_for(&self, atoms: &[u64]) -> bool {
+        self.xtb
+            .conformer_inversion_target
+            .as_ref()
+            .is_some_and(|(tab, epoch, target)| {
+                (*tab, *epoch) == (self.tab.id.0, self.tab.file_epoch) && target.as_slice() == atoms
+            })
+    }
+
+    pub(super) fn xtb_sync_conformer_inversion(&mut self) {
+        if self.xtb.conformer_inversion_target.is_some()
+            && !self
+                .xtb_target()
+                .is_some_and(|atoms| self.xtb_inverts_for(&atoms))
+        {
+            self.xtb.conformer_inversion_target = None;
+            self.xtb.conformers.invert_undefined_stereo = false;
+        }
+    }
+
     /// The current 3D model of the molecule of `atom`, by index.
     fn xtb_model(&self, atom: u64) -> Option<usize> {
         let index = self
@@ -549,6 +571,7 @@ impl App {
         if !self.xtb_can_start() {
             return Task::none();
         }
+        self.xtb_sync_conformer_inversion();
         let Some((atoms, first)) = self
             .xtb_target()
             .and_then(|atoms| Some((atoms.clone(), *atoms.first()?)))
@@ -607,6 +630,10 @@ impl App {
                 limit,
             });
             return Task::none();
+        }
+        if request.search.is_some() {
+            self.xtb.conformer_inversion_target = None;
+            self.xtb.conformers.invert_undefined_stereo = false;
         }
         self.xtb_end_preview();
         self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);

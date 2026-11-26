@@ -1,21 +1,21 @@
 //! The card's Conformers fields, the Conformers tab and its footer.
 use super::{Action, Diversity, Format, MAX_REPRESENTATIVES, MAX_STARTS, Minimizer, Row};
-use crate::app::workspace::{accessible_command, control};
+use crate::app::workspace::{accessible_command, control, hover_hint};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
 use crate::app::xtb::tone::{Tone, line, toned_text};
 use crate::app::xtb::{Action as XtbAction, view::segment};
 use crate::app::{App, Message};
-use iced::widget::{Column, column, container, row, text};
+use iced::widget::{Column, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length};
 use reshiki::qcdata::{CalcResult, Settings};
 use reshiki::science::{self, TetrahedralStereo};
 
-const STEREO_WIDTH: f32 = 60.;
+const UNASSIGNED_CONFIGURATION: &str = "configuration could not be assigned";
 const FOOTNOTE: &str = "Pop. = Boltzmann population of the kept conformers at 298 K · RMSD: heavy atoms after superposition";
 
-pub(super) fn headers(result: &CalcResult, inspector: bool) -> Vec<(String, f32)> {
+pub(super) fn headers(result: &CalcResult, inspector: bool) -> Vec<(String, Length)> {
     let (delta, pop) = if inspector {
-        (("ΔE", 64.), ("Pop.", 60.))
+        (("ΔE (kcal/mol)", 90.), ("Pop.", 60.))
     } else {
         let label = match result.settings {
             Settings::Xtb(_) => "ΔE xTB (kcal/mol)",
@@ -23,15 +23,21 @@ pub(super) fn headers(result: &CalcResult, inspector: bool) -> Vec<(String, f32)
         };
         ((label, 114.), ("Pop. 298 K", 68.))
     };
-    let mut columns = vec![("#".into(), 24.), (delta.0.into(), delta.1)];
+    let mut columns = vec![
+        ("#".into(), Length::Fixed(24.)),
+        (delta.0.into(), Length::Fixed(delta.1)),
+    ];
     if !inspector && let Some(field) = super::start_field(result) {
-        columns.push((format!("ΔE {field} (kcal/mol)"), 144.));
+        columns.push((format!("ΔE {field} (kcal/mol)"), Length::Fixed(144.)));
     }
-    columns.push((pop.0.into(), pop.1));
+    columns.push((pop.0.into(), Length::Fixed(pop.1)));
     if !inspector {
-        columns.extend([("RMSD to #1 (Å)".into(), 100.), ("Starts".into(), 42.)]);
+        columns.extend([
+            ("RMSD to #1 (Å)".into(), Length::Fixed(100.)),
+            ("Starts".into(), Length::Fixed(42.)),
+        ]);
     }
-    columns.push(("Stereo".into(), STEREO_WIDTH));
+    columns.push(("Stereo".into(), Length::Fill));
     columns
 }
 
@@ -67,7 +73,11 @@ pub(super) fn search_funnel(result: &CalcResult) -> Option<String> {
             summary.push_str(&format!(" of {}", counts.rerank_planned));
         }
     }
-    summary.push_str(&format!(" · {} kept", counts.kept));
+    let kept = result
+        .trajectory
+        .as_ref()
+        .map_or(counts.kept, |path| path.steps());
+    summary.push_str(&format!(" · {kept} kept"));
     Some(summary)
 }
 
@@ -314,7 +324,7 @@ impl App {
         let result = &shown.stored.result;
         let field = super::start_field(result).filter(|_| !inspector);
         let headers = headers(result, inspector);
-        let cell = |content: String, width: f32| {
+        let cell = |content: String, width: Length| {
             text(content)
                 .size(12)
                 .width(width)
@@ -339,21 +349,32 @@ impl App {
                 (!inspector).then(|| r.rmsd.map_or_else(|| "—".into(), |x| format!("{x:.2}"))),
                 (!inspector).then(|| r.cluster.map_or_else(|| "—".into(), |c| c.to_string())),
             ];
+            let mut name = format!("Conformer {}, {:.2} kcal/mol", index + 1, r.delta_kcal);
+            if stereo != "—" {
+                name.push_str(&format!(" · Stereo {stereo}"));
+            }
+            let unassigned = stereo.contains('?');
+            let stereo_cell = toned_text(stereo, tone)
+                .width(Length::Fill)
+                .wrapping(text::Wrapping::WordOrGlyph);
+            let stereo_cell: Element<'_, Message> = if unassigned {
+                name.push_str(&format!(" · {UNASSIGNED_CONFIGURATION}"));
+                hover_hint(
+                    stereo_cell,
+                    UNASSIGNED_CONFIGURATION,
+                    tooltip::Position::Top,
+                )
+                .into()
+            } else {
+                stereo_cell.into()
+            };
             let cells = row(values
                 .into_iter()
                 .flatten()
                 .zip(&headers)
                 .map(|(value, (_, width))| cell(value, *width).into()))
-            .push(
-                container(toned_text(stereo.clone(), tone).wrapping(text::Wrapping::None))
-                    .width(STEREO_WIDTH)
-                    .clip(true),
-            )
+            .push(stereo_cell)
             .spacing(8);
-            let mut name = format!("Conformer {}, {:.2} kcal/mol", index + 1, r.delta_kcal);
-            if stereo != "—" {
-                name.push_str(&format!(" · Stereo {stereo}"));
-            }
             reshiki::accessibility::button(format!("xtb-conformer-{}", r.step), name, cells)
                 .padding([3, 8])
                 .width(Length::Fill)
@@ -415,7 +436,8 @@ impl App {
         let input = if matches!(
             shown.stored.result.settings,
             reshiki::qcdata::Settings::Xtb(_)
-        ) && rows.first().is_some_and(|r| !r.undefined().is_empty())
+        ) && shown.stored.result.input_frame.is_some()
+            && rows.first().is_some_and(|r| !r.undefined().is_empty())
         {
             let ids: Vec<_> = shown.atoms.iter().flatten().copied().collect();
             science::tetrahedral_stereo(&self.tab.doc, &ids, Some((shown.atoms, shown.input))).ok()
@@ -563,7 +585,7 @@ pub(super) fn stereo_text(row: &Row) -> (String, Tone) {
                 } else {
                     cip
                 }
-                .unwrap_or("—")
+                .unwrap_or("?")
             })
             .collect::<Vec<_>>()
             .join(",")
@@ -601,6 +623,15 @@ fn wedge_text(names: &[String]) -> String {
     )
 }
 
+pub(super) fn unpinned_stereo_note(names: &[String]) -> String {
+    let reason = if names.len() == 1 {
+        "its 3D configuration could not be read. Both forms may appear."
+    } else {
+        "their 3D configurations could not be read. Both forms of each may appear."
+    };
+    format!("{} and {reason}", wedge_text(names))
+}
+
 pub(super) fn card_stereo(
     stereo: &TetrahedralStereo,
     has_model: bool,
@@ -619,6 +650,16 @@ pub(super) fn card_stereo(
             "{}. The search keeps one configuration (the 3D model is made first):",
             wedge_text(&names)
         );
+    } else {
+        let unresolved: Vec<_> = stereo
+            .undefined
+            .iter()
+            .filter(|centre| centre.winding.is_none())
+            .map(|centre| name(centre.atom))
+            .collect();
+        if !unresolved.is_empty() {
+            info = unpinned_stereo_note(&unresolved);
+        }
     }
     let model = "As in the 3D model";
     if stereo.has_defined {
@@ -658,6 +699,15 @@ pub(super) fn stereo_note(
     let first = rows.first()?.tetrahedral.as_ref()?;
     if first.undefined.is_empty() {
         return None;
+    }
+    let unresolved: Vec<_> = input
+        .into_iter()
+        .flat_map(|stereo| &stereo.undefined)
+        .filter(|centre| centre.winding.is_none())
+        .map(|centre| name(centre.atom))
+        .collect();
+    if !unresolved.is_empty() {
+        return Some(unpinned_stereo_note(&unresolved));
     }
     let names: Vec<_> = first.undefined.iter().map(|c| name(c.atom)).collect();
     let wedge = wedge_text(&names);
@@ -701,7 +751,7 @@ pub(super) fn stereo_note(
         ));
     }
     let model = match input.and_then(handedness) {
-        Some(hand) if Some(&hand) == first_hand.as_ref() => ", as in the 3D model",
+        Some(hand) if Some(&hand) == first_hand.as_ref() => ", as in the starting 3D model",
         Some(hand)
             if first_hand.as_ref().is_some_and(|first| {
                 hand.len() == first.len()
@@ -710,7 +760,7 @@ pub(super) fn stereo_note(
                         .all(|(atom, tag)| hand.get(atom) == Some(&(3 - tag)))
             }) =>
         {
-            ", the mirror image of the 3D model"
+            ", the mirror image of the starting 3D model"
         }
         _ => "",
     };

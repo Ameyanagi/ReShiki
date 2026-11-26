@@ -373,7 +373,10 @@ fn undefined_stereo_pinning_uses_model_ids_and_native_neighbor_order() {
                 let materialized = pinned.materialized.clone();
                 assert_eq!(
                     pinned.pin_undefined_stereo(&positions, invert).unwrap(),
-                    [centre]
+                    StereoPinning {
+                        pinned: vec![centre],
+                        unpinned: vec![],
+                    }
                 );
                 let request = pinned
                     .ensemble_request(ForceField::Uff, DEFAULT_SEED, 4, Ensemble::Embedded)
@@ -401,7 +404,13 @@ fn undefined_stereo_pinning_preserves_defined_centers_and_is_transactional() {
     for position in positions.values_mut() {
         position.z = 0.;
     }
-    assert!(prepared.pin_undefined_stereo(&positions, false).is_err());
+    assert_eq!(
+        prepared.pin_undefined_stereo(&positions, false).unwrap(),
+        StereoPinning {
+            pinned: vec![],
+            unpinned: vec![centre],
+        }
+    );
     assert_eq!(
         serde_json::to_value(&prepared.molecule.state.metadata).unwrap(),
         before
@@ -413,16 +422,44 @@ fn undefined_stereo_pinning_preserves_defined_centers_and_is_transactional() {
     });
     let mut defined = Prepared::new(&source, &[]).unwrap();
     let before = serde_json::to_value(&defined.molecule.state.metadata).unwrap();
-    assert!(
-        defined
-            .pin_undefined_stereo(&positions, true)
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        defined.pin_undefined_stereo(&positions, true).unwrap(),
+        StereoPinning::default()
     );
     assert_eq!(
         serde_json::to_value(&defined.molecule.state.metadata).unwrap(),
         before
     );
+}
+
+#[test]
+fn undefined_stereo_pinning_keeps_the_readable_centre_when_another_is_planar() {
+    let (mut source, centre, mut positions) = undefined_tetrahedron("plain", false);
+    let planar = 66;
+    source.atom_mut(planar).unwrap().element = "C".into();
+    positions.get_mut(&planar).unwrap().z = 0.;
+    for (element, [x, y]) in [("F", [-2., -1.]), ("Cl", [-1., -2.]), ("Br", [-2., -2.])] {
+        let atom = source.add_atom(element, Point::new(x as f32 * 42., y as f32 * 42.));
+        source.add_bond(planar, atom, 1, "plain");
+        positions.insert(atom, Point3 { x, y, z: 0. });
+    }
+    let mut tags = Vec::new();
+    for invert in [false, true] {
+        let mut prepared = Prepared::new(&source, &[]).unwrap();
+        assert_eq!(
+            prepared.pin_undefined_stereo(&positions, invert).unwrap(),
+            StereoPinning {
+                pinned: vec![centre],
+                unpinned: vec![planar],
+            }
+        );
+        let request = prepared
+            .ensemble_request(ForceField::Uff, DEFAULT_SEED, 4, Ensemble::Embedded)
+            .unwrap();
+        tags.push(request.atoms[prepared.index(centre).unwrap()].chiral_tag);
+        assert_eq!(request.atoms[prepared.index(planar).unwrap()].chiral_tag, 0);
+    }
+    assert!(matches!(tags.as_slice(), [1, 2] | [2, 1]), "{tags:?}");
 }
 
 #[test]
@@ -432,11 +469,9 @@ fn undefined_stereo_pinning_skips_equivalent_ligands() {
     source.atom_mut(3).unwrap().map_num = 7;
     source.atom_mut(89).unwrap().map_num = 9;
     let mut prepared = Prepared::new(&source, &[]).unwrap();
-    assert!(
-        prepared
-            .pin_undefined_stereo(&positions, false)
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        prepared.pin_undefined_stereo(&positions, false).unwrap(),
+        StereoPinning::default()
     );
     assert_eq!(
         prepared.molecule.state.metadata.atoms[prepared.index(centre).unwrap()].chiral_tag,
@@ -475,11 +510,11 @@ async fn undefined_stereo_pinning_retains_coupled_ring_metadata() {
     );
     // These ring centres are already defined, so no model coordinates are
     // needed. Their paired ring-membership annotations must survive inference.
-    assert!(
+    assert_eq!(
         prepared
             .pin_undefined_stereo(&HashMap::new(), false)
-            .unwrap()
-            .is_empty()
+            .unwrap(),
+        StereoPinning::default()
     );
 }
 
