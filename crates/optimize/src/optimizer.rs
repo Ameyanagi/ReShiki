@@ -279,8 +279,10 @@ pub struct Outcome {
     pub evaluations: usize,
     /// Calls to [`Potential::hessian`], including errors and unavailability probes.
     pub hessian_evaluations: usize,
+    /// Last active method; the requested method if no search was attempted.
     pub method: Method,
-    /// Algorithms selected during the run, in order, including fallback attempts.
+    /// Algorithms whose searches were attempted, in order, including failed
+    /// searches and fallback attempts. Empty if no search step was attempted.
     pub methods: Vec<Method>,
     /// One energy per accepted geometry, including the input. A successful
     /// accuracy change replaces the entry at the same geometry.
@@ -482,7 +484,7 @@ impl<'a> Engine<'a> {
         Self {
             options,
             method: options.method,
-            methods: vec![options.method],
+            methods: Vec::new(),
             anc: None,
             internal: None,
             internal_built_at: 0,
@@ -674,6 +676,9 @@ impl<'a> Engine<'a> {
         accuracy_changed: bool,
     ) -> Result<(Point, Motion, Diagnostics), Status> {
         let (next, diagnostics) = loop {
+            if self.methods.last() != Some(&self.method) {
+                self.methods.push(self.method);
+            }
             match self.method {
                 Method::Internal => {
                     if let Some(trial) =
@@ -684,7 +689,6 @@ impl<'a> Engine<'a> {
                         break trial;
                     }
                     self.method = Method::AncRfo;
-                    self.methods.push(self.method);
                     self.internal = None;
                     self.history.clear();
                     self.trust = TrustRegion::new(self.options, eval.coords.indices.len() / 3);
@@ -696,7 +700,6 @@ impl<'a> Engine<'a> {
                         break trial;
                     }
                     self.method = Method::Lbfgs;
-                    self.methods.push(self.method);
                     self.anc = None;
                 }
                 Method::Lbfgs => break self.search_lbfgs(eval, point, accuracy_changed)?,
@@ -795,7 +798,7 @@ pub fn optimize<P: Potential + ?Sized>(
         evaluations: 0,
         hessian_evaluations: 0,
         method: options.method,
-        methods: vec![options.method],
+        methods: Vec::new(),
         energies: Vec::new(),
     };
     let coords = match Coordinates::new(numbers, positions, &options.fixed_atoms) {

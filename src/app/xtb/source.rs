@@ -227,7 +227,7 @@ fn conformer(method: &str, step: usize, count: usize) -> Source {
 fn optimized(method: &str) -> Source {
     Source {
         label: format!("xTB optimized geometry · {method}"),
-        short: format!("{method} optimized"),
+        short: format!("{method} optimized geometry"),
         frame: None,
         model_state: None,
     }
@@ -254,7 +254,7 @@ mod tests {
                 .label
                 .starts_with("xTB optimized geometry · GFN2-xTB · ")
         );
-        assert_eq!(sources[0].short, "GFN2-xTB optimized");
+        assert_eq!(sources[0].short, "GFN2-xTB optimized geometry");
         assert!(sources[0].frame.is_none());
         assert_eq!(sources[1].label, "Start geometry before xTB");
         assert_eq!(sources[1].short, "start geometry before xTB");

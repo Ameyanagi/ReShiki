@@ -169,18 +169,18 @@ impl Shown<'_> {
     }
 }
 
-/// Previously placed charges have signed decimals, except for unsigned zero.
-/// Plain nonzero decimals may be NMR shifts, so preserve those too.
+/// Placed charges have signed decimals. Unsigned decimals, including zero,
+/// may belong to the user or to NMR, so preserve them.
 fn is_charge_label(text: &str) -> bool {
-    let signed = text.strip_prefix(['+', '-', '−']);
-    let digits = signed.unwrap_or(text);
+    let Some(digits) = text.strip_prefix(['+', '-', '−']) else {
+        return false;
+    };
     let Some((whole, part)) = digits.split_once('.') else {
         return false;
     };
     [whole, part]
         .iter()
         .all(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
-        && (signed.is_some() || digits.bytes().all(|b| matches!(b, b'0' | b'.')))
 }
 
 impl App {
@@ -470,13 +470,13 @@ impl App {
             ChargeScheme::Other(name) => name,
         };
         let mut labels = shown.charge_labels(&self.tab.doc, 2);
+        let style = shift_label_style(&self.tab.doc);
         let visible = labels.len();
         labels.retain(|(id, _)| {
             self.tab.doc.atom(*id).is_some_and(|atom| {
-                atom.display
-                    .number
-                    .as_ref()
-                    .is_none_or(|label| label.text.is_empty() || is_charge_label(&label.text))
+                atom.display.number.as_ref().is_none_or(|label| {
+                    label.style == style && label.offset.is_none() && is_charge_label(&label.text)
+                })
             })
         });
         let n = labels.len();
@@ -486,9 +486,14 @@ impl App {
             status.push_str(&format!(" · {kept} atoms kept their own labels"));
         }
         let before = self.tab.doc.clone();
-        let style = shift_label_style(&before);
-        for (id, text) in labels {
+        for (id, mut text) in labels {
             if let Some(atom) = self.tab.doc.atom_mut(id) {
+                // The results table and preview omit a sign on rounded zero.
+                // Keep placed zero identifiable by the same signed-decimal
+                // rule as every other charge when the user refreshes it.
+                if text.starts_with('0') {
+                    text.insert(0, '+');
+                }
                 atom.display.number = Some(Number {
                     text,
                     style: style.clone(),

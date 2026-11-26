@@ -60,12 +60,8 @@ fn wrapping(inspector: bool) -> text::Wrapping {
     }
 }
 
-fn footer_note<'a>(note: impl text::IntoFragment<'a>, inspector: bool) -> Element<'a, Message> {
-    text(note)
-        .size(11)
-        .style(muted_text)
-        .wrapping(wrapping(inspector))
-        .into()
+fn footer_note<'a>(note: impl text::IntoFragment<'a>) -> Element<'a, Message> {
+    text(note).size(11).style(muted_text).into()
 }
 
 /// Text in the palette: greyed while the result is stale.
@@ -612,20 +608,18 @@ impl App {
             View::Vibrations => {
                 actions = actions.push(footer_note(
                     "Normal modes are recomputed when shown; the file keeps frequencies, intensities and thermochemistry.",
-                    inspector,
                 ));
             }
             View::Steps => {
                 actions = actions.push(footer_note(
                     "The file keeps the first and last steps; keep full results to save every step.",
-                    inspector,
                 ));
             }
             View::Orbitals => {
-                actions = actions.push(self.xtb_orbitals_note(shown, wrapping(inspector)))
+                actions = actions.push(self.xtb_orbitals_note(shown, text::Wrapping::default()))
             }
             View::Conformers => {
-                actions = actions.push(super::super::conformers::footer(wrapping(inspector)));
+                actions = actions.push(super::super::conformers::footer(text::Wrapping::default()));
             }
             View::Log => {
                 actions = actions.push(
@@ -652,10 +646,7 @@ impl App {
         let note = shown.stored.result.omitted_bytes.map(|bytes| {
             // Imported results whose heavy data did not fit; the import lane
             // adds the source file and the reopen action here.
-            footer_note(
-                format!("Not saved in the file ({}).", results::size(bytes)),
-                inspector,
-            )
+            footer_note(format!("Not saved in the file ({}).", results::size(bytes)))
         });
         if inspector {
             return column![actions.wrap(), sizes.wrap()]
