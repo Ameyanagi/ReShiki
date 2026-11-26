@@ -53,7 +53,7 @@ fn profile_note(positions: bool, stale: bool) -> Option<&'static str> {
 
 fn selection_label(index: usize, count: usize, climbing: usize, delta: f64) -> String {
     let role = if index == climbing {
-        "climbing image (TS)"
+        "climbing image"
     } else if index == 0 {
         "reactant"
     } else if index + 1 == count {
@@ -68,6 +68,17 @@ fn selection_label(index: usize, count: usize, climbing: usize, delta: f64) -> S
     )
 }
 
+fn relative_energies(energies: &[f64], saddle: Option<f64>) -> (Vec<f64>, Option<f64>) {
+    let Some(&reactant) = energies.first() else {
+        return (vec![], None);
+    };
+    let delta = |energy| (energy - reactant) * KCAL_PER_HARTREE;
+    (
+        energies.iter().copied().map(delta).collect(),
+        saddle.map(delta),
+    )
+}
+
 impl App {
     pub(in crate::app::xtb) fn xtb_ts_path<'a>(
         &'a self,
@@ -79,11 +90,7 @@ impl App {
         let climbing = climbing_image(energies, shown.ts.map(|s| s.extras.climbing));
         let selected = self.xtb_step().filter(|&index| index < energies.len());
         let current = selection(energies.len(), selected, climbing);
-        let reference = energies.first().copied().unwrap_or(0.);
-        let deltas: Vec<_> = energies
-            .iter()
-            .map(|energy| (energy - reference) * KCAL_PER_HARTREE)
-            .collect();
+        let (deltas, refined_delta) = relative_energies(energies, result.energy_hartree);
         let positions = shown.ts.is_some_and(|session| {
             session.extras.image_positions.len() == energies.len()
                 && session
@@ -95,6 +102,7 @@ impl App {
         let interactive = !self.xtb_running();
         let chart = canvas(PathChart {
             deltas: deltas.clone(),
+            refined_delta,
             selected: current,
             climbing,
             interactive,
@@ -153,14 +161,12 @@ impl App {
             )
         };
         let mut details = column![text(title).size(14)].spacing(7);
-        if let (Some(ts), Some(reactant), Some(product)) = (
-            result.energy_hartree,
-            energies.first().copied(),
-            energies.last().copied(),
-        ) {
+        if let (Some(forward), Some(ts), Some(&product)) =
+            (refined_delta, result.energy_hartree, energies.last())
+        {
             details = details.push(
                 row![
-                    barrier("ΔE‡ forward", (ts - reactant) * KCAL_PER_HARTREE),
+                    barrier("ΔE‡ forward", forward),
                     barrier("ΔE‡ back", (ts - product) * KCAL_PER_HARTREE),
                 ]
                 .spacing(22)
@@ -436,6 +442,8 @@ fn changed_bonds(_: &Frame, _: &Frame) -> Vec<(&'static str, [usize; 2])> {
 /// Reactant-relative energy against the NEB image index.
 struct PathChart {
     deltas: Vec<f64>,
+    /// The optimized saddle can differ from its climbing NEB image.
+    refined_delta: Option<f64>,
     selected: Option<usize>,
     climbing: usize,
     interactive: bool,
@@ -459,6 +467,20 @@ impl PathChart {
                 .abs()
                 .total_cmp(&(self.x(b, bounds) - x).abs())
         })
+    }
+
+    fn energy_bounds(&self) -> (f64, f64) {
+        self.deltas
+            .iter()
+            .chain(self.refined_delta.iter())
+            .fold((0_f64, 0_f64), |(lo, hi), &energy| {
+                (lo.min(energy), hi.max(energy))
+            })
+    }
+
+    fn refined_ts_marker(&self) -> Option<(f64, String)> {
+        self.refined_delta
+            .map(|delta| (delta, format!("TS‡ {}", state::signed(delta, 1))))
     }
 }
 
@@ -523,10 +545,7 @@ impl canvas::Program<Message> for PathChart {
         if self.deltas.is_empty() {
             return vec![frame.into_geometry()];
         }
-        let (lo, hi) = self
-            .deltas
-            .iter()
-            .fold((0_f64, 0_f64), |(lo, hi), &e| (lo.min(e), hi.max(e)));
+        let (lo, hi) = self.energy_bounds();
         let range = (hi - lo).max(1.);
         let plot_height = (bounds.height - Self::TOP - Self::BOTTOM).max(1.);
         let y = |energy: f64| Self::TOP + ((hi - energy) / range) as f32 * plot_height;
@@ -581,21 +600,18 @@ impl canvas::Program<Message> for PathChart {
             canvas::Stroke::default().with_color(ink).with_width(1.5),
         );
         for (index, (&point, &delta)) in points.iter().zip(&self.deltas).enumerate() {
-            let color = if index == self.climbing { amber } else { ink };
             let selected = self.selected == Some(index);
             if selected {
                 frame.stroke(
                     &canvas::Path::circle(point, 6.),
-                    canvas::Stroke::default().with_color(color).with_width(1.),
+                    canvas::Stroke::default().with_color(ink).with_width(1.),
                 );
             }
             frame.fill(
                 &canvas::Path::circle(point, if selected { 3.8 } else { 2.6 }),
-                color,
+                ink,
             );
-            let label = if index == self.climbing {
-                Some(format!("TS ‡ {}", state::signed(delta, 1)))
-            } else if index == 0 {
+            let label = if index == 0 {
                 Some("R 0.0".into())
             } else if index + 1 == self.deltas.len() {
                 Some(format!("P {}", state::signed(delta, 1)))
@@ -603,19 +619,39 @@ impl canvas::Program<Message> for PathChart {
                 None
             };
             if let Some(content) = label {
-                let position = Point::new(
-                    point.x,
-                    point.y + if index == self.climbing { -19. } else { 7. },
-                );
                 frame.fill_text(canvas::Text {
                     content,
-                    position,
-                    color,
+                    position: Point::new(point.x, point.y + 7.),
+                    color: ink,
                     size: 11.into(),
                     align_x: iced::alignment::Horizontal::Center.into(),
                     ..Default::default()
                 });
             }
+        }
+        if let Some((delta, content)) = self.refined_ts_marker()
+            && let Some(climbing) = points.get(self.climbing)
+        {
+            let point = Point::new(climbing.x, y(delta));
+            frame.stroke(
+                &canvas::Path::new(|path| {
+                    path.move_to(Point::new(point.x, point.y - 6.5));
+                    path.line_to(Point::new(point.x + 6.5, point.y));
+                    path.line_to(Point::new(point.x, point.y + 6.5));
+                    path.line_to(Point::new(point.x - 6.5, point.y));
+                    path.close();
+                }),
+                canvas::Stroke::default().with_color(amber).with_width(1.4),
+            );
+            let label_y = point.y + if point.y >= climbing.y { 8. } else { -19. };
+            frame.fill_text(canvas::Text {
+                content,
+                position: Point::new(point.x, label_y),
+                color: amber,
+                size: 11.into(),
+                align_x: iced::alignment::Horizontal::Center.into(),
+                ..Default::default()
+            });
         }
         frame.fill_text(canvas::Text {
             content: "NEB image index".into(),

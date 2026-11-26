@@ -683,7 +683,12 @@ impl App {
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
                 if run.model.is_none() =>
             {
-                let task = self.model_for_calculation(run.atoms.clone());
+                let reaction_arrow = run
+                    .ts
+                    .as_ref()
+                    .map(|ts| ts.request.arrow)
+                    .or_else(|| self.tab.xtb.energy_state.arrow());
+                let task = self.model_for_calculation(run.atoms.clone(), reaction_arrow);
                 let Some(key) = self.tab.model_job.as_ref().map(|job| job.key) else {
                     self.xtb_fail(state::Failure::Other(format!(
                         "xTB not started · {}",

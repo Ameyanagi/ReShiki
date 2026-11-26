@@ -184,6 +184,9 @@ fn generated_model_reveals_its_target_after_selection_changed() {
     app.tab.camera.center = Point::new(5000., 4000.);
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
     assert_eq!(app.tab.selected, [water]);
+    let doc = &app.tab.doc;
+    let (lo, _) = models3d::frame(doc, &doc.models[0]).unwrap();
+    assert!((lo.x - 72. - doc.drawing_style.bond_length_world).abs() < 1e-3);
     assert_model_visible(&app, &atoms);
     assert!(app.tab.camera.zoom <= 2.5);
 }

@@ -358,6 +358,10 @@ impl State {
         self.batch.is_some()
     }
 
+    pub(in crate::app::xtb) fn arrow(&self) -> Option<u64> {
+        self.batch.as_ref().map(|batch| batch.arrow)
+    }
+
     pub(in crate::app::xtb) fn running(&self, serial: u64) -> bool {
         self.batch
             .as_ref()
