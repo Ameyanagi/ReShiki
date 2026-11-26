@@ -161,6 +161,8 @@ fn ts_report() -> TsReport {
         climbing_image: 1,
         ts: point(-1., 3.),
         saddle_converged: true,
+        saddle_reason: ts::SaddleReason::Stationary,
+        saddle_diagnostics: Vec::new(),
         hessian: vec![0.25; 36],
         frequencies_cm1: vec![-60.],
         imaginary: 1,
