@@ -293,8 +293,10 @@ mod execution {
         let (mut app, _) = App::new();
         app.tab.busy = false;
         let a = app.tab.doc.add_atom("O", Point::default());
-        let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        let b = app.tab.doc.add_atom("O", Point::new(100., 50.));
         let (arrow, species) = reaction(&mut app, a, b);
+        let (_, scheme_bottom) =
+            reshiki::scene::selection_bounds(&app.tab.doc, &[a, arrow, b]).unwrap();
         let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
         assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [a]);
         model(&mut app);
@@ -302,6 +304,15 @@ mod execution {
         assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
         assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [b]);
         model(&mut app);
+        let doc = &app.tab.doc;
+        let gap = doc.drawing_style.bond_length_world;
+        let mut bottom = scheme_bottom.y;
+        for model in &doc.models {
+            let (lo, hi) = reshiki::models3d::frame(doc, model).unwrap();
+            assert!((lo.x.midpoint(hi.x) - 50.).abs() < 1e-3);
+            assert!((lo.y - bottom - gap).abs() < 1e-3);
+            bottom = hi.y;
+        }
         event(&mut app, optimized(&START, &MOVED));
         assert_eq!(app.tab.doc.science.results.len(), 2, "{}", app.status);
         assert!(

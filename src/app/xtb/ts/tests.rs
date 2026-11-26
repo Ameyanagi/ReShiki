@@ -74,6 +74,55 @@ fn finish_model(app: &mut App) {
     assert_eq!(launch.frame.numbers.iter().filter(|&&z| z == 1).count(), 8);
 }
 
+#[test]
+fn generated_ts_model_clears_the_arrow_and_all_participants() {
+    let (mut doc, arrow) = card::tests::claisen();
+    let product = doc.reactions[0].products[0].atoms[2];
+    doc.atom_mut(product).unwrap().position.y = 75.;
+    let agent = doc.add_atom("O", reshiki::document::Point::new(50., 100.));
+    doc.reactions[0]
+        .agents
+        .push(reshiki::reactions::Participant {
+            atoms: vec![agent],
+            coefficient: 1,
+        });
+    let caption = reshiki::molecule_names::show(
+        &mut doc,
+        &[agent],
+        "water".into(),
+        "O".into(),
+        Default::default(),
+        false,
+    )
+    .unwrap();
+    let reaction = &doc.reactions[0];
+    let objects = [vec![arrow], vec![caption]]
+        .into_iter()
+        .chain(
+            reshiki::reactions::Role::ALL
+                .into_iter()
+                .flat_map(|role| reaction.participants(role))
+                .map(|participant| participant.atoms.clone()),
+        )
+        .collect::<Vec<_>>();
+    let bounds = reshiki::scene::selections_bounds(&doc, &objects);
+    let mut app = reaction_app(doc, arrow);
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    finish_model(&mut app);
+
+    let doc = &app.tab.doc;
+    let (lo, hi) = reshiki::models3d::frame(doc, &doc.models[0]).unwrap();
+    let arrow = &doc.arrows[0];
+    assert!((lo.x.midpoint(hi.x) - arrow.start.x.midpoint(arrow.end.x)).abs() < 1e-3);
+    let gap = doc.drawing_style.bond_length_world;
+    for (_, bottom) in bounds.into_iter().map(Option::unwrap) {
+        assert!(
+            lo.y >= bottom.y + gap - 1e-3,
+            "frame top {lo:?}, object bottom {bottom:?}"
+        );
+    }
+}
+
 fn example_report(launch: &Launch) -> Arc<job::Report> {
     let reactant = (*launch.frame).clone();
     let mut transition = reactant.clone();

@@ -10,7 +10,7 @@ use super::{App, Message, document_tab::TabId, inspector::Section};
 use crate::canvas::Edit;
 use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
-use reshiki::document::Document;
+use reshiki::document::{Document, Point};
 use reshiki::geometry::{
     Client, DEFAULT_SEED, ForceField, GENERATION_SEED_MAX, Optimized, Prepared,
 };
@@ -89,6 +89,7 @@ pub(crate) struct Job {
     display: Display,
     /// An existing model to replace, keeping its view at completion.
     target: Option<usize>,
+    below_reaction: Option<u64>,
     seed: i32,
     pub(super) force_field: ForceField,
     pub(super) prepared: Arc<Prepared>,
@@ -174,7 +175,7 @@ impl App {
                 if let Some(index) = job.target {
                     self.replace_model(index, model);
                 } else {
-                    self.add_model(model, job.display);
+                    self.add_model(model, job.display, job.below_reaction);
                 }
             }
             Err(error) => {
@@ -356,7 +357,14 @@ impl App {
             }
             return Task::none();
         }
-        self.generate_model(atoms, display, None, ForceField::Mmff94s, DEFAULT_SEED)
+        self.generate_model(
+            atoms,
+            display,
+            None,
+            ForceField::Mmff94s,
+            DEFAULT_SEED,
+            None,
+        )
     }
 
     fn regenerate_model(&mut self, fresh: bool) -> Task<Message> {
@@ -369,10 +377,13 @@ impl App {
         self.regenerate_model_at(index, fresh)
     }
 
-    /// A model for a calculation on `atoms`: a new one shown beside the
-    /// drawing, or an Update of an out-of-date one. Starts nothing on error;
-    /// the status says why.
-    pub(super) fn model_for_calculation(&mut self, atoms: Vec<u64>) -> Task<Message> {
+    /// Generate a model for the calculation, or update it if out of date.
+    /// A reaction arrow places a new model below the scheme.
+    pub(super) fn model_for_calculation(
+        &mut self,
+        atoms: Vec<u64>,
+        below_reaction: Option<u64>,
+    ) -> Task<Message> {
         let first = atoms.first().copied();
         let index = self
             .tab
@@ -388,6 +399,7 @@ impl App {
                 None,
                 ForceField::Mmff94s,
                 DEFAULT_SEED,
+                below_reaction,
             ),
         }
     }
@@ -426,7 +438,7 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        self.generate_model(atoms, model.display, Some(index), force_field, seed)
+        self.generate_model(atoms, model.display, Some(index), force_field, seed, None)
     }
 
     fn generate_model(
@@ -436,6 +448,7 @@ impl App {
         target: Option<usize>,
         force_field: ForceField,
         seed: i32,
+        below_reaction: Option<u64>,
     ) -> Task<Message> {
         if target.is_some()
             && self
@@ -480,6 +493,7 @@ impl App {
             current: key,
             display,
             target,
+            below_reaction,
             seed,
             force_field,
             prepared,
@@ -698,7 +712,12 @@ impl App {
         (key == self.model_key()).then_some((id, start))
     }
 
-    fn add_model(&mut self, model: models3d::Model3d, display: Display) {
+    fn add_model(
+        &mut self,
+        model: models3d::Model3d,
+        display: Display,
+        below_reaction: Option<u64>,
+    ) {
         let before = self.tab.doc.clone();
         let atoms = model.linked_ids(&before);
         let previous = before
@@ -710,6 +729,19 @@ impl App {
         models3d::require_version(&mut self.tab.doc);
         let index = self.tab.doc.models.len() - 1;
         models3d::set_display(&mut self.tab.doc, index, display);
+        if let Some(anchor) = below_reaction.and_then(|arrow| below_reaction_anchor(&before, arrow))
+            && let Some((lo, hi)) = self
+                .tab
+                .doc
+                .models
+                .get(index)
+                .and_then(|model| models3d::frame(&self.tab.doc, model))
+            && let Some(model) = self.tab.doc.models.get_mut(index)
+        {
+            model.offset = model
+                .offset
+                .offset(anchor.x - lo.x.midpoint(hi.x), anchor.y - lo.y);
+        }
         self.changed(before);
         if !self.error {
             self.status = status(display);
@@ -1630,6 +1662,23 @@ impl App {
             .map(|job| job.prepared.ids().to_vec())
             .unwrap_or_default()
     }
+}
+
+/// The centre of the new frame's top edge beneath the reaction drawing.
+fn below_reaction_anchor(doc: &Document, arrow_id: u64) -> Option<Point> {
+    let arrow = doc.arrows.iter().find(|arrow| arrow.id == arrow_id)?;
+    let reaction = doc
+        .reactions
+        .iter()
+        .find(|reaction| reaction.arrow == arrow_id)?;
+    let mut ids = reaction.ids();
+    ids.extend(reshiki::arrow_labels::of(doc, arrow_id).map(|label| label.annotation));
+    let ids = reshiki::molecule_names::include_annotations(doc, &ids);
+    let (_, bottom) = reshiki::scene::selection_bounds(doc, &ids)?;
+    Some(Point::new(
+        arrow.start.x.midpoint(arrow.end.x),
+        bottom.y + doc.drawing_style.bond_length_world,
+    ))
 }
 
 /// The view now shown.

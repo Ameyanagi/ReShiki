@@ -28,7 +28,7 @@ fn climbing_image_and_selection_labels_use_one_based_image_numbers() {
     assert_eq!(climbing_image(&[], None), 0);
     assert_eq!(
         selection_label(6, 15, 6, 26.5),
-        "Image 7 of 15 · climbing image (TS) · ΔE 26.5 kcal/mol"
+        "Image 7 of 15 · climbing image · ΔE 26.5 kcal/mol"
     );
     assert!(selection_label(14, 15, 6, -8.2).contains("product · ΔE −8.2"));
 }
@@ -37,6 +37,7 @@ fn climbing_image_and_selection_labels_use_one_based_image_numbers() {
 fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
     let chart = PathChart {
         deltas: vec![0., 2., 5., 1., -1.],
+        refined_delta: Some(4.),
         selected: Some(2),
         climbing: 2,
         interactive: true,
@@ -46,6 +47,47 @@ fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
     assert_eq!(chart.nearest(chart.x(0, bounds), bounds), Some(0));
     assert_eq!(chart.nearest(chart.x(3, bounds) + 1., bounds), Some(3));
     assert_eq!(chart.nearest(bounds.width, bounds), Some(4));
+}
+
+#[test]
+fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
+    let reactant = -5.;
+    let energy = |delta| reactant + delta / KCAL_PER_HARTREE;
+    let (deltas, refined_delta) =
+        relative_energies(&[reactant, energy(30.2), energy(-8.2)], Some(energy(26.5)));
+    let chart = PathChart {
+        deltas,
+        refined_delta,
+        selected: Some(1),
+        climbing: 1,
+        interactive: true,
+        stale: false,
+    };
+    assert_eq!(chart.refined_ts_marker().unwrap().1, "TS‡ 26.5");
+    assert!(selection_label(1, 3, 1, chart.deltas[1]).ends_with("ΔE 30.2 kcal/mol"));
+    assert_eq!(chart.energy_bounds(), (chart.deltas[2], chart.deltas[1]));
+
+    let higher_saddle = PathChart {
+        refined_delta: Some(34.1),
+        ..chart
+    };
+    assert_eq!(
+        higher_saddle.energy_bounds(),
+        (higher_saddle.deltas[2], 34.1)
+    );
+    let lower_saddle = PathChart {
+        refined_delta: Some(-12.3),
+        ..higher_saddle
+    };
+    assert_eq!(
+        lower_saddle.energy_bounds(),
+        (-12.3, lower_saddle.deltas[1])
+    );
+    let no_saddle = PathChart {
+        refined_delta: None,
+        ..lower_saddle
+    };
+    assert_eq!(no_saddle.refined_ts_marker(), None);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
