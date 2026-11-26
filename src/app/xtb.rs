@@ -537,7 +537,8 @@ impl App {
             return None;
         }
         let Some(target) = self.xtb_target() else {
-            return Some(outcome);
+            return (!matches!(outcome, Outcome::Failed(_)) || self.xtb_failed().is_some())
+                .then_some(outcome);
         };
         let intersects = |atoms: &[u64]| atoms.iter().any(|id| target.contains(id));
         let belongs = match outcome {
@@ -554,12 +555,32 @@ impl App {
         belongs.then_some(outcome)
     }
 
-    /// The failure that belongs on the card and in the palette.
+    /// The molecule failure that belongs with the result on display.
     fn xtb_failed(&self) -> Option<&Failed> {
         let Outcome::Failed(failed) = self.tab.xtb.outcome.as_ref()? else {
             return None;
         };
-        self.xtb_outcome().map(|_| failed.as_ref())
+        if failed.ts().is_some() || self.xtb_selected_reaction().is_some() {
+            return None;
+        }
+        let belongs = if let Some((_, stored)) = self.xtb_shown_entry() {
+            !ts::is_ts(&stored.result)
+                && self
+                    .tab
+                    .doc
+                    .science
+                    .attachment(stored.attachment)?
+                    .atoms
+                    .iter()
+                    .flatten()
+                    .any(|atom| failed.atoms.contains(atom))
+        } else {
+            self.xtb_target().map_or_else(
+                || failed.atoms.is_empty(),
+                |target| target.iter().any(|atom| failed.atoms.contains(atom)),
+            )
+        };
+        belongs.then_some(failed)
     }
 
     /// The current 3D model of the molecule of `atom`, by index.
@@ -772,12 +793,7 @@ impl App {
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
                 if run.model.is_none() =>
             {
-                let reaction_arrow = run
-                    .ts
-                    .as_ref()
-                    .map(|ts| ts.request.arrow)
-                    .or_else(|| self.tab.xtb.energy_state.arrow());
-                let task = self.model_for_calculation(run.atoms.clone(), reaction_arrow);
+                let task = self.model_for_calculation(run.atoms.clone());
                 let Some(key) = self.tab.model_job.as_ref().map(|job| job.key) else {
                     self.xtb_fail(state::Failure::Other(format!(
                         "xTB not started · {}",

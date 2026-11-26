@@ -10,7 +10,7 @@ use super::{App, Message, document_tab::TabId, inspector::Section};
 use crate::canvas::Edit;
 use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
-use reshiki::document::{Document, Point};
+use reshiki::document::Document;
 use reshiki::geometry::{Client, ForceField, ModelGeneration, Optimized, Prepared};
 use reshiki::models3d::{
     self, Background, Display, Hydrogens, Labels, Layout, Look, Probability, Style,
@@ -87,7 +87,6 @@ pub(crate) struct Job {
     display: Display,
     /// An existing model to replace, keeping its view at completion.
     target: Option<usize>,
-    below_reaction: Option<u64>,
     seed: i32,
     pub(super) force_field: ForceField,
     pub(super) prepared: Arc<Prepared>,
@@ -173,7 +172,7 @@ impl App {
                 if let Some(index) = job.target {
                     self.replace_model(index, model);
                 } else {
-                    self.add_model(model, job.display, job.below_reaction);
+                    self.add_model(model, job.display);
                 }
             }
             Err(error) => {
@@ -355,7 +354,7 @@ impl App {
             }
             return Task::none();
         }
-        self.generate_model(atoms, display, ModelGeneration::default(), None)
+        self.generate_model(atoms, display, ModelGeneration::default())
     }
 
     fn regenerate_model(&mut self, fresh: bool) -> Task<Message> {
@@ -372,19 +371,15 @@ impl App {
     }
 
     /// A model for a calculation on `atoms`: a new one shown beside the
-    /// drawing (below the scheme for a reaction arrow), or an Update of an
-    /// out-of-date one. Starts nothing on error; the status says why.
-    pub(super) fn model_for_calculation(
-        &mut self,
-        atoms: Vec<u64>,
-        below_reaction: Option<u64>,
-    ) -> Task<Message> {
+    /// drawing, or an Update of an out-of-date one. Starts nothing on error;
+    /// the status says why.
+    pub(super) fn model_for_calculation(&mut self, atoms: Vec<u64>) -> Task<Message> {
         let Some(generation) = ModelGeneration::for_calculation(&self.tab.doc, &atoms) else {
             return Task::none();
         };
         match generation.target {
             Some(_) => self.regenerate_saved_model(generation),
-            None => self.generate_model(atoms, Display::Both, generation, below_reaction),
+            None => self.generate_model(atoms, Display::Both, generation),
         }
     }
 
@@ -406,7 +401,7 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        self.generate_model(atoms, model.display, generation, None)
+        self.generate_model(atoms, model.display, generation)
     }
 
     fn generate_model(
@@ -414,7 +409,6 @@ impl App {
         atoms: Vec<u64>,
         display: Display,
         generation: ModelGeneration,
-        below_reaction: Option<u64>,
     ) -> Task<Message> {
         let ModelGeneration {
             target,
@@ -464,7 +458,6 @@ impl App {
             current: key,
             display,
             target,
-            below_reaction,
             seed,
             force_field,
             prepared,
@@ -683,12 +676,7 @@ impl App {
         (key == self.model_key()).then_some((id, start))
     }
 
-    fn add_model(
-        &mut self,
-        model: models3d::Model3d,
-        display: Display,
-        below_reaction: Option<u64>,
-    ) {
+    fn add_model(&mut self, model: models3d::Model3d, display: Display) {
         let before = self.tab.doc.clone();
         let atoms = model.linked_ids(&before);
         let previous = before
@@ -700,36 +688,6 @@ impl App {
         models3d::require_version(&mut self.tab.doc);
         let index = self.tab.doc.models.len() - 1;
         models3d::set_display(&mut self.tab.doc, index, display);
-        if let Some(anchor) = below_reaction.and_then(|arrow| below_reaction_anchor(&before, arrow))
-            && let Some((lo, hi)) = self
-                .tab
-                .doc
-                .models
-                .get(index)
-                .and_then(|model| models3d::frame(&self.tab.doc, model))
-        {
-            // Keep whole molecules together so bonds crossing the proposed
-            // frame count too. Their bounds include existing 3D models.
-            let mut objects = reshiki::reactions::molecules(&before, &before.all_ids());
-            objects.extend(
-                before
-                    .object_ids()
-                    .skip(before.atoms.len())
-                    .map(|id| vec![id]),
-            );
-            let obstacles = reshiki::scene::selections_bounds(&before, &objects);
-            let dx = anchor.x - lo.x.midpoint(hi.x);
-            let mut dy = anchor.y - lo.y;
-            let step = hi.y - lo.y + before.drawing_style.bond_length_world;
-            while obstacles.iter().flatten().any(|(a, b)| {
-                a.x <= hi.x + dx && b.x >= lo.x + dx && a.y <= hi.y + dy && b.y >= lo.y + dy
-            }) {
-                dy += step;
-            }
-            if let Some(model) = self.tab.doc.models.get_mut(index) {
-                model.offset = model.offset.offset(dx, dy);
-            }
-        }
         self.changed(before);
         if !self.error {
             self.status = status(display);
@@ -1712,23 +1670,6 @@ impl App {
             .map(|job| job.prepared.ids().to_vec())
             .unwrap_or_default()
     }
-}
-
-/// The centre of the new frame's top edge beneath the reaction drawing.
-fn below_reaction_anchor(doc: &Document, arrow_id: u64) -> Option<Point> {
-    let arrow = doc.arrows.iter().find(|arrow| arrow.id == arrow_id)?;
-    let reaction = doc
-        .reactions
-        .iter()
-        .find(|reaction| reaction.arrow == arrow_id)?;
-    let mut ids = reaction.ids();
-    ids.extend(reshiki::arrow_labels::of(doc, arrow_id).map(|label| label.annotation));
-    let ids = reshiki::molecule_names::include_annotations(doc, &ids);
-    let (_, bottom) = reshiki::scene::selection_bounds(doc, &ids)?;
-    Some(Point::new(
-        arrow.start.x.midpoint(arrow.end.x),
-        bottom.y + doc.drawing_style.bond_length_world,
-    ))
 }
 
 /// The view now shown.

@@ -108,6 +108,21 @@ fn dialog_defaults_to_transition_state_and_keeps_the_source_when_the_drawing_cha
 }
 
 #[test]
+fn each_program_has_its_own_default_ts_file_name() {
+    let (mut app, _) = App::new();
+    let _ = app.open_qc_export_source(source());
+    for (program, name) in [
+        (Program::Gaussian, "test-ts.gjf"),
+        (Program::Orca, "test-ts-orca.inp"),
+        (Program::Gamess, "test-ts-gamess.inp"),
+        (Program::Xyz, "test-ts.xyz"),
+    ] {
+        send(&mut app, ExportAction::Program(program));
+        assert_eq!(app.qc_output().unwrap().main.name, name);
+    }
+}
+
+#[test]
 fn reopened_light_source_exports_without_hessian_and_explains_it_for_orca() {
     let mut source = source();
     Arc::make_mut(&mut source.result)
@@ -271,12 +286,12 @@ fn path_job_changes_update_the_file_suffix_and_preserve_the_reaction_title() {
     send(&mut app, ExportAction::Program(Program::Orca));
     send(&mut app, ExportAction::Job(Job::NebTs));
     let output = app.qc_output().unwrap();
-    assert_eq!(output.main.name, "allyl-vinyl-ether-neb.inp");
+    assert_eq!(output.main.name, "allyl-vinyl-ether-neb-orca.inp");
     assert!(
         output
             .companions
             .iter()
-            .any(|file| file.name.starts_with("allyl-vinyl-ether-neb"))
+            .any(|file| file.name.starts_with("allyl-vinyl-ether-neb-orca"))
     );
 
     send(
@@ -284,7 +299,7 @@ fn path_job_changes_update_the_file_suffix_and_preserve_the_reaction_title() {
         ExportAction::Field(Field::Title, "Refined reaction".into()),
     );
     let output = app.qc_output().unwrap();
-    assert_eq!(output.main.name, "allyl-vinyl-ether-neb.inp");
+    assert_eq!(output.main.name, "allyl-vinyl-ether-neb-orca.inp");
     assert!(output.main.text.contains("Refined reaction"));
 }
 
