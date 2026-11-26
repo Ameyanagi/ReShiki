@@ -1,6 +1,6 @@
 //! Complete fullerene regression, including its closed spatial cage.
 //! The fixture retains the user's InChI graph's original atom/bond indices.
-use reshiki_geometry::{ForceField, Operation, Request, Response, solve};
+use reshiki_geometry::{Ensemble, ForceField, Operation, Request, Response, solve};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -273,6 +273,31 @@ fn generates_a_converged_convex_c60_cage_with_each_force_field() {
         assert_result(&request, &response, &reference.faces);
         // Input atom/bond ordering is the drawing identity contract.
         assert_eq!(serde_json::to_value(&request).unwrap(), original_request);
+    }
+}
+
+#[test]
+fn c60_ensembles_keep_the_eigenvector_cage_pilot_and_random_production_starts() {
+    let reference = reference();
+    for mode in [Ensemble::Embedded, Ensemble::Minimized] {
+        let mut request = request();
+        request.field = ForceField::MMFF94s;
+        request.conformers = 2;
+        request.ensemble = Some(mode);
+        let response = solve(&request).unwrap_or_else(|error| panic!("{mode:?}: {error}"));
+        assert_eq!(response.ensemble.len(), request.conformers as usize);
+        assert!(
+            response.diagnostics.iter().any(|line| {
+                line.contains("initialization=cage-ETDG") && line.contains("trial_attempt_limit=1")
+            }),
+            "{mode:?}: {:?}",
+            response.diagnostics
+        );
+        for member in &response.ensemble {
+            assert!(member.energy.is_finite());
+            assert_eq!(member.converged, mode == Ensemble::Minimized);
+            assert_cage(&request, &member.coordinates, &reference.faces);
+        }
     }
 }
 

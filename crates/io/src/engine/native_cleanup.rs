@@ -86,7 +86,8 @@ pub async fn execute(
     .await?
 }
 
-pub(super) fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
+/// Clean up the drawing without starting identifier helpers.
+pub fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
     if request.protocol != crate::engine::PROTOCOL {
         return Err(Error::Protocol);
     }

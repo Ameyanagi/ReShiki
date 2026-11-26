@@ -1,5 +1,9 @@
 //! Conformer ensembles as files: multi-frame XYZ and SDF with energies.
 
+use super::Format;
+use crate::app::App;
+use crate::app::figure_export::{Kind, Prepared};
+use crate::app::xtb::{palette::Shown, state};
 use reshiki::document::Document;
 use reshiki::qc_input::{SdfEntry, write_sdf};
 use reshiki::qcdata::CalcResult;
@@ -7,6 +11,45 @@ pub(crate) use reshiki::science::frame_bonds;
 #[cfg(test)]
 use reshiki_xtb_jobs::conformers::populations;
 use reshiki_xtb_jobs::conformers::{self, RankedConformer, ranked_trajectory};
+
+impl App {
+    pub(super) fn xtb_prepare_conformer_export(
+        &self,
+        shown: &Shown<'_>,
+        format: Format,
+    ) -> Result<Prepared, String> {
+        let result = &shown.stored.result;
+        let atoms: Vec<_> = shown.atoms.iter().flatten().copied().collect();
+        let (title, stem) = reshiki::molecule_names::label(&self.tab.doc, &atoms)
+            .map(|caption| caption.text.trim().to_owned())
+            .and_then(export_name)
+            .or_else(|| self.export_stem().and_then(export_name))
+            .or_else(|| export_name(state::formula(&shown.frame.numbers)))
+            .unwrap_or_else(|| ("Molecule".into(), "Molecule".into()));
+        let (text, extension) = match format {
+            Format::Sdf => (sdf(&self.tab.doc, shown.atoms, result, &title)?, "sdf"),
+            Format::Xyz => (xyz(result, &title)?, "xyz"),
+        };
+        let count = result.trajectory.as_ref().map_or(0, |path| path.steps());
+        let detail = format!("{count} conformer{}", if count == 1 { "" } else { "s" });
+        Ok(Prepared::new(
+            text.into_bytes(),
+            extension,
+            Some(format!("{stem}-conformers")),
+            vec![detail],
+            Kind::Xtb,
+        ))
+    }
+}
+
+fn export_name(title: String) -> Option<(String, String)> {
+    let stem = title
+        .chars()
+        .filter(|c| (!c.is_control() || c.is_whitespace()) && !r#"<>:"/\|?*"#.contains(*c))
+        .collect::<String>();
+    let stem = stem.split_whitespace().collect::<Vec<_>>().join("-");
+    (!stem.is_empty()).then_some((title, stem))
+}
 
 /// Export every saved conformer as XYZ, lowest energy first.
 pub(crate) fn xyz(result: &CalcResult, title: &str) -> Result<String, String> {

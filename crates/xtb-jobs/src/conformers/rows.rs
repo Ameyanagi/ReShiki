@@ -2,6 +2,8 @@
 
 use reshiki_model::document::Document;
 use reshiki_optimize::conformers::boltzmann_weights;
+#[cfg(not(target_arch = "wasm32"))]
+use reshiki_optimize::conformers::{Automorphisms, Settings, Topology, rmsd};
 use reshiki_qcdata::Trajectory;
 
 use super::KCAL_PER_HARTREE;
@@ -38,6 +40,23 @@ pub fn trajectory_rows(
     rows
 }
 
+/// Symmetry-aware alignment built from the drawing bonds and the original
+/// hydrogen neighbours in the first saved frame.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn trajectory_alignment(
+    doc: &Document,
+    atoms: &[Option<u64>],
+    first: &reshiki_qcdata::Frame,
+) -> Option<(Topology, Automorphisms)> {
+    let bonds = reshiki_model::science::frame_bonds(doc, atoms, &first.positions_angstrom)
+        .into_iter()
+        .map(|(a, b, _)| [a, b])
+        .collect();
+    let topology = Topology::new(first.numbers.clone(), bonds).ok()?;
+    let autos = topology.automorphisms(Settings::default().automorphism_cap);
+    Some((topology, autos))
+}
+
 fn measure_rmsds(
     doc: &Document,
     atoms: &[Option<u64>],
@@ -45,27 +64,19 @@ fn measure_rmsds(
     rows: &mut [RowStatistics],
 ) {
     #[cfg(not(target_arch = "wasm32"))]
-    if let Some(first) = path.frame(0) {
-        use reshiki_model::science;
-        use reshiki_optimize::conformers::{Settings, Topology, rmsd};
-
-        let bonds = science::frame_bonds(doc, atoms, &first.positions_angstrom)
-            .into_iter()
-            .map(|(a, b, _)| [a, b])
-            .collect();
-        if let Ok(topology) = Topology::new(first.numbers.clone(), bonds) {
-            let autos = topology.automorphisms(Settings::default().automorphism_cap);
-            for (index, row) in rows.iter_mut().enumerate() {
-                row.rmsd = path.frame(index).and_then(|frame| {
-                    rmsd(
-                        &topology,
-                        &autos,
-                        &first.positions_angstrom,
-                        &frame.positions_angstrom,
-                    )
-                    .ok()
-                });
-            }
+    if let Some(first) = path.frame(0)
+        && let Some((topology, autos)) = trajectory_alignment(doc, atoms, &first)
+    {
+        for (index, row) in rows.iter_mut().enumerate() {
+            row.rmsd = path.frame(index).and_then(|frame| {
+                rmsd(
+                    &topology,
+                    &autos,
+                    &first.positions_angstrom,
+                    &frame.positions_angstrom,
+                )
+                .ok()
+            });
         }
     }
     // The browser has no conformer fitting.

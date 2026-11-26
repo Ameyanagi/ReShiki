@@ -177,6 +177,28 @@ pub enum StereoChange {
     DoubleBond { atoms: [u64; 2] },
 }
 
+/// Tetrahedral stereochemistry the drawing leaves unspecified.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TetrahedralStereo {
+    /// Potential centres in drawing atom order, including explicit unknowns.
+    pub undefined: Vec<UndefinedCentre>,
+    /// At least one potential centre has a defined drawing configuration.
+    pub has_defined: bool,
+}
+
+/// One potential centre with no defined drawing configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UndefinedCentre {
+    pub atom: u64,
+    /// Full CIP descriptor inferred from the supplied frame, when resolved.
+    pub cip: Option<String>,
+    /// The frame's tetrahedral winding (1 or 2), relative to the prepared
+    /// drawing's bond order. Comparable across frames of the same drawing,
+    /// even when CIP cannot resolve a descriptor. Absent without a frame or
+    /// when the geometry does not define a tetrahedron.
+    pub winding: Option<u8>,
+}
+
 impl PartialEq for Science {
     /// Snapshots share their payloads, so pointer equality decides almost
     /// every comparison without reading the arrays.
@@ -1577,6 +1599,177 @@ pub fn stereo_changes(
     }
     changes.sort_by_key(|(index, _)| *index);
     Ok(changes.into_iter().map(|(_, change)| change).collect())
+}
+
+/// Classify potential tetrahedral centres in `ids` without requiring a 3D
+/// model. A zero drawing chiral tag or a wavy single bond touching either end
+/// leaves a centre undefined. With a frame and its drawing-atom map, infer
+/// each undefined centre's winding and full CIP descriptor from that geometry.
+/// Flat or unresolved centres remain in the result with absent descriptors.
+/// Neither the drawing nor its saved stereochemistry changes.
+pub fn tetrahedral_stereo(
+    doc: &Document,
+    ids: &[u64],
+    frame: Option<(&[Option<u64>], &Frame)>,
+) -> Result<TetrahedralStereo, ScienceError> {
+    use crate::chemistry::{
+        document,
+        kekulize::Direction,
+        stereo::{
+            self, Point3, SpatialAnnotations, SpatialOptions, perception, wedging::Conformer,
+        },
+    };
+
+    if frame.is_some_and(|(atoms, frame)| {
+        atoms.len() != frame.numbers.len() || atoms.len() != frame.positions_angstrom.len()
+    }) {
+        return Err(ScienceError::ModelMismatch);
+    }
+    let chemistry = |error: document::Error| ScienceError::Chemistry(error.to_string());
+    let mut part = crate::editing::analysis_document(doc, ids);
+    part.models.clear();
+    let mut molecule = document::prepare(&part).map_err(chemistry)?;
+    let mut input = molecule.state.clone();
+    // As in the drawing stereo lint, maps and cached labels must not make
+    // chemically equivalent ligands distinct during potential-centre detection.
+    for atom in &mut input.properties.atoms {
+        atom.cip_code = None;
+        atom.cip_rank = None;
+        atom.possible = None;
+    }
+    for atom in &mut input.metadata.atoms {
+        atom.map_number = 0;
+        atom.map_present = false;
+    }
+    let options = perception::Options {
+        clean: false,
+        force: true,
+        flag_possible: true,
+    };
+    let possible = if part.bonds.iter().any(|bond| bond.stereo_authoritative) {
+        let mask: Vec<_> = part
+            .bonds
+            .iter()
+            .map(|bond| bond.stereo_authoritative)
+            .collect();
+        perception::perceive_preserving_bonds(&input, options, &mask)
+    } else {
+        perception::perceive(&input, options)
+    }
+    .map_err(ScienceError::Chemistry)?;
+    let (centres, _) = perception::stereogenic_units(&possible).map_err(ScienceError::Chemistry)?;
+    let centres: HashSet<_> = centres.into_iter().collect();
+    let wiggly: HashSet<_> = molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&molecule.state.directions)
+        .zip(&molecule.state.metadata.bonds)
+        .filter(|((bond, direction), metadata)| {
+            bond.order == 1 && (**direction == Direction::Unknown || metadata.unknown_stereo)
+        })
+        .flat_map(|((bond, _), _)| [bond.a, bond.b])
+        .collect();
+    let mut result = TetrahedralStereo::default();
+    let mut undefined = Vec::new();
+    for (index, (&atom, drawn)) in molecule
+        .ids
+        .iter()
+        .zip(&molecule.state.metadata.atoms)
+        .enumerate()
+    {
+        if !centres.contains(&index) {
+            continue;
+        }
+        if drawn.chiral_tag == 0 || wiggly.contains(&index) {
+            undefined.push(index);
+            result.undefined.push(UndefinedCentre {
+                atom,
+                cip: None,
+                winding: None,
+            });
+        } else if matches!(drawn.chiral_tag, 1 | 2) {
+            result.has_defined = true;
+        }
+    }
+    let Some((atoms, frame)) = frame.filter(|_| !undefined.is_empty()) else {
+        return Ok(result);
+    };
+    let positions: HashMap<_, _> = atoms
+        .iter()
+        .zip(&frame.positions_angstrom)
+        .filter_map(|(&id, &[x, y, z])| id.map(|id| (id, Point3 { x, y, z })))
+        .collect();
+    let conformer = Conformer {
+        positions: molecule
+            .ids
+            .iter()
+            .map(|id| {
+                positions
+                    .get(id)
+                    .copied()
+                    .ok_or(ScienceError::ModelMismatch)
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        is_3d: true,
+    };
+    // Wavy marks say what the drawing leaves open. They must not suppress
+    // inference of the particular geometry the calculation produced.
+    for ((bond, direction), metadata) in molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .zip(&mut molecule.state.directions)
+        .zip(&mut molecule.state.metadata.bonds)
+    {
+        if matches!(*direction, Direction::Wedge | Direction::Hash)
+            || bond.order == 1 && *direction == Direction::Unknown
+        {
+            *direction = Direction::None;
+        }
+        if bond.order == 1 {
+            metadata.unknown_stereo = false;
+        }
+    }
+    molecule.state.metadata = stereo::from_3d(
+        &molecule.state.graph,
+        &molecule.state.metadata,
+        &molecule.state.directions,
+        Some(&conformer),
+        &SpatialAnnotations {
+            non_explicit: vec![None; molecule.ids.len()],
+            done: None,
+        },
+        SpatialOptions {
+            replace_existing: true,
+            allow_nontetrahedral: false,
+        },
+    )
+    .map_err(|error| ScienceError::Chemistry(error.to_string()))?
+    .metadata;
+    molecule.set_conformer(conformer);
+    let labels = document::for_drawing(&molecule, &part)
+        .map_err(chemistry)?
+        .labels()
+        .ok();
+    for (centre, index) in result.undefined.iter_mut().zip(undefined) {
+        let tag = molecule
+            .state
+            .metadata
+            .atoms
+            .get(index)
+            .ok_or(ScienceError::ModelMismatch)?
+            .chiral_tag;
+        centre.winding = matches!(tag, 1 | 2).then_some(tag);
+        centre.cip = labels
+            .as_ref()
+            .and_then(|labels| labels.atoms.get(index))
+            .cloned()
+            .flatten();
+    }
+    Ok(result)
 }
 
 /// Unsigned dihedral between the substituents around the bond axis.

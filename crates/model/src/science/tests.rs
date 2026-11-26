@@ -1294,6 +1294,7 @@ fn transition_state_drawing() -> (Document, u64) {
         seconds: 1.,
         scf_iterations: vec![],
         finished: None,
+        search: None,
         transition_state: Some(Box::new(TransitionStateRun {
             arrow: Some(arrow),
             context: Some(TransitionStateContext {
@@ -1973,6 +1974,223 @@ fn stereo_check_reports_inverted_centre_and_flipped_double_bond() {
             }],
         );
     }
+}
+
+/// A drawing and a hand-built heavy-atom frame; no 3D model is needed.
+fn ibuprofen_stereo(wedge: bool) -> (Document, Vec<u64>, Frame) {
+    let geometry = [
+        [0., 0., 0.], // Stereocentre.
+        [0., 1., 0.8],
+        [-1., -0.5, 0.], // Carboxyl carbon and oxygens.
+        [-2., -0.3, 0.],
+        [-1.1, -1.8, 0.2],
+        [1., -0.5, 0.], // Phenyl ring, para substituted.
+        [1.6, -1.5, 0.],
+        [2.9, -1.5, 0.],
+        [3.5, -0.5, 0.],
+        [2.9, 0.5, 0.],
+        [1.6, 0.5, 0.],
+        [4.8, -0.5, 0.], // Isobutyl group.
+        [5.5, 0.5, 0.1],
+        [6.8, 0.5, 0.2],
+        [5., 1.8, -0.2],
+    ];
+    let mut doc = Document::default();
+    let ids: Vec<_> = geometry
+        .iter()
+        .enumerate()
+        .map(|(index, &[x, y, _])| {
+            let element = if matches!(index, 3 | 4) { "O" } else { "C" };
+            doc.add_atom(element, Point::new(x as f32 * 28., -y as f32 * 28.))
+        })
+        .collect();
+    doc.add_bond(ids[0], ids[1], 1, if wedge { "wedge" } else { "plain" });
+    for (a, b, order) in [
+        (0, 2, 1),
+        (0, 5, 1),
+        (2, 3, 2),
+        (2, 4, 1),
+        (5, 6, 2),
+        (6, 7, 1),
+        (7, 8, 2),
+        (8, 9, 1),
+        (9, 10, 2),
+        (10, 5, 1),
+        (8, 11, 1),
+        (11, 12, 1),
+        (12, 13, 1),
+        (12, 14, 1),
+    ] {
+        doc.add_bond(ids[a], ids[b], order, "plain");
+    }
+    let frame = Frame {
+        numbers: (0..ids.len())
+            .map(|index| if matches!(index, 3 | 4) { 8 } else { 6 })
+            .collect(),
+        positions_angstrom: geometry.to_vec(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    (doc, ids, frame)
+}
+
+#[test]
+fn tetrahedral_stereo_ibuprofen_uses_frame_cip_and_retains_flat_targets() {
+    let (doc, ids, frame) = ibuprofen_stereo(false);
+    let before = doc.clone();
+    let map: Vec<_> = ids.iter().copied().map(Some).collect();
+    let drawing = tetrahedral_stereo(&doc, &ids, None).unwrap();
+    assert_eq!(
+        drawing,
+        TetrahedralStereo {
+            undefined: vec![UndefinedCentre {
+                atom: ids[0],
+                cip: None,
+                winding: None,
+            }],
+            has_defined: false,
+        }
+    );
+    let spatial = tetrahedral_stereo(&doc, &ids, Some((&map, &frame))).unwrap();
+    assert!(!spatial.has_defined);
+    assert_eq!(spatial.undefined.len(), 1);
+    let centre = &spatial.undefined[0];
+    assert_eq!(centre.atom, ids[0]);
+    assert!(matches!(centre.cip.as_deref(), Some("R" | "S")));
+    assert!(matches!(centre.winding, Some(1 | 2)));
+
+    let mut mirror = frame.clone();
+    for xyz in &mut mirror.positions_angstrom {
+        xyz[0] = -xyz[0];
+    }
+    let mirrored = tetrahedral_stereo(&doc, &ids, Some((&map, &mirror))).unwrap();
+    assert_eq!(mirrored.undefined[0].atom, ids[0]);
+    assert!(matches!(
+        mirrored.undefined[0].cip.as_deref(),
+        Some("R" | "S")
+    ));
+    assert_ne!(mirrored.undefined[0].cip, centre.cip);
+    assert_ne!(mirrored.undefined[0].winding, centre.winding);
+
+    let mut flat = frame.clone();
+    for xyz in &mut flat.positions_angstrom {
+        xyz[2] = 0.;
+    }
+    assert_eq!(
+        tetrahedral_stereo(&doc, &ids, Some((&map, &flat))).unwrap(),
+        drawing
+    );
+    assert_eq!(doc, before);
+    assert!(matches!(
+        tetrahedral_stereo(&doc, &ids, Some((&map[..map.len() - 1], &frame))),
+        Err(ScienceError::ModelMismatch)
+    ));
+
+    // Frame order need not match the drawing's atom order.
+    let mut reversed = frame.clone();
+    reversed.numbers.reverse();
+    reversed.positions_angstrom.reverse();
+    let reverse_map: Vec<_> = map.iter().rev().copied().collect();
+    assert_eq!(
+        tetrahedral_stereo(&doc, &ids, Some((&reverse_map, &reversed))).unwrap(),
+        spatial
+    );
+
+    let (defined, ids, frame) = ibuprofen_stereo(true);
+    let map: Vec<_> = ids.iter().copied().map(Some).collect();
+    let expected = TetrahedralStereo {
+        undefined: vec![],
+        has_defined: true,
+    };
+    assert_eq!(tetrahedral_stereo(&defined, &ids, None).unwrap(), expected);
+    assert_eq!(
+        tetrahedral_stereo(&defined, &ids, Some((&map, &frame))).unwrap(),
+        expected
+    );
+}
+
+#[test]
+fn tetrahedral_stereo_wavy_touch_overrides_explicit_winding() {
+    let (mut doc, ids, frame) = ibuprofen_stereo(true);
+    doc.atom_mut(ids[0]).unwrap().stereo = Some(crate::document::AtomStereo {
+        winding: "ccw".into(),
+        neighbors: vec![ids[1], ids[2], ids[5]],
+    });
+    doc.bonds[0].display = "wavy".into();
+    doc.bonds[0].reverse();
+    assert_eq!(
+        crate::chemistry::document::prepare(&doc)
+            .unwrap()
+            .state
+            .metadata
+            .atoms[0]
+            .chiral_tag,
+        2
+    );
+    let map: Vec<_> = ids.iter().copied().map(Some).collect();
+    let report = tetrahedral_stereo(&doc, &ids, Some((&map, &frame))).unwrap();
+    assert!(!report.has_defined);
+    assert_eq!(report.undefined.len(), 1);
+    assert_eq!(report.undefined[0].atom, ids[0]);
+    assert!(matches!(
+        report.undefined[0].cip.as_deref(),
+        Some("R" | "S")
+    ));
+    assert!(matches!(report.undefined[0].winding, Some(1 | 2)));
+}
+
+#[test]
+fn tetrahedral_stereo_keeps_defined_and_undefined_centres_separate() {
+    let mut doc = Document::default();
+    let geometry = [
+        [0., 0., 0.],
+        [0., 1., 0.8],
+        [-1., -0.5, 0.],
+        [1., -0.5, 0.],
+        [1., -1.5, 0.8],
+        [2., 0., 0.],
+    ];
+    let ids: Vec<_> = ["C", "F", "Cl", "C", "Br", "I"]
+        .into_iter()
+        .zip(geometry)
+        .map(|(element, [x, y, _])| {
+            doc.add_atom(element, Point::new(x as f32 * 28., -y as f32 * 28.))
+        })
+        .collect();
+    for (a, b, display) in [
+        (0, 1, "wedge"),
+        (0, 2, "plain"),
+        (0, 3, "plain"),
+        (3, 4, "plain"),
+        (3, 5, "plain"),
+    ] {
+        doc.add_bond(ids[a], ids[b], 1, display);
+    }
+    let frame = Frame {
+        numbers: vec![6, 9, 17, 6, 35, 53],
+        positions_angstrom: geometry.to_vec(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let map: Vec<_> = ids.iter().copied().map(Some).collect();
+    let report = tetrahedral_stereo(&doc, &ids, Some((&map, &frame))).unwrap();
+    assert!(report.has_defined);
+    assert_eq!(report.undefined.len(), 1);
+    assert_eq!(report.undefined[0].atom, ids[3]);
+    assert!(matches!(
+        report.undefined[0].cip.as_deref(),
+        Some("R" | "S")
+    ));
+    let drawn = tetrahedral_stereo(&doc, &ids, None).unwrap();
+    assert!(drawn.has_defined);
+    assert_eq!(drawn.undefined[0].atom, ids[3]);
+    assert_eq!(drawn.undefined[0].cip, None);
 }
 
 #[test]
