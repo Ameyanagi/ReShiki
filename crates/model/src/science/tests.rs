@@ -1297,11 +1297,16 @@ fn transition_state_drawing() -> (Document, u64) {
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
             arrow: Some(arrow),
+            free_energy: false,
+            endpoint_energies_hartree: None,
+            endpoint_thermo: None,
+            reached_positions_angstrom: vec![],
             context: Some(TransitionStateContext {
                 reactant_chemistry: "a".repeat(64),
                 product_chemistry: "b".repeat(64),
                 title: "Saved water reaction".into(),
                 reactant: "water".into(),
+                endpoint_complex: None,
             }),
             saddle_converged: false,
             imaginary: 0,

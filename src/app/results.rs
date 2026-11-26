@@ -294,6 +294,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Query(..)
                 | Action::NewCanvas(..)
                 | Action::DrawingUnit(..)
+                | Action::EnergyUnit(..)
                 | Action::CopyBackground(..)
                 | Action::ExportBackground(..)
                 | Action::Custom(..)
@@ -855,6 +856,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::AtomSinglet(..)
         | Message::ToggleInspector
         | Message::Inspector(..)
+        | Message::ReactionBondHover(..)
         | Message::InsertInput
         | Message::ToggleHelp
         | Message::Help(..)

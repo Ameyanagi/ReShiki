@@ -1,15 +1,17 @@
 //! The results palette's content, kept free of iced: the method line, the
 //! Summary rows, the optimization steps, the log and file sizes, built from
 //! a stored result and what this session still knows about its run.
+use super::EnergyUnit;
 use super::state::{
     Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, capitalized, formula, scientific, signed,
     symbol,
 };
 use crate::app::files::{nonblank, program_label};
 use reshiki::qcdata;
+pub(crate) use reshiki::qcdata::HARTREE_TO_EV as EV_PER_HARTREE;
 use reshiki::qcdata::{
-    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Source, Status, Task,
-    XtbConventions,
+    Beta, CalcResult, Convergence, Frame, KCAL_PER_HARTREE, OrbitalSet, Orbitals, Settings, Source,
+    Status, Task, XtbConventions,
 };
 use reshiki_xtb_jobs::OPTIMIZER_SEPARATOR;
 
@@ -26,11 +28,8 @@ pub(super) fn method_without_optimizer(method: &str) -> &str {
 pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequencies approximate, orbitals qualitative (minimal basis).";
 /// The gap under which the electronic structure counts as near-degenerate.
 const NEAR_DEGENERATE_EV: f64 = 0.1;
-/// CODATA 2022, as the worker converts its gap.
-pub(crate) const EV_PER_HARTREE: f64 = 27.211386245981;
 /// Debye per e·bohr.
 const DEBYE_PER_E_BOHR: f64 = 2.541746473;
-const KCAL_PER_MOL_PER_HARTREE: f64 = 627.509474;
 /// Bond orders listed from this order up: what the worker reports and a
 /// saved file keeps.
 pub(crate) const BOND_ORDER_MIN: f64 = reshiki::qcdata::LIGHT_BOND_ORDER_MIN;
@@ -479,7 +478,7 @@ pub(super) fn summary_grid_rows(
             format!(
                 "{} Eh ({} kcal/mol)",
                 signed(zpve, 6),
-                signed(zpve * KCAL_PER_MOL_PER_HARTREE, 2)
+                signed(zpve * KCAL_PER_HARTREE, 2)
             ),
         ));
         if let Some(energy) = result.energy_hartree {
@@ -742,7 +741,7 @@ pub(crate) fn log(
     info: Option<&RunInfo>,
     method: &str,
 ) -> String {
-    log_with_ts(result, frame, info, method, None)
+    log_with_ts(result, frame, info, method, None, EnergyUnit::default())
 }
 
 pub(super) fn log_with_ts(
@@ -751,6 +750,7 @@ pub(super) fn log_with_ts(
     info: Option<&RunInfo>,
     method: &str,
     session: Option<&super::ts::Session>,
+    unit: EnergyUnit,
 ) -> String {
     let mut lines = vec![method.to_owned()];
     match &result.provenance.source {
@@ -828,7 +828,7 @@ pub(super) fn log_with_ts(
     if let Some(info) = info.filter(|info| !info.numerics.is_empty()) {
         lines.push(format!("numerics {}", info.numerics));
     }
-    let search = super::ts::view::search_log(result, session);
+    let search = super::ts::view::search_log(result, session, unit);
     if !search.is_empty() {
         lines.push(String::new());
         lines.push(search);

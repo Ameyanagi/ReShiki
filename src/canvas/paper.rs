@@ -16,6 +16,7 @@ mod overlays;
 #[cfg(test)]
 mod review_tests;
 pub(super) use overlays::OrbitGuideCache;
+pub(crate) use overlays::{BondChangeKind, BondChangeMark, draw_bond_changes};
 mod placement;
 #[cfg(test)]
 mod preview_tests;
@@ -367,6 +368,7 @@ impl MoleculeCanvas<'_> {
         let nmr_cache = (cached_camera.is_some() && translation.is_none()).then_some(&state.scene);
         self.draw_nmr_assignments(frame, preview, selected, bounds, nmr_cache);
         self.draw_outdated_models(frame, preview, bounds);
+        draw_bond_changes(frame, preview, &self.bond_changes, self.camera, bounds);
         self.draw_editor_markers(frame, preview, bounds);
         self.draw_cycle_drop(frame, cycle_drop.as_ref(), bounds);
         self.draw_seat_hint(frame, seat_hint.as_ref(), bounds);

@@ -235,6 +235,7 @@ fn completion() -> (Launch, Completion) {
     let done = Completion {
         report: ts_report(),
         checked: Ok(checked),
+        endpoint_thermo: None,
         engine: crate::app::xtb::run::example_engine(),
         changes: Changes {
             form: vec![(0, 1)],
@@ -279,6 +280,7 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
     assert!(report.extras.connects);
     assert!(report.extras.saddle_converged);
     assert_eq!(report.extras.num_imaginary, 1);
+    assert!(report.extras.candidate.is_none());
     let trajectory = result.trajectory.as_ref().unwrap();
     assert_eq!(trajectory.energies_hartree, [-3., -1.1, -2.]);
     assert!(trajectory.positions_angstrom.is_empty());
@@ -335,6 +337,112 @@ fn result_energy_is_the_refined_search_energy_for_every_presentation() {
     assert!((presentation.refined_kcal.unwrap() - 1.95 * 627.509_474_063).abs() < 1e-8);
 }
 
+fn endpoint_computed() -> Computed {
+    let (_, done) = completion();
+    let mut computed = done.checked.unwrap();
+    computed.energy = -999.;
+    computed.vibrations.as_mut().unwrap().frequencies_cm1 = vec![300.];
+    computed
+}
+
+#[test]
+fn free_energy_uses_optimized_endpoints_and_reuses_the_existing_ts_analysis() {
+    let (launch, mut done) = completion();
+    // The band endpoint samples deliberately differ from the optimized minima.
+    done.report.path[0].energy = -30.;
+    done.report.path.last_mut().unwrap().energy = -20.;
+    let mut calls = Vec::new();
+    let analysis = endpoint_thermochemistry(
+        &launch.frame,
+        &done.report,
+        &done.masses,
+        |positions, masses| {
+            calls.push((positions.to_vec(), masses.to_vec()));
+            Ok(endpoint_computed())
+        },
+    )
+    .unwrap();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0],
+        (done.report.reactant.positions.clone(), done.masses.clone())
+    );
+    assert_eq!(
+        calls[1],
+        (done.report.product.positions.clone(), done.masses.clone())
+    );
+    assert!(analysis.corrections.iter().all(|slot| {
+        let thermo = slot.as_ref().unwrap();
+        thermo.temperature_k == 298.15 && thermo.pressure_pa == 101_325.
+    }));
+    done.endpoint_thermo = Some(analysis);
+    let report = complete(&launch, done).unwrap();
+    assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
+    assert!(report.extras.endpoint_thermo.is_some());
+    assert_eq!(report.result.energy_hartree, Some(-1.));
+    let expected_ts = thermochemistry(
+        &report.frames[0],
+        &report.frames[0].positions_angstrom,
+        &report.frames[0].masses_amu,
+        &[-55.],
+    );
+    assert_eq!(report.result.thermo, Some(expected_ts));
+    assert_eq!(report.result.status, qcdata::Status::Converged);
+    report.result.validate(&report.frames[0]).unwrap();
+}
+
+#[test]
+fn endpoint_frequency_failures_retain_electronic_energies_and_do_not_stop_the_other_end() {
+    for failed in 0..2 {
+        let (launch, mut done) = completion();
+        let mut endpoints = [Ok(endpoint_computed()), Ok(endpoint_computed())];
+        endpoints[failed] = Err(ts::TsError::Failed("endpoint worker timed out".into()));
+        let mut endpoints = endpoints.into_iter();
+        let analysis =
+            endpoint_thermochemistry(&launch.frame, &done.report, &done.masses, |_, _| {
+                endpoints.next().unwrap()
+            })
+            .unwrap();
+        assert!(endpoints.next().is_none());
+        assert!(analysis.diagnostics[failed].1.contains("timed out"));
+        done.endpoint_thermo = Some(analysis);
+        let report = complete(&launch, done).unwrap();
+        assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
+        let corrections = report.extras.endpoint_thermo.unwrap();
+        assert!(corrections[failed].is_none());
+        assert!(corrections[1 - failed].is_some());
+        assert!(report.result.thermo.is_some());
+        assert_eq!(report.result.status, qcdata::Status::Converged);
+    }
+}
+
+#[test]
+fn endpoint_free_energy_rejects_significant_imaginary_modes_and_propagates_cancellation() {
+    let (launch, done) = completion();
+    let analysis = endpoint_thermochemistry(&launch.frame, &done.report, &done.masses, |_, _| {
+        let mut computed = endpoint_computed();
+        computed.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-21.];
+        Ok(computed)
+    })
+    .unwrap();
+    assert_eq!(analysis.corrections, [None, None]);
+    assert!(
+        analysis
+            .diagnostics
+            .iter()
+            .all(|(_, value)| value.contains("imaginary frequency"))
+    );
+    let mut calls = 0;
+    assert!(matches!(
+        endpoint_thermochemistry(&launch.frame, &done.report, &done.masses, |_, _| {
+            calls += 1;
+            Err(ts::TsError::Cancelled)
+        }),
+        Err(ts::TsError::Cancelled)
+    ));
+    assert_eq!(calls, 1);
+}
+
 #[test]
 fn wrong_irc_endpoint_classes_never_present_a_headline_barrier() {
     for reached in [
@@ -351,7 +459,11 @@ fn wrong_irc_endpoint_classes_never_present_a_headline_barrier() {
         let report = complete(&launch, done).unwrap();
         let presentation = super::super::view::presentation(&report.result, None);
         assert!(!presentation.reliable());
-        assert!(!presentation.status_line().contains("kcal/mol"));
+        assert!(
+            !presentation
+                .status_line(crate::appearance::EnergyUnit::KcalPerMol)
+                .contains("kcal/mol")
+        );
     }
 }
 
@@ -484,6 +596,37 @@ fn irc_failure_names_the_reached_endpoints() {
         }
         assert_eq!(failure_reason(&report, &[-60.]), Some(reason.into()));
     }
+}
+
+#[test]
+fn live_band_events_throttle_intermediate_samples_and_always_publish_the_final_band() {
+    let mut last_band = None;
+    let start = Instant::now();
+    let mut send_band = |iteration, millis, energies, finished| {
+        progress(
+            ts::Event::Neb {
+                iteration,
+                energies,
+                max_force: 0.1,
+                climbing: None,
+                finished,
+            },
+            &mut last_band,
+            || start + Duration::from_millis(millis),
+        )
+    };
+    assert!(matches!(
+        send_band(0, 0, &[-5., -4.9, -5.], false),
+        Some(Event::Neb { iteration: 0, .. })
+    ));
+    assert!(send_band(1, 249, &[-5., -4.91, -5.], false).is_none());
+    assert!(
+        matches!(send_band(2, 250, &[-5., -4.92, -5.], false), Some(Event::Neb {
+        iteration: 2, energies
+    }) if energies == [-5., -4.92, -5.])
+    );
+    assert!(matches!(send_band(3, 251, &[-5., -4.93, -5.], true),
+        Some(Event::Neb { iteration: 3, energies }) if energies == [-5., -4.93, -5.]));
 }
 
 #[test]

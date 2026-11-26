@@ -107,7 +107,7 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
         "{}",
         shown.method()
     );
-    let rows = shown.rows();
+    let rows = shown.rows(None);
     let labels: Vec<_> = rows.iter().map(|(label, _)| label.as_str()).collect();
     assert_eq!(
         &labels[..3],
@@ -532,7 +532,7 @@ fn a_reopened_light_optfreq_result_shows_the_vibrations_tab() {
     reopened.tab.xtb.palette.show(&result);
     let shown = reopened.xtb_shown().expect("a saved result");
     assert!(shown.info.is_none());
-    let rows = shown.rows();
+    let rows = shown.rows(None);
     for (label, value) in [
         ("Frequencies", "lowest 1590 cm⁻¹"),
         ("ZPVE", "0.019453 Eh (12.21 kcal/mol)"),

@@ -28,8 +28,6 @@ pub enum Page {
     Model,
     /// xTB on the selected molecule: Energy or Optimize.
     Calculate,
-    /// Review the clicked reaction arrow before calculating.
-    CalculateReaction(u64),
     /// Property lines under the clicked molecule, ticked when shown.
     Properties,
     /// Chemistry, Reference or Illustration, ticked for the current one.
@@ -307,26 +305,6 @@ impl App {
                         command(label, Message::Xtb(Action::Entry(Entry::Task(task))), idle)
                     })
                     .into()
-            }
-            Page::CalculateReaction(arrow) => {
-                use super::xtb::{Action, ts};
-                use ts::review::Mode;
-                let enabled = super::xtb::available()
-                    && !self.tab.busy
-                    && !self.xtb_running()
-                    && ts::review::reaction_arrow(&self.tab.doc, arrow);
-                [
-                    ("Reaction energy", Mode::Energy),
-                    ("Transition state", Mode::TransitionState),
-                ]
-                .map(|(label, mode)| {
-                    command(
-                        label,
-                        Message::Xtb(Action::Ts(ts::Action::Review(mode, Some(arrow)))),
-                        enabled,
-                    )
-                })
-                .into()
             }
             Page::Properties => self.property_entries(),
             Page::Purpose => reshiki::purpose::Purpose::ALL
@@ -845,7 +823,13 @@ impl App {
         // Builds that cannot calculate hide it, as they hide Run.
         if super::xtb::available() {
             if let Some(arrow) = self.context_calculate_reaction_arrow() {
-                entries.push(submenu("Calculate (xTB)", Page::CalculateReaction(arrow)));
+                entries.push(command(
+                    "Calculate (xTB)",
+                    Message::Xtb(super::xtb::Action::Ts(super::xtb::ts::Action::Calculate(
+                        arrow,
+                    ))),
+                    self.xtb_can_calculate_reaction(arrow),
+                ));
             } else if reshiki::models3d::selected_molecule(&self.tab.doc, &self.tab.selected)
                 .is_some()
             {

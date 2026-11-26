@@ -31,7 +31,7 @@ const ENERGY_CANCELLATION_RELATIVE: f64 = 1e-3;
 
 /// Bound expensive checks that do not advance the normal refinement schedule:
 /// rejected trial certifications, force-only acceptances, secant refreshes and
-/// a band restart share seven exact Hessians for the entire search. The eighth
+/// a band restart share seven exact Hessians per refinement. The eighth
 /// slot is reserved for a force-converged trial. Normal scheduled/force-converged
 /// trials refund their slot on acceptance.
 /// Thus the total is at most one initial + accepted steps + eight recovery
@@ -576,9 +576,10 @@ pub(super) fn refine_band(
     options: &TsOptions,
     on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
 ) -> Result<Refinement, TsError> {
+    let start = &band.path[band.climbing];
     run(
         p,
-        &band.path[band.climbing],
+        (&start.positions, Some(start.energy)),
         &band.tangent,
         Some(band),
         masses,
@@ -596,28 +597,56 @@ pub(super) fn refine(
     options: &TsOptions,
     on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
 ) -> Result<Refinement, TsError> {
-    run(p, start, tangent, None, masses, options, on_event)
+    run(
+        p,
+        (&start.positions, Some(start.energy)),
+        tangent,
+        None,
+        masses,
+        options,
+        on_event,
+    )
+}
+
+pub(super) fn refine_displaced(
+    p: &mut impl Potential,
+    positions: &[f64],
+    tangent: &[f64],
+    masses: &[f64],
+    options: &TsOptions,
+    on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
+) -> Result<Refinement, TsError> {
+    run(
+        p,
+        (positions, None),
+        tangent,
+        None,
+        masses,
+        options,
+        on_event,
+    )
 }
 
 /// Keep the Normal projected-force and exact IRC launch-mode displacement
 /// requirements. Empty masses denote synthetic surfaces in arbitrary units.
 fn run(
     p: &mut impl Potential,
-    start: &Minimum,
+    (positions, saved_energy): (&[f64], Option<f64>),
     tangent: &[f64],
     band: Option<&Band>,
     masses: &[f64],
     options: &TsOptions,
     on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
 ) -> Result<Refinement, TsError> {
+    let mut x = positions.to_vec();
+    let (mut energy, mut gradient) = evaluate(p, &x)?;
+    let start_energy = saved_energy.unwrap_or(energy);
     let headroom = options.saddle_headroom_kcal / crate::KCAL_PER_HARTREE;
     let mut ceiling = if masses.is_empty() {
         f64::INFINITY
     } else {
-        start.energy + headroom
+        start_energy + headroom
     };
-    let mut x = start.positions.clone();
-    let (mut energy, mut gradient) = evaluate(p, &x)?;
     let mut original_seed = band.map(|_| RecoverySeed {
         point: Minimum {
             positions: x.clone(),
@@ -747,7 +776,7 @@ fn run(
                 ceiling_exhausted = probe.ceiling_exhausted;
                 diagnostics.extend(probe.diagnostics);
             }
-            if stalled && x != start.positions {
+            if stalled && x != positions {
                 seeds.extend(original_seed.take());
             }
             for seed in seeds {
@@ -797,7 +826,7 @@ fn run(
                 // Reuse the energy and gradient that established this seed.
                 // The accepted midpoint gets the same headroom as the original CI.
                 if !masses.is_empty() {
-                    ceiling = start.energy.max(seed.point.energy) + headroom;
+                    ceiling = start_energy.max(seed.point.energy) + headroom;
                 }
                 x = seed.point.positions;
                 energy = seed.point.energy;

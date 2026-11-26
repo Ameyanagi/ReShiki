@@ -1,17 +1,66 @@
 //! Transition-state path profile and the saved saddle's details.
 use super::{Action, Session};
-use crate::app::workspace::{accessible_command, control, panel};
+use crate::app::workspace::{accessible_command, control, hover_hint, panel};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
 use crate::app::xtb::tone::{Tone, line};
-use crate::app::xtb::{Action as XtbAction, state};
+use crate::app::xtb::{Action as XtbAction, EnergyUnit, state};
 use crate::app::{App, Message};
-use iced::widget::{canvas, column, container, row, text};
+use iced::widget::{canvas, column, container, row, text, tooltip};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
-use reshiki::qcdata::{CalcResult, Frame, Status};
+use reshiki::qcdata::{CalcResult, Frame, KCAL_PER_HARTREE, Status};
 
-const KCAL_PER_HARTREE: f64 = 627.509_474_063;
 const IMAGINARY_CM1: f64 = 50.;
+pub(super) const THERMO_IMAGINARY_CM1: f64 = 20.;
+pub(super) const OPTIMIZED_COMPLEX: &str = "optimized complex";
 const RELOAD_NOTE: &str = "Run the search again to inspect structures along the saved path.";
+pub(super) const IRC_RETURNS_TO_REACTANT: &str = "IRC reaches the reactant on both sides";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Recovery {
+    CheckMap,
+    RefineHighest,
+    ShowWhere,
+    FinerPath,
+}
+
+impl Recovery {
+    pub(super) fn button(
+        self,
+        id: &'static str,
+        arrow: Option<u64>,
+        enabled: bool,
+        has_endpoint: bool,
+    ) -> Element<'static, Message> {
+        let label = match self {
+            Self::CheckMap => "Check the atom map",
+            Self::RefineHighest => "Refine from the highest point",
+            Self::ShowWhere => "Show where it leads",
+            Self::FinerPath => "Try again with a finer path",
+        };
+        let missing_endpoint = self == Self::ShowWhere && !has_endpoint;
+        let command: Element<'static, Message> = accessible_command(id, label, label)
+            .style(crate::appearance::primary)
+            .on_press_maybe(arrow.filter(|_| enabled && !missing_endpoint).map(|arrow| {
+                send(match self {
+                    Self::CheckMap => Action::ReviewMap(arrow),
+                    Self::RefineHighest => Action::Retry(arrow, super::Retry::RefineHighest),
+                    Self::ShowWhere => Action::ShowWhere(arrow),
+                    Self::FinerPath => Action::Retry(arrow, super::Retry::FinerPath),
+                })
+            }))
+            .into();
+        if missing_endpoint {
+            hover_hint(
+                command,
+                "This result has no saved endpoint",
+                tooltip::Position::Top,
+            )
+            .into()
+        } else {
+            command
+        }
+    }
+}
 
 /// One interpretation of the saved result, shared by the card, Path and status.
 /// A candidate's energy is never exposed as a barrier before these checks pass.
@@ -19,6 +68,7 @@ const RELOAD_NOTE: &str = "Run the search again to inspect structures along the 
 pub(in crate::app::xtb) struct Presentation {
     pub refined_kcal: Option<f64>,
     pub reason: Option<String>,
+    pub(super) recovery: Recovery,
     pub warning: Option<String>,
     pub highest_path_kcal: Option<f64>,
     pub verification: String,
@@ -29,17 +79,16 @@ impl Presentation {
         self.refined_kcal.is_some()
     }
 
-    #[cfg(any(test, all(not(target_arch = "wasm32"), feature = "xtb")))]
-    pub fn status_line(&self) -> String {
-        match self.barrier_line() {
+    pub fn status_line(&self, unit: EnergyUnit) -> String {
+        match self.barrier_line(unit) {
             Some(barrier) => format!("Transition state · {barrier}"),
-            None => "No reliable transition state found.".into(),
+            None => "xTB · No reliable transition state found.".into(),
         }
     }
 
-    pub fn barrier_line(&self) -> Option<String> {
+    pub fn barrier_line(&self, unit: EnergyUnit) -> Option<String> {
         self.refined_kcal
-            .map(|value| format!("ΔE‡ {} kcal/mol", state::signed(value, 1)))
+            .map(|value| format!("ΔE‡ {}", unit.format(value)))
     }
 }
 
@@ -54,15 +103,26 @@ fn wrong_endpoints(reason: &str) -> bool {
     reason.starts_with("IRC reaches ") || reason.starts_with("IRC did not connect ")
 }
 
+fn disagreement_counts(reason: &str) -> Option<(usize, usize)> {
+    let counts =
+        reason.strip_prefix("engine/worker imaginary frequency counts disagree: engine ")?;
+    let (engine, worker) = counts.split_once(", worker ")?;
+    Some((engine.parse().ok()?, worker.parse().ok()?))
+}
+
+pub(super) fn has_reached_endpoint(result: &CalcResult) -> bool {
+    super::saved_search(result).is_some_and(|search| !search.reached_positions_angstrom.is_empty())
+}
+
 fn readable_reason(reason: &str) -> String {
-    if reason == "saddle refinement did not converge" {
+    if reason == IRC_RETURNS_TO_REACTANT {
+        "The path returned to the reactant on both sides. The bonds that should change may not match this drawing.".into()
+    } else if reason == "saddle refinement did not converge" {
         "The transition-state refinement did not converge.".into()
     } else if reason.contains("on both sides") {
         reason.replacen("IRC reaches", "The reaction path reaches", 1) + "."
     } else if wrong_endpoints(reason) {
         reason.replacen("IRC", "The reaction path", 1) + "."
-    } else if reason.starts_with("engine/worker imaginary frequency counts disagree") {
-        "The two frequency checks disagree about the number of imaginary frequencies.".into()
     } else if let Some(reason) = reason.strip_prefix("worker check failed: ") {
         format!("The independent frequency check failed: {reason}.")
     } else if let Some(reason) = reason.strip_prefix("IRC failed: ") {
@@ -96,6 +156,11 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| session.map(|s| s.extras.num_imaginary))
         .or(saved_count);
     let reported = reported_reason(result);
+    let disagreement = reported.and_then(disagreement_counts).or_else(|| {
+        count
+            .zip(saved_count)
+            .filter(|(engine, worker)| engine != worker)
+    });
     // Converged results passed both the endpoint and independent frequency checks.
     let accepted = matches!(result.status, Status::Converged);
     let saddle_converged = saved
@@ -103,19 +168,42 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| session.map(|s| s.extras.saddle_converged))
         .unwrap_or(accepted);
     let connects = session.map_or(accepted, |s| s.extras.connects);
-    let reliable =
-        super::is_ts(result) && saddle_converged && count == Some(1) && connects && accepted;
+    let reliable = super::is_ts(result)
+        && saddle_converged
+        && count == Some(1)
+        && disagreement.is_none()
+        && connects
+        && accepted;
     let energies = super::path_energies(result);
     let (deltas, candidate) = relative_energies(energies, result.energy_hartree);
     let refined_kcal = candidate.filter(|value| reliable && value.is_finite());
+    let recovery = match reported {
+        _ if disagreement.is_some() => Recovery::FinerPath,
+        Some(IRC_RETURNS_TO_REACTANT) => Recovery::CheckMap,
+        Some(reason) if wrong_endpoints(reason) => Recovery::ShowWhere,
+        _ if count.is_some_and(|count| count >= 2)
+            && session.is_some_and(|session| session.can_refine(result)) =>
+        {
+            Recovery::RefineHighest
+        }
+        _ => Recovery::FinerPath,
+    };
     let reason = if refined_kcal.is_some() {
         None
-    } else if let Some(count) = count.filter(|&count| count != 1) {
-        Some(match count {
-            0 => "The search ended at a point with no significant imaginary frequency.".into(),
-            2 => "The search ended at a point with two imaginary frequencies.".into(),
-            count => format!("The search ended at a point with {count} imaginary frequencies."),
+    } else if let Some((engine, worker)) = disagreement {
+        Some(format!(
+            "The two frequency checks disagree (engine {engine}, worker {worker})."
+        ))
+    } else if matches!(recovery, Recovery::CheckMap | Recovery::ShowWhere) {
+        reported.map(readable_reason)
+    } else if let Some(count) = count.filter(|&count| count >= 2) {
+        Some(if count == 2 {
+            "The search ended at a point with two imaginary frequencies.".into()
+        } else {
+            format!("The search ended at a point with {count} imaginary frequencies.")
         })
+    } else if count == Some(0) {
+        Some("The search ended at a point with no significant imaginary frequency.".into())
     } else if let Some(reason) = reported {
         Some(readable_reason(reason))
     } else if !saddle_converged {
@@ -132,13 +220,13 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| frequencies.and_then(|f| f.iter().copied().find(|&f| f < -IMAGINARY_CM1)));
     let frequency_check = match (count, frequency) {
         (Some(1), Some(frequency)) => {
-            format!("One imaginary frequency {:.0}i cm⁻¹", frequency.abs())
+            format!("✓ one imaginary frequency {:.0}i cm⁻¹", frequency.abs())
         }
-        (Some(1), None) => "One imaginary frequency".into(),
+        (Some(1), None) => "✓ one imaginary frequency".into(),
         _ => "Transition state not verified".into(),
     };
     let verification = if connects {
-        format!("{frequency_check} · connects reactant and product ✓")
+        format!("{frequency_check} · ✓ path connects reactant and product")
     } else {
         frequency_check
     };
@@ -155,6 +243,7 @@ pub(in crate::app::xtb) fn presentation(
     Presentation {
         refined_kcal,
         reason,
+        recovery,
         warning,
         highest_path_kcal: deltas
             .into_iter()
@@ -165,7 +254,11 @@ pub(in crate::app::xtb) fn presentation(
 }
 
 /// Technical search detail belongs in Log, including after the file is reopened.
-pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Session>) -> String {
+pub(in crate::app::xtb) fn search_log(
+    result: &CalcResult,
+    session: Option<&Session>,
+    unit: EnergyUnit,
+) -> String {
     if !super::is_ts(result) {
         return String::new();
     }
@@ -233,10 +326,18 @@ pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Sess
         rows.push(("Total time".into(), format!("{:.2} s", run.seconds)));
     }
     let mut lines = vec!["Transition-state search".into()];
-    lines.extend(
-        rows.into_iter()
-            .map(|(label, value)| format!("{label}: {value}")),
-    );
+    lines.extend(rows.into_iter().map(|(label, value)| {
+        if label == "Folded the starting conformer"
+            && let Some((distances, energy)) = value.rsplit_once(" (")
+            && let Some(energy) = energy.strip_suffix(" kcal/mol)")
+            && let Ok(kcal) = energy.parse::<f64>()
+        {
+            let plus = if kcal.is_sign_positive() { "+" } else { "" };
+            format!("{label}: {distances} ({plus}{})", unit.format(kcal))
+        } else {
+            format!("{label}: {value}")
+        }
+    }));
     lines.join("\n")
 }
 
@@ -269,8 +370,8 @@ fn profile_note(positions: bool, stale: bool) -> Option<&'static str> {
     }
 }
 
-fn selection_label(delta: f64) -> String {
-    format!("ΔE {} kcal/mol", state::signed(delta, 1))
+fn selection_label(delta: f64, unit: EnergyUnit) -> String {
+    format!("ΔE {}", unit.format(delta))
 }
 
 fn relative_energies(energies: &[f64], saddle: Option<f64>) -> (Vec<f64>, Option<f64>) {
@@ -284,7 +385,162 @@ fn relative_energies(energies: &[f64], saddle: Option<f64>) -> (Vec<f64>, Option
     )
 }
 
+/// The optimized endpoints remain valid reaction-energy evidence even if the
+/// saddle was not verified. Older saves kept these same endpoints in the band.
+pub(in crate::app::xtb) fn reaction_energy_kcal(result: &CalcResult) -> Option<f64> {
+    let hartree = super::saved_search(result)
+        .and_then(|search| search.reaction_energy_hartree())
+        .or_else(|| {
+            let [reactant, .., product] = super::path_energies(result) else {
+                return None;
+            };
+            Some(product - reactant)
+        })?;
+    let kcal = hartree * KCAL_PER_HARTREE;
+    kcal.is_finite().then_some(kcal)
+}
+
+pub(in crate::app::xtb) fn reaction_gibbs_kcal(result: &CalcResult) -> Option<f64> {
+    let delta = super::saved_search(result)?.reaction_gibbs_hartree()? * KCAL_PER_HARTREE;
+    delta.is_finite().then_some(delta)
+}
+
+pub(super) fn reaction_gibbs_unavailable(result: &CalcResult) -> Option<String> {
+    let search = super::saved_search(result)?;
+    if !search.free_energy || reaction_gibbs_kcal(result).is_some() {
+        return None;
+    }
+    let reason = search.diagnostics.iter().find_map(|(label, detail)| {
+        let side = match label.as_str() {
+            "Reactant thermochemistry" => "reactant",
+            "Product thermochemistry" => "product",
+            _ => return None,
+        };
+        let reason = detail.strip_prefix("Free energy unavailable: ")?;
+        Some(format!("{side} frequency analysis failed ({reason})"))
+    });
+    Some(format!(
+        "Reaction ΔG not reported: {}",
+        reason.as_deref().unwrap_or("see the calculation log")
+    ))
+}
+
+/// The sorted frequency list starts with the reaction mode for a verified TS.
+pub(super) fn extra_thermo_imaginary(frequencies: &[f64]) -> Option<f64> {
+    frequencies
+        .iter()
+        .copied()
+        .filter(|&f| f <= -THERMO_IMAGINARY_CM1)
+        .nth(1)
+}
+
+pub(super) fn barrier_gibbs_unavailable(result: &CalcResult) -> Option<String> {
+    let frequency = extra_thermo_imaginary(&result.vibrations.as_ref()?.frequencies_cm1)?;
+    Some(format!(
+        "ΔG‡ not reported: a second small imaginary mode ({:.0}i cm⁻¹)",
+        frequency.abs()
+    ))
+}
+
+/// A Gibbs barrier needs the same verified saddle as the electronic barrier,
+/// plus TS and reactant corrections evaluated under matching conditions.
+pub(in crate::app::xtb) fn barrier_gibbs_kcal(result: &CalcResult) -> Option<f64> {
+    if !presentation(result, None).reliable() {
+        return None;
+    }
+    let search = super::saved_search(result)?;
+    let [reactant, _] = search.endpoint_energies_hartree?;
+    let [reactant_thermo, _] = search.endpoint_thermo.as_ref()?;
+    let reactant_thermo = reactant_thermo.as_ref()?;
+    let ts_thermo = result.thermo.as_ref()?;
+    if result
+        .vibrations
+        .as_ref()
+        .is_some_and(|v| extra_thermo_imaginary(&v.frequencies_cm1).is_some())
+    {
+        return None;
+    }
+    if (ts_thermo.temperature_k - reactant_thermo.temperature_k).abs() > 1e-6
+        || (ts_thermo.pressure_pa - reactant_thermo.pressure_pa).abs() > 1e-3
+        || (ts_thermo.frequency_scale - reactant_thermo.frequency_scale).abs() > 1e-12
+        || (ts_thermo.rotor_cutoff_cm1 - reactant_thermo.rotor_cutoff_cm1).abs() > 1e-12
+        || (ts_thermo.imaginary_cutoff_cm1 - reactant_thermo.imaginary_cutoff_cm1).abs() > 1e-12
+    {
+        return None;
+    }
+    let delta = (result.energy_hartree? + ts_thermo.gibbs_correction_hartree
+        - reactant
+        - reactant_thermo.gibbs_correction_hartree)
+        * KCAL_PER_HARTREE;
+    delta.is_finite().then_some(delta)
+}
+
+/// Copy and export the same reactant-relative quantities shown on Path.
+pub(in crate::app::xtb) fn path_rows(
+    result: &CalcResult,
+    session: Option<&Session>,
+    unit: EnergyUnit,
+    reference: Option<&str>,
+) -> Vec<(String, String)> {
+    let (deltas, _) = relative_energies(super::path_energies(result), None);
+    let mut rows: Vec<_> = deltas
+        .iter()
+        .enumerate()
+        .map(|(index, &delta)| {
+            let label = if index == 0 {
+                "R ΔE".into()
+            } else if index + 1 == deltas.len() {
+                reference.map_or_else(|| "P ΔE".into(), |reference| format!("P ΔE ({reference})"))
+            } else {
+                format!("Image {} ΔE", index + 1)
+            };
+            (label, unit.format(delta))
+        })
+        .collect();
+    if let Some(delta) = presentation(result, session).refined_kcal {
+        rows.push(("TS‡ ΔE".into(), unit.format(delta)));
+    }
+    if let Some(delta) = barrier_gibbs_kcal(result) {
+        rows.push(("TS‡ ΔG (298.15 K)".into(), unit.format(delta)));
+    }
+    if let Some(delta) = reaction_gibbs_kcal(result) {
+        rows.push(("P ΔG (298.15 K)".into(), unit.format(delta)));
+    }
+    rows
+}
+
 impl App {
+    pub(in crate::app::xtb) fn xtb_ts_live_path(&self, live: &super::Live) -> Element<'_, Message> {
+        if live.energies.is_empty() {
+            return container(line("Finding a path…", Tone::Muted))
+                .center(Length::Fill)
+                .height(190)
+                .into();
+        }
+        PathChart::live(&live.energies, self.appearance.energy_unit).widget()
+    }
+
+    fn xtb_ts_path_chart(&self, shown: &Shown<'_>, refined_delta: Option<f64>) -> PathChart {
+        let result = &shown.stored.result;
+        let energies = super::path_energies(result);
+        let (deltas, _) = relative_energies(energies, None);
+        PathChart {
+            deltas,
+            refined_delta,
+            selected: self.xtb_step().filter(|&index| index < energies.len()),
+            climbing: climbing_image(
+                energies,
+                super::saved_search(result)
+                    .map(|search| search.climbing_image)
+                    .or_else(|| shown.ts.map(|s| s.extras.climbing)),
+            ),
+            interactive: !self.xtb_running(),
+            stale: shown.stale,
+            live: false,
+            unit: self.appearance.energy_unit,
+        }
+    }
+
     pub(in crate::app::xtb) fn xtb_ts_path<'a>(
         &'a self,
         shown: &Shown<'a>,
@@ -292,16 +548,13 @@ impl App {
     ) -> Element<'a, Message> {
         let result = &shown.stored.result;
         let energies = super::path_energies(result);
-        let climbing = climbing_image(
-            energies,
-            super::saved_search(result)
-                .map(|search| search.climbing_image)
-                .or_else(|| shown.ts.map(|s| s.extras.climbing)),
-        );
-        let selected = self.xtb_step().filter(|&index| index < energies.len());
-        let presentation = presentation(result, shown.ts);
-        let (deltas, _) = relative_energies(energies, None);
-        let refined_delta = presentation.refined_kcal;
+        let presentation =
+            presentation(result, self.xtb_ts_refinement_session(&shown.stored.result));
+        let chart = self.xtb_ts_path_chart(shown, presentation.refined_kcal);
+        let selected = chart.selected;
+        let deltas = chart.deltas.clone();
+        let interactive = chart.interactive;
+        let unit = chart.unit;
         let positions = shown.ts.is_some_and(|session| {
             session.extras.image_positions.len() == energies.len()
                 && session
@@ -310,30 +563,16 @@ impl App {
                     .iter()
                     .all(|image| image.len() == shown.frame.numbers.len())
         });
-        let interactive = !self.xtb_running();
-        let chart = PathChart {
-            deltas: deltas.clone(),
-            refined_delta,
-            selected,
-            climbing,
-            interactive,
-            stale: shown.stale,
-        };
-        let chart = reshiki::accessibility::image(
-            "xtb-ts-path-profile",
-            chart.accessible_name(),
-            canvas(chart).width(Length::Fill).height(190),
-        );
-        let mut profile = column![chart].spacing(6);
+        let mut profile = column![chart.widget()].spacing(6);
         if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
-            profile = profile.push(text(selection_label(delta)).size(12));
+            profile = profile.push(text(selection_label(delta, unit)).size(12));
         }
         if !deltas.is_empty() {
             // The buttons also make every canvas point keyboard accessible.
             let images = row(deltas.iter().enumerate().map(|(index, &delta)| {
                 reshiki::accessibility::button(
                     format!("xtb-ts-image-{index}"),
-                    selection_label(delta),
+                    selection_label(delta, unit),
                     text(if index == 0 {
                         "R"
                     } else if index + 1 == deltas.len() {
@@ -355,7 +594,27 @@ impl App {
         } else {
             profile = profile.push(line("No path energy profile was saved.", Tone::Muted));
         }
-        if selected.is_some() {
+        let reached = self.xtb_reached_endpoint_selected();
+        if has_reached_endpoint(result) {
+            profile = profile.push(
+                accessible_command(
+                    "xtb-ts-reached-endpoint",
+                    "Reached endpoint",
+                    "Reached endpoint",
+                )
+                .checked(reached)
+                .style(control(reached))
+                .on_press_maybe(
+                    (interactive && !shown.stale).then(|| send(Action::ReachedEndpoint)),
+                ),
+            );
+        } else if presentation.recovery == Recovery::ShowWhere {
+            profile = profile.push(line(
+                "The reached geometry was not saved with this result.",
+                Tone::Muted,
+            ));
+        }
+        if selected.is_some() || reached {
             profile = profile.push(
                 accessible_command(
                     "xtb-ts-back",
@@ -385,9 +644,16 @@ impl App {
         }
         if presentation.reliable() {
             details = details.push(line(presentation.verification.clone(), Tone::Good));
+            if super::saved_search(result).is_some_and(|search| search.free_energy)
+                && let Some(reason) = barrier_gibbs_unavailable(result)
+            {
+                details = details.push(line(reason, Tone::Warning));
+            }
         }
+        details = details
+            .push(reaction_gibbs_unavailable(result).map(|reason| line(reason, Tone::Warning)));
         if let Some(warning) = &presentation.warning {
-            details = details.push(line(warning.clone(), Tone::Warning));
+            details = details.push(line(warning.clone(), Tone::Muted));
         }
         if super::card::imaginary_mode(result).is_some() {
             details = details.push(
@@ -396,6 +662,7 @@ impl App {
                     "Animate the saved imaginary mode",
                     "Animate imaginary mode",
                 )
+                .style(crate::appearance::secondary)
                 .on_press_maybe(interactive.then(|| {
                     Message::Xtb(XtbAction::Vibrations(
                         crate::app::xtb::vibrations::Action::AnimateImaginary,
@@ -414,35 +681,49 @@ impl App {
                     .filter(|&number| number > 0)
             })
             .collect();
-        let changes = self.xtb_ts_bond_changes(shown);
-        for (kind, pair) in changes {
-            if let Some(value) = bond_length(shown.frame, pair) {
-                details = details.push(
+        let geometry = self.xtb_ts_bond_geometry(shown, &maps);
+        if !geometry.is_empty() {
+            let distance = |value: String| {
+                text(value)
+                    .size(12)
+                    .width(42)
+                    .align_x(iced::alignment::Horizontal::Right)
+            };
+            let mut table = column![
+                text("Bond distances (Å)").size(12),
+                row![
+                    text("Bond").size(11).width(Length::Fill),
+                    distance("R".into()),
+                    distance("TS".into()),
+                    distance("P".into()),
+                ]
+                .spacing(6),
+            ]
+            .spacing(5);
+            for [bond, reactant, ts, product] in geometry {
+                table = table.push(
                     row![
-                        text(format!("{kind} {}", bond_label(shown.frame, pair, &maps)))
-                            .size(12)
-                            .width(Length::Fill),
-                        text(format!("{value:.2} Å")).size(12),
+                        text(bond).size(12).width(Length::Fill),
+                        distance(reactant),
+                        distance(ts),
+                        distance(product),
                     ]
-                    .spacing(10)
-                    .wrap(),
+                    .spacing(6),
                 );
             }
+            details = details.push(table);
         }
-        if !presentation.reliable() {
-            details = details.push(
-                reshiki::accessibility::button(
-                    "xtb-ts-rerun-20",
-                    "Try again with a finer path",
-                    text("Try again with a finer path").size(12),
-                )
-                .padding([5, 9])
-                .style(control(false))
-                .on_press_maybe(self.xtb_ts_can_rerun(shown).then(|| send(Action::Rerun))),
-            );
+        if !presentation.reliable() && crate::app::xtb::available() {
+            details = details.push(presentation.recovery.button(
+                "xtb-ts-rerun-20",
+                shown.arrow,
+                self.xtb_ts_can_rerun(shown)
+                    && (presentation.recovery != Recovery::ShowWhere || !shown.stale),
+                has_reached_endpoint(result),
+            ));
         }
         details = details.push(line(
-            "Semi-empirical barriers are rough, often several kcal/mol off. Refine with DFT before quoting them.",
+            "Semi-empirical barriers are rough estimates. Refine with DFT before quoting them.",
             Tone::Muted,
         ));
         details = details.push(
@@ -473,7 +754,7 @@ impl App {
 
     /// Compare the saved optimized endpoints, so reopened results use the same
     /// covalent-radius criterion as the search instead of the current drawing.
-    fn xtb_ts_bond_changes(&self, shown: &Shown<'_>) -> Vec<(&'static str, [usize; 2])> {
+    fn xtb_ts_bond_geometry(&self, shown: &Shown<'_>, maps: &[Option<u32>]) -> Vec<[String; 4]> {
         let Some(endpoints) = shown.stored.result.endpoints else {
             return vec![];
         };
@@ -484,8 +765,30 @@ impl App {
         ) else {
             return vec![];
         };
-        changed_bonds(reactant, product)
+        bond_geometry_rows(reactant, shown.frame, product, maps)
     }
+}
+
+fn bond_geometry_rows(
+    reactant: &Frame,
+    ts: &Frame,
+    product: &Frame,
+    maps: &[Option<u32>],
+) -> Vec<[String; 4]> {
+    let distance = |frame: &Frame, pair| {
+        bond_length(frame, pair).map_or_else(|| "—".into(), |value| format!("{value:.2}"))
+    };
+    changed_bonds(reactant, product)
+        .into_iter()
+        .map(|(kind, pair)| {
+            [
+                format!("{kind} {}", bond_label(ts, pair, maps)),
+                distance(reactant, pair),
+                distance(ts, pair),
+                distance(product, pair),
+            ]
+        })
+        .collect()
 }
 
 fn bond_label(frame: &Frame, [a, b]: [usize; 2], maps: &[Option<u32>]) -> String {
@@ -559,6 +862,8 @@ struct PathChart {
     climbing: usize,
     interactive: bool,
     stale: bool,
+    live: bool,
+    unit: EnergyUnit,
 }
 
 impl PathChart {
@@ -566,6 +871,27 @@ impl PathChart {
     const RIGHT: f32 = 24.;
     const TOP: f32 = 34.;
     const BOTTOM: f32 = 34.;
+
+    fn live(energies: &[f64], unit: EnergyUnit) -> Self {
+        Self {
+            deltas: relative_energies(energies, None).0,
+            refined_delta: None,
+            selected: None,
+            climbing: 0,
+            interactive: false,
+            stale: false,
+            live: true,
+            unit,
+        }
+    }
+
+    fn widget(self) -> Element<'static, Message> {
+        reshiki::accessibility::image(
+            "xtb-ts-path-profile",
+            self.accessible_name(),
+            canvas(self).width(Length::Fill).height(190),
+        )
+    }
 
     fn x(&self, index: usize, bounds: Rectangle) -> f32 {
         let width = (bounds.width - Self::LEFT - Self::RIGHT).max(1.);
@@ -591,19 +917,44 @@ impl PathChart {
 
     fn refined_ts_marker(&self) -> Option<(f64, String)> {
         self.refined_delta
-            .map(|delta| (delta, format!("TS‡ {}", state::signed(delta, 1))))
+            .map(|delta| (delta, format!("TS‡ {}", self.unit.number(delta))))
+    }
+
+    fn axis_title(&self) -> String {
+        format!("ΔE from reactants ({})", self.unit.label())
+    }
+
+    fn endpoint_marker(&self, index: usize) -> Option<String> {
+        if self.live {
+            return None;
+        }
+        let point = if index == 0 {
+            "R"
+        } else if index + 1 == self.deltas.len() {
+            "P"
+        } else {
+            return None;
+        };
+        self.deltas
+            .get(index)
+            .map(|&delta| format!("{point} {}", self.unit.number(delta)))
     }
 
     fn accessible_name(&self) -> String {
-        let mut name = format!(
-            "Reaction path energy profile · {} images",
-            self.deltas.len()
-        );
+        let profile = if self.live {
+            "Live reaction path"
+        } else {
+            "Reaction path"
+        };
+        let mut name = format!("{profile} energy profile · {} images", self.deltas.len());
         if let Some((_, marker)) = self.refined_ts_marker() {
-            name.push_str(&format!(" · {marker} kcal/mol"));
+            name.push_str(&format!(" · {marker} {}", self.unit.label()));
         }
         if let Some(delta) = self.selected.and_then(|index| self.deltas.get(index)) {
-            name.push_str(&format!(" · Selected {}", selection_label(*delta)));
+            name.push_str(&format!(
+                " · Selected {}",
+                selection_label(*delta, self.unit)
+            ));
         }
         name
     }
@@ -661,7 +1012,7 @@ impl canvas::Program<Message> for PathChart {
             reshiki::color_contrast::TEXT_TARGET,
         );
         frame.fill_text(canvas::Text {
-            content: "ΔE from reactants (kcal/mol)".into(),
+            content: self.axis_title(),
             position: Point::new(Self::LEFT, 3.),
             color: muted,
             size: 10.into(),
@@ -675,12 +1026,22 @@ impl canvas::Program<Message> for PathChart {
         let plot_height = (bounds.height - Self::TOP - Self::BOTTOM).max(1.);
         let y = |energy: f64| Self::TOP + ((hi - energy) / range) as f32 * plot_height;
         let grid = Color { a: 0.25, ..muted };
-        for energy in [hi, 0., lo] {
+        let mut ticks = vec![hi, 0., lo];
+        ticks.dedup();
+        for energy in ticks {
             let start = Point::new(Self::LEFT, y(energy));
             frame.stroke(
                 &canvas::Path::line(start, Point::new(bounds.width - Self::RIGHT, start.y)),
                 canvas::Stroke::default().with_color(grid).with_width(1.),
             );
+            frame.fill_text(canvas::Text {
+                content: self.unit.number(energy),
+                position: Point::new(Self::LEFT - 7., start.y - 6.),
+                color: muted,
+                size: 10.into(),
+                align_x: iced::alignment::Horizontal::Right.into(),
+                ..Default::default()
+            });
         }
         let points: Vec<_> = self
             .deltas
@@ -726,20 +1087,17 @@ impl canvas::Program<Message> for PathChart {
                 &canvas::Path::circle(point, if selected { 3.8 } else { 2.6 }),
                 ink,
             );
-            let label = if index == 0 {
-                Some("R".into())
-            } else if index + 1 == self.deltas.len() {
-                Some("P".into())
-            } else {
-                None
-            };
-            if let Some(content) = label {
+            if let Some(content) = self.endpoint_marker(index) {
                 frame.fill_text(canvas::Text {
                     content,
                     position: Point::new(point.x, point.y + 7.),
                     color: ink,
                     size: 11.into(),
-                    align_x: iced::alignment::Horizontal::Center.into(),
+                    align_x: if index == 0 {
+                        iced::alignment::Horizontal::Left.into()
+                    } else {
+                        iced::alignment::Horizontal::Right.into()
+                    },
                     ..Default::default()
                 });
             }

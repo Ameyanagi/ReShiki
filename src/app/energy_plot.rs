@@ -3,6 +3,7 @@
 //! an ordered trajectory. The selected item is highlighted; a click selects
 //! the nearest one.
 use super::Message;
+use crate::appearance::EnergyUnit;
 use iced::widget::canvas::{self, Frame, Path, Stroke, Text};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 
@@ -18,6 +19,7 @@ pub(crate) enum Layout {
 pub(crate) struct EnergyPlot {
     /// Energy above the lowest in kcal/mol, one per item in item order.
     pub delta_kcal: Vec<f64>,
+    pub unit: EnergyUnit,
     pub layout: Layout,
     pub selected: Option<usize>,
     /// A short note under each level (its Boltzmann share), in item order;
@@ -35,6 +37,19 @@ const TOP: f32 = 16.;
 const BOTTOM: f32 = 16.;
 
 impl EnergyPlot {
+    fn axis_title(&self) -> String {
+        format!("ΔE, {}", self.unit.label())
+    }
+
+    fn axis_top(&self) -> String {
+        let top = self.unit.convert_kcal(self.top());
+        if top >= 1e4 {
+            return format!("{top:.0e}");
+        }
+        let digits = if self.unit == EnergyUnit::Ev { 3 } else { 1 };
+        format!("{top:.digits$}")
+    }
+
     /// Items in drawing order, left to right.
     fn order(&self) -> Vec<usize> {
         let mut order: Vec<usize> = (0..self.delta_kcal.len()).collect();
@@ -152,7 +167,6 @@ impl canvas::Program<Message> for EnergyPlot {
         let ink = theme.palette().text;
         let accent = theme.palette().primary;
         let bottom = bounds.height - BOTTOM;
-        let top = self.top();
         let y = |delta: f64| self.y(delta, bounds);
         let label = |frame: &mut Frame, text: String, at: Point, color: Color| {
             frame.fill_text(Text {
@@ -163,30 +177,16 @@ impl canvas::Program<Message> for EnergyPlot {
                 ..Text::default()
             });
         };
-        // The axis: kcal/mol from zero up to the highest item.
+        // The axis: the selected unit from zero up to the highest item.
         frame.stroke(
             &Path::line(Point::new(LEFT - 4., TOP), Point::new(LEFT - 4., bottom)),
             Stroke::default()
                 .with_color(Color { a: 0.5, ..muted })
                 .with_width(1.),
         );
-        label(
-            &mut frame,
-            if top < 1e4 {
-                format!("{top:.1}")
-            } else {
-                format!("{top:.0e}")
-            },
-            Point::new(4., TOP - 6.),
-            muted,
-        );
+        label(&mut frame, self.axis_top(), Point::new(4., TOP - 6.), muted);
         label(&mut frame, "0".into(), Point::new(4., bottom - 6.), muted);
-        label(
-            &mut frame,
-            "ΔE, kcal/mol".into(),
-            Point::new(LEFT, 0.),
-            muted,
-        );
+        label(&mut frame, self.axis_title(), Point::new(LEFT, 0.), muted);
         let order = self.order();
         match self.layout {
             Layout::Levels => {
@@ -261,6 +261,7 @@ mod tests {
     fn plot(delta_kcal: Vec<f64>, layout: Layout) -> EnergyPlot {
         EnergyPlot {
             delta_kcal,
+            unit: EnergyUnit::default(),
             layout,
             selected: None,
             notes: vec![],
@@ -284,5 +285,19 @@ mod tests {
         assert_eq!(line.order(), [0, 1, 2]);
         assert_eq!(line.point(1, 1, bounds).y, bounds.height - BOTTOM);
         assert_eq!(line.point(0, 0, bounds).y, TOP);
+    }
+
+    #[test]
+    fn changing_energy_units_keeps_levels_in_place_and_updates_the_axis() {
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(300., 120.));
+        let mut levels = plot(vec![0., 2.], Layout::Levels);
+        let position = levels.point(1, 1, bounds);
+        levels.unit = EnergyUnit::KjPerMol;
+        assert_eq!(levels.axis_title(), "ΔE, kJ/mol");
+        assert_eq!(levels.point(1, 1, bounds), position);
+        assert_eq!(levels.axis_top(), "8.4");
+        levels.unit = EnergyUnit::Ev;
+        levels.delta_kcal[1] = 0.2;
+        assert_eq!(levels.axis_top(), "0.009");
     }
 }

@@ -333,11 +333,16 @@ fn light_transition_state_run_metadata_costs_at_most_four_kilobytes() {
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
             arrow: Some(42),
+            free_energy: false,
+            endpoint_energies_hartree: None,
+            endpoint_thermo: None,
+            reached_positions_angstrom: vec![],
             context: Some(TransitionStateContext {
                 reactant_chemistry: "ab".repeat(32),
                 product_chemistry: "cd".repeat(32),
                 title: "Allyl vinyl ether → pent-4-enal".into(),
                 reactant: "Allyl vinyl ether".into(),
+                endpoint_complex: None,
             }),
             saddle_converged: true,
             imaginary: 1,

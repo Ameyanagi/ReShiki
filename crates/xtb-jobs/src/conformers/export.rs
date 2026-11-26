@@ -8,6 +8,15 @@ const NO_SAVED_POSITIONS: &str = "This result has no saved conformer positions."
 
 /// Export every saved conformer as XYZ, lowest energy first.
 pub fn xyz(path: Option<&Trajectory>, title: &str) -> Result<String, String> {
+    xyz_with_relative_energy(path, title, |delta| format!("{delta:.2} kcal/mol"))
+}
+
+/// Export XYZ with a caller-formatted relative energy; absolute energies stay in Eh.
+pub fn xyz_with_relative_energy(
+    path: Option<&Trajectory>,
+    title: &str,
+    relative_energy: impl Fn(f64) -> String,
+) -> Result<String, String> {
     let (path, ranked) = ranked_trajectory(path)?;
     let labeled = Trajectory {
         numbers: path.numbers.clone(),
@@ -39,10 +48,11 @@ pub fn xyz(path: Option<&Trajectory>, title: &str) -> Result<String, String> {
                 let cluster = statistics
                     .cluster
                     .map_or_else(String::new, |size| format!(" · cluster {size}"));
+                let delta = relative_energy(*delta_kcal);
                 // charge= and mult= as extended XYZ reads them back; the
                 // energy last, as ReShiki and xtb tools read it.
                 format!(
-                    "{title} conformer {rank} · ΔE {delta_kcal:.2} kcal/mol · {percent:.1} %{cluster} · charge={} mult={} · E = {energy:.10} Eh",
+                    "{title} conformer {rank} · ΔE {delta} · {percent:.1} %{cluster} · charge={} mult={} · E = {energy:.10} Eh",
                     path.charge, path.multiplicity
                 )
             })

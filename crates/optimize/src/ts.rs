@@ -14,6 +14,7 @@ mod mapping;
 mod modes;
 mod neb;
 mod reactive_start;
+mod recovery;
 mod saddle;
 
 #[cfg(test)]
@@ -22,6 +23,7 @@ mod tests;
 pub use endpoint::{bonds, build_endpoint};
 pub use mapping::least_motion_map;
 pub use reactive_start::{ReactiveStart, prepare_reactive_start};
+pub use recovery::{SaddleCandidate, refine_from_candidate};
 use std::ops::ControlFlow;
 
 use crate::{Accuracy, EvalError, KCAL_PER_HARTREE, Options, Potential, Status, optimize};
@@ -126,6 +128,9 @@ pub enum Event<'a> {
         energies: &'a [f64],
         max_force: f64,
         climbing: Option<usize>,
+        /// This is the last evaluated band, whether converged or budget-limited.
+        /// Consumers should publish it even when intermediate updates are throttled.
+        finished: bool,
     },
     Saddle {
         step: usize,
@@ -398,9 +403,28 @@ pub fn search<P: Potential + Send>(
 pub fn search_with_cancel<P: Potential + Send>(
     potentials: &mut [P],
     search: &Search,
+    on_event: impl FnMut(Event) -> ControlFlow<()>,
+    on_cancel: impl FnMut() -> ControlFlow<()>,
+) -> Result<TsReport, TsError> {
+    search_with_verification(potentials, search, on_event, on_cancel, |_, _, _| {
+        Ok((true, ()))
+    })
+    .map(|(report, ())| report)
+}
+
+/// Like [`search_with_cancel`], with an independent candidate check before IRC.
+/// The check receives the first potential, the fitted candidate in bohr, and
+/// its significant imaginary-mode count. Return false to retain the characterized
+/// candidate without launching IRC. Its payload is returned with that candidate,
+/// allowing worker calculations to stay paired with their geometry. Engine work
+/// counts exclude evaluations owned by the callback. Errors and cancellation propagate.
+pub fn search_with_verification<P: Potential + Send, T>(
+    potentials: &mut [P],
+    search: &Search,
     mut on_event: impl FnMut(Event) -> ControlFlow<()>,
     mut on_cancel: impl FnMut() -> ControlFlow<()>,
-) -> Result<TsReport, TsError> {
+    mut verify: impl FnMut(&mut P, &[f64], usize) -> Result<(bool, T), TsError>,
+) -> Result<(TsReport, T), TsError> {
     search.validate()?;
     if potentials.is_empty() {
         return Err(TsError::Invalid(
@@ -459,39 +483,157 @@ pub fn search_with_cancel<P: Potential + Send>(
         &mut on_event,
     )?;
 
-    emit(&mut on_event, Event::Stage(Stage::Saddle))?;
+    let (mut report, verification) = refine_and_characterize(
+        &mut pool[0],
+        search,
+        &band,
+        reactant,
+        product,
+        &mut on_event,
+        &mut verify,
+    )?;
+    report.evaluations = pool.iter().map(|p| p.evaluations).sum();
+    report.hessians = pool.iter().map(|p| p.hessians).sum();
+    Ok((report, verification))
+}
+
+/// Refine the highest interior image of a saved band, then characterize the
+/// candidate with the same frequency and IRC checks as [`search`].
+///
+/// The saved images and their finite energies must be in reactant-to-product
+/// order, in bohr and hartree. Their count must match `search.options.images`,
+/// and the endpoint coordinates must match `search.reactant` and
+/// `search.product`. Endpoint optimization, interpolation and NEB are skipped;
+/// `neb_converged` preserves the earlier band's convergence status. All images
+/// must describe the same potential and atomic state as `potential`.
+///
+/// Events begin at [`Stage::Saddle`]. Returning `ControlFlow::Break(())` from
+/// `on_event` cancels refinement or characterization just as in [`search`].
+pub fn refine_from_band<P: Potential>(
+    potential: &mut P,
+    search: &Search<'_>,
+    path: &[Minimum],
+    neb_converged: bool,
+    mut on_event: impl FnMut(Event) -> ControlFlow<()>,
+) -> Result<TsReport, TsError> {
+    validate_saved_band(search, path)?;
+    let reactant = &path[0];
+    let product = &path[path.len() - 1];
+    let mut counted = Counted {
+        potential,
+        evaluations: 0,
+        hessians: 0,
+    };
+    let band = neb::Band::from_saved(path, search.masses_amu, neb_converged);
+    refine_and_characterize(
+        &mut counted,
+        search,
+        &band,
+        reactant.clone(),
+        product.clone(),
+        &mut on_event,
+        &mut |_, _, _| Ok((true, ())),
+    )
+    .map(|(report, ())| report)
+}
+
+fn validate_saved_band(search: &Search<'_>, path: &[Minimum]) -> Result<(), TsError> {
+    search.validate()?;
+    if path.len() != search.options.images {
+        return Err(TsError::Invalid(
+            "saved band length must match the requested image count".into(),
+        ));
+    }
+    for point in path {
+        validate_geometry(search.numbers, &point.positions)?;
+        endpoint::validate_nuclei_separation(&point.positions)?;
+        if !point.energy.is_finite() {
+            return Err(TsError::Invalid(
+                "saved band energies must be finite".into(),
+            ));
+        }
+    }
+    // Search validation guarantees at least five images, so these endpoints
+    // exist once the saved length has been checked.
+    let reactant = &path[0];
+    let product = &path[path.len() - 1];
+    if reactant.positions.as_slice() != search.reactant
+        || product.positions.as_slice() != search.product
+    {
+        return Err(TsError::Invalid(
+            "saved band endpoints must match the search endpoints".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn refine_and_characterize<P: Potential, T>(
+    potential: &mut Counted<'_, P>,
+    search: &Search<'_>,
+    band: &neb::Band,
+    reactant: Minimum,
+    product: Minimum,
+    on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
+    verify: &mut impl FnMut(&mut P, &[f64], usize) -> Result<(bool, T), TsError>,
+) -> Result<(TsReport, T), TsError> {
+    emit(on_event, Event::Stage(Stage::Saddle))?;
+    let refinement =
+        saddle::refine_band(potential, band, search.masses_amu, search.options, on_event)?;
+    characterize(
+        potential,
+        search,
+        band,
+        [reactant, product],
+        refinement,
+        on_event,
+        verify,
+    )
+}
+
+fn characterize<P: Potential, T>(
+    potential: &mut Counted<'_, P>,
+    search: &Search<'_>,
+    band: &neb::Band,
+    endpoints: [Minimum; 2],
+    refinement: saddle::Refinement,
+    on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
+    verify: &mut impl FnMut(&mut P, &[f64], usize) -> Result<(bool, T), TsError>,
+) -> Result<(TsReport, T), TsError> {
+    let [reactant, product] = endpoints;
+    let masses = search.masses_amu;
     let saddle::Refinement {
         point: mut ts,
         converged: saddle_converged,
         reason: saddle_reason,
         diagnostics: saddle_diagnostics,
         hessian,
-    } = saddle::refine_band(&mut pool[0], &band, masses, options, &mut on_event)?;
+    } = refinement;
     // The exact Hessian that certified the Newton displacement also supplies the
     // spectrum. Rotate it with the fitted geometry so the reported mode and IRC
     // launch share that frame. An exhausted Bofill model needs a fresh build.
     let fit = mapping::Fit::new(&reactant.positions, &ts.positions, masses);
     ts.positions = fit.apply(&ts.positions);
-    emit(&mut on_event, Event::Stage(Stage::Frequencies))?;
+    emit(on_event, Event::Stage(Stage::Frequencies))?;
     let hessian = match hessian {
         Some(h) => fit.rotate_hessian(&h, ts.positions.len()),
-        None => saddle::hessian(&mut pool[0], &ts.positions)?,
+        None => saddle::hessian(potential, &ts.positions)?,
     };
     let (frequencies_cm1, transition_mode) = modes::frequencies(&ts.positions, &hessian, masses)?;
     let imaginary = frequencies_cm1
         .iter()
         .filter(|&&f| f < -IMAGINARY_CM1)
         .count();
-    let (irc, irc_error) = if saddle_converged && imaginary == 1 {
-        emit(&mut on_event, Event::Stage(Stage::Irc))?;
+    let (agrees, verification) = verify(potential.potential, &ts.positions, imaginary)?;
+    let (irc, irc_error) = if saddle_converged && imaginary == 1 && agrees {
+        emit(on_event, Event::Stage(Stage::Irc))?;
         match irc::branches(
-            &mut pool[0],
+            potential,
             search,
             [&reactant, &product],
             &ts,
             &hessian,
             &transition_mode,
-            &mut on_event,
+            on_event,
         ) {
             Ok(branches) => (Some(branches), None),
             Err(TsError::Cancelled) => return Err(TsError::Cancelled),
@@ -506,24 +648,27 @@ pub fn search_with_cancel<P: Potential + Send>(
             (Reached::Reactant, Reached::Product) | (Reached::Product, Reached::Reactant)
         )
     });
-    Ok(TsReport {
-        reactant,
-        product,
-        path: band.path,
-        neb_converged: band.converged,
-        climbing_image: band.climbing,
-        ts,
-        saddle_converged,
-        saddle_reason,
-        saddle_diagnostics,
-        hessian,
-        imaginary,
-        frequencies_cm1,
-        transition_mode,
-        irc,
-        irc_error,
-        connects,
-        evaluations: pool.iter().map(|p| p.evaluations).sum(),
-        hessians: pool.iter().map(|p| p.hessians).sum(),
-    })
+    Ok((
+        TsReport {
+            reactant,
+            product,
+            path: band.path.clone(),
+            neb_converged: band.converged,
+            climbing_image: band.climbing,
+            ts,
+            saddle_converged,
+            saddle_reason,
+            saddle_diagnostics,
+            hessian,
+            imaginary,
+            frequencies_cm1,
+            transition_mode,
+            irc,
+            irc_error,
+            connects,
+            evaluations: potential.evaluations,
+            hessians: potential.hessians,
+        },
+        verification,
+    ))
 }

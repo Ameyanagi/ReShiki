@@ -41,6 +41,7 @@ fn trace_distinguishes_climbing_image_from_a_higher_endpoint() {
                 energies: &[5., 1., 3., 2., 0.],
                 climbing,
                 max_force: 0.,
+                finished: false,
             },
             &mut output,
         );

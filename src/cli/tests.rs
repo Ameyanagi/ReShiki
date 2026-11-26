@@ -3759,7 +3759,7 @@ async fn export_input_writes_orca_neb_ts_with_safe_companion_names() {
     std::fs::write(&input, WATER_XYZ).unwrap();
     std::fs::write(&reactant, WATER_XYZ.replace("O 0 0 0", "O 1 0 0")).unwrap();
     std::fs::write(&product, WATER_XYZ.replace("O 0 0 0", "O 2 0 0")).unwrap();
-    let (code, out, err) = call(&[
+    let mut args = [
         "export-input",
         input.to_str().unwrap(),
         "--program",
@@ -3772,8 +3772,8 @@ async fn export_input_writes_orca_neb_ts_with_safe_companion_names() {
         product.to_str().unwrap(),
         "--out",
         output.to_str().unwrap(),
-    ])
-    .await;
+    ];
+    let (code, out, err) = call(&args).await;
     assert_eq!((code, out.as_str(), err.as_str()), (SUCCESS, "", ""));
     let text = std::fs::read_to_string(&output).unwrap();
     for expected in [
@@ -3790,6 +3790,13 @@ async fn export_input_writes_orca_neb_ts_with_safe_companion_names() {
     assert!(product.lines().nth(2).unwrap().contains("2.00000000"));
     let guess = std::fs::read_to_string(output.with_file_name("Job.1-____path_ts.xyz")).unwrap();
     assert!(guess.lines().nth(3).unwrap().contains("0.95720000"));
+
+    let unusable = directory.path().join(" +反.inp");
+    *args.last_mut().unwrap() = unusable.to_str().unwrap();
+    let (code, out, err) = call(&args).await;
+    assert_eq!((code, out.as_str()), (FAILURE, ""), "{err}");
+    assert!(err.contains("for ORCA companion files"), "{err}");
+    assert!(!unusable.exists());
 }
 
 #[tokio::test]

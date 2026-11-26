@@ -1,10 +1,11 @@
 //! Conformer search settings and the desktop and Python pipeline.
 
 use crate::Failure;
+pub use reshiki_qcdata::KCAL_PER_HARTREE;
 use reshiki_qcdata::{MAX_HESSIAN_ATOMS, XtbMethod};
 
 mod export;
-pub use export::{RankedConformer, ranked_trajectory, xyz};
+pub use export::{RankedConformer, ranked_trajectory, xyz, xyz_with_relative_energy};
 mod rows;
 #[cfg(not(target_arch = "wasm32"))]
 pub use rows::trajectory_alignment;
@@ -20,8 +21,6 @@ pub const MAX_STARTS: u32 = 300;
 pub const MAX_ATOMS: usize = MAX_HESSIAN_ATOMS;
 /// GFN2-xTB may minimize every start only up to this many atoms.
 pub const MAX_GFN2_START_ATOMS: usize = 120;
-/// Hartree in thermochemical kcal/mol (CODATA 2022).
-pub const KCAL_PER_HARTREE: f64 = 627.509_474_063;
 /// Representatives xTB re-ranks at most.
 pub const MAX_REPRESENTATIVES: usize = 60;
 /// xTB jobs a search may run concurrently.
