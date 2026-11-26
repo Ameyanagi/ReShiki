@@ -279,7 +279,11 @@ pub struct Outcome {
     pub evaluations: usize,
     /// Calls to [`Potential::hessian`], including errors and unavailability probes.
     pub hessian_evaluations: usize,
+    /// Last active method; the requested method if no search was attempted.
     pub method: Method,
+    /// Algorithms whose searches were attempted, in order, including failed
+    /// searches and fallback attempts. Empty if no search step was attempted.
+    pub methods: Vec<Method>,
     /// One energy per accepted geometry, including the input. A successful
     /// accuracy change replaces the entry at the same geometry.
     pub energies: Vec<f64>,
@@ -465,6 +469,7 @@ impl<P: Potential + ?Sized> Evaluator<'_, P> {
 struct Engine<'a> {
     options: &'a Options,
     method: Method,
+    methods: Vec<Method>,
     anc: Option<Anc>,
     internal: Option<InternalModel>,
     internal_built_at: usize,
@@ -479,6 +484,7 @@ impl<'a> Engine<'a> {
         Self {
             options,
             method: options.method,
+            methods: Vec::new(),
             anc: None,
             internal: None,
             internal_built_at: 0,
@@ -670,6 +676,9 @@ impl<'a> Engine<'a> {
         accuracy_changed: bool,
     ) -> Result<(Point, Motion, Diagnostics), Status> {
         let (next, diagnostics) = loop {
+            if self.methods.last() != Some(&self.method) {
+                self.methods.push(self.method);
+            }
             match self.method {
                 Method::Internal => {
                     if let Some(trial) =
@@ -789,6 +798,7 @@ pub fn optimize<P: Potential + ?Sized>(
         evaluations: 0,
         hessian_evaluations: 0,
         method: options.method,
+        methods: Vec::new(),
         energies: Vec::new(),
     };
     let coords = match Coordinates::new(numbers, positions, &options.fixed_atoms) {
@@ -952,6 +962,7 @@ pub fn optimize<P: Potential + ?Sized>(
     out.evaluations = eval.count;
     out.hessian_evaluations = eval.hessian_count;
     out.method = engine.method;
+    out.methods = engine.methods;
     out
 }
 

@@ -331,7 +331,7 @@ async fn run_search(search: Search) -> Result<(Found, Phases), state::Failure> {
             Event::Tick => {}
             Event::Done(found) => {
                 phases.done = Some(elapsed);
-                return Ok((found?, phases));
+                return Ok((*found?, phases));
             }
         }
     }

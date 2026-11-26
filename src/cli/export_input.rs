@@ -53,7 +53,7 @@ pub(crate) fn run(
     };
     let file_stem = match &command.output {
         Output::File(path) => file_stem(path),
-        Output::Stdout => file_stem(&command.input),
+        Output::Stdout => qc_input::default_stem(&file_stem(&command.input), command.program),
     };
     let geometry = Geometry {
         frame: &frame,

@@ -85,6 +85,7 @@ fn tab() -> App {
             converged: true,
             positions: START.to_vec(),
             steps: 0,
+            optimizers: vec![],
             energies: vec![-5.070176],
             path: vec![],
             evaluations: vec![],
