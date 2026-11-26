@@ -10,7 +10,7 @@ use reshiki::qcdata::{CalcResult, Frame, Spin};
 use reshiki::science::{self, Freshness, Stored};
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Weak},
 };
 
@@ -20,6 +20,7 @@ pub(crate) enum Action {
     Show,
     Close,
     Collapse,
+    Previous,
     /// Move between the bottom dock and the inspector.
     Dock,
     View(View),
@@ -38,6 +39,7 @@ pub(crate) enum Action {
     CopyLog,
     Labels(bool),
     Recalculate,
+    RecalculateMolecule,
     KeepFull(bool),
     /// Save as `name` after the large-results question.
     SaveNamed(String),
@@ -58,6 +60,7 @@ pub(crate) struct Palette {
     /// index or an attachment ID.
     result: Vec<Weak<CalcResult>>,
     pub(super) open: bool,
+    pub(super) previous: bool,
     pub(super) view: View,
     pub(super) labels: bool,
     step: Option<Step>,
@@ -74,6 +77,8 @@ pub(crate) struct Palette {
 
 struct Step {
     index: usize,
+    attachment: u64,
+    result: Weak<CalcResult>,
     /// The document state the preview belongs to; any edit ends it.
     revision: (u64, u64),
     /// The document with the model at this step, when the step's geometry
@@ -84,7 +89,7 @@ struct Step {
 struct TsView {
     result: Vec<Weak<CalcResult>>,
     view: View,
-    step: Option<(usize, (u64, u64))>,
+    step: Option<Step>,
 }
 
 struct Sizes {
@@ -102,11 +107,6 @@ struct Sizes {
 }
 
 impl Palette {
-    /// The shown result's identity, to notice another result shown.
-    pub(super) fn shown_id(&self) -> usize {
-        self.result.first().map_or(0, |weak| weak.as_ptr() as usize)
-    }
-
     fn clear_result(&mut self) {
         self.ts_views
             .retain(|view| view.result.iter().any(|weak| weak.strong_count() > 0));
@@ -114,7 +114,10 @@ impl Palette {
             self.ts_views.push(TsView {
                 result: std::mem::take(&mut self.result),
                 view: self.view,
-                step: self.step.as_ref().map(|step| (step.index, step.revision)),
+                step: self.step.take().map(|step| Step {
+                    preview: None,
+                    ..step
+                }),
             });
         }
         self.result.clear();
@@ -137,6 +140,7 @@ impl Palette {
     /// Open the result, restoring a reaction's last tab and path selection.
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) -> bool {
         self.open = true;
+        self.previous = false;
         let same = self.follows(result);
         if same && ts::is_ts(result) {
             return false;
@@ -151,11 +155,7 @@ impl Palette {
                 let saved = self.ts_views.swap_remove(index);
                 self.result = saved.result;
                 self.view = saved.view;
-                self.step = saved.step.map(|(index, revision)| Step {
-                    index,
-                    revision,
-                    preview: None,
-                });
+                self.step = saved.step;
                 return self.step.is_some();
             }
             self.result = vec![Arc::downgrade(result)];
@@ -201,6 +201,10 @@ impl Shown<'_> {
         }
         results::step_positions(&self.stored.result, step, self.input, self.frame)
     }
+
+    fn repeatable(&self) -> bool {
+        results::config(&self.stored.result, self.frame, self.atoms, 1).is_some()
+    }
 }
 
 impl App {
@@ -219,9 +223,45 @@ impl App {
     }
 
     pub(super) fn xtb_shown(&self) -> Option<Shown<'_>> {
+        self.xtb_result(self.xtb_shown_entry()?)
+    }
+
+    pub(super) fn xtb_shown_entry(&self) -> Option<(usize, &Stored)> {
+        let palette = &self.tab.xtb.palette;
+        if palette.result.is_empty() {
+            return palette.open.then(|| self.xtb_newest()).flatten();
+        }
+        let Some(entry) = self.xtb_palette_result() else {
+            return self.xtb_newest();
+        };
+        // Reaction selection follows its own result through xtb_sync_reaction_palette.
+        if self.xtb_selected_reaction().is_some() {
+            return Some(entry);
+        }
+        let science = &self.tab.doc.science;
+        let link = science.attachment(entry.1.attachment)?;
+        if link
+            .atoms
+            .iter()
+            .flatten()
+            .any(|id| self.tab.selected.contains(id))
+        {
+            return Some(entry);
+        }
+        let Some(target) = self.xtb_target() else {
+            return Some(entry);
+        };
+        let target: HashSet<_> = target.into_iter().collect();
+        if link.atoms.iter().flatten().any(|id| target.contains(id)) {
+            Some(entry)
+        } else {
+            self.xtb_newest_for(&target)
+        }
+    }
+
+    fn xtb_result<'a>(&'a self, (index, stored): (usize, &'a Stored)) -> Option<Shown<'a>> {
         let doc = &self.tab.doc;
         let science = &doc.science;
-        let (index, stored) = self.xtb_palette_result()?;
         let link = science.attachment(stored.attachment)?;
         let ts = self
             .tab
@@ -304,75 +344,121 @@ impl App {
         let Some(super::Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
             return None;
         };
-        failed
-            .ts()
-            .is_none_or(|ts| arrow == Some(ts.arrow))
-            .then_some(failed)
+        match failed.ts() {
+            Some(ts) => (arrow == Some(ts.arrow)).then_some(failed),
+            None => self.xtb_failed(),
+        }
     }
 
     /// Whether Show results would show something new: the card's molecule
     /// has a newer result than the one on display, or the palette is closed
     /// on results.
     pub(super) fn xtb_can_show(&self) -> bool {
-        if !self.tab.xtb.palette.open
-            && self
-                .xtb_palette_failure(self.xtb_selected_reaction())
-                .is_some()
-        {
-            return true;
+        let open = self.tab.xtb.palette.open;
+        let reaction = self.xtb_selected_reaction();
+        if self.xtb_palette_failure(reaction).is_some() {
+            return !open;
         }
-        let visible = self.xtb_palette_visible();
+        let shown = self.xtb_shown_entry().map(|(index, _)| index);
         match self.xtb_newest() {
-            Some(newest) => {
-                !visible
-                    || !self
-                        .xtb_shown()
-                        .is_some_and(|s| Arc::ptr_eq(&s.stored.result, &newest))
-            }
-            None => !visible && self.xtb_shown().is_some(),
+            Some((newest, _)) => !open || shown != Some(newest),
+            None => reaction.is_none() && !open && shown.is_some(),
         }
     }
 
     /// The newest result stored for the card's molecule; cheap enough for
     /// every frame (no freshness or frame hashing).
-    fn xtb_newest(&self) -> Option<Arc<CalcResult>> {
+    fn xtb_newest(&self) -> Option<(usize, &Stored)> {
         if let Some(arrow) = self.xtb_selected_reaction() {
-            return match self.xtb_ts_card_result(arrow) {
-                ts::card::ArrowResult::Found(result) => Some(Arc::clone(result)),
-                _ => None,
+            let ts::card::ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
+                return None;
             };
+            return self
+                .tab
+                .doc
+                .science
+                .results
+                .iter()
+                .enumerate()
+                .rfind(|(_, stored)| Arc::ptr_eq(&stored.result, result));
         }
-        let target: std::collections::HashSet<u64> = self.xtb_target()?.into_iter().collect();
-        let science = &self.tab.doc.science;
-        science
+        self.xtb_newest_for(&self.xtb_target()?.into_iter().collect())
+    }
+
+    fn xtb_newest_for(&self, target: &HashSet<u64>) -> Option<(usize, &Stored)> {
+        self.tab
+            .doc
+            .science
             .results
             .iter()
+            .enumerate()
             .rev()
-            .find(|s| {
-                science
-                    .attachment(s.attachment)
-                    .is_some_and(|a| a.atoms.iter().flatten().any(|id| target.contains(id)))
+            .find(|(_, stored)| self.xtb_result_belongs(stored, target))
+    }
+
+    fn xtb_result_belongs(&self, stored: &Stored, target: &HashSet<u64>) -> bool {
+        self.tab
+            .doc
+            .science
+            .attachment(stored.attachment)
+            .is_some_and(|link| link.atoms.iter().flatten().any(|id| target.contains(id)))
+    }
+
+    /// Whether the card can repeat this molecule's newest calculation.
+    pub(in crate::app) fn xtb_can_recalculate_molecule(&self) -> bool {
+        super::available()
+            && self
+                .xtb_newest()
+                .and_then(|entry| self.xtb_result(entry))
+                .is_some_and(|shown| shown.repeatable())
+    }
+
+    pub(super) fn xtb_palette_body_visible(&self) -> bool {
+        self.tab.xtb.palette.open
+            && if self.xtb.dock.inspector {
+                self.inspector_open
+                    && self.inspector_tab == crate::app::InspectorTab::Predict
+                    && self.xtb.page == super::Page::Xtb
+            } else {
+                !self.xtb.dock.collapsed
+            }
+    }
+
+    /// Whether the visible palette shows a stale result it can run again.
+    pub(in crate::app) fn xtb_palette_can_repeat_stale(&self, atoms: &[u64]) -> bool {
+        self.xtb_palette_body_visible()
+            && self.tab.xtb.run.is_none()
+            && self.xtb_failed().is_none()
+            && self.xtb_shown().is_some_and(|shown| {
+                shown.stale
+                    && shown.atoms.iter().flatten().any(|id| atoms.contains(id))
+                    && shown.repeatable()
             })
-            .map(|s| s.result.clone())
     }
 
     /// The palette is showing a result.
     pub(super) fn xtb_palette_visible(&self) -> bool {
-        self.tab.xtb.palette.open && self.xtb_shown().is_some()
+        self.tab.xtb.palette.open && self.xtb_shown_entry().is_some()
     }
 
     /// The step preview, while the document has not changed since.
     pub(super) fn xtb_step_preview(&self) -> Option<&Document> {
-        let step = self.tab.xtb.palette.step.as_ref()?;
-        (step.revision == (self.tab.file_epoch, self.tab.revision))
-            .then_some(step.preview.as_deref())
-            .flatten()
+        self.xtb_current_step()?.preview.as_deref()
     }
 
     /// The selected step, while it is current.
     pub(super) fn xtb_step(&self) -> Option<usize> {
+        Some(self.xtb_current_step()?.index)
+    }
+
+    fn xtb_current_step(&self) -> Option<&Step> {
         let step = self.tab.xtb.palette.step.as_ref()?;
-        (step.revision == (self.tab.file_epoch, self.tab.revision)).then_some(step.index)
+        if step.revision != (self.tab.file_epoch, self.tab.revision) || self.xtb_failed().is_some()
+        {
+            return None;
+        }
+        let (_, shown) = self.xtb_shown_entry()?;
+        (step.attachment == shown.attachment && is(&step.result, &shown.result)).then_some(step)
     }
 
     /// Esc ends a step preview first.
@@ -469,7 +555,8 @@ impl App {
 
     /// The canvas label for "Show as labels": the energy under the molecule.
     pub(in crate::app) fn xtb_label(&self) -> Option<crate::canvas::ResultLabel> {
-        if !self.tab.xtb.palette.labels || !self.xtb_palette_visible() {
+        if !self.tab.xtb.palette.labels || !self.tab.xtb.palette.open || self.xtb_failed().is_some()
+        {
             return None;
         }
         let shown = self.xtb_shown().filter(|shown| !shown.stale)?;
@@ -499,19 +586,17 @@ impl App {
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
-                if self
-                    .xtb_palette_failure(self.xtb_selected_reaction())
-                    .is_some()
-                {
+                self.tab.xtb.palette.previous = false;
+                let reaction = self.xtb_selected_reaction();
+                if self.xtb_palette_failure(reaction).is_some() {
                     self.tab.xtb.palette.open = true;
                     self.xtb.dock.collapsed = false;
                 }
-                let newest = self.xtb_newest();
-                let shown = self
-                    .xtb_palette_result()
-                    .filter(|_| self.xtb_selected_reaction().is_none())
-                    .map(|(_, shown)| shown.result.clone());
-                if let Some(result) = newest.or(shown) {
+                let result = self
+                    .xtb_newest()
+                    .or_else(|| reaction.is_none().then(|| self.xtb_shown_entry()).flatten())
+                    .map(|(_, stored)| Arc::clone(&stored.result));
+                if let Some(result) = result {
                     self.xtb_show_result(&result);
                 }
             }
@@ -521,6 +606,7 @@ impl App {
                 return super::super::focus_drawing();
             }
             Action::Collapse => self.xtb.dock.collapsed = !self.xtb.dock.collapsed,
+            Action::Previous => self.tab.xtb.palette.previous = !self.tab.xtb.palette.previous,
             Action::Dock => {
                 let old_width = self.inspector_width();
                 self.xtb.dock.inspector = !self.xtb.dock.inspector;
@@ -549,6 +635,9 @@ impl App {
                 self.error = false;
             }
             Action::CopyTable | Action::Export | Action::CopyLog => {
+                if self.xtb_failed().is_some() {
+                    return Task::none();
+                }
                 let Some(shown) = self.xtb_shown() else {
                     return Task::none();
                 };
@@ -610,6 +699,16 @@ impl App {
             },
             Action::Labels(on) => self.tab.xtb.palette.labels = on,
             Action::Recalculate => return self.xtb_recalculate(),
+            Action::RecalculateMolecule => {
+                let result = self
+                    .xtb_newest()
+                    .map(|(_, stored)| Arc::clone(&stored.result));
+                if let Some(result) = result {
+                    self.xtb_show_result(&result);
+                    self.xtb.dock.collapsed = false;
+                    return self.xtb_recalculate();
+                }
+            }
             Action::KeepFull(keep) => {
                 let Some(index) = self.xtb_shown().map(|shown| shown.index) else {
                     return Task::none();
@@ -685,6 +784,8 @@ impl App {
         } else {
             super::conformers::step_name(result, index)
         };
+        let attachment = shown.stored.attachment;
+        let result_id = Arc::downgrade(result);
         self.status = if let Some(error) = failure {
             format!("{name} cannot be shown: {error}")
         } else if preview.is_some() {
@@ -707,6 +808,8 @@ impl App {
         self.tab.xtb.palette.confirm.clear();
         self.tab.xtb.palette.step = Some(Step {
             index,
+            attachment,
+            result: result_id,
             revision: (self.tab.file_epoch, self.tab.revision),
             preview: preview.map(Box::new),
         });

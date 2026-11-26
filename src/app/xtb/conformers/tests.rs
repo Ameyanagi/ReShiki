@@ -4,7 +4,8 @@ use reshiki::qcdata::{
     Frame, Provenance, Settings as QcSettings, Source, Status, Task, Trajectory, XtbSettings,
 };
 
-const A: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];
+// The lowest conformer differs from the water model the search started from.
+const A: [[f64; 3]; 3] = [[0., 0., 0.], [0.95, 0., 0.], [-0.24, 0.92, 0.]];
 const B: [[f64; 3]; 3] = [[0., 0., 0.], [0.97, 0., 0.], [-0.30, 0.90, 0.]];
 const C: [[f64; 3]; 3] = [[0., 0., 0.], [0.95, 0.1, 0.], [-0.20, 0.95, 0.1]];
 
@@ -332,6 +333,14 @@ mod app {
             notes: vec![],
             seconds: 12.5,
         }))
+    }
+
+    impl App {
+        pub(in crate::app) fn xtb_searched_water() -> (Self, u64) {
+            let (mut app, oxygen) = water(CalcTask::Conformers);
+            search(&mut app, found(false));
+            (app, oxygen)
+        }
     }
 
     #[test]

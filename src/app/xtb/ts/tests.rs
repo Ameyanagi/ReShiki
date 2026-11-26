@@ -348,7 +348,7 @@ async fn worker_and_storage_failures_show_before_the_previous_reaction_result() 
             panic!("the attempt should have failed");
         };
         assert_eq!(failed.ts().unwrap().arrow, arrow);
-        let (failure, _) = failed.explain();
+        let (failure, _) = failed.explain(app.xtb_can_retry(failed));
         if storage_failure {
             assert!(failure.contains("would exceed"), "{failure}");
         }

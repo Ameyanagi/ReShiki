@@ -67,7 +67,7 @@ impl Source {
         } else {
             "Saved transition-state candidate"
         };
-        format!("{structure} · {} atoms{hessian}", self.frame.numbers.len())
+        format!("{structure}{hessian}")
     }
 
     pub(in crate::app) fn output(
