@@ -81,7 +81,9 @@ fn center_of_mass(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> [f
 /// Proper rotations about the centre of mass must map each atom to an atom
 /// with the same label within a Cartesian distance of 1e-3 Å. Use labels
 /// `Z * 1000 + isotope`, with isotope 0 for natural atoms. The search tests
-/// axes of orders 2 through 8. A linear rotor has symmetry number 2 if
+/// axes of orders 2 through 12. The search can undercount when distortions
+/// approach the tolerance. Well-converged geometries typically have much
+/// smaller deviations. A linear rotor has symmetry number 2 if
 /// its ends can be exchanged, and 1 otherwise. A single atom returns 1.
 /// Supply finite positions and positive finite masses, one per label.
 pub fn rotational_symmetry_number(
