@@ -204,6 +204,8 @@ fn placing_charges_preserves_other_labels() {
         ("#3 · 7.21 ppm", false, None),
         ("#3", false, None),
         ("7.21", false, None),
+        // A negative NMR shift as write_labels writes it.
+        ("-0.25", false, None),
         ("+1", false, None),
         ("−2", false, None),
         ("custom label", false, None),
@@ -225,7 +227,7 @@ fn placing_charges_preserves_other_labels() {
         palette(&mut app, Action::PlaceCharges);
         assert_eq!(
             app.status,
-            "Placed 3 CM5 charges as atom labels · ⌘Z undoes · 1 atoms kept their own labels"
+            "Placed 3 CM5 charges as atom labels · ⌘Z undoes · 1 atom kept its own label"
         );
         assert_eq!(app.tab.doc.atom(carbon).unwrap().display.number, Some(own));
     }
