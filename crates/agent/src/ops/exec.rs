@@ -38,7 +38,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     task::Poll,
-    time::Instant,
+    time::{Duration, Instant},
 };
 #[cfg(test)]
 pub(crate) use tests::Barrier;
@@ -146,6 +146,16 @@ struct Lease {
     _admission: Admission,
 }
 
+/// Keeps a call's permit and admission while it lives; see [`Context::hold`].
+#[derive(Default)]
+pub struct Hold(#[allow(dead_code)] Option<Arc<Lease>>);
+
+impl std::fmt::Debug for Hold {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Hold")
+    }
+}
+
 /// Finishes the call's progress when the operation ends.
 struct FinishGuard(Option<Arc<Monotonic>>);
 
@@ -158,8 +168,8 @@ impl Drop for FinishGuard {
 }
 
 /// Runs operations within [`Budgets::concurrency`] permits and a queue of
-/// [`Budgets::queue`] waiting calls, each under a [`Budgets::op_deadline`]
-/// measured from admission.
+/// [`Budgets::queue`] waiting calls, each under its deadline measured from
+/// admission.
 #[derive(Clone)]
 pub struct Executor {
     shared: Arc<Shared>,
@@ -199,6 +209,7 @@ impl Executor {
         who: Principal,
         id: RequestId,
         progress: Option<Sink>,
+        deadline: Duration,
         f: F,
     ) -> Result<T, OpError>
     where
@@ -206,7 +217,7 @@ impl Executor {
         Fut: Future<Output = Result<T, OpError>> + Send + 'static,
         T: Send + 'static,
     {
-        let deadline = Instant::now().checked_add(self.shared.budgets.op_deadline);
+        let deadline = Instant::now().checked_add(deadline);
         let (token, admission) = self.admit((who, id))?;
         let permit = {
             let mut permit = pin!(Arc::clone(&self.shared.permits).acquire_owned());
@@ -408,6 +419,18 @@ pub struct Context {
 }
 
 impl Context {
+    /// A share of this call's permit and admission for work that outlives
+    /// the call's future, such as a worker thread that finishes after a
+    /// cancellation: the call's slot stays taken until it is dropped.
+    pub fn hold(&self) -> Hold {
+        Hold(Some(Arc::clone(&self.lease)))
+    }
+
+    /// When this operation's cooperative deadline expires, if representable.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.deadline
+    }
+
     /// Ok once committed; otherwise [`ErrorKind::Cancelled`] when the call
     /// was cancelled and [`ErrorKind::Timeout`] when its deadline has passed.
     pub fn checkpoint(&self) -> Result<(), OpError> {

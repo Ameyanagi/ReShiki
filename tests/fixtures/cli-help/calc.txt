@@ -24,4 +24,5 @@ Options:
   --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
   --threads N                  Use 1 to 64 worker threads (default 1).
 
+Use calculate for the compact calculation summary.
 See docs/xtb-worker.md (Command line)

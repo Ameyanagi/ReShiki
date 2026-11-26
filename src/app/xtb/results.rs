@@ -29,6 +29,8 @@ pub(crate) const BOND_ORDER_MIN: f64 = reshiki::qcdata::LIGHT_BOND_ORDER_MIN;
 pub(crate) enum View {
     #[default]
     Summary,
+    /// A conformer search's ranked conformers.
+    Conformers,
     Vibrations,
     Steps,
     Log,
@@ -38,10 +40,13 @@ impl View {
     /// The tabs supported by the stored data.
     pub(crate) fn available(result: &CalcResult) -> Vec<Self> {
         let mut views = vec![Self::Summary];
+        if result.task == Task::Conformers {
+            views.push(Self::Conformers);
+        }
         if result.vibrations.is_some() {
             views.push(Self::Vibrations);
         }
-        if energies(result).len() > 1 {
+        if result.task == Task::Optimize && energies(result).len() > 1 {
             views.push(Self::Steps);
         }
         views.push(Self::Log);
@@ -51,6 +56,7 @@ impl View {
     pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Summary => "Summary",
+            Self::Conformers => "Conformers",
             Self::Vibrations => "Vibrations",
             Self::Steps => "Steps",
             Self::Log => "Log",
@@ -129,12 +135,13 @@ fn solvent(result: &CalcResult) -> String {
     }
 }
 
-/// The energy of each optimization step, the start included.
+/// The energy of each optimization step, the start included, or of each
+/// kept conformer, the lowest first.
 pub(crate) fn energies(result: &CalcResult) -> &[f64] {
     result
         .trajectory
         .as_ref()
-        .filter(|_| result.task == Task::Optimize)
+        .filter(|_| matches!(result.task, Task::Optimize | Task::Conformers))
         .map_or(&[], |path| path.energies_hartree.as_slice())
 }
 
@@ -150,6 +157,10 @@ pub(crate) fn step_positions(
     let count = energies(result).len();
     let atoms = output.numbers.len();
     let path = result.trajectory.as_ref()?;
+    // A conformer is never the input or the result frame by position.
+    if result.task == Task::Conformers {
+        return path.frame(step).map(|frame| frame.positions_angstrom);
+    }
     if path.positions_angstrom.len() == count * atoms * 3 {
         let block = path
             .positions_angstrom
@@ -217,6 +228,20 @@ pub(crate) fn summary_rows(
             outcome.push_str(&format!(" · RMSD from start {rmsd:.2} Å"));
         }
         rows.push(("Optimization".into(), outcome));
+    }
+    if result.task == Task::Conformers {
+        let kept = energies(result).len();
+        let mut text = format!(
+            "{kept} kept · the lowest is shown here{}",
+            match &result.status {
+                Status::NotConverged { reason } => format!(" · {reason}"),
+                _ => String::new(),
+            }
+        );
+        if kept > 1 {
+            text.push_str(" · see the Conformers tab");
+        }
+        rows.push(("Conformers".into(), text));
     }
     let gradient = &result.gradient_hartree_per_bohr;
     if !gradient.is_empty() {
@@ -438,6 +463,7 @@ pub(crate) fn config(
         qcdata::Task::Optimize => CardTask::Optimize,
         qcdata::Task::Hessian => CardTask::Frequencies,
         qcdata::Task::Energy => CardTask::Energy,
+        qcdata::Task::Conformers => CardTask::Conformers,
         _ => return None,
     };
     // Settings the card cannot send: a retry ladder, GFN-FF fragment
@@ -534,6 +560,7 @@ pub(crate) fn log(
         Task::Optimize => "optimize",
         Task::Hessian => "frequencies",
         Task::Energy => "energy",
+        Task::Conformers => "conformer search",
         _ => "other",
     };
     let mut task_line = format!("task {task}");

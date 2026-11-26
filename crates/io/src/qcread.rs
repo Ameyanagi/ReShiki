@@ -25,6 +25,8 @@ mod xyz;
 #[cfg(test)]
 mod tests;
 
+/// The most jobs one output file may hold.
+pub const MAX_JOBS: usize = 1_000;
 /// The largest file the readers accept.
 pub const MAX_FILE_BYTES: usize = 128 * 1024 * 1024;
 

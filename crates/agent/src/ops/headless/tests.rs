@@ -65,7 +65,9 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
             "label_atoms",
             "convert",
             "name",
-            "schema"
+            "schema",
+            "export_input",
+            "read_output",
         ]
     );
     let unique: HashSet<_> = names.iter().collect();
@@ -92,7 +94,14 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
         hints(false, false, false),
         hints(false, true, false),
         hints(false, true, true),
+        hints(true, false, true),
+        hints(true, false, true),
+        hints(true, false, true),
+        hints(true, false, true),
+        hints(true, false, true),
+        hints(true, false, true),
     ];
+    assert_eq!(catalog::SPECS.len(), expected.len());
     for (spec, hints) in catalog::SPECS.iter().zip(expected) {
         assert!(valid_name(spec.name), "{}", spec.name);
         assert!(
@@ -105,12 +114,12 @@ fn the_catalog_lists_each_tool_once_with_explicit_hints() {
         assert_eq!(schema["type"], "object", "{}", spec.name);
         assert_eq!(schema["additionalProperties"], false, "{}", spec.name);
         assert!(
-            catalog::decode(spec.name, json!({}), &Budgets::default()).is_some(),
+            catalog::decode(spec.name, json!({}), &Budgets::default(), true).is_some(),
             "{}",
             spec.name
         );
     }
-    assert!(catalog::decode("canvas_preview", json!({}), &Budgets::default()).is_none());
+    assert!(catalog::decode("canvas_preview", json!({}), &Budgets::default(), true).is_none());
 }
 
 #[test]
@@ -199,9 +208,11 @@ async fn info_reports_versions_budgets_and_formats() {
     assert_eq!(budgets["max_session_weight"], 2_000_000);
     assert_eq!(budgets["history_depth"], 20);
     assert_eq!(budgets["op_deadline_seconds"], 120);
+    assert_eq!(budgets["calc_deadline_seconds"], 1800);
     assert_eq!(budgets["idle_ttl_seconds"], 3600);
     assert_eq!(budgets["render"]["max_side"], 8192);
-    assert_eq!(budgets.as_object().unwrap().len(), 19);
+    assert_eq!(budgets.as_object().unwrap().len(), 20);
+    assert!(info.value["value"]["calculations"].is_null());
     assert_eq!(
         info.value["value"]["formats"],
         json!({
@@ -364,13 +375,19 @@ async fn cancelled_queued_calls_end_cancelled_while_the_rest_complete() {
             let (exec, release) = (exec.clone(), release.clone());
             tokio::spawn(async move {
                 let id = RequestId::Str(format!("blocker-{n}"));
-                exec.run(Principal::local(), id, None, move |ctx| async move {
-                    ctx.blocking(move || {
-                        release.wait();
-                        Ok(())
-                    })
-                    .await
-                })
+                exec.run(
+                    Principal::local(),
+                    id,
+                    None,
+                    Budgets::default().op_deadline,
+                    move |ctx| async move {
+                        ctx.blocking(move || {
+                            release.wait();
+                            Ok(())
+                        })
+                        .await
+                    },
+                )
                 .await
             })
         })

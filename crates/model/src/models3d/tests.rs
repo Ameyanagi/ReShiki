@@ -1924,6 +1924,87 @@ fn hydrogens_can_be_all_polar_or_none() {
     assert_eq!(model.shown(&doc), [true, false]);
 }
 
+#[test]
+fn conformer_overlays_draw_faint_atoms_and_bonds_behind_the_selected_model() {
+    for (style, expected) in [
+        (Style::BallStick, (4, 6, 0)),
+        (Style::SpaceFilling, (4, 0, 0)),
+        (Style::Wireframe, (0, 0, 6)),
+        (Style::Stick, (0, 0, 0)),
+    ] {
+        let (mut doc, base) = styled(|m| {
+            m.style = style;
+            m.show_hydrogens = Hydrogens::Polar;
+            m.labels = Labels::All;
+            m.copy_opacity = 1.;
+        });
+        let model = &doc.models[0];
+        let view = View::new(&doc, model).unwrap();
+        let (center, reach, bounds) = (view.center, view.reach, view.bounds());
+        let atom_zero = view.project(view.rotated[0]).0;
+        let picking = balls_and_sticks(&doc, model).unwrap();
+        let ghost = model
+            .points(&doc)
+            .unwrap()
+            .into_iter()
+            .map(|(_, [x, y, z])| [x, y + 0.4, z + 0.1])
+            .collect();
+        doc.models[0].overlay.push(ghost);
+        let model = &doc.models[0];
+        let view = View::new(&doc, model).unwrap();
+        assert_eq!(view.center, center);
+        assert_eq!(view.reach, reach);
+        assert_eq!(view.project(view.rotated[0]).0, atom_zero);
+        assert_eq!(balls_and_sticks(&doc, model).unwrap(), picking);
+
+        let parts = primitives(&doc);
+        assert!(parts.len() > base.len(), "{style:?}");
+        let (overlay, selected) = parts.split_at(parts.len() - base.len());
+        assert_eq!(
+            scene::svg_part(selected, bounds.0, bounds.1),
+            scene::svg_part(&base, bounds.0, bounds.1),
+            "{style:?}",
+        );
+        let overlay: Vec<_> = overlay
+            .iter()
+            .map(|p| match p {
+                Primitive::Opacity { alpha, primitive } => {
+                    assert_eq!(*alpha, 0.18);
+                    primitive.as_ref().clone()
+                }
+                _ => panic!("Unexpected overlay primitive: {p:?}"),
+            })
+            .collect();
+        assert_eq!(counts(&overlay), expected, "{style:?}");
+        if style == Style::Stick {
+            assert!(matches!(overlay.first(), Some(Primitive::Contour { .. })));
+            assert_eq!(overlay.len(), 7); // One contour and six shaded half-bonds.
+            assert!(
+                overlay[1..]
+                    .iter()
+                    .all(|p| matches!(p, Primitive::ShadedPolygon { .. }))
+            );
+        } else {
+            assert_eq!(overlay.len(), expected.0 + expected.1 + expected.2);
+        }
+    }
+}
+
+#[test]
+fn malformed_conformer_overlays_are_ignored_and_overlays_are_never_saved() {
+    let (mut doc, ..) = shown(Display::ThreeD);
+    let base = scene::svg(&doc);
+    let saved = serde_json::to_string(&doc.models[0]).unwrap();
+    doc.models[0].overlay = vec![vec![[0.; 3]; doc.models[0].atoms.len()]];
+    assert_eq!(scene::svg(&doc), base);
+
+    let len = doc.models[0].atoms.len() + doc.models[0].hydrogens.len();
+    doc.models[0].overlay = vec![vec![[0.; 3]; len]];
+    assert_eq!(serde_json::to_string(&doc.models[0]).unwrap(), saved);
+    let read: Model3d = serde_json::from_str(&saved).unwrap();
+    assert!(read.overlay.is_empty());
+}
+
 /// A one-model drawing of these atoms with their hydrogens, shown as 3D.
 fn lone(
     atoms: &[(&str, [f32; 3])],
