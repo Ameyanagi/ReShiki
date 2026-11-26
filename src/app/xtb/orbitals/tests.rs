@@ -301,6 +301,25 @@ fn place_keeps_the_orbital_in_the_drawing_as_one_undo_step() {
 }
 
 #[test]
+fn a_failed_run_leaves_no_orbital_surface_behind() {
+    let mut app = tab();
+    computed(&mut app);
+    assert!(app.display_document().models[0].surface.is_some());
+    let _ = app.update(Message::Xtb(XtbAction::Run));
+    event(
+        &mut app,
+        Event::Done(Err(super::super::state::Failure::Scf(
+            "not converged".into(),
+        ))),
+    );
+    assert!(app.xtb_failed().is_some());
+    assert!(
+        app.display_document().models[0].surface.is_none(),
+        "the failure card hides the tabs, so no surface may stay on the canvas"
+    );
+}
+
+#[test]
 fn a_changed_molecule_shows_no_orbitals() {
     let mut app = tab();
     let o = app.tab.doc.atoms[0].id;
