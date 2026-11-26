@@ -1,9 +1,8 @@
 //! Extra-mode displacement followed by ordinary index-one refinement.
 //!
-//! Negative-curvature escape follows Heidrich & Quapp (1986), Theor. Chim. Acta
-//! 70, 89–98, sec. 3; P-RFO uses Baker (1986), J. Comput. Chem. 7, 385–395,
-//! doi:10.1002/jcc.540070402 [Baker1986PRFO]. Tangent ordering and the symmetric
-//! 0.1-bohr seeds are local recovery choices.
+//! Negative-curvature escape follows Heidrich & Quapp (1986) \[Heidrich1986IndexTwo\];
+//! P-RFO follows Baker (1986) \[Baker1986PRFO\]. Tangent ordering and the
+//! symmetric 0.1-bohr seeds are local recovery choices.
 
 use std::ops::ControlFlow;
 

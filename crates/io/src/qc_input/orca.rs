@@ -112,18 +112,17 @@ pub(super) fn write(
     let has_companions = endpoints.is_some()
         || (matches!(settings.job, Job::TransitionState | Job::Irc)
             && geometry.hessian().is_some());
-    if has_companions
-        && stem
-            .chars()
-            .any(|c| c.is_control() || matches!(c, '"' | '/' | '\\'))
-    {
+    let safe = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
+    if has_companions && !stem.chars().any(safe) {
         return Err(Error::Invalid(
-            "ORCA companion file names cannot contain quotes, path separators or control characters."
+            "Choose an input file name with an ASCII letter, digit, period, underscore or hyphen for ORCA companion files."
                 .into(),
         ));
     }
-    // Keep the selected stem verbatim: lossy substitutions can merge two jobs.
-    let companion_stem = stem;
+    let companion_stem: String = stem
+        .chars()
+        .map(|c| if safe(c) { c } else { '_' })
+        .collect();
     let mut files = Vec::new();
     let frame = geometry.frame;
     if matches!(settings.job, Job::TransitionState | Job::Irc) {

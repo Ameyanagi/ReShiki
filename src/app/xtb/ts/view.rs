@@ -82,7 +82,7 @@ impl Presentation {
     pub fn status_line(&self, unit: EnergyUnit) -> String {
         match self.barrier_line(unit) {
             Some(barrier) => format!("Transition state · {barrier}"),
-            None => "No reliable transition state found.".into(),
+            None => "xTB · No reliable transition state found.".into(),
         }
     }
 

@@ -707,7 +707,7 @@ mod presentation_tests {
             );
             assert_eq!(
                 presentation.status_line(EnergyUnit::KcalPerMol),
-                "No reliable transition state found."
+                "xTB · No reliable transition state found."
             );
         }
     }
