@@ -107,8 +107,21 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
             data.rsplit_once(" E ")
                 .map(|(_, s)| energy(s.trim()))
                 .transpose()?
+        } else if let Some((_, data)) = label.rsplit_once(" E = ")
+            && let Some(value) = data.trim().strip_suffix("Eh")
+        {
+            // ReShiki's own conformer export: "… · E = -5.0701760000 Eh".
+            Some(energy(value.trim())?)
         } else {
-            None
+            // CREST writes each conformer's energy (Eh) as the whole comment,
+            // with decimals; a bare frame number is not an energy.
+            label
+                .split_once('.')
+                .filter(|(_, decimals)| {
+                    decimals.len() >= 4 && decimals.bytes().all(|b| b.is_ascii_digit())
+                })
+                .and_then(|_| label.parse::<f64>().ok())
+                .filter(|e| e.is_finite())
         };
         steps.push(Step {
             frame: frame(&atoms, positions, charge, multiplicity)?,

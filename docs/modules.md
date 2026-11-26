@@ -70,6 +70,7 @@ explains how the crates and modules fit together.
 - `src/app/document_tab.rs`: Per-document state.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
+- `src/app/energy_plot.rs`: A small energy diagram shared by the import sheet and the Conformers tab
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.
@@ -85,6 +86,7 @@ explains how the crates and modules fit together.
 - `src/app/file_shortcuts.rs`
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
+- `src/app/frames_import.rs`: Opening a file that holds several geometries of one molecule (a multi-frame XYZ such as a trajectory or a CREST ensemble, or an SD file of conformers)
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/github.rs`: GitHub in the editor
