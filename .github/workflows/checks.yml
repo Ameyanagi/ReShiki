@@ -682,6 +682,23 @@ jobs:
         run: cargo test --locked -p reshiki-xtb-worker --features engine
       - name: Test xTB application integration
         run: cargo test --locked --test it xtb --features xtb
+      # The workspace jobs build without xTB, so these unit tests either do not
+      # exist there, return early when `xtb::available()` is false, or check
+      # menus and commands that change with it. Keep any new test that depends
+      # on the engine inside one of these modules. The step above built
+      # target/debug/reshiki, which serves as the InChI and naming helper.
+      - name: Test the application's xTB code paths
+        run: |
+          RESHIKI_INCHI_HELPER="$PWD/target/debug/reshiki" \
+          RESHIKI_NAMING_HELPER="$PWD/target/debug/reshiki" \
+          RESHIKI_REQUIRE_INCHI_HELPER=1 \
+          cargo test --locked -p reshiki --features xtb --lib --bin reshiki -- \
+            app::xtb:: app::nmr:: app::context_menu:: app::workspace:: \
+            app::command_palette:: app::models3d:: app::updates:: \
+            app::shortcuts:: app::dispatch app::shortcut_focus app::help:: \
+            app::inspector_pages:: app::document_styles:: app::theme_generator:: \
+            app::github:: app::joining:: app::graphics:: app::compound_numbers:: \
+            cli:: xtb_agent:: launch::mcp
   rust-result:
     name: Rust checks
     needs: [scope, rust-build, rust, rust-extra, rust-lint-goldens, xtb]
