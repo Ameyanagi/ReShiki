@@ -336,6 +336,73 @@ fn acetic_acid() -> IrFigure {
     )
 }
 
+fn aspirin() -> IrFigure {
+    IrFigure::with_defaults(
+        "aspirin".into(),
+        "GFN2-xTB".into(),
+        vec![
+            [39.7, 5.39],
+            [76.2, 5.21],
+            [83.4, 2.92],
+            [104.6, 0.8],
+            [111.4, 0.25],
+            [137.8, 1.11],
+            [193.8, 0.14],
+            [246.3, 1.45],
+            [290.5, 1.82],
+            [335.0, 1.4],
+            [378.1, 2.37],
+            [423.0, 8.3],
+            [470.8, 3.76],
+            [507.9, 9.74],
+            [537.1, 0.64],
+            [561.6, 23.37],
+            [596.0, 68.59],
+            [605.1, 33.78],
+            [648.6, 9.28],
+            [682.1, 86.59],
+            [733.8, 62.07],
+            [756.5, 25.92],
+            [789.4, 6.09],
+            [831.4, 23.9],
+            [883.5, 1.54],
+            [918.4, 1.07],
+            [928.7, 0.24],
+            [936.5, 41.55],
+            [994.5, 57.45],
+            [1007.9, 30.93],
+            [1071.4, 119.07],
+            [1086.2, 13.97],
+            [1137.1, 209.52],
+            [1159.0, 93.46],
+            [1163.0, 448.63],
+            [1178.1, 2.16],
+            [1218.6, 74.47],
+            [1240.5, 8.0],
+            [1277.3, 215.13],
+            [1320.8, 0.5],
+            [1358.7, 60.36],
+            [1427.5, 19.23],
+            [1434.2, 13.28],
+            [1439.9, 14.97],
+            [1455.2, 46.54],
+            [1573.3, 16.19],
+            [1590.5, 29.93],
+            [1756.1, 470.92],
+            [1788.3, 410.89],
+            [3021.9, 1.12],
+            [3053.4, 2.61],
+            [3068.6, 9.71],
+            [3088.2, 4.48],
+            [3097.2, 21.93],
+            [3106.4, 19.47],
+            [3110.2, 11.52],
+            [3450.5, 44.2],
+        ],
+        Journal::Acs,
+    )
+}
+
 #[test]
 fn peak_selection_reserves_weak_stretches_before_fingerprint_bands() {
     let peaks = [
@@ -585,9 +652,38 @@ fn strongest_band_reaches_twenty_percent_or_unit_absorbance() {
 
 #[test]
 fn peak_labels_clear_labels_leaders_and_curve() {
+    check_peak_label_layouts(acetic_acid(), |case, peaks| {
+        let mut peaks = peaks.to_vec();
+        peaks.sort_unstable();
+        assert_eq!(
+            peaks,
+            [657, 1159, 1243, 1381, 1436, 1803, 3082, 3448],
+            "{case}"
+        );
+    });
+}
+
+#[test]
+fn aspirin_peak_labels_clear_labels_leaders_and_curve() {
+    check_peak_label_layouts(aspirin(), |case, peaks| {
+        println!("{case}: {peaks:?}");
+        for number in [1788, 1756] {
+            assert!(peaks.contains(&number), "{case}: missing {number}");
+        }
+        assert!(
+            peaks.iter().any(|peak| (3450..=3452).contains(peak)),
+            "{case}: missing O–H stretch label"
+        );
+        assert!(
+            peaks.iter().any(|peak| (3000..=3120).contains(peak)),
+            "{case}: missing C–H stretch label"
+        );
+    });
+}
+
+fn check_peak_label_layouts(mut ir: IrFigure, check_peaks: impl Fn(&str, &[u32])) {
     let doc = Document::default();
     let at = Point::new(13., 42.);
-    let mut ir = acetic_acid();
     let pad = doc.drawing_style.world(1.);
     for (columns, y, vertical) in [Columns::One, Columns::Two]
         .into_iter()
@@ -603,13 +699,7 @@ fn peak_labels_clear_labels_leaders_and_curve() {
         let case = format!("{columns:?} {y:?} vertical={vertical}");
         let chart = figure::spectrum(&doc, &ir, at);
         assert_eq!(chart, figure::spectrum(&doc, &ir, at));
-        let mut peaks = chart.labelled_peaks.clone();
-        peaks.sort_unstable();
-        assert_eq!(
-            peaks,
-            [657, 1159, 1243, 1381, 1436, 1803, 3082, 3448],
-            "{case}"
-        );
+        check_peaks(&case, &chart.labelled_peaks);
         let labels = &chart.annotations[chart.annotations.len() - chart.labelled_peaks.len()..];
         let leaders = &chart.graphics[chart.graphics.len() - labels.len()..];
         if columns == Columns::One {

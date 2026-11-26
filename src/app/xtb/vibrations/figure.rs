@@ -182,6 +182,9 @@ pub(super) fn select_labels(
         );
     }
     reserved.sort_unstable_by(|a, b| strength(b, a));
+    reserved.truncate(limit);
+    // Leave a slot for each region anchor before taking optional doublet partners.
+    let mut optional_slots = limit - reserved.len();
     let mut fill: Vec<_> = candidates()
         .filter(|&(_, [_, value])| value >= maximum * 0.05)
         .collect();
@@ -200,16 +203,17 @@ pub(super) fn select_labels(
     };
     let mut selected = Vec::new();
     reserved
-        .into_iter()
+        .iter()
+        .copied()
         .map(|i| (i, true))
         .chain(fill.into_iter().map(|i| (i, false)))
-        .flat_map(|((i, peak), reserved)| {
+        .flat_map(|((i, peak), required)| {
             // A doublet takes consecutive slots at its anchor's priority.
             let pair = if selected.contains(&i) {
                 [None, None]
             } else {
                 selected.push(i);
-                let partner = if reserved && !in_bond_region(peak[0]) {
+                let partner = if required && !in_bond_region(peak[0]) {
                     None
                 } else {
                     neighbour(i, peak, &selected)
@@ -217,20 +221,28 @@ pub(super) fn select_labels(
                 [
                     Some(PeakLabel {
                         peak,
-                        required: reserved || partner.is_some(),
+                        required,
                         partner: partner.map(|(_, [number, _])| number),
                     }),
                     partner.map(|(j, other)| {
                         selected.push(j);
                         PeakLabel {
                             peak: other,
-                            required: true,
+                            required: reserved.iter().any(|&(i, _)| i == j),
                             partner: Some(peak[0]),
                         }
                     }),
                 ]
             };
             pair.into_iter().flatten()
+        })
+        .filter(|label| {
+            if label.required {
+                return true;
+            }
+            let has_slot = optional_slots > 0;
+            optional_slots = optional_slots.saturating_sub(1);
+            has_slot
         })
         .take(limit)
         .collect()
@@ -660,11 +672,17 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
             .skip(first)
             .take_while(move |[a, _]| a.x <= right)
     };
-    // Resolve reserved peaks and doublets before individual fills.
-    let placement_order = labels
-        .iter()
-        .filter(|label| label.required)
-        .chain(labels.iter().filter(|label| !label.required));
+    // Place region anchors first and give doublets priority over individual fills.
+    let placement_order = labels.iter().filter(|label| label.required).chain(
+        labels
+            .iter()
+            .filter(|label| !label.required && label.partner.is_some())
+            .chain(
+                labels
+                    .iter()
+                    .filter(|label| !label.required && label.partner.is_none()),
+            ),
+    );
     let has_doublet = labels.iter().any(|label| label.partner.is_some());
     for &PeakLabel {
         peak: [number, intensity],
@@ -703,47 +721,75 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
                     centre.offset(width / 2., height / 2.),
                 )
             });
-        let collisions = |centre: Point, start, end, length| {
+        let collisions = |centre: Point, start, end, length, allow_overlaps| {
             let clear_start = band_tip.lerp(end, pt(1.5) / length);
+            let (box_lo, box_hi) = (
+                centre.offset(-w / 2., -h / 2.),
+                centre.offset(w / 2., h / 2.),
+            );
             let (lo, hi) = (
                 centre.offset(-w / 2. - clearance, -h / 2. - clearance),
                 centre.offset(w / 2. + clearance, h / 2. + clearance),
             );
-            let hits_label = |a: Point, b: Point, gap: f32| {
-                (lo.x <= b.x && hi.x >= a.x && lo.y <= b.y && hi.y >= a.y)
-                    || hits_box(start, end, a.offset(-gap, -gap), b.offset(gap, gap))
+            let boxes_overlap = |lo: Point, hi: Point, a: Point, b: Point| {
+                lo.x <= b.x && hi.x >= a.x && lo.y <= b.y && hi.y >= a.y
             };
-            axis_labels
+            let (box_hits_label, padded_hits_label, label_collisions) = axis_labels
                 .iter()
-                .filter(|&&(a, b)| hits_label(a, b, 0.))
-                .count()
-                + axes
-                    .iter()
-                    .filter(|&&(a, b, inset)| {
-                        hits_box(a, b, lo.offset(inset, inset), hi.offset(-inset, -inset))
-                    })
-                    .count()
-                + occupied
-                    .iter()
-                    .filter(|&&(_, (a, b))| hits_label(a, b, clearance))
-                    .count()
-                + leaders
-                    .iter()
-                    .filter(|&&(a, b)| hits_box(a, b, lo, hi) || segments_cross(start, end, a, b))
-                    .count()
-                + usize::from(curve_between(lo.x, hi.x).any(|&[a, b]| hits_box(a, b, lo, hi)))
-                + usize::from(
-                    curve_between(clear_start.x.min(end.x), clear_start.x.max(end.x))
-                        .any(|&[a, b]| segments_cross(clear_start, end, a, b)),
-                )
+                .map(|&(a, b)| (a, b, 0.))
+                .chain(occupied.iter().map(|&(_, (a, b))| (a, b, clearance)))
+                .fold(
+                    (false, false, 0),
+                    |(box_hit, padded_hit, count), (a, b, gap)| {
+                        let padded = boxes_overlap(lo, hi, a, b);
+                        let hit = padded
+                            || hits_box(start, end, a.offset(-gap, -gap), b.offset(gap, gap));
+                        (
+                            box_hit
+                                || (allow_overlaps
+                                    && padded
+                                    && boxes_overlap(box_lo, box_hi, a, b)),
+                            padded_hit || padded,
+                            count + usize::from(hit),
+                        )
+                    },
+                );
+            let axis_collisions = axes
+                .iter()
+                .filter(|&&(a, b, inset)| {
+                    hits_box(a, b, lo.offset(inset, inset), hi.offset(-inset, -inset))
+                })
+                .count();
+            let leader_collisions = leaders
+                .iter()
+                .filter(|&&(a, b)| hits_box(a, b, lo, hi) || segments_cross(start, end, a, b))
+                .count();
+            let padded_hits_curve = curve_between(lo.x, hi.x).any(|&[a, b]| hits_box(a, b, lo, hi));
+            let box_hits_curve = allow_overlaps
+                && padded_hits_curve
+                && curve_between(box_lo.x, box_hi.x).any(|&[a, b]| hits_box(a, b, box_lo, box_hi));
+            let leader_hits_curve =
+                curve_between(clear_start.x.min(end.x), clear_start.x.max(end.x))
+                    .any(|&[a, b]| segments_cross(clear_start, end, a, b));
+            let total = label_collisions
+                + axis_collisions
+                + leader_collisions
+                + usize::from(padded_hits_curve)
+                + usize::from(leader_hits_curve);
+            let overlaps_nonleader = padded_hits_curve || padded_hits_label || axis_collisions != 0;
+            // In the fallback, rank actual box crossings ahead of clearance and collision count.
+            (box_hits_curve, box_hits_label, overlaps_nonleader, total)
         };
-        let search = |steps: u8, side_steps, pitch: f32, protect_partner, allow_overlaps| {
-            let mut shifts: Vec<_> = (0..steps)
-                .flat_map(|step| {
-                    let dy = f32::from(step) * (h + pt(1.5)) * pitch;
-                    std::iter::once(0)
-                        .chain((1..=side_steps).flat_map(|n: i16| [-n, n]))
-                        .map(move |n| (w * f32::from(n) * pitch / 2., dy))
+        let search = |grids: &[(u8, i16, f32)], protect_partner, allow_overlaps| {
+            let mut shifts: Vec<_> = grids
+                .iter()
+                .flat_map(|&(steps, side_steps, pitch)| {
+                    (0..steps).flat_map(move |step| {
+                        let dy = f32::from(step) * (h + pt(1.5)) * pitch;
+                        std::iter::once(0)
+                            .chain((1..=side_steps).flat_map(|n| [-n, n]))
+                            .map(move |n| (w * f32::from(n) * pitch / 2., dy))
+                    })
                 })
                 .collect();
             shifts.sort_by(|&(ax, ay), &(bx, by)| {
@@ -767,30 +813,32 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
                     continue;
                 }
                 let (start, end, length) = leader(centre);
-                let count = collisions(centre, start, end, length);
+                let score = collisions(centre, start, end, length, allow_overlaps);
                 let candidate = (centre, start, end);
-                if count == 0 {
+                if score.3 == 0 {
                     return Some(candidate);
                 }
-                if allow_overlaps && best.as_ref().is_none_or(|(fewest, _)| count < *fewest) {
-                    best = Some((count, candidate));
+                if allow_overlaps && best.as_ref().is_none_or(|(prior, _)| score < *prior) {
+                    best = Some((score, candidate));
                 }
             }
             best.map(|(_, candidate)| candidate)
         };
-        let clean = if partner.is_some() {
-            search(32, 24, 0.25, true, false)
-                .or_else(|| partner_box.and_then(|_| search(32, 24, 0.25, false, false)))
+        let fine = if partner.is_some() {
+            (32, 24, 0.25)
         } else {
-            search(8, 3, 1., false, false).or_else(|| {
-                has_doublet
-                    .then(|| search(16, 12, 0.5, false, false))
-                    .flatten()
-            })
+            (16, 12, 0.5)
+        };
+        let clean = if partner.is_some() {
+            search(&[fine], true, false)
+                .or_else(|| partner_box.and_then(|_| search(&[fine], false, false)))
+        } else {
+            search(&[(8, 3, 1.)], false, false)
+                .or_else(|| has_doublet.then(|| search(&[fine], false, false)).flatten())
         };
         let Some((centre, start, end)) = clean.or_else(|| {
             required.then(|| {
-                search(16, 6, 1., false, true).unwrap_or_else(|| {
+                search(&[(16, 6, 1.), fine], false, true).unwrap_or_else(|| {
                     // A band near an edge can have every outward shift outside the plot.
                     let centre = position(0., 0.);
                     let centre = p(
@@ -965,12 +1013,29 @@ mod tests {
             .find(|label| label.peak[0] == 1980.)
             .unwrap();
         assert_eq!(anchor.partner, Some(1940.));
-        assert_eq!(
-            selected
+        let peak_flags = |labels: &[PeakLabel]| {
+            labels
                 .iter()
-                .map(|label| label.peak[0])
-                .collect::<Vec<_>>(),
-            [2050., 2010., 1980., 1940., 1050.]
+                .map(|label| (label.peak[0], label.required))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            peak_flags(&selected),
+            [
+                (2050., true),
+                (2010., false),
+                (1980., true),
+                (1940., false),
+                (1050., false)
+            ]
+        );
+        assert_eq!(
+            peak_flags(&select_labels(&bands, 10000., 2, |_| true)),
+            [(2050., true), (1980., true)]
+        );
+        assert_eq!(
+            peak_flags(&select_labels(&bands[1..], 10000., 2, |_| true)),
+            [(2010., true), (1980., true)]
         );
         let ir = IrFigure {
             bands: bands.into(),
