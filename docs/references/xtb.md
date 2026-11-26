@@ -147,8 +147,8 @@ Paths below are relative to `crates/optimize/src`.
   doi:10.1016/0021-9991(75)90065-0. Lowest eigenvector of the RFO matrix
   (`optimizer/anc/davidson.rs`).
 - **Farkas1999Update**: Farkas & Schlegel, J. Chem. Phys. 111, 10806 (1999),
-  doi:10.1063/1.480484. SR1/BFGS blended Hessian update, the optional `Update::Bofill`
-  (`optimizer.rs`, `optimizer/rfo.rs`).
+  doi:10.1063/1.480484. SR1/BFGS blended Hessian update, the optional
+  `Update::FarkasSchlegel` (`optimizer.rs`, `optimizer/rfo.rs`).
 - **Powell1978Damping**: Powell, in _Numerical Analysis_ (ed. Watson), Lecture Notes in
   Mathematics, 144 (1978), doi:10.1007/BFb0067703. Damped BFGS update (`optimizer.rs`,
   `optimizer/rfo.rs`, via Nocedal & Wright, Procedure 18.2).
