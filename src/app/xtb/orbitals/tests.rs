@@ -237,7 +237,11 @@ fn place_keeps_the_orbital_in_the_drawing_as_one_undo_step() {
     act(&mut app, Action::Iso(0.09));
     assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, 0.09);
     act(&mut app, Action::Settle);
-    act(&mut app, Action::Iso(0.02));
+    // Presets are steps of their own, even one after another.
+    act(&mut app, Action::Preset(0.02));
+    act(&mut app, Action::Preset(0.10));
+    assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, 0.10);
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, 0.02);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, 0.09);

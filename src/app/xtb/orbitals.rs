@@ -51,9 +51,11 @@ pub(crate) enum Action {
     Lumo,
     /// ↑ (+1) or ↓ (−1) while nothing is selected on the canvas.
     Step(i32),
-    /// The isovalue slider or a preset; a placed figure changes at once,
-    /// one Undo step per drag.
+    /// The isovalue slider: a placed figure changes at once, one Undo step
+    /// per drag.
     Iso(f32),
+    /// An isovalue preset: its own Undo step.
+    Preset(f32),
     Opacity(u8),
     /// A slider let go: the next change starts a new Undo step.
     Settle,
@@ -722,7 +724,7 @@ impl App {
                 let index = (choice.index as i64 + i64::from(step)).clamp(0, last.max(0));
                 self.xtb_orbital_choose(choice.column, index as usize);
             }
-            Action::Iso(iso) => {
+            Action::Iso(iso) | Action::Preset(iso) => {
                 let iso = iso.clamp(*ISO_RANGE.start(), *ISO_RANGE.end());
                 self.xtb_orbital_setting(|figure| figure.iso = iso, |state| state.iso = iso);
             }

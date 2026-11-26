@@ -143,7 +143,7 @@ impl App {
             .padding([2, 6])
             .checked(on)
             .style(control(on))
-            .on_press_maybe(live.then(|| send(Action::Iso(preset))))
+            .on_press_maybe(live.then(|| send(Action::Preset(preset))))
             .into()
         }))
         .spacing(2);
