@@ -31,12 +31,16 @@ pub(crate) enum View {
     Steps,
     /// A conformer search's ranked conformers.
     Conformers,
+    Path,
     Log,
 }
 
 impl View {
-    /// The tabs `result` has: Steps only for an optimization with steps.
+    /// The tabs `result` has, in display order.
     pub(crate) fn available(result: &CalcResult) -> Vec<Self> {
+        if super::ts::is_ts(result) {
+            return vec![Self::Path, Self::Summary, Self::Log];
+        }
         let mut views = vec![Self::Summary];
         if result.task == Task::Conformers {
             views.push(Self::Conformers);
@@ -52,6 +56,7 @@ impl View {
             Self::Summary => "Summary",
             Self::Steps => "Steps",
             Self::Conformers => "Conformers",
+            Self::Path => "Path",
             Self::Log => "Log",
         }
     }
@@ -82,6 +87,12 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
         Some(version) => format!("{} {version}", provenance.program),
         None => provenance.program.clone(),
     });
+    if super::ts::is_ts(result) && !super::ts::path_energies(result).is_empty() {
+        parts.push(format!(
+            "IDPP → CI-NEB ({} images) → P-RFO → IRC",
+            super::ts::path_energies(result).len()
+        ));
+    }
     parts.push(solvent(result));
     if let Settings::Xtb(settings) = &result.settings {
         if settings.conventions == XtbConventions::Xtb68 {
@@ -488,6 +499,7 @@ pub(crate) fn log(
         Task::Optimize => "optimize",
         Task::Energy => "energy",
         Task::Conformers => "conformer search",
+        Task::TransitionState => "transition-state search",
         _ => "other",
     };
     let mut task_line = format!("task {task}");

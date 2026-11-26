@@ -498,6 +498,12 @@ impl App {
         } else {
             super::workspace::section(&heading).into()
         };
+        let header = match self.selected_arrows().next().filter(|_| roles) {
+            Some(arrow) => column![header, self.xtb_ts_card(arrow.id)]
+                .spacing(8)
+                .into(),
+            None => header,
+        };
         let mut panel = column![
             header,
             canvas(crate::canvas::ArrowPreview {

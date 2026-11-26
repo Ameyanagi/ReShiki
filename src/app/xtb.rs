@@ -14,6 +14,7 @@ use reshiki::qcdata::{self, CalcResult, Frame};
 use reshiki::science::{self, Freshness, Launch};
 use results::RunInfo;
 use state::{Progress, Settings};
+use std::rc::Rc;
 use std::sync::{Arc, Weak};
 
 mod conformers;
@@ -23,6 +24,7 @@ mod results;
 mod run;
 mod state;
 mod tone;
+pub(super) mod ts;
 mod view;
 
 #[cfg(test)]
@@ -68,10 +70,13 @@ pub(crate) enum Action {
     Palette(palette::Action),
     /// The card's Conformers fields and the Conformers tab.
     Conformers(conformers::Action),
+    Ts(ts::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
     #[cfg(not(target_arch = "wasm32"))]
     Search(u64, conformers::Event),
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    TsEvent(u64, ts::Event),
 }
 
 /// Ways to start a calculation without the card's Run button. Each shows
@@ -114,6 +119,8 @@ pub(crate) struct State {
     pub(super) outcome: Option<Outcome>,
     serial: u64,
     pub(super) palette: palette::Palette,
+    ts_card: ts::card::State,
+    ts_sessions: ts::Sessions,
     /// What this session knows about stored results' runs, by result.
     infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
 }
@@ -148,6 +155,7 @@ pub(crate) struct Request {
     keep_full: bool,
     /// The search, for a Conformers task.
     search: Option<conformers::Config>,
+    ts: Option<ts::Request>,
 }
 
 pub(crate) struct Run {
@@ -157,6 +165,7 @@ pub(crate) struct Run {
     keep_full: bool,
     /// A conformer search's settings and progress.
     search: Option<conformers::Live>,
+    ts: Option<ts::Live>,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -264,6 +273,7 @@ impl Failed {
 pub(crate) struct Review {
     pending: Pending,
     reasons: Vec<String>,
+    ts: Option<Rc<ts::Session>>,
 }
 
 /// A finished calculation, not yet stored.
@@ -278,6 +288,10 @@ struct Pending {
 
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    if matches!(message, Message::Xtb(Action::TsEvent(..))) {
+        return true;
+    }
     #[cfg(not(target_arch = "wasm32"))]
     return matches!(
         message,
@@ -317,6 +331,9 @@ impl App {
                 }
                 let mut request = request.clone();
                 if matches!(action, Action::Retry) {
+                    if request.ts.is_some() {
+                        return Task::none();
+                    }
                     let Some(hotter) = request.config.hotter() else {
                         return Task::none();
                     };
@@ -335,7 +352,7 @@ impl App {
                     return iced::clipboard::write(details);
                 }
             }
-            Action::Cancel => self.xtb_cancel(),
+            Action::Cancel => return self.xtb_cancel(),
             Action::ApplyAnyway => self.xtb_apply_anyway(),
             Action::Discard => {
                 if let Some(Outcome::Review(_)) = self.tab.xtb.outcome.take() {
@@ -348,8 +365,11 @@ impl App {
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => return self.xtb_palette(action),
             Action::Conformers(action) => return self.xtb_conformers(action),
+            Action::Ts(action) => return self.xtb_ts_action(action),
             #[cfg(not(target_arch = "wasm32"))]
             Action::Search(serial, event) => self.xtb_search_event(serial, event),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            Action::TsEvent(serial, event) => self.xtb_ts_event(serial, event),
             setting => {
                 let target = self.xtb_key();
                 let settings = &mut self.xtb.settings;
@@ -533,6 +553,7 @@ impl App {
             config,
             keep_full: false,
             search,
+            ts: None,
         };
         self.xtb_begin(request)
     }
@@ -558,6 +579,7 @@ impl App {
                 phase: Default::default(),
                 stopping: false,
             }),
+            ts: request.ts.map(ts::Live::new),
             config: request.config,
             keep_full: request.keep_full,
             launch: None,
@@ -661,6 +683,16 @@ impl App {
         {
             return self.xtb_search_start(launch);
         }
+        #[cfg(feature = "xtb")]
+        if self
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .is_some_and(|run| run.ts.is_some())
+        {
+            return self.xtb_ts_start(launch);
+        }
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
@@ -743,6 +775,7 @@ impl App {
                 config: run.config.clone(),
                 keep_full: run.keep_full,
                 search: run.search.as_ref().map(|live| live.config.clone()),
+                ts: run.ts.as_ref().map(|live| live.request.clone()),
             })
         });
         let failed = Failed {
@@ -761,18 +794,22 @@ impl App {
     }
 
     /// Cancel stops the worker (or the model generation) and applies nothing.
-    pub(super) fn xtb_cancel(&mut self) {
+    pub(super) fn xtb_cancel(&mut self) -> Task<Message> {
         if self.xtb_search_stop() {
-            return;
+            return Task::none();
         }
         let Some(run) = self.tab.xtb.run.take() else {
-            return;
+            return Task::none();
         };
         if run.launch.is_none() {
             self.tab.model_job.take_if(|job| Some(job.key) == run.model);
         }
         self.status = "Calculation canceled".into();
         self.error = false;
+        if run.ts.is_some() {
+            return super::focus_drawing();
+        }
+        Task::none()
     }
 
     fn xtb_apply_anyway(&mut self) {
@@ -782,7 +819,7 @@ impl App {
             return;
         }
         if let Some(Outcome::Review(review)) = self.tab.xtb.outcome.take() {
-            self.xtb_store(review.pending, true);
+            self.xtb_store_with_session(review.pending, true, review.ts);
         }
     }
 
@@ -790,6 +827,15 @@ impl App {
     /// as one Undo step. Unless `forced`, a stereo change or an open edit
     /// stops at the review card instead.
     fn xtb_store(&mut self, pending: Pending, forced: bool) {
+        self.xtb_store_with_session(pending, forced, None);
+    }
+
+    fn xtb_store_with_session(
+        &mut self,
+        pending: Pending,
+        forced: bool,
+        ts: Option<Rc<ts::Session>>,
+    ) {
         let mut doc = self.tab.doc.clone();
         let attached = match science::attach(
             &mut doc,
@@ -841,7 +887,11 @@ impl App {
             if let Some(first) = reasons.first() {
                 self.status = format!("{} · nothing applied", first.trim_end_matches('.'));
                 self.error = false;
-                self.tab.xtb.outcome = Some(Outcome::Review(Box::new(Review { pending, reasons })));
+                self.tab.xtb.outcome = Some(Outcome::Review(Box::new(Review {
+                    pending,
+                    reasons,
+                    ts,
+                })));
                 return;
             }
         }
@@ -870,6 +920,14 @@ impl App {
             .map(|s| s.result.clone())
         {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
+            if let Some(ts) = ts {
+                self.tab.xtb.ts_sessions.remember(&result, ts);
+                self.xtb.dock.collapsed = false;
+                if self.xtb.dock.inspector {
+                    self.xtb.page = Page::Xtb;
+                    let _ = self.show_inspector_tab(super::InspectorTab::Predict);
+                }
+            }
             self.tab.xtb.palette.show(&result);
         }
         self.status = if applied {
@@ -904,6 +962,9 @@ impl Run {
         }
         if let Some(live) = &self.search {
             return format!("{} · {}", self.label, live.line(self.seconds()));
+        }
+        if let Some(live) = &self.ts {
+            return format!("{} · {}\n{}", self.label, live.line(), live.detail());
         }
         format!(
             "{} · {}",

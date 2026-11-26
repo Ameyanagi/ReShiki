@@ -14,6 +14,8 @@ use reshiki::qc_input::{self, Geometry, Job, Output, Program, Settings, Template
 use reshiki::qcdata::Frame;
 use std::path::PathBuf;
 
+use super::xtb::ts::export::Source;
+
 const ACCENT: Color = Color::from_rgb8(47, 122, 95);
 const WARNING: Color = Color::from_rgb8(161, 98, 7);
 const ERROR: Color = Color::from_rgb8(185, 28, 28);
@@ -72,6 +74,8 @@ pub(super) struct Dialog {
     /// Tells this dialog's save receipts from an earlier dialog's.
     id: u64,
     atoms: Vec<u64>,
+    /// A TS export uses the saved frames rather than the drawing's model.
+    source: Option<Source>,
     name: String,
     program: Program,
     job: Job,
@@ -154,6 +158,38 @@ fn line_color(program: Program, line: &str) -> Option<Color> {
 }
 
 impl Dialog {
+    pub(super) fn new(atoms: Vec<u64>, name: String, charge: i32, multiplicity: u32) -> Self {
+        let [default, ..] = qc_input::builtin_templates();
+        let mut dialog = Self {
+            id: NEXT_DIALOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            atoms,
+            source: None,
+            title: name.clone(),
+            name,
+            program: Program::Gaussian,
+            job: Job::OptFreq,
+            template: default.clone(),
+            method: String::new(),
+            basis: String::new(),
+            charge: charge.to_string(),
+            multiplicity: multiplicity.to_string(),
+            cores: String::new(),
+            memory: String::new(),
+            extra: String::new(),
+            irc_points: "30".into(),
+            template_name: None,
+            message: String::new(),
+        };
+        dialog.apply(default);
+        dialog
+    }
+
+    pub(super) fn with_source(mut self, source: Source, job: Job) -> Self {
+        self.source = Some(source);
+        self.job = job;
+        self
+    }
+
     fn apply(&mut self, template: Template) {
         self.method = template.method.clone();
         self.basis = template.basis.clone();
@@ -290,27 +326,11 @@ impl App {
             .map(|name| name.text.clone())
             .or_else(|| self.export_stem())
             .unwrap_or_else(|| "molecule".into());
-        let [default, ..] = qc_input::builtin_templates();
-        let mut dialog = Dialog {
-            id: NEXT_DIALOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-            atoms,
-            title: name.clone(),
-            name,
-            program: Program::Gaussian,
-            job: Job::OptFreq,
-            template: default.clone(),
-            method: String::new(),
-            basis: String::new(),
-            charge: charge.to_string(),
-            multiplicity: (unpaired + 1).to_string(),
-            cores: String::new(),
-            memory: String::new(),
-            extra: String::new(),
-            irc_points: "30".into(),
-            template_name: None,
-            message: String::new(),
-        };
-        dialog.apply(default);
+        let dialog = Dialog::new(atoms, name, charge, unpaired + 1);
+        self.show_qc_export(dialog)
+    }
+
+    pub(super) fn show_qc_export(&mut self, dialog: Dialog) -> Task<Message> {
         self.qc_export = Some(dialog);
         self.context_menu = None;
         self.palette = None;
@@ -458,6 +478,13 @@ impl App {
     }
 
     fn qc_model(&self, dialog: &Dialog) -> Model {
+        if let Some(source) = &dialog.source {
+            return Model::Ready {
+                frame: (*source.frame).clone(),
+                label: source.label(),
+                stale: false,
+            };
+        }
         let doc = &self.tab.doc;
         let Some((index, model)) = doc
             .models
@@ -522,9 +549,13 @@ impl App {
     }
 
     /// The files the dialog would write, or why it cannot.
-    fn qc_output(&self) -> Result<Output, String> {
+    pub(super) fn qc_output(&self) -> Result<Output, String> {
         let dialog = self.qc_export.as_ref().ok_or_else(String::new)?;
         let settings = dialog.settings()?;
+        let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
+        if let Some(source) = &dialog.source {
+            return source.output(&settings, &stem(&dialog.name), &generator);
+        }
         let frame = match self.qc_model(dialog) {
             Model::Ready { stale: true, .. } => {
                 return Err(
@@ -541,7 +572,6 @@ impl App {
             product: None,
             result: None,
         };
-        let generator = format!("ReShiki {}", env!("CARGO_PKG_VERSION"));
         qc_input::write(&settings, &geometry, &stem(&dialog.name), &generator)
             .map_err(|error| error.to_string())
     }
@@ -669,6 +699,7 @@ impl App {
         };
 
         // Job: the plain tasks, then the transition-state tasks.
+        let endpoints = dialog.source.as_ref().is_some_and(Source::has_endpoints);
         let job_row = |jobs: &[Job]| {
             let mut buttons = row![].spacing(4);
             for &job in jobs {
@@ -679,7 +710,7 @@ impl App {
                     format!("qc-export-job-{job:?}"),
                     job.label(),
                     !xyz && dialog.job == job,
-                    (offered && !needs_path).then(|| send(Action::Job(job))),
+                    (offered && (!needs_path || endpoints)).then(|| send(Action::Job(job))),
                 ));
             }
             buttons.wrap()
@@ -691,6 +722,8 @@ impl App {
             .collect();
         let job_note = if xyz {
             "XYZ writes the coordinates only.".to_owned()
+        } else if endpoints {
+            "Reactant, product and TS guess from this transition-state search.".to_owned()
         } else if path_jobs.is_empty() {
             format!("{} offers no QST2, QST3 or NEB-TS.", dialog.program.label())
         } else {
@@ -797,9 +830,13 @@ impl App {
                 ),
             ]
             .spacing(8),
-            text("Charge and multiplicity from the drawing")
-                .size(11)
-                .style(muted_text),
+            text(if dialog.source.is_some() {
+                "Charge and multiplicity from the TS result"
+            } else {
+                "Charge and multiplicity from the drawing"
+            })
+            .size(11)
+            .style(muted_text),
             row![
                 input(
                     "qc-export-cores",
