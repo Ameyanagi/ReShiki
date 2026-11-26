@@ -180,8 +180,25 @@ fn the_headline_names_the_outcome_medium_and_electronic_state() {
 }
 
 #[test]
+fn imported_optimizations_without_step_energies_omit_the_step_count() {
+    let mut result = optimized(true);
+    let output = frame(&END);
+    result.settings = Settings::Imported { keywords: vec![] };
+    result.trajectory.as_mut().unwrap().energies_hartree.clear();
+    assert!(headline(&result, &output).starts_with("Converged ·"));
+    result.trajectory = None;
+    assert!(headline(&result, &output).starts_with("Converged ·"));
+
+    result.status = Status::NotConverged {
+        reason: "step limit".into(),
+    };
+    assert!(headline(&result, &output).starts_with("Optimization ·"));
+}
+
+#[test]
 fn methods_text_describes_a_gas_phase_optimization() {
     let mut result = optimized(false);
+    result.provenance.method = Some("GFN2-xTB · optimizer TRIC".into());
     let Settings::Xtb(settings) = &mut result.settings else {
         unreachable!()
     };
@@ -192,7 +209,7 @@ fn methods_text_describes_a_gas_phase_optimization() {
         concat!(
             "Geometries were optimized with GFN2-xTB [Bannwarth2019GFN2] as implemented in ReShiki ",
             env!("CARGO_PKG_VERSION"),
-            " [ReShiki] (axtb 0.2.0 [Axtb]) in the gas phase with normal convergence ",
+            " [ReShiki] (axtb 0.2.0 [Axtb]) in the gas phase to the normal convergence criteria using the TRIC optimizer ",
             "[Wang2016TRIC; Baker1996DLC; Lindh1995Hessian; Banerjee1985PRFO].",
         )
     );
@@ -202,7 +219,9 @@ fn methods_text_describes_a_gas_phase_optimization() {
 fn methods_text_describes_solvation_and_frequencies() {
     let mut result = with_frequencies(optimized(false));
     let text = methods_text(&result, &frame(&END));
-    assert!(text.contains("in water using ALPB [Ehlert2021ALPB] with tight convergence"));
+    assert!(
+        text.contains("in water using ALPB [Ehlert2021ALPB] to the tight convergence criteria")
+    );
     assert!(text.contains("Harmonic frequencies and quasi-RRHO thermochemistry at 298.15 K [Grimme2012QRRHO; FernandezRamos2007Symmetry]"));
     result.task = Task::Hessian;
     result.thermo.as_mut().unwrap().temperature_k = 310.;
@@ -233,16 +252,141 @@ fn methods_text_cites_embedding_minimization_and_clustering_for_conformers() {
     let mut result = optimized(false);
     result.task = Task::Conformers;
     result.provenance.method =
-        Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank".into());
+        Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer TRIC".into());
     let text = methods_text(&result, &frame(&END));
     for phrase in [
         "Conformers were generated with ETKDG [Riniker2015ETKDG; Wang2020ETKDGv3]",
         "MMFF94s [Halgren1999MMFF94s]",
         "clustered by heavy-atom RMSD [Butina1999Clustering]",
-        "Conformer energies were computed with GFN2-xTB [Bannwarth2019GFN2]",
+        "Cluster representatives were re-optimized with GFN2-xTB [Bannwarth2019GFN2]",
+        "to the tight convergence criteria using the TRIC optimizer",
+        "Wang2016TRIC; Baker1996DLC; Lindh1995Hessian; Banerjee1985PRFO",
     ] {
         assert!(text.contains(phrase), "{text}");
     }
+}
+
+#[test]
+fn methods_text_uses_the_effective_uff_minimizer_and_xtb_optimization_stage() {
+    let mut result = optimized(false);
+    result.task = Task::Conformers;
+    result.provenance.method =
+        Some("UFF ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank · optimizer ANC".into());
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.contains("UFF [Rappe1992UFF]"), "{text}");
+    assert!(!text.contains("Halgren"), "{text}");
+    assert!(text.contains("Cluster representatives were re-optimized with GFN2-xTB"));
+    assert!(text.contains("Grimme2017ANCopt"));
+    assert!(!text.contains("Wang2016TRIC"));
+
+    result.provenance.method =
+        Some("GFN-FF ETKDG 100 starts · Butina 0.75 Å · optimizer TRIC".into());
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.method = qcdata::XtbMethod::GfnFf;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.contains("Conformer starts were optimized with GFN-FF [Spicher2020GFNFF]"));
+    assert!(!text.contains("re-optimized"));
+}
+
+#[test]
+fn methods_text_distinguishes_unreached_criteria_and_cites_optimizer_fallbacks() {
+    for (convergence, label) in [
+        (Convergence::Normal, "normal"),
+        (Convergence::Tight, "tight"),
+    ] {
+        let mut result = optimized(false);
+        result.status = Status::NotConverged {
+            reason: "Stopped after 2 steps".into(),
+        };
+        result.provenance.method = Some("GFN2-xTB · optimizer TRIC, ANC, L-BFGS".into());
+        let Settings::Xtb(settings) = &mut result.settings else {
+            unreachable!()
+        };
+        settings.convergence = Some(convergence);
+        let text = methods_text(&result, &frame(&END));
+        assert!(
+            text.contains(&format!(
+                "for 2 steps without reaching the {label} convergence criteria"
+            )),
+            "{text}"
+        );
+        for citation in [
+            "Wang2016TRIC",
+            "Grimme2017ANCopt",
+            "Liu1989LBFGS",
+            "Armijo1966LineSearch",
+        ] {
+            assert!(text.contains(citation), "{text}");
+        }
+        assert_eq!(text.matches("Lindh1995Hessian").count(), 1);
+        assert!(!text.contains("with tight convergence"));
+    }
+}
+
+#[test]
+fn methods_text_qualifies_missing_legacy_optimizer_and_convergence_provenance() {
+    let mut result = optimized(false);
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!()
+    };
+    settings.convergence = None;
+    let text = methods_text(&result, &frame(&END));
+    assert!(text.contains("convergence criteria were not recorded"));
+    assert!(text.contains("optimizer algorithms were not recorded"));
+    assert!(text.contains("ReShiki’s default optimizer uses TRIC [Wang2016TRIC]"));
+}
+
+#[test]
+fn imported_methods_keep_the_orca6_method_basis_and_program_reference() {
+    let file = reshiki_io::qcread::read(
+        "water.out",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/qc/cclib/orca60_water_mp2.out"
+        )),
+    )
+    .unwrap();
+    let job = &file.jobs[0];
+    let text = methods_text(job.result.as_ref().unwrap(), &job.steps[0].frame);
+    assert!(text.contains("ORCA 6.0.1 [Neese2025ORCA6]"), "{text}");
+    assert!(
+        text.to_ascii_lowercase().contains("using mp2/sto-3g"),
+        "{text}"
+    );
+}
+
+#[test]
+fn imported_methods_describe_an_unknown_molden_writer_as_a_file_source() {
+    let file = reshiki_io::qcread::read(
+        "water.molden",
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/qc/cclib/molden5.7_water_mp2.molden"
+        )),
+    )
+    .unwrap();
+    let job = &file.jobs[0];
+    let text = methods_text(job.result.as_ref().unwrap(), &job.steps[0].frame);
+    assert!(
+        text.contains("were read from water.molden (Molden format)"),
+        "{text}"
+    );
+    assert!(text.contains("MoldenFormat; Schaftenaar2000Molden"));
+    assert!(!text.contains("computed with Molden"));
+    let mut result = job.result.as_ref().unwrap().clone();
+    result.energy_hartree = Some(-75.);
+    assert!(
+        methods_text(&result, &job.steps[0].frame)
+            .starts_with("Geometries and energies were read from water.molden")
+    );
+    result.energy_hartree = None;
+    result.trajectory = None;
+    assert!(
+        methods_text(&result, &job.steps[0].frame)
+            .starts_with("Geometries were read from water.molden")
+    );
 }
 
 #[test]

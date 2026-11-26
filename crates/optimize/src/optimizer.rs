@@ -279,6 +279,8 @@ pub struct Outcome {
     /// Calls to [`Potential::hessian`], including errors and unavailability probes.
     pub hessian_evaluations: usize,
     pub method: Method,
+    /// Algorithms selected during the run, in order, including fallback attempts.
+    pub methods: Vec<Method>,
     /// One energy per accepted geometry, including the input. A successful
     /// accuracy change replaces the entry at the same geometry.
     pub energies: Vec<f64>,
@@ -464,6 +466,7 @@ impl<P: Potential + ?Sized> Evaluator<'_, P> {
 struct Engine<'a> {
     options: &'a Options,
     method: Method,
+    methods: Vec<Method>,
     anc: Option<Anc>,
     internal: Option<InternalModel>,
     internal_built_at: usize,
@@ -478,6 +481,7 @@ impl<'a> Engine<'a> {
         Self {
             options,
             method: options.method,
+            methods: vec![options.method],
             anc: None,
             internal: None,
             internal_built_at: 0,
@@ -679,6 +683,7 @@ impl<'a> Engine<'a> {
                         break trial;
                     }
                     self.method = Method::AncRfo;
+                    self.methods.push(self.method);
                     self.internal = None;
                     self.history.clear();
                     self.trust = TrustRegion::new(self.options, eval.coords.indices.len() / 3);
@@ -690,6 +695,7 @@ impl<'a> Engine<'a> {
                         break trial;
                     }
                     self.method = Method::Lbfgs;
+                    self.methods.push(self.method);
                     self.anc = None;
                 }
                 Method::Lbfgs => break self.search_lbfgs(eval, point, accuracy_changed)?,
@@ -788,6 +794,7 @@ pub fn optimize<P: Potential + ?Sized>(
         evaluations: 0,
         hessian_evaluations: 0,
         method: options.method,
+        methods: vec![options.method],
         energies: Vec::new(),
     };
     let coords = match Coordinates::new(numbers, positions, &options.fixed_atoms) {
@@ -951,6 +958,7 @@ pub fn optimize<P: Potential + ?Sized>(
     out.evaluations = eval.count;
     out.hessian_evaluations = eval.hessian_count;
     out.method = engine.method;
+    out.methods = engine.methods;
     out
 }
 

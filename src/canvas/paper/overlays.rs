@@ -201,39 +201,19 @@ impl MoleculeCanvas<'_> {
                 true,
             );
         }
+        let drawn = self.doc.abbreviation_render_copy();
         let distance = 0.55 * self.doc.drawing_style.bond_length_world * self.camera.zoom;
         for (id, text) in &label.atom_labels {
-            let Some(atom) = self.doc.atom(*id) else {
+            let Some(atom) = drawn.atom(*id).filter(|_| drawn.atom_visible(*id)) else {
                 continue;
             };
-            let mut away = Vector::ZERO;
-            for bond in &self.doc.bonds {
-                let neighbor = if bond.a == *id {
-                    bond.b
-                } else if bond.b == *id {
-                    bond.a
-                } else {
-                    continue;
-                };
-                if let Some(neighbor) = self.doc.atom(neighbor) {
-                    away += Vector::new(
-                        atom.position.x - neighbor.position.x,
-                        atom.position.y - neighbor.position.y,
-                    );
-                }
-            }
-            let length = away.x.hypot(away.y);
-            let direction = if length > 1e-4 {
-                away / length
-            } else {
-                Vector::new(0., -1.)
-            };
+            let direction = result_label_direction(&drawn, atom);
             let width = crate::app::text_width(text, 11.) + 6.;
             let half = Vector::new(width / 2., 7.5);
             let center = self.camera.screen(atom.position, bounds);
             // Give the badge enough room to clear the element symbol at any zoom.
             let mut offset = distance;
-            if let Some((lo, hi)) = reshiki::scene::atom_label_ink_bounds(atom, self.doc) {
+            if let Some((lo, hi)) = reshiki::scene::atom_label_ink_bounds(atom, &drawn) {
                 let corner = World::new(
                     if direction.x < 0. { lo.x } else { hi.x },
                     if direction.y < 0. { lo.y } else { hi.y },
@@ -1356,6 +1336,83 @@ impl MoleculeCanvas<'_> {
                     .with_color(rgb([65, 136, 119])),
             );
         }
+    }
+}
+
+/// Keep badges away from visible bonds, including opposite bonds whose
+/// outward vectors cancel (for example, the carbon in vertical CO₂).
+fn result_label_direction(doc: &Document, atom: &Atom) -> Vector {
+    let mut away = Vector::ZERO;
+    let mut first = None;
+    for bond in doc
+        .bonds
+        .iter()
+        .filter(|bond| doc.bond_visible(bond.a, bond.b))
+    {
+        let neighbor = if bond.a == atom.id {
+            bond.b
+        } else if bond.b == atom.id {
+            bond.a
+        } else {
+            continue;
+        };
+        if let Some(neighbor) = doc.atom(neighbor) {
+            let vector = Vector::new(
+                atom.position.x - neighbor.position.x,
+                atom.position.y - neighbor.position.y,
+            );
+            away += vector;
+            let length = vector.x.hypot(vector.y);
+            if first.is_none() && length > 1e-4 {
+                first = Some(vector / length);
+            }
+        }
+    }
+    let length = away.x.hypot(away.y);
+    if length > 1e-4 {
+        away / length
+    } else {
+        first.map_or(Vector::new(0., -1.), |bond| Vector::new(-bond.y, bond.x))
+    }
+}
+
+#[cfg(test)]
+mod result_label_tests {
+    use super::*;
+
+    #[test]
+    fn cancelling_bonds_put_charge_badges_perpendicular_to_the_bond() {
+        for axis in [
+            World::new(0., 42.),
+            World::new(42., 0.),
+            World::new(30., 40.),
+        ] {
+            let mut doc = Document::default();
+            let c = doc.add_atom("C", World::default());
+            for position in [axis, World::new(-axis.x, -axis.y)] {
+                let o = doc.add_atom("O", position);
+                doc.add_bond(c, o, 2, "plain");
+            }
+            let direction = result_label_direction(&doc, doc.atom(c).unwrap());
+            assert!((direction.x * axis.x + direction.y * axis.y).abs() < 1e-4);
+            assert!((direction.x.hypot(direction.y) - 1.).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn hidden_abbreviation_bonds_do_not_steer_charge_badges() {
+        let mut doc = Document::default();
+        let anchor = doc.add_atom("C", World::default());
+        let hidden = doc.add_atom("C", World::new(0., -42.));
+        let outside = doc.add_atom("O", World::new(42., 0.));
+        doc.add_bond(anchor, hidden, 1, "plain");
+        doc.add_bond(anchor, outside, 1, "plain");
+        doc.contract(&[anchor, hidden], "Et", "Et").unwrap();
+        let drawn = doc.abbreviation_render_copy();
+        assert_eq!(
+            result_label_direction(&drawn, drawn.atom(anchor).unwrap()),
+            Vector::new(-1., 0.)
+        );
     }
 }
 

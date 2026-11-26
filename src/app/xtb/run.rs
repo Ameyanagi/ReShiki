@@ -79,6 +79,8 @@ pub(crate) struct Report {
     pub positions: Vec<[f64; 3]>,
     /// Accepted optimizer steps (0 for an energy job).
     pub steps: usize,
+    /// Algorithms selected during optimization, including fallback attempts.
+    pub optimizers: Vec<reshiki_optimize::Method>,
     /// One energy per accepted geometry, including the input.
     pub energies: Vec<f64>,
     /// Step-major Å coordinates, one block per energy. Empty for an energy job.
@@ -237,6 +239,9 @@ pub(super) fn run(
         .as_ref()
         .is_none_or(|out| out.status == Status::Converged);
     let steps = outcome.as_ref().map_or(0, |outcome| outcome.steps);
+    let optimizers = outcome
+        .as_ref()
+        .map_or_else(Vec::new, |outcome| outcome.methods.clone());
     let mut energies = outcome.map_or_else(Vec::new, |outcome| outcome.energies);
     match energies.last_mut() {
         Some(last) => *last = energy,
@@ -249,10 +254,34 @@ pub(super) fn run(
         converged,
         positions,
         steps,
+        optimizers,
         energies,
         path,
         evaluations,
     })
+}
+
+/// Keep optimizer provenance in the existing saved method text.
+pub(super) fn optimizer_provenance(
+    method: &str,
+    optimizers: &[reshiki_optimize::Method],
+) -> String {
+    if optimizers.is_empty() {
+        return method.into();
+    }
+    let labels: Vec<_> = optimizers
+        .iter()
+        .map(|method| match method {
+            reshiki_optimize::Method::Internal => "TRIC",
+            reshiki_optimize::Method::AncRfo => "ANC",
+            reshiki_optimize::Method::Lbfgs => "L-BFGS",
+        })
+        .collect();
+    format!(
+        "{method}{}{}",
+        super::results::OPTIMIZER_SEPARATOR,
+        labels.join(", ")
+    )
 }
 
 fn options(job: &Job) -> Options {

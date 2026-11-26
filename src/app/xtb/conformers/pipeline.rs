@@ -49,12 +49,16 @@ pub(crate) enum Event {
     Phase(Phase),
     Tick,
     /// Always the last event.
-    Done(Result<Found, Failure>),
+    Done(Result<Box<Found>, Failure>),
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct Found {
     pub engine: Engine,
+    /// Effective start minimizer, including MMFF-to-UFF fallback.
+    pub minimizer: Minimizer,
+    /// Algorithms selected for the retained representatives, including fallbacks.
+    pub optimizers: Vec<reshiki_optimize::Method>,
     /// The report at exactly the final positions of `ranked[0]`.
     pub best: Arc<run::Report>,
     /// Lowest first, aligned onto the best.
@@ -108,7 +112,7 @@ pub(crate) fn start(search: Search, cancel: Cancel) -> impl Stream<Item = Event>
                 }
                 Err(error) => Err(Failure::Other(error.to_string())),
             };
-            let _ = worker_tx.unbounded_send(Event::Done(result));
+            let _ = worker_tx.unbounded_send(Event::Done(result.map(Box::new)));
             worker_tx.close_channel();
         });
     if let Err(error) = worker {
@@ -135,7 +139,7 @@ fn search_conformers(
         ));
     }
     let mut notes = Vec::new();
-    let mut starts = sample(&search, cancel, tx, &mut notes)?;
+    let (mut starts, minimizer) = sample(&search, cancel, tx, &mut notes)?;
     let minimized = if xtb_minimizer.is_some() {
         let positions = starts
             .iter()
@@ -268,8 +272,18 @@ fn search_conformers(
     if !reranking {
         check_cancel(cancel)?;
     }
+    let mut optimizers = Vec::new();
+    for (_, report) in &reports {
+        for &method in &report.optimizers {
+            if !optimizers.contains(&method) {
+                optimizers.push(method);
+            }
+        }
+    }
     Ok(Found {
         engine,
+        minimizer,
+        optimizers,
         best,
         ranked,
         starts: starts.len(),
@@ -287,20 +301,13 @@ fn sample(
     cancel: &Cancel,
     tx: &mpsc::UnboundedSender<Event>,
     notes: &mut Vec<String>,
-) -> Result<Vec<Start>, Failure> {
+) -> Result<(Vec<Start>, Minimizer), Failure> {
     emit_phase(tx, Phase::Starts);
     let minimizer = search.config.minimizer;
     let embedded = minimizer.xtb().is_some();
-    let mut field = match minimizer {
-        Minimizer::Mmff94 => ForceField::Mmff94,
-        Minimizer::Uff => ForceField::Uff,
-        Minimizer::Mmff94s | Minimizer::GfnFf | Minimizer::Gfn2 => ForceField::Mmff94s,
-    };
-    if field != ForceField::Uff && !search.prepared.mmff_available() {
-        field = ForceField::Uff;
-        if !embedded {
-            notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
-        }
+    let (field, effective) = sampling_minimizer(minimizer, search.prepared.mmff_available());
+    if effective != minimizer {
+        notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
     }
     let mode = if embedded {
         Ensemble::Embedded
@@ -367,7 +374,7 @@ fn sample(
             "No start converged with the force field: clustering used unconverged geometries, and xTB re-optimized the representatives.".into(),
         );
     }
-    conformers
+    let starts = conformers
         .into_iter()
         .map(|entry| {
             let positions = frame_positions(
@@ -386,7 +393,26 @@ fn sample(
                 energy_hartree,
             })
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+    Ok((starts, effective))
+}
+
+fn sampling_minimizer(minimizer: Minimizer, mmff_available: bool) -> (ForceField, Minimizer) {
+    let field = match minimizer {
+        Minimizer::Mmff94 => ForceField::Mmff94,
+        Minimizer::Uff => ForceField::Uff,
+        Minimizer::Mmff94s | Minimizer::GfnFf | Minimizer::Gfn2 => ForceField::Mmff94s,
+    };
+    if field != ForceField::Uff && !mmff_available {
+        let effective = if minimizer.xtb().is_some() {
+            minimizer
+        } else {
+            Minimizer::Uff
+        };
+        (ForceField::Uff, effective)
+    } else {
+        (field, minimizer)
+    }
 }
 
 fn frame_positions(
@@ -621,6 +647,27 @@ mod tests {
     use super::*;
     use geometry::Point3;
 
+    #[test]
+    fn unavailable_mmff_records_uff_but_keeps_xtb_start_minimizers() {
+        for minimizer in [Minimizer::Mmff94s, Minimizer::Mmff94] {
+            assert_eq!(
+                sampling_minimizer(minimizer, false),
+                (ForceField::Uff, Minimizer::Uff)
+            );
+            assert_eq!(sampling_minimizer(minimizer, true).1, minimizer);
+        }
+        for minimizer in [Minimizer::GfnFf, Minimizer::Gfn2] {
+            assert_eq!(
+                sampling_minimizer(minimizer, false),
+                (ForceField::Uff, minimizer)
+            );
+        }
+        assert_eq!(
+            sampling_minimizer(Minimizer::Uff, true),
+            (ForceField::Uff, Minimizer::Uff)
+        );
+    }
+
     fn conformer() -> Conformer {
         Conformer {
             positions: (0..5)
@@ -738,6 +785,7 @@ mod tests {
             converged: true,
             positions: vec![[0.0; 3]],
             steps: 0,
+            optimizers: vec![],
             energies: vec![-1.0],
             path: vec![],
             evaluations: vec![],

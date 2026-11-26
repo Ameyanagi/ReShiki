@@ -85,6 +85,7 @@ fn optimization(start: &[[f64; 3]], end: &[[f64; 3]]) -> Report {
         converged: true,
         positions: end.to_vec(),
         steps: 1,
+        optimizers: vec![reshiki_optimize::Method::Internal],
         energies: vec![-5.06, -5.070176],
         path: [start.as_flattened(), end.as_flattened()].concat(),
         evaluations: vec![],
@@ -153,6 +154,14 @@ fn an_optimization_moves_a_preview_then_applies_as_one_undo_step() {
     assert!(!app.xtb_running());
     assert_eq!(model(&app.tab.doc), f32s(&MOVED));
     assert_eq!(app.tab.doc.science.results.len(), 1);
+    assert_eq!(
+        app.tab.doc.science.results[0]
+            .result
+            .provenance
+            .method
+            .as_deref(),
+        Some("GFN2-xTB · optimizer TRIC")
+    );
     assert!(
         app.status
             .starts_with("Applied xTB geometry · E −5.070176 Eh"),
@@ -226,6 +235,7 @@ fn frequencies_store_a_hessian_on_the_starting_geometry() {
     let (mut app, _) = water(CalcTask::Frequencies);
     let report = Report {
         steps: 0,
+        optimizers: vec![],
         energies: vec![-5.070176],
         path: vec![],
         ..optfreq(&START, &START)
@@ -280,6 +290,7 @@ fn an_energy_keeps_the_result_and_the_model() {
             converged: true,
             positions: START.to_vec(),
             steps: 0,
+            optimizers: vec![],
             energies: vec![-5.070176],
             path: vec![],
             evaluations: vec![],
@@ -340,6 +351,7 @@ fn an_energy_stores_the_worker_charges_bond_orders_and_orbital_levels() {
         converged: true,
         positions: START.to_vec(),
         steps: 0,
+        optimizers: vec![],
         energies: vec![-5.070176],
         path: vec![],
         evaluations: vec![],
@@ -745,6 +757,7 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
             converged: true,
             positions: START.to_vec(),
             steps: 0,
+            optimizers: vec![],
             energies: vec![-5.2],
             path: vec![],
             evaluations: vec![],
@@ -850,6 +863,7 @@ fn saved_optimization() -> (Vec<u8>, [u64; 2]) {
             converged: true,
             positions: end.clone(),
             steps: 1,
+            optimizers: vec![reshiki_optimize::Method::Internal],
             energies: vec![-5.06, -5.2],
             path: [start.as_flattened(), end.as_flattened()].concat(),
             evaluations: [(-5.06, 9), (-5.1, 5), (-5.2, 6)]
@@ -1197,6 +1211,26 @@ fn history_names_attached_geometry_changes_and_leaves_view_edits_generic() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.status, "History restored");
     let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "History restored");
+}
+
+#[test]
+fn history_describes_pasting_a_calculation_as_a_drawing_edit() {
+    let (mut source, _) = water(CalcTask::Optimize);
+    event(&mut source, optimized(&START, &MOVED));
+
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    app.tab.busy = false;
+    assert!(app.append_pasted(&source.tab.doc));
+    assert_eq!(app.tab.doc.science.results.len(), 1);
+
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.atoms.is_empty());
+    assert!(app.tab.doc.science.results.is_empty());
+    assert_eq!(app.status, "History restored");
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc.science.results.len(), 1);
     assert_eq!(app.status, "History restored");
 }
 

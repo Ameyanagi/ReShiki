@@ -205,6 +205,7 @@ fn spectrum_method(result: &CalcResult) -> &str {
         .provenance
         .method
         .as_deref()
+        .map(super::results::method_without_optimizer)
         .unwrap_or(match &result.settings {
             Settings::Xtb(settings) => settings.method.label(),
             Settings::Imported { .. } => "xTB",

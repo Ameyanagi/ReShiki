@@ -14,6 +14,15 @@ use reshiki::qcdata::{
 mod methods;
 pub(crate) use methods::methods_text;
 
+/// Separates the optimizer record from the method or conformer recipe.
+pub(super) const OPTIMIZER_SEPARATOR: &str = " · optimizer ";
+
+pub(super) fn method_without_optimizer(method: &str) -> &str {
+    method
+        .split_once(OPTIMIZER_SEPARATOR)
+        .map_or(method, |(base, _)| base)
+}
+
 /// Shown under the xTB headline.
 pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequencies approximate, orbitals qualitative (minimal basis).";
 /// The gap under which the electronic structure counts as near-degenerate.
@@ -99,7 +108,8 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     // Files from other programs may not name their method.
     let mut parts: Vec<String> = provenance
         .method
-        .clone()
+        .as_deref()
+        .map(|method| method_without_optimizer(method).to_owned())
         .or_else(|| matches!(result.settings, Settings::Xtb(_)).then(|| "xTB".into()))
         .into_iter()
         .collect();
@@ -128,13 +138,7 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
 pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
     let outcome = match result.task {
         Task::Optimize => {
-            let steps = energies(result).len().saturating_sub(1);
-            let unit = if steps == 1 { "step" } else { "steps" };
-            let outcome = if result.status == Status::Converged {
-                format!("Converged in {steps} {unit}")
-            } else {
-                format!("Not converged after {steps} {unit}")
-            };
+            let outcome = optimization_outcome(result);
             if result.vibrations.is_some() {
                 format!("{outcome} + frequencies")
             } else {
@@ -229,6 +233,26 @@ pub(crate) fn energies(result: &CalcResult) -> &[f64] {
         .as_ref()
         .filter(|_| matches!(result.task, Task::Optimize | Task::Conformers))
         .map_or(&[], |path| path.energies_hartree.as_slice())
+}
+
+fn optimization_outcome(result: &CalcResult) -> String {
+    let count = energies(result).len();
+    let converged = result.status == Status::Converged;
+    if count == 0 && matches!(result.settings, Settings::Imported { .. }) {
+        return if converged {
+            "Converged"
+        } else {
+            "Optimization"
+        }
+        .into();
+    }
+    let steps = count.saturating_sub(1);
+    let unit = if steps == 1 { "step" } else { "steps" };
+    if converged {
+        format!("Converged in {steps} {unit}")
+    } else {
+        format!("Not converged after {steps} {unit}")
+    }
 }
 
 /// Step `step`'s geometry in Å. The file keeps only the first and the last
@@ -349,12 +373,10 @@ pub(super) fn summary_grid_rows(
         ));
     }
     if result.task == Task::Optimize {
-        let steps = energies(result).len().saturating_sub(1);
-        let plural = if steps == 1 { "" } else { "s" };
-        let mut outcome = match &result.status {
-            Status::Converged => format!("converged in {steps} step{plural}"),
-            _ => format!("not converged after {steps} step{plural}"),
-        };
+        let mut outcome = optimization_outcome(result).to_ascii_lowercase();
+        if outcome == "optimization" {
+            outcome = "step count unavailable".into();
+        }
         if let Some(rmsd) = rmsd(&input.positions_angstrom, &output.positions_angstrom) {
             outcome.push_str(&format!(" · RMSD from start {rmsd:.2} Å"));
         }
@@ -659,6 +681,14 @@ pub(crate) fn log(
     let mut lines = vec![method.to_owned()];
     if let reshiki::qcdata::Source::Calculated { engine_revision } = &result.provenance.source {
         lines.push(format!("engine revision {engine_revision}"));
+        if let Some((_, optimizers)) = result
+            .provenance
+            .method
+            .as_deref()
+            .and_then(|method| method.split_once(OPTIMIZER_SEPARATOR))
+        {
+            lines.push(format!("optimizer {optimizers}"));
+        }
     }
     lines.push(format!(
         "{} · {} atoms · {} electrons",
@@ -741,8 +771,8 @@ pub(crate) fn log(
     if result.task == Task::Optimize {
         lines.push(match &result.status {
             Status::Converged => format!(
-                "optimization converged in {} steps",
-                energies(result).len().saturating_sub(1)
+                "optimization {}",
+                optimization_outcome(result).to_ascii_lowercase()
             ),
             Status::NotConverged { reason } => format!("optimization not converged: {reason}"),
             Status::Failed { reason } => format!("failed: {reason}"),

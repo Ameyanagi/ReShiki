@@ -13,7 +13,7 @@ use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme,
 
 /// The bottom dock's body height; the inspector shows the body in full.
 const BODY_HEIGHT: f32 = 150.;
-const FOOTER_HEIGHT: f32 = 32.;
+const FOOTER_LINE_HEIGHT: f32 = 32.;
 const LABEL_WIDTH: f32 = 130.;
 
 fn send(action: Action) -> Message {
@@ -561,7 +561,7 @@ impl App {
         view: View,
         inspector: bool,
     ) -> Element<'a, Message> {
-        let mut footer = row![].spacing(10).align_y(Alignment::Center);
+        let mut actions = row![].spacing(10).align_y(Alignment::Center);
         let command = |id, name, label| {
             reshiki::accessibility::button(
                 id,
@@ -573,7 +573,7 @@ impl App {
         };
         match view {
             View::Summary => {
-                footer = footer
+                actions = actions
                     .push(
                         command("xtb-copy-methods", "Copy methods text", "Copy methods text")
                             .on_press(send(Action::CopyMethods)),
@@ -610,25 +610,25 @@ impl App {
                     );
             }
             View::Vibrations => {
-                footer = footer.push(footer_note(
+                actions = actions.push(footer_note(
                     "Normal modes are recomputed when shown; the file keeps frequencies, intensities and thermochemistry.",
                     inspector,
                 ));
             }
             View::Steps => {
-                footer = footer.push(footer_note(
+                actions = actions.push(footer_note(
                     "The file keeps the first and last steps; keep full results to save every step.",
                     inspector,
                 ));
             }
             View::Orbitals => {
-                footer = footer.push(self.xtb_orbitals_note(shown, wrapping(inspector)))
+                actions = actions.push(self.xtb_orbitals_note(shown, wrapping(inspector)))
             }
             View::Conformers => {
-                footer = footer.push(super::super::conformers::footer(wrapping(inspector)));
+                actions = actions.push(super::super::conformers::footer(wrapping(inspector)));
             }
             View::Log => {
-                footer = footer.push(
+                actions = actions.push(
                     command("xtb-copy-log", "Copy the log", "Copy").on_press(send(Action::CopyLog)),
                 );
             }
@@ -658,15 +658,23 @@ impl App {
             )
         });
         if inspector {
-            return column![footer.wrap(), sizes.wrap()]
+            return column![actions.wrap(), sizes.wrap()]
                 .spacing(6)
                 .extend(note)
                 .into();
         }
-        let actions = container(footer).width(Length::Fill).clip(true);
-        let main = container(row![actions, sizes].spacing(10).align_y(Alignment::Center))
-            .center_y(FOOTER_HEIGHT)
-            .clip(true);
+        // Reserve both action lines on every tab so switching tabs cannot move the dock.
+        let main = column![
+            container(actions.wrap().vertical_spacing(4))
+                .width(Length::Fill)
+                .center_y(2. * FOOTER_LINE_HEIGHT + 4.)
+                .clip(true),
+            container(sizes)
+                .width(Length::Fill)
+                .center_y(FOOTER_LINE_HEIGHT)
+                .clip(true),
+        ]
+        .spacing(4);
         column![main]
             .extend(note.map(|note| container(note).clip(true).into()))
             .into()
