@@ -66,6 +66,10 @@ fn main() -> iced::Result {
         Some(code) => std::process::exit(code),
         None => {}
     }
+    #[cfg(feature = "conformer-bench")]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--conformer-bench")) {
+        std::process::exit(app::App::xtb_conformer_bench(std::env::args_os().skip(2)));
+    }
     // Headless modes enter before Office registration, graphics, Apple events
     // and the std::env::args() checks below.
     match launch::mode(std::env::args_os().skip(1)) {
