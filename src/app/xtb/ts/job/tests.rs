@@ -136,6 +136,18 @@ fn missing_atom_or_bonded_hydrogen_is_rejected_before_worker_start() {
 }
 
 #[test]
+fn a_model_whose_bonds_differ_from_the_drawing_is_refused() {
+    // N20–H80 is bonded in the model; O90 sits 2.8 Å away.
+    assert!(check_drawn_bonds(&launch(), &[(20, 80)]).is_ok());
+    for drawn in [&[(20, 80), (20, 90)][..], &[]] {
+        assert!(matches!(
+            check_drawn_bonds(&launch(), drawn),
+            Err(Failure::Other(message)) if message.contains("no longer match the drawing")
+        ));
+    }
+}
+
+#[test]
 fn worker_pool_respects_cores_and_inner_images() {
     assert_eq!(worker_count(5, 64), 3);
     assert_eq!(worker_count(15, 64), 4);

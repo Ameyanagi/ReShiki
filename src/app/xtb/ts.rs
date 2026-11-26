@@ -477,6 +477,19 @@ impl App {
             return Task::none();
         };
         let Request { plan, images, .. } = live.request.clone();
+        // Hydrogen interactions (order 0) are not covalent bonds.
+        let drawn_bonds: Vec<_> = self
+            .tab
+            .doc
+            .bonds
+            .iter()
+            .filter(|bond| {
+                bond.order > 0
+                    && plan.start_atoms.contains(&bond.a)
+                    && plan.start_atoms.contains(&bond.b)
+            })
+            .map(|bond| (bond.a, bond.b))
+            .collect();
         let cancel = run.cancel.clone();
         run.label = "xTB · transition state".into();
         run.launch = Some(launch.clone());
@@ -484,7 +497,7 @@ impl App {
         run.started = iced::time::Instant::now();
         let serial = run.serial;
         let events = iced::futures::StreamExt::flatten(iced::futures::stream::once(async move {
-            job::start(launch, plan, images, cancel)
+            job::start(launch, plan, drawn_bonds, images, cancel)
         }));
         let (task, handle) = Task::run(events, move |event| {
             Message::Xtb(XtbAction::TsEvent(serial, event))
