@@ -1186,7 +1186,11 @@ impl App {
                     false
                 }
             };
-        if let Some(orbitals) = &pending.result.orbitals {
+        if attached.freshness == Freshness::Current
+            && !moved
+            && (!optimized || applied)
+            && let Some(orbitals) = &pending.result.orbitals
+        {
             let columns = reshiki::orbital_levels::columns(orbitals);
             if !columns.is_empty() {
                 let key = science::result_key(&pending.result);

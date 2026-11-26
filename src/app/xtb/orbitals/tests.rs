@@ -71,11 +71,55 @@ fn worker_orbitals() -> qcdata::Orbitals {
     }
 }
 
+fn worker_rows(rows: &[u32]) -> qcdata::Orbitals {
+    let mut orbitals = worker_orbitals();
+    let coefficients = rows
+        .iter()
+        .flat_map(|&index| {
+            compute::row(&orbitals, qcdata::Spin::Alpha, index as usize)
+                .unwrap()
+                .1
+                .iter()
+                .copied()
+        })
+        .collect();
+    orbitals.alpha.rows = rows.to_vec();
+    orbitals.alpha.coefficients = coefficients;
+    orbitals
+}
+
+/// A wider synthetic spectrum puts both range limits within reach.
+fn wide_orbitals() -> qcdata::Orbitals {
+    let mut orbitals = worker_orbitals();
+    orbitals.basis = Some(BasisSet {
+        shells: (0..20)
+            .map(|i| Shell {
+                atom: 0,
+                l: 0,
+                pure: false,
+                exponents_per_bohr2: vec![0.5 + f64::from(i) * 0.1],
+                coefficients: vec![1.],
+            })
+            .collect(),
+    });
+    orbitals.alpha.energies_hartree = (0..20).map(|i| f64::from(i) * 0.1 - 1.).collect();
+    orbitals.alpha.occupations = (0..20).map(|i| if i < 10 { 2. } else { 0. }).collect();
+    orbitals.alpha.rows = (0..20).collect();
+    orbitals.alpha.coefficients = (0..400)
+        .map(|i| if i / 20 == i % 20 { 1. } else { 0. })
+        .collect();
+    orbitals
+}
+
 /// Water with an energy result that keeps only levels, its Orbitals tab
 /// open.
 fn tab() -> App {
+    tab_with_orbitals(levels())
+}
+
+fn tab_with_orbitals(orbitals: qcdata::Orbitals) -> App {
     let (mut app, _) = water(CalcTask::Energy);
-    finish_energy(&mut app, Method::Gfn2, -5.070176, levels());
+    finish_energy(&mut app, Method::Gfn2, -5.070176, orbitals);
     let _ = app.update(Message::Xtb(XtbAction::Palette(
         super::super::palette::Action::View(View::Orbitals),
     )));
@@ -580,6 +624,67 @@ fn mo_diagram_picture_toggles_from_the_tab_and_canvas_without_editing_the_main_s
 }
 
 #[test]
+fn orbitals_controls_follow_the_selected_matching_mo_diagram() {
+    let mut app = tab();
+    computed(&mut app);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let before = app.tab.doc.clone();
+    let first = before.graphics[0].clone();
+    let mut second = first.clone();
+    second.id = before.next_id();
+    let id = second.id;
+    app.tab.doc.graphics.push(second);
+    app.changed(before);
+    app.set_selection(vec![]);
+    assert_eq!(app.xtb_orbital_target().unwrap().diagram, Some(first.id));
+    app.set_selection(vec![id]);
+    assert_eq!(app.xtb_orbital_target().unwrap().diagram, Some(id));
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::MoLevelClick(id, 0, 3)));
+    let target = app.xtb_orbital_target().unwrap();
+    assert_eq!(target.diagram, Some(id));
+    assert_eq!(app.xtb_orbital_choice(&target).index, 3);
+    assert_eq!(
+        app.tab.doc.graphics[1].mo.as_ref().unwrap().pictures.len(),
+        1
+    );
+    act(
+        &mut app,
+        Action::EditDiagram(target.diagram.unwrap(), DiagramEdit::Remove),
+    );
+    assert_eq!(app.tab.doc.graphics, [first]);
+}
+
+#[cfg(all(feature = "xtb", not(windows)))]
+#[test]
+fn place_mo_diagram_command_opens_matching_orbitals_and_requests_frontier_rows() {
+    let mut app = tab();
+    app.tab.xtb.palette.view = View::Summary;
+    app.tab.xtb.palette.collapsed = true;
+    app.tab.xtb.orbitals.computing = None;
+    app.set_selection(vec![app.tab.doc.atoms[0].id]);
+    let command = Action::PlaceDiagram {
+        for_selection: true,
+    };
+
+    act(&mut app, command.clone());
+    assert!(app.xtb_orbitals_visible());
+    assert!(app.tab.xtb.orbitals.computing.is_some());
+    assert!(app.tab.doc.graphics.is_empty());
+    assert_eq!(app.status, "The orbitals are loading; try again");
+
+    computed(&mut app);
+    act(&mut app, command);
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    assert_eq!(app.tab.selected, [app.tab.doc.graphics[0].id]);
+}
+
+#[test]
 fn mo_diagram_places_and_selects_beta_when_alpha_levels_are_missing() {
     let mut partial = worker_orbitals();
     let mut beta = partial.alpha.clone();
@@ -641,7 +746,43 @@ fn an_empty_mo_diagram_waits_for_multiple_requested_rows_and_pins_each_on_arriva
     assert_eq!(app.tab.history.frames(), frames);
     assert_eq!(app.tab.xtb.orbitals.pending_pictures.len(), 2);
     assert!(app.tab.xtb.orbitals.computing.is_some());
-    computed(&mut app);
+    let key = key(&app);
+    act(
+        &mut app,
+        Action::Computed(key.clone(), Ok(Arc::new(worker_rows(&[1])))),
+    );
+    let mo = app.tab.doc.graphics[0].mo.as_ref().unwrap();
+    assert_eq!(
+        mo.pictures
+            .iter()
+            .map(|p| p.figure.orbital.index)
+            .collect::<Vec<_>>(),
+        [1]
+    );
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    assert_eq!(app.tab.xtb.orbitals.pending_pictures.len(), 1);
+    assert_eq!(
+        app.tab.xtb.orbitals.pending_pictures[0]
+            .picture
+            .figure
+            .orbital
+            .index,
+        2
+    );
+    assert_eq!(
+        app.tab
+            .xtb
+            .orbitals
+            .computing
+            .as_ref()
+            .map(|c| c.key.as_str()),
+        Some(key.as_str()),
+        "a partial reply starts a follow-up request for the remaining picture"
+    );
+    act(
+        &mut app,
+        Action::Computed(key, Ok(Arc::new(worker_rows(&[2])))),
+    );
     let mo = app.tab.doc.graphics[0].mo.as_ref().unwrap();
     assert_eq!(
         mo.pictures
@@ -707,13 +848,270 @@ fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
     assert_eq!(app.tab.doc.graphics[1], unlinked);
     assert_eq!(app.tab.history.frames(), frames + 1);
     let key = linked.result.clone();
-    act(
-        &mut app,
-        Action::Computed(key, Ok(Arc::new(worker_orbitals()))),
-    );
+    let mut reply = worker_orbitals();
+    reply.alpha.energies_hartree = new_levels.alpha.energies_hartree.clone();
+    act(&mut app, Action::Computed(key, Ok(Arc::new(reply))));
     assert_eq!(app.tab.history.frames(), frames + 1);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn a_stale_rerun_keeps_the_linked_mo_diagram_and_its_snapshots() {
+    let mut app = tab();
+    computed(&mut app);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let small = app.tab.doc.graphics[0]
+        .mo_picture_models(&app.tab.doc)
+        .next()
+        .unwrap();
+    let view = surface::draw::view_signature(&app.tab.doc, &small);
+    let shapes =
+        surface::snapshot::encode(&Primitive::Surface { groups: vec![] }, Default::default())
+            .unwrap();
+    let before = app.tab.doc.clone();
+    app.tab.doc.graphics[0].mo.as_mut().unwrap().pictures[0]
+        .figure
+        .snapshot = Some(surface::Snapshot {
+        view,
+        shapes,
+        reach: 1.,
+    });
+    app.changed(before);
+    let diagram = app.tab.doc.graphics[0].clone();
+    let old_key = key(&app);
+    let atom = app.tab.doc.atoms[0].id;
+    app.set_selection(vec![atom]);
+    app.xtb.settings.method = qcdata::XtbMethod::GXtb;
+    let _ = app.update(Message::Xtb(XtbAction::Run));
+    assert!(app.xtb_running());
+
+    let before = app.tab.doc.clone();
+    app.tab.doc.atom_mut(atom).unwrap().charge = 1;
+    app.changed(before);
+    let mut new_levels = levels();
+    new_levels.alpha.energies_hartree[4] += 0.05;
+    finish_energy(&mut app, Method::Gxtb, -5.07, new_levels);
+
+    assert!(!app.error, "{}", app.status);
+    let stored = app.tab.doc.science.results.last().unwrap();
+    assert_ne!(science::result_key(&stored.result), old_key);
+    assert_eq!(
+        app.tab
+            .doc
+            .science
+            .attachment(stored.attachment)
+            .unwrap()
+            .freshness(&app.tab.doc),
+        science::Freshness::Stale,
+        "the rerun result is retained as stale"
+    );
+    assert_eq!(app.tab.doc.graphics[0], diagram);
+}
+
+#[test]
+fn adding_an_mo_picture_extends_either_range_and_resizes_in_one_undo_step() {
+    use reshiki::document::Point;
+
+    for (index, edit, range) in [
+        (1, DiagramEdit::Below(8), (8, 2)),
+        (18, DiagramEdit::Above(8), (2, 8)),
+    ] {
+        let orbitals = wide_orbitals();
+        let mut app = tab_with_orbitals(orbitals.clone());
+        let key = key(&app);
+        act(&mut app, Action::Computed(key, Ok(Arc::new(orbitals))));
+        act(
+            &mut app,
+            Action::PlaceDiagram {
+                for_selection: false,
+            },
+        );
+        let id = app.tab.selected[0];
+        let before = app.tab.doc.clone();
+        app.tab.doc.graphics[0].axis_x = Point::new(200., 80.);
+        app.tab.doc.graphics[0].axis_y = Point::new(-50., 130.);
+        app.changed(before);
+        let before = app.tab.doc.clone();
+        let frames = app.tab.history.frames();
+        act(&mut app, Action::EditDiagram(id, edit));
+        let stepped = app.tab.doc.graphics[0].clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+
+        act(&mut app, Action::ToggleDiagramPicture(id, 0, index));
+        assert!(!app.error, "{}", app.status);
+        let g = &app.tab.doc.graphics[0];
+        let mo = g.mo.as_ref().unwrap();
+        assert_eq!((mo.below, mo.above), range);
+        assert!(super::diagram::has_picture(mo, 0, index));
+        assert_eq!(app.tab.history.frames(), frames + 1);
+        assert_eq!(g.origin, stepped.origin);
+        let (w, h) = mo.natural_size(&app.tab.doc.drawing_style);
+        let (step_w, step_h) = stepped
+            .mo
+            .as_ref()
+            .unwrap()
+            .natural_size(&app.tab.doc.drawing_style);
+        for (actual, expected) in [
+            (g.axis_x.x / w, stepped.axis_x.x / step_w),
+            (g.axis_x.y / w, stepped.axis_x.y / step_w),
+            (g.axis_y.x / h, stepped.axis_y.x / step_h),
+            (g.axis_y.y / h, stepped.axis_y.y / step_h),
+        ] {
+            assert!(
+                (actual - expected).abs() < 1e-5,
+                "picture addition keeps the same axis scale as the range stepper"
+            );
+        }
+        let _ = app.update(Message::Undo);
+        assert_eq!(
+            app.tab.doc, before,
+            "one Undo removes the picture and range edit"
+        );
+    }
+}
+
+#[test]
+fn an_mo_picture_beyond_either_range_limit_does_not_change_the_drawing() {
+    let orbitals = wide_orbitals();
+    let mut app = tab_with_orbitals(orbitals.clone());
+    let key = key(&app);
+    act(&mut app, Action::Computed(key, Ok(Arc::new(orbitals))));
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let id = app.tab.selected[0];
+    let before = app.tab.doc.clone();
+    let frames = app.tab.history.frames();
+    for index in [0, 19] {
+        act(&mut app, Action::ToggleDiagramPicture(id, 0, index));
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.frames(), frames);
+        assert!(app.tab.xtb.orbitals.pending_pictures.is_empty());
+        assert_eq!(app.status, "This orbital is out of the diagram's range");
+        assert!(app.status.chars().count() <= 60);
+    }
+}
+
+#[test]
+fn an_mo_picture_requires_a_current_attachment_and_matching_model_geometry() {
+    for stale_attachment in [false, true] {
+        let mut app = tab();
+        computed(&mut app);
+        act(
+            &mut app,
+            Action::PlaceDiagram {
+                for_selection: false,
+            },
+        );
+        let id = app.tab.selected[0];
+        let before = app.tab.doc.clone();
+        if stale_attachment {
+            app.tab.doc.atoms[0].charge = 1;
+        } else {
+            app.tab.doc.models[0].atoms[0].xyz[2] += 0.01;
+        }
+        app.changed(before);
+        let small = app.tab.doc.graphics[0]
+            .mo_picture_models(&app.tab.doc)
+            .next()
+            .unwrap();
+        assert!(!surface::draw::figure_ready(&app.tab.doc, &small));
+        app.tab.xtb.orbitals.computed.clear();
+        let before = app.tab.doc.clone();
+        let frames = app.tab.history.frames();
+        act(&mut app, Action::ToggleDiagramPicture(id, 0, 1));
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.frames(), frames);
+        assert!(app.tab.xtb.orbitals.pending_pictures.is_empty());
+        assert_eq!(app.status, "The orbital no longer matches this molecule");
+        assert!(app.status.chars().count() <= 60);
+    }
+}
+
+#[test]
+fn adding_an_mo_picture_uses_the_renderers_geometry_tolerance() {
+    let mut app = tab();
+    computed(&mut app);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let id = app.tab.selected[0];
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].atoms[0].xyz[2] += 0.0005;
+    app.changed(before);
+    let small = app.tab.doc.graphics[0]
+        .mo_picture_models(&app.tab.doc)
+        .next()
+        .unwrap();
+    assert!(surface::draw::figure_ready(&app.tab.doc, &small));
+    let frames = app.tab.history.frames();
+    act(&mut app, Action::ToggleDiagramPicture(id, 0, 1));
+    assert!(!app.error, "{}", app.status);
+    assert!(super::diagram::has_picture(
+        app.tab.doc.graphics[0].mo.as_ref().unwrap(),
+        0,
+        1
+    ));
+    assert_eq!(app.tab.history.frames(), frames + 1);
+}
+
+#[cfg(all(feature = "xtb", not(windows)))]
+#[test]
+fn a_pending_mo_picture_retires_when_its_source_geometry_changes() {
+    let mut app = tab();
+    computed(&mut app);
+    act(
+        &mut app,
+        Action::PlaceDiagram {
+            for_selection: false,
+        },
+    );
+    let id = app.tab.selected[0];
+    app.tab.xtb.orbitals.computed.clear();
+    act(&mut app, Action::ToggleDiagramPicture(id, 0, 1));
+    assert_eq!(app.tab.xtb.orbitals.pending_pictures.len(), 1);
+    assert!(app.tab.xtb.orbitals.computing.is_some());
+
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].atoms[0].xyz[2] += 0.01;
+    app.changed(before);
+    let stored = &app.tab.doc.science.results[0];
+    assert_eq!(
+        app.tab
+            .doc
+            .science
+            .attachment(stored.attachment)
+            .unwrap()
+            .freshness(&app.tab.doc),
+        science::Freshness::Current,
+        "the attachment still matches; only the accepted model geometry changed"
+    );
+    let small = app.tab.doc.graphics[0]
+        .mo_picture_models(&app.tab.doc)
+        .next()
+        .unwrap();
+    assert!(!surface::draw::figure_ready(&app.tab.doc, &small));
+    let before = app.tab.doc.clone();
+    let frames = app.tab.history.frames();
+    computed(&mut app);
+    assert_eq!(app.tab.doc, before, "the late row is not pinned or placed");
+    assert_eq!(app.tab.history.frames(), frames);
+    assert!(app.tab.xtb.orbitals.pending_pictures.is_empty());
+    assert_eq!(app.status, "The orbital no longer matches this molecule");
+    assert!(app.status.chars().count() <= 60);
 }
 
 #[test]

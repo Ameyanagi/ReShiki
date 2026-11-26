@@ -312,10 +312,14 @@ impl App {
         let frontier = atom
             .and_then(|atom| doc.models.iter().find(|m| m.linked_atoms.contains(&atom)))
             .is_some_and(|m| m.panels.iter().any(|p| p.figure.orbital.result == key));
-        let diagram = doc.graphics.iter().find_map(|g| {
+        let mut diagrams = doc.graphics.iter().filter_map(|g| {
             let mo = g.mo.as_deref()?;
             (mo.result == key && shown.atoms.contains(&Some(mo.molecule?))).then_some(g.id)
         });
+        let diagram = diagrams
+            .clone()
+            .find(|id| self.tab.selected.contains(id))
+            .or_else(|| diagrams.next());
         let problem = if shown.stale {
             Some(
                 "The molecule changed after this calculation. Recalculate to show orbitals.".into(),
@@ -453,13 +457,7 @@ impl App {
     /// drawing, and start the work the shown figures still need. Cheap when
     /// nothing it reads changed.
     pub(in crate::app) fn xtb_orbitals_sync(&mut self) -> Task<Message> {
-        let epoch = self.tab.file_epoch;
-        let doc = &self.tab.doc;
-        self.tab
-            .xtb
-            .orbitals
-            .pending_pictures
-            .retain(|p| p.valid_for(epoch, doc));
+        self.xtb_mo_retire_invalid_pictures();
         let state = &self.tab.xtb.orbitals;
         let visible = self.xtb_orbitals_visible();
         let shown = self.xtb_orbital_result_id();

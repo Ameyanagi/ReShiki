@@ -23,12 +23,12 @@ pub(super) struct PendingPicture {
 }
 
 impl PendingPicture {
-    pub(super) fn valid_for(&self, epoch: u64, doc: &Document) -> bool {
-        self.epoch == epoch
-            && diagram(doc, self.diagram).is_some_and(|mo| {
-                mo.molecule == Some(self.molecule)
-                    && mo.result == self.picture.figure.orbital.result
-            })
+    fn diagram_for<'a>(&self, epoch: u64, doc: &'a Document) -> Option<&'a MoDiagram> {
+        diagram(doc, self.diagram).filter(|mo| {
+            self.epoch == epoch
+                && mo.molecule == Some(self.molecule)
+                && mo.result == self.picture.figure.orbital.result
+        })
     }
 }
 
@@ -78,7 +78,21 @@ impl App {
             self.xtb_shown()
                 .and_then(|s| s.atoms.iter().flatten().next().copied()),
         ) else {
-            self.status = "The frontier orbitals are not ready".into();
+            self.status = if for_selection
+                && target.problem.is_none()
+                && super::super::available()
+                && self
+                    .xtb_orbital_stored()
+                    .is_some_and(|(_, stored)| matches!(stored.result.settings, Settings::Xtb(_)))
+                && target
+                    .columns
+                    .get(self.xtb_orbital_choice(&target).column)
+                    .is_some_and(|column| column.homo().is_some() && column.lumo().is_some())
+            {
+                "The orbitals are loading; try again".into()
+            } else {
+                "The frontier orbitals are not ready".into()
+            };
             self.error = false;
             return;
         };
@@ -97,15 +111,17 @@ impl App {
             else {
                 return;
             };
-            if let Err(error) = science::pin_orbital(
+            if science::pin_orbital(
                 &mut doc,
                 stored_index,
                 figure.orbital.spin,
                 index as u32,
                 basis,
                 row,
-            ) {
-                self.status = format!("Could not keep the orbitals: {error}");
+            )
+            .is_err()
+            {
+                self.status = "The orbitals cannot be kept with the drawing".into();
                 self.error = true;
                 return;
             }
@@ -140,23 +156,22 @@ impl App {
     /// selection takes precedence over a result the dock previously showed.
     fn xtb_mo_show_selection_result(&mut self) -> bool {
         let atoms = self.xtb_target();
-        let shown = self
-            .xtb_shown()
-            .filter(|shown| shown.stored.result.orbitals.is_some());
-        if shown.is_some_and(|shown| {
-            self.tab.selected.is_empty()
-                || atoms
-                    .as_ref()
-                    .is_some_and(|atoms| shown.atoms.iter().flatten().any(|id| atoms.contains(id)))
+        if let Some(shown) = self.xtb_shown().filter(|shown| {
+            shown.stored.result.orbitals.is_some()
+                && (self.tab.selected.is_empty()
+                    || atoms.as_ref().is_some_and(|atoms| {
+                        shown.atoms.iter().flatten().any(|id| atoms.contains(id))
+                    }))
         }) {
+            let result = Arc::clone(&shown.stored.result);
+            self.xtb_mo_open_orbitals(&result);
             return true;
         }
         let doc = &self.tab.doc;
         let result = if let [id] = self.tab.selected.as_slice()
             && let Some(mo) = diagram(doc, *id)
         {
-            self.xtb_mo_result(mo, None)
-                .map(|(_, stored)| &stored.result)
+            self.xtb_mo_result(mo).map(|stored| &stored.result)
         } else {
             atoms.and_then(|atoms| {
                 doc.science.results.iter().rev().find_map(|stored| {
@@ -174,10 +189,22 @@ impl App {
         let Some(result) = result.cloned() else {
             return false;
         };
-        self.xtb_show_result(&result);
+        self.xtb_mo_open_orbitals(&result);
+        true
+    }
+
+    fn xtb_mo_open_orbitals(&mut self, result: &Arc<reshiki::qcdata::CalcResult>) {
+        self.xtb_end_preview();
+        self.xtb_show_result(result);
         self.tab.xtb.palette.view = View::Orbitals;
         self.tab.xtb.palette.collapsed = false;
-        true
+        if self.xtb.dock.inspector {
+            let old_width = self.inspector_width();
+            self.inspector_open = true;
+            self.inspector_tab = crate::app::InspectorTab::Predict;
+            self.xtb.page = super::super::Page::Xtb;
+            self.expect_inspector_width_change(old_width);
+        }
     }
 
     pub(in crate::app) fn xtb_mo_level_click(&mut self, id: u64, column: u8, index: usize) {
@@ -185,7 +212,7 @@ impl App {
             return;
         }
         if let Some(mo) = diagram(&self.tab.doc, id)
-            && let Some((_, stored)) = self.xtb_mo_result(mo, None)
+            && let Some(stored) = self.xtb_mo_result(mo)
             && let Some(spectrum) = mo.columns.get(usize::from(column))
             && let Some(orbitals) = &stored.result.orbitals
             && let Some(tab_column) = levels::columns(orbitals)
@@ -199,9 +226,7 @@ impl App {
                 from_diagram: true,
             };
             let result = Arc::clone(&stored.result);
-            self.xtb_end_preview();
-            self.xtb_show_result(&result);
-            self.tab.xtb.palette.view = View::Orbitals;
+            self.xtb_mo_open_orbitals(&result);
             self.tab.xtb.orbitals.choice = Some(choice);
             self.tab.xtb.orbitals.pending = None;
         }
@@ -256,113 +281,113 @@ impl App {
                 snapshot: None,
             },
         };
-        let request = mo.molecule.map(|molecule| PendingPicture {
+        let Some(molecule) = mo.molecule else {
+            self.xtb_mo_invalid_picture();
+            return;
+        };
+        let request = PendingPicture {
             epoch: self.tab.file_epoch,
             diagram: id,
             molecule,
             picture,
-        });
+        };
         let recomputable = self
-            .xtb_mo_result(mo, None)
-            .is_some_and(|(_, stored)| matches!(stored.result.settings, Settings::Xtb(_)));
+            .xtb_mo_result(mo)
+            .is_some_and(|stored| matches!(stored.result.settings, Settings::Xtb(_)));
         self.error = false;
-        if let Some(request) = request {
-            let pending = &mut self.tab.xtb.orbitals.pending_pictures;
-            if let Some(at) = pending.iter().position(|p| {
-                p.diagram == id
-                    && p.picture.column == column
-                    && p.picture.figure.orbital.index as usize == index
-            }) {
-                pending.remove(at);
-                self.status = "Canceled adding the orbital picture".into();
-                return;
-            }
-            if self.xtb_mo_add_picture(&request) {
-                return;
-            }
-            if recomputable && super::super::available() {
-                let state = &mut self.tab.xtb.orbitals;
-                state
-                    .errors
-                    .retain(|(key, _)| *key != request.picture.figure.orbital.result);
-                state.pending_pictures.push(request);
-                self.status = "Computing the orbital… it is added when ready".into();
-                return;
-            }
+        let pending = &mut self.tab.xtb.orbitals.pending_pictures;
+        if let Some(at) = pending.iter().position(|p| {
+            p.diagram == id
+                && p.picture.column == column
+                && p.picture.figure.orbital.index as usize == index
+        }) {
+            pending.remove(at);
+            self.status = "Canceled adding the orbital picture".into();
+            return;
         }
-        self.status = "This orbital's shape is not saved with this result".into();
+        if self.xtb_mo_add_picture(&request) {
+            return;
+        }
+        if recomputable && super::super::available() {
+            let state = &mut self.tab.xtb.orbitals;
+            state
+                .errors
+                .retain(|(key, _)| *key != request.picture.figure.orbital.result);
+            state.pending_pictures.push(request);
+            self.status = "Computing the orbital… it is added when ready".into();
+        } else {
+            self.status = "This orbital's shape is not saved with this result".into();
+        }
     }
 
     /// The diagram's calculation on this molecule, independent of the palette.
-    fn xtb_mo_result(
-        &self,
-        mo: &MoDiagram,
-        orbital: Option<&OrbitalRef>,
-    ) -> Option<(usize, &Stored)> {
+    fn xtb_mo_result(&self, mo: &MoDiagram) -> Option<&Stored> {
         let atom = mo.molecule?;
         let science = &self.tab.doc.science;
-        let mut results = science
-            .results
-            .iter()
-            .enumerate()
-            .rev()
-            .filter(|(_, stored)| {
-                science
-                    .attachment(stored.attachment)
-                    .is_some_and(|attachment| {
-                        attachment.atoms.contains(&Some(atom))
-                            && science::result_key(&stored.result) == mo.result
-                    })
-            });
-        let newest = results.next()?;
-        if let Some(orbital) = orbital {
-            let keeps_row = |stored: &Stored| {
-                stored.result.orbitals.as_ref().is_some_and(|orbitals| {
-                    super::compute::row(orbitals, orbital.spin, orbital.index as usize).is_some()
+        science.results.iter().rev().find(|stored| {
+            science
+                .attachment(stored.attachment)
+                .is_some_and(|attachment| {
+                    attachment.atoms.contains(&Some(atom))
+                        && science::result_key(&stored.result) == mo.result
                 })
-            };
-            if !keeps_row(newest.1) {
-                return Some(
-                    results
-                        .find(|(_, stored)| keeps_row(stored))
-                        .unwrap_or(newest),
-                );
-            }
-        }
-        Some(newest)
+        })
     }
 
+    /// Returns false only when a valid addition still needs a coefficient row.
     fn xtb_mo_add_picture(&mut self, request: &PendingPicture) -> bool {
-        let id = request.diagram;
-        let Some(mo) = diagram(&self.tab.doc, id) else {
+        let picture = &request.picture;
+        if cfg!(target_arch = "wasm32") && picture.figure.snapshot.is_none() {
+            self.status = "Add pictures in the desktop app".into();
+            self.error = false;
+            return true;
+        }
+        let doc = &self.tab.doc;
+        let Some(mo) = request.diagram_for(self.tab.file_epoch, doc) else {
+            self.xtb_mo_invalid_picture();
             return true;
         };
-        let picture = &request.picture;
         let orbital = &picture.figure.orbital;
         let index = orbital.index as usize;
         if mo.pictures.len() >= 16 || has_picture(mo, picture.column, index) {
             return true;
         }
-        let Some((stored_index, stored)) = self.xtb_mo_result(mo, Some(orbital)) else {
-            return false;
+        let Some((below, above)) = mo.range_for_picture(picture.column, index) else {
+            self.status = "This orbital is out of the diagram's range".into();
+            self.error = false;
+            return true;
+        };
+        let Some((stored_index, stored)) = mo
+            .orbital_model(doc, &picture.figure)
+            .filter(|model| super::surface::draw::figure_ready(doc, model))
+            .and_then(|model| science::figure_result(doc, &model))
+        else {
+            self.xtb_mo_invalid_picture();
+            return true;
         };
         let Some((basis, row)) = self.xtb_orbital_row(stored, orbital.spin, index) else {
             return false;
         };
-        let mut doc = self.tab.doc.clone();
-        if let Err(error) = science::pin_orbital(
+        let mut doc = doc.clone();
+        if science::pin_orbital(
             &mut doc,
             stored_index,
             orbital.spin,
             orbital.index,
             basis,
             row,
-        ) {
-            self.status = format!("Could not keep the orbital: {error}");
+        )
+        .is_err()
+        {
+            self.status = "The orbital cannot be kept with the drawing".into();
             self.error = true;
             return true;
         }
-        edit_layout(&mut doc, id, |mo| mo.pictures.push(picture.clone()));
+        edit_layout(&mut doc, request.diagram, |mo| {
+            mo.below = below;
+            mo.above = above;
+            mo.pictures.push(picture.clone());
+        });
         self.xtb_follow_results(&doc);
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.error = false;
@@ -386,7 +411,7 @@ impl App {
         }
         let request = state.pending_pictures.first()?;
         let mo = diagram(&self.tab.doc, request.diagram)?;
-        let (_, stored) = self.xtb_mo_result(mo, None)?;
+        let stored = self.xtb_mo_result(mo)?;
         let frame = self.tab.doc.science.frame(&stored.result.frame)?;
         let rows = state
             .pending_pictures
@@ -400,14 +425,26 @@ impl App {
     }
 
     pub(super) fn xtb_mo_finish_pictures(&mut self, key: &str) {
+        self.xtb_mo_retire_invalid_pictures();
         for request in std::mem::take(&mut self.tab.xtb.orbitals.pending_pictures) {
-            if request.valid_for(self.tab.file_epoch, &self.tab.doc)
-                && (request.picture.figure.orbital.result != key
-                    || !self.xtb_mo_add_picture(&request))
-            {
+            if request.picture.figure.orbital.result != key || !self.xtb_mo_add_picture(&request) {
                 self.tab.xtb.orbitals.pending_pictures.push(request);
             }
         }
+    }
+
+    pub(super) fn xtb_mo_retire_invalid_pictures(&mut self) {
+        let pending = &mut self.tab.xtb.orbitals.pending_pictures;
+        let count = pending.len();
+        pending.retain(|p| p.diagram_for(self.tab.file_epoch, &self.tab.doc).is_some());
+        if pending.len() != count {
+            self.xtb_mo_invalid_picture();
+        }
+    }
+
+    fn xtb_mo_invalid_picture(&mut self) {
+        self.status = "The orbital no longer matches this molecule".into();
+        self.error = false;
     }
 
     pub(in crate::app) fn xtb_mo_cancel_pending(&mut self) {
