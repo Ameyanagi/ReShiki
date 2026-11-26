@@ -142,7 +142,7 @@ async fn gaussian_job_rows_choose_the_molecule_and_its_results() {
     );
     assert_eq!(
         results_title(Some(&stored.result), None),
-        "Calculation results"
+        "Results · CH2O_CO2.log"
     );
     assert!(app.xtb_bottom_palette().is_some());
     assert!(
@@ -593,7 +593,7 @@ fn a_sorted_file_is_an_ensemble_with_a_turnable_preview_and_the_lowest_overlaid(
     let result = &app.tab.doc.science.results[0].result;
     assert_eq!(
         crate::app::xtb::results_title(Some(result), None),
-        "Calculation results"
+        "Results · crest_conformers.xyz"
     );
     assert_eq!(crate::app::xtb::results_title(None, None), "xTB results");
     let _ = app.update(Message::Xtb(XtbAction::Palette(PaletteAction::Step(1))));

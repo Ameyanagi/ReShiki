@@ -185,10 +185,10 @@ impl App {
         }
 
         // A failed rerun stays above the scrolling body, before its previous result.
-        let mut pinned = column![].spacing(4);
+        let mut dock = column![header].spacing(4);
         if let Some(failed) = failed.filter(|failed| failed.ts().is_some()) {
-            pinned = pinned.push(self.xtb_failure_card(failed, inspector));
-            pinned = pinned.push(line(
+            dock = dock.push(self.xtb_failure_card(failed, inspector));
+            dock = dock.push(line(
                 results::previous_result(&shown.stored.result),
                 Tone::Muted,
             ));
@@ -231,14 +231,9 @@ impl App {
                 .into()
         };
         Some(
-            column![
-                header,
-                pinned,
-                middle,
-                self.xtb_footer(&shown, view, inspector)
-            ]
-            .spacing(4)
-            .into(),
+            dock.push(middle)
+                .push(self.xtb_footer(&shown, view, inspector))
+                .into(),
         )
     }
 
