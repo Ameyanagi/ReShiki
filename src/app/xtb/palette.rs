@@ -98,11 +98,6 @@ struct Sizes {
 }
 
 impl Palette {
-    /// The shown result's identity, to notice another result shown.
-    pub(super) fn shown_id(&self) -> usize {
-        self.result.first().map_or(0, |weak| weak.as_ptr() as usize)
-    }
-
     /// Open on `result`'s Summary.
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) {
         // The same result again keeps its lighter copies' identities.

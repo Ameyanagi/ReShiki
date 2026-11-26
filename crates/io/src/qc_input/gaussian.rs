@@ -1,7 +1,7 @@
 //! Gaussian 16 input: Link 0 lines, the route, and one molecule section per structure.
 use std::{borrow::Cow, fmt::Write};
 
-use super::{Dispersion, Frame, Job, Method, Settings, single_line, write_atoms};
+use super::{Dispersion, Frame, Job, Method, Program, Settings, single_line, write_atoms};
 
 pub(super) fn write(
     settings: &Settings,
@@ -87,6 +87,6 @@ fn section(text: &mut String, settings: &Settings, title: &str, frame: &Frame) {
         "{title}\n\n{} {}",
         settings.charge, settings.multiplicity
     );
-    write_atoms(text, frame, " ");
+    write_atoms(text, frame, Program::Gaussian);
     text.push('\n');
 }

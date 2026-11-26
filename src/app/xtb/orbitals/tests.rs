@@ -200,6 +200,41 @@ fn the_tab_previews_the_homo_without_changing_the_drawing() {
 }
 
 #[test]
+fn the_orbital_preview_follows_the_selected_molecule() {
+    let mut app = tab();
+    let before = app.tab.doc.clone();
+    // Appending a copy gives the second molecule its own attachment but shares the result Arc.
+    let copied = reshiki::editing::append(
+        &mut app.tab.doc,
+        &before,
+        reshiki::document::Point::new(200., 0.),
+    );
+    app.changed(before);
+    let [first, second] = app.tab.doc.science.results.as_slice() else {
+        panic!("one result per molecule");
+    };
+    assert!(Arc::ptr_eq(&first.result, &second.result));
+    assert_ne!(first.attachment, second.attachment);
+
+    answer(&mut app);
+    let preview = app.xtb_orbital_preview().expect("first molecule's preview");
+    assert!(preview.models[0].surface.is_some());
+    assert!(preview.models[1].surface.is_none());
+    assert!(has_surface(preview));
+
+    app.tab.selected = copied.clone();
+    assert_eq!(app.xtb_shown_entry().map(|(index, _)| index), Some(1));
+    assert!(app.xtb_orbital_preview().is_none());
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(copied)));
+    let preview = app
+        .xtb_orbital_preview()
+        .expect("second molecule's preview");
+    assert!(preview.models[0].surface.is_none());
+    assert!(preview.models[1].surface.is_some());
+}
+
+#[test]
 fn place_keeps_the_orbital_in_the_drawing_as_one_undo_step() {
     let mut app = tab();
     let target = app.xtb_orbital_target().unwrap();

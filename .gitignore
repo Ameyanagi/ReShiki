@@ -2,6 +2,8 @@
 /.venv/
 /crates/python/.venv/
 /crates/python/wheel-licenses/
+/crates/python-xtb/.venv/
+/crates/python-xtb/wheel-licenses/
 __pycache__/
 *.pyc
 .DS_Store

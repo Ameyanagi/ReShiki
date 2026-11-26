@@ -156,6 +156,7 @@ pub fn trajectory(
         labels: vec![],
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     };
     for (i, conformer) in ranked.iter().take(MAX_SAVED_CONFORMERS).enumerate() {
         if conformer.positions.len() != numbers.len() {
@@ -172,6 +173,7 @@ pub fn trajectory(
             .minimizer_energies_hartree
             .push(conformer.start_energy_hartree);
         saved.cluster_sizes.push(conformer.cluster_size);
+        saved.rmsd_to_best_angstrom.push(conformer.rmsd_to_best);
         saved.labels.push((i + 1).to_string());
     }
     saved

@@ -482,10 +482,18 @@ fn drawn_isotopes_reach_the_writer_warning() {
     send(&mut app, Action::Open);
     send(&mut app, Action::Generate);
     finish_model(&mut app);
+    // Gaussian writes the isotope (`C(Iso=13)`); ORCA warns that it does not.
     let warnings = app.qc_output().unwrap().warnings;
     assert!(
-        warnings
-            .contains(&"Isotopes are not written; set them in Gaussian if you need them.".into())
+        !warnings
+            .iter()
+            .any(|warning| warning.starts_with("Isotopes"))
+    );
+    assert!(preview(&app).unwrap().contains("C(Iso=13)"));
+    send(&mut app, Action::Program(Program::Orca));
+    let warnings = app.qc_output().unwrap().warnings;
+    assert!(
+        warnings.contains(&"Isotopes are not written; set them in ORCA if you need them.".into())
     );
 }
 
