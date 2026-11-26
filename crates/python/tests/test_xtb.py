@@ -1,10 +1,9 @@
 """The optional xTB worker, tested through the installed Python packages."""
 
-import _thread
 import json
+import subprocess
 import sys
 from pathlib import Path
-from threading import Timer
 
 import numpy as np
 import pytest
@@ -155,20 +154,38 @@ def test_version_mismatch(worker, monkeypatch):
     assert not xtb.available()
 
 
+_INTERRUPT_SCRIPT = """
+import _thread, sys, threading, time
+import numpy as np
+from reshiki import qc, xtb
+
+caffeine = qc.Geometry.from_xyz(open(sys.argv[1]).read())
+distorted = qc.Geometry(
+    caffeine.numbers,
+    caffeine.positions + np.random.default_rng(1).normal(0, 0.15, caffeine.positions.shape),
+)
+threading.Timer(0.05, _thread.interrupt_main).start()
+start = time.perf_counter()
+try:
+    xtb.optimize(distorted, level="tight")
+    print("finished")
+except KeyboardInterrupt:
+    print("interrupted", time.perf_counter() - start)
+print("energy", xtb.energy(caffeine).energy)
+"""
+
+
 def test_keyboard_interrupt(worker):
-    # A distorted caffeine takes dozens of optimizer steps (about 0.2-0.4 s),
-    # several of the extension's 100 ms signal checks.
-    caffeine = geometry("caffeine")
-    distorted = qc.Geometry(
-        caffeine.numbers,
-        caffeine.positions + np.random.default_rng(1).normal(0, 0.15, caffeine.positions.shape),
+    # In its own interpreter: the interrupt must not depend on what other tests
+    # left in this process, and a failure cannot hang the suite. The distorted
+    # caffeine takes dozens of optimizer steps, several 100 ms signal checks.
+    done = subprocess.run(
+        [sys.executable, "-c", _INTERRUPT_SCRIPT, str(FIXTURES / "caffeine.xyz")],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
     )
-    timer = Timer(0.05, _thread.interrupt_main)
-    timer.daemon = True
-    try:
-        with pytest.raises(KeyboardInterrupt):
-            timer.start()
-            xtb.optimize(distorted, level="tight")
-    finally:
-        timer.cancel()
-    assert xtb.energy(geometry("water")).energy is not None
+    lines = done.stdout.splitlines()
+    assert lines[0].startswith("interrupted"), done.stdout + done.stderr
+    assert lines[1].startswith("energy -42.")
