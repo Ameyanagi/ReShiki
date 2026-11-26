@@ -46,7 +46,7 @@ pub(crate) fn start(job: Job, cancel: Cancel) -> impl Stream<Item = Event> + Sen
         .name("xtb-run".into())
         .spawn(move || {
             let result = std::env::current_exe()
-                .map_err(|_| Failure::Crashed("could not start the xTB worker".into()))
+                .map_err(|_| Failure::crashed("could not start the xTB worker"))
                 .and_then(|executable| {
                     driver::run(&executable, job, &cancel, |event| {
                         let event = match event {

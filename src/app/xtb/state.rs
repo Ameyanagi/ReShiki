@@ -160,7 +160,7 @@ impl FailureDetails for Failure {
                 format!("This molecule has {count} atoms. The limit is {limit} atoms."),
                 "Split the structure or calculate a fragment.".into(),
             ),
-            Self::Crashed(_) => (
+            Self::Crashed { .. } => (
                 "The calculation stopped unexpectedly. Your drawing is safe.".into(),
                 "Run again, or copy the details for a bug report.".into(),
             ),

@@ -324,6 +324,7 @@ fn xyz_ignores_settings_and_preserves_isotopes() {
     assert_eq!(output.main.name, "water.xyz");
     let restored = crate::qcread::read(&output.main.name, output.main.text.as_bytes()).unwrap();
     assert_eq!(restored.jobs[0].steps[0].frame.isotopes, [18, 2, 3]);
+    assert_eq!(parse_xyz(&output.main.text).unwrap().isotopes, [18, 2, 3]);
     frame.numbers.clear();
     frame.positions_angstrom.clear();
     frame.isotopes.clear();

@@ -167,7 +167,7 @@ class Geometry:
         """Read the first frame of an XYZ string.
 
         Example: ``Geometry.from_xyz("1\\nhelium\\nHe 0 0 0\\n")``.
-        The keyword arguments set the electronic state.
+        The keyword arguments set the electronic state, overriding XYZ comment metadata.
         """
         lines = text.splitlines()
         try:
@@ -175,10 +175,7 @@ class Geometry:
         except (IndexError, ValueError) as error:
             raise _invalid("An XYZ file must start with the number of atoms.") from error
         first = "\n".join(lines[: count + 2]) + "\n"
-        # The constructor sets the electronic state instead of using the file
-        # reader's charge and spin assumption.
-        file = json.loads(_native.qc_read("geometry.xyz", first.encode()))
-        geometry = file["jobs"][0]["steps"][0]["geometry"]
+        geometry = json.loads(_native.qc_read_xyz_geometry(first))
         return cls.from_symbols(
             geometry["numbers"],
             geometry["positions"],
@@ -236,6 +233,9 @@ class Result:
     vectors normalized as supplied by the program. Orbital energies and
     occupations refer to alpha orbitals. Beta arrays are present when separate
     beta data is available. NumPy arrays are read-only.
+
+    ``unpaired`` is the number of valence-space unpaired electrons used by xTB.
+    It is ``None`` for imported results.
     """
 
     method: str
@@ -258,6 +258,7 @@ class Result:
     normal_modes: NDArray[np.float64] | None = None
     thermo: Thermo | None = None
     warnings: tuple[str, ...] = ()
+    unpaired: int | None = None
 
 
 @dataclass(frozen=True)
@@ -391,6 +392,7 @@ def _result_from_data(data: dict[str, Any], cls: type[Result] = Result, **extra:
         normal_modes=_array(data.get("normal_modes"), (-1, n, 3)),
         thermo=Thermo(**data["thermo"]) if data.get("thermo") is not None else None,
         warnings=tuple(messages),
+        unpaired=data.get("unpaired"),
         **extra,
     )
 

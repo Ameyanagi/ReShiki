@@ -164,7 +164,7 @@ impl App {
             return Task::none();
         }
         let search = std::env::current_exe()
-            .map_err(|_| state::Failure::Crashed("could not start the xTB worker".into()))
+            .map_err(|_| state::Failure::crashed("could not start the xTB worker"))
             .and_then(|executable| {
                 super::Search::from_launch(
                     &self.tab.doc,

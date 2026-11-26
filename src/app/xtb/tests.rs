@@ -659,9 +659,10 @@ fn a_crash_offers_run_again_and_details_without_the_structure() {
     let (mut app, _) = water(CalcTask::Energy);
     event(
         &mut app,
-        Event::Done(Err(state::Failure::Crashed(
-            "xTB worker exited with signal: 11: ".into(),
-        ))),
+        Event::Done(Err(state::Failure::Crashed {
+            summary: "xTB worker exited with signal: 11".into(),
+            details: Some("xTB worker exited with signal: 11: worker stderr".into()),
+        })),
     );
     assert_eq!(
         app.status,
@@ -681,6 +682,7 @@ fn a_crash_offers_run_again_and_details_without_the_structure() {
     );
     assert!(details.contains("H2O, 3 atoms"), "{details}");
     assert!(details.contains("signal: 11"), "{details}");
+    assert!(!details.contains("worker stderr"), "{details}");
     assert!(!details.contains("0.96"), "no coordinates: {details}");
     send(&mut app, Action::RunAgain);
     assert!(app.xtb_running());

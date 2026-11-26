@@ -1,5 +1,6 @@
 """Final wheels must match the generated license files and declare each one."""
 
+import json
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,8 @@ from check_python_wheel_notices import (
     verify_release_wheel,
     verify_wheel,
 )
+
+DEFAULT_SBOM = object()
 
 
 class WheelFixture(unittest.TestCase):
@@ -39,8 +42,12 @@ class WheelFixture(unittest.TestCase):
         for name, content in self.files.items():
             (self.licenses / name).write_bytes(content)
 
-    def wheel(self, *, files=None, declarations=None):
+    sbom = ("pyo3", "reshiki-io")
+
+    def wheel(self, *, files=None, declarations=None, sbom=DEFAULT_SBOM):
         files = self.files if files is None else files
+        if sbom is DEFAULT_SBOM:
+            sbom = {"components": [{"type": "library", "name": name} for name in self.sbom]}
         declarations = self.files if declarations is None else declarations
         path = self.directory / "reshiki-1.0-cp310-abi3-any.whl"
         metadata = "Metadata-Version: 2.4\nName: reshiki\nVersion: 1.0\n"
@@ -49,6 +56,11 @@ class WheelFixture(unittest.TestCase):
             archive.writestr("reshiki-1.0.dist-info/METADATA", metadata + "\n")
             for name, content in files.items():
                 archive.writestr(f"reshiki-1.0.dist-info/licenses/wheel-licenses/{name}", content)
+            if sbom is not None:
+                archive.writestr(
+                    "reshiki-1.0.dist-info/sboms/reshiki.cyclonedx.json",
+                    json.dumps(sbom),
+                )
         return path
 
 
@@ -112,8 +124,26 @@ class PythonWheelNoticeTests(WheelFixture):
         with self.assertRaisesRegex(ValueError, "base reshiki wheel must not contain"):
             verify_wheel(self.wheel(files={**self.files, name: content}), self.licenses)
 
+    def test_engine_crates_in_the_sbom_are_rejected_in_the_base_wheel(self):
+        with self.assertRaisesRegex(ValueError, "base reshiki wheel contains the xTB engine"):
+            verify_wheel(
+                self.wheel(sbom={"components": [{"name": "pyo3"}, {"name": "axtb-driver"}]}),
+                self.licenses,
+            )
+
+    def test_missing_sbom_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "no Rust SBOM"):
+            verify_wheel(self.wheel(sbom=None), self.licenses)
+
+    def test_sbom_requires_a_components_list(self):
+        for sbom in ({}, {"components": None}, {"components": {}}, {"components": "axtb"}):
+            with self.subTest(sbom=sbom), self.assertRaisesRegex(ValueError, "no Rust SBOM"):
+                verify_wheel(self.wheel(sbom=sbom), self.licenses)
+
 
 class XtbWheelNoticeTests(WheelFixture):
+    sbom = ("axtb", "axtb-driver", "faer")
+
     def setUp(self):
         super().setUp()
         self.files["THIRD-PARTY-NOTICES.txt"] = (
@@ -140,6 +170,21 @@ class XtbWheelNoticeTests(WheelFixture):
                 verify_wheel(
                     self.wheel(files={**self.files, name: content}), self.licenses, xtb=True
                 )
+
+    def test_engine_wheel_sbom_must_list_the_engine(self):
+        with self.assertRaisesRegex(ValueError, "SBOM does not list the axtb engine"):
+            verify_wheel(
+                self.wheel(sbom={"components": [{"name": "faer"}]}), self.licenses, xtb=True
+            )
+
+    def test_missing_sbom_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "no Rust SBOM"):
+            verify_wheel(self.wheel(sbom=None), self.licenses, xtb=True)
+
+    def test_sbom_requires_a_components_list(self):
+        for sbom in ({}, {"components": None}, {"components": {}}, {"components": "axtb"}):
+            with self.subTest(sbom=sbom), self.assertRaisesRegex(ValueError, "no Rust SBOM"):
+                verify_wheel(self.wheel(sbom=sbom), self.licenses, xtb=True)
 
     def test_no_font_attribution_is_required(self):
         # Engine wheels do not need the drawing package's fonts.
