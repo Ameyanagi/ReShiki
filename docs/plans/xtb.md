@@ -4,7 +4,9 @@ Status: in progress on the `xtb/next` integration branch. Nothing here is releas
 
 ReShiki gains 3D quantum chemistry files (read and write) and semiempirical calculations with
 GFN2-xTB, GFN-FF and g-xTB through [axtb](https://github.com/atomsforhumanity/axtb), a pure
-Rust xTB implementation. The data model is fixed in [xtb-data.md](xtb-data.md).
+Rust xTB implementation. The data model is fixed in [xtb-data.md](xtb-data.md). The papers
+behind every method and algorithm, and what to cite for each feature, are in
+[References for xTB features](../references/xtb.md).
 
 ## Decisions
 

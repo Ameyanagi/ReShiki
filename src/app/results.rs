@@ -770,6 +770,11 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Vibrations(super::xtb::VibrationsAction::CaptionCopied(..)) => {
                     Some(Completion::Clipboard)
                 }
+                Action::Orbitals(
+                    super::xtb::orbitals::Action::Computed(..)
+                    | super::xtb::orbitals::Action::Built(..),
+                ) => Some(Completion::Xtb),
+                Action::Orbitals(..) => None,
                 #[cfg(not(target_arch = "wasm32"))]
                 Action::Vibrations(super::xtb::VibrationsAction::Recomputed(..)) => {
                     Some(Completion::Xtb)

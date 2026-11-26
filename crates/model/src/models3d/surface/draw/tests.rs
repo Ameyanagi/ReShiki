@@ -194,7 +194,7 @@ fn changing_the_look_reuses_the_mesh() {
     demo_on_this_thread(Some("pi,look=mesh,opacity=30")).unwrap();
     let mesh = meshes(&doc, &doc.models[0]).unwrap();
     demo_on_this_thread(None).unwrap();
-    assert!(Rc::ptr_eq(&shaded, &mesh));
+    assert!(Arc::ptr_eq(&shaded, &mesh));
 }
 
 #[test]
@@ -510,7 +510,7 @@ fn mesh_strokes_keep_subunit_runs() {
         width: 1.,
     };
     let Some(Primitive::Surface { groups }) =
-        prepared.primitive(false, [255.; 3], 0., Some(outline), 1.)
+        prepared.paint(demo_colors(false), [255.; 3], 0., Some(outline), 1.)
     else {
         panic!("the 0.3-unit mesh line should be painted");
     };
@@ -554,9 +554,16 @@ fn tone_counts_follow_the_faded_endpoint_range_and_group_weights() {
     assert_eq!(shaded(POSITIVE, 0.35, backdrop, fade), [86, 119, 188]);
     assert_eq!(shaded(POSITIVE, 1., backdrop, fade), [175, 196, 238]);
     // The ramp bends at lightness 0.6: 33 levels below it (blue), 80 above (red).
-    assert_eq!(tone_counts(Look::default(), false, backdrop, fade), [114]);
+    let colors = demo_colors(false);
+    assert_eq!(
+        phase_tone_counts(Look::default(), colors, backdrop, fade),
+        [114]
+    );
     let film = Look::new(Fill::Shaded, false, 60).unwrap();
-    assert_eq!(tone_counts(film, false, backdrop, fade), [68, 28, 11, 5]);
+    assert_eq!(
+        phase_tone_counts(film, colors, backdrop, fade),
+        [68, 28, 11, 5]
+    );
 }
 
 #[test]

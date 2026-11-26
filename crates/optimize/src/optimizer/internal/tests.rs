@@ -1348,7 +1348,7 @@ fn selected_updates_apply_endpoint_secants_in_the_nonlinear_internal_chart() {
     let free = free_components(&x, &[0]);
     let mut state = 0xb121_658c_78f4_e902;
     let requested = random_vector(free.len(), 1e-3, &mut state);
-    for update in [Update::Bfgs, Update::DampedBfgs, Update::Bofill] {
+    for update in [Update::Bfgs, Update::DampedBfgs, Update::FarkasSchlegel] {
         let mut model = lindh_model(&numbers, &free, &x, true).unwrap();
         let next = model.back_transform(&x, &requested).unwrap();
         assert!(next.converged);

@@ -299,6 +299,292 @@ fn add_result(doc: &mut Document, start: &Launch, result: CalcResult) -> Attache
 }
 
 #[test]
+fn result_key_uses_identity_and_ignores_result_values() {
+    let (doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Energy, true);
+    let key = result_key(&full);
+    assert_eq!(key.len(), 16);
+    assert!(
+        key.bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    );
+    assert_eq!(result_key(&full.light(&[])), key);
+    let mut changed = full.clone();
+    changed.orbitals = None;
+    changed.energy_hartree = Some(-500.);
+    changed.keep_full = true;
+    changed.omitted_bytes = Some(20_000);
+    assert_eq!(result_key(&changed), key);
+
+    let mut identities = Vec::new();
+    let mut changed = full.clone();
+    changed.frame = FrameHash([0; 32]);
+    identities.push(changed);
+    let mut changed = full.clone();
+    changed.input_frame = Some(full.frame);
+    identities.push(changed);
+    let mut changed = full.clone();
+    changed.task = Task::Gradient;
+    identities.push(changed);
+    let mut changed = full.clone();
+    changed.settings = Settings::Imported { keywords: vec![] };
+    identities.push(changed);
+    let mut changed = full;
+    changed.provenance.program_version = Some("another version".into());
+    identities.push(changed);
+    for changed in identities {
+        assert_ne!(result_key(&changed), key);
+    }
+}
+
+#[test]
+fn figure_result_and_pinning_follow_the_model_across_paste() {
+    use crate::models3d::surface::{Figure, OrbitalRef, draw::figure_ready};
+
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Energy, true);
+    let basis = full.orbitals.as_ref().unwrap().basis.as_ref().unwrap();
+    let n_ao = basis.shells.iter().map(Shell::n_functions).sum();
+    doc.models[0].surface = Some(Figure {
+        orbital: OrbitalRef {
+            result: result_key(&full),
+            spin: Spin::Alpha,
+            index: 3,
+        },
+        iso: 0.05,
+        look: Default::default(),
+        snapshot: None,
+    });
+    add_result(&mut doc, &start, full.light(&[]));
+    add_result(&mut doc, &start, full.light(&[]));
+    let part = editing::selection(&doc, &[oxygen]);
+    let pasted = editing::append(&mut doc, &part, Point::new(150., 0.))[0];
+    doc.atom_mut(pasted).unwrap().isotope = 18;
+    let (original_index, original) = figure_result(&doc, &doc.models[0]).unwrap();
+    let (copy_index, copy) = figure_result(&doc, &doc.models[1]).unwrap();
+    assert_eq!(original_index, 1);
+    assert_eq!(copy_index, 3);
+    assert_ne!(original.attachment, copy.attachment);
+    assert_eq!(result_key(&original.result), result_key(&copy.result));
+    assert!(figure_ready(&doc, &doc.models[0]));
+    assert!(!figure_ready(&doc, &doc.models[1]));
+
+    let row = vec![0.25; n_ao];
+    pin_orbital(&mut doc, original_index, Spin::Alpha, 3, basis, &row).unwrap();
+    let orbitals = |index: usize| doc.science.results[index].result.orbitals.as_ref().unwrap();
+    assert_eq!(orbitals(original_index).alpha.rows, [3]);
+    assert_eq!(orbitals(original_index).alpha.coefficients, row);
+    assert!(orbitals(copy_index).alpha.rows.is_empty());
+    doc.models[0].surface.as_mut().unwrap().orbital.result = "unknown".into();
+    assert!(figure_result(&doc, &doc.models[0]).is_none());
+}
+
+#[test]
+fn a_repeated_calculation_leaves_a_placed_figure_on_its_pinned_result() {
+    use crate::models3d::surface::{Figure, OrbitalRef};
+
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Energy, true);
+    let basis = full.orbitals.as_ref().unwrap().basis.clone().unwrap();
+    let n_ao = basis.shells.iter().map(Shell::n_functions).sum();
+    doc.models[0].surface = Some(Figure {
+        orbital: OrbitalRef {
+            result: result_key(&full),
+            spin: Spin::Alpha,
+            index: 3,
+        },
+        iso: 0.05,
+        look: Default::default(),
+        snapshot: None,
+    });
+    add_result(&mut doc, &start, full.light(&[]));
+    pin_orbital(&mut doc, 0, Spin::Alpha, 3, &basis, &vec![0.5; n_ao]).unwrap();
+    // Recalculate: same frame and settings, so the same key, no rows.
+    add_result(&mut doc, &start, full.light(&[]));
+    assert_eq!(doc.science.results.len(), 2);
+    let (index, _) = figure_result(&doc, &doc.models[0]).unwrap();
+    assert_eq!(index, 0, "the figure keeps the result holding its row");
+    // Without a pinned row anywhere, the newest result is used.
+    doc.models[0].surface.as_mut().unwrap().orbital.index = 4;
+    assert_eq!(figure_result(&doc, &doc.models[0]).unwrap().0, 1);
+}
+
+#[test]
+fn pin_orbital_inserts_sorted_rows_and_keeps_the_result_key() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Energy, true);
+    let basis = full.orbitals.as_ref().unwrap().basis.as_ref().unwrap();
+    let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
+    add_result(&mut doc, &start, full.light(&[]));
+    let original = doc.science.results[0].result.clone();
+    let key = result_key(&original);
+    for index in [4, 1, 3] {
+        let row = vec![f64::from(index) * -0.125; n_ao];
+        pin_orbital(&mut doc, 0, Spin::Alpha, index, basis, &row).unwrap();
+        assert_eq!(result_key(&doc.science.results[0].result), key);
+    }
+    let pinned = doc.science.results[0].result.clone();
+    let orbitals = pinned.orbitals.as_ref().unwrap();
+    assert_eq!(orbitals.basis.as_ref(), Some(basis));
+    assert_eq!(orbitals.alpha.rows, [1, 3, 4]);
+    for (&index, row) in orbitals
+        .alpha
+        .rows
+        .iter()
+        .zip(orbitals.alpha.coefficients.chunks_exact(n_ao))
+    {
+        assert_eq!(row, vec![f64::from(index) * -0.125; n_ao]);
+    }
+    assert!(original.orbitals.as_ref().unwrap().alpha.rows.is_empty());
+    // A second calculation of an existing row cannot change its signs.
+    pin_orbital(&mut doc, 0, Spin::Alpha, 3, basis, &[f64::NAN]).unwrap();
+    assert!(Arc::ptr_eq(&pinned, &doc.science.results[0].result));
+    doc.science.validate().unwrap();
+}
+
+#[test]
+fn pin_orbital_rejects_invalid_rows_and_mismatched_bases_without_changes() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Energy, true);
+    let basis = full.orbitals.as_ref().unwrap().basis.as_ref().unwrap();
+    let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
+    add_result(&mut doc, &start, full.light(&[]));
+    let original = doc.science.results[0].result.clone();
+    for (index, row) in [
+        (0, vec![0.; n_ao - 1]),
+        (n_ao as u32, vec![0.; n_ao]),
+        (0, vec![f64::INFINITY; n_ao]),
+    ] {
+        assert!(matches!(
+            pin_orbital(&mut doc, 0, Spin::Alpha, index, basis, &row),
+            Err(ScienceError::Invalid(_))
+        ));
+        assert!(Arc::ptr_eq(&original, &doc.science.results[0].result));
+    }
+    let mut invalid_basis = basis.clone();
+    invalid_basis.shells[0].atom = start.frame.numbers.len() as u32;
+    assert!(matches!(
+        pin_orbital(&mut doc, 0, Spin::Alpha, 0, &invalid_basis, &vec![0.; n_ao]),
+        Err(ScienceError::Invalid(_))
+    ));
+    assert!(Arc::ptr_eq(&original, &doc.science.results[0].result));
+
+    pin_orbital(&mut doc, 0, Spin::Alpha, 0, basis, &vec![0.25; n_ao]).unwrap();
+    let pinned = doc.science.results[0].result.clone();
+    let mut other_basis = basis.clone();
+    other_basis.shells[0].exponents_per_bohr2[0] *= 2.;
+    assert!(matches!(
+        pin_orbital(&mut doc, 0, Spin::Alpha, 1, &other_basis, &vec![0.; n_ao]),
+        Err(ScienceError::Invalid(_))
+    ));
+    assert!(Arc::ptr_eq(&pinned, &doc.science.results[0].result));
+    assert!(matches!(
+        pin_orbital(&mut doc, 1, Spin::Alpha, 0, basis, &vec![0.; n_ao]),
+        Err(ScienceError::Unknown)
+    ));
+}
+
+#[test]
+fn pin_orbital_uses_separate_beta_rows_only_for_unrestricted_orbitals() {
+    let (doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Energy, true);
+    let basis = full.orbitals.as_ref().unwrap().basis.as_ref().unwrap();
+    let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
+    for unrestricted in [false, true] {
+        let mut doc = doc.clone();
+        let mut light = full.light(&[]);
+        let orbitals = light.orbitals.as_mut().unwrap();
+        orbitals.alpha.occupations.fill(1.);
+        orbitals.beta = if unrestricted {
+            Beta::Unrestricted(orbitals.alpha.clone())
+        } else {
+            Beta::SameOrbitals {
+                occupations: vec![],
+            }
+        };
+        add_result(&mut doc, &start, light);
+        pin_orbital(&mut doc, 0, Spin::Beta, 2, basis, &vec![-0.5; n_ao]).unwrap();
+        let orbitals = doc.science.results[0].result.orbitals.as_ref().unwrap();
+        match &orbitals.beta {
+            Beta::Unrestricted(set) => {
+                assert_eq!(set.rows, [2]);
+                assert!(orbitals.alpha.rows.is_empty());
+            }
+            _ => assert_eq!(orbitals.alpha.rows, [2]),
+        }
+        doc.science.validate().unwrap();
+    }
+}
+
+#[test]
+fn saved_with_pins_keeps_an_xtb_row_and_its_basis() {
+    use crate::models3d::surface::{Figure, OrbitalRef};
+
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Hessian, true);
+    let original = Arc::new(full.clone());
+    let key = result_key(&full);
+    add_result(&mut doc, &start, full);
+    let pins = HashMap::from([(key.clone(), vec![(Spin::Alpha, 4)])]);
+    doc.models[0].surface = Some(Figure {
+        orbital: OrbitalRef {
+            result: key.clone(),
+            spin: Spin::Alpha,
+            index: 4,
+        },
+        iso: 0.05,
+        look: Default::default(),
+        snapshot: None,
+    });
+    let unpinned = doc.science.saved();
+    let orbitals = unpinned.results[0].result.orbitals.as_ref().unwrap();
+    assert!(orbitals.basis.is_none());
+    assert!(orbitals.alpha.rows.is_empty());
+
+    let saved = doc.science.saved_with_pins(&pins);
+    assert_eq!(doc.current().science, saved);
+    let result = &saved.results[0].result;
+    let orbitals = result.orbitals.as_ref().unwrap();
+    let full = original.orbitals.as_ref().unwrap();
+    let n_ao: usize = full
+        .basis
+        .as_ref()
+        .unwrap()
+        .shells
+        .iter()
+        .map(Shell::n_functions)
+        .sum();
+    assert_eq!(orbitals.basis, full.basis);
+    assert_eq!(orbitals.alpha.rows, [4]);
+    assert_eq!(
+        orbitals.alpha.coefficients,
+        full.alpha.coefficients[4 * n_ao..5 * n_ao]
+    );
+    assert!(result.hessian_hartree_per_bohr2.is_empty());
+    assert_eq!(result_key(result), key);
+    result.validate(&start.frame).unwrap();
+    let json = serde_json::to_vec_pretty(&saved).unwrap();
+    let reopened: Science = serde_json::from_slice(&json).unwrap();
+    assert_eq!(reopened, saved);
+    assert_eq!(doc.science.file_bytes_with_pins(&pins), json.len());
+    assert_eq!(
+        doc.science.saved_sizes_with_pins(&pins),
+        vec![serde_json::to_vec_pretty(&saved.results[0]).unwrap().len()]
+    );
+    assert_eq!(doc.science.results[0].result.as_ref(), original.as_ref());
+    doc.science.results[0].keep_full = true;
+    assert_eq!(make_lighter(&mut doc), 1);
+    assert_eq!(doc.science, saved);
+}
+
+#[test]
 fn launch_maps_model_atoms_then_hydrogens() {
     let (doc, oxygen) = water();
     let start = launch(&doc, oxygen, 0, 1).unwrap();
@@ -968,6 +1254,115 @@ fn clipboard_selection_carries_no_science() {
 }
 
 #[test]
+fn clipboard_figures_keep_only_their_linked_results_and_pinned_rows() {
+    use crate::models3d::surface::{Figure, OrbitalRef};
+
+    let (mut source, atoms) = water_pair();
+    let first = launch(&source, atoms[0], 0, 1).unwrap();
+    let full = result(&first.frame, Task::Energy, true);
+    let key = result_key(&full);
+    add_result(&mut source, &first, full.clone());
+    source.science.results[0].keep_full = true;
+    let second = launch(&source, atoms[1], 0, 1).unwrap();
+    add_result(&mut source, &second, full);
+    assert_eq!(result_key(&source.science.results[1].result), key);
+    let mut optimized_frame = (*first.frame).clone();
+    optimized_frame.positions_angstrom[0][0] += 0.1;
+    let mut optimized = result(&optimized_frame, Task::Optimize, false);
+    optimized.input_frame = Some(first.frame.hash());
+    attach(&mut source, &first, vec![optimized_frame], optimized).unwrap();
+    source.models[0].surface = Some(Figure {
+        orbital: OrbitalRef {
+            result: key.clone(),
+            spin: Spin::Alpha,
+            index: 4,
+        },
+        iso: 0.05,
+        look: Default::default(),
+        snapshot: None,
+    });
+    assert_eq!(source.science.results.len(), 3);
+    assert_eq!(source.science.frames.len(), 2);
+
+    let science = for_figures(&source);
+    assert_eq!(science.results.len(), 1);
+    assert_eq!(science.attachments.len(), 1);
+    assert_eq!(science.frames.len(), 1);
+    let stored = &science.results[0];
+    assert!(!stored.keep_full);
+    assert_eq!(stored.attachment, source.science.results[0].attachment);
+    assert_eq!(result_key(&stored.result), key);
+    let orbitals = stored.result.orbitals.as_ref().unwrap();
+    assert!(orbitals.basis.is_some());
+    assert_eq!(orbitals.alpha.rows, [4]);
+    assert!(stored.result.hessian_hartree_per_bohr2.is_empty());
+    assert!(stored.result.gradient_hartree_per_bohr.is_empty());
+    science.validate().unwrap();
+
+    let part = editing::selection(&source, &[atoms[0]]);
+    assert_eq!(part.models.len(), 1);
+    assert_eq!(part.science, science);
+    part.validate().unwrap();
+    assert!(editing::selection(&source, &[atoms[1]]).science.is_empty());
+    assert_eq!(source.science.results.len(), 3);
+    assert!(source.science.results[0].keep_full);
+}
+
+#[test]
+fn remapping_ids_refreshes_only_matching_surface_snapshot_signatures() {
+    use crate::models3d::surface::{Figure, OrbitalRef, Snapshot, draw::view_signature};
+
+    let (mut original, oxygen) = water();
+    let start = launch(&original, oxygen, 0, 1).unwrap();
+    let result = result(&start.frame, Task::Energy, false);
+    let key = result_key(&result);
+    add_result(&mut original, &start, result);
+    original.models[0].surface = Some(Figure {
+        orbital: OrbitalRef {
+            result: key,
+            spin: Spin::Alpha,
+            index: 0,
+        },
+        iso: 0.05,
+        look: Default::default(),
+        snapshot: None,
+    });
+    let view = view_signature(&original, &original.models[0]);
+    original.models[0].surface.as_mut().unwrap().snapshot = Some(Snapshot {
+        view: view.clone(),
+        reach: 3.,
+        shapes: "saved vector surface".into(),
+    });
+
+    for matches in [true, false] {
+        let mut doc = original.clone();
+        if !matches {
+            doc.models[0].size += 10.;
+        }
+        let mapping = doc.all_ids().into_iter().map(|id| (id, id + 100)).collect();
+        editing::remap_ids(&mut doc, &mapping).unwrap();
+        let signature = view_signature(&doc, &doc.models[0]);
+        let snapshot = doc.models[0]
+            .surface
+            .as_ref()
+            .unwrap()
+            .snapshot
+            .as_ref()
+            .unwrap();
+        assert_ne!(signature, view);
+        if matches {
+            assert_eq!(snapshot.view, signature);
+        } else {
+            assert_eq!(snapshot.view, view);
+            assert_ne!(snapshot.view, signature);
+        }
+        assert_eq!(snapshot.reach, 3.);
+        assert_eq!(snapshot.shapes, "saved vector surface");
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
 fn calculated_fragment_can_still_be_joined() {
     use crate::{
         joining::Prepared,
@@ -1562,3 +1957,5 @@ fn oversized_baselines_are_refused_on_read() {
     json["science"]["attachments"][0]["baseline"] = json!("0".repeat(10_000));
     assert!(Document::from_json(&serde_json::to_vec(&json).unwrap()).is_err());
 }
+
+mod import;

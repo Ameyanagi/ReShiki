@@ -1,6 +1,7 @@
 //! The xTB protocol, client and engine-backed worker.
 //!
-//! Only the `engine` feature links the LGPL axtb fork. See `docs/xtb-licensing.md`.
+//! Only the `engine` feature links the LGPL axtb fork \[Axtb\]. See `docs/xtb-licensing.md`;
+//! the methods and their full references are in docs/references/xtb.md.
 
 #[cfg(any(feature = "engine", test))]
 mod ao;
