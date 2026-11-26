@@ -2,6 +2,8 @@
 //!
 //! Coordinates are supplied by the caller. Every vector in one proposal must
 //! use the same model chart, including both endpoint secant gradients.
+//!
+//! Full references: docs/references/xtb.md.
 
 mod diis;
 mod positive;
@@ -27,7 +29,7 @@ pub(crate) fn dense_lowest_eigenvector(hessian: &[f64], gradient: &[f64]) -> Opt
     Some(vectors)
 }
 
-/// Banerjee et al., J. Phys. Chem. 89, 52 (1985). Normalizing the
+/// Banerjee et al., J. Phys. Chem. 89, 52 (1985) \[Banerjee1985PRFO\]. Normalizing the
 /// homogeneous component to one gives the RFO displacement g·s = λ < 0.
 pub(crate) fn eigenvector_step(vector: &[f64], gradient: &[f64]) -> Option<Vec<f64>> {
     let n = gradient.len();
@@ -92,7 +94,7 @@ pub(crate) fn update(
         if !ys.is_finite() {
             return;
         }
-        // Nocedal & Wright, Numerical Optimization, Procedure 18.2.
+        // Nocedal & Wright, Numerical Optimization, Procedure 18.2 [Powell1978Damping].
         // Replacing y by r ensures s·r >= 0.2 s·Hs.
         if ys < 0.2 * shs {
             let theta = 0.8 * shs / (shs - ys);
@@ -122,7 +124,7 @@ fn bofill(
     shs: f64,
 ) {
     // Farkas & Schlegel, J. Chem. Phys. 111, 10806 (1999),
-    // doi:10.1063/1.480484: minimization blend of SR1 and BFGS,
+    // doi:10.1063/1.480484 [Farkas1999Update]: minimization blend of SR1 and BFGS,
     // with phi = |(y − Hs)·s| / (|y − Hs| |s|).
     let residual: Vec<_> = y.iter().zip(hs).map(|(yi, hsi)| yi - hsi).collect();
     let snorm = norm(s);
