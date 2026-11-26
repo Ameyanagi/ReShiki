@@ -1246,12 +1246,10 @@ fn export_input(options: &Options) -> Result<Command, String> {
     let reactant = path("--reactant", options.reactant.as_deref())?;
     let product = path("--product", options.product.as_deref())?;
     let hessian = path("--hessian", options.hessian.as_deref())?;
-    if (!job.is_transition_state() || program == Program::Xyz)
-        && (reactant.is_some() || product.is_some())
-    {
-        return Err("--reactant and --product require a transition-state job".into());
-    }
-    if matches!(job, Job::Qst2 | Job::Qst3 | Job::NebTs) {
+    if matches!(
+        (program, job),
+        (Program::Gaussian, Job::Qst2 | Job::Qst3) | (Program::Orca, Job::NebTs)
+    ) {
         let missing = match (&reactant, &product) {
             (None, None) => Some("--reactant and --product"),
             (None, Some(_)) => Some("--reactant"),
@@ -1261,6 +1259,8 @@ fn export_input(options: &Options) -> Result<Command, String> {
         if let Some(missing) = missing {
             return Err(format!("{} requires {missing}", job.label()));
         }
+    } else if reactant.is_some() || product.is_some() {
+        return Err("--reactant and --product require Gaussian qst2/qst3 or ORCA neb-ts".into());
     }
     if hessian.is_some()
         && !(program == Program::Orca && matches!(job, Job::TransitionState | Job::Irc))

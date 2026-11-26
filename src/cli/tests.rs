@@ -3439,36 +3439,35 @@ fn export_input_parses_defaults_and_orca_composite_template() {
 #[test]
 fn export_input_parses_transition_state_paths() {
     use reshiki_io::qc_input::Job;
-    for (program, job, expected, options) in [
-        ("gaussian", "qst2", Job::Qst2, &[][..]),
-        ("gaussian", "qst3", Job::Qst3, &[][..]),
-        ("orca", "neb-ts", Job::NebTs, &["--out", "job.inp"][..]),
+    let endpoints = ["--reactant", "reactant.xyz", "--product", "product.xyz"];
+    for (program, job, expected, has_endpoints, options) in [
+        ("gaussian", "qst2", Job::Qst2, true, &[][..]),
+        ("gaussian", "qst3", Job::Qst3, true, &[][..]),
+        (
+            "orca",
+            "neb-ts",
+            Job::NebTs,
+            true,
+            &["--out", "job.inp"][..],
+        ),
         (
             "orca",
             "ts",
             Job::TransitionState,
+            false,
             &["--hessian", "ts.hess", "--out", "job.inp"],
         ),
         (
             "orca",
             "irc",
             Job::Irc,
+            false,
             &["--hessian", "ts.hess", "--out", "job.inp"],
         ),
     ] {
         let tokens = [
-            &[
-                "export-input",
-                "--program",
-                program,
-                "--job",
-                job,
-                "--reactant",
-                "reactant.xyz",
-                "--product",
-                "product.xyz",
-                "ts.xyz",
-            ][..],
+            &["export-input", "--program", program, "--job", job, "ts.xyz"][..],
+            if has_endpoints { &endpoints[..] } else { &[] },
             options,
         ]
         .concat();
@@ -3476,8 +3475,14 @@ fn export_input_parses_transition_state_paths() {
             panic!("expected export-input");
         };
         assert_eq!(command.job, expected);
-        assert_eq!(command.reactant, Some(PathBuf::from("reactant.xyz")));
-        assert_eq!(command.product, Some(PathBuf::from("product.xyz")));
+        assert_eq!(
+            command.reactant,
+            has_endpoints.then(|| PathBuf::from("reactant.xyz"))
+        );
+        assert_eq!(
+            command.product,
+            has_endpoints.then(|| PathBuf::from("product.xyz"))
+        );
         assert_eq!(
             command.hessian,
             options
@@ -3499,16 +3504,12 @@ fn export_input_rejects_invalid_options_before_reading() {
             "QST3 requires --product",
         ),
         (
-            &["--job", "neb-ts", "--product", "missing-product.xyz"],
-            "NEB-TS requires --reactant",
-        ),
-        (
             &["--reactant", "missing-reactant.xyz"],
-            "--reactant and --product require a transition-state job",
+            "--reactant and --product require Gaussian qst2/qst3 or ORCA neb-ts",
         ),
         (
             &["--job", "opt", "--product", "missing-product.xyz"],
-            "--reactant and --product require a transition-state job",
+            "--reactant and --product require Gaussian qst2/qst3 or ORCA neb-ts",
         ),
         (
             &["--job", "ts", "--hessian", "missing.hess"],
@@ -3562,6 +3563,48 @@ fn export_input_rejects_invalid_options_before_reading() {
 }
 
 #[tokio::test]
+async fn export_input_rejects_misplaced_endpoints_before_reading() {
+    for (program, job) in [
+        ("orca", "ts"),
+        ("orca", "irc"),
+        ("orca", "qst2"),
+        ("gaussian", "ts"),
+        ("gaussian", "irc"),
+        ("gaussian", "neb-ts"),
+        ("gamess", "ts"),
+        ("xyz", "ts"),
+    ] {
+        for flag in ["--reactant", "--product"] {
+            let (code, out, err) = call(&[
+                "export-input",
+                "missing-input.xyz",
+                "--program",
+                program,
+                "--job",
+                job,
+                flag,
+                "missing-endpoint.xyz",
+            ])
+            .await;
+            assert_eq!((code, out.as_str()), (USAGE, ""), "{program} {job}: {err}");
+            assert!(
+                err.contains("--reactant and --product require Gaussian qst2/qst3 or ORCA neb-ts"),
+                "{err}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn export_input_help_explains_endpoint_jobs_and_atom_indices() {
+    let (code, out, err) = call(&["help", "export-input"]).await;
+    assert_eq!((code, err.as_str()), (SUCCESS, ""));
+    let help = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(help.contains("Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts."));
+    assert!(help.contains("Corresponding atoms must have the same index in every structure."));
+}
+
+#[tokio::test]
 async fn export_input_rejects_misplaced_hessian_and_missing_companion_destination() {
     for (options, message) in [
         (
@@ -3571,6 +3614,10 @@ async fn export_input_rejects_misplaced_hessian_and_missing_companion_destinatio
         (
             &["--job", "ts", "--hessian", "missing.hess"],
             "use --out PATH to write the main input and its companion files",
+        ),
+        (
+            &["--job", "neb-ts", "--product", "missing-product.xyz"],
+            "NEB-TS requires --reactant",
         ),
         (
             &[
@@ -3669,12 +3716,16 @@ async fn export_input_writes_gaussian_qst_sections_in_order() {
 }
 
 #[tokio::test]
-async fn export_input_writes_orca_neb_ts_companions() {
+async fn export_input_writes_orca_neb_ts_with_safe_companion_names() {
     let directory = tempfile::tempdir().unwrap();
     let input = directory.path().join("ts.xyz");
     let reactant = directory.path().join("reactant.xyz");
     let product = directory.path().join("product.xyz");
-    let output = directory.path().join("job.inp");
+    #[cfg(unix)]
+    let name = "Job.1-\"反+ path.inp";
+    #[cfg(not(unix))]
+    let name = "Job.1-!反+ path.inp";
+    let output = directory.path().join(name);
     std::fs::write(&input, WATER_XYZ).unwrap();
     std::fs::write(&reactant, WATER_XYZ.replace("O 0 0 0", "O 1 0 0")).unwrap();
     std::fs::write(&product, WATER_XYZ.replace("O 0 0 0", "O 2 0 0")).unwrap();
@@ -3697,16 +3748,17 @@ async fn export_input_writes_orca_neb_ts_companions() {
     let text = std::fs::read_to_string(&output).unwrap();
     for expected in [
         " NEB-TS Freq\n",
-        "NEB_End_XYZFile \"job_product.xyz\"",
-        "NEB_TS_XYZFile \"job_ts.xyz\"",
+        "NEB_End_XYZFile \"Job.1-____path_product.xyz\"",
+        "NEB_TS_XYZFile \"Job.1-____path_ts.xyz\"",
     ] {
         assert!(text.contains(expected), "{text}");
     }
     let (_, inline) = text.split_once("* xyz 0 1\n").unwrap();
     assert!(inline.lines().next().unwrap().contains("1.00000000"));
-    let product = std::fs::read_to_string(output.with_file_name("job_product.xyz")).unwrap();
+    let product =
+        std::fs::read_to_string(output.with_file_name("Job.1-____path_product.xyz")).unwrap();
     assert!(product.lines().nth(2).unwrap().contains("2.00000000"));
-    let guess = std::fs::read_to_string(output.with_file_name("job_ts.xyz")).unwrap();
+    let guess = std::fs::read_to_string(output.with_file_name("Job.1-____path_ts.xyz")).unwrap();
     assert!(guess.lines().nth(3).unwrap().contains("0.95720000"));
 }
 
@@ -3725,24 +3777,30 @@ async fn export_input_writes_orca_ts_and_irc_with_imported_hessian() {
         masses_amu: vec![],
         drawing_atoms: vec![],
     };
-    let values: Vec<_> = (0..36).map(|value| f64::from(value - 18) / 16.0).collect();
+    let values: Vec<_> = (0_i32..6)
+        .flat_map(|row| {
+            (0..6).map(move |column| f64::from(row.min(column) * 6 + row.max(column) - 18) / 16.0)
+        })
+        .collect();
     std::fs::write(&input, "2\nTS guess\nH 0 0 0\nH 0.75 0 0\n").unwrap();
+    let mut source_frame = frame.clone();
+    source_frame.positions_angstrom[1][0] += 0.0008;
     std::fs::write(
         &hessian,
-        qc_input::write_orca_hess(&frame, &values).unwrap(),
+        qc_input::write_orca_hess(&source_frame, &values).unwrap(),
     )
     .unwrap();
     for (job, keywords) in [
         (
             "ts",
-            "%geom\n  InHess Read\n  InHessName \"ts_xtb.hess\"\nend",
+            "%geom\n  InHess Read\n  InHessName \"ts__xtb.hess\"\nend",
         ),
         (
             "irc",
-            "%irc\n  MaxIter 30\n  InitHess read\n  Hess_Filename \"irc_xtb.hess\"\nend",
+            "%irc\n  MaxIter 30\n  InitHess read\n  Hess_Filename \"irc__xtb.hess\"\nend",
         ),
     ] {
-        let output = directory.path().join(format!("{job}.inp"));
+        let output = directory.path().join(format!("{job}+.inp"));
         let (code, out, err) = call(&[
             "export-input",
             input.to_str().unwrap(),
@@ -3769,8 +3827,74 @@ async fn export_input_writes_orca_ts_and_irc_with_imported_hessian() {
         assert!(text.contains("* xyz 1 2\n"), "{text}");
         assert!(text.contains(keywords), "{text}");
         let companion =
-            std::fs::read_to_string(output.with_file_name(format!("{job}_xtb.hess"))).unwrap();
-        assert_eq!(qc_input::read_orca_hess(&companion, 2).unwrap(), values);
+            std::fs::read_to_string(output.with_file_name(format!("{job}__xtb.hess"))).unwrap();
+        assert_eq!(
+            qc_input::read_orca_hess(&companion, &frame).unwrap(),
+            values
+        );
+    }
+}
+
+#[tokio::test]
+async fn export_input_rejects_hessians_with_missing_or_mismatched_atoms() {
+    use reshiki_io::qc_input;
+
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("ts.xyz");
+    let hessian = directory.path().join("source.hess");
+    let output = directory.path().join("job.inp");
+    let frame = qc_input::parse_xyz(WATER_XYZ).unwrap();
+    let text = qc_input::write_orca_hess(&frame, &[0.0; 81]).unwrap();
+    let (matrix, atoms) = text.split_once("$atoms\n").unwrap();
+    let mut atom_lines = atoms.lines().skip(1);
+    let oxygen = atom_lines.next().unwrap();
+    let first_hydrogen = atom_lines.next().unwrap();
+    let second_hydrogen = atom_lines.next().unwrap();
+    for (xyz, atom_block, message) in [
+        (WATER_XYZ, "$end\n".into(), "no $atoms section"),
+        (
+            WATER_XYZ,
+            format!("$atoms\n2\n{oxygen}\n{first_hydrogen}\n$end\n"),
+            "Atom count mismatch",
+        ),
+        (
+            WATER_XYZ,
+            format!("$atoms\n3\n{first_hydrogen}\n{oxygen}\n{second_hydrogen}\n$end\n"),
+            "Atom 1 element mismatch",
+        ),
+        (
+            WATER_XYZ,
+            format!("$atoms\n3\n{oxygen}\n{second_hydrogen}\n{first_hydrogen}\n$end\n"),
+            "Atom 2 coordinate x mismatch",
+        ),
+        (
+            "3\ntranslated water\nO 1 0 0\nH 1.9572 0 0\nH 0.7600128 0.9266272 0\n",
+            format!("$atoms\n{atoms}"),
+            "Atom 1 coordinate x mismatch",
+        ),
+    ] {
+        std::fs::write(&input, xyz).unwrap();
+        std::fs::write(&hessian, format!("{matrix}{atom_block}")).unwrap();
+        let (code, out, err) = call(&[
+            "export-input",
+            input.to_str().unwrap(),
+            "--program",
+            "orca",
+            "--job",
+            "irc",
+            "--hessian",
+            hessian.to_str().unwrap(),
+            "--out",
+            output.to_str().unwrap(),
+        ])
+        .await;
+        assert_eq!((code, out.as_str()), (FAILURE, ""), "{err}");
+        assert!(
+            err.contains("source.hess") && err.contains(message),
+            "{err}"
+        );
+        assert!(!output.exists());
+        assert!(!output.with_file_name("job_xtb.hess").exists());
     }
 }
 
@@ -3786,6 +3910,10 @@ async fn export_input_reports_bad_hessians_without_writing_output() {
         (
             "$hessian\n3\n0 1 2\n0 NaN 0 0\n1 0 1 0\n2 0 0 1\n$end\n",
             "finite",
+        ),
+        (
+            "$hessian\n3\n0 1 2\n0 1 2 0\n1 0 1 0\n2 0 0 1\n$atoms\n1\nHe 4 0 0 0\n$end\n",
+            "asymmetric",
         ),
         ("$orca_hessian_file\n$end\n", "$hessian"),
     ] {

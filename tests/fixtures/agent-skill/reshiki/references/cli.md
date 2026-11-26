@@ -274,9 +274,9 @@ Without --out, the input goes to stdout. With --out, the main file is
 replaced and new companions go beside it. An existing companion file
 stops the export. Warnings go to stderr.
 
-Gaussian supports qst2 and qst3. ORCA supports neb-ts. Endpoint files
-are accepted only for transition-state jobs and must list the same
-elements as INPUT.xyz in the same order.
+Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts. They must
+list the same elements as INPUT.xyz in the same order. Corresponding atoms
+must have the same index in every structure.
 
 Options:
   --program PROGRAM   gaussian, orca, gamess or xyz. Required.
@@ -290,8 +290,8 @@ Options:
   --memory-gb G       Total memory in GB (16).
   --title T           Title (the input file name).
   --extra TEXT        More keywords, or GAMESS groups.
-  --reactant R.xyz    First reactant XYZ frame. Required for qst2, qst3 and neb-ts.
-  --product P.xyz     First product XYZ frame. Required for qst2, qst3 and neb-ts.
+  --reactant R.xyz    First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
+  --product P.xyz     First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
   --hessian H.hess    ORCA Cartesian Hessian. Requires --program orca with --job ts or irc.
   --out PATH          Main file. Required for ORCA neb-ts or when using --hessian.
 
