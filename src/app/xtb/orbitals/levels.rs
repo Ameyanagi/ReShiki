@@ -197,24 +197,30 @@ impl Diagram {
         Self::AXIS + 12. + columns as f32 * Self::COLUMN + 76.
     }
 
-    /// The energy range shown: the windows of every column.
+    /// The energy range shown: around the first column's gap, wide enough
+    /// to read the frontier levels apart (distant levels such as diffuse
+    /// virtuals stay off the axis), and holding the chosen level.
     fn range(&self) -> (f64, f64) {
-        let mut lo = f64::INFINITY;
-        let mut hi = f64::NEG_INFINITY;
-        for (c, column) in self.columns.iter().enumerate() {
-            let selected = self.selected.filter(|s| s.0 == c).map(|s| s.1);
-            for index in column.window(selected) {
-                if let Some(&e) = column.energies_ev.get(index) {
-                    lo = lo.min(e);
-                    hi = hi.max(e);
-                }
-            }
-        }
-        if lo > hi {
+        let Some(column) = self.columns.first() else {
             return (-1., 1.);
+        };
+        let e = &column.energies_ev;
+        let at = |i: Option<usize>| i.and_then(|i| e.get(i)).copied();
+        let (homo, lumo) = match (at(column.homo()), at(column.lumo())) {
+            (Some(h), Some(l)) => (h, l),
+            (Some(h), None) => (h, h),
+            (None, Some(l)) => (l, l),
+            (None, None) => (e[0], e[e.len() - 1]),
+        };
+        let span = ((lumo - homo) * 1.2).clamp(4., 10.);
+        let (mut lo, mut hi) = (homo - span, lumo + span);
+        if let Some((c, i)) = self.selected
+            && let Some(&chosen) = self.columns.get(c).and_then(|c| c.energies_ev.get(i))
+        {
+            lo = lo.min(chosen - 1.);
+            hi = hi.max(chosen + 1.);
         }
-        let pad = ((hi - lo) * 0.04).max(0.2);
-        (lo - pad, hi + pad)
+        (lo, hi)
     }
 
     fn y(&self, bounds: Rectangle) -> impl Fn(f64) -> f32 + use<> {
@@ -223,34 +229,55 @@ impl Diagram {
         move |e: f64| Self::TOP + ((hi - e) / (hi - lo).max(1e-9)) as f32 * height
     }
 
+    /// Each level on the axis: levels closer than a line's spacing sit side
+    /// by side, as degenerate ones do.
     fn place(&self, bounds: Rectangle) -> Vec<Placed> {
+        const SPACING: f32 = 9.;
+        let (lo, hi) = self.range();
         let y = self.y(bounds);
         let mut placed = Vec::new();
         for (c, column) in self.columns.iter().enumerate() {
             let left = Self::AXIS + 12. + c as f32 * Self::COLUMN;
-            let selected = self.selected.filter(|s| s.0 == c).map(|s| s.1);
-            let window = column.window(selected);
-            let mut index = *window.start();
-            while index <= *window.end() && index < column.energies_ev.len() {
-                let group = column.group(index);
-                let members: Vec<usize> =
-                    (index.max(*group.start())..=(*group.end()).min(*window.end())).collect();
-                // Degenerate levels side by side, sharing the column's width.
-                // Up to 4 px apart, closer for large groups so none vanishes.
-                let count = members.len() as f32;
+            let shown: Vec<(usize, f32)> = (column.energies_ev.iter().enumerate())
+                .filter(|(_, e)| (lo..=hi).contains(*e))
+                .map(|(i, e)| (i, y(*e)))
+                .collect();
+            // Runs of levels each within the spacing of the last.
+            let mut runs: Vec<Vec<(usize, f32)>> = vec![];
+            for level in shown {
+                match runs.last_mut() {
+                    Some(run) if run.last().is_some_and(|l| (l.1 - level.1).abs() < SPACING) => {
+                        run.push(level);
+                    }
+                    _ => runs.push(vec![level]),
+                }
+            }
+            for run in runs {
+                // A slot takes the next level once its last is a spacing away.
+                let mut slots: Vec<f32> = vec![];
+                let mut slot_of = vec![];
+                for &(_, at) in &run {
+                    let slot = slots.iter().position(|last| (last - at).abs() >= SPACING);
+                    let slot = slot.unwrap_or_else(|| {
+                        slots.push(at);
+                        slots.len() - 1
+                    });
+                    slots[slot] = at;
+                    slot_of.push(slot);
+                }
+                let count = slots.len() as f32;
                 let gap = (Self::LINE / (2. * count)).min(4.);
                 let width = (Self::LINE - gap * (count - 1.)) / count;
-                for (k, &member) in members.iter().enumerate() {
-                    let x0 = left + k as f32 * (width + gap);
+                for (&(index, at), slot) in run.iter().zip(slot_of) {
+                    let x0 = left + slot as f32 * (width + gap);
                     placed.push(Placed {
                         column: c,
-                        index: member,
+                        index,
                         x0,
                         x1: x0 + width,
-                        y: y(column.energies_ev[member]),
+                        y: at,
                     });
                 }
-                index = members.last().map_or(index + 1, |last| last + 1);
             }
         }
         placed
@@ -565,5 +592,29 @@ mod tests {
         assert_eq!(column.window(None), 10..=19);
         assert_eq!(column.window(Some(2)), 2..=19);
         assert_eq!(column.window(Some(29)), 10..=29);
+    }
+
+    #[test]
+    fn the_diagram_spreads_close_levels_and_leaves_far_virtuals_off_the_axis() {
+        // Formaldehyde-like: crowded occupied levels, a virtual at 98 eV.
+        let energies = [-0.70, -0.66, -0.65, -0.53, -0.441, 0.113, 1.47, 3.61];
+        let occupations = [2., 2., 2., 2., 2., 0., 0., 0.];
+        let hartree: Vec<f64> = energies.to_vec();
+        let diagram = Diagram {
+            columns: columns(&closed(&hartree, &occupations)),
+            selected: Some((0, 4)),
+            live: true,
+        };
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(200., 228.));
+        let placed = diagram.place(bounds);
+        assert!(placed.iter().all(|p| p.index != 7), "98 eV is off the axis");
+        // Levels 1 and 2 (0.27 eV apart) share a row side by side.
+        let [a, b] = [1, 2].map(|i| placed.iter().find(|p| p.index == i).unwrap());
+        assert!((a.y - b.y).abs() < 9.);
+        assert!(a.x1 <= b.x0 || b.x1 <= a.x0, "side by side, not on top");
+        assert_eq!(
+            diagram.hit(bounds, Point::new((b.x0 + b.x1) / 2., b.y)),
+            Some((0, 2))
+        );
     }
 }
