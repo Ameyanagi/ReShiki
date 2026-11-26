@@ -17,15 +17,18 @@ use std::sync::{Arc, Weak};
 const CAL_PER_MOL_PER_HARTREE: f64 = 627_509.474;
 const LIST_WIDTH: f32 = 250.;
 const CHART_WIDTH: f32 = 480.;
+const SPECTRUM_CONTROLS_WIDTH: f32 = 280.;
 /// Chart height in the inspector; the bottom dock's body is shorter.
 const CHART_HEIGHT: f32 = 156.;
 const DOCK_CHART_HEIGHT: f32 = 128.;
 /// Peaks labelled on the spectrum: at most this many, at least this fraction of the tallest.
 const LABELS: usize = 8;
 const LABEL_FRACTION: f64 = 0.05;
+const CHART_FONT_SIZE: f32 = 10.;
 const MAX_WAVENUMBER: f64 = 10_000.;
 const MAX_TICKS: usize = 40;
 const UNPLOTTABLE: &str = "Frequencies outside 0–10000 cm⁻¹ cannot be plotted";
+pub(super) const WAVENUMBER_TITLE: &str = "Wavenumber (cm⁻¹)";
 
 fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Vibrations(action))
@@ -73,13 +76,15 @@ impl App {
         } else {
             Length::Fixed(LIST_WIDTH)
         });
-        let chart = canvas(Spectrum::new(result, settings, selected));
+        let spectrum = Spectrum::new(result, settings, selected);
+        let spectrum_controls = spectrum_controls(settings, spectrum.data.can_plot());
+        let chart = canvas(spectrum).width(Length::Fill);
         let controls = self.xtb_animation_controls(shown);
         if inspector {
             body = body
                 .push(left)
-                .push(chart.width(Length::Fill).height(CHART_HEIGHT))
-                .push(spectrum_controls(settings))
+                .push(chart.height(CHART_HEIGHT))
+                .push(spectrum_controls)
                 .push(controls);
         } else {
             // Everything fits the dock's short body: list, chart, then the
@@ -87,11 +92,11 @@ impl App {
             body = body.push(
                 row![
                     left,
-                    chart
-                        .width(Length::Fixed(CHART_WIDTH))
-                        .height(DOCK_CHART_HEIGHT),
+                    container(chart.height(DOCK_CHART_HEIGHT))
+                        .width(Length::FillPortion(5))
+                        .max_width(CHART_WIDTH),
                     controls.width(Length::FillPortion(3)),
-                    container(spectrum_controls(settings)).width(Length::FillPortion(2)),
+                    container(spectrum_controls).width(SPECTRUM_CONTROLS_WIDTH),
                 ]
                 .spacing(18)
                 .align_y(Alignment::Start),
@@ -446,8 +451,8 @@ pub(super) fn thermo_rows(thermo: &Thermo, energy: Option<f64>) -> Vec<(&'static
     rows
 }
 
-/// Band shape, FWHM and scale factor under the spectrum.
-fn spectrum_controls(settings: &State) -> Element<'_, Message> {
+/// The spectrum settings and commands.
+fn spectrum_controls(settings: &State, enabled: bool) -> Element<'_, Message> {
     let shapes = row([
         (BandShape::Lorentzian, "Lorentzian"),
         (BandShape::Gaussian, "Gaussian"),
@@ -476,6 +481,26 @@ fn spectrum_controls(settings: &State) -> Element<'_, Message> {
     ]
     .spacing(6)
     .align_y(Alignment::Center);
+    let commands = row([
+        ("xtb-ir-place", "Place in drawing", Action::PlaceSpectrum),
+        (
+            "xtb-ir-export-svg",
+            "Export SVG…",
+            Action::ExportSpectrum("svg"),
+        ),
+        (
+            "xtb-ir-export-pdf",
+            "Export PDF…",
+            Action::ExportSpectrum("pdf"),
+        ),
+    ]
+    .map(|(id, label, action)| {
+        accessible_command(id, label, label)
+            .padding([4, 6])
+            .on_press_maybe(enabled.then(|| send(action)))
+            .into()
+    }))
+    .spacing(4);
     column![
         shapes,
         labelled_slider(
@@ -484,6 +509,7 @@ fn spectrum_controls(settings: &State) -> Element<'_, Message> {
             slider(5.0..=60., settings.fwhm, |v| send(Action::Fwhm(v))).step(1_f32),
         ),
         scale,
+        commands,
     ]
     .spacing(7)
     .into()
@@ -510,15 +536,38 @@ impl PartialEq for SpectrumKey {
 pub(super) struct SpectrumData {
     /// Scaled real frequencies and their mode indices.
     sticks: Vec<(usize, f64, f64)>,
-    curve: Vec<[f64; 2]>,
-    peaks: Vec<[f64; 2]>,
+    pub(super) curve: Vec<[f64; 2]>,
+    pub(super) peaks: Vec<[f64; 2]>,
     high: f64,
     low: f64,
     unplottable: bool,
+    pub(super) scale: f64,
+    pub(super) fwhm: f64,
+    pub(super) shape: BandShape,
 }
 
 impl SpectrumData {
+    pub(super) fn cached(result: &Arc<CalcResult>, settings: &State) -> Arc<Self> {
+        let scale = settings.scale().unwrap_or(1.);
+        let key = SpectrumKey {
+            result: Arc::downgrade(result),
+            shape: settings.shape,
+            fwhm_bits: settings.fwhm.to_bits(),
+            scale_bits: scale.to_bits(),
+        };
+        let mut cache = settings.spectrum.borrow_mut();
+        if let Some((cached_key, data)) = cache.as_ref()
+            && *cached_key == key
+        {
+            return Arc::clone(data);
+        }
+        let data = Arc::new(Self::new(result, settings.shape, settings.fwhm, scale));
+        *cache = Some((key, Arc::clone(&data)));
+        data
+    }
+
     fn new(result: &CalcResult, shape: BandShape, fwhm: f32, scale: f64) -> Self {
+        let fwhm = f64::from(fwhm);
         let mut data = Self {
             sticks: vec![],
             curve: vec![],
@@ -526,6 +575,9 @@ impl SpectrumData {
             high: 4000.,
             low: 400.,
             unplottable: false,
+            scale,
+            fwhm,
+            shape,
         };
         let Some(vibrations) = &result.vibrations else {
             return data;
@@ -559,7 +611,6 @@ impl SpectrumData {
         if data.unplottable {
             return data;
         }
-        let fwhm = f64::from(fwhm);
         data.curve = vibrational::ir_spectrum(
             frequencies,
             intensities,
@@ -602,6 +653,46 @@ impl SpectrumData {
             None
         }
     }
+
+    pub(super) fn can_plot(&self) -> bool {
+        self.message().is_none() && self.curve.iter().all(|[_, value]| value.is_finite())
+    }
+
+    pub(super) fn x(&self, wavenumber: f64) -> f32 {
+        ((self.high - wavenumber) / (self.high - self.low)) as f32
+    }
+
+    pub(super) fn ticks(&self) -> Vec<f64> {
+        spectrum_ticks(self.high, self.low)
+    }
+
+    pub(super) fn labelled_peaks(
+        &self,
+        x: impl Fn(f64) -> f32,
+        font_size: f32,
+        mut placed: Vec<(f32, f32)>,
+    ) -> impl Iterator<Item = [f64; 2]> {
+        let mut peaks = self.peaks.clone();
+        peaks.sort_by(|a, b| b[1].total_cmp(&a[1]));
+        let padding = 0.4 * font_size;
+        peaks.into_iter().filter(move |[wavenumber, _]| {
+            let x = x(*wavenumber);
+            let half = text_extent(&format!("{wavenumber:.0}"), font_size) / 2.;
+            let (lo, hi) = (x - half, x + half);
+            if !placed
+                .iter()
+                .all(|&(a, b)| hi + padding < a || lo > b + padding)
+            {
+                return false;
+            }
+            placed.push((lo, hi));
+            true
+        })
+    }
+}
+
+fn text_extent(text: &str, font_size: f32) -> f32 {
+    text.chars().count() as f32 * (0.6 * font_size)
 }
 
 /// A bounded axis generator also tolerates ranges much larger than the chart
@@ -636,29 +727,8 @@ impl Spectrum {
     const BOTTOM: f32 = 30.;
 
     fn new(result: &Arc<CalcResult>, settings: &State, selected: usize) -> Self {
-        let scale = settings.scale().unwrap_or(1.);
-        let key = SpectrumKey {
-            result: Arc::downgrade(result),
-            shape: settings.shape,
-            fwhm_bits: settings.fwhm.to_bits(),
-            scale_bits: scale.to_bits(),
-        };
-        let data = {
-            let mut cache = settings.spectrum.borrow_mut();
-            match cache.as_ref() {
-                Some((cached_key, data)) if *cached_key == key => Arc::clone(data),
-                _ => {
-                    let data = Arc::new(SpectrumData::new(
-                        result,
-                        settings.shape,
-                        settings.fwhm,
-                        scale,
-                    ));
-                    *cache = Some((key, Arc::clone(&data)));
-                    data
-                }
-            }
-        };
+        let data = SpectrumData::cached(result, settings);
+        let scale = data.scale;
         let frequency = result
             .vibrations
             .as_ref()
@@ -675,8 +745,7 @@ impl Spectrum {
 
     fn x(&self, wavenumber: f64, bounds: Rectangle) -> f32 {
         let width = bounds.width - Self::LEFT - Self::RIGHT;
-        Self::LEFT
-            + ((self.data.high - wavenumber) / (self.data.high - self.data.low)) as f32 * width
+        Self::LEFT + self.data.x(wavenumber) * width
     }
 }
 
@@ -746,14 +815,14 @@ impl canvas::Program<Message> for Spectrum {
             content,
             position,
             color,
-            size: 10.into(),
+            size: CHART_FONT_SIZE.into(),
             align_x: align.into(),
             ..Default::default()
         };
         // A narrow chart labels fewer ticks: each label needs its width
         // (about 6 px a digit at 10 px) clear of the previous one.
         let mut last_right = f32::NEG_INFINITY;
-        for tick in spectrum_ticks(self.data.high, self.data.low) {
+        for tick in self.data.ticks() {
             let x = self.x(tick, bounds);
             frame.stroke(
                 &canvas::Path::line(Point::new(x, base), Point::new(x, base + 4.)),
@@ -772,7 +841,7 @@ impl canvas::Program<Message> for Spectrum {
             }
         }
         frame.fill_text(small(
-            "Wavenumber (cm⁻¹)".into(),
+            WAVENUMBER_TITLE.into(),
             Point::new(Self::LEFT + width / 2., bounds.height - 12.),
             muted,
             iced::alignment::Horizontal::Center,
@@ -831,11 +900,8 @@ impl canvas::Program<Message> for Spectrum {
         // The selected mode's label and the imaginary note win; then the
         // tallest peaks, each clear of the text already placed (horizontal
         // extents at the chart's 10 px text, about 6 px a character).
-        let extent = |text: &str| text.chars().count() as f32 * 6.;
-        let mut placed: Vec<(f32, f32)> = Vec::new();
-        let free = |placed: &[(f32, f32)], (lo, hi): (f32, f32)| {
-            placed.iter().all(|&(a, b)| hi + 4. < a || lo > b + 4.)
-        };
+        let extent = |text: &str| text_extent(text, CHART_FONT_SIZE);
+        let mut placed = Vec::new();
         if let Some(frequency) = self.selected {
             let x = self.x(frequency, bounds);
             let label = format!("{frequency:.0} cm⁻¹");
@@ -869,19 +935,17 @@ impl canvas::Program<Message> for Spectrum {
             ));
             placed.push((Self::LEFT + 4., Self::LEFT + 4. + extent(note)));
         }
-        let mut peaks: Vec<&[f64; 2]> = self.data.peaks.iter().collect();
-        peaks.sort_by(|a, b| b[1].total_cmp(&a[1]));
-        for [wavenumber, value] in peaks {
-            let x = self.x(*wavenumber, bounds);
-            let label = format!("{wavenumber:.0}");
-            let half = extent(&label) / 2.;
-            if !free(&placed, (x - half, x + half)) {
-                continue;
-            }
-            placed.push((x - half, x + half));
+        for [wavenumber, value] in self.data.labelled_peaks(
+            |wavenumber| self.x(wavenumber, bounds),
+            CHART_FONT_SIZE,
+            placed,
+        ) {
             frame.fill_text(small(
-                label,
-                Point::new(x, (y(*value) - 12.).max(Self::TOP + 2.)),
+                format!("{wavenumber:.0}"),
+                Point::new(
+                    self.x(wavenumber, bounds),
+                    (y(value) - 12.).max(Self::TOP + 2.),
+                ),
                 ink,
                 iced::alignment::Horizontal::Center,
             ));

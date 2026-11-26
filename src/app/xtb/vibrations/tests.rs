@@ -3,6 +3,8 @@ use super::super::tests::{MOVED, START, event, f32s, model, optfreq, send, water
 use super::super::{Action as XtbAction, CalcTask, Outcome, palette, results::View, run};
 use super::*;
 use crate::app::Message;
+use reshiki::graphics::GraphicKind;
+use reshiki::models3d::{self, Display};
 
 fn vibrations(app: &mut App, action: Action) {
     send(app, XtbAction::Vibrations(action));
@@ -91,7 +93,6 @@ fn another_mode_or_amplitude_rebuilds_the_frames() {
 #[test]
 fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     let mut app = opened();
-    use reshiki::models3d::{self, Display};
     models3d::set_display(&mut app.tab.doc, 0, Display::TwoD);
     vibrations(&mut app, Action::Arrows(true));
     assert_eq!(
@@ -116,6 +117,315 @@ fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.graphics.is_empty());
     assert_eq!(app.tab.doc.models.first().unwrap().display, Display::TwoD);
+}
+
+#[test]
+fn placing_the_spectrum_selects_one_group_and_undo_removes_it() {
+    let mut app = opened();
+    let before = app.tab.doc.clone();
+    let bond = before.drawing_style.bond_length_world;
+
+    vibrations(&mut app, Action::PlaceSpectrum);
+    let doc = &app.tab.doc;
+    let [group] = doc.groups.as_slice() else {
+        panic!("Expected one spectrum group. Status was {}", app.status);
+    };
+    assert!(!group.integral);
+    assert_eq!(app.tab.selected, group.members);
+    let mut object_ids: Vec<_> = doc
+        .graphics
+        .iter()
+        .map(|g| g.id)
+        .chain(doc.annotations.iter().map(|a| a.id))
+        .collect();
+    object_ids.sort_unstable();
+    assert_eq!(group.members, object_ids);
+    let (curve, lines) = doc.graphics.split_first().unwrap();
+    assert_eq!(curve.kind, GraphicKind::Path);
+    assert!((900..=908).contains(&curve.path.len()));
+    assert_eq!(curve.style.width_pt, doc.drawing_style.line_width_pt);
+    assert!(lines.iter().all(|g| g.kind == GraphicKind::Line));
+    let points: Vec<_> = curve
+        .commands()
+        .iter()
+        .flat_map(|command| command.points())
+        .collect();
+    let width = points.last().unwrap().x - points[0].x;
+    assert!((width - super::figure::PLOT_WIDTH_BONDS * bond).abs() < 1e-3);
+    assert!(points.windows(2).all(|pair| pair[0].x <= pair[1].x));
+    let tick_labels: Vec<_> = doc
+        .annotations
+        .iter()
+        .filter(|a| a.text.parse::<u32>().is_ok() && a.position.y > lines[0].origin.y)
+        .collect();
+    assert_eq!(
+        tick_labels
+            .iter()
+            .map(|a| a.text.as_str())
+            .collect::<Vec<_>>(),
+        ["4000", "3000", "2000", "1000"]
+    );
+    assert!(
+        tick_labels
+            .windows(2)
+            .all(|pair| pair[0].position.x < pair[1].position.x)
+    );
+    assert!(doc.annotations.iter().any(|a| a.text == "1590"));
+    assert_eq!(
+        doc.annotations[0].text,
+        "GFN2-xTB · scale 1.00 · FWHM 15 cm⁻¹ · Lorentzian"
+    );
+    assert_eq!(app.status, "Placed the IR spectrum · ⌘Z undoes");
+    vibrations(&mut app, Action::Tick);
+    assert_eq!(app.status, "Placed the IR spectrum · ⌘Z undoes");
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn the_spectrum_clears_a_2d_component_extended_after_calculation() {
+    let mut app = opened();
+    let oxygen = *app
+        .xtb_shown()
+        .unwrap()
+        .atoms
+        .iter()
+        .flatten()
+        .next()
+        .unwrap();
+    let before = app.tab.doc.clone();
+    models3d::set_display(&mut app.tab.doc, 0, Display::TwoD);
+    let carbon = app.tab.doc.add_atom("C", Point::new(1000., -200.));
+    app.tab.doc.add_bond(oxygen, carbon, 1, "plain");
+    app.changed(before);
+    assert!(!app.error, "{}", app.status);
+    assert!(app.xtb_shown().unwrap().stale);
+    assert!(app.xtb_vibration_preview().is_none());
+    let doc = &app.tab.doc;
+    let (_, carbon_hi) = reshiki::scene::selection_bounds(doc, &[carbon]).unwrap();
+    let expected_x = carbon_hi.x + doc.drawing_style.bond_length_world;
+
+    vibrations(&mut app, Action::PlaceSpectrum);
+    assert!(!app.error, "{}", app.status);
+    let (lo, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    assert!((lo.x - expected_x).abs() < 1e-3);
+}
+
+#[test]
+fn the_spectrum_clears_the_shown_3d_model_frame_throughout_animation() {
+    let mut app = opened();
+    app.tab.doc.models[0].size = 600.;
+    vibrations(&mut app, Action::Amplitude(0.6));
+    let drawn = app.display_document();
+    assert_ne!(drawn.models[0].display, Display::TwoD);
+    let (_, initial_hi) = models3d::frame(drawn, &drawn.models[0]).unwrap();
+    let animation = app.xtb_current_animation().unwrap();
+    let farthest_x = animation
+        .frames
+        .iter()
+        .map(|(model, _)| models3d::frame(&animation.doc, model).unwrap().1.x)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let bond = app.tab.doc.drawing_style.bond_length_world;
+    assert!(farthest_x > initial_hi.x + bond);
+
+    vibrations(&mut app, Action::PlaceSpectrum);
+    assert!(!app.error, "{}", app.status);
+    let (lo, _) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+    assert!((lo.x - farthest_x - bond).abs() < 1e-3);
+}
+
+#[test]
+fn the_editable_figure_keeps_the_palette_peaks_and_is_deterministic() {
+    let mut app = opened();
+    let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
+    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = vec![127.68, 14.05, 10.];
+    let result = Arc::new(result);
+    app.tab.doc.science.results.first_mut().unwrap().result = result.clone();
+    app.tab.xtb.palette.show(&result);
+
+    let settings = &mut app.tab.xtb.vibrations;
+    settings.scale = "1.104".into();
+    settings.shape = BandShape::Gaussian;
+    settings.fwhm = 5.;
+    let data = view::SpectrumData::cached(&result, settings);
+    let doc = &app.tab.doc;
+    let at = Point::new(13., 42.);
+    let build = || figure::spectrum(doc, &data, "GFN2-xTB", at);
+    let figure = build();
+    assert_eq!(figure, build());
+    assert_eq!(
+        figure.annotations[0].text,
+        "GFN2-xTB · scale 1.104 · FWHM 5 cm⁻¹ · Gaussian"
+    );
+
+    let curve = &figure.graphics[0];
+    let points: Vec<_> = curve
+        .commands()
+        .iter()
+        .flat_map(|command| command.points())
+        .collect();
+    let bond = doc.drawing_style.bond_length_world;
+    let base = figure.graphics[1].origin.y;
+    let top = data
+        .curve
+        .iter()
+        .chain(&data.peaks)
+        .map(|p| p[1])
+        .fold(0., f64::max);
+    let [weaker, stronger, bend] = data.peaks.as_slice() else {
+        panic!("expected three separated maxima");
+    };
+    assert!(weaker[1] < stronger[1]);
+    for &[wavenumber, intensity] in &data.peaks {
+        let peak_x = points[0].x + data.x(wavenumber) * super::figure::PLOT_WIDTH_BONDS * bond;
+        let peak_y = base - (intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond;
+        assert!(
+            points
+                .iter()
+                .any(|p| p.distance(Point::new(peak_x, peak_y)) < 1e-3)
+        );
+    }
+    for &[wavenumber, intensity] in [stronger, bend] {
+        let peak_x = points[0].x + data.x(wavenumber) * super::figure::PLOT_WIDTH_BONDS * bond;
+        let peak_y = base - (intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond;
+        let text = format!("{wavenumber:.0}");
+        assert!(figure.annotations.iter().any(|a| {
+            a.text == text && (a.centre().x - peak_x).abs() < 1e-3 && a.position.y < peak_y
+        }));
+    }
+    let skipped = format!("{:.0}", weaker[0]);
+    assert!(figure.annotations.iter().all(|a| a.text != skipped));
+}
+
+#[test]
+fn the_ninth_band_keeps_its_sampled_height_without_a_label() {
+    let app = opened();
+    let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
+    let bands = result.vibrations.as_mut().unwrap();
+    bands.frequencies_cm1 = [750, 650, 550, 449, 300, 250, 200, 150, 100]
+        .map(|index| 4000. - 3600. * (f64::from(index) / 899.))
+        .into();
+    bands.ir_intensities_km_mol = vec![100., 100., 100., 99., 100., 100., 100., 100., 100.];
+    let settings = State {
+        shape: BandShape::Gaussian,
+        fwhm: 5.,
+        ..State::default()
+    };
+    let data = view::SpectrumData::cached(&Arc::new(result), &settings);
+    let [frequency, intensity] = data.curve[449];
+    let top = data.curve.iter().map(|p| p[1]).fold(0., f64::max);
+    assert!((intensity / top - 0.99).abs() < 1e-8);
+    let label = format!("{frequency:.0}");
+    assert_eq!(data.peaks.len(), 8);
+    assert!(data.peaks.iter().all(|p| format!("{:.0}", p[0]) != label));
+
+    let doc = &app.tab.doc;
+    let figure = figure::spectrum(doc, &data, "GFN2-xTB", Point::default());
+    let axis = &figure.graphics[1];
+    let bond = doc.drawing_style.bond_length_world;
+    let apex = axis.origin.offset(
+        data.x(frequency) * super::figure::PLOT_WIDTH_BONDS * bond,
+        -(intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond,
+    );
+    assert!(figure.graphics[0].commands().iter().any(|command| {
+        command
+            .points()
+            .iter()
+            .any(|point| point.distance(apex) < 1e-3)
+    }));
+    assert!(figure.annotations.iter().all(|a| a.text != label));
+}
+
+#[test]
+fn wide_spectrum_tick_labels_have_clearance_and_keep_the_minor_ticks() {
+    let app = opened();
+    let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
+    result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![1590., 3469., 9900.];
+    let data = view::SpectrumData::cached(&Arc::new(result), &State::default());
+    let doc = &app.tab.doc;
+    let figure = figure::spectrum(doc, &data, "GFN2-xTB", Point::default());
+    let axis = &figure.graphics[1];
+    let ticks = &figure.graphics[2..];
+    assert_eq!(ticks.len(), 20);
+    let step = super::figure::PLOT_WIDTH_BONDS * doc.drawing_style.bond_length_world * 500. / 9600.;
+    assert!(
+        ticks
+            .windows(2)
+            .all(|pair| (pair[1].origin.x - pair[0].origin.x - step).abs() < 1e-3)
+    );
+    let labels: Vec<_> = figure
+        .annotations
+        .iter()
+        .filter(|a| a.position.y > axis.origin.y && a.text.parse::<u32>().is_ok())
+        .collect();
+    assert!(labels.len() > 1);
+    assert!(
+        labels
+            .windows(2)
+            .all(|pair| pair[0].bounds().1.x < pair[1].bounds().0.x)
+    );
+}
+
+#[test]
+fn spectrum_actions_are_inert_when_the_spectrum_cannot_be_plotted() {
+    for modify in [
+        (|v: &mut reshiki::qcdata::Vibrations| v.ir_intensities_km_mol.clear()) as fn(&mut _),
+        |v| v.ir_intensities_km_mol.fill(0.),
+        |v| *v.frequencies_cm1.first_mut().unwrap() = 20_000.,
+    ] {
+        let mut app = opened();
+        let mut result = (*app.xtb_shown().unwrap().stored.result).clone();
+        modify(result.vibrations.as_mut().unwrap());
+        let result = Arc::new(result);
+        app.tab.doc.science.results.first_mut().unwrap().result = result.clone();
+        app.tab.xtb.palette.show(&result);
+        let before = app.tab.doc.clone();
+        vibrations(&mut app, Action::PlaceSpectrum);
+        for format in ["svg", "pdf"] {
+            let export = app.xtb_vibrations_action(Action::ExportSpectrum(format));
+            assert_eq!(export.units(), 0);
+        }
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[tokio::test]
+async fn spectrum_exports_use_publication_for_svg_and_pdf() {
+    use iced::futures::StreamExt;
+
+    let mut app = opened();
+    app.tab.path = Some("water.rsk".into());
+    app.appearance.export_editable_drawing = true;
+    let before = app.tab.doc.clone();
+    for (format, live_text) in [("svg", false), ("svg", true), ("pdf", false)] {
+        app.appearance.export_svg_live_text = live_text;
+        let task = app.xtb_vibrations_action(Action::ExportSpectrum(format));
+        let mut stream = iced_runtime::task::into_stream(task).unwrap();
+        let Some(iced_runtime::Action::Output(Message::ExportReady(export))) = stream.next().await
+        else {
+            panic!("Expected a prepared {format} spectrum export");
+        };
+        assert_eq!(export.name, format!("water IR spectrum.{format}"));
+        assert!(matches!(export.kind, Kind::Xtb));
+        if format == "svg" {
+            let svg = std::str::from_utf8(&export.bytes).unwrap();
+            assert!(svg.starts_with("<svg") || svg.starts_with("<?xml"));
+            let xml = roxmltree::Document::parse(svg).unwrap();
+            assert_eq!(
+                xml.descendants().any(|node| node.has_tag_name("text")),
+                live_text
+            );
+            assert!(xml.descendants().any(|node| node.has_tag_name("path")));
+        } else {
+            assert!(export.bytes.starts_with(b"%PDF"));
+        }
+        let standalone = reshiki::payload::read(&export.bytes).unwrap().unwrap();
+        assert!(standalone.atoms.is_empty() && standalone.models.is_empty());
+        assert_eq!(standalone.groups.len(), 1);
+        assert!(standalone.annotations.iter().any(|a| a.text == "1590"));
+    }
+    assert_eq!(app.tab.doc, before);
 }
 
 #[test]
