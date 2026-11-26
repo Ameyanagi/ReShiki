@@ -12,6 +12,17 @@ pub(in crate::app) struct Source {
     pub short: String,
     /// `None` uses the 3D model as it is. `Some` supplies coordinates in frame order (Å).
     pub frame: Option<Frame>,
+    /// Electronic state of the xTB result shown by the current 3D model.
+    model_state: Option<(i32, u32)>,
+}
+
+impl Source {
+    pub fn electronic_state(&self) -> Option<(i32, u32)> {
+        self.frame
+            .as_ref()
+            .map(|frame| (frame.charge, frame.multiplicity))
+            .or(self.model_state)
+    }
 }
 
 impl App {
@@ -40,17 +51,20 @@ impl App {
         });
         let model = geometries.clone().find_map(|(result, link, method)| {
             let shows = |xyz: &[[f64; 3]]| model_shows(doc, &link.atoms, xyz);
-            let mut source = if conformers::is_search(result) {
+            let (mut source, state) = if conformers::is_search(result) {
                 let path = result.trajectory.as_ref()?;
                 let count = path.steps();
                 let step = (0..count).find(|&i| {
                     path.frame(i)
                         .is_some_and(|frame| shows(&frame.positions_angstrom))
                 })?;
-                conformer(method, step, count)
+                (
+                    conformer(method, step, count),
+                    (path.charge, path.multiplicity),
+                )
             } else {
                 let output = science.frame(&result.frame)?;
-                if shows(&output.positions_angstrom) {
+                let source = if shows(&output.positions_angstrom) {
                     optimized(method)
                 } else {
                     let input = science.frame(&link.frame)?;
@@ -63,9 +77,12 @@ impl App {
                         label: format!("xTB optimization step {step} · {method}"),
                         short: format!("{method} step {step}"),
                         frame: None,
+                        model_state: None,
                     }
-                }
+                };
+                (source, (output.charge, output.multiplicity))
             };
+            source.model_state = Some(state);
             if let Some(time) = results::finished_local(result) {
                 source
                     .label
@@ -99,6 +116,7 @@ impl App {
                 label,
                 short,
                 frame: None,
+                model_state: None,
             }
         });
         let mut sources = vec![model];
@@ -151,9 +169,10 @@ impl App {
                 && !model_shows(doc, &link.atoms, &input.positions_angstrom)
             {
                 sources.push(Source {
-                    label: "Force-field start geometry (before xTB)".into(),
-                    short: "force-field start geometry (before xTB)".into(),
+                    label: "Start geometry before xTB".into(),
+                    short: "start geometry before xTB".into(),
                     frame: Some(with_atoms(input)),
+                    model_state: None,
                 });
             }
         }
@@ -183,6 +202,7 @@ fn conformer(method: &str, step: usize, count: usize) -> Source {
         label: format!("xTB conformer {k} of {count} · {method}"),
         short: format!("{method} conformer {k}"),
         frame: None,
+        model_state: None,
     }
 }
 
@@ -191,6 +211,7 @@ fn optimized(method: &str) -> Source {
         label: format!("xTB optimized geometry · {method}"),
         short: format!("{method} optimized"),
         frame: None,
+        model_state: None,
     }
 }
 
@@ -217,7 +238,8 @@ mod tests {
         );
         assert_eq!(sources[0].short, "GFN2-xTB optimized");
         assert!(sources[0].frame.is_none());
-        assert_eq!(sources[1].label, "Force-field start geometry (before xTB)");
+        assert_eq!(sources[1].label, "Start geometry before xTB");
+        assert_eq!(sources[1].short, "start geometry before xTB");
         let start = sources[1].frame.as_ref().unwrap();
         assert_eq!(
             start.positions_angstrom,
