@@ -108,10 +108,14 @@ impl App {
                     }
                 })
             });
-        let title = reaction.map_or_else(
-            || "xTB results".into(),
-            |title| format!("xTB results · {title}"),
-        );
+        // Results opened from other programs are not xTB's.
+        let title = match shown.as_ref().map(|s| &s.stored.result.settings) {
+            Some(reshiki::qcdata::Settings::Imported { .. }) => "Calculation results".into(),
+            _ => reaction.map_or_else(
+                || "xTB results".into(),
+                |title| format!("xTB results · {title}"),
+            ),
+        };
         let Some(shown) = shown else {
             return failed.map(|failed| {
                 let mut content =
@@ -145,13 +149,14 @@ impl App {
                 Tone::Muted,
             ));
         }
-        content = content.push(
-            column![
-                text(method.clone()).size(12),
-                line(results::LIMITATIONS, Tone::Muted),
-            ]
-            .spacing(4),
-        );
+        content = content.push(text(method.clone()).size(12));
+        // The semi-empirical caveat is about xTB, not imported results.
+        if matches!(
+            shown.stored.result.settings,
+            reshiki::qcdata::Settings::Xtb(_)
+        ) {
+            content = content.push(line(results::LIMITATIONS, Tone::Muted));
+        }
         if let Some(failed) = failed.filter(|failed| failed.ts().is_none()) {
             content = content.push(self.xtb_failure_card(failed));
         }
@@ -165,6 +170,7 @@ impl App {
             View::Summary => summary(&shown, inspector),
             View::Vibrations => self.xtb_vibrations(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
+            View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Path => self.xtb_ts_path(&shown, inspector),
             View::Log => log(&shown, &method),
@@ -174,7 +180,11 @@ impl App {
         } else {
             scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(BODY_HEIGHT)
+                .height(if view == View::Orbitals {
+                    super::super::orbitals::HEIGHT
+                } else {
+                    BODY_HEIGHT
+                })
                 .into()
         };
         content = content.push(container(body).padding([6, 0]));
@@ -537,6 +547,7 @@ impl App {
                     Tone::Muted,
                 ));
             }
+            View::Orbitals => footer = footer.push(self.xtb_orbitals_note(shown)),
             View::Conformers => {
                 footer = footer.push(super::super::conformers::footer());
             }
