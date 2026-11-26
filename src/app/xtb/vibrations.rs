@@ -16,6 +16,7 @@ use reshiki::document::{Document, Point};
 use reshiki::graphics::{Graphic, IrFigure, Journal, YAxis};
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
+use reshiki::science::Stored;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::{Arc, Weak};
@@ -152,6 +153,7 @@ struct Key {
 /// One preview document; each frame swaps in the model (and its arrows), so
 /// a large drawing is copied once, not once per frame.
 struct Animation {
+    attachment: u64,
     result: Weak<CalcResult>,
     key: Key,
     doc: Document,
@@ -166,6 +168,10 @@ struct Animation {
 }
 
 impl Animation {
+    fn is_for(&self, stored: &Stored) -> bool {
+        self.attachment == stored.attachment && is(&self.result, &stored.result)
+    }
+
     /// Put the frame for the current phase into the preview document.
     fn show(&mut self) {
         let index = ((self.phase * self.frames.len() as f32) as usize)
@@ -360,17 +366,17 @@ impl App {
             .filter(|animation| {
                 animation.key.revision == (self.tab.file_epoch, self.tab.revision)
                     && self
-                        .xtb_vibration_result()
-                        .is_some_and(|result| is(&animation.result, result))
+                        .xtb_vibration_entry()
+                        .is_some_and(|stored| animation.is_for(stored))
             })
     }
 
-    pub(in crate::app) fn xtb_vibration_result(&self) -> Option<&Arc<CalcResult>> {
+    pub(in crate::app) fn xtb_vibration_entry(&self) -> Option<&Stored> {
         if !self.xtb_vibrations_visible() || self.tab.xtb.run.is_some() {
             return None;
         }
-        let result = &self.xtb_shown_entry()?.1.result;
-        result.vibrations.is_some().then_some(result)
+        let (_, stored) = self.xtb_shown_entry()?;
+        stored.result.vibrations.is_some().then_some(stored)
     }
 
     /// Ticks while a mode animates.
@@ -433,7 +439,7 @@ impl App {
         let previous = settings
             .animation
             .as_ref()
-            .filter(|a| is(&a.result, result));
+            .filter(|a| a.is_for(shown.stored));
         if previous.is_some_and(|a| a.key == key) {
             return;
         }
@@ -489,6 +495,7 @@ impl App {
         }
         *doc.models.get_mut(index)? = rest;
         Some(Animation {
+            attachment: shown.stored.attachment,
             result: Arc::downgrade(&shown.stored.result),
             key,
             graphics: doc.graphics.len(),
