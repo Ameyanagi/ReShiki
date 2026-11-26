@@ -147,6 +147,9 @@ pub(crate) struct ExportInput {
     pub(crate) input: PathBuf,
     pub(crate) program: Program,
     pub(crate) job: Job,
+    pub(crate) reactant: Option<PathBuf>,
+    pub(crate) product: Option<PathBuf>,
+    pub(crate) hessian: Option<PathBuf>,
     pub(crate) method: String,
     pub(crate) basis: String,
     pub(crate) charge: i32,
@@ -882,6 +885,7 @@ struct Options {
     threads: Option<OsString>,
     reactant: Option<OsString>,
     product: Option<OsString>,
+    hessian: Option<OsString>,
     form: Vec<OsString>,
     break_: Vec<OsString>,
     images: Option<OsString>,
@@ -984,6 +988,7 @@ fn parse_options(
                 "--threads" => options.threads = Some(value),
                 "--reactant" => options.reactant = Some(value),
                 "--product" => options.product = Some(value),
+                "--hessian" => options.hessian = Some(value),
                 "--form" => options.form.push(value),
                 "--break" => options.break_.push(value),
                 "--images" => options.images = Some(value),
@@ -1240,15 +1245,45 @@ fn export_input(options: &Options) -> Result<Command, String> {
         return Err(format!("{} is available only for ORCA", template.name));
     }
     let job = match option_text("--job", options.job.as_deref())? {
-        Some(text) => Job::parse(text)
-            .ok_or("--job must be single-point, optimize, opt-freq, transition-state or irc")?,
+        Some(text) => Job::parse(text).ok_or(
+            "--job must be single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts",
+        )?,
         None => template.job,
     };
-    if matches!(job, Job::Qst2 | Job::Qst3 | Job::NebTs) {
-        return Err(
-            "QST2, QST3 and NEB-TS need a transition-state result; export them from the app."
-                .into(),
-        );
+    let path = |flag, value: Option<&OsStr>| {
+        value
+            .map(|value| {
+                if value.is_empty() || value == "-" {
+                    Err(format!("{flag} needs a file path"))
+                } else {
+                    Ok(PathBuf::from(value))
+                }
+            })
+            .transpose()
+    };
+    let reactant = path("--reactant", options.reactant.as_deref())?;
+    let product = path("--product", options.product.as_deref())?;
+    let hessian = path("--hessian", options.hessian.as_deref())?;
+    if matches!(
+        (program, job),
+        (Program::Gaussian, Job::Qst2 | Job::Qst3) | (Program::Orca, Job::NebTs)
+    ) {
+        let missing = match (&reactant, &product) {
+            (None, None) => Some("--reactant and --product"),
+            (None, Some(_)) => Some("--reactant"),
+            (Some(_), None) => Some("--product"),
+            (Some(_), Some(_)) => None,
+        };
+        if let Some(missing) = missing {
+            return Err(format!("{} requires {missing}", job.label()));
+        }
+    } else if reactant.is_some() || product.is_some() {
+        return Err("--reactant and --product require Gaussian qst2/qst3 or ORCA neb-ts".into());
+    }
+    if hessian.is_some()
+        && !(program == Program::Orca && matches!(job, Job::TransitionState | Job::Irc))
+    {
+        return Err("--hessian requires --program orca with --job ts or irc".into());
     }
     let output = match &options.output {
         None => Output::Stdout,
@@ -1256,10 +1291,18 @@ fn export_input(options: &Options) -> Result<Command, String> {
         Some(path) if path.is_empty() => return Err("--out needs a file path".into()),
         Some(path) => Output::File(path.into()),
     };
+    if output == Output::Stdout
+        && (hessian.is_some() || (program == Program::Orca && job == Job::NebTs))
+    {
+        return Err("use --out PATH to write the main input and its companion files".into());
+    }
     Ok(Command::ExportInput(ExportInput {
         input: input.into(),
         program,
         job,
+        reactant,
+        product,
+        hessian,
         method: option_text("--method", options.method.as_deref())?
             .unwrap_or(&template.method)
             .into(),
