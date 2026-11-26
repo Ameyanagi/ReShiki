@@ -2055,6 +2055,22 @@ fn reaction_commands_use_the_reaction_chosen_in_roles_with_only_a_product_select
 }
 
 #[test]
+fn xtb_reaction_commands_are_found_by_energy_and_barrier_keywords() {
+    let mut app = app();
+    for (query, name) in [
+        ("barrier", "Find transition state (xTB)"),
+        ("activation", "Find transition state (xTB)"),
+        ("reaction energy", "Reaction energy (xTB)"),
+        ("thermochemistry", "Reaction energy (xTB)"),
+        ("delta", "Reaction energy (xTB)"),
+    ] {
+        search(&mut app, query);
+        let command = &app.commands.items[row(&app, name)];
+        assert_eq!(command.need, Need::XtbReaction, "{query}");
+    }
+}
+
+#[test]
 fn xtb_reaction_commands_are_discoverable_and_use_shared_target_and_build_availability() {
     use crate::app::xtb::{self, ts};
     use reshiki::{document::Arrow, reactions::Reaction};

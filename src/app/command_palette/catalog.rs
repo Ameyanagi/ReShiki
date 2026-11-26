@@ -1615,13 +1615,13 @@ fn analysis(app: &App) -> Vec<Command> {
         (
             "Find transition state (xTB)",
             "Review the reaction before finding its transition state with GFN2-xTB",
-            "xtb gfn2 reaction scheme transition state ts saddle neb",
+            "xtb gfn2 reaction scheme transition state ts saddle neb barrier activation",
             xtb::ts::review::Mode::TransitionState,
         ),
         (
             "Reaction energy (xTB)",
             "Review the reaction before calculating its endpoint energies with GFN2-xTB",
-            "xtb gfn2 reaction scheme energy enthalpy delta",
+            "xtb gfn2 reaction scheme reaction energy thermochemistry enthalpy delta",
             xtb::ts::review::Mode::Energy,
         ),
     ] {

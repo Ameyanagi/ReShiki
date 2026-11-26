@@ -280,6 +280,7 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
 #[test]
 fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
     let (launch, mut done) = completion();
+    done.trace.reactive_start = Some("Li1···Cl2 4.72 → 3.05 Å (+2.1 kcal/mol)".into());
     done.trace.neb_iterations = Some(34);
     done.trace.saddle_steps = Some(7);
     done.trace.times = vec![("CI-NEB".into(), 1.25), ("Worker check".into(), 0.5)];
@@ -303,6 +304,10 @@ fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
     assert!(value("IRC −mode").starts_with("product"));
     assert_eq!(value("Evaluations"), "12");
     assert_eq!(value("Hessians"), "2");
+    assert_eq!(
+        value("Folded the starting conformer"),
+        "Li1···Cl2 4.72 → 3.05 Å (+2.1 kcal/mol)"
+    );
     assert_eq!(value("Time · CI-NEB"), "1.25 s");
     assert_eq!(value("Time · Worker check"), "0.50 s");
     assert!(value("Saddle diagnostic 1").contains("Hessian rebuild"));

@@ -980,6 +980,14 @@ Their atom order defines the map. `--remap-hydrogens` requires two XYZ files.
 With one file, supply at least one bond change in the reactant-to-product
 direction to construct the missing endpoint.
 
+With one XYZ, the search first pulls distant forming pairs toward each other
+(the `--break` pairs when starting from a product), then releases the restraints.
+It uses the relaxed conformer as the barrier reference on that side if the original
+bonds survive and the distant pairs move closer. `--keep-endpoints` skips this step.
+An accepted fold appears on stderr and in the JSON `reactive_start` object, with
+1-based `pairs`, parallel `before_angstrom` and `after_angstrom` arrays, and the
+physical energy change `energy_change_kcal` in kcal/mol. Otherwise the field is `null`.
+
 | Option              | Command | Meaning                                                                                                                |
 | ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `--reactant R.xyz`  | ts      | Read the reactant XYZ.                                                                                                 |
