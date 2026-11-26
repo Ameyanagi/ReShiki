@@ -31,10 +31,9 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
 }
 
 #[test]
-fn reaction_calculate_submenu_reviews_the_clicked_arrow_and_respects_xtb_availability() {
+fn reaction_calculate_command_uses_the_clicked_arrow_and_respects_xtb_availability() {
     use crate::app::xtb::{self, ts};
     use reshiki::purpose::Purpose;
-    use ts::review::Mode;
 
     let (mut app, _) = App::new();
     app.tab.doc = Default::default();
@@ -56,56 +55,45 @@ fn reaction_calculate_submenu_reviews_the_clicked_arrow_and_respects_xtb_availab
         selected: arrows.into(),
         hit: vec![arrows[1]],
     });
-    let pages: Vec<_> = app
+    let commands: Vec<_> = app
         .context_entries(Page::Main)
         .into_iter()
         .filter_map(|entry| match entry {
             Entry::Item {
                 label: "Calculate (xTB)",
-                action: Action::Page(page),
+                action: Action::Run(message),
+                enabled,
                 ..
-            } => Some(page),
+            } => Some((message, enabled)),
             _ => None,
         })
         .collect();
-    assert_eq!(
-        pages,
-        if xtb::available() {
-            vec![Page::CalculateReaction(arrows[1])]
-        } else {
-            vec![]
-        }
-    );
-    let page = Page::CalculateReaction(arrows[1]);
-    assert_eq!(labels(&app, page), ["Reaction energy", "Transition state"]);
-    for (label, transition_state) in [("Reaction energy", false), ("Transition state", true)] {
-        let entry = app
-            .context_entries(page)
-            .into_iter()
-            .find(|entry| matches!(entry, Entry::Item { label: name, .. } if *name == label))
-            .unwrap();
-        let Entry::Item {
-            action: Action::Run(message),
-            enabled,
-            ..
-        } = entry
-        else {
-            panic!("{label} must dispatch the shared review action");
-        };
-        assert_eq!(enabled, xtb::available());
+    if xtb::available() {
+        assert_eq!(commands.len(), 1);
+        let (message, enabled) = &commands[0];
+        assert!(*enabled);
         assert!(matches!(
             message.as_ref(),
-            Message::Xtb(xtb::Action::Ts(ts::Action::Review(mode, Some(id))))
-                if *id == arrows[1] && matches!(mode, Mode::TransitionState) == transition_state
+            Message::Xtb(xtb::Action::Ts(ts::Action::Calculate(id))) if *id == arrows[1]
         ));
+        assert_eq!(
+            crate::app::shortcuts::label(message),
+            Some(xtb::rerun_keys()),
+        );
+    } else {
+        assert!(
+            commands.is_empty(),
+            "builds without xTB hide reaction calculation"
+        );
     }
     app.tab.busy = true;
-    assert_eq!(enabled(&app, page, "Reaction energy"), Some(false));
-    assert_eq!(enabled(&app, page, "Transition state"), Some(false));
+    assert_eq!(
+        enabled(&app, Page::Main, "Calculate (xTB)"),
+        xtb::available().then_some(false)
+    );
     app.tab.busy = false;
     app.tab.doc.arrows[1].purpose = Purpose::Illustration;
     assert!(!labels(&app, Page::Main).contains(&"Calculate (xTB)"));
-    assert_eq!(enabled(&app, page, "Transition state"), Some(false));
 }
 
 #[test]

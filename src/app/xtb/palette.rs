@@ -195,8 +195,13 @@ impl Shown<'_> {
         results::method_line(&self.stored.result, self.frame)
     }
 
-    pub(super) fn rows(&self) -> Vec<(String, String)> {
-        results::summary_rows(&self.stored.result, self.input, self.frame, self.info)
+    pub(super) fn rows(&self, unit: Option<super::EnergyUnit>) -> Vec<(String, String)> {
+        let result = &self.stored.result;
+        let mut rows = results::summary_rows(result, self.input, self.frame, self.info, unit);
+        if let Some(unit) = unit {
+            rows.extend(ts::view::path_rows(result, self.ts, unit));
+        }
+        rows
     }
 
     pub(super) fn step_positions(&self, step: usize) -> Option<Vec<[f64; 3]>> {
@@ -792,7 +797,8 @@ impl App {
                     self.xtb_set_palette_status(StatusKind::Palette, "Copied the xTB log", false);
                     return iced::clipboard::write(log);
                 }
-                let rows = shown.rows();
+                let unit = ts::is_ts(&shown.stored.result).then_some(self.appearance.energy_unit);
+                let rows = shown.rows(unit);
                 let table = results::tsv(&method, &rows);
                 if matches!(action, Action::CopyTable) {
                     self.xtb_set_palette_status(

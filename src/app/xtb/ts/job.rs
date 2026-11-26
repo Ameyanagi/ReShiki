@@ -22,6 +22,9 @@ use reshiki_xtb_worker::{
 };
 use std::{collections::BTreeSet, ops::ControlFlow, sync::Arc, time::Instant};
 
+const THERMO_TEMPERATURE_K: f64 = 298.15;
+const THERMO_IMAGINARY_CM1: f64 = 20.;
+
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
     Stage(Stage),
@@ -45,6 +48,7 @@ pub(super) fn start(
     plan: TsPlan,
     drawn_bonds: Vec<(u64, u64)>,
     images: usize,
+    free_energy: bool,
     cancel: Cancel,
 ) -> impl Stream<Item = Event> + Send + 'static {
     let (tx, rx) = mpsc::unbounded();
@@ -52,7 +56,15 @@ pub(super) fn start(
     let thread = std::thread::Builder::new()
         .name("xtb-ts-run".into())
         .spawn(move || {
-            let result = run(&launch, &plan, &drawn_bonds, images, &cancel, &events);
+            let result = run(
+                &launch,
+                &plan,
+                &drawn_bonds,
+                images,
+                free_energy,
+                &cancel,
+                &events,
+            );
             let _ = events.unbounded_send(Event::Done(result.map(Arc::new)));
             events.close_channel();
         });
@@ -68,6 +80,7 @@ fn run(
     plan: &TsPlan,
     drawn_bonds: &[(u64, u64)],
     images: usize,
+    free_energy: bool,
     cancel: &Cancel,
     tx: &mpsc::UnboundedSender<Event>,
 ) -> Result<Report, Failure> {
@@ -193,6 +206,34 @@ fn run(
         .checked_hessian(&report.ts.positions, &masses)
         .map_err(ts::TsError::from);
     check_cancel(cancel)?;
+    let endpoint_thermo = if free_energy {
+        trace.enter("Endpoint thermochemistry");
+        send(tx, cancel, Event::Stage(Stage::Thermochemistry))?;
+        let worker = workers
+            .first_mut()
+            .ok_or_else(|| Failure::Other("No xTB worker".into()))?;
+        let mut analysis =
+            endpoint_thermochemistry(&launch.frame, &report, &masses, |positions, masses| {
+                if control(cancel, tx).is_break() {
+                    return Err(ts::TsError::Cancelled);
+                }
+                let computed = worker.checked_hessian(positions, masses);
+                if control(cancel, tx).is_break() {
+                    return Err(ts::TsError::Cancelled);
+                }
+                computed.map_err(ts::TsError::from)
+            })
+            .map_err(failed)?;
+        if plan.shape != (1, 1) {
+            analysis.diagnostics.push((
+                "Endpoint convention".into(),
+                "Free energies use the optimized endpoint complexes.".into(),
+            ));
+        }
+        Some(analysis)
+    } else {
+        None
+    };
     trace.finish();
     let evaluations = workers
         .iter()
@@ -209,6 +250,7 @@ fn run(
         Completion {
             report,
             checked,
+            endpoint_thermo,
             engine,
             changes: changes.in_reaction_direction(plan.start),
             evaluations,
@@ -390,12 +432,100 @@ fn pair(a: usize, b: usize) -> (usize, usize) {
 struct Completion {
     report: TsReport,
     checked: Result<Computed, ts::TsError>,
+    endpoint_thermo: Option<EndpointThermo>,
     engine: Engine,
     changes: Changes,
     evaluations: Vec<Evaluation>,
     masses: Vec<f64>,
     seconds: f64,
     trace: SearchTrace,
+}
+
+struct EndpointThermo {
+    corrections: Option<[qcdata::Thermo; 2]>,
+    diagnostics: Vec<(String, String)>,
+}
+
+/// Analyze the exact optimized search endpoints. Electronic energies returned
+/// with these Hessians never replace the energies used by the search.
+fn endpoint_thermochemistry(
+    frame: &Frame,
+    report: &TsReport,
+    masses: &[f64],
+    mut analyze: impl FnMut(&[f64], &[f64]) -> Result<Computed, ts::TsError>,
+) -> Result<EndpointThermo, ts::TsError> {
+    let mut corrections = Vec::with_capacity(2);
+    let mut diagnostics = Vec::with_capacity(2);
+    for (name, endpoint) in [("Reactant", &report.reactant), ("Product", &report.product)] {
+        let correction = analyze(&endpoint.positions, masses).and_then(|computed| {
+            let vibrations = computed.vibrations.ok_or_else(|| {
+                ts::TsError::Failed("The xTB worker returned no vibrational analysis".into())
+            })?;
+            if vibrations
+                .frequencies_cm1
+                .iter()
+                .any(|&frequency| frequency < -THERMO_IMAGINARY_CM1)
+            {
+                return Err(ts::TsError::Failed(format!(
+                    "the optimized endpoint has an imaginary frequency below -{THERMO_IMAGINARY_CM1} cm-1"
+                )));
+            }
+            Ok(thermochemistry(
+                frame,
+                &angstroms(&endpoint.positions),
+                masses,
+                &vibrations.frequencies_cm1,
+            ))
+        });
+        match correction {
+            Ok(correction) => {
+                corrections.push(correction);
+                diagnostics.push((
+                    format!("{name} thermochemistry"),
+                    "298.15 K · 101325 Pa · quasi-RRHO".into(),
+                ));
+            }
+            Err(ts::TsError::Cancelled) => return Err(ts::TsError::Cancelled),
+            Err(error) => diagnostics.push((
+                format!("{name} thermochemistry"),
+                format!("Free energy unavailable: {error}"),
+            )),
+        }
+    }
+    Ok(EndpointThermo {
+        corrections: corrections.try_into().ok(),
+        diagnostics,
+    })
+}
+
+fn thermochemistry(
+    frame: &Frame,
+    positions_angstrom: &[[f64; 3]],
+    masses_amu: &[f64],
+    frequencies_cm1: &[f64],
+) -> qcdata::Thermo {
+    use qcdata::vibrational::{ThermoInput, rotational_symmetry_number, thermochemistry};
+
+    let labels: Vec<_> = frame
+        .numbers
+        .iter()
+        .enumerate()
+        .map(|(index, &number)| {
+            u32::from(number) * 1000 + u32::from(frame.isotopes.get(index).copied().unwrap_or(0))
+        })
+        .collect();
+    thermochemistry(&ThermoInput {
+        frequencies_cm1,
+        masses_amu,
+        positions_angstrom,
+        symmetry_number: rotational_symmetry_number(&labels, positions_angstrom, masses_amu),
+        linear: None,
+        temperature_k: THERMO_TEMPERATURE_K,
+        pressure_pa: 101_325.,
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: THERMO_IMAGINARY_CM1,
+    })
 }
 
 /// Search counters and wall times are independent of the visible progress text.
@@ -445,6 +575,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     let Completion {
         report,
         checked,
+        endpoint_thermo,
         engine,
         changes,
         evaluations,
@@ -495,6 +626,18 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     result.task = qcdata::Task::TransitionState;
     // The search's refined saddle is the energy used by every barrier display.
     result.energy_hartree = Some(report.ts.energy);
+    // Reuse the existing TS frequency analysis; endpoint corrections and this
+    // correction share the same temperature, isotope and symmetry policy.
+    result.thermo = endpoint_thermo.as_ref().and_then(|_| {
+        result.vibrations.as_ref().map(|vibrations| {
+            thermochemistry(
+                &transition,
+                &transition.positions_angstrom,
+                &masses,
+                &vibrations.frequencies_cm1,
+            )
+        })
+    });
     result.input_frame = Some(launch.frame.hash());
     result.endpoints = Some(qcdata::Endpoints {
         reactant: reactant.hash(),
@@ -531,10 +674,17 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     result
         .validate(&transition)
         .map_err(|error| Failure::Other(error.to_string()))?;
+    let mut diagnostic_rows = diagnostics(&report, &worker_frequencies, &result, &trace);
+    let endpoint_corrections = endpoint_thermo.and_then(|analysis| {
+        diagnostic_rows.extend(analysis.diagnostics);
+        analysis.corrections
+    });
     let extras = Extras {
+        endpoint_energies_hartree: [report.reactant.energy, report.product.energy],
+        endpoint_thermo: endpoint_corrections,
         saddle_converged: report.saddle_converged,
         num_imaginary: report.imaginary,
-        diagnostics: diagnostics(&report, &worker_frequencies, &result, &trace),
+        diagnostics: diagnostic_rows,
         image_positions: report
             .path
             .iter()

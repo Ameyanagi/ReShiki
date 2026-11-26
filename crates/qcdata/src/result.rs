@@ -115,6 +115,16 @@ pub struct TransitionStateRun {
     /// Chemistry and export labels captured when the search was requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TransitionStateContext>,
+    /// Whether endpoint thermochemistry was requested for this search.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub free_energy: bool,
+    /// Electronic energies of the search's optimized [reactant, product], in hartree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_energies_hartree: Option<[f64; 2]>,
+    /// Corrections for those same endpoints, in [reactant, product] order.
+    /// Absent when not requested or when either frequency analysis failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_thermo: Option<[Thermo; 2]>,
     pub saddle_converged: bool,
     pub imaginary: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -153,6 +163,22 @@ pub struct MappedAtom {
 }
 
 impl TransitionStateRun {
+    /// Optimized product minus reactant electronic energy, independent of the saddle check.
+    pub fn reaction_energy_hartree(&self) -> Option<f64> {
+        let [reactant, product] = self.endpoint_energies_hartree?;
+        let delta = product - reactant;
+        delta.is_finite().then_some(delta)
+    }
+
+    /// Optimized product minus reactant Gibbs energy at the saved analysis conditions.
+    pub fn reaction_gibbs_hartree(&self) -> Option<f64> {
+        let [reactant, product] = self.endpoint_energies_hartree?;
+        let [reactant_thermo, product_thermo] = self.endpoint_thermo.as_ref()?;
+        let delta = (product + product_thermo.gibbs_correction_hartree)
+            - (reactant + reactant_thermo.gibbs_correction_hartree);
+        delta.is_finite().then_some(delta)
+    }
+
     fn validate(&self, result: &CalcResult, atoms: usize) -> Result<(), Error> {
         let valid_pairs = |pairs: &[[MappedAtom; 2]]| {
             pairs.len() <= atoms * atoms
@@ -164,6 +190,21 @@ impl TransitionStateRun {
         };
         if result.task != Task::TransitionState
             || self.arrow == Some(0)
+            || self.endpoint_energies_hartree.is_some_and(|energies| {
+                result.endpoints.is_none() || energies.iter().any(|energy| !energy.is_finite())
+            })
+            || self.endpoint_thermo.as_ref().is_some_and(|corrections| {
+                !self.free_energy
+                    || self.endpoint_energies_hartree.is_none()
+                    || corrections.iter().any(|thermo| {
+                        (thermo.temperature_k - 298.15).abs() > 1e-6
+                            || (thermo.pressure_pa - 101_325.).abs() > 1e-3
+                            || (thermo.frequency_scale - 1.).abs() > 1e-12
+                            || (thermo.rotor_cutoff_cm1 - 50.).abs() > 1e-12
+                            || (thermo.imaginary_cutoff_cm1 - 20.).abs() > 1e-12
+                            || thermo.symmetry_number == 0
+                    })
+            })
             || self.context.as_ref().is_some_and(|context| {
                 [&context.reactant_chemistry, &context.product_chemistry]
                     .into_iter()
@@ -210,6 +251,12 @@ impl TransitionStateRun {
                     .sum::<usize>()
         };
         size_of::<Self>()
+            + self.endpoint_thermo.as_ref().map_or(0, |corrections| {
+                corrections
+                    .iter()
+                    .map(|thermo| thermo.point_group.as_ref().map_or(0, String::len))
+                    .sum::<usize>()
+            })
             + self.context.as_ref().map_or(0, |context| {
                 context.reactant_chemistry.len()
                     + context.product_chemistry.len()
@@ -745,7 +792,14 @@ impl CalcResult {
                 ));
             }
         }
-        if let Some(t) = &self.thermo {
+        for t in self.thermo.iter().chain(
+            self.run
+                .as_ref()
+                .and_then(|run| run.transition_state.as_ref())
+                .and_then(|search| search.endpoint_thermo.as_ref())
+                .into_iter()
+                .flatten(),
+        ) {
             if [
                 t.temperature_k,
                 t.pressure_pa,

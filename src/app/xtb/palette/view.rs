@@ -848,7 +848,7 @@ fn key_tiles<'a>(
 
 /// Label and value rows: two columns at the bottom, one in the inspector.
 fn summary<'a>(shown: &Shown<'a>, inspector: bool, previous: bool) -> Element<'a, Message> {
-    let rows = results::summary_grid_rows(&shown.stored.result, shown.input, shown.frame);
+    let rows = results::summary_grid_rows(&shown.stored.result, shown.input, shown.frame, None);
     let label_width = if inspector { 104. } else { LABEL_WIDTH };
     let column_of = |rows: &[(String, String)]| {
         Column::with_children(rows.iter().map(|(label, content)| {

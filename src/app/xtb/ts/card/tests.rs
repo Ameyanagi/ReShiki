@@ -9,6 +9,7 @@ use iced::advanced::{
 #[cfg(not(target_arch = "wasm32"))]
 use iced::{Rectangle, Size};
 use reshiki::document::{Arrow, Point};
+use reshiki::reactions::ts_plan;
 use reshiki::reactions::{Participant, Reaction};
 use std::collections::BTreeMap;
 
@@ -38,6 +39,11 @@ impl ViewHarness {
             .expect("headless renderer"),
             viewport: Rectangle::with_size(Size::new(600., 2400.)),
         }
+    }
+
+    pub fn at_width(mut self, width: f32) -> Self {
+        self.viewport.width = width;
+        self
     }
 
     fn operate(&self, view: &mut Element<'_, Message>, operation: &mut dyn Operation) {
@@ -371,21 +377,17 @@ async fn predict_view_switches_reaction_controls_with_the_selected_chemistry_arr
     let atom = doc.atoms[0].id;
     let mut app = app(doc, arrow);
     app.xtb.page = xtb::Page::Xtb;
-    let ui = ViewHarness::new().await;
+    let ui = ViewHarness::new().await.at_width(330.);
     let reaction = ui.inspect(app.predict_inspector());
     assert!(reaction.semantics.duplicate_ids.is_empty());
-    for id in ["xtb-ts-review", "xtb-ts-find", "xtb-ts-export-input"] {
-        assert!(
+    for id in ["xtb-ts-review", "xtb-ts-calculate", "xtb-ts-barrier"] {
+        assert_eq!(
             reaction.semantics.nodes.iter().any(|node| node.id == id),
-            "the selected reaction must produce {id} in Predict"
+            xtb::available(),
+            "{id} must follow xTB availability"
         );
     }
-    assert!(
-        reaction
-            .texts
-            .iter()
-            .any(|text| text.starts_with("Reaction (xTB) · "))
-    );
+    assert!(reaction.texts.iter().any(|text| text == "C5H8O → C5H8O"));
     for selection in [vec![atom], vec![arrow, atom], vec![]] {
         app.tab.selected = selection;
         let molecule = ui.inspect(app.predict_inspector());
@@ -397,20 +399,16 @@ async fn predict_view_switches_reaction_controls_with_the_selected_chemistry_arr
                 .all(|node| !node.id.starts_with("xtb-ts-")),
             "a molecule or mixed selection must replace the reaction card"
         );
-        assert!(
-            molecule
-                .texts
-                .iter()
-                .all(|text| !text.starts_with("Reaction (xTB) · "))
-        );
+        assert!(molecule.texts.iter().all(|text| text != "C5H8O → C5H8O"));
     }
     app.tab.selected = vec![arrow];
-    assert!(
+    assert_eq!(
         ui.inspect(app.predict_inspector())
             .semantics
             .nodes
             .iter()
-            .any(|node| node.id == "xtb-ts-find"),
+            .any(|node| node.id == "xtb-ts-calculate"),
+        xtb::available(),
         "returning to the arrow restores the reaction controls"
     );
     app.tab.doc.arrows[0].kind = "resonance".into();

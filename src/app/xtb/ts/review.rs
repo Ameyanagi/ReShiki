@@ -6,7 +6,7 @@ use super::super::{
 use super::{Action as TsAction, energy::Species};
 use crate::app::help::{Placement, modal};
 use crate::app::reaction_mapping::{Preview, calculate, with_roles};
-use crate::app::workspace::{accessible_command, control};
+use crate::app::workspace::accessible_command;
 use crate::app::{App, InspectorTab, Message};
 use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{Space, column, row, scrollable, text};
@@ -38,9 +38,8 @@ pub(crate) enum Mode {
 pub(crate) enum Action {
     Ready(u64, Result<Arc<Proposal>, String>),
     Charge(usize, String),
-    Multiplicity(usize, String),
+    Unpaired(usize, String),
     PathPoints(String),
-    Task(CalcTask),
     Accept,
     EditMap,
     Cancel,
@@ -163,6 +162,7 @@ pub(in crate::app::xtb) struct Dialog {
     inputs: Vec<species::Input>,
     path_points: String,
     task: CalcTask,
+    free_energy: bool,
     mapping: Mapping,
     preview: Option<Preview>,
     changes: Result<Changes, TsPlanError>,
@@ -277,6 +277,54 @@ pub(in crate::app) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Messa
 }
 
 impl App {
+    pub(in crate::app) fn xtb_reaction_supports_barrier(&self, arrow: u64) -> bool {
+        if !reaction_arrow(&self.tab.doc, arrow) {
+            return false;
+        }
+        let Ok(source) = with_roles(&self.tab.doc, arrow) else {
+            return false;
+        };
+        let Ok(reaction) = reshiki::reaction_mapping::reaction(&source, arrow) else {
+            return false;
+        };
+        reaction.ready()
+            && reaction
+                .reactants
+                .iter()
+                .chain(&reaction.products)
+                .all(|participant| participant.coefficient == 1)
+            && species::shape(&source, reaction)
+                .is_ok_and(|shape| matches!(shape, (1, 1 | 2) | (2, 1)))
+    }
+
+    pub(in crate::app) fn xtb_can_calculate_reaction(&self, arrow: u64) -> bool {
+        let choices = &self.tab.xtb.ts_card;
+        available()
+            && reaction_arrow(&self.tab.doc, arrow)
+            && !self.tab.busy
+            && !self.xtb_running()
+            && !self.tab.xtb.energy_state.in_progress()
+            && !self.ts_review_open()
+            && self.tab.optimization.is_none()
+            && self.tab.model_job.is_none()
+            && !self.tab.drawing_edit_active()
+            && (choices.reaction_energy
+                || choices.free_energy
+                || (choices.barrier && self.xtb_reaction_supports_barrier(arrow)))
+    }
+
+    pub(super) fn xtb_calculate_reaction(&mut self, arrow: u64) -> Task<Message> {
+        if !self.xtb_can_calculate_reaction(arrow) {
+            return Task::none();
+        }
+        let mode = if self.tab.xtb.ts_card.barrier && self.xtb_reaction_supports_barrier(arrow) {
+            Mode::TransitionState
+        } else {
+            Mode::Energy
+        };
+        self.xtb_review_open(mode, Some(arrow))
+    }
+
     pub(in crate::app) fn xtb_review_target(&self) -> Option<u64> {
         let doc = &self.tab.doc;
         if let Some(arrow) = self.selected_reaction_arrow() {
@@ -422,7 +470,12 @@ impl App {
             Mapping::Drawing
         };
         let id = NEXT_SHEET.fetch_add(1, Ordering::Relaxed);
-        let task = self.tab.xtb.energy_state.task(self.xtb.settings.task);
+        let free_energy = self.tab.xtb.ts_card.free_energy;
+        let task = if free_energy {
+            CalcTask::OptFreq
+        } else {
+            CalcTask::Optimize
+        };
         let mut dialog = Dialog {
             id,
             at: self.review_stamp(),
@@ -431,6 +484,7 @@ impl App {
             rerun,
             explicit,
             task,
+            free_energy,
             inputs,
             path_points: "15".into(),
             mapping,
@@ -516,16 +570,12 @@ impl App {
                     input.charge = value;
                 }
             }
-            Action::Multiplicity(index, value) => {
+            Action::Unpaired(index, value) => {
                 if let Some(input) = dialog.inputs.get_mut(index) {
-                    input.multiplicity = value;
+                    input.unpaired = value;
                 }
             }
             Action::PathPoints(value) => dialog.path_points = value,
-            Action::Task(task) if dialog.mode == Mode::Energy && task.optimizes() => {
-                dialog.task = task
-            }
-            Action::Task(_) => {}
             Action::EditMap => {
                 if matches!(dialog.mapping, Mapping::Finding) {
                     return Task::none();
@@ -602,7 +652,14 @@ impl App {
                     Err(error) => return self.review_error(error),
                 };
                 let unpaired = start.multiplicity - 1;
-                self.xtb_ts_begin(arrow, plan, images, start.charge, unpaired)
+                self.xtb_ts_begin(
+                    arrow,
+                    plan,
+                    images,
+                    start.charge,
+                    unpaired,
+                    dialog.free_energy,
+                )
             }
             Mode::Energy => self.xtb_reaction_energy_begin(arrow, species, dialog.task),
         }
@@ -697,7 +754,7 @@ impl App {
                 row![
                     text(&input.label).size(13).width(Length::Fill),
                     field("Charge", &input.charge, Action::Charge),
-                    field("Multiplicity", &input.multiplicity, Action::Multiplicity),
+                    field("Unpaired electrons", &input.unpaired, Action::Unpaired),
                 ]
                 .spacing(10)
                 .align_y(Alignment::Center),
@@ -723,29 +780,17 @@ impl App {
                 .align_y(Alignment::Center),
             );
         }
+        if dialog.free_energy {
+            content = content.push(line(
+                if dialog.mode == Mode::TransitionState {
+                    "Report ΔG and ΔG‡ at 298.15 K"
+                } else {
+                    "Report ΔG at 298.15 K"
+                },
+                Tone::Muted,
+            ));
+        }
         if dialog.mode == Mode::Energy {
-            let button = |task, label: &'static str| {
-                let active = task == dialog.task;
-                reshiki::accessibility::button(
-                    format!("ts.review.{task:?}"),
-                    label,
-                    text(label).size(12),
-                )
-                .checked(active)
-                .padding([6, 10])
-                .style(control(active))
-                .on_press(send(Action::Task(task)))
-            };
-            content = content.push(
-                row![
-                    button(CalcTask::Optimize, "Optimize"),
-                    button(CalcTask::OptFreq, "Opt + freq")
-                ]
-                .spacing(8),
-            );
-            if dialog.task == CalcTask::OptFreq {
-                content = content.push(line("Report ΔG at 298.15 K", Tone::Muted));
-            }
             if let Mapping::Failed(reason) = &dialog.mapping {
                 content = content.push(line(reason, Tone::Muted));
             } else if let Err(reason) = &dialog.changes

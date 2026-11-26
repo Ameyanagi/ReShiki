@@ -3,7 +3,7 @@ use super::{Action, Session};
 use crate::app::workspace::{accessible_command, control, panel};
 use crate::app::xtb::palette::{Action as PaletteAction, Shown};
 use crate::app::xtb::tone::{Tone, line};
-use crate::app::xtb::{Action as XtbAction, state};
+use crate::app::xtb::{Action as XtbAction, EnergyUnit, state};
 use crate::app::{App, Message};
 use iced::widget::{canvas, column, container, row, text};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
@@ -29,17 +29,16 @@ impl Presentation {
         self.refined_kcal.is_some()
     }
 
-    #[cfg(any(test, all(not(target_arch = "wasm32"), feature = "xtb")))]
-    pub fn status_line(&self) -> String {
-        match self.barrier_line() {
+    pub fn status_line(&self, unit: EnergyUnit) -> String {
+        match self.barrier_line(unit) {
             Some(barrier) => format!("Transition state · {barrier}"),
             None => "No reliable transition state found.".into(),
         }
     }
 
-    pub fn barrier_line(&self) -> Option<String> {
+    pub fn barrier_line(&self, unit: EnergyUnit) -> Option<String> {
         self.refined_kcal
-            .map(|value| format!("ΔE‡ {} kcal/mol", state::signed(value, 1)))
+            .map(|value| format!("ΔE‡ {}", unit.format(value)))
     }
 }
 
@@ -132,13 +131,13 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| frequencies.and_then(|f| f.iter().copied().find(|&f| f < -IMAGINARY_CM1)));
     let frequency_check = match (count, frequency) {
         (Some(1), Some(frequency)) => {
-            format!("One imaginary frequency {:.0}i cm⁻¹", frequency.abs())
+            format!("✓ one imaginary frequency {:.0}i cm⁻¹", frequency.abs())
         }
-        (Some(1), None) => "One imaginary frequency".into(),
+        (Some(1), None) => "✓ one imaginary frequency".into(),
         _ => "Transition state not verified".into(),
     };
     let verification = if connects {
-        format!("{frequency_check} · connects reactant and product ✓")
+        format!("{frequency_check} · ✓ path connects reactant and product")
     } else {
         frequency_check
     };
@@ -269,8 +268,8 @@ fn profile_note(positions: bool, stale: bool) -> Option<&'static str> {
     }
 }
 
-fn selection_label(delta: f64) -> String {
-    format!("ΔE {} kcal/mol", state::signed(delta, 1))
+fn selection_label(delta: f64, unit: EnergyUnit) -> String {
+    format!("ΔE {}", unit.format(delta))
 }
 
 fn relative_energies(energies: &[f64], saddle: Option<f64>) -> (Vec<f64>, Option<f64>) {
@@ -284,7 +283,105 @@ fn relative_energies(energies: &[f64], saddle: Option<f64>) -> (Vec<f64>, Option
     )
 }
 
+/// The optimized endpoints remain valid reaction-energy evidence even if the
+/// saddle was not verified. Older saves kept these same endpoints in the band.
+pub(in crate::app::xtb) fn reaction_energy_kcal(result: &CalcResult) -> Option<f64> {
+    let hartree = super::saved_search(result)
+        .and_then(|search| search.reaction_energy_hartree())
+        .or_else(|| {
+            let [reactant, .., product] = super::path_energies(result) else {
+                return None;
+            };
+            Some(product - reactant)
+        })?;
+    let kcal = hartree * KCAL_PER_HARTREE;
+    kcal.is_finite().then_some(kcal)
+}
+
+pub(in crate::app::xtb) fn reaction_gibbs_kcal(result: &CalcResult) -> Option<f64> {
+    let delta = super::saved_search(result)?.reaction_gibbs_hartree()? * KCAL_PER_HARTREE;
+    delta.is_finite().then_some(delta)
+}
+
+/// A Gibbs barrier needs the same verified saddle as the electronic barrier,
+/// plus TS and reactant corrections evaluated under matching conditions.
+pub(in crate::app::xtb) fn barrier_gibbs_kcal(result: &CalcResult) -> Option<f64> {
+    if !presentation(result, None).reliable() {
+        return None;
+    }
+    let search = super::saved_search(result)?;
+    let [reactant, _] = search.endpoint_energies_hartree?;
+    let [reactant_thermo, _] = search.endpoint_thermo.as_ref()?;
+    let ts_thermo = result.thermo.as_ref()?;
+    if (ts_thermo.temperature_k - reactant_thermo.temperature_k).abs() > 1e-6
+        || (ts_thermo.pressure_pa - reactant_thermo.pressure_pa).abs() > 1e-3
+        || (ts_thermo.frequency_scale - reactant_thermo.frequency_scale).abs() > 1e-12
+        || (ts_thermo.rotor_cutoff_cm1 - reactant_thermo.rotor_cutoff_cm1).abs() > 1e-12
+        || (ts_thermo.imaginary_cutoff_cm1 - reactant_thermo.imaginary_cutoff_cm1).abs() > 1e-12
+    {
+        return None;
+    }
+    let delta = (result.energy_hartree? + ts_thermo.gibbs_correction_hartree
+        - reactant
+        - reactant_thermo.gibbs_correction_hartree)
+        * KCAL_PER_HARTREE;
+    delta.is_finite().then_some(delta)
+}
+
+/// Copy and export the same reactant-relative quantities shown on Path.
+pub(in crate::app::xtb) fn path_rows(
+    result: &CalcResult,
+    session: Option<&Session>,
+    unit: EnergyUnit,
+) -> Vec<(String, String)> {
+    let (deltas, _) = relative_energies(super::path_energies(result), None);
+    let mut rows: Vec<_> = deltas
+        .iter()
+        .enumerate()
+        .map(|(index, &delta)| {
+            let point: String = if index == 0 {
+                "R".into()
+            } else if index + 1 == deltas.len() {
+                "P".into()
+            } else {
+                format!("Image {}", index + 1)
+            };
+            (format!("{point} ΔE"), unit.format(delta))
+        })
+        .collect();
+    if let Some(delta) = presentation(result, session).refined_kcal {
+        rows.push(("TS‡ ΔE".into(), unit.format(delta)));
+    }
+    if let Some(delta) = barrier_gibbs_kcal(result) {
+        rows.push(("TS‡ ΔG (298.15 K)".into(), unit.format(delta)));
+    }
+    if let Some(delta) = reaction_gibbs_kcal(result) {
+        rows.push(("P ΔG (298.15 K)".into(), unit.format(delta)));
+    }
+    rows
+}
+
 impl App {
+    fn xtb_ts_path_chart(&self, shown: &Shown<'_>, refined_delta: Option<f64>) -> PathChart {
+        let result = &shown.stored.result;
+        let energies = super::path_energies(result);
+        let (deltas, _) = relative_energies(energies, None);
+        PathChart {
+            deltas,
+            refined_delta,
+            selected: self.xtb_step().filter(|&index| index < energies.len()),
+            climbing: climbing_image(
+                energies,
+                super::saved_search(result)
+                    .map(|search| search.climbing_image)
+                    .or_else(|| shown.ts.map(|s| s.extras.climbing)),
+            ),
+            interactive: !self.xtb_running(),
+            stale: shown.stale,
+            unit: self.appearance.energy_unit,
+        }
+    }
+
     pub(in crate::app::xtb) fn xtb_ts_path<'a>(
         &'a self,
         shown: &Shown<'a>,
@@ -292,16 +389,12 @@ impl App {
     ) -> Element<'a, Message> {
         let result = &shown.stored.result;
         let energies = super::path_energies(result);
-        let climbing = climbing_image(
-            energies,
-            super::saved_search(result)
-                .map(|search| search.climbing_image)
-                .or_else(|| shown.ts.map(|s| s.extras.climbing)),
-        );
-        let selected = self.xtb_step().filter(|&index| index < energies.len());
         let presentation = presentation(result, shown.ts);
-        let (deltas, _) = relative_energies(energies, None);
-        let refined_delta = presentation.refined_kcal;
+        let chart = self.xtb_ts_path_chart(shown, presentation.refined_kcal);
+        let selected = chart.selected;
+        let deltas = chart.deltas.clone();
+        let interactive = chart.interactive;
+        let unit = chart.unit;
         let positions = shown.ts.is_some_and(|session| {
             session.extras.image_positions.len() == energies.len()
                 && session
@@ -310,15 +403,6 @@ impl App {
                     .iter()
                     .all(|image| image.len() == shown.frame.numbers.len())
         });
-        let interactive = !self.xtb_running();
-        let chart = PathChart {
-            deltas: deltas.clone(),
-            refined_delta,
-            selected,
-            climbing,
-            interactive,
-            stale: shown.stale,
-        };
         let chart = reshiki::accessibility::image(
             "xtb-ts-path-profile",
             chart.accessible_name(),
@@ -326,14 +410,14 @@ impl App {
         );
         let mut profile = column![chart].spacing(6);
         if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
-            profile = profile.push(text(selection_label(delta)).size(12));
+            profile = profile.push(text(selection_label(delta, unit)).size(12));
         }
         if !deltas.is_empty() {
             // The buttons also make every canvas point keyboard accessible.
             let images = row(deltas.iter().enumerate().map(|(index, &delta)| {
                 reshiki::accessibility::button(
                     format!("xtb-ts-image-{index}"),
-                    selection_label(delta),
+                    selection_label(delta, unit),
                     text(if index == 0 {
                         "R"
                     } else if index + 1 == deltas.len() {
@@ -396,6 +480,7 @@ impl App {
                     "Animate the saved imaginary mode",
                     "Animate imaginary mode",
                 )
+                .style(crate::appearance::secondary)
                 .on_press_maybe(interactive.then(|| {
                     Message::Xtb(XtbAction::Vibrations(
                         crate::app::xtb::vibrations::Action::AnimateImaginary,
@@ -414,20 +499,37 @@ impl App {
                     .filter(|&number| number > 0)
             })
             .collect();
-        let changes = self.xtb_ts_bond_changes(shown);
-        for (kind, pair) in changes {
-            if let Some(value) = bond_length(shown.frame, pair) {
-                details = details.push(
+        let geometry = self.xtb_ts_bond_geometry(shown, &maps);
+        if !geometry.is_empty() {
+            let distance = |value: String| {
+                text(value)
+                    .size(12)
+                    .width(42)
+                    .align_x(iced::alignment::Horizontal::Right)
+            };
+            let mut table = column![
+                text("Bond distances (Å)").size(12),
+                row![
+                    text("Bond").size(11).width(Length::Fill),
+                    distance("R".into()),
+                    distance("TS".into()),
+                    distance("P".into()),
+                ]
+                .spacing(6),
+            ]
+            .spacing(5);
+            for [bond, reactant, ts, product] in geometry {
+                table = table.push(
                     row![
-                        text(format!("{kind} {}", bond_label(shown.frame, pair, &maps)))
-                            .size(12)
-                            .width(Length::Fill),
-                        text(format!("{value:.2} Å")).size(12),
+                        text(bond).size(12).width(Length::Fill),
+                        distance(reactant),
+                        distance(ts),
+                        distance(product),
                     ]
-                    .spacing(10)
-                    .wrap(),
+                    .spacing(6),
                 );
             }
+            details = details.push(table);
         }
         if !presentation.reliable() {
             details = details.push(
@@ -442,7 +544,7 @@ impl App {
             );
         }
         details = details.push(line(
-            "Semi-empirical barriers are rough, often several kcal/mol off. Refine with DFT before quoting them.",
+            "Semi-empirical barriers are rough estimates. Refine with DFT before quoting them.",
             Tone::Muted,
         ));
         details = details.push(
@@ -473,7 +575,7 @@ impl App {
 
     /// Compare the saved optimized endpoints, so reopened results use the same
     /// covalent-radius criterion as the search instead of the current drawing.
-    fn xtb_ts_bond_changes(&self, shown: &Shown<'_>) -> Vec<(&'static str, [usize; 2])> {
+    fn xtb_ts_bond_geometry(&self, shown: &Shown<'_>, maps: &[Option<u32>]) -> Vec<[String; 4]> {
         let Some(endpoints) = shown.stored.result.endpoints else {
             return vec![];
         };
@@ -484,8 +586,30 @@ impl App {
         ) else {
             return vec![];
         };
-        changed_bonds(reactant, product)
+        bond_geometry_rows(reactant, shown.frame, product, maps)
     }
+}
+
+fn bond_geometry_rows(
+    reactant: &Frame,
+    ts: &Frame,
+    product: &Frame,
+    maps: &[Option<u32>],
+) -> Vec<[String; 4]> {
+    let distance = |frame: &Frame, pair| {
+        bond_length(frame, pair).map_or_else(|| "—".into(), |value| format!("{value:.2}"))
+    };
+    changed_bonds(reactant, product)
+        .into_iter()
+        .map(|(kind, pair)| {
+            [
+                format!("{kind} {}", bond_label(ts, pair, maps)),
+                distance(reactant, pair),
+                distance(ts, pair),
+                distance(product, pair),
+            ]
+        })
+        .collect()
 }
 
 fn bond_label(frame: &Frame, [a, b]: [usize; 2], maps: &[Option<u32>]) -> String {
@@ -559,6 +683,7 @@ struct PathChart {
     climbing: usize,
     interactive: bool,
     stale: bool,
+    unit: EnergyUnit,
 }
 
 impl PathChart {
@@ -591,7 +716,24 @@ impl PathChart {
 
     fn refined_ts_marker(&self) -> Option<(f64, String)> {
         self.refined_delta
-            .map(|delta| (delta, format!("TS‡ {}", state::signed(delta, 1))))
+            .map(|delta| (delta, format!("TS‡ {}", self.unit.number(delta))))
+    }
+
+    fn axis_title(&self) -> String {
+        format!("ΔE from reactants ({})", self.unit.label())
+    }
+
+    fn endpoint_marker(&self, index: usize) -> Option<String> {
+        let point = if index == 0 {
+            "R"
+        } else if index + 1 == self.deltas.len() {
+            "P"
+        } else {
+            return None;
+        };
+        self.deltas
+            .get(index)
+            .map(|&delta| format!("{point} {}", self.unit.number(delta)))
     }
 
     fn accessible_name(&self) -> String {
@@ -600,10 +742,13 @@ impl PathChart {
             self.deltas.len()
         );
         if let Some((_, marker)) = self.refined_ts_marker() {
-            name.push_str(&format!(" · {marker} kcal/mol"));
+            name.push_str(&format!(" · {marker} {}", self.unit.label()));
         }
         if let Some(delta) = self.selected.and_then(|index| self.deltas.get(index)) {
-            name.push_str(&format!(" · Selected {}", selection_label(*delta)));
+            name.push_str(&format!(
+                " · Selected {}",
+                selection_label(*delta, self.unit)
+            ));
         }
         name
     }
@@ -661,7 +806,7 @@ impl canvas::Program<Message> for PathChart {
             reshiki::color_contrast::TEXT_TARGET,
         );
         frame.fill_text(canvas::Text {
-            content: "ΔE from reactants (kcal/mol)".into(),
+            content: self.axis_title(),
             position: Point::new(Self::LEFT, 3.),
             color: muted,
             size: 10.into(),
@@ -675,12 +820,22 @@ impl canvas::Program<Message> for PathChart {
         let plot_height = (bounds.height - Self::TOP - Self::BOTTOM).max(1.);
         let y = |energy: f64| Self::TOP + ((hi - energy) / range) as f32 * plot_height;
         let grid = Color { a: 0.25, ..muted };
-        for energy in [hi, 0., lo] {
+        let mut ticks = vec![hi, 0., lo];
+        ticks.dedup();
+        for energy in ticks {
             let start = Point::new(Self::LEFT, y(energy));
             frame.stroke(
                 &canvas::Path::line(start, Point::new(bounds.width - Self::RIGHT, start.y)),
                 canvas::Stroke::default().with_color(grid).with_width(1.),
             );
+            frame.fill_text(canvas::Text {
+                content: self.unit.number(energy),
+                position: Point::new(Self::LEFT - 7., start.y - 6.),
+                color: muted,
+                size: 10.into(),
+                align_x: iced::alignment::Horizontal::Right.into(),
+                ..Default::default()
+            });
         }
         let points: Vec<_> = self
             .deltas
@@ -726,20 +881,17 @@ impl canvas::Program<Message> for PathChart {
                 &canvas::Path::circle(point, if selected { 3.8 } else { 2.6 }),
                 ink,
             );
-            let label = if index == 0 {
-                Some("R".into())
-            } else if index + 1 == self.deltas.len() {
-                Some("P".into())
-            } else {
-                None
-            };
-            if let Some(content) = label {
+            if let Some(content) = self.endpoint_marker(index) {
                 frame.fill_text(canvas::Text {
                     content,
                     position: Point::new(point.x, point.y + 7.),
                     color: ink,
                     size: 11.into(),
-                    align_x: iced::alignment::Horizontal::Center.into(),
+                    align_x: if index == 0 {
+                        iced::alignment::Horizontal::Left.into()
+                    } else {
+                        iced::alignment::Horizontal::Right.into()
+                    },
                     ..Default::default()
                 });
             }

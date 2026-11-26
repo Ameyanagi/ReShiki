@@ -1021,6 +1021,28 @@ async fn manual_settings_snapshots() {
 }
 
 #[test]
+fn energy_unit_defaults_persists_and_restores() {
+    let legacy: Settings = serde_json::from_str("{}").unwrap();
+    assert_eq!(legacy.energy_unit, EnergyUnit::KcalPerMol);
+    let mut app = app();
+    let _ = app.settings_action(Action::EnergyUnit(EnergyUnit::KjPerMol));
+    let saved = serde_json::to_string(&app.appearance).unwrap();
+    let reopened: Settings = serde_json::from_str(&saved).unwrap();
+    assert_eq!(reopened.energy_unit, EnergyUnit::KjPerMol);
+    let _ = app.settings_action(Action::Restore(Section::Calculations));
+    assert_eq!(app.appearance.energy_unit, EnergyUnit::KcalPerMol);
+}
+
+#[test]
+fn energy_unit_formats_signed_differences_in_each_unit() {
+    assert_eq!(EnergyUnit::KcalPerMol.format(27.3), "27.3 kcal/mol");
+    assert_eq!(EnergyUnit::KjPerMol.format(27.3), "114.2 kJ/mol");
+    assert_eq!(EnergyUnit::Ev.format(-23.0605), "−1.00 eV");
+    assert!((EnergyUnit::KjPerMol.convert_kcal(1.) - 4.184).abs() < 1e-12);
+    assert!((EnergyUnit::Ev.convert_kcal(23.0605) - 1.).abs() < 1e-12);
+}
+
+#[test]
 fn ruler_units_have_their_own_setting_default_roundtrip_and_restore() {
     use crate::canvas::guides::Unit as RulerUnit;
     let legacy: Settings =

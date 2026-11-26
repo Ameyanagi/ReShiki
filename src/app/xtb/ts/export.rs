@@ -1,6 +1,7 @@
 //! Feed the existing input-export dialog from the saved TS, without depending
 //! on the current drawing or the geometry temporarily previewed on the canvas.
 use crate::app::qc_export::Dialog;
+use crate::app::xtb::EnergyUnit;
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::qc_input::{self, Geometry, Job, Output, Settings};
@@ -75,9 +76,27 @@ impl Source {
         settings: &Settings,
         stem: &str,
         generator: &str,
+        unit: EnergyUnit,
     ) -> Result<Output, String> {
+        let mut settings = settings.clone();
+        let mut energies = Vec::new();
+        if let Some(barrier) = super::view::presentation(&self.result, None).barrier_line(unit) {
+            energies.push(barrier);
+        }
+        if let Some(delta) = super::view::reaction_energy_kcal(&self.result) {
+            energies.push(format!("ΔE {}", unit.format(delta)));
+        }
+        if let Some(delta) = super::view::barrier_gibbs_kcal(&self.result) {
+            energies.push(format!("ΔG‡ (298.15 K) {}", unit.format(delta)));
+        }
+        if let Some(delta) = super::view::reaction_gibbs_kcal(&self.result) {
+            energies.push(format!("ΔG (298.15 K) {}", unit.format(delta)));
+        }
+        if !energies.is_empty() {
+            settings.title = format!("{} · {}", settings.title, energies.join(" · "));
+        }
         qc_input::write(
-            settings,
+            &settings,
             &Geometry {
                 frame: &self.frame,
                 reactant: self.reactant.as_deref(),

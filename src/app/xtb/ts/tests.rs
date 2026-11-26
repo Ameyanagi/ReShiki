@@ -57,7 +57,7 @@ fn append_reaction(doc: &mut Document, name: &str) -> u64 {
 fn start() -> (App, u64) {
     let (doc, arrow) = card::tests::claisen();
     let mut app = reaction_app(doc, arrow);
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
     let plan = ts_plan::plan(&app.tab.doc, arrow).unwrap();
     assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, plan.start_atoms);
     assert!(app.tab.model_job.is_some());
@@ -143,7 +143,7 @@ fn generated_ts_model_clears_the_arrow_and_all_participants() {
         .collect::<Vec<_>>();
     let bounds = reshiki::scene::selections_bounds(&doc, &objects);
     let mut app = reaction_app(doc, arrow);
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
     finish_model(&mut app);
 
     let doc = &app.tab.doc;
@@ -198,6 +198,8 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         transition_state: None,
     });
     let extras = Extras {
+        endpoint_energies_hartree: [-5., -5.02],
+        endpoint_thermo: None,
         image_positions: [&reactant, &transition, &product]
             .map(|frame| frame.positions_angstrom.clone())
             .to_vec(),
@@ -231,6 +233,48 @@ fn complete(app: &mut App) {
 }
 
 #[test]
+fn transition_state_status_follows_energy_units_and_clears_on_molecule_selection() {
+    use crate::appearance::EnergyUnit;
+
+    let (mut app, _) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    assert_eq!(app.status, "Transition state · ΔE‡ 26.5 kcal/mol");
+    let _ = app.update(Message::Settings(
+        crate::app::settings_page::Action::EnergyUnit(EnergyUnit::KjPerMol),
+    ));
+    assert_eq!(app.status, "Transition state · ΔE‡ 110.9 kJ/mol");
+    let atom = app.tab.doc.reactions[0].reactants[0].atoms[0];
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![atom])));
+    assert!(!app.status.contains("Transition state"), "{}", app.status);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
+async fn narrow_reaction_card_shows_endpoint_energies_in_the_selected_unit() {
+    use crate::appearance::EnergyUnit;
+
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    let ui = card::tests::ViewHarness::new().await.at_width(330.);
+    for (unit, barrier, reaction) in [
+        (EnergyUnit::KcalPerMol, "26.5", "−12.6"),
+        (EnergyUnit::KjPerMol, "110.9", "−52.5"),
+        (EnergyUnit::Ev, "1.15", "−0.54"),
+    ] {
+        app.appearance.energy_unit = unit;
+        let card = ui.inspect(app.xtb_reaction_card(arrow));
+        let displayed = |value| card.texts.iter().position(|text| text == value).unwrap();
+        assert!(displayed("Barrier ΔE‡") < displayed("Recalculate"));
+        assert!(displayed(barrier) < displayed("Recalculate"));
+        assert!(displayed(reaction) < displayed("Recalculate"));
+        assert!(displayed(unit.label()) < displayed("Recalculate"));
+        assert!(card.semantics.duplicate_ids.is_empty());
+    }
+}
+
+#[test]
 fn selecting_reactions_switches_the_palette_and_restores_its_path_preview() {
     let (mut app, a) = start();
     finish_model(&mut app);
@@ -243,7 +287,7 @@ fn selecting_reactions_switches_the_palette_and_restores_its_path_preview() {
 
     select(&mut app, b);
     assert!(app.xtb_bottom_palette().is_none());
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    send(&mut app, XtbAction::Ts(Action::Calculate(b)));
     finish_model(&mut app);
     complete(&mut app);
     let b_result = Arc::clone(&app.xtb_shown().unwrap().stored.result);
@@ -354,7 +398,7 @@ async fn worker_and_storage_failures_show_before_the_previous_reaction_result() 
         let mut candidate = app.tab.doc.clone();
         let other = append_reaction(&mut candidate, "Unrelated reactant");
         app.try_replace_document(candidate, vec![arrow]).unwrap();
-        send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+        send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
         let run = app.tab.xtb.run.as_ref().unwrap();
         let serial = run.serial;
         if storage_failure {
@@ -428,7 +472,7 @@ async fn deselecting_keeps_the_failed_rerun_on_the_shown_reaction() {
     let (mut app, arrow) = start();
     finish_model(&mut app);
     complete(&mut app);
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
     let serial = app.tab.xtb.run.as_ref().unwrap().serial;
     send(
         &mut app,
@@ -527,7 +571,7 @@ fn stale_result_keeps_its_saved_title_and_export_name() {
     let (mut doc, arrow) = card::tests::claisen();
     name_reactant(&mut doc, arrow, "allyl vinyl ether");
     let mut app = reaction_app(doc, arrow);
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
     finish_model(&mut app);
     complete(&mut app);
     let mut doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
@@ -1137,7 +1181,7 @@ fn reopened_light_and_full_paths_become_stale_after_an_opposite_side_map_edit() 
 fn path_image_previews_a_hydrogen_nearest_its_new_parent() {
     let (doc, arrow) = card::tests::hydrogen_transfer();
     let mut app = reaction_app(doc, arrow);
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
     assert!(app.ts_review_visible());
     send(
         &mut app,
@@ -1255,12 +1299,12 @@ fn background_ts_completion_preserves_the_foreground_predict_page_and_dock() {
 
 #[test]
 fn cancel_drops_generation_and_a_late_finish_cannot_attach() {
-    let (mut app, _) = start();
+    let (mut app, arrow) = start();
     send(&mut app, XtbAction::Cancel);
     assert!(app.tab.model_job.is_none());
     assert!(!app.xtb_running());
     assert!(app.tab.doc.models.is_empty());
-    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
     finish_model(&mut app);
     let run = app.tab.xtb.run.as_ref().unwrap();
     let serial = run.serial;

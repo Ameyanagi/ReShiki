@@ -1,6 +1,7 @@
 //! The results palette's content, kept free of iced: the method line, the
 //! Summary rows, the optimization steps, the log and file sizes, built from
 //! a stored result and what this session still knows about its run.
+use super::EnergyUnit;
 use super::state::{
     Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, capitalized, formula, scientific, signed,
     symbol,
@@ -362,10 +363,19 @@ pub(crate) fn summary_rows(
     input: &Frame,
     output: &Frame,
     info: Option<&RunInfo>,
+    unit: Option<EnergyUnit>,
 ) -> Vec<(String, String)> {
     let mut rows: Vec<_> = key_numbers(result, info)
         .into_iter()
         .map(|(label, value)| {
+            let value = if label == "Energy" {
+                unit.zip(result.energy_hartree)
+                    .map_or(value, |(unit, energy)| {
+                        unit.format(energy * KCAL_PER_MOL_PER_HARTREE)
+                    })
+            } else {
+                value
+            };
             let label = match label {
                 "Energy" => "Total energy",
                 "Gap" => "HOMO–LUMO gap",
@@ -374,7 +384,7 @@ pub(crate) fn summary_rows(
             (label.into(), value)
         })
         .collect();
-    rows.extend(summary_grid_rows(result, input, output));
+    rows.extend(summary_grid_rows(result, input, output, unit));
     if let Some(run) = result.run.as_ref().filter(|run| run.seconds > 0.) {
         rows.push((
             "Run time".into(),
@@ -398,6 +408,7 @@ pub(super) fn summary_grid_rows(
     result: &CalcResult,
     input: &Frame,
     output: &Frame,
+    unit: Option<EnergyUnit>,
 ) -> Vec<(String, String)> {
     let mut rows = Vec::new();
     if let Some(charges) = result.charges.first() {
@@ -476,10 +487,15 @@ pub(super) fn summary_grid_rows(
         let zpve = thermo.zero_point_energy_hartree;
         rows.push((
             "ZPVE".into(),
-            format!(
-                "{} Eh ({} kcal/mol)",
-                signed(zpve, 6),
-                signed(zpve * KCAL_PER_MOL_PER_HARTREE, 2)
+            unit.map_or_else(
+                || {
+                    format!(
+                        "{} Eh ({} kcal/mol)",
+                        signed(zpve, 6),
+                        signed(zpve * KCAL_PER_MOL_PER_HARTREE, 2)
+                    )
+                },
+                |unit| unit.format(zpve * KCAL_PER_MOL_PER_HARTREE),
             ),
         ));
         if let Some(energy) = result.energy_hartree {
@@ -489,7 +505,10 @@ pub(super) fn summary_grid_rows(
             ] {
                 rows.push((
                     format!("{quantity} ({:.2} K)", thermo.temperature_k),
-                    format!("{} Eh", signed(energy + correction, 6)),
+                    unit.map_or_else(
+                        || format!("{} Eh", signed(energy + correction, 6)),
+                        |unit| unit.format((energy + correction) * KCAL_PER_MOL_PER_HARTREE),
+                    ),
                 ));
             }
         }

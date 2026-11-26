@@ -74,7 +74,9 @@ fn ts_source_writes_the_saved_saddle_endpoints_and_hessian() {
     let [template, ..] = qc_input::builtin_templates();
     let mut settings = Settings::from_template(&template, Program::Orca, 0, 1, "TS".into());
     settings.job = Job::TransitionState;
-    let output = source.output(&settings, "test", "ReShiki test").unwrap();
+    let output = source
+        .output(&settings, "test", "ReShiki test", EnergyUnit::KcalPerMol)
+        .unwrap();
     assert!(output.main.text.contains("OptTS"));
     assert!(output.main.text.contains("imaginary frequency -350 cm-1"));
     assert!(
@@ -87,10 +89,52 @@ fn ts_source_writes_the_saved_saddle_endpoints_and_hessian() {
 
     settings.program = Program::Gaussian;
     settings.job = Job::Qst3;
-    let output = source.output(&settings, "test", "ReShiki test").unwrap();
+    let output = source
+        .output(&settings, "test", "ReShiki test", EnergyUnit::KcalPerMol)
+        .unwrap();
     assert!(output.main.text.contains("QST3"));
     for z in ["0.000000", "0.200000", "0.400000"] {
         assert!(output.main.text.contains(z));
+    }
+}
+
+#[test]
+fn ts_export_titles_follow_the_current_app_energy_unit() {
+    let mut source = source();
+    let energy = |delta| -1. + (delta - 26.5) / 627.509_474_063;
+    Arc::make_mut(&mut source.result).trajectory = Some(reshiki::qcdata::Trajectory {
+        rmsd_to_best_angstrom: vec![],
+        numbers: source.frame.numbers.clone(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        positions_angstrom: vec![],
+        energies_hartree: vec![energy(0.), energy(30.2), energy(-8.2)],
+        labels: vec![],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
+    });
+    let (mut app, _) = App::new();
+    let _ = app.open_qc_export_source(source);
+    for (unit, barrier, reaction) in [
+        (EnergyUnit::KjPerMol, "110.9 kJ/mol", "−34.3 kJ/mol"),
+        (EnergyUnit::Ev, "1.15 eV", "−0.36 eV"),
+    ] {
+        app.appearance.energy_unit = unit;
+        for program in [
+            Program::Gaussian,
+            Program::Orca,
+            Program::Gamess,
+            Program::Xyz,
+        ] {
+            send(&mut app, ExportAction::Program(program));
+            let output = app.qc_output().unwrap();
+            assert!(output.main.text.contains(&format!("ΔE‡ {barrier}")));
+            assert!(output.main.text.contains(&format!("ΔE {reaction}")));
+            assert!(!output.main.text.contains("kcal/mol"));
+            assert!(output.main.text.contains("0.200000"));
+        }
     }
 }
 
@@ -131,7 +175,9 @@ fn reopened_light_source_exports_without_hessian_and_explains_it_for_orca() {
     let [template, ..] = qc_input::builtin_templates();
     let mut settings = Settings::from_template(&template, Program::Orca, 0, 1, "TS".into());
     settings.job = Job::TransitionState;
-    let output = source.output(&settings, "test", "ReShiki test").unwrap();
+    let output = source
+        .output(&settings, "test", "ReShiki test", EnergyUnit::KcalPerMol)
+        .unwrap();
     assert!(output.companions.is_empty());
     assert!(
         output
