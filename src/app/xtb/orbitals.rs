@@ -20,7 +20,7 @@ use reshiki::science::{self, Stored};
 use std::sync::Arc;
 
 mod compute;
-pub(crate) mod levels;
+mod levels;
 mod view;
 
 pub(crate) use view::HEIGHT;
@@ -37,7 +37,7 @@ const COMPUTED: usize = 4;
 /// Orbitals recomputed on each side of the frontier, beyond those asked for.
 const AROUND: u32 = 8;
 
-pub(crate) fn send(action: Action) -> Message {
+fn send(action: Action) -> Message {
     Message::Xtb(super::Action::Orbitals(action))
 }
 
@@ -171,7 +171,7 @@ impl Default for Orbitals {
 
 /// The chosen orbital: a result, a spin column and a level.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Choice {
+struct Choice {
     pub result: String,
     pub column: usize,
     pub index: usize,
@@ -222,7 +222,7 @@ impl Drop for Computing {
 }
 
 /// What the tab shows for the palette's result.
-pub(crate) struct Target {
+struct Target {
     pub key: String,
     pub columns: Vec<Column>,
     /// The result's current 3D model, by index, when it shows the
@@ -236,7 +236,7 @@ pub(crate) struct Target {
 impl App {
     /// The Orbitals tab is on screen: the palette shows it docked at the
     /// bottom and expanded, or in the inspector's xTB page.
-    pub(in crate::app) fn xtb_orbitals_visible(&self) -> bool {
+    fn xtb_orbitals_visible(&self) -> bool {
         self.xtb_palette_visible()
             && self.tab.xtb.palette.view == View::Orbitals
             && if self.xtb.dock.inspector {
@@ -249,7 +249,7 @@ impl App {
     }
 
     /// The tab's result, its levels and where its surface would go.
-    pub(super) fn xtb_orbital_target(&self) -> Option<Target> {
+    fn xtb_orbital_target(&self) -> Option<Target> {
         let shown = self.xtb_shown()?;
         let result = &shown.stored.result;
         let orbitals = result.orbitals.as_ref()?;
@@ -333,7 +333,7 @@ impl App {
 
     /// The chosen orbital of `target`: the placed figure's, else the tab's,
     /// else the HOMO (the first level without occupations).
-    pub(super) fn xtb_orbital_choice(&self, target: &Target) -> Choice {
+    fn xtb_orbital_choice(&self, target: &Target) -> Choice {
         let chosen = self
             .tab
             .xtb
@@ -939,7 +939,7 @@ impl App {
     }
 
     /// What the tab says about the work in flight for the shown figure.
-    pub(super) fn xtb_orbital_busy(&self, target: &Target) -> Option<String> {
+    fn xtb_orbital_busy(&self, target: &Target) -> Option<String> {
         let state = &self.tab.xtb.orbitals;
         if state
             .computing
@@ -963,7 +963,7 @@ impl App {
     }
 
     /// The row of the chosen orbital is at hand: Place can keep it.
-    pub(super) fn xtb_orbital_ready(&self, target: &Target, choice: &Choice) -> bool {
+    fn xtb_orbital_ready(&self, target: &Target, choice: &Choice) -> bool {
         let spin = target.columns[choice.column].spin;
         let Some(model) = target.model else {
             return false;
@@ -976,7 +976,7 @@ impl App {
     }
 
     /// The tab's isovalue and look: the placed figure's, else the preview's.
-    pub(super) fn xtb_orbital_settings(&self, target: &Target) -> (f32, Look) {
+    fn xtb_orbital_settings(&self, target: &Target) -> (f32, Look) {
         let state = &self.tab.xtb.orbitals;
         target
             .placed
