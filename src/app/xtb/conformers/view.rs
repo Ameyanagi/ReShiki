@@ -376,7 +376,7 @@ impl App {
             .push(stereo_cell)
             .spacing(8);
             reshiki::accessibility::button(format!("xtb-conformer-{}", r.step), name, cells)
-                .padding([3, 8])
+                .padding([1, 8])
                 .width(Length::Fill)
                 .checked(active)
                 .style(control(active))
