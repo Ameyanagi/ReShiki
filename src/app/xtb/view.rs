@@ -312,7 +312,10 @@ impl App {
             column![
                 label("Task"),
                 tasks,
-                line("Orbitals are coming in the Orbitals tab.", Tone::Muted),
+                line(
+                    "Every run shows its orbitals in the results' Orbitals tab.",
+                    Tone::Muted
+                ),
                 label("Method"),
                 methods,
             ]

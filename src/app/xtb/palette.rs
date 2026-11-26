@@ -101,6 +101,11 @@ struct Sizes {
 }
 
 impl Palette {
+    /// The shown result's identity, to notice another result shown.
+    pub(super) fn shown_id(&self) -> usize {
+        self.result.first().map_or(0, |weak| weak.as_ptr() as usize)
+    }
+
     fn clear_result(&mut self) {
         self.ts_views
             .retain(|view| view.result.iter().any(|weak| weak.strong_count() > 0));
@@ -251,7 +256,8 @@ impl App {
         })
     }
 
-    pub(super) fn xtb_show_result(&mut self, result: &Arc<CalcResult>) {
+    /// Open the palette on this result, restoring a reaction's path preview.
+    pub(in crate::app) fn xtb_show_result(&mut self, result: &Arc<CalcResult>) {
         if self.tab.xtb.palette.show(result)
             && let Some(index) = self.xtb_step()
         {

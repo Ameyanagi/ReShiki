@@ -16,7 +16,7 @@ pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequenci
 /// The gap under which the electronic structure counts as near-degenerate.
 const NEAR_DEGENERATE_EV: f64 = 0.1;
 /// CODATA 2022, as the worker converts its gap.
-const EV_PER_HARTREE: f64 = 27.211386245981;
+pub(crate) const EV_PER_HARTREE: f64 = 27.211386245981;
 /// Debye per e·bohr.
 const DEBYE_PER_E_BOHR: f64 = 2.541746473;
 const KCAL_PER_MOL_PER_HARTREE: f64 = 627.509474;
@@ -34,6 +34,7 @@ pub(crate) enum View {
     Path,
     Vibrations,
     Steps,
+    Orbitals,
     Log,
 }
 
@@ -54,6 +55,13 @@ impl View {
         if result.task == Task::Optimize && energies(result).len() > 1 {
             views.push(Self::Steps);
         }
+        if result
+            .orbitals
+            .as_ref()
+            .is_some_and(|o| !o.alpha.energies_hartree.is_empty())
+        {
+            views.push(Self::Orbitals);
+        }
         views.push(Self::Log);
         views
     }
@@ -65,6 +73,7 @@ impl View {
             Self::Path => "Path",
             Self::Vibrations => "Vibrations",
             Self::Steps => "Steps",
+            Self::Orbitals => "Orbitals",
             Self::Log => "Log",
         }
     }
@@ -90,7 +99,13 @@ pub(crate) struct RunInfo {
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
 pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
-    let mut parts = vec![provenance.method.clone().unwrap_or_else(|| "xTB".into())];
+    // Files from other programs may not name their method.
+    let mut parts: Vec<String> = provenance
+        .method
+        .clone()
+        .or_else(|| matches!(result.settings, Settings::Xtb(_)).then(|| "xTB".into()))
+        .into_iter()
+        .collect();
     parts.push(match &provenance.program_version {
         Some(version) => format!("{} {version}", provenance.program),
         None => provenance.program.clone(),

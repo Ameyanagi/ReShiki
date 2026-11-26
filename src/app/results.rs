@@ -768,6 +768,11 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Discard => None,
                 Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
                 Action::Conformers(..) | Action::Palette(..) | Action::Ts(..) => None,
+                Action::Orbitals(
+                    super::xtb::orbitals::Action::Computed(..)
+                    | super::xtb::orbitals::Action::Built(..),
+                ) => Some(Completion::Xtb),
+                Action::Orbitals(..) => None,
                 #[cfg(not(target_arch = "wasm32"))]
                 Action::Vibrations(super::xtb::VibrationsAction::Recomputed(..)) => {
                     Some(Completion::Xtb)
