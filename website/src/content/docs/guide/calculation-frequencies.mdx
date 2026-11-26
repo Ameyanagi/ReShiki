@@ -1,23 +1,59 @@
 ---
-title: Frequencies and thermochemistry
-description: Vibrational frequencies, IR spectra and thermochemistry from an xTB Hessian.
+title: Frequencies and IR spectra
+description: Vibrational frequencies, animated normal modes, IR spectra and thermochemistry from an xTB Hessian.
 ---
 
-:::caution[In progress]
-The Vibrations tab is being built and is not on the `xtb/next` branch yet. Until it lands, the **Opt + freq** task on the Calculate card is off. This page describes the agreed design and will be updated when it lands. From the command line, frequencies already work: `reshiki --cli calc --task hessian water.xyz` (see [xTB from scripts](/guide/calculation-scripts/#command-line)).
+import Screenshot from "../../../components/Screenshot.astro";
+
+:::caution[Not released yet]
+Frequencies are on the `xtb/next` branch and are not in a released version of ReShiki yet.
 :::
 
-**Opt + freq** optimizes the molecule, then calculates the analytic Hessian with the same method. Up to 200 atoms.
+ReShiki calculates frequencies from the analytic Hessian of the chosen xTB method, for molecules of up to 200 atoms.
 
-## What you will see
+## Run a frequency calculation
 
-- **Vibrations** tab of the results palette: one row per mode, such as `1590 cm⁻¹ · IR 127.7`, and the IR spectrum beside it (Lorentzian lines, adjustable width and scale factor).
-- Select a mode to animate it on the 3D model. **Show arrows** draws the displacements as vector arrows for figures; a mode can be exported as a multi-frame XYZ movie.
-- Imaginary frequencies are listed in red, negative, with a banner: one imaginary frequency means the structure is not a minimum. **Push along mode and re-optimize** moves the structure along that mode and optimizes again; a cancelled or unconverged rerun never replaces the accepted structure.
-- Thermochemistry at a chosen temperature and pressure (default 298.15 K, 1 atm): zero-point energy, enthalpy, entropy and free energy, with the point group and symmetry number.
+In **Predict → xTB**, choose the task:
+
+- **Opt + freq** optimizes the molecule with Tight convergence, then calculates the frequencies at the optimized geometry. Use this for a new structure.
+- **Frequencies** calculates them at the current 3D model, for a structure that is already optimized.
+
+Then click **Run**. The results open in the **Vibrations** tab of the results palette.
+
+## Read the Vibrations tab
+
+<Screenshot
+  src="/manual/xtb-vibrations.webp"
+  alt="Acetic acid after Opt + freq with GFN2-xTB. The Vibrations tab lists modes such as 19 cm⁻¹ · IR 0.6 and 657 cm⁻¹ · IR 185.7, shows the IR spectrum from 4000 to 0 cm⁻¹ with peaks labelled 1803, 1159 and 657, Pause, Show arrows, Amplitude 0.30 Å, Speed 1.00×, Export mode as XYZ movie…, Lorentzian or Gaussian, FWHM 15 cm⁻¹ and Scale factor 1.00."
+/>
+
+- The list shows one row per mode with its frequency (cm⁻¹) and IR intensity (km/mol). Imaginary modes come first, in red, as negative numbers.
+- Select a mode to animate it on the 3D model. **Pause** / **Play**, **Amplitude** and **Speed** control the animation.
+- **Show arrows** draws the displacements on the model; **Add to drawing** adds them as ordinary pen paths you can restyle (one Undo step).
+- **Export mode as XYZ movie…** writes the selected mode as a multi-frame XYZ file.
+- The IR spectrum uses **Lorentzian** or **Gaussian** bands with the **FWHM** and **Scale factor** you set. Click a peak to select its mode.
+
+## Put the IR spectrum in a figure
+
+**Place in drawing** adds the spectrum next to the molecule as editable vector objects: the curve, axis, tick labels, peak labels and a caption such as `GFN2-xTB · scale 1.00 · FWHM 15 cm⁻¹ · Lorentzian`. It is one Undo step and exports to SVG, PDF and the other figure formats like any drawing. **Export SVG…** and **Export PDF…** save the spectrum on its own.
+
+<Screenshot
+  src="/manual/xtb-ir-figure.webp"
+  alt="The IR spectrum of acetic acid placed in the drawing beside its 3D model: caption GFN2-xTB · scale 1.00 · FWHM 15 cm⁻¹ · Lorentzian, peaks labelled 1803, 1159 and 657, axis from 4000 to 0 labelled Wavenumber (cm⁻¹). The Vibrations tab below has Place in drawing, Export SVG… and Export PDF…."
+/>
+
+## Thermochemistry
+
+Open **Thermochemistry** in the Vibrations tab for the zero-point vibrational energy (ZPVE), enthalpy, entropy, Gibbs free energy and heat capacity, with the point group and symmetry number. ReShiki uses the quasi-RRHO treatment that xtb uses by default: low modes below 50 cm⁻¹ are treated as free rotors. Enter another temperature or pressure to recompute them without a new calculation.
+
+## Imaginary frequencies
+
+One or more imaginary frequencies mean the structure is not a minimum. **Push along mode and re-optimize** moves the structure 0.3 Å along the imaginary mode and runs **Opt + freq** again. The structure changes only if that optimization converges; Cancel leaves it as it was.
+
+## File size
+
+The file keeps the frequencies, IR intensities and thermochemistry. The normal-mode vectors are not saved: ReShiki recomputes them when you open the Vibrations tab, and shows them only if the recomputed frequencies match the saved ones. In a build without the xTB engine, the modes cannot be shown.
 
 ## How good the numbers are
 
-xTB frequencies are approximate. They reliably tell a minimum from a saddle point and give the shape of an IR spectrum; individual bands can be off by tens of cm⁻¹. For thermochemistry in a paper, recompute frequencies with DFT; the [input export](/guide/calculation-files/) writes an **Opt + freq** input for Gaussian, ORCA or GAMESS from the xTB geometry.
-
-Example, water with GFN2-xTB (axtb 0.2.0): 1590.13 cm⁻¹ (bend, IR 127.68 km/mol), 3468.58 and 3480.11 cm⁻¹ (stretches), zero-point energy 0.019453 Eh, point group C2v.
+xTB frequencies are approximate. They reliably tell a minimum from a saddle point and give the shape of an IR spectrum; individual bands can be off by tens of cm⁻¹. For thermochemistry in a paper, recompute the frequencies with DFT; the [input export](/guide/calculation-files/) writes an **Opt + freq** input for Gaussian, ORCA or GAMESS from the xTB geometry.
