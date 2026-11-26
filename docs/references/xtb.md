@@ -17,10 +17,10 @@ be checked.
 ## What to cite
 
 For every calculation ReShiki runs, cite ReShiki (`ReShiki`), axtb (`Axtb`) and the method:
-GFN2-xTB is `Bannwarth2019GFN2`, GFN-FF is `Spicher2020GFNFF` and g-xTB is
-`Froitzheim2025gxTB`. `Bannwarth2021Xtb` covers the xtb program whose conventions axtb
-reproduces. For results opened from another program's files, cite ReShiki and that program
-and method instead of axtb. Then add:
+GFN2-xTB is `Bannwarth2019GFN2`, GFN-FF is `Spicher2020GFNFF` (plus `Rose2024GFNFFLnAn` for
+lanthanides and actinides) and g-xTB is `Froitzheim2025gxTB`. `Bannwarth2021Xtb` covers the
+xtb program whose conventions axtb reproduces. For results opened from another program's
+files, cite ReShiki and that program and method instead of axtb. Then add:
 
 | Feature                                                            | Also cite                                                                                                                                                                                   |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,10 +29,10 @@ and method instead of axtb. Then add:
 | Geometry optimization, ANC                                         | Grimme2017ANCopt, Lindh1995Hessian (with the default model Hessian), Banerjee1985PRFO                                                                                                       |
 | Geometry optimization, L-BFGS                                      | Liu1989LBFGS, Armijo1966LineSearch                                                                                                                                                          |
 | Conformer search                                                   | Riniker2015ETKDG, Wang2020ETKDGv3, Butina1999Clustering, and what minimized the starts: Halgren1999MMFF94s (default), Halgren1996MMFF, Rappe1992UFF, or the GFN-FF or GFN2-xTB method paper |
-| Frequencies and thermochemistry                                    | Grimme2012QRRHO                                                                                                                                                                             |
+| Frequencies and thermochemistry                                    | Grimme2012QRRHO, FernandezRamos2007Symmetry                                                                                                                                                 |
 | IR spectrum                                                        | nothing beyond the method                                                                                                                                                                   |
 | Orbital energies and coefficients                                  | nothing beyond the method                                                                                                                                                                   |
-| Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes, Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                                                                        |
+| Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes (and Doi & Koide 1991, see the verification notes), Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                     |
 | Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Bitzek2006FIRE, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC                                           |
 | Results read from another program's files                          | ReShiki and that program (for ORCA 6, Neese2025ORCA6)                                                                                                                                       |
 
@@ -47,6 +47,9 @@ labels and capabilities: `crates/qcdata/src/capabilities.rs`.
   transition states.
 - **Spicher2020GFNFF**: Spicher & Grimme, Angew. Chem. Int. Ed. 59, 15665 (2020),
   doi:10.1002/anie.202004239. GFN-FF, used alone and for minimizing conformer starts.
+- **Rose2024GFNFFLnAn**: Rose et al., Inorg. Chem. 63, 19364 (2024),
+  doi:10.1021/acs.inorgchem.4c03215. GFN-FF's lanthanide and actinide extension, included in
+  axtb's GFN-FF.
 - **Froitzheim2025gxTB**: Froitzheim, Müller, Hansen & Grimme, ChemRxiv preprint (2025),
   doi:10.26434/chemrxiv-2025-bjxvt. g-xTB; ReShiki ships g-xTB 2.0.1 only
   (<https://github.com/grimme-lab/g-xtb>).
@@ -155,8 +158,8 @@ Paths below are relative to `crates/optimize/src`.
   Theory Comput. 2, 835 (2006), doi:10.1021/ct050275a. Optional GDIIS and GEDIIS steps
   (`optimizer/rfo/diis.rs`, `optimizer/anc/diis.rs`).
 - **SanzGarcia2016Thesis**: J. Sanz García, PhD thesis, Université de Toulouse (2016),
-  HAL tel-01402497, <https://hal.science/tel-01402497>. The GEDIIS switching thresholds
-  (`Acceleration::Gediis` in `optimizer.rs`).
+  doi:10.70675/9b2808d6z1282z4702zbe8cz2edf56ef312c, HAL tel-01402497. The GEDIIS
+  switching thresholds (`Acceleration::Gediis` in `optimizer.rs`).
 - **Liu1989LBFGS**: Liu & Nocedal, Math. Program. 45, 503 (1989), doi:10.1007/BF01589116,
   and **Armijo1966LineSearch**: Armijo, Pacific J. Math. 16, 1 (1966),
   doi:10.2140/pjm.1966.16.1. Cartesian L-BFGS direction (`optimizer/lbfgs.rs`) and Armijo
@@ -166,7 +169,7 @@ Paths below are relative to `crates/optimize/src`.
   (Algorithm 7.4), trust radius (Algorithm 4.1), BFGS curvature test and damping
   (`optimizer/lbfgs.rs`, `optimizer/trust.rs`, `optimizer/rfo.rs`).
 - **Golub2013Matrix**: Golub & Van Loan, _Matrix Computations_, 4th ed., Johns Hopkins
-  University Press (2013), ISBN 978-1-4214-0794-4. Symmetric eigensolver and Krylov shift
+  University Press (2013), ISBN 978-1-4214-0794-4, doi:10.56021/9781421407944. Symmetric eigensolver and Krylov shift
   (`linalg.rs`, `optimizer/rfo/positive.rs`); also the Jacobi principal axes of the symmetry
   number (`crates/qcdata/src/vibrational/symmetry.rs`).
 - **Horn1987Quaternion**: Horn, J. Opt. Soc. Am. A 4, 629 (1987),
@@ -192,7 +195,8 @@ specific paper.
   doi:10.1002/(SICI)1096-987X(199905)20:7<720::AID-JCC7>3.0.CO;2-X. MMFF94s, the default
   pre-minimizer.
 - **Rappe1992UFF**: Rappé et al., J. Am. Chem. Soc. 114, 10024 (1992),
-  doi:10.1021/ja00051a040. UFF, used when MMFF cannot type the molecule.
+  doi:10.1021/ja00051a040. UFF, when chosen, and in place of MMFF for molecules with a
+  metal.
 - **Tosco2014MMFF**: Tosco, Stiefl & Landrum, J. Cheminform. 6, 37 (2014),
   doi:10.1186/s13321-014-0037-3. RDKit's MMFF implementation, the source of COSMolKit's
   parameter tables and ReShiki's comparison reference (`docs/geometry-backend.md`).
@@ -211,10 +215,12 @@ thermochemistry for other temperatures, scales and cutoffs (`thermochemistry` in
   Quasi-RRHO entropy of low-frequency modes.
 - **FernandezRamos2007Symmetry**: Fernández-Ramos et al., Theor. Chem. Acc. 118, 813 (2007),
   doi:10.1007/s00214-007-0328-0. Rotational symmetry numbers in the rotational partition
-  function. ReShiki counts the proper rotations of the isotope-labelled geometry itself
-  (`rotational_symmetry_number` in `crates/qcdata/src/vibrational.rs` and
-  `vibrational/symmetry.rs`, using Jacobi rotations (Golub2013Matrix) and augmenting-path
-  atom matching (Kuhn1955Hungarian)).
+  function. With default masses axtb takes the number from its point group; when a run
+  carries explicit isotope masses, ReShiki counts the proper rotations of the
+  isotope-labelled geometry itself (`rotational_symmetry_number` in
+  `crates/qcdata/src/vibrational.rs` and `vibrational/symmetry.rs`, using Jacobi rotations
+  (Golub2013Matrix) and augmenting-path atom matching (Kuhn1955Hungarian); called from
+  `src/app/xtb/run.rs`).
 - **Eckart1935Conditions**: Eckart, Phys. Rev. 47, 552 (1935), doi:10.1103/PhysRev.47.552,
   and **Miller1980Eckart**: Miller, Handy & Adams, J. Chem. Phys. 72, 99 (1980),
   doi:10.1063/1.438959. Projection of rigid translations and rotations from the Hessian
@@ -321,12 +327,15 @@ Readers in `crates/io/src/qcread/`.
 
 ## Verification notes
 
-- Powell1978Damping: the Lecture Notes in Mathematics volume number (630 in older notes) is
-  not in the Crossref or OpenAlex records and is left out.
-- Golub2013Matrix: the code does not name an edition; the 4th edition is assumed.
-- SanzGarcia2016Thesis has no DOI; it was checked on HAL (author, title, year, doctoral
-  school in Toulouse) and in its PDF, where printed page 54 gives the 10⁻³ a.u. RMS force
-  and 2.5·10⁻³ a.u. RMS step switches quoted in `optimizer.rs`.
+- Powell1978Damping: the Lecture Notes in Mathematics volume number (630 in older notes and
+  according to a reviewer) is not in the Crossref or OpenAlex records, and Springer's page
+  refused our automated fetch, so it is left out.
+- Golub2013Matrix: the code does not name an edition; the 4th edition is assumed. Its
+  Crossref record (doi:10.56021/9781421407944) gives the release year 2012 and lists only
+  the first author; the 2013 copyright year and both authors follow Open Library.
+- SanzGarcia2016Thesis: the Crossref record (registered by Abes) has no year; the year,
+  school and title come from HAL, and printed page 54 of the thesis gives the 10⁻³ a.u. RMS
+  force and 2.5·10⁻³ a.u. RMS step switches quoted in `optimizer.rs`.
 - Marching tetrahedra: A. Doi & A. Koide, "An Efficient Method of Triangulating Equi-Valued
   Surfaces by Using Tetrahedral Cells", IEICE Trans. Inf. Syst. E74-D, 214–224 (1991), as a
   reviewer reported it. It has no Crossref record and the IEICE page refused our automated
