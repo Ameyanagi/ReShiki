@@ -709,6 +709,7 @@ mod tests {
             optimize: false,
             frequencies: false,
             masses: None,
+            isotope_labels: Vec::new(),
             numbers: launch.frame.numbers.clone(),
             positions: launch.frame.positions_angstrom.clone(),
             charge: 0,
