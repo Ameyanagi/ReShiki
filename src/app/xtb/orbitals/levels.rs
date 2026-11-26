@@ -238,8 +238,11 @@ impl Diagram {
         let mut placed = Vec::new();
         for (c, column) in self.columns.iter().enumerate() {
             let left = Self::AXIS + 12. + c as f32 * Self::COLUMN;
+            let selected = self.selected.filter(|s| s.0 == c).map(|s| s.1);
+            let window = column.window(selected);
+            // The list's levels, as far as the axis reaches.
             let shown: Vec<(usize, f32)> = (column.energies_ev.iter().enumerate())
-                .filter(|(_, e)| (lo..=hi).contains(*e))
+                .filter(|(i, e)| window.contains(i) && (lo..=hi).contains(*e))
                 .map(|(i, e)| (i, y(*e)))
                 .collect();
             // Runs of levels each within the spacing of the last.
@@ -448,8 +451,11 @@ impl canvas::Program<Message> for Diagram {
                 &[]
             };
             let middle = (level.x0 + level.x1) / 2.;
+            // Arrows shrink to fit levels drawn side by side.
+            let apart = ((level.x1 - level.x0) / 3.).min(7.);
+            let wing = (apart / 3.).min(2.);
             for (k, &up) in arrows.iter().enumerate() {
-                let x = middle + (k as f32 - (arrows.len() - 1) as f32 / 2.) * 7.;
+                let x = middle + (k as f32 - (arrows.len() - 1) as f32 / 2.) * apart;
                 let (tip, tail, head) = if up {
                     (level.y - 5., level.y + 4., 2.5)
                 } else {
@@ -459,9 +465,9 @@ impl canvas::Program<Message> for Diagram {
                     &canvas::Path::new(|path| {
                         path.move_to(Point::new(x, tail));
                         path.line_to(Point::new(x, tip));
-                        path.move_to(Point::new(x - 2., tip + head));
+                        path.move_to(Point::new(x - wing, tip + head));
                         path.line_to(Point::new(x, tip));
-                        path.line_to(Point::new(x + 2., tip + head));
+                        path.line_to(Point::new(x + wing, tip + head));
                     }),
                     canvas::Stroke::default().with_color(color).with_width(1.),
                 );
