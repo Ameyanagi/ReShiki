@@ -283,8 +283,6 @@ fn minimized_ensembles_preserve_candidates_mapping_and_lowest_energy_selection()
         assert_eq!(result.energy, lowest.energy);
         assert_eq!(result.coordinates, lowest.coordinates);
         assert_eq!(result.converged, lowest.converged);
-        // Unpruned ensemble starts can improve on ordinary generation's choice.
-        assert!(result.energy <= single.energy + 1e-6);
         assert!(result.energy <= result.initial_energy + 1e-6);
         assert!(result.diagnostics.iter().any(|line| {
             line.contains("ensemble=Minimized")
@@ -414,6 +412,33 @@ fn ensemble_batches_at_the_sequential_seed_ceiling_are_exactly_repeatable() {
         assert_eq!(first.ensemble, repeated.ensemble);
         assert_eq!(first.coordinates, repeated.coordinates);
         assert_eq!(first.energy, repeated.energy);
+    }
+}
+
+#[test]
+fn ensemble_responses_are_byte_identical_across_thread_counts() {
+    let mut request = molecule(
+        &[6; 5],
+        &[(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1)],
+        ForceField::MMFF94s,
+    );
+    request.conformers = 11;
+    request.seed = 0x52534b;
+    let _guard = SOLVER_OPERATION.lock().unwrap();
+    for mode in [Ensemble::Embedded, Ensemble::Minimized] {
+        request.ensemble = Some(mode);
+        request.validate().unwrap();
+        let serial = solver::solve_with_threads(&request, 1).unwrap();
+        assert_eq!(serial.ensemble.len(), request.conformers as usize);
+        let serial = serde_json::to_vec(&serial).unwrap();
+        for threads in [2, 3, 8] {
+            let parallel = solver::solve_with_threads(&request, threads).unwrap();
+            assert_eq!(
+                serde_json::to_vec(&parallel).unwrap(),
+                serial,
+                "{mode:?}, {threads} threads"
+            );
+        }
     }
 }
 

@@ -23,6 +23,8 @@ pub const DEFAULT_SEED: i32 = 0x52534b;
 pub const GENERATION_SEED_MAX: i32 = i32::MAX - 8;
 /// Maximum number of embeddings requested across one conformer search.
 pub const MAX_CONFORMER_STARTS: u32 = 300;
+// Let MMFF94s finish flexible starts: ritonavir went from 99/100 at 1000 iterations to 100/100 at 2000.
+const ENSEMBLE_ITERATION_LIMIT: u32 = 2000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -770,6 +772,7 @@ impl Prepared {
         request.coordinates.clear();
         request.conformers = count;
         request.ensemble = Some(mode);
+        request.max_iterations = ENSEMBLE_ITERATION_LIMIT;
         request.validate().map_err(Error::Invalid)?;
         Ok(request)
     }
