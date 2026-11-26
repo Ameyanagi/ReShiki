@@ -815,7 +815,7 @@ impl App {
         details = details
             .push(reaction_gibbs_unavailable(result).map(|reason| line(reason, Tone::Warning)));
         if let Some(warning) = &presentation.warning {
-            details = details.push(line(warning.clone(), Tone::Warning));
+            details = details.push(line(warning.clone(), Tone::Muted));
         }
         if super::card::imaginary_mode(result).is_some() {
             details = details.push(
