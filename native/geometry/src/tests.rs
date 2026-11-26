@@ -207,7 +207,7 @@ fn rust_relax_keeps_original_and_added_hydrogen_fixed() {
 }
 
 #[test]
-fn seeded_sampling_is_repeatable_and_does_not_substitute_force_fields() {
+fn seeded_sampling_is_repeatable_and_substitutes_uff_only_to_generate_untyped_molecules() {
     for field in [ForceField::MMFF94, ForceField::MMFF94s, ForceField::UFF] {
         let request = ethanol(field);
         let first = solve(&request).unwrap();
@@ -226,7 +226,50 @@ fn seeded_sampling_is_repeatable_and_does_not_substitute_force_fields() {
     assert_eq!(supported.hydrogen_parents, [0, 0, 0]);
     for field in [ForceField::MMFF94, ForceField::MMFF94s] {
         borane.field = field;
-        assert!(solve(&borane).unwrap_err().contains("MMFF parameters"));
+        let generated = solve(&borane).unwrap();
+        assert_eq!(generated.field, ForceField::UFF);
+        assert_eq!(
+            generated.approximations,
+            [format!(
+                "UFF used: {field:?} parameters are unavailable for this molecule"
+            )]
+        );
+        let evaluation = Request {
+            operation: Operation::Evaluate,
+            coordinates: supported.coordinates.clone(),
+            ..borane.clone()
+        };
+        assert!(solve(&evaluation).unwrap_err().contains("MMFF parameters"));
+    }
+}
+
+#[test]
+fn generation_uses_uff_for_small_molecules_mmff_cannot_type() {
+    // MMFF94 has no atom types for O=O, ozone or carbon monoxide; the 3D
+    // model view used to stop at "MMFF parameters are unavailable".
+    let oxygen = molecule(&[8, 8], &[(0, 1, 2)], ForceField::MMFF94s);
+    let mut ozone = molecule(&[8, 8, 8], &[(0, 1, 2), (1, 2, 1)], ForceField::MMFF94s);
+    ozone.atoms[1].charge = 1;
+    ozone.atoms[2].charge = -1;
+    let mut monoxide = molecule(&[6, 8], &[(0, 1, 3)], ForceField::MMFF94s);
+    monoxide.atoms[0].charge = -1;
+    monoxide.atoms[1].charge = 1;
+    for (request, lengths) in [
+        (&oxygen, 1.1..1.3),
+        (&ozone, 1.15..1.45),
+        (&monoxide, 1.05..1.2),
+    ] {
+        let result = solve(request).unwrap();
+        assert_eq!(result.field, ForceField::UFF);
+        assert!(result.hydrogen_parents.is_empty());
+        assert_eq!(
+            result.approximations,
+            ["UFF used: MMFF94s parameters are unavailable for this molecule"]
+        );
+        for bond in &request.bonds {
+            let length = distance(&result.coordinates, bond.a, bond.b);
+            assert!(lengths.contains(&length), "{bond:?}: {length} A");
+        }
     }
 }
 
@@ -733,7 +776,7 @@ fn relaxed_cisplatin_matches_rdkit_uff_and_discloses_square_planar_distortion() 
 }
 
 #[test]
-fn relaxed_cobalt_hexammine_pre_relaxes_hydrogens_in_a_tight_planar_seed() {
+fn relaxed_cobalt_hexammine_from_a_tight_planar_seed_is_octahedral() {
     let mut request = ammine(27, 3, 6);
     request.coordinates[1..].copy_from_slice(&planar_ring(6, 1.5));
     let result = solve(&request).unwrap();
@@ -766,8 +809,10 @@ fn relaxed_cobalt_hexammine_pre_relaxes_hydrogens_in_a_tight_planar_seed() {
             .iter()
             .any(|note| note == "Started from the drawn coordinates")
     );
+    // Its ligands start lifted into an octahedron, so the crowded ammine
+    // hydrogens no longer need the pre-relaxation retry.
     assert!(
-        result
+        !result
             .diagnostics
             .iter()
             .any(|note| note.contains("hydrogens pre-relaxed"))
@@ -969,7 +1014,10 @@ fn relaxed_hypervalent_main_group_and_extra_bond_orders_use_uff() {
 
 #[test]
 fn relaxed_errors_name_uff_or_missing_atoms_and_strict_defaults_survive_wire() {
+    let generated = solve(&cisplatin()).unwrap();
     let mut platinum = cisplatin();
+    platinum.operation = Operation::Evaluate;
+    platinum.coordinates = generated.coordinates;
     for field in [ForceField::MMFF94, ForceField::MMFF94s] {
         platinum.field = field;
         assert!(solve(&platinum).unwrap_err().contains("UFF"));

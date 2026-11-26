@@ -92,6 +92,8 @@ pub(crate) struct Job {
     seed: i32,
     force_field: ForceField,
     prepared: Arc<Prepared>,
+    /// Why strict chemistry checks refused a model built in relaxed mode.
+    strict_error: Option<String>,
     started: iced::time::Instant,
     _handle: iced::task::Handle,
 }
@@ -158,15 +160,29 @@ impl App {
                 let model = result.and_then(|optimized| {
                     job.prepared
                         .model(&optimized)
+                        .map(|model| (model, optimized.force_field))
                         .map_err(|error| error.to_string())
                 });
                 match model {
-                    Ok(mut model) => {
+                    Ok((mut model, field)) => {
                         model.seed = job.seed;
                         if let Some(index) = job.target {
                             self.replace_model(index, model);
                         } else {
                             self.add_model(model, job.display);
+                        }
+                        let caution = match &job.strict_error {
+                            Some(reason) => Some(format!(
+                                "Approximate {field} geometry, chemistry not checked: {reason}"
+                            )),
+                            None if field != job.force_field => Some(format!(
+                                "{field} used: no {} parameters for this molecule",
+                                job.force_field
+                            )),
+                            None => None,
+                        };
+                        if let Some(caution) = caution.filter(|_| !self.error) {
+                            self.status = format!("{} · {caution}", self.status);
                         }
                     }
                     Err(error) => {
@@ -411,8 +427,10 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        let prepared = match Prepared::new(&self.tab.doc, &atoms) {
-            Ok(prepared) => Arc::new(prepared.without_retained_depth()),
+        let (prepared, strict_error) = match prepare(&self.tab.doc, &atoms) {
+            Ok((prepared, strict_error)) => {
+                (Arc::new(prepared.without_retained_depth()), strict_error)
+            }
             Err(error) => {
                 self.status = format!("3D model not generated: {error}");
                 self.error = true;
@@ -441,6 +459,7 @@ impl App {
             seed,
             force_field,
             prepared,
+            strict_error,
             started: iced::time::Instant::now(),
             _handle: handle.abort_on_drop(),
         });
@@ -601,8 +620,8 @@ impl App {
             doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
             Ok(doc)
         } else {
-            Prepared::new(&self.tab.doc, &atoms)
-                .and_then(|prepared| prepared.flattened(model))
+            prepare(&self.tab.doc, &atoms)
+                .and_then(|(prepared, _)| prepared.flattened(model))
                 .map_err(|error| error.to_string())
         }
         .and_then(|mut doc| {
@@ -1586,6 +1605,21 @@ impl App {
             .as_ref()
             .map(|job| job.prepared.ids().to_vec())
             .unwrap_or_default()
+    }
+}
+
+/// Strict preparation, or relaxed preparation with the strict refusal when
+/// only chemistry checks refused the molecule (radicals; elements such as Ce,
+/// U or Xe): the 3D view shows an approximate model with a note instead.
+fn prepare(
+    doc: &Document,
+    atoms: &[u64],
+) -> Result<(Prepared, Option<String>), reshiki::geometry::Error> {
+    match Prepared::new(doc, atoms) {
+        Ok(prepared) => Ok((prepared, None)),
+        Err(strict) => Prepared::relaxed(doc, atoms)
+            .map(|prepared| (prepared, Some(strict.to_string())))
+            .map_err(|_| strict),
     }
 }
 

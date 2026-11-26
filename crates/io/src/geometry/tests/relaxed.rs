@@ -427,8 +427,10 @@ fn relaxed_imported_cobalt_hexammine_generates_octahedral_geometry() {
             .iter()
             .any(|note| note == "Started from the drawn coordinates")
     );
+    // Its ligands start lifted into an octahedron, so the crowded ammine
+    // hydrogens no longer need the pre-relaxation retry.
     assert!(
-        result
+        !result
             .diagnostics
             .iter()
             .any(|note| note.contains("hydrogens pre-relaxed"))

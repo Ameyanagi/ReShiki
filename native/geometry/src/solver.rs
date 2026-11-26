@@ -5,8 +5,8 @@ use super::{
 use cosmolkit::{
     AddHsParams, AtomId, AtomSpec, BondOrder, BondSpec, BondStereo, ChiralTag, Element,
     EmbedFailureCause, EmbedMultipleConfsResult, EmbedParams, ForceFieldMinimizeParams,
-    MmffForceFieldParams, MmffPropertiesParams, MmffVariant, MolecularForceField, Molecule,
-    MoleculeBuilder, PropertyValue, StructureTagParams, UffForceFieldParams,
+    Hybridization, MmffForceFieldParams, MmffPropertiesParams, MmffVariant, MolecularForceField,
+    Molecule, MoleculeBuilder, PropertyValue, StructureTagParams, UffForceFieldParams,
 };
 
 mod relaxed;
@@ -383,6 +383,46 @@ fn validate_geometry(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
     Ok(())
 }
 
+// UFF bends angles at an octahedral (sp3d2) centre with (1 - cos 4θ) / 16,
+// which has minima at 90° and 180° but also at 0°, past a 45° barrier, and
+// UFF has no 1-3 repulsion. Ligands that cross the barrier collapse onto
+// RDKit's 30° penalty wall (UF6 from a flat drawing: F···F 1.19 Å). Two
+// ligands bonded to each other, such as an η2 alkene, may legitimately be
+// closer and are not checked.
+fn reject_collapsed_ligands(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
+    let adjacency = &mol.topology().adjacency;
+    for atom in mol.atoms() {
+        if atom.hybridization() != Hybridization::Sp3d2 {
+            continue;
+        }
+        let centre = atom.id().index();
+        let ligands = adjacency.neighbors_of(centre);
+        for (index, a) in ligands.iter().enumerate() {
+            for b in &ligands[index + 1..] {
+                let (a, b) = (a.atom_index, b.atom_index);
+                if adjacency
+                    .neighbors_of(a)
+                    .iter()
+                    .any(|neighbor| neighbor.atom_index == b)
+                {
+                    continue;
+                }
+                let u = sub(coordinates[a], coordinates[centre]);
+                let v = sub(coordinates[b], coordinates[centre]);
+                let cosine = dot(u, v) / (dot(u, u) * dot(v, v)).sqrt();
+                require(
+                    cosine < std::f64::consts::FRAC_1_SQRT_2,
+                    format!(
+                        "atoms {a} and {b} collapsed to {:.0} degrees at atom {centre}",
+                        cosine.clamp(-1., 1.).acos().to_degrees()
+                    ),
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
 // Test the principal extents, not the drawing's z coordinates: a flat drawing
 // remains flat after rotation. A conservative thickness threshold also avoids
 // treating roundoff or tiny display offsets as a physical starting geometry.
@@ -707,6 +747,9 @@ fn minimized(
     )?;
     let result = field.positions();
     validate_geometry(mol, &result)?;
+    if request.field == ForceField::UFF {
+        reject_collapsed_ligands(mol, &result)?;
+    }
     expected.validate(mol, &result)?;
     if let Some(cage) = cage {
         cage.validate(mol, &result)?;
@@ -729,11 +772,36 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
     let original = molecule(request)?;
     let mol = with_hydrogens(&original, request.atoms.len(), false)?;
     let expected = StereoExpectation::new(&mol)?;
-    if request.relaxed {
-        relaxed::check_field(&mol, request.field)?;
-    } else {
-        check_field_parameters(&mol, request.field)?;
-    }
+    let check = |field| {
+        if request.relaxed {
+            relaxed::check_field(&mol, field)
+        } else {
+            check_field_parameters(&mol, field)
+        }
+    };
+    // MMFF cannot type metals or some small molecules (O2, O3, CO, SF6).
+    // Generation then uses UFF and says so. Relax and Evaluate continue a
+    // geometry in the caller's field, so they keep refusing.
+    let fallback = match check(request.field) {
+        Ok(()) => None,
+        Err(error)
+            if request.operation == Operation::Generate && request.field != ForceField::UFF =>
+        {
+            check(ForceField::UFF).map_err(|uff| format!("{error}; UFF fallback: {uff}"))?;
+            Some(Request {
+                field: ForceField::UFF,
+                ..request.clone()
+            })
+        }
+        Err(error) => return Err(error),
+    };
+    let field_note = fallback.as_ref().map(|_| {
+        format!(
+            "UFF used: {:?} parameters are unavailable for this molecule",
+            request.field
+        )
+    });
+    let request = fallback.as_ref().unwrap_or(request);
     let cage = Cage::from_molecule(&mol);
     validate_original_order(&mol, request.atoms.len())?;
     let parents = hydrogen_parents(&mol, request.atoms.len())?;
@@ -747,11 +815,14 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         converged: false,
         field: request.field,
         diagnostics: Vec::new(),
-        approximations: if request.relaxed {
-            relaxed::approximations(&mol)?
-        } else {
-            Vec::new()
-        },
+        approximations: field_note
+            .into_iter()
+            .chain(if request.relaxed {
+                relaxed::approximations(&mol)?
+            } else {
+                Vec::new()
+            })
+            .collect(),
     };
     if request.operation == Operation::Generate {
         let minimize_seed = |coordinates: Vec<[f64; 3]>| {

@@ -394,6 +394,7 @@ pub(super) fn starting_coordinates(
         // Break a planar saddle reproducibly without discarding the drawing's
         // relative ligand placement (cis/trans metal arrangements included).
         perturb_drawing(&mut points, request.seed);
+        lift_octahedral_ligands(original, &mut points);
     }
     validate_geometry(original, &points)?;
     let positioned = original
@@ -459,6 +460,33 @@ pub(super) fn relax_hydrogens(
         *point = std::array::from_fn(|axis| point[axis] + origin[axis]);
     }
     Ok(result)
+}
+
+/// Six ligands drawn flat around an octahedral (sp3d2) centre go alternately
+/// above and below the plane, 35.3° out of it, in their drawn angular order:
+/// a flat star becomes an octahedron seen along its threefold axis, and each
+/// ligand pair starts at 90° or 180°. Flat, some pairs began below the 45°
+/// barrier of UFF's octahedral angle term and collapsed (see
+/// `reject_collapsed_ligands`). Only the donor atoms move.
+fn lift_octahedral_ligands(mol: &Molecule, points: &mut [[f64; 3]]) {
+    for atom in mol.atoms() {
+        let centre = atom.id().index();
+        let ligands = mol.topology().adjacency.neighbors_of(centre);
+        if atom.hybridization() != Hybridization::Sp3d2 || ligands.len() != 6 {
+            continue;
+        }
+        let [x, y, _] = points[centre];
+        let mut ligands: Vec<_> = ligands.iter().map(|n| n.atom_index).collect();
+        ligands.sort_by(|&a, &b| {
+            let turn = |i: usize| (points[i][1] - y).atan2(points[i][0] - x);
+            turn(a).total_cmp(&turn(b))
+        });
+        for (index, ligand) in ligands.into_iter().enumerate() {
+            let radius = (points[ligand][0] - x).hypot(points[ligand][1] - y);
+            let side = if index % 2 == 0 { 1. } else { -1. };
+            points[ligand][2] = points[centre][2] + side * radius * std::f64::consts::FRAC_1_SQRT_2;
+        }
+    }
 }
 
 fn perturb_drawing(points: &mut [[f64; 3]], seed: i32) {
