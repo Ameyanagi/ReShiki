@@ -69,7 +69,9 @@ fn native_open_names_results_and_counts_outdated_results_and_models() {
     outdated.atom_mut(atoms[1]).unwrap().charge = -1;
     assert_eq!(
         opened_results_status(path, &outdated).as_deref(),
-        Some("Opened water.rsk · 1 calculation result · 1 outdated (the drawing changed)")
+        Some(
+            "Opened water.rsk · 1 calculation result · 1 outdated 3D model · the drawing changed since"
+        )
     );
     attach(&mut doc, atoms[0]);
     assert_eq!(
@@ -86,12 +88,14 @@ fn native_open_names_results_and_counts_outdated_results_and_models() {
     )));
     assert_eq!(
         app.status,
-        "Opened water.rsk · 3 calculation results · 3 outdated (the drawing changed)"
+        "Opened water.rsk · 3 calculation results (2 outdated) · 1 outdated 3D model · the drawing changed since"
     );
     doc.atom_mut(atoms[1]).unwrap().charge = -1;
     assert_eq!(
         opened_results_status(path, &doc).as_deref(),
-        Some("Opened water.rsk · 3 calculation results · 5 outdated (the drawing changed)")
+        Some(
+            "Opened water.rsk · 3 calculation results (3 outdated) · 2 outdated 3D models · the drawing changed since"
+        )
     );
 }
 
@@ -117,7 +121,7 @@ fn native_open_reports_outdated_models_without_calculation_results() {
     )));
     assert_eq!(
         app.status,
-        "Opened x.rsk · 1 outdated 3D model (the drawing changed)"
+        "Opened x.rsk · 1 outdated 3D model · the drawing changed since"
     );
 }
 

@@ -779,9 +779,9 @@ fn a_recompute_reply_from_a_previous_file_epoch_is_ignored() {
 fn switching_away_from_docked_vibrations_cancels_recomputation() {
     let (mut app, light) = light_result(1590.13);
     send(&mut app, XtbAction::Palette(palette::Action::Dock));
-    send(&mut app, XtbAction::Page(Page::Nmr));
+    send(&mut app, XtbAction::Page(crate::app::xtb::Page::Nmr));
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
-    send(&mut app, XtbAction::Page(Page::Xtb));
+    send(&mut app, XtbAction::Page(crate::app::xtb::Page::Xtb));
     assert!(app.tab.xtb.vibrations.recomputing(&light));
 }
 
