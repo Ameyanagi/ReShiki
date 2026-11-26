@@ -41,10 +41,14 @@ pub enum Page {
     Distribute,
     Order,
     Arrange,
+    /// Build a model with xTB or the force field, under the context row.
+    Model3d,
     /// The last n context row commands, folded into ⋯.
     More(usize),
 }
 
+#[cfg(test)]
+mod model_menu_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -92,6 +96,8 @@ pub enum Action {
     FocusedKey(usize, usize, Named),
     Run(Box<Message>),
     Properties(bool),
+    /// Open the xTB settings in Predict.
+    XtbSettings,
     /// Flip the Editable drawing choice of Copy image on; the menu stays open.
     Editable,
 }
@@ -181,6 +187,58 @@ impl Entry {
 }
 
 impl App {
+    /// The inline 3D menu and its four ordinary overflow commands share actions.
+    pub(super) fn model_commands(&self) -> Vec<super::workspace::RowCommand> {
+        use super::workspace::RowCommand;
+        use super::xtb::{Action, CalcTask, Entry};
+        let model = !self.tab.doc.atoms.is_empty() && !self.tab.busy;
+        let idle = model && !self.xtb_running();
+        [
+            (
+                "Optimize with xTB (quantum, GFN2)",
+                Message::Xtb(Action::Entry(Entry::OptimizeGfn2)),
+                idle,
+            ),
+            (
+                "Opt + freq (xTB)",
+                Message::Xtb(Action::Entry(Entry::Task(CalcTask::OptFreq))),
+                idle,
+            ),
+            (
+                "Force-field 3D model (MMFF94s)…",
+                Message::Optimization(super::optimization::Action::Begin),
+                model,
+            ),
+            (
+                "More xTB settings…",
+                Message::ContextMenu(self::Action::XtbSettings),
+                true,
+            ),
+        ]
+        .into_iter()
+        .map(|(label, message, enabled)| RowCommand {
+            label,
+            menu: label,
+            message,
+            enabled,
+        })
+        .collect()
+    }
+
+    /// Rerun is the same operation as the named GFN2 optimization only while
+    /// the card still names that task and method.
+    fn context_shortcut(&self, action: &Action) -> Option<String> {
+        if matches!(action, Action::Run(message) if matches!(message.as_ref(),
+            Message::Xtb(super::xtb::Action::Entry(super::xtb::Entry::OptimizeGfn2))))
+        {
+            return (self.xtb.settings.task == super::xtb::CalcTask::Optimize
+                && self.xtb.settings.method == reshiki::qcdata::XtbMethod::Gfn2Xtb)
+                .then(super::xtb::rerun_keys)
+                .filter(|keys| !keys.is_empty());
+        }
+        shortcut(action)
+    }
+
     fn context_entries(&self, page: Page) -> Vec<Entry> {
         use Entry::{Hint, Separator};
         let command = Entry::command;
@@ -278,12 +336,28 @@ impl App {
                 self.arrange_entries(&[&Command::TRANSFORM]),
             ]
             .join(&Separator),
+            Page::Model3d => {
+                let mut entries: Vec<_> = self
+                    .model_commands()
+                    .into_iter()
+                    .map(|c| command(c.menu, c.message, c.enabled))
+                    .collect();
+                entries.insert(2, Separator);
+                entries
+            }
             Page::More(folded) => {
                 let commands = self.context_commands();
                 let shown = commands.len().saturating_sub(folded);
                 commands
                     .into_iter()
                     .skip(shown)
+                    .flat_map(|c| {
+                        if c.model_menu() {
+                            self.model_commands()
+                        } else {
+                            vec![c]
+                        }
+                    })
                     .map(|c| command(c.menu, c.message, c.enabled))
                     .collect()
             }
@@ -1162,13 +1236,25 @@ impl App {
 
     pub(super) fn context_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::Close => self.context_menu = None,
+            Action::Close => {
+                let model = self
+                    .context_menu
+                    .as_ref()
+                    .is_some_and(|m| m.page == Page::Model3d);
+                self.context_menu = None;
+                if model {
+                    return super::focus_drawing();
+                }
+            }
             Action::Open(page, x) => {
                 let open = self
                     .context_menu
                     .as_ref()
                     .is_some_and(|menu| menu.page == page);
                 self.context_menu = (!open).then(|| State::new(Point::new(x, 0.), page));
+                if open && page == Page::Model3d {
+                    return super::focus_drawing();
+                }
             }
             Action::Page(Page::Main) => {
                 if let Some(menu) = &mut self.context_menu {
@@ -1235,8 +1321,32 @@ impl App {
                 return self.context_key_action(key);
             }
             Action::Run(message) => {
+                let model = self.context_menu.as_ref().is_some_and(|m| {
+                    m.page == Page::Model3d
+                        || (matches!(m.page, Page::More(_))
+                            && super::xtb::available()
+                            && matches!(
+                                message.as_ref(),
+                                Message::Xtb(super::xtb::Action::Entry(
+                                    super::xtb::Entry::OptimizeGfn2
+                                        | super::xtb::Entry::Task(super::xtb::CalcTask::OptFreq)
+                                )) | Message::Optimization(super::optimization::Action::Begin)
+                            ))
+                });
                 self.context_menu = None;
-                return self.update(*message);
+                let task = self.update(*message);
+                return if model {
+                    Task::batch([task, super::focus_drawing()])
+                } else {
+                    task
+                };
+            }
+            Action::XtbSettings => {
+                self.context_menu = None;
+                return Task::batch(
+                    super::xtb::settings_messages().map(|message| self.update(message)),
+                )
+                .chain(super::focus_drawing());
             }
             Action::Editable => {
                 let editable = !self.copy_editable();
@@ -1295,8 +1405,7 @@ impl App {
 
     fn context_key_action(&mut self, key: Named) -> Task<Message> {
         if key == Named::Escape {
-            self.context_menu = None;
-            return Task::none();
+            return self.context_action(Action::Close);
         }
         let Some(menu) = &self.context_menu else {
             return Task::none();
@@ -1423,7 +1532,7 @@ impl App {
                         + if matches!(action, Action::Page(_)) {
                             24.
                         } else {
-                            shortcut(action).map_or(0., |keys| {
+                            self.context_shortcut(action).map_or(0., |keys| {
                                 SHORTCUT_GAP
                                     + super::shortcuts::spans(&keys)
                                         .iter()
@@ -1543,7 +1652,7 @@ impl App {
                     }
                     if matches!(action, Action::Page(_)) {
                         content = content.push(text("›").size(16));
-                    } else if let Some(keys) = shortcut(&action) {
+                    } else if let Some(keys) = self.context_shortcut(&action) {
                         content = content.push(
                             rich_text(super::shortcuts::spans(&keys))
                                 .size(11)
