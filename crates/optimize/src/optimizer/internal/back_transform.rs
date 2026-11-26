@@ -1,5 +1,8 @@
 //! Iterative back-transformation after Pulay & Fogarasi, J. Chem. Phys.
-//! **96**, 2856 (1992), and Peng et al., J. Comput. Chem. **17**, 49 (1996).
+//! **96**, 2856 (1992), and Peng et al., J. Comput. Chem. **17**, 49 (1996)
+//! \[Pulay1992BackTransform\] \[Peng1996Redundant\].
+//!
+//! Full references: docs/references/xtb.md.
 
 use super::{InternalModel, metric::apply};
 use crate::linalg::norm;
