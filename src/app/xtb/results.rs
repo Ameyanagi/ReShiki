@@ -10,12 +10,10 @@ use reshiki::qcdata::{
     Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Status, Task,
     XtbConventions,
 };
+use reshiki_xtb_jobs::OPTIMIZER_SEPARATOR;
 
 mod methods;
 pub(crate) use methods::methods_text;
-
-/// Separates the optimizer record from the method or conformer recipe.
-pub(super) const OPTIMIZER_SEPARATOR: &str = " · optimizer ";
 
 pub(super) fn method_without_optimizer(method: &str) -> &str {
     method
@@ -85,13 +83,7 @@ impl View {
     }
 }
 
-/// One SCF the worker ran.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Evaluation {
-    pub energy: f64,
-    pub scf_iterations: usize,
-    pub seconds: f64,
-}
+pub(crate) use reshiki_xtb_jobs::Evaluation;
 
 /// What this session knows about a run beyond the stored result.
 #[derive(Clone, Debug, Default, PartialEq)]

@@ -241,6 +241,7 @@ fn light_50_atom_optimization_with_frequencies_fits_20_kb() {
         labels: vec![],
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
+        rmsd_to_best_angstrom: vec![],
     });
     result.validate(&frame).unwrap();
     let saved = result.for_file(MAX_IMPORTED_HEAVY_BYTES, &[]);

@@ -568,7 +568,7 @@ fn an_edit_greys_the_results_undo_restores_them_and_recalculate_reruns() {
 
     let _ = app.update(Message::Redo);
     assert!(app.xtb_shown().is_some_and(|shown| shown.stale));
-    assert!(!app.outdated_model_frames().is_empty());
+    assert!(!app.outdated_models().is_empty());
     palette(&mut app, Action::KeepFull(true));
     palette(&mut app, Action::Close);
     app.xtb.settings.task = CalcTask::Energy;
