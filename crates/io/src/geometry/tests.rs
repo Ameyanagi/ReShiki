@@ -181,6 +181,71 @@ fn explicit_generation_seeds_preserve_field_and_reject_values_outside_sampling_r
 }
 
 #[test]
+fn model_generation_updates_stale_uff_with_its_saved_seed() {
+    let mut source = ethanol();
+    let ids: Vec<_> = source.atoms.iter().map(|atom| atom.id).collect();
+    let prepared = Prepared::new(&source, &ids).unwrap();
+    let mut result = optimized(&prepared, vec![]);
+    result.force_field = ForceField::Uff;
+    let mut model = prepared.model(&result).unwrap();
+    model.seed = 91_337;
+    source.models.push(model);
+    crate::models3d::require_version(&mut source);
+    assert!(ModelGeneration::for_calculation(&source, &ids).is_none());
+
+    source.atom_mut(89).unwrap().element = "N".into();
+    assert!(source.models[0].is_stale(&source));
+    let generation = ModelGeneration::for_calculation(&source, &ids).unwrap();
+    assert_eq!(
+        generation,
+        ModelGeneration {
+            target: Some(0),
+            force_field: ForceField::Uff,
+            seed: 91_337,
+        }
+    );
+    assert_eq!(
+        ModelGeneration::for_model(&source, 0, false),
+        Some(generation)
+    );
+    let request = Prepared::new(&source, &ids)
+        .unwrap()
+        .without_retained_depth()
+        .generation_request(generation.force_field, generation.seed)
+        .unwrap();
+    assert_eq!(request.field, reshiki_geometry::ForceField::UFF);
+    assert_eq!(request.seed, 91_337);
+}
+
+#[test]
+fn model_generation_keeps_new_models_and_regeneration_on_the_existing_seed_policy() {
+    let mut source = ethanol();
+    let ids: Vec<_> = source.atoms.iter().map(|atom| atom.id).collect();
+    assert_eq!(
+        ModelGeneration::for_calculation(&source, &ids),
+        Some(ModelGeneration::default())
+    );
+    let prepared = Prepared::new(&source, &ids).unwrap();
+    let mut model = prepared.model(&optimized(&prepared, vec![])).unwrap();
+    model.seed = GENERATION_SEED_MAX - 2;
+    source.models.push(model);
+    let generation = ModelGeneration::for_model(&source, 0, true).unwrap();
+    assert_eq!(generation.seed, 1_000_001);
+
+    source.models[0].seed = 0;
+    source.atom_mut(89).unwrap().element = "N".into();
+    assert_eq!(
+        ModelGeneration::for_calculation(&source, &ids)
+            .unwrap()
+            .seed,
+        DEFAULT_SEED
+    );
+    source.models[0].file_geometry = true;
+    assert!(ModelGeneration::for_calculation(&source, &ids).is_none());
+    assert!(ModelGeneration::for_model(&source, 0, true).is_none());
+}
+
+#[test]
 fn ensemble_request_encodes_fresh_generation_and_validates_limits() {
     let mut source = carbon_chain(4);
     source.atoms[0].depth = 17.;

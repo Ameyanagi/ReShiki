@@ -612,9 +612,9 @@ fn push_is_refused_if_the_model_moved_after_calculation() {
     assert!(app.tab.xtb.run.is_none());
     assert!(matches!(
         &app.tab.xtb.outcome,
-        Some(Outcome::Failed(failed)) if failed.failure == state::Failure::Other(
-            "The 3D model moved after this calculation".into()
-        )
+        Some(Outcome::Failed(failed))
+            if matches!(failed.failure.reason(), state::Failure::Other(message)
+                if message == "The 3D model moved after this calculation")
     ));
     assert_eq!(model(&app.tab.doc), f32s(&MOVED));
 }

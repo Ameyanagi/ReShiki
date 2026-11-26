@@ -83,8 +83,8 @@ pub(crate) fn update(
     }
     let hs: Vec<_> = hessian.chunks_exact(n).map(|row| dot(row, s)).collect();
     let shs = dot(s, &hs);
-    if update == Update::Bofill {
-        bofill(hessian, positive_definite, s, y, &hs, ys, shs);
+    if update == Update::FarkasSchlegel {
+        farkas_schlegel(hessian, positive_definite, s, y, &hs, ys, shs);
         return;
     }
     if !shs.is_finite() || shs <= 0. {
@@ -114,7 +114,7 @@ pub(crate) fn update(
     }
 }
 
-fn bofill(
+fn farkas_schlegel(
     hessian: &mut [f64],
     positive_definite: &mut bool,
     s: &[f64],

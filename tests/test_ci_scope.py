@@ -1,7 +1,9 @@
 """Documentation can skip native CI; uncertain or source changes cannot."""
 
+import ast
 import subprocess
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from scripts.ci_scope import changed_paths, matrices, needs_geometry, needs_macos, needs_native
@@ -105,6 +107,42 @@ class CheckScopeTests(unittest.TestCase):
         self.assertNotIn("aarch64-apple-darwin", [row["target"] for row in full["geometry"]])
         self.assertIn("x86_64-apple-darwin", [row["target"] for row in full["geometry"]])
         self.assertEqual(len(full["geometry"]), 5)
+
+    def test_xtb_wheels_pair_with_the_four_supported_base_targets(self):
+        full = matrices(True)
+        base = {row["target"]: row for row in full["wheel"]}
+        xtb = {row["target"]: row for row in full["xtb_wheel"]}
+        self.assertEqual(
+            set(xtb),
+            {
+                "aarch64-apple-darwin",
+                "x86_64-apple-darwin",
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+            },
+        )
+        for target, row in xtb.items():
+            with self.subTest(target=target):
+                self.assertEqual(row, {**base[target], "test": True})
+                self.assertIs(row["test"], True)
+        self.assertFalse(base["x86_64-apple-darwin"].get("test", False))
+        self.assertEqual(
+            {row["target"] for row in matrices(False)["xtb_wheel"]},
+            {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"},
+        )
+
+    def test_engine_pair_tests_do_not_import_rdkit(self):
+        root = Path(__file__).resolve().parents[1] / "crates/python/tests"
+        for name in ("conftest.py", "test_xtb.py", "test_qc.py"):
+            with self.subTest(file=name):
+                tree = ast.parse((root / name).read_text())
+                imports = set()
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        imports.update(alias.name.split(".")[0] for alias in node.names)
+                    elif isinstance(node, ast.ImportFrom) and node.module:
+                        imports.add(node.module.split(".")[0])
+                self.assertNotIn("rdkit", imports)
 
 
 if __name__ == "__main__":

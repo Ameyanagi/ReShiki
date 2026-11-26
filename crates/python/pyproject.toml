@@ -37,9 +37,16 @@ Issues = "https://github.com/Ameyanagi/ReShiki/issues"
 [project.optional-dependencies]
 excel = ["openpyxl>=3.1,<4", "pillow>=10"]
 pandas = ["pandas>=2.0,<4"]
+xtb = [
+  "reshiki-xtb==0.17.1; sys_platform == 'darwin' or (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64'))",
+  "numpy>=1.24",
+]
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "ruff>=0.15", "ty>=0.0.24", "pillow>=10"]
+dev = ["pytest>=8,<10", "ruff>=0.15", "ty>=0.0.24", "pillow>=10", "numpy>=1.24"]
+
+[tool.uv.sources]
+reshiki-xtb = { path = "../python-xtb" }
 
 [tool.maturin]
 python-source = "python"
