@@ -233,8 +233,9 @@ pub(super) struct Session {
     mode: Mode,
     strict_error: Option<String>,
     approximations: Vec<String>,
-    /// Generation answered in UFF because MMFF could not type the molecule.
-    mmff_untyped: bool,
+    /// Why generation answered in UFF: MMFF could not type the molecule.
+    /// It disables MMFF for the session, across mode switches.
+    field_note: Option<String>,
     energy: Option<f64>,
     iterations: u64,
     converged: bool,
@@ -703,7 +704,7 @@ impl App {
                 field: ForceField::Mmff94s,
                 mode: Mode::Strict,
                 approximations: vec![],
-                mmff_untyped: false,
+                field_note: None,
                 energy: None,
                 iterations: 0,
                 converged: false,
@@ -808,7 +809,12 @@ impl App {
                 .saturating_add(u64::from(result.iterations));
             session.converged = result.converged;
             if flight.work == Work::Generate {
-                session.mmff_untyped |= result.force_field != flight.field;
+                if result.force_field != flight.field {
+                    session.field_note = Some(format!(
+                        "{} used: no {} parameters for this molecule",
+                        result.force_field, flight.field
+                    ));
+                }
                 session.approximations = result.approximations.clone();
                 session.initialization = result.diagnostics.iter().rev().find_map(|diagnostic| {
                     if diagnostic.starts_with("initialization=existing-3d") {
@@ -1176,7 +1182,7 @@ impl App {
             || phase.to_owned(),
             |initialization| format!("{phase} · {initialization}"),
         );
-        let mmff = session.prepared.mmff_available() && !session.mmff_untyped;
+        let mmff = session.prepared.mmff_available() && session.field_note.is_none();
         let field = |id, name, label, field| {
             let available = mmff || field == ForceField::Uff;
             preview_control(
@@ -1304,14 +1310,16 @@ impl App {
                 .spacing(3),
             );
         }
-        if session.mode == Mode::Strict {
-            for note in &session.approximations {
-                panel = panel.push(
-                    text(format!("· {note}"))
-                        .size(11)
-                        .style(super::workspace::muted_text),
-                );
-            }
+        if let Some(note) = session
+            .field_note
+            .as_ref()
+            .filter(|_| session.mode == Mode::Strict)
+        {
+            panel = panel.push(
+                text(format!("· {note}"))
+                    .size(11)
+                    .style(super::workspace::muted_text),
+            );
         }
         if session.phase == Phase::Preparing {
             panel = panel.push(

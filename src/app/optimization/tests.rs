@@ -1408,6 +1408,9 @@ fn a_generation_answered_in_uff_keeps_the_session_on_uff() {
     let _ = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(computed))));
     let session = app.tab.optimization.as_ref().unwrap();
     assert_eq!(session.field, ForceField::Uff);
-    assert!(session.mmff_untyped, "MMFF stays offered after it failed");
-    assert_eq!(session.approximations.len(), 1);
+    assert_eq!(
+        session.field_note.as_deref(),
+        Some("UFF used: no MMFF94s parameters for this molecule"),
+        "MMFF stays offered after it failed"
+    );
 }

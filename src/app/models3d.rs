@@ -463,7 +463,16 @@ impl App {
             started: iced::time::Instant::now(),
             _handle: handle.abort_on_drop(),
         });
-        self.status = format!("Generating 3D model · {}", force_field.name());
+        self.status = if self
+            .tab
+            .model_job
+            .as_ref()
+            .is_some_and(|job| job.strict_error.is_some())
+        {
+            "Generating an approximate 3D model · relaxed checks".into()
+        } else {
+            format!("Generating 3D model · {}", force_field.name())
+        };
         self.error = false;
         task
     }
