@@ -153,7 +153,9 @@ pub(in crate::app::xtb) struct Dialog {
     at: (u64, u64),
     arrow: u64,
     mode: Mode,
+    rerun: bool,
     inferred: bool,
+    unmapped_isotope_hydrogen: bool,
     ignored: Option<String>,
     inputs: Vec<species::Input>,
     task: CalcTask,
@@ -238,23 +240,15 @@ pub(in crate::app) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Messa
 impl App {
     pub(in crate::app) fn xtb_review_target(&self) -> Option<u64> {
         let doc = &self.tab.doc;
-        if let Some(arrow) = self.selected_reaction_arrow()
-            && reaction_arrow(doc, arrow.id)
-        {
-            return Some(arrow.id);
+        if let Some(arrow) = self.selected_reaction_arrow() {
+            return reaction_arrow(doc, arrow.id).then_some(arrow.id);
         }
-        match doc.reactions.as_slice() {
-            [reaction] => reaction_arrow(doc, reaction.arrow).then_some(reaction.arrow),
-            [] => {
-                let mut candidates = doc
-                    .arrows
-                    .iter()
-                    .filter(|arrow| reactions::preview(doc, arrow.id).is_ok());
-                let first = candidates.next()?;
-                candidates.next().is_none().then_some(first.id)
-            }
-            _ => None,
-        }
+        let mut candidates = doc
+            .arrows
+            .iter()
+            .filter(|arrow| reactions::preview(doc, arrow.id).is_ok());
+        let first = candidates.next()?;
+        candidates.next().is_none().then_some(first.id)
     }
 
     pub(in crate::app) fn ts_review_open(&self) -> bool {
@@ -280,6 +274,19 @@ impl App {
     }
 
     pub(super) fn xtb_review_open(&mut self, mode: Mode, arrow: Option<u64>) -> Task<Message> {
+        self.xtb_review_open_inner(mode, arrow, false)
+    }
+
+    pub(super) fn xtb_review_rerun(&mut self, arrow: u64) -> Task<Message> {
+        self.xtb_review_open_inner(Mode::TransitionState, Some(arrow), true)
+    }
+
+    fn xtb_review_open_inner(
+        &mut self,
+        mode: Mode,
+        arrow: Option<u64>,
+        rerun: bool,
+    ) -> Task<Message> {
         if !available() || !self.xtb_can_start() || self.ts_review_open() {
             return Task::none();
         }
@@ -305,6 +312,8 @@ impl App {
             arrow,
             plan.as_ref().ok().filter(|_| mode == Mode::TransitionState),
         );
+        let unmapped_isotope_hydrogen =
+            matches!(changes, Err(TsPlanError::UnmappedIsotopeHydrogen));
         let mapping = if mode == Mode::TransitionState && !matches!(shape, (1, 1 | 2) | (2, 1)) {
             Mapping::Failed(SHAPE_NOTE.into())
         } else if reaction
@@ -316,7 +325,9 @@ impl App {
             Mapping::Failed("Expand coefficients to review a one-to-one atom map".into())
         } else if matches!(
             changes,
-            Err(TsPlanError::Unmapped { .. } | TsPlanError::UnmappedHydrogen)
+            Err(TsPlanError::Unmapped { .. }
+                | TsPlanError::UnmappedHydrogen
+                | TsPlanError::UnmappedIsotopeHydrogen)
         ) {
             Mapping::Finding
         } else {
@@ -329,17 +340,19 @@ impl App {
             at: self.review_stamp(),
             arrow,
             mode,
+            rerun,
             task,
             inputs,
             mapping,
             plan,
             changes,
             inferred: matches!(source, Cow::Owned(_)),
+            unmapped_isotope_hydrogen,
             ignored: species::ignored(&source, &reaction),
             preview: None,
         };
         let finding = matches!(dialog.mapping, Mapping::Finding);
-        if !dialog.needs_review() {
+        if !rerun && !dialog.needs_review() {
             return self.xtb_review_run(dialog);
         }
         dialog.preview = Some(Preview::for_reaction(source.as_ref().clone(), arrow));
@@ -407,7 +420,7 @@ impl App {
                     return Task::none();
                 }
                 if let Some(dialog) = self.tab.xtb.ts_review.take() {
-                    return self.xtb_review_run(dialog);
+                    return crate::app::focus_drawing().chain(self.xtb_review_run(dialog));
                 }
             }
         }
@@ -455,6 +468,9 @@ impl App {
                     Err(error) => return self.review_error(error),
                 };
                 let unpaired = start.multiplicity - 1;
+                if dialog.rerun {
+                    self.tab.xtb.ts_card.rerun_images();
+                }
                 let images = self.tab.xtb.ts_card.accept_review(
                     (self.tab.file_epoch, arrow),
                     &plan,
@@ -495,6 +511,12 @@ impl App {
         }
         if let Some(ignored) = &dialog.ignored {
             content = content.push(line(ignored, Tone::Muted));
+        }
+        if dialog.unmapped_isotope_hydrogen {
+            content = content.push(line(
+                "Isotope-labelled hydrogens need an explicit atom map.",
+                Tone::Muted,
+            ));
         }
         if let Mapping::Proposed(proposal) = &dialog.mapping {
             let detail = if !proposal.complete {

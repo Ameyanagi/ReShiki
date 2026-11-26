@@ -11,7 +11,7 @@ fn result(energy: f64) -> (Frame, CalcResult) {
         multiplicity: 1,
         drawing_atoms: vec![],
     };
-    let result = crate::app::xtb::run::example_computed(energy, 1.)
+    let mut result = crate::app::xtb::run::example_computed(energy, 1.)
         .to_calc_result(
             &frame,
             qcdata::Task::Optimize,
@@ -19,6 +19,9 @@ fn result(energy: f64) -> (Frame, CalcResult) {
             None,
         )
         .unwrap();
+    if let qcdata::Settings::Xtb(settings) = &mut result.settings {
+        settings.convergence = Some(qcdata::Convergence::Normal);
+    }
     (frame, result)
 }
 
@@ -117,7 +120,7 @@ fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_conver
         &species,
         CalcTask::Optimize
     ));
-    for change in 0..6 {
+    for change in 0..7 {
         let mut result = result.clone();
         let qcdata::Settings::Xtb(settings) = &mut result.settings else {
             unreachable!()
@@ -128,6 +131,7 @@ fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_conver
             2 => settings.conventions = qcdata::XtbConventions::Xtb68,
             3 => settings.electronic_temperature_k = Some(1000.),
             4 => settings.convergence = Some(qcdata::Convergence::Tight),
+            5 => settings.convergence = None,
             _ => {
                 result.status = qcdata::Status::NotConverged {
                     reason: "step limit".into(),
@@ -148,8 +152,19 @@ fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_conver
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn optfreq_reuse_requires_thermochemistry_at_298_kelvin_and_one_atmosphere() {
-    let (frame, _) = result(-1.);
+fn optfreq_reuse_requires_all_thermochemistry_settings_and_known_tight_convergence() {
+    let (mut frame, _) = result(-1.);
+    // The engine detects C2v at its automatic tolerance even when the
+    // isotope-aware geometry counter sees a slightly distorted structure.
+    frame.positions_angstrom[1][0] += 0.01;
+    assert_eq!(
+        qcdata::vibrational::rotational_symmetry_number(
+            &[8000, 1000, 1000],
+            &frame.positions_angstrom,
+            &[15.999, 1.008, 1.008],
+        ),
+        1
+    );
     let report =
         crate::app::xtb::tests::optfreq(&frame.positions_angstrom, &frame.positions_angstrom);
     let mut result = report
@@ -162,17 +177,50 @@ fn optfreq_reuse_requires_thermochemistry_at_298_kelvin_and_one_atmosphere() {
         )
         .unwrap();
     let species = species(false, 1);
-    assert!(matching(&result, &frame, &species, CalcTask::OptFreq));
+    assert!(!matching(&result, &frame, &species, CalcTask::OptFreq));
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
         settings.convergence = Some(qcdata::Convergence::Tight);
     }
     assert!(matching(&result, &frame, &species, CalcTask::OptFreq));
-    result.thermo.as_mut().unwrap().temperature_k = 350.;
-    assert!(!matching(&result, &frame, &species, CalcTask::OptFreq));
-    result.thermo.as_mut().unwrap().temperature_k = TEMPERATURE_K;
-    result.thermo.as_mut().unwrap().pressure_pa = 1_000.;
-    assert!(!matching(&result, &frame, &species, CalcTask::OptFreq));
-    result.thermo.as_mut().unwrap().pressure_pa = 101_325.;
+    for change in 0..6 {
+        let mut changed = result.clone();
+        let thermo = changed.thermo.as_mut().unwrap();
+        match change {
+            0 => thermo.temperature_k = 350.,
+            1 => thermo.pressure_pa = 1_000.,
+            2 => thermo.frequency_scale = 0.95,
+            3 => thermo.rotor_cutoff_cm1 = 100.,
+            4 => thermo.imaginary_cutoff_cm1 = 10.,
+            _ => thermo.symmetry_number = 1,
+        }
+        assert!(
+            !matching(&changed, &frame, &species, CalcTask::OptFreq),
+            "thermochemistry override {change} must not be reused"
+        );
+    }
+    let mut unlabelled = result.clone();
+    unlabelled.thermo.as_mut().unwrap().point_group = None;
+    assert!(!matching(&unlabelled, &frame, &species, CalcTask::OptFreq));
+
+    let mut isotopologue = result.clone();
+    let mut labelled_frame = frame.clone();
+    labelled_frame.isotopes = vec![0, 2, 0];
+    isotopologue.vibrations.as_mut().unwrap().masses_amu =
+        xtb::isotope_masses(&labelled_frame).unwrap();
+    assert!(!matching(
+        &isotopologue,
+        &labelled_frame,
+        &species,
+        CalcTask::OptFreq
+    ));
+    isotopologue.thermo.as_mut().unwrap().symmetry_number = 1;
+    assert!(matching(
+        &isotopologue,
+        &labelled_frame,
+        &species,
+        CalcTask::OptFreq
+    ));
+
     result.vibrations = None;
     assert!(!matching(&result, &frame, &species, CalcTask::OptFreq));
 }
@@ -228,6 +276,16 @@ mod execution {
             "{}",
             app.status
         );
+    }
+
+    fn summary_totals(app: &App) -> Option<Totals> {
+        let summary = app.tab.xtb.energy_state.summaries.first()?;
+        input_totals(
+            &app.tab.doc,
+            &summary.species,
+            &summary.inputs,
+            summary.task,
+        )
     }
 
     #[test]
@@ -301,6 +359,137 @@ mod execution {
         assert!(reusable(&app.tab.doc, &species, CalcTask::Optimize).is_some());
         app.tab.doc.atom_mut(a).unwrap().isotope = 18;
         assert!(reusable(&app.tab.doc, &species, CalcTask::Optimize).is_none());
+    }
+
+    #[test]
+    fn a_queued_species_geometry_stereo_edit_stops_before_its_launch() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let water = app.tab.doc.add_atom("O", Point::default());
+        let alkene = [
+            Point::new(100., 0.),
+            Point::new(140., 0.),
+            Point::new(80., -28.),
+            Point::new(160., -28.),
+        ]
+        .map(|position| app.tab.doc.add_atom("C", position));
+        app.tab.doc.add_bond(alkene[0], alkene[1], 2, "plain");
+        app.tab.doc.add_bond(alkene[0], alkene[2], 1, "plain");
+        app.tab.doc.add_bond(alkene[1], alkene[3], 1, "plain");
+        let (arrow, mut species) = reaction(&mut app, water, alkene[0]);
+        species[1].atoms = alkene.to_vec();
+        app.tab.doc.reactions[0].products[0].atoms = alkene.to_vec();
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
+        model(&mut app);
+        let reviewed = snapshot(&app.tab.doc, arrow, &species).unwrap();
+        // Stored stereo fields stay unchanged; E/Z is perceived from drawing geometry.
+        let stereo: Vec<_> = app
+            .tab
+            .doc
+            .bonds
+            .iter()
+            .map(|bond| bond.stereo.clone())
+            .collect();
+        app.tab.doc.atom_mut(alkene[3]).unwrap().position.y = 28.;
+        assert_eq!(
+            app.tab
+                .doc
+                .bonds
+                .iter()
+                .map(|bond| bond.stereo.clone())
+                .collect::<Vec<_>>(),
+            stereo
+        );
+        assert_ne!(snapshot(&app.tab.doc, arrow, &species).unwrap(), reviewed);
+        event(&mut app, optimized(&START, &MOVED));
+        assert_eq!(app.tab.doc.science.results.len(), 1);
+        assert!(app.tab.xtb.run.is_none());
+        assert!(app.tab.xtb.energy_state.batch.is_none());
+        assert!(
+            app.status.contains("review its species again"),
+            "{}",
+            app.status
+        );
+    }
+
+    #[test]
+    fn completed_energy_keeps_its_exact_results_and_expires_if_an_input_is_stale_or_removed() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("O", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
+        model(&mut app);
+        event(&mut app, optimized(&START, &MOVED));
+        model(&mut app);
+        event(&mut app, optimized(&START, &MOVED));
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize);
+        assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
+        let original_total = summary_totals(&app).unwrap();
+        assert!(
+            app.status.contains(&original_total.line()),
+            "{}",
+            app.status
+        );
+        let original = Arc::clone(&app.tab.xtb.energy_state.summaries[0].inputs[1].result);
+
+        // An ordinary optimization starts from a different conformer with the same settings.
+        app.tab.doc.models[1].atoms[0].xyz[2] += 0.1;
+        app.tab.selected = vec![b];
+        app.xtb.settings.task = CalcTask::Optimize;
+        send(&mut app, xtb::Action::Run);
+        let start = app
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .unwrap()
+            .launch
+            .as_ref()
+            .unwrap()
+            .frame
+            .positions_angstrom
+            .clone();
+        let mut end = MOVED;
+        end[1][2] += 0.05;
+        let mut answer = optimized(&start, &end);
+        let crate::app::xtb::run::Event::Done(Ok(report)) = &mut answer else {
+            unreachable!()
+        };
+        let report = Arc::get_mut(report).unwrap();
+        report.energy -= 0.1;
+        report.computed.energy = report.energy;
+        *report.energies.last_mut().unwrap() = report.energy;
+        event(&mut app, answer);
+        assert_eq!(app.tab.doc.science.results.len(), 3, "{}", app.status);
+        assert!(Arc::ptr_eq(
+            &reusable(&app.tab.doc, &species[1], CalcTask::Optimize)
+                .unwrap()
+                .result,
+            &app.tab.doc.science.results[2].result,
+        ));
+        assert_eq!(summary_totals(&app), Some(original_total));
+        assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
+        assert!(Arc::ptr_eq(
+            &app.tab.xtb.energy_state.summaries[0].inputs[1].result,
+            &original,
+        ));
+
+        app.tab.doc.atom_mut(b).unwrap().isotope = 18;
+        assert!(summary_totals(&app).is_none());
+        app.tab.doc.atom_mut(b).unwrap().isotope = 0;
+        assert!(summary_totals(&app).is_some());
+        app.tab
+            .doc
+            .science
+            .results
+            .retain(|stored| !Arc::ptr_eq(&stored.result, &original));
+        assert!(reusable(&app.tab.doc, &species[1], CalcTask::Optimize).is_some());
+        assert!(
+            summary_totals(&app).is_none(),
+            "a newer result cannot replace a missing input"
+        );
     }
 
     #[test]

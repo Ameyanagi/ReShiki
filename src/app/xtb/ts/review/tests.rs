@@ -12,22 +12,11 @@ fn app(doc: Document, arrow: u64) -> App {
     app
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 fn open(app: &mut App, mode: Mode) {
     let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Review(mode, None))));
 }
 
-#[test]
-fn complete_balanced_map_runs_in_one_click_when_xtb_is_available() {
-    let (doc, arrow) = claisen();
-    let mut app = app(doc, arrow);
-    open(&mut app, Mode::TransitionState);
-    assert!(!app.ts_review_open());
-    assert_eq!(app.xtb_running(), available());
-    assert_eq!(app.tab.model_job.is_some(), available());
-    assert!(!app.tab.history.can_undo());
-}
-
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 fn drawn_claisen() -> (Document, u64) {
     let (mut doc, arrow) = claisen();
     let reaction = doc.reactions.pop().unwrap();
@@ -44,6 +33,33 @@ fn drawn_claisen() -> (Document, u64) {
     }
     doc.add_atom("O", Point::new(180., -32.));
     (doc, arrow)
+}
+
+#[test]
+fn palette_counts_assigned_and_inferred_arrows_together() {
+    let (mut doc, inferred) = drawn_claisen();
+    let mut reaction = reactions::preview(&doc, inferred).unwrap();
+    assert!(reaction.ready());
+    let assigned = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        assigned,
+        Point::new(110., 400.),
+        Point::new(250., 400.),
+        Default::default(),
+        Default::default(),
+    ));
+    reaction.arrow = assigned;
+    doc.reactions.push(reaction);
+
+    let mut app = app(doc, assigned);
+    assert_eq!(app.xtb_review_target(), Some(assigned));
+    app.tab.selected.clear();
+    assert_eq!(app.xtb_review_target(), None);
+    app.tab.doc.reactions.clear();
+    app.tab.doc.arrows[1].purpose = reshiki::purpose::Purpose::Illustration;
+    assert_eq!(app.xtb_review_target(), Some(inferred));
+    app.tab.selected = vec![assigned];
+    assert_eq!(app.xtb_review_target(), None);
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
@@ -148,6 +164,40 @@ fn complete_map_with_moving_hydrogen_requires_the_sheet() {
     let _ = app.update(send(Action::Cancel));
     assert!(!app.ts_review_open());
     assert!(!app.tab.history.can_undo());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn missing_isotope_maps_open_auto_map_with_an_explanation() {
+    let (mut doc, arrow) = claisen();
+    let attachments = [
+        (doc.reactions[0].reactants[0].atoms[0], false),
+        (doc.reactions[0].products[0].atoms[3], true),
+    ];
+    for (parent, product) in attachments {
+        let position = doc.atom(parent).unwrap().position;
+        let h = doc.add_atom("H", Point::new(position.x, position.y + 25.));
+        doc.atom_mut(h).unwrap().isotope = 2;
+        doc.add_bond(parent, h, 1, "plain");
+        let reaction = &mut doc.reactions[0];
+        let side = if product {
+            &mut reaction.products
+        } else {
+            &mut reaction.reactants
+        };
+        side[0].atoms.push(h);
+    }
+    let mut app = app(doc, arrow);
+    open(&mut app, Mode::TransitionState);
+    assert!(!app.xtb_running());
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert!(dialog.unmapped_isotope_hydrogen);
+    assert!(matches!(dialog.mapping, Mapping::Finding));
+    finish_mapping(&mut app);
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert!(dialog.unmapped_isotope_hydrogen);
+    assert!(dialog.validate().is_ok());
+    assert!(!app.xtb_running());
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]

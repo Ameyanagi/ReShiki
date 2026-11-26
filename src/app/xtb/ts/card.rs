@@ -74,6 +74,10 @@ struct Config {
 }
 
 impl State {
+    pub(super) fn rerun_images(&mut self) {
+        self.images = "20".into();
+    }
+
     fn plan(&self, doc: &Document, scope: Scope) -> Result<TsPlan, TsPlanError> {
         let drawn = ts_plan::plan(doc, scope.1);
         if drawn.is_err()
@@ -276,35 +280,45 @@ fn subtitle(doc: &Document, arrow: u64, plan: &Result<TsPlan, TsPlanError>) -> S
     )
 }
 
+enum ArrowResult<'a> {
+    Found(&'a Arc<CalcResult>),
+    Ambiguous,
+    Missing,
+}
+
 impl App {
     /// Follow this arrow's TS result even when another calculation is shown.
-    fn xtb_ts_card_result(&self, arrow: u64) -> Option<&Arc<CalcResult>> {
-        self.tab
-            .doc
-            .science
-            .results
-            .iter()
-            .rev()
-            .find_map(|stored| {
-                let result = &stored.result;
-                if !super::is_ts(result) {
-                    return None;
+    fn xtb_ts_card_result(&self, arrow: u64) -> ArrowResult<'_> {
+        let doc = &self.tab.doc;
+        let mut ambiguous = false;
+        for stored in doc.science.results.iter().rev() {
+            let result = &stored.result;
+            if !super::is_ts(result) {
+                continue;
+            }
+            if let Some(session) = self.tab.xtb.ts_sessions.get(result) {
+                if session.arrow == arrow {
+                    return ArrowResult::Found(result);
                 }
-                let matches = self.tab.xtb.ts_sessions.get(result).map_or_else(
-                    || {
-                        self.tab
-                            .doc
-                            .science
-                            .attachment(stored.attachment)
-                            .is_some_and(|link| {
-                                super::matching_plans(&self.tab.doc, &link.atoms)
-                                    .any(|(candidate, _)| candidate == arrow)
-                            })
-                    },
-                    |session| session.arrow == arrow,
-                );
-                matches.then_some(result)
-            })
+                continue;
+            }
+            let Some(link) = doc.science.attachment(stored.attachment) else {
+                continue;
+            };
+            let mut candidates = super::matching_plans(doc, &link.atoms).map(|(arrow, _)| arrow);
+            let first = candidates.next();
+            let second = candidates.next();
+            if first == Some(arrow) && second.is_none() {
+                return ArrowResult::Found(result);
+            }
+            ambiguous |=
+                first == Some(arrow) || second == Some(arrow) || candidates.any(|id| id == arrow);
+        }
+        if ambiguous {
+            ArrowResult::Ambiguous
+        } else {
+            ArrowResult::Missing
+        }
     }
 
     /// Open the saved saddle's imaginary mode without applying its geometry.
@@ -385,8 +399,8 @@ impl App {
                 }
             }
             Action::Animate => {
-                if let Some(result) = self.xtb_ts_card_result(arrow).cloned() {
-                    return self.xtb_ts_animate(result);
+                if let ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) {
+                    return self.xtb_ts_animate(Arc::clone(result));
                 }
             }
             Action::Open(_) | Action::SearchSettings => {}
@@ -395,15 +409,28 @@ impl App {
     }
 
     /// Shown next to Reaction roles only for one selected chemistry arrow.
-    pub(in crate::app) fn xtb_ts_card(&self, arrow: u64) -> Element<'_, Message> {
+    pub(in crate::app) fn xtb_ts_card(&self, arrow: u64) -> Option<Element<'_, Message>> {
         let card = &self.tab.xtb.ts_card;
         // Match Calculate's platform/build note exactly, with no search
         // controls or chemistry diagnostics in an unavailable build.
         if let Some(reason) = crate::app::xtb::unavailable() {
-            return container(text(reason).size(12))
-                .padding(10)
-                .width(Length::Fill)
-                .into();
+            return Some(
+                container(text(reason).size(12))
+                    .padding(10)
+                    .width(Length::Fill)
+                    .into(),
+            );
+        }
+        let result = self.xtb_ts_card_result(arrow);
+        let live = self
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .and_then(|run| run.ts.as_ref().map(|live| (run, live)))
+            .filter(|(_, live)| live.request.arrow == arrow);
+        if matches!(result, ArrowResult::Ambiguous) && live.is_none() {
+            return None;
         }
         let scope = (self.tab.file_epoch, arrow);
         let assigned = card.plan(&self.tab.doc, scope);
@@ -444,12 +471,12 @@ impl App {
             .on_press(send(Action::Open(!card.open))),
         ];
         if !card.open {
-            return crate::app::inspector::card(content);
+            return Some(crate::app::inspector::card(content));
         }
         let idle = self.tab.xtb.run.is_none() && !self.tab.busy;
         let set = |action| idle.then(|| send(action));
         let mut body = column![].spacing(6);
-        if let Some(result) = self.xtb_ts_card_result(arrow) {
+        if let ArrowResult::Found(result) = result {
             let imaginary = imaginary_mode(result);
             body = body.push(match imaginary {
                 Some((_, frequency)) => row![
@@ -473,14 +500,7 @@ impl App {
                 None => line("No significant imaginary frequency.", Tone::Warning),
             });
         }
-        if let Some((run, live)) = self
-            .tab
-            .xtb
-            .run
-            .as_ref()
-            .and_then(|run| run.ts.as_ref().map(|live| (run, live)))
-            .filter(|(_, live)| live.request.arrow == arrow)
-        {
+        if let Some((run, live)) = live {
             let stage = if run.launch.is_some() {
                 live.line()
             } else {
@@ -564,7 +584,7 @@ impl App {
             bottom: 12.,
             left: 10.,
         }));
-        crate::app::inspector::card(content)
+        Some(crate::app::inspector::card(content))
     }
 
     fn xtb_ts_search_settings(

@@ -50,6 +50,8 @@ pub enum TsPlanError {
     Unmapped { mapped: usize, heavy: usize },
     #[error("Map drawn hydrogens that are not terminal on a heavy atom")]
     UnmappedHydrogen,
+    #[error("Map every isotope-labelled hydrogen before searching")]
+    UnmappedIsotopeHydrogen,
     #[error("{0}")]
     Mismatch(String),
     #[error("Total hydrogen counts differ between reactants and products")]
@@ -248,8 +250,8 @@ fn side_drawing(doc: &Document, ids: &[u64]) -> Result<Document, TsPlanError> {
             "Expand abbreviations and superatoms before searching for a transition state".into(),
         ));
     }
-    // The 3D component lookup follows even zero-order bonds. Check these
-    // before extracting the side, where bonds to other components are lost.
+    // Check contacts before extracting the side, where links to other
+    // components are lost. TS bond changes use ordinary bonds only.
     if doc.bonds.iter().any(|bond| {
         (selected.contains(&bond.a) || selected.contains(&bond.b)) && !matches!(bond.order, 1..=4)
     }) {
@@ -274,7 +276,6 @@ fn side_drawing(doc: &Document, ids: &[u64]) -> Result<Document, TsPlanError> {
 struct MappedAtom<'a> {
     drawing: &'a Atom,
     hydrogens: usize,
-    has_unmapped_isotope_h: bool,
 }
 
 struct MappedSide<'a> {
@@ -286,6 +287,15 @@ struct MappedSide<'a> {
 
 impl<'a> MappedSide<'a> {
     fn new(part: &'a Document) -> Result<Self, TsPlanError> {
+        // Folding an isotope-labelled H into its heavy atom's hydrogen count
+        // loses its identity, even when an exchange preserves every count.
+        if part
+            .atoms
+            .iter()
+            .any(|atom| atom.element == "H" && atom.isotope != 0 && atom.map_num == 0)
+        {
+            return Err(TsPlanError::UnmappedIsotopeHydrogen);
+        }
         let unsupported = |error: chemistry::Error| TsPlanError::Unsupported(error.to_string());
         let prepared = chemistry::prepare(part).map_err(unsupported)?;
         let graph = chemistry::drawing_graph(part).map_err(unsupported)?;
@@ -310,7 +320,6 @@ impl<'a> MappedSide<'a> {
             let atom = MappedAtom {
                 drawing,
                 hydrogens: hydrogens.len(),
-                has_unmapped_isotope_h: hydrogens.iter().any(|&isotope| isotope != 0),
             };
             if atoms.insert(map, atom).is_some() {
                 return Err(TsPlanError::Mismatch(format!(
@@ -362,11 +371,6 @@ fn hydrogen_moves(
         let next = to.atom(map)?.hydrogens;
         match atom.hydrogens.cmp(&next) {
             std::cmp::Ordering::Greater => {
-                if atom.has_unmapped_isotope_h {
-                    return Err(TsPlanError::Unsupported(
-                        "Map isotope-labelled hydrogens before searching".into(),
-                    ));
-                }
                 donors.push((atom.drawing, atom.hydrogens - next));
             }
             std::cmp::Ordering::Less => acceptors.push((atom.drawing, next - atom.hydrogens)),

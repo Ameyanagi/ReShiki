@@ -205,19 +205,14 @@ fn mapped_drawn_hydrogen_changes_are_bonds() {
 }
 
 #[test]
-fn inferred_transfer_requires_mapping_an_isotope_labelled_donor_hydrogen() {
+fn inferred_transfer_requires_mapping_an_isotope_labelled_hydrogen() {
     let (mut doc, arrow, left, right) = tautomer(true);
     for id in [left[&5], right[&5]] {
         let atom = doc.atom_mut(id).unwrap();
         atom.isotope = 2;
         atom.map_num = 0;
     }
-    assert_eq!(
-        plan(&doc, arrow),
-        Err(TsPlanError::Unsupported(
-            "Map isotope-labelled hydrogens before searching".into()
-        ))
-    );
+    assert_eq!(plan(&doc, arrow), Err(TsPlanError::UnmappedIsotopeHydrogen));
     for id in [left[&5], right[&5]] {
         doc.atom_mut(id).unwrap().map_num = 5;
     }
@@ -226,6 +221,83 @@ fn inferred_transfer_requires_mapping_an_isotope_labelled_donor_hydrogen() {
     assert_eq!(plan.mapped_hydrogens, [left[&5]]);
     assert_eq!(plan.break_, [(left[&1], left[&5])]);
     assert_eq!(plan.form, [(left[&3], left[&5])]);
+}
+
+fn isotope_exchange(product_site: u32) -> (Document, u64, BTreeMap<u32, u64>, BTreeMap<u32, u64>) {
+    let (mut doc, arrow, mut left) = claisen();
+    let mut right: BTreeMap<_, _> = doc.reactions[0].products[0]
+        .atoms
+        .iter()
+        .map(|id| (doc.atom(*id).unwrap().map_num, *id))
+        .collect();
+    for (side, site, participant) in [
+        (&mut left, 1, Role::Reactant),
+        (&mut right, product_site, Role::Product),
+    ] {
+        let hydrogen = doc.add_atom("H", Point::default());
+        doc.atom_mut(hydrogen).unwrap().isotope = 2;
+        doc.add_bond(side[&site], hydrogen, 1, "plain");
+        side.insert(7, hydrogen);
+        match participant {
+            Role::Reactant => &mut doc.reactions[0].reactants[0],
+            Role::Product => &mut doc.reactions[0].products[0],
+            Role::Agent => unreachable!(),
+        }
+        .atoms
+        .push(hydrogen);
+    }
+    doc.validate().unwrap();
+    (doc, arrow, left, right)
+}
+
+#[test]
+fn isotope_exchange_requires_both_maps_even_when_all_total_hydrogen_counts_match() {
+    // C1 and C4 retain two total H atoms each across the Claisen rearrangement.
+    // Exchanging D and ordinary H therefore leaves inferred H moves empty if
+    // the isotope identity is folded into those counts.
+    for mapped_sides in [[false, false], [true, false], [false, true]] {
+        let (mut doc, arrow, left, right) = isotope_exchange(4);
+        for (id, mapped) in [left[&7], right[&7]].into_iter().zip(mapped_sides) {
+            doc.atom_mut(id).unwrap().map_num = if mapped { 7 } else { 0 };
+        }
+        assert_eq!(plan(&doc, arrow), Err(TsPlanError::UnmappedIsotopeHydrogen));
+        assert_eq!(
+            plan_for_review(&doc, arrow),
+            Err(TsPlanError::UnmappedIsotopeHydrogen)
+        );
+        assert!(matches!(
+            map_review(&doc, arrow),
+            Err(TsPlanError::UnmappedIsotopeHydrogen)
+        ));
+    }
+}
+
+#[test]
+fn unchanged_isotope_labelled_hydrogens_also_require_explicit_correspondence() {
+    for isotope in [1, 2, 3] {
+        let (mut doc, arrow, left, right) = isotope_exchange(1);
+        for id in [left[&7], right[&7]] {
+            doc.atom_mut(id).unwrap().isotope = isotope;
+        }
+        assert_eq!(plan(&doc, arrow), Err(TsPlanError::UnmappedIsotopeHydrogen));
+    }
+}
+
+#[test]
+fn auto_mapping_preserves_isotope_exchange_alongside_heavy_atom_changes() {
+    let (doc, arrow, left, right) = isotope_exchange(4);
+    let proposal = reaction_mapping::propose(&doc, arrow, Default::default()).unwrap();
+    assert!(proposal.complete);
+    assert!(!proposal.multiple_best);
+    assert_eq!(proposal.unmatched_reactants, 0);
+    assert_eq!(proposal.unmatched_products, 0);
+    assert!(proposal.pairs.contains(&(left[&7], right[&7])));
+    let mapped = proposal.apply(&doc, false).unwrap();
+    let result = plan(&mapped, arrow).unwrap();
+    assert_eq!(result.mapped_hydrogens, [left[&7]]);
+    assert_eq!(result.form, [(left[&1], left[&6]), (left[&4], left[&7])]);
+    assert_eq!(result.break_, [(left[&1], left[&7]), (left[&3], left[&4])]);
+    assert_eq!(result.hydrogen_moves, [(left[&4], left[&1])]);
 }
 
 #[test]
