@@ -798,6 +798,11 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
     let original = molecule(request)?;
     let mol = with_hydrogens(&original, request.atoms.len(), false)?;
     let expected = StereoExpectation::new(&mol)?;
+    // MMFF types none of these elements, so this is the UFF that generation
+    // would fall back to; refuse before typing, which may fail for Og first.
+    if request.operation == Operation::Generate {
+        refuse_shapes_uff_gets_wrong(request)?;
+    }
     let check = |field| {
         if request.relaxed {
             relaxed::check_field(&mol, field)
@@ -828,9 +833,6 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         )
     });
     let request = fallback.as_ref().unwrap_or(request);
-    if request.operation == Operation::Generate && request.field == ForceField::UFF {
-        refuse_shapes_uff_gets_wrong(request)?;
-    }
     let cage = Cage::from_molecule(&mol);
     validate_original_order(&mol, request.atoms.len())?;
     let parents = hydrogen_parents(&mol, request.atoms.len())?;

@@ -1622,8 +1622,9 @@ impl App {
 }
 
 /// Strict preparation, or relaxed preparation with the strict refusal when
-/// only chemistry checks refused the molecule (radicals; elements such as Ce,
-/// U or Xe): the 3D view shows an approximate model with a note instead.
+/// only chemistry checks refused the molecule (radicals; elements such as U
+/// in UF6): the 3D view shows an approximate model with a note instead. The
+/// worker still refuses shapes UFF gets wrong, such as CeF3 or XeF2.
 fn prepare(
     doc: &Document,
     atoms: &[u64],

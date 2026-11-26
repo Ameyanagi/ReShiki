@@ -1186,6 +1186,8 @@ fn generation_refuses_only_the_shapes_uff_gets_wrong() {
         ("XeF2", star(54, 9, 2, 1)),
         ("XeO3", star(54, 8, 3, 2)),
         ("KrF2", star(36, 9, 2, 1)),
+        // UFF has no Og type; the shape refusal still comes first.
+        ("OgF", star(118, 9, 1, 1)),
     ] {
         let message = solve(&request).unwrap_err();
         assert!(
