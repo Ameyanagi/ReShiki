@@ -90,6 +90,7 @@ pub struct IrFigure {
     pub scale: f64,
     pub labels: u8,
     pub vertical_labels: bool,
+    /// Unscaled, rounded wavenumbers of hidden labels in cm⁻¹.
     pub hidden_labels: Vec<u32>,
     pub method_line: bool,
     pub journal: Journal,

@@ -97,12 +97,12 @@ impl App {
             ),
         ]
         .spacing(9);
-        for &peak in &self.tab.ir_figure.peaks {
-            let visible = !figure.hidden_labels.contains(&peak);
-            let label = format!("{peak} cm⁻¹");
+        for &(key, printed) in &self.tab.ir_figure.peaks {
+            let visible = !figure.hidden_labels.contains(&key);
+            let label = format!("{printed} cm⁻¹");
             body = body.push(
                 reshiki::accessibility::button(
-                    format!("ir-figure-peak-{peak}"),
+                    format!("ir-figure-peak-{key}"),
                     label.clone(),
                     toggler(visible)
                         .label(label)
@@ -110,13 +110,13 @@ impl App {
                         .text_size(12)
                         .spacing(8)
                         .on_toggle(move |visible| {
-                            Message::IrFigure(Action::Edit(target, Edit::Peak(peak, visible)))
+                            Message::IrFigure(Action::Edit(target, Edit::Peak(key, visible)))
                         }),
                 )
                 .checked(visible)
                 .on_press(Message::IrFigure(Action::Edit(
                     target,
-                    Edit::Peak(peak, !visible),
+                    Edit::Peak(key, !visible),
                 )))
                 .padding(0)
                 .style(|theme, _| iced::widget::button::Style {

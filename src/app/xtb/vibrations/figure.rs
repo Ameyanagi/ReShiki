@@ -13,7 +13,8 @@ pub(crate) struct Figure {
     pub(crate) graphics: Vec<Graphic>,
     pub(crate) annotations: Vec<Annotation>,
     pub(crate) group: Group,
-    pub(crate) labelled_peaks: Vec<u32>,
+    /// Drawn labels as (unscaled key, printed wavenumber).
+    pub(crate) labelled_peaks: Vec<(u32, u32)>,
 }
 
 impl Figure {
@@ -856,12 +857,13 @@ pub(crate) fn spectrum(doc: &Document, figure: &IrFigure, at: Point) -> Figure {
         let label = annotation(0, text, tick_format.clone(), centre, angle);
         occupied.push((rounded, label.bounds()));
         leaders.push((start, end));
-        if figure.hidden_labels.contains(&rounded) {
+        let key = (number / figure.scale).round() as u32;
+        if figure.hidden_labels.contains(&key) {
             continue;
         }
         graphics.push(line(id(), start, end, line_width / 2.));
         annotations.push(Annotation { id: id(), ..label });
-        labelled_peaks.push(rounded);
+        labelled_peaks.push((key, rounded));
     }
 
     for graphic in &mut graphics {
@@ -902,7 +904,7 @@ mod tests {
     }
 
     fn assert_outward_label(doc: &Document, chart: &Figure, ir: &IrFigure, number: u32) {
-        assert_eq!(chart.labelled_peaks, [number]);
+        assert_eq!(chart.labelled_peaks, [(number, number)]);
         let label = chart.annotations.last().unwrap();
         assert_eq!(label.text, number.to_string());
         let (lo, hi) = label.bounds();
@@ -1046,7 +1048,7 @@ mod tests {
             ..IrFigure::default()
         };
         let chart = spectrum(&Document::default(), &ir, Point::default());
-        assert!(chart.labelled_peaks.contains(&1940));
+        assert!(chart.labelled_peaks.contains(&(1940, 1940)));
         assert_eq!(chart.labelled_peaks.len(), 5);
     }
 }
