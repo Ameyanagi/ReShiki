@@ -1039,7 +1039,17 @@ fn energy_unit_formats_signed_differences_in_each_unit() {
     assert_eq!(EnergyUnit::KjPerMol.format(27.3), "114.2 kJ/mol");
     assert_eq!(EnergyUnit::Ev.format(-23.0605), "−1.00 eV");
     assert!((EnergyUnit::KjPerMol.convert_kcal(1.) - 4.184).abs() < 1e-12);
-    assert!((EnergyUnit::Ev.convert_kcal(23.0605) - 1.).abs() < 1e-12);
+}
+
+#[test]
+fn minus_twenty_five_hartree_uses_the_shared_energy_conversion_constants() {
+    use reshiki::qcdata::{HARTREE_TO_EV, KCAL_PER_HARTREE};
+
+    let kcal = -25. * KCAL_PER_HARTREE;
+    assert_eq!(EnergyUnit::KcalPerMol.convert_kcal(kcal), kcal);
+    assert_eq!(EnergyUnit::KjPerMol.convert_kcal(kcal), kcal * 4.184);
+    assert_eq!(EnergyUnit::Ev.convert_kcal(kcal), -25. * HARTREE_TO_EV);
+    assert_eq!(EnergyUnit::Ev.format(kcal), "−680.28 eV");
 }
 
 #[test]

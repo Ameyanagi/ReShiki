@@ -515,13 +515,7 @@ fn imported_methods_credit_a_named_molden_writer_as_the_exporter() {
 #[test]
 fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
     let result = optimized(true);
-    let rows = summary_rows(
-        &result,
-        &frame(&START),
-        &frame(&END),
-        Some(&info(14.01)),
-        None,
-    );
+    let rows = summary_rows(&result, &frame(&START), &frame(&END), Some(&info(14.01)));
     let labels: Vec<_> = rows.iter().map(|(label, _)| label.as_str()).collect();
     assert_eq!(
         labels,
@@ -555,7 +549,7 @@ fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
     assert_eq!(run_time, "1.2 s · 2 SCF calculations");
 
     // The saved run summary survives reopening, and missing properties are omitted.
-    let rows = summary_rows(&result, &frame(&START), &frame(&END), None, None);
+    let rows = summary_rows(&result, &frame(&START), &frame(&END), None);
     assert_eq!(
         rows.last().unwrap(),
         &("Run time".into(), "1.2 s · 2 SCF calculations".into())
@@ -570,7 +564,7 @@ fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
     energy.trajectory = None;
     energy.run = None;
     energy.gradient_hartree_per_bohr.clear();
-    let rows = summary_rows(&energy, &frame(&START), &frame(&START), None, None);
+    let rows = summary_rows(&energy, &frame(&START), &frame(&START), None);
     assert_eq!(rows.len(), 2, "{rows:?}");
     assert_eq!(View::available(&energy), [View::Summary, View::Log]);
     assert_eq!(
@@ -644,7 +638,7 @@ fn with_properties(mut result: CalcResult) -> CalcResult {
 fn stored_properties_show_without_run_information() {
     let result = with_properties(optimized(false));
     let (input, output) = (frame(&START), frame(&END));
-    let rows = summary_rows(&result, &input, &output, None, None);
+    let rows = summary_rows(&result, &input, &output, None);
     assert_eq!(
         key_numbers(&result, None),
         [
@@ -654,7 +648,7 @@ fn stored_properties_show_without_run_information() {
         ]
     );
     assert!(
-        summary_grid_rows(&result, &input, &output, None)
+        summary_grid_rows(&result, &input, &output)
             .iter()
             .all(|(label, _)| {
                 !matches!(
@@ -828,7 +822,7 @@ fn the_summary_and_log_show_imaginary_modes_and_stored_thermochemistry() {
         .computed
         .to_calc_result(&output, Task::Optimize, &report.engine, None)
         .unwrap();
-    let rows = summary_rows(&result, &frame(&START), &output, None, None);
+    let rows = summary_rows(&result, &frame(&START), &output, None);
     let row = |name: &str| {
         rows.iter()
             .find(|(label, _)| label == name)

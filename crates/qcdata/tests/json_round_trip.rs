@@ -627,6 +627,7 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
         product_chemistry: "cd".repeat(32),
         title: "Reactant → product".into(),
         reactant: "Reactant".into(),
+        endpoint_complex: Some(true),
     };
     let added_heap = context.reactant_chemistry.len()
         + context.product_chemistry.len()
@@ -658,7 +659,7 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
     let search = details(&mut result);
     search.free_energy = true;
     search.endpoint_energies_hartree = Some([-117., -118.]);
-    search.endpoint_thermo = Some([reactant_thermo, product_thermo]);
+    search.endpoint_thermo = Some([Some(reactant_thermo), Some(product_thermo)]);
     // Endpoint reaction energies remain meaningful for an unreliable saddle.
     search.saddle_converged = false;
     assert_eq!(search.reaction_energy_hartree(), Some(-1.));
@@ -710,9 +711,17 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
             0 => search.endpoint_energies_hartree = Some([f64::NAN, -118.]),
             1 => search.endpoint_energies_hartree = None,
             2 => search.free_energy = false,
-            3 => search.endpoint_thermo.as_mut().unwrap()[1].temperature_k = 350.,
+            3 => {
+                search.endpoint_thermo.as_mut().unwrap()[1]
+                    .as_mut()
+                    .unwrap()
+                    .temperature_k = 350.
+            }
             _ => {
-                search.endpoint_thermo.as_mut().unwrap()[0].gibbs_correction_hartree = f64::INFINITY
+                search.endpoint_thermo.as_mut().unwrap()[0]
+                    .as_mut()
+                    .unwrap()
+                    .gibbs_correction_hartree = f64::INFINITY
             }
         }
         assert!(

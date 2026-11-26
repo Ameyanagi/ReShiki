@@ -122,9 +122,9 @@ pub struct TransitionStateRun {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub endpoint_energies_hartree: Option<[f64; 2]>,
     /// Corrections for those same endpoints, in [reactant, product] order.
-    /// Absent when not requested or when either frequency analysis failed.
+    /// A missing slot means that endpoint's frequency analysis failed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub endpoint_thermo: Option<[Thermo; 2]>,
+    pub endpoint_thermo: Option<[Option<Thermo>; 2]>,
     pub saddle_converged: bool,
     pub imaginary: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -145,6 +145,9 @@ pub struct TransitionStateContext {
     pub title: String,
     /// First reactant label used by exported file names.
     pub reactant: String,
+    /// Whether one endpoint represents multiple species optimized together.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_complex: Option<bool>,
 }
 
 /// Atom labels are captured at run start, in the direction of the reaction arrow.
@@ -174,6 +177,8 @@ impl TransitionStateRun {
     pub fn reaction_gibbs_hartree(&self) -> Option<f64> {
         let [reactant, product] = self.endpoint_energies_hartree?;
         let [reactant_thermo, product_thermo] = self.endpoint_thermo.as_ref()?;
+        let (reactant_thermo, product_thermo) =
+            (reactant_thermo.as_ref()?, product_thermo.as_ref()?);
         let delta = (product + product_thermo.gibbs_correction_hartree)
             - (reactant + reactant_thermo.gibbs_correction_hartree);
         delta.is_finite().then_some(delta)
@@ -196,7 +201,7 @@ impl TransitionStateRun {
             || self.endpoint_thermo.as_ref().is_some_and(|corrections| {
                 !self.free_energy
                     || self.endpoint_energies_hartree.is_none()
-                    || corrections.iter().any(|thermo| {
+                    || corrections.iter().flatten().any(|thermo| {
                         (thermo.temperature_k - 298.15).abs() > 1e-6
                             || (thermo.pressure_pa - 101_325.).abs() > 1e-3
                             || (thermo.frequency_scale - 1.).abs() > 1e-12
@@ -254,6 +259,7 @@ impl TransitionStateRun {
             + self.endpoint_thermo.as_ref().map_or(0, |corrections| {
                 corrections
                     .iter()
+                    .flatten()
                     .map(|thermo| thermo.point_group.as_ref().map_or(0, String::len))
                     .sum::<usize>()
             })
@@ -798,6 +804,7 @@ impl CalcResult {
                 .and_then(|run| run.transition_state.as_ref())
                 .and_then(|search| search.endpoint_thermo.as_ref())
                 .into_iter()
+                .flatten()
                 .flatten(),
         ) {
             if [

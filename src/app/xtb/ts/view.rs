@@ -7,10 +7,11 @@ use crate::app::xtb::{Action as XtbAction, EnergyUnit, state};
 use crate::app::{App, Message};
 use iced::widget::{canvas, column, container, row, text};
 use iced::{Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
-use reshiki::qcdata::{CalcResult, Frame, Status};
+use reshiki::qcdata::{CalcResult, Frame, KCAL_PER_HARTREE, Status};
 
-const KCAL_PER_HARTREE: f64 = 627.509_474_063;
 const IMAGINARY_CM1: f64 = 50.;
+pub(super) const THERMO_IMAGINARY_CM1: f64 = 20.;
+pub(super) const OPTIMIZED_COMPLEX: &str = "optimized complex";
 const RELOAD_NOTE: &str = "Run the search again to inspect structures along the saved path.";
 
 /// One interpretation of the saved result, shared by the card, Path and status.
@@ -164,7 +165,11 @@ pub(in crate::app::xtb) fn presentation(
 }
 
 /// Technical search detail belongs in Log, including after the file is reopened.
-pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Session>) -> String {
+pub(in crate::app::xtb) fn search_log(
+    result: &CalcResult,
+    session: Option<&Session>,
+    unit: EnergyUnit,
+) -> String {
     if !super::is_ts(result) {
         return String::new();
     }
@@ -232,10 +237,18 @@ pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Sess
         rows.push(("Total time".into(), format!("{:.2} s", run.seconds)));
     }
     let mut lines = vec!["Transition-state search".into()];
-    lines.extend(
-        rows.into_iter()
-            .map(|(label, value)| format!("{label}: {value}")),
-    );
+    lines.extend(rows.into_iter().map(|(label, value)| {
+        if label == "Folded the starting conformer"
+            && let Some((distances, energy)) = value.rsplit_once(" (")
+            && let Some(energy) = energy.strip_suffix(" kcal/mol)")
+            && let Ok(kcal) = energy.parse::<f64>()
+        {
+            let plus = if kcal.is_sign_positive() { "+" } else { "" };
+            format!("{label}: {distances} ({plus}{})", unit.format(kcal))
+        } else {
+            format!("{label}: {value}")
+        }
+    }));
     lines.join("\n")
 }
 
@@ -303,6 +316,43 @@ pub(in crate::app::xtb) fn reaction_gibbs_kcal(result: &CalcResult) -> Option<f6
     delta.is_finite().then_some(delta)
 }
 
+pub(super) fn reaction_gibbs_unavailable(result: &CalcResult) -> Option<String> {
+    let search = super::saved_search(result)?;
+    if !search.free_energy || reaction_gibbs_kcal(result).is_some() {
+        return None;
+    }
+    let reason = search.diagnostics.iter().find_map(|(label, detail)| {
+        let side = match label.as_str() {
+            "Reactant thermochemistry" => "reactant",
+            "Product thermochemistry" => "product",
+            _ => return None,
+        };
+        let reason = detail.strip_prefix("Free energy unavailable: ")?;
+        Some(format!("{side} frequency analysis failed ({reason})"))
+    });
+    Some(format!(
+        "Reaction ΔG not reported: {}",
+        reason.as_deref().unwrap_or("see the calculation log")
+    ))
+}
+
+/// The sorted frequency list starts with the reaction mode for a verified TS.
+pub(super) fn extra_thermo_imaginary(frequencies: &[f64]) -> Option<f64> {
+    frequencies
+        .iter()
+        .copied()
+        .filter(|&f| f <= -THERMO_IMAGINARY_CM1)
+        .nth(1)
+}
+
+pub(super) fn barrier_gibbs_unavailable(result: &CalcResult) -> Option<String> {
+    let frequency = extra_thermo_imaginary(&result.vibrations.as_ref()?.frequencies_cm1)?;
+    Some(format!(
+        "ΔG‡ not reported: a second small imaginary mode ({:.0}i cm⁻¹)",
+        frequency.abs()
+    ))
+}
+
 /// A Gibbs barrier needs the same verified saddle as the electronic barrier,
 /// plus TS and reactant corrections evaluated under matching conditions.
 pub(in crate::app::xtb) fn barrier_gibbs_kcal(result: &CalcResult) -> Option<f64> {
@@ -312,7 +362,15 @@ pub(in crate::app::xtb) fn barrier_gibbs_kcal(result: &CalcResult) -> Option<f64
     let search = super::saved_search(result)?;
     let [reactant, _] = search.endpoint_energies_hartree?;
     let [reactant_thermo, _] = search.endpoint_thermo.as_ref()?;
+    let reactant_thermo = reactant_thermo.as_ref()?;
     let ts_thermo = result.thermo.as_ref()?;
+    if result
+        .vibrations
+        .as_ref()
+        .is_some_and(|v| extra_thermo_imaginary(&v.frequencies_cm1).is_some())
+    {
+        return None;
+    }
     if (ts_thermo.temperature_k - reactant_thermo.temperature_k).abs() > 1e-6
         || (ts_thermo.pressure_pa - reactant_thermo.pressure_pa).abs() > 1e-3
         || (ts_thermo.frequency_scale - reactant_thermo.frequency_scale).abs() > 1e-12
@@ -333,20 +391,21 @@ pub(in crate::app::xtb) fn path_rows(
     result: &CalcResult,
     session: Option<&Session>,
     unit: EnergyUnit,
+    reference: Option<&str>,
 ) -> Vec<(String, String)> {
     let (deltas, _) = relative_energies(super::path_energies(result), None);
     let mut rows: Vec<_> = deltas
         .iter()
         .enumerate()
         .map(|(index, &delta)| {
-            let point: String = if index == 0 {
-                "R".into()
+            let label = if index == 0 {
+                "R ΔE".into()
             } else if index + 1 == deltas.len() {
-                "P".into()
+                reference.map_or_else(|| "P ΔE".into(), |reference| format!("P ΔE ({reference})"))
             } else {
-                format!("Image {}", index + 1)
+                format!("Image {} ΔE", index + 1)
             };
-            (format!("{point} ΔE"), unit.format(delta))
+            (label, unit.format(delta))
         })
         .collect();
     if let Some(delta) = presentation(result, session).refined_kcal {
@@ -469,7 +528,14 @@ impl App {
         }
         if presentation.reliable() {
             details = details.push(line(presentation.verification.clone(), Tone::Good));
+            if super::saved_search(result).is_some_and(|search| search.free_energy)
+                && let Some(reason) = barrier_gibbs_unavailable(result)
+            {
+                details = details.push(line(reason, Tone::Warning));
+            }
         }
+        details = details
+            .push(reaction_gibbs_unavailable(result).map(|reason| line(reason, Tone::Warning)));
         if let Some(warning) = &presentation.warning {
             details = details.push(line(warning.clone(), Tone::Warning));
         }

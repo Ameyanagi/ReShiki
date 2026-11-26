@@ -231,6 +231,92 @@ fn unsupported_barrier_falls_back_to_energy_and_no_effective_output_blocks_calcu
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
+fn refused_barrier_runs_the_energy_batch_from_calculate_and_rerun() {
+    use reshiki::reactions::Role;
+
+    for (carbons, reason) in [(2, "no bonds forming or breaking"), (41, "up to 120 atoms")] {
+        let (mut doc, arrow) = ions(false);
+        doc.atoms.clear();
+        for side in [Role::Reactant, Role::Product] {
+            let mut atoms = Vec::new();
+            for i in 0..carbons {
+                let id = doc.add_atom("C", Point::new(i as f32 * 24., 0.));
+                doc.atom_mut(id).unwrap().map_num = i + 1;
+                if let Some(&previous) = atoms.last() {
+                    doc.add_bond(previous, id, 1, "plain");
+                }
+                atoms.push(id);
+            }
+            let participants = match side {
+                Role::Reactant => &mut doc.reactions[0].reactants,
+                Role::Product => &mut doc.reactions[0].products,
+                Role::Agent => unreachable!(),
+            };
+            *participants = vec![Participant {
+                atoms,
+                coefficient: 1,
+            }];
+        }
+        assert!(
+            barrier_refusal(&ts_plan::plan_for_review(&doc, arrow))
+                .unwrap()
+                .contains(reason)
+        );
+        for action in [
+            XtbAction::Ts(TsAction::Calculate(arrow)),
+            XtbAction::Entry(super::super::super::Entry::Rerun),
+        ] {
+            let mut app = app(doc.clone(), arrow);
+            let _ = app.update(Message::Xtb(action));
+            assert!(!app.ts_review_open());
+            assert!(app.tab.xtb.run.as_ref().is_some_and(|run| run.ts.is_none()));
+            assert!(app.tab.xtb.energy_state.in_progress());
+            assert!(
+                app.xtb_energy_result(arrow, None)
+                    .1
+                    .unwrap()
+                    .contains(reason)
+            );
+        }
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn automatic_map_refusal_stays_with_the_energy_batch_after_species_storage() {
+    use crate::app::xtb::tests::{MOVED, START, event, optimized};
+    use reshiki::geometry::Point3;
+
+    let (mut doc, arrow) = ions(false);
+    doc.atoms.retain(|atom| atom.map_num == 1);
+    for atom in &mut doc.atoms {
+        atom.map_num = 0;
+        atom.charge = 0;
+        atom.element = "O".into();
+    }
+    doc.reactions[0].reactants.truncate(1);
+    doc.reactions[0].products.truncate(1);
+    let mut app = app(doc, arrow);
+    let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Calculate(arrow))));
+    finish_mapping(&mut app);
+    let refusal = "The atom map shows no bonds forming or breaking and no hydrogen moves";
+    assert_eq!(app.xtb_energy_result(arrow, None).1, Some(refusal));
+    assert!(app.tab.doc.atoms.iter().all(|atom| atom.map_num == 0));
+
+    for _ in 0..2 {
+        let positions = START.iter().map(|&[x, y, z]| Point3 { x, y, z }).collect();
+        let _ = app.finish_model(positions, vec![0, 0]);
+        event(&mut app, optimized(&START, &MOVED));
+        assert_eq!(app.xtb_energy_result(arrow, None).1, Some(refusal));
+    }
+    assert_eq!(app.tab.doc.science.results.len(), 2);
+    assert!(app.xtb_energy_result(arrow, None).0.is_some());
+    app.tab.doc.atoms[0].isotope = 18;
+    assert_eq!(app.xtb_energy_result(arrow, None).1, None);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
 fn free_energy_choice_is_kept_while_a_review_waits() {
     let (doc, arrow) = claisen();
     let mut app = app(doc, arrow);

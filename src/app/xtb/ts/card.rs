@@ -107,6 +107,12 @@ struct SpeciesLabel {
 }
 
 impl ReactionLabel {
+    pub(super) fn has_multiple_species(&self) -> bool {
+        [&self.reactants, &self.products]
+            .into_iter()
+            .any(|side| side.len() > 1 || side.iter().any(|species| species.coefficient > 1))
+    }
+
     pub(in crate::app::xtb) fn title(&self) -> String {
         self.line(false)
     }
@@ -660,6 +666,18 @@ impl App {
             ArrowResult::Found(result) => Some(result),
             _ => None,
         };
+        let endpoint_energy = result.and_then(|result| view::reaction_energy_kcal(result));
+        let (batch, batch_refusal) =
+            self.xtb_energy_result(arrow, result.filter(|_| endpoint_energy.is_some()));
+        let barrier_refusal = state
+            .barrier
+            .then(|| {
+                batch_refusal.map(str::to_owned).or_else(|| {
+                    review::barrier_refusal(&plan)
+                        .filter(|_| !matches!(plan, Err(TsPlanError::Mismatch(_))))
+                })
+            })
+            .flatten();
         let search = result.and_then(|result| super::saved_search(result));
         let presentation = result.map(|result| {
             view::presentation(
@@ -710,9 +728,7 @@ impl App {
         let barrier = presentation
             .as_ref()
             .and_then(|view| view.refined_kcal)
-            .filter(|_| failed.is_none());
-        let endpoint_energy = result.and_then(|result| view::reaction_energy_kcal(result));
-        let batch = self.xtb_energy_totals(arrow, result.filter(|_| endpoint_energy.is_some()));
+            .filter(|_| failed.is_none() && barrier_refusal.is_none());
         let reaction = batch
             .as_ref()
             .map(|totals| totals.energy)
@@ -725,23 +741,40 @@ impl App {
             barrier.and_then(|_| result.and_then(|result| view::barrier_gibbs_kcal(result)));
         let unreliable =
             failed.is_some() || presentation.as_ref().is_some_and(|view| !view.reliable());
-        let reaction_number = energy_number(unit, "Reaction ΔE", reaction, "ΔG", reaction_gibbs);
-        content = if unreliable {
+        let reference = if batch.is_some() {
+            label.has_multiple_species().then_some("separated species")
+        } else {
+            result.and_then(|result| self.xtb_ts_reference(result, Some(arrow)))
+        };
+        let reaction_number = energy_number(
+            unit,
+            "Reaction ΔE",
+            reaction,
+            reference,
+            "ΔG",
+            reaction_gibbs,
+        );
+        content = if unreliable && barrier_refusal.is_none() {
             content.push(reaction_number)
         } else {
             content.push(
                 row![
-                    container(energy_number(
-                        unit,
-                        if barrier.is_some() && batch.is_some() {
-                            "Previous barrier ΔE‡"
-                        } else {
-                            "Barrier ΔE‡"
-                        },
-                        barrier,
-                        "ΔG‡",
-                        barrier_gibbs
-                    ))
+                    container(if let Some(reason) = &barrier_refusal {
+                        line(format!("Barrier not available: {reason}"), Tone::Muted)
+                    } else {
+                        energy_number(
+                            unit,
+                            if barrier.is_some() && batch.is_some() {
+                                "Previous barrier ΔE‡"
+                            } else {
+                                "Barrier ΔE‡"
+                            },
+                            barrier,
+                            None,
+                            "ΔG‡",
+                            barrier_gibbs,
+                        )
+                    })
                     .width(Length::FillPortion(1)),
                     container(reaction_number).width(Length::FillPortion(1)),
                 ]
@@ -850,23 +883,16 @@ impl App {
             );
         }
 
-        if batch.is_none()
-            && reaction_gibbs.is_some()
-            && (label.reactants.len() > 1 || label.products.len() > 1)
+        if barrier.is_some()
+            && search.is_some_and(|search| search.free_energy)
+            && let Some(reason) = result.and_then(|result| view::barrier_gibbs_unavailable(result))
         {
-            content = content.push(line(
-                "Free energies use the optimized endpoint complexes.",
-                Tone::Muted,
-            ));
+            content = content.push(line(reason, Tone::Warning));
         }
         if batch.is_none()
-            && reaction_gibbs.is_none()
-            && search.is_some_and(|search| search.free_energy)
+            && let Some(reason) = result.and_then(|result| view::reaction_gibbs_unavailable(result))
         {
-            content = content.push(line(
-                "Free energies unavailable. See the calculation log.",
-                Tone::Warning,
-            ));
+            content = content.push(line(reason, Tone::Warning));
         }
         if let Some(result) = result {
             let stale = doc
@@ -935,14 +961,6 @@ impl App {
         let supports_barrier = self.xtb_reaction_supports_barrier(arrow);
         if supports_barrier {
             content = content.push(label.target_stereo_note.map(|note| line(note, Tone::Muted)));
-            if let Err(
-                error @ (TsPlanError::TooLarge { .. }
-                | TsPlanError::Unsupported(_)
-                | TsPlanError::NoChange),
-            ) = &plan
-            {
-                content = content.push(line(error.to_string(), Tone::Muted));
-            }
         }
         content = content
             .push(self.xtb_scheme_ignored(arrow))
@@ -972,7 +990,7 @@ impl App {
                 .spacing(1),
             );
         }
-        let free_label = if supports_barrier && state.barrier {
+        let free_label = if supports_barrier && state.barrier && barrier_refusal.is_none() {
             "Free energies ΔG, ΔG‡ at 298 K"
         } else {
             "Free energy ΔG at 298 K"
@@ -1015,6 +1033,7 @@ fn energy_number(
     unit: EnergyUnit,
     label: &'static str,
     energy: Option<f64>,
+    reference: Option<&'static str>,
     gibbs_label: &'static str,
     gibbs: Option<f64>,
 ) -> Element<'static, Message> {
@@ -1034,6 +1053,9 @@ fn energy_number(
     column![
         line(label, Tone::Muted),
         number,
+        reference
+            .filter(|_| energy.is_some())
+            .map(|reference| line(reference, Tone::Muted)),
         gibbs.map(|value| line(format!("{gibbs_label} {}", unit.format(value)), Tone::Muted)),
     ]
     .spacing(1)

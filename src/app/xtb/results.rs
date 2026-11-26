@@ -8,9 +8,10 @@ use super::state::{
 };
 use crate::app::files::{nonblank, program_label};
 use reshiki::qcdata;
+pub(crate) use reshiki::qcdata::HARTREE_TO_EV as EV_PER_HARTREE;
 use reshiki::qcdata::{
-    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Source, Status, Task,
-    XtbConventions,
+    Beta, CalcResult, Convergence, Frame, KCAL_PER_HARTREE, OrbitalSet, Orbitals, Settings, Source,
+    Status, Task, XtbConventions,
 };
 use reshiki_xtb_jobs::OPTIMIZER_SEPARATOR;
 
@@ -27,11 +28,8 @@ pub(super) fn method_without_optimizer(method: &str) -> &str {
 pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequencies approximate, orbitals qualitative (minimal basis).";
 /// The gap under which the electronic structure counts as near-degenerate.
 const NEAR_DEGENERATE_EV: f64 = 0.1;
-/// CODATA 2022, as the worker converts its gap.
-pub(crate) const EV_PER_HARTREE: f64 = 27.211386245981;
 /// Debye per e·bohr.
 const DEBYE_PER_E_BOHR: f64 = 2.541746473;
-const KCAL_PER_MOL_PER_HARTREE: f64 = 627.509474;
 /// Bond orders listed from this order up: what the worker reports and a
 /// saved file keeps.
 pub(crate) const BOND_ORDER_MIN: f64 = reshiki::qcdata::LIGHT_BOND_ORDER_MIN;
@@ -363,19 +361,10 @@ pub(crate) fn summary_rows(
     input: &Frame,
     output: &Frame,
     info: Option<&RunInfo>,
-    unit: Option<EnergyUnit>,
 ) -> Vec<(String, String)> {
     let mut rows: Vec<_> = key_numbers(result, info)
         .into_iter()
         .map(|(label, value)| {
-            let value = if label == "Energy" {
-                unit.zip(result.energy_hartree)
-                    .map_or(value, |(unit, energy)| {
-                        unit.format(energy * KCAL_PER_MOL_PER_HARTREE)
-                    })
-            } else {
-                value
-            };
             let label = match label {
                 "Energy" => "Total energy",
                 "Gap" => "HOMO–LUMO gap",
@@ -384,7 +373,7 @@ pub(crate) fn summary_rows(
             (label.into(), value)
         })
         .collect();
-    rows.extend(summary_grid_rows(result, input, output, unit));
+    rows.extend(summary_grid_rows(result, input, output));
     if let Some(run) = result.run.as_ref().filter(|run| run.seconds > 0.) {
         rows.push((
             "Run time".into(),
@@ -408,7 +397,6 @@ pub(super) fn summary_grid_rows(
     result: &CalcResult,
     input: &Frame,
     output: &Frame,
-    unit: Option<EnergyUnit>,
 ) -> Vec<(String, String)> {
     let mut rows = Vec::new();
     if let Some(charges) = result.charges.first() {
@@ -487,15 +475,10 @@ pub(super) fn summary_grid_rows(
         let zpve = thermo.zero_point_energy_hartree;
         rows.push((
             "ZPVE".into(),
-            unit.map_or_else(
-                || {
-                    format!(
-                        "{} Eh ({} kcal/mol)",
-                        signed(zpve, 6),
-                        signed(zpve * KCAL_PER_MOL_PER_HARTREE, 2)
-                    )
-                },
-                |unit| unit.format(zpve * KCAL_PER_MOL_PER_HARTREE),
+            format!(
+                "{} Eh ({} kcal/mol)",
+                signed(zpve, 6),
+                signed(zpve * KCAL_PER_HARTREE, 2)
             ),
         ));
         if let Some(energy) = result.energy_hartree {
@@ -505,10 +488,7 @@ pub(super) fn summary_grid_rows(
             ] {
                 rows.push((
                     format!("{quantity} ({:.2} K)", thermo.temperature_k),
-                    unit.map_or_else(
-                        || format!("{} Eh", signed(energy + correction, 6)),
-                        |unit| unit.format((energy + correction) * KCAL_PER_MOL_PER_HARTREE),
-                    ),
+                    format!("{} Eh", signed(energy + correction, 6)),
                 ));
             }
         }
@@ -761,7 +741,7 @@ pub(crate) fn log(
     info: Option<&RunInfo>,
     method: &str,
 ) -> String {
-    log_with_ts(result, frame, info, method, None)
+    log_with_ts(result, frame, info, method, None, EnergyUnit::default())
 }
 
 pub(super) fn log_with_ts(
@@ -770,6 +750,7 @@ pub(super) fn log_with_ts(
     info: Option<&RunInfo>,
     method: &str,
     session: Option<&super::ts::Session>,
+    unit: EnergyUnit,
 ) -> String {
     let mut lines = vec![method.to_owned()];
     match &result.provenance.source {
@@ -847,7 +828,7 @@ pub(super) fn log_with_ts(
     if let Some(info) = info.filter(|info| !info.numerics.is_empty()) {
         lines.push(format!("numerics {}", info.numerics));
     }
-    let search = super::ts::view::search_log(result, session);
+    let search = super::ts::view::search_log(result, session, unit);
     if !search.is_empty() {
         lines.push(String::new());
         lines.push(search);

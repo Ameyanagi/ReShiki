@@ -63,6 +63,7 @@ fn source() -> Source {
         stem: "test".into(),
         frame: ts,
         result: Arc::new(result),
+        reference: None,
         reactant: Some(reactant),
         product: Some(product),
     }
@@ -131,11 +132,102 @@ fn ts_export_titles_follow_the_current_app_energy_unit() {
             send(&mut app, ExportAction::Program(program));
             let output = app.qc_output().unwrap();
             assert!(output.main.text.contains(&format!("ΔE‡ {barrier}")));
-            assert!(output.main.text.contains(&format!("ΔE {reaction}")));
+            assert_eq!(
+                output.main.text.contains(&format!("ΔE {reaction}")),
+                program != Program::Gamess
+            );
             assert!(!output.main.text.contains("kcal/mol"));
             assert!(output.main.text.contains("0.200000"));
         }
     }
+}
+
+#[test]
+fn gamess_title_fits_eighty_columns_with_all_energies_and_the_complex_reference() {
+    use reshiki::qcdata::{RunSummary, Thermo, TransitionStateMapping, TransitionStateRun};
+
+    let mut source = source();
+    source.reference = Some(super::super::view::OPTIMIZED_COMPLEX);
+    let result = Arc::make_mut(&mut source.result);
+    let correction = Thermo {
+        temperature_k: 298.15,
+        pressure_pa: 101_325.,
+        zero_point_energy_hartree: 0.01,
+        enthalpy_correction_hartree: 0.01,
+        entropy_hartree_per_k: 0.,
+        gibbs_correction_hartree: 0.01,
+        heat_capacity_hartree_per_k: None,
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: 20.,
+        symmetry_number: 1,
+        point_group: None,
+    };
+    result.thermo = Some(correction.clone());
+    result.trajectory = Some(reshiki::qcdata::Trajectory {
+        rmsd_to_best_angstrom: vec![],
+        numbers: source.frame.numbers.clone(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        positions_angstrom: vec![],
+        energies_hartree: vec![-1.1, -1., -1.2],
+        labels: vec![],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
+    });
+    result.run = Some(RunSummary {
+        seconds: 1.,
+        scf_iterations: vec![],
+        finished: None,
+        search: None,
+        transition_state: Some(Box::new(TransitionStateRun {
+            arrow: None,
+            context: None,
+            free_energy: true,
+            endpoint_energies_hartree: Some([-1.1, -1.2]),
+            endpoint_thermo: Some([Some(correction.clone()), Some(correction)]),
+            saddle_converged: true,
+            imaginary: 1,
+            imaginary_cm1: Some(-350.),
+            climbing_image: 1,
+            mapping: TransitionStateMapping {
+                formed: vec![],
+                broken: vec![],
+                hydrogen_moves: vec![],
+                automatic: false,
+            },
+            diagnostics: vec![],
+        })),
+    });
+    assert!(super::super::view::reaction_energy_kcal(result).is_some());
+    assert!(super::super::view::reaction_gibbs_kcal(result).is_some());
+    let [template, ..] = qc_input::builtin_templates();
+    let mut settings = Settings::from_template(
+        &template,
+        Program::Gamess,
+        0,
+        1,
+        "Long reactant name → first product + second product".into(),
+    );
+    settings.job = Job::TransitionState;
+    let output = source
+        .output(&settings, "test", "ReShiki test", EnergyUnit::default())
+        .unwrap();
+    let mut lines = output.main.text.lines();
+    assert!(lines.any(|line| line.trim() == "$DATA"));
+    let title = lines.next().unwrap();
+    assert!(title.len() <= 80, "{title}");
+    assert!(title.contains("ΔE‡ 62.8 kcal/mol"));
+    assert!(title.contains("ΔG‡ 62.8 kcal/mol"));
+    assert!(title.contains("optimized complex"));
+    assert!(
+        !output
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("80 columns"))
+    );
 }
 
 #[test]
@@ -330,6 +422,7 @@ fn late_cached_name_updates_a_fresh_export_stem_and_keeps_the_saved_title() {
         product_chemistry: super::super::endpoint_chemistry(doc, reaction, Role::Product),
         title: title.clone(),
         reactant: "C5H8O".into(),
+        endpoint_complex: None,
     };
     let mapping = super::super::card::BondChanges::from_plan(doc, &plan).0;
     Arc::make_mut(&mut app.tab.doc.science.results[0].result).run = Some(RunSummary {

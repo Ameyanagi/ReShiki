@@ -341,6 +341,7 @@ fn light_transition_state_run_metadata_costs_at_most_four_kilobytes() {
                 product_chemistry: "cd".repeat(32),
                 title: "Allyl vinyl ether → pent-4-enal".into(),
                 reactant: "Allyl vinyl ether".into(),
+                endpoint_complex: None,
             }),
             saddle_converged: true,
             imaginary: 1,

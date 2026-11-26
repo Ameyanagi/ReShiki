@@ -730,10 +730,20 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
         [1, 6]
     );
     assert!(
-        view::search_log(&shown.stored.result, None).contains("NEB: 120 iterations · converged")
+        view::search_log(
+            &shown.stored.result,
+            None,
+            crate::appearance::EnergyUnit::default()
+        )
+        .contains("NEB: 120 iterations · converged")
     );
     assert!(
-        view::search_log(&shown.stored.result, None).contains("Worker frequencies (cm⁻¹): -387.0")
+        view::search_log(
+            &shown.stored.result,
+            None,
+            crate::appearance::EnergyUnit::default()
+        )
+        .contains("Worker frequencies (cm⁻¹): -387.0")
     );
     send(&mut reopened, XtbAction::Ts(Action::Image(1)));
     assert_eq!(reopened.xtb_step(), Some(1));
