@@ -180,6 +180,9 @@ fn result(frame: &Frame, task: Task, full: bool) -> CalcResult {
             max_iterations: None,
             scf_retries: vec![],
             gfnff: None,
+            threads: None,
+            convergence: Default::default(),
+            fixed_atoms: vec![],
         }),
         provenance: Provenance {
             program: "axtb".into(),
@@ -263,10 +266,12 @@ fn result(frame: &Frame, task: Task, full: bool) -> CalcResult {
             rotor_cutoff_cm1: 100.,
             imaginary_cutoff_cm1: 50.,
             symmetry_number: 1,
+            point_group: Some("C1".into()),
         }),
         trajectory: None,
         keep_full: false,
         omitted_bytes: None,
+        run: None,
     };
     result.validate(frame).unwrap();
     result

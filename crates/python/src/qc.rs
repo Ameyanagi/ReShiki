@@ -342,6 +342,7 @@ impl HessianData {
             trajectory: None,
             keep_full: false,
             omitted_bytes: None,
+            run: None,
         }
     }
 }

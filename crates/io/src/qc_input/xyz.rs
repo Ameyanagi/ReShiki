@@ -1,9 +1,13 @@
 //! XYZ files, one frame or a trajectory.
 use std::fmt::Write;
 
-use crate::qcdata::Trajectory;
+use reshiki_model::chemistry::ELEMENTS;
 
-use super::{Error, Frame, Program, check_atoms, clean_title, single_line, write_atoms};
+use crate::qcdata::{MAX_FRAME_ATOMS, Trajectory};
+
+use super::{
+    Error, Frame, Program, XyzColumns, check_atoms, clean_title, single_line, write_atoms,
+};
 
 pub(super) fn frame(frame: &Frame, title: &str) -> String {
     let mut text = String::new();
@@ -35,4 +39,60 @@ pub fn write_xyz_trajectory(path: &Trajectory, title: &str) -> Result<String, Er
 fn write_frame(text: &mut String, frame: &Frame, comment: &str) {
     let _ = writeln!(text, "{}\n{comment}", frame.numbers.len());
     write_atoms(text, frame, Program::Xyz);
+}
+
+/// Reads the first Cartesian XYZ frame in ångströms, including extended XYZ columns.
+/// Later frames may contain a different structure.
+pub fn parse_xyz(text: &str) -> Result<Frame, String> {
+    let mut lines = text.lines();
+    let atoms = lines
+        .next()
+        .and_then(|line| line.trim().parse::<usize>().ok())
+        .ok_or("The XYZ input needs an atom count on the first line.")?;
+    if atoms > MAX_FRAME_ATOMS {
+        return Err(format!("The XYZ input exceeds {MAX_FRAME_ATOMS} atoms."));
+    }
+    let comment = lines.next().ok_or("The XYZ input needs a comment line.")?;
+    let columns = XyzColumns::from_comment(comment)
+        .ok_or("XYZ Properties needs species:S:1 and pos:R:3 columns.")?;
+    let mut numbers = Vec::with_capacity(atoms);
+    let mut positions_angstrom = Vec::with_capacity(atoms);
+    for atom in 0..atoms {
+        let invalid = || {
+            format!(
+                "Invalid XYZ atom {}: expected an element and finite x y z coordinates.",
+                atom + 1
+            )
+        };
+        let fields: Vec<_> = lines
+            .next()
+            .ok_or_else(invalid)?
+            .split_whitespace()
+            .collect();
+        let symbol = *fields.get(columns.species).ok_or_else(invalid)?;
+        let number = ELEMENTS
+            .iter()
+            .position(|element| element.symbol == symbol && element.symbol != "*")
+            .and_then(|number| u8::try_from(number).ok())
+            .ok_or_else(invalid)?;
+        let mut position = [0.0; 3];
+        for (offset, coordinate) in position.iter_mut().enumerate() {
+            *coordinate = fields
+                .get(columns.position + offset)
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite())
+                .ok_or_else(invalid)?;
+        }
+        numbers.push(number);
+        positions_angstrom.push(position);
+    }
+    Ok(Frame {
+        numbers,
+        positions_angstrom,
+        isotopes: Vec::new(),
+        masses_amu: Vec::new(),
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: Vec::new(),
+    })
 }

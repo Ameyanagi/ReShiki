@@ -520,10 +520,18 @@ async fn a_file_changed_elsewhere_opens_as_saved_with_a_note() {
             "{format}: {:?}",
             response.warnings
         );
-        // One message: the cycle's, not also the steps'.
-        assert_eq!(response.warnings.len(), 1, "{:?}", response.warnings);
+        // The reversible step has two arrows and cannot restore as a native
+        // reaction; the other two steps still come back from the file.
+        assert!(
+            response
+                .warnings
+                .iter()
+                .any(|w| w == cdxml::schemes::NOTICE)
+        );
+        assert_eq!(response.warnings.len(), 2, "{:?}", response.warnings);
         let doc = response.document.unwrap();
         assert!(doc.graphics.iter().all(|g| g.cycle.is_none()));
+        assert_eq!(doc.reactions.len(), 2, "{format}");
         assert!(doc.arrows.len() >= 4, "{format}");
         assert!(doc.annotations.iter().any(|a| a.text == "ArY"));
     }
@@ -541,7 +549,7 @@ fn a_fresh_cycle_file_loses_no_steps_on_save() {
         assert_eq!((loss.schemes, loss.steps), (0, 0), "{format}");
     }
     let loss = crate::formats::chemdraw_loss("cdxml", &xml.replace(">ArX<", ">ArY<"));
-    assert_eq!((loss.schemes, loss.steps), (1, 3));
+    assert_eq!((loss.schemes, loss.steps), (1, 1));
 }
 
 #[tokio::test]
@@ -662,8 +670,8 @@ async fn a_part_split_in_two_opens_as_drawn() {
     assert!(doc.graphics.iter().all(|g| g.cycle.is_none()));
 }
 
-#[test]
-fn only_the_cycles_that_come_back_count_as_kept_on_save() {
+#[tokio::test]
+async fn a_cycle_without_saved_data_reopens_as_ordinary_steps_beside_a_saved_cycle() {
     let (mut document, _) = structure_cycle();
     // A second cycle whose part is split in two writes steps but no data.
     let mut parts = vec![];
@@ -684,5 +692,15 @@ fn only_the_cycles_that_come_back_count_as_kept_on_save() {
         .retain(|b| !(split.contains(&b.a) && split.contains(&b.b) && b.a == split[1]));
     let xml = write(&document, Default::default()).unwrap();
     let loss = crate::formats::chemdraw_loss("cdxml", &xml);
-    assert_eq!((loss.schemes, loss.steps), (1, 2));
+    assert_eq!((loss.schemes, loss.steps), (0, 0));
+    let reopened = import("cdxml", &xml).await.document.unwrap();
+    assert_eq!(
+        reopened
+            .graphics
+            .iter()
+            .filter(|g| g.cycle.is_some())
+            .count(),
+        1
+    );
+    assert_eq!(reopened.reactions.len(), 2);
 }

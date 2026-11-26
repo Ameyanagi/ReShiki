@@ -6,6 +6,7 @@ Default operation budgets, as reported by `info`.
 
 | Budget | Value | Unit |
 | --- | --- | --- |
+| `calc_deadline_seconds` | 1800 | seconds |
 | `concurrency` | 2 | count |
 | `export_png_pixels` | 16000000 | pixels |
 | `history_depth` | 20 | count |

@@ -1,7 +1,7 @@
 //! Bounded reads of regular files inside read roots.
 use super::{
     AccessError, Grants, io_error,
-    path::{check_extension, parse},
+    path::{RequestPath, check_extension, parse},
     resolution_error,
     root::Kind,
 };
@@ -19,7 +19,18 @@ impl Grants {
     ) -> Result<Vec<u8>, AccessError> {
         let request = parse(path)?;
         check_extension(&request, extensions)?;
-        let (root, rel) = self.locate(Kind::Read, &request)?;
+        self.read_checked(&request, limit)
+    }
+
+    /// Read a quantum chemistry file for content-based format detection.
+    /// The reader accepts arbitrary names; all path, read-root, regular-file
+    /// and size checks are the same as [`Self::read`].
+    pub(crate) fn read_qc(&self, path: &str, limit: usize) -> Result<Vec<u8>, AccessError> {
+        self.read_checked(&parse(path)?, limit)
+    }
+
+    fn read_checked(&self, request: &RequestPath, limit: usize) -> Result<Vec<u8>, AccessError> {
+        let (root, rel) = self.locate(Kind::Read, request)?;
         let echo = request.echo.as_str();
         let mut options = OpenOptions::new();
         options.read(true);

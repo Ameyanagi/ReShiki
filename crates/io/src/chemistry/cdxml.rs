@@ -43,6 +43,8 @@ pub(crate) mod xml_guard;
 #[cfg(test)]
 mod coordination_tests;
 #[cfg(test)]
+mod reaction_corpus_tests;
+#[cfg(test)]
 mod residue_tests;
 #[cfg(test)]
 mod tests;

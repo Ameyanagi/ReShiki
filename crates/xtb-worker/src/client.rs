@@ -75,6 +75,11 @@ impl Cancel {
         self.0.store(true, Ordering::Release);
     }
 
+    /// Whether cancellation has been requested.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled()
+    }
+
     fn cancelled(&self) -> bool {
         self.0.load(Ordering::Acquire)
     }

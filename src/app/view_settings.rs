@@ -155,6 +155,7 @@ fn focus(id: &str) -> Task<Message> {
 
 pub(super) fn keeps_open(message: &Message) -> bool {
     super::results::async_result(message).is_some()
+        || super::xtb::is_progress(message)
         || matches!(
             message,
             Message::View(_)
