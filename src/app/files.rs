@@ -1520,6 +1520,7 @@ fn opened_results_status(
     path: &std::path::Path,
     doc: &reshiki::document::Document,
 ) -> Option<String> {
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
     let results = doc.science.results.len();
     let outdated_models = doc
         .models
@@ -1529,20 +1530,6 @@ fn opened_results_status(
     if results == 0 && outdated_models == 0 {
         return None;
     }
-    let name = path
-        .file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy();
-    if results == 0 {
-        let plural = if outdated_models == 1 { "" } else { "s" };
-        return Some(format!(
-            "Opened {name} · {outdated_models} outdated 3D model{plural} (the drawing changed)"
-        ));
-    }
-    let mut status = format!(
-        "Opened {name} · {results} calculation result{}",
-        if results == 1 { "" } else { "s" },
-    );
     let outdated_results = doc
         .science
         .results
@@ -1553,11 +1540,28 @@ fn opened_results_status(
                 .is_some_and(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
         })
         .count();
-    let outdated = outdated_results + outdated_models;
-    if outdated > 0 {
-        status.push_str(&format!(" · {outdated} outdated (the drawing changed)"));
+    let name = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy();
+    let mut parts = vec![format!("Opened {name}")];
+    if results > 0 {
+        let mut text = format!("{results} calculation result{}", plural(results));
+        if outdated_results > 0 {
+            text.push_str(&format!(" ({outdated_results} outdated)"));
+        }
+        parts.push(text);
     }
-    Some(status)
+    if outdated_models > 0 {
+        parts.push(format!(
+            "{outdated_models} outdated 3D model{}",
+            plural(outdated_models)
+        ));
+    }
+    if outdated_results + outdated_models > 0 {
+        parts.push("the drawing changed since".into());
+    }
+    Some(parts.join(" · "))
 }
 
 pub(super) fn export_status(path: &std::path::Path, details: &[String], browser: bool) -> String {

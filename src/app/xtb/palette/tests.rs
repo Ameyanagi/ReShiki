@@ -144,7 +144,7 @@ fn a_failure_blocks_actions_on_the_previous_result() {
     let failure_status = app.status.clone();
     assert_eq!(
         failure_status,
-        "xTB calculation failed: The electronic structure (SCF) did not converge within 1 iterations, the Max SCF iterations you set."
+        "xTB calculation failed: The electronic structure (SCF) did not converge within 1 iteration, the Max SCF iterations you set."
     );
     let failed = app.xtb_failed().expect("the selected molecule's failure");
     assert!(app.xtb_can_retry(failed));
