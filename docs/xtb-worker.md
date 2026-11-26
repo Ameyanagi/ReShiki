@@ -426,3 +426,8 @@ reshiki: Near-degenerate electronic structure: results can differ between comput
 The warning leaves the calculation's exit status unchanged. A refused method ×
 task combination exits 1 with qcdata's message. In a build without xTB the CLI
 prints `reshiki: xTB is not included in this build` on stderr and exits 1.
+
+`ts` uses single-threaded GFN2-xTB worker sessions for gas-phase
+transition-state searches. It independently requests a Hessian analysis at
+the final geometry and reports both the search and worker spectra.
+[Transition-state command](agent-cli.md#ts)

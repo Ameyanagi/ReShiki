@@ -33,7 +33,7 @@ files, cite ReShiki and that program and method instead of axtb. Then add:
 | IR spectrum                                                        | nothing beyond the method                                                                                                                                                                   |
 | Orbital energies and coefficients                                  | nothing beyond the method                                                                                                                                                                   |
 | Orbital surfaces in a figure                                       | Lorensen1987MarchingCubes (and Doi & Koide 1991, see the verification notes), Taubin1995Smoothing, Garland1997Simplification; Schneider1990CurveFit for vector outlines                     |
-| Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Bitzek2006FIRE, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC                                           |
+| Transition-state search (GFN2-xTB only)                            | Smidstrup2014IDPP, Henkelman2000CINEB, Henkelman2000Tangent, Bitzek2006FIRE, Banerjee1985PRFO, Baker1986PRFO, Bofill1994Update, PageMcIver1988IRC, Kolsbjerg2016AutoNEB, McIver1972TS       |
 | Results read from another program's files                          | ReShiki and that program (for ORCA 6, Neese2025ORCA6)                                                                                                                                       |
 
 ## Calculation methods
@@ -278,6 +278,12 @@ The transition-state engine (`crates/optimize/src/ts/`, GFN2-xTB only; on the
   radius from the model ratio (`ts/saddle.rs`).
 - **PageMcIver1988IRC**: Page & McIver, J. Chem. Phys. 88, 922 (1988), doi:10.1063/1.454172.
   Intrinsic reaction coordinate steps (`ts/irc.rs`).
+- **Kolsbjerg2016AutoNEB**: Kolsbjerg, Groves & Hammer, J. Chem. Phys. 145, 094107 (2016),
+  doi:10.1063/1.4961868. Motivation for probing the links next to the climbing image when it
+  misses the saddle (`ts/neb.rs`); the two-midpoint rule is ReShiki's own.
+- **McIver1972TS**: McIver & Komornicki, J. Am. Chem. Soc. 94, 2625 (1972),
+  doi:10.1021/ja00763a011. Squared force as a local merit function near a saddle
+  (`ts/saddle.rs`).
 - **Eckart1935Conditions**, **Miller1980Eckart** and **Wilson1955Vibrations**: rigid-motion
   projection and normal modes (`ts/modes.rs`).
 - **Horn1987Quaternion**, **Kuhn1955Hungarian**: Kuhn, Naval Res. Logist. Q. 2, 83 (1955),
