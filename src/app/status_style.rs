@@ -16,6 +16,7 @@ pub enum Action {
 
 pub(super) fn keeps_open(message: &Message) -> bool {
     super::results::async_result(message).is_some()
+        || super::xtb::is_progress(message)
         || matches!(
             message,
             Message::StatusStyle(_)

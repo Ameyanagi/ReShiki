@@ -70,6 +70,7 @@ explains how the crates and modules fit together.
 - `src/app/document_tab.rs`: Per-document state.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
+- `src/app/energy_plot.rs`: A small energy diagram shared by the import sheet and the Conformers tab
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.
@@ -85,6 +86,7 @@ explains how the crates and modules fit together.
 - `src/app/file_shortcuts.rs`
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
+- `src/app/frames_import.rs`: Opening a file that holds several geometries of one molecule (a multi-frame XYZ such as a trajectory or a CREST ensemble, or an SD file of conformers)
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/github.rs`: GitHub in the editor
@@ -207,6 +209,11 @@ explains how the crates and modules fit together.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
 - `src/app/xtb.rs`: Predict → xTB
+- `src/app/xtb/conformers.rs`: Conformer search
+- `src/app/xtb/conformers/export.rs`: Conformer ensembles as files
+- `src/app/xtb/conformers/pipeline.rs`: Desktop conformer sampling, clustering and xTB ranking.
+- `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
+- `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
 - `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
 - `src/app/xtb/orbitals/compute.rs`: Work off the UI thread
 - `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
@@ -217,6 +224,9 @@ explains how the crates and modules fit together.
 - `src/app/xtb/run.rs`: One xTB job on its own thread
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
+- `src/app/xtb/vibrations.rs`: The Vibrations tab
+- `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
+- `src/app/xtb/vibrations/view.rs`: The Vibrations tab's widgets
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
 - `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.
@@ -280,6 +290,7 @@ explains how the crates and modules fit together.
 - `src/cli/analyze.rs`: `reshiki --cli analyze`
 - `src/cli/args.rs`: Token parsing for the grammar in `commands::COMMANDS`, described by `reshiki --cli help`.
 - `src/cli/calc.rs`: CLI-only calculation sessions call the xTB worker directly.
+- `src/cli/calculate.rs`: `reshiki --cli calculate`
 - `src/cli/commands.rs`: The command grammar and help text for `reshiki --cli`.
 - `src/cli/compose.rs`: `reshiki --cli compose`
 - `src/cli/convert.rs`: `reshiki --cli convert`
@@ -290,6 +301,7 @@ explains how the crates and modules fit together.
 - `src/cli/name.rs`: `reshiki --cli name`
 - `src/cli/pieces.rs`: `reshiki --cli pieces`
 - `src/cli/predict_nmr.rs`: `reshiki --cli predict-nmr`
+- `src/cli/read_output.rs`: `reshiki --cli read-output`
 - `src/cli/reference.rs`: Deterministic agent documentation from the live CLI and operation contracts.
 - `src/cli/render.rs`: `reshiki --cli render`
 - `src/cli/skill.rs`: The Agent Skill folder `reshiki --cli skill` writes
@@ -368,6 +380,7 @@ explains how the crates and modules fit together.
 - `src/web/storage.rs`: Application data in the browser (see `reshiki::storage::browser`)
 - `src/window_fit.rs`: Windows work-area sizing; UI scale stays under Iced's DPI handling.
 - `src/workers.rs`: Worker modes
+- `src/xtb_agent.rs`: The worker-backed calculation hook for the CLI and MCP hosts.
 
 ## reshiki-agent
 
@@ -390,6 +403,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/analyze.rs`: The `analyze` tool
 - `crates/agent/src/ops/apply.rs`: The `apply` tool
 - `crates/agent/src/ops/budget.rs`: Resource budgets for the operation API and the document cost helpers they are measured with.
+- `crates/agent/src/ops/calculate.rs`: The `calculate` tool
 - `crates/agent/src/ops/catalog.rs`: The operation tool catalog and the argument decoder for each tool.
 - `crates/agent/src/ops/compose.rs`: The `compose` tool
 - `crates/agent/src/ops/convert.rs`: The `convert` tool
@@ -397,6 +411,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/error.rs`: Operation errors and their stable wire codes.
 - `crates/agent/src/ops/exec.rs`: The bounded executor
 - `crates/agent/src/ops/export.rs`: The `export` tool
+- `crates/agent/src/ops/export_input.rs`: The `export_input` tool
 - `crates/agent/src/ops/files.rs`: The `file_open` and `file_save` tools
 - `crates/agent/src/ops/headless.rs`: The tool host for a process without the app
 - `crates/agent/src/ops/host.rs`: The transport-facing side of the operation API.
@@ -408,6 +423,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/policy.rs`: Who may read or edit which document.
 - `crates/agent/src/ops/predict_nmr.rs`: The `predict_nmr` tool
 - `crates/agent/src/ops/progress.rs`: Progress reports from a running operation to the transport.
+- `crates/agent/src/ops/read_output.rs`: Quantum chemistry files as compact job summaries and calculated values.
 - `crates/agent/src/ops/render.rs`: The `render` tool
 - `crates/agent/src/ops/result.rs`: The protocol-neutral result of a tool call.
 - `crates/agent/src/ops/schema.rs`: The `schema` tool
@@ -1010,6 +1026,7 @@ explains how the crates and modules fit together.
 - `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
 - `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
 - `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
+- `crates/qcdata/src/vibrational.rs`
 
 ## reshiki-web
 

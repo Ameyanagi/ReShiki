@@ -1,5 +1,5 @@
 //! The xTB results palette: docked under the status bar like NMR (or in the
-//! inspector), with Summary, Steps and Log, the stale banner, energy labels,
+//! inspector), with result tabs, the stale banner, energy labels,
 //! "Saved in file" and the large-results question on Save.
 use super::results::{self, RunInfo, View};
 use super::{Request, is, state};
@@ -61,7 +61,9 @@ pub(crate) struct Palette {
     pub(super) labels: bool,
     step: Option<Step>,
     /// Why the previewed step was not used: the stereo check's findings.
-    confirm: Vec<String>,
+    pub(super) confirm: Vec<String>,
+    /// The Conformers tab's overlay choice and its table.
+    pub(super) ensemble: super::conformers::Ensemble,
     /// Save asked about large results once for this document.
     size_asked: bool,
     /// File sizes for one document state; serializing is too slow per frame.
@@ -104,7 +106,11 @@ impl Palette {
             self.result = vec![Arc::downgrade(result)];
         }
         self.open = true;
-        self.view = View::Summary;
+        self.view = if super::conformers::is_search(result) {
+            View::Conformers
+        } else {
+            View::Summary
+        };
         self.step = None;
         self.confirm.clear();
     }
@@ -126,11 +132,11 @@ impl Shown<'_> {
         results::method_line(&self.stored.result, self.frame)
     }
 
-    pub(super) fn rows(&self) -> Vec<(&'static str, String)> {
+    pub(super) fn rows(&self) -> Vec<(String, String)> {
         results::summary_rows(&self.stored.result, self.input, self.frame, self.info)
     }
 
-    fn step_positions(&self, step: usize) -> Option<Vec<[f64; 3]>> {
+    pub(super) fn step_positions(&self, step: usize) -> Option<Vec<[f64; 3]>> {
         results::step_positions(&self.stored.result, step, self.input, self.frame)
     }
 }
@@ -212,7 +218,7 @@ impl App {
     }
 
     /// The selected step, while it is current.
-    fn xtb_step(&self) -> Option<usize> {
+    pub(super) fn xtb_step(&self) -> Option<usize> {
         let step = self.tab.xtb.palette.step.as_ref()?;
         (step.revision == (self.tab.file_epoch, self.tab.revision)).then_some(step.index)
     }
@@ -222,12 +228,14 @@ impl App {
         let previewing = self.xtb_step().is_some();
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
+        // The overlay belongs to the preview that drew it.
+        self.tab.xtb.palette.ensemble.overlay = false;
         previewing
     }
 
     /// The step whose geometry the 3D model shows, if any: the last one
     /// unless another step was used.
-    fn xtb_model_step(&self, shown: &Shown<'_>) -> Option<usize> {
+    pub(super) fn xtb_model_step(&self, shown: &Shown<'_>) -> Option<usize> {
         let result = &shown.stored.result;
         let count = results::energies(result).len();
         let atom = shown.atoms.iter().flatten().next()?;
@@ -366,7 +374,7 @@ impl App {
             }
             Action::View(view) => {
                 self.tab.xtb.palette.view = view;
-                if view != View::Steps {
+                if !matches!(view, View::Steps | View::Conformers) {
                     self.xtb_end_preview();
                 }
             }
@@ -447,7 +455,7 @@ impl App {
         Task::none()
     }
 
-    fn xtb_preview_step(&mut self, index: usize) {
+    pub(super) fn xtb_preview_step(&mut self, index: usize) {
         let Some(shown) = self.xtb_shown() else {
             return;
         };
@@ -477,14 +485,23 @@ impl App {
             if let Some(model) = model {
                 reshiki::models3d::set_display(&mut doc, model, reshiki::models3d::Display::Both);
             }
+            if self.tab.xtb.palette.ensemble.overlay {
+                super::conformers::overlay(&mut doc, &shown, index);
+            }
             Some(doc)
         });
+        let name = super::conformers::step_name(&shown.stored.result, index);
         self.status = if let Some(error) = failure {
-            format!("Step {index} cannot be shown: {error}")
+            format!("{name} cannot be shown: {error}")
         } else if preview.is_some() {
-            format!("Previewing step {index} of {} · Esc returns", count - 1)
+            super::conformers::previewing(
+                &shown.stored.result,
+                index,
+                count,
+                self.tab.xtb.palette.ensemble.overlay,
+            )
         } else {
-            format!("Step {index} is not saved in this file")
+            format!("{name} is not saved in this file")
         };
         self.error = false;
         self.tab.xtb.palette.confirm.clear();
@@ -524,7 +541,10 @@ impl App {
                     .map(|change| {
                         state::describe(change, |id| self.xtb_atom_name(&atoms, id)).replacen(
                             "Optimization changed",
-                            &format!("Step {index} changes"),
+                            &format!(
+                                "{} changes",
+                                super::conformers::step_name(&shown.stored.result, index)
+                            ),
                             1,
                         )
                     })
@@ -547,10 +567,19 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if !self.error {
-            self.status = format!("Applied xTB geometry of step {index} · ⌘Z undoes");
+            self.status = match self.xtb_shown() {
+                Some(shown) if super::conformers::is_search(&shown.stored.result) => {
+                    format!(
+                        "Applied conformer {} to the 3D model · ⌘Z undoes",
+                        index + 1
+                    )
+                }
+                _ => format!("Applied xTB geometry of step {index} · ⌘Z undoes"),
+            };
         }
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
+        self.tab.xtb.palette.ensemble.overlay = false;
     }
 
     /// Run the shown result's calculation again on the molecule as it is now.
@@ -585,10 +614,26 @@ impl App {
             return Task::none();
         };
         config.fixed.retain(|id| self.tab.doc.atom(*id).is_some());
+        // A search runs again with the card's Conformers fields.
+        let search = match config.task {
+            super::CalcTask::Conformers => {
+                match super::conformers::recalculation(&mut config, &self.xtb.conformers) {
+                    Ok(search) => Some(search),
+                    Err(reason) => {
+                        self.status = reason;
+                        self.error = true;
+                        return Task::none();
+                    }
+                }
+            }
+            _ => None,
+        };
         let request = Request {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),
+            search,
             config,
             keep_full: shown.stored.keep_full,
+            start: None,
         };
         self.xtb_end_preview();
         self.xtb_begin(request)
@@ -706,7 +751,7 @@ pub(in crate::app) fn size_question(
     );
     let text = match lighter {
         Some((count, after)) => format!(
-            "Make lighter drops the full data you chose to keep for {count} result{} (optimization steps, gradients), leaving {} of results. Energies and final geometries stay; data imported from other programs stays.",
+            "Make lighter drops the full data you chose to keep for {count} result{} (optimization steps, gradients, normal modes), leaving {} of results. Energies and final geometries stay; data imported from other programs stays.",
             if count == 1 { "" } else { "s" },
             results::size(after)
         ),
@@ -716,6 +761,7 @@ pub(in crate::app) fn size_question(
 }
 
 mod view;
+pub(super) use view::alert;
 
 #[cfg(test)]
 pub(in crate::app) mod tests;
