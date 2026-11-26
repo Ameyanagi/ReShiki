@@ -79,7 +79,9 @@ impl App {
                     self.fit();
                 }
             }
-            self.status = "History restored".into();
+            self.status = self
+                .xtb_history_status(&before, redo)
+                .unwrap_or_else(|| "History restored".into());
         }
     }
 }

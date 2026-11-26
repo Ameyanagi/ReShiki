@@ -188,39 +188,74 @@ impl MoleculeCanvas<'_> {
         let Some(label) = &self.result_label else {
             return;
         };
-        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms) else {
-            return;
-        };
-        let lo = self.camera.screen(lo, bounds);
-        let hi = self.camera.screen(hi, bounds);
-        badge(
-            frame,
-            bounds,
-            Point::new(lo.x - 14., hi.y),
-            label.text.clone(),
-            true,
-        );
+        if !label.text.is_empty()
+            && let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms)
+        {
+            let lo = self.camera.screen(lo, bounds);
+            let hi = self.camera.screen(hi, bounds);
+            badge(
+                frame,
+                bounds,
+                Point::new(lo.x - 14., hi.y),
+                label.text.clone(),
+                true,
+            );
+        }
+        let distance = 0.55 * self.doc.drawing_style.bond_length_world * self.camera.zoom;
         for (id, text) in &label.atom_labels {
             let Some(atom) = self.doc.atom(*id) else {
                 continue;
             };
-            // Above and right of the atom, clear of a label glyph about
-            // 10 pt tall at any zoom.
-            let half = 5. * self.camera.zoom;
-            let at =
-                self.camera.screen(atom.position, bounds) + Vector::new(half + 2., -half - 15.);
+            let mut away = Vector::ZERO;
+            for bond in &self.doc.bonds {
+                let neighbor = if bond.a == *id {
+                    bond.b
+                } else if bond.b == *id {
+                    bond.a
+                } else {
+                    continue;
+                };
+                if let Some(neighbor) = self.doc.atom(neighbor) {
+                    away += Vector::new(
+                        atom.position.x - neighbor.position.x,
+                        atom.position.y - neighbor.position.y,
+                    );
+                }
+            }
+            let length = away.x.hypot(away.y);
+            let direction = if length > 1e-4 {
+                away / length
+            } else {
+                Vector::new(0., -1.)
+            };
             let width = crate::app::text_width(text, 11.) + 6.;
-            frame.fill_rectangle(
-                at - Vector::new(3., 1.),
-                iced::Size::new(width, 15.),
-                ACCENT_TINT,
-            );
+            let half = Vector::new(width / 2., 7.5);
+            let center = self.camera.screen(atom.position, bounds);
+            // Give the badge enough room to clear the element symbol at any zoom.
+            let mut offset = distance;
+            if let Some((lo, hi)) = reshiki::scene::atom_label_ink_bounds(atom, self.doc) {
+                let corner = World::new(
+                    if direction.x < 0. { lo.x } else { hi.x },
+                    if direction.y < 0. { lo.y } else { hi.y },
+                );
+                let edge = self.camera.screen(corner, bounds) - center;
+                let clearance = edge.x * direction.x
+                    + edge.y * direction.y
+                    + half.x * direction.x.abs()
+                    + half.y * direction.y.abs()
+                    + 2.;
+                offset = offset.max(clearance);
+            }
+            let at = center + direction * offset;
+            frame.fill_rectangle(at - half, iced::Size::new(width, 15.), ACCENT_TINT);
             frame.fill_text(canvas::Text {
                 content: text.clone(),
                 position: at,
                 color: rgb([30, 100, 85]),
                 size: 11.into(),
                 font: iced::Font::with_name(reshiki::style::ui_font_family()),
+                align_x: iced::widget::text::Alignment::Center,
+                align_y: iced::alignment::Vertical::Center,
                 ..Default::default()
             });
         }

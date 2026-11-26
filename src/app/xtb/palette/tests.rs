@@ -83,6 +83,11 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Done { .. })));
     assert!(app.xtb_bottom_palette().is_some());
 
+    palette(&mut app, Action::CopyMethods);
+    assert_eq!(
+        app.status,
+        "Copied the methods text (BibTeX keys from ReShiki's xtb.bib)"
+    );
     palette(&mut app, Action::CopyTable);
     assert!(app.status.starts_with("Copied 6 rows"), "{}", app.status);
 
@@ -97,6 +102,147 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     assert!(app.xtb_bottom_palette().is_none());
     assert!(app.xtb_inspector_palette().is_some());
     assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
+}
+
+#[test]
+fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
+    use reshiki::atom_labels::shift_label_style;
+    use reshiki::qcdata::{AtomicCharges, ChargeScheme};
+    use reshiki::scene::{Primitive, primitives};
+    use std::sync::Arc;
+
+    let (mut app, _, start) = halocarbon();
+    let Event::Done(Ok(mut report)) = optimized(&start, &start) else {
+        unreachable!()
+    };
+    Arc::get_mut(&mut report).unwrap().computed.charges = Some(AtomicCharges {
+        scheme: ChargeScheme::Cm5,
+        values: vec![-0.561, 0.2805, -0.0001, 0.0, 0.2806],
+    });
+    event(&mut app, Event::Done(Ok(report)));
+    let shown = app.xtb_shown().expect("the new result");
+    let ids: Vec<_> = shown.atoms.iter().flatten().copied().collect();
+    assert_eq!(ids.len(), 4);
+    assert_eq!(shown.atoms.last(), Some(&None));
+    let before = app.tab.doc.clone();
+    palette(&mut app, Action::PlaceCharges);
+    assert_eq!(
+        app.status,
+        "Placed 4 CM5 charges as atom labels · ⌘Z undoes"
+    );
+    let style = shift_label_style(&app.tab.doc);
+    let drawing = primitives(&app.tab.doc);
+    for (id, expected) in ids.into_iter().zip(["−0.56", "+0.28", "0.00", "0.00"]) {
+        let label = app
+            .tab
+            .doc
+            .atom(id)
+            .unwrap()
+            .display
+            .number
+            .as_ref()
+            .unwrap();
+        assert_eq!(label.text, expected);
+        assert_eq!(label.offset, None);
+        assert_eq!(label.style, style);
+        assert!(
+            drawing
+                .iter()
+                .any(|item| matches!(item, Primitive::Text { text, .. } if text == expected))
+        );
+    }
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms, before.atoms);
+    assert!(app.xtb_shown().is_some_and(|shown| !shown.stale));
+    edit(&mut app, before.atoms[0].id);
+    palette(&mut app, Action::PlaceCharges);
+    assert!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .all(|atom| atom.display.number.is_none())
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in layout check. Use --features iced/tiny-skia without a GPU"]
+async fn bottom_dock_keeps_its_tabs_and_footer_at_the_same_height() {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    use iced::{Rectangle, Size};
+
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let (mut optimization, _) = water(CalcTask::OptFreq);
+    let mut report = optfreq(&START, &MOVED);
+    report.computed.orbitals = Some(
+        serde_json::from_value(serde_json::json!({
+            "core_electrons": [2, 0, 0],
+            "alpha": { "energies_hartree": [-0.7, -0.5, -0.4, -0.3, 0.2],
+                       "occupations": [2., 2., 2., 2., 0.] },
+            "beta": "restricted"
+        }))
+        .unwrap(),
+    );
+    event(
+        &mut optimization,
+        Event::Done(Ok(std::sync::Arc::new(report))),
+    );
+    let (conformers, _) = App::xtb_searched_water();
+    for (mut app, expected) in [
+        (
+            optimization,
+            &[
+                View::Summary,
+                View::Vibrations,
+                View::Steps,
+                View::Orbitals,
+                View::Log,
+            ][..],
+        ),
+        (
+            conformers,
+            &[View::Summary, View::Conformers, View::Log][..],
+        ),
+    ] {
+        assert_eq!(
+            View::available(&app.xtb_shown().unwrap().stored.result),
+            expected
+        );
+        for size in [Size::new(1040., 680.), Size::new(1280., 820.)] {
+            let mut before = None;
+            for &view in expected {
+                palette(&mut app, Action::View(view));
+                let mut ui = iced_runtime::UserInterface::build(
+                    app.view(),
+                    size,
+                    Default::default(),
+                    &mut renderer,
+                );
+                let mut collect = reshiki::accessibility::Collect::new(Rectangle::with_size(size));
+                ui.operate(&renderer, &mut operation::black_box(&mut collect));
+                let bounds = |id| {
+                    collect
+                        .snapshot()
+                        .nodes
+                        .iter()
+                        .find(|node| node.id == id)
+                        .unwrap()
+                        .bounds
+                };
+                let found = (bounds("xtb-results-summary").y, bounds("xtb-keep-full"));
+                if let Some(before) = before {
+                    assert_eq!(found, before, "{size:?}, {view:?}");
+                }
+                before = Some(found);
+            }
+        }
+    }
 }
 
 #[test]
