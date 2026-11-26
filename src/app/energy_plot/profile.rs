@@ -31,6 +31,11 @@ pub(crate) struct Marker {
     pub side: Side,
     pub transition: bool,
     pub note: Option<String>,
+    /// A separate relaxation from the last traced point to this endpoint.
+    /// The caller keeps both samples at the branch's terminal coordinate.
+    pub connector_from: Option<Sample>,
+    /// Describes this marker's energy reference when its label is abbreviated.
+    pub tooltip: Option<String>,
     /// Index into the caller's prepared molecular thumbnails.
     pub thumbnail: Option<usize>,
 }
@@ -63,14 +68,29 @@ pub(crate) struct ModelBox {
 }
 
 #[derive(Debug)]
+pub(crate) struct EndpointConnector<'a> {
+    pub from: Point,
+    pub to: Point,
+    marker: &'a Marker,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum PlotDot<'a> {
+    Marker(&'a Marker),
+    Overlay(Sample),
+}
+
+#[derive(Debug)]
 pub(crate) struct ProfileLayout<'a> {
     pub plot: Rectangle,
     pub labels: Vec<Label<'a>>,
     pub models: Vec<ModelBox>,
+    pub connectors: Vec<EndpointConnector<'a>>,
     pub energy_ticks: Vec<f64>,
     pub coordinate_ticks: Vec<f64>,
     legend_y: Option<f32>,
     footer_legend: bool,
+    legend_rows: usize,
     x_range: (f64, f64),
     energy_range: (f64, f64),
 }
@@ -79,6 +99,25 @@ const LEFT: f32 = 52.;
 const RIGHT: f32 = 16.;
 const FONT: f32 = 11.;
 const LINE: f32 = 15.;
+const MODEL_SIZE: f32 = 36.;
+const RELAXED_LEGEND: &str = "relaxed to the minimum";
+
+fn finite(sample: Sample) -> bool {
+    sample.x.is_finite() && sample.energy.is_finite()
+}
+
+fn relaxation_stroke(color: Color) -> Stroke<'static> {
+    Stroke {
+        line_dash: canvas::LineDash {
+            segments: &[1., 3.],
+            offset: 0,
+        },
+        ..Stroke::default()
+            .with_color(color)
+            .with_width(1.3)
+            .with_line_cap(canvas::LineCap::Round)
+    }
+}
 
 fn finite_range(values: impl Iterator<Item = f64>, include_zero: bool) -> (f64, f64) {
     let mut range: Option<(f64, f64)> = include_zero.then_some((0., 0.));
@@ -149,7 +188,13 @@ impl Profile {
                 .iter()
                 .chain(self.overlay.iter())
                 .map(|sample| sample.x)
-                .chain(self.markers.iter().map(|marker| marker.sample.x)),
+                .chain(self.markers.iter().map(|marker| marker.sample.x))
+                .chain(
+                    self.markers
+                        .iter()
+                        .filter_map(|marker| marker.connector_from)
+                        .map(|sample| sample.x),
+                ),
             false,
         );
         if self.style == Style::Levels {
@@ -166,7 +211,13 @@ impl Profile {
                 .iter()
                 .chain(self.overlay.iter())
                 .map(|sample| sample.energy)
-                .chain(self.markers.iter().map(|marker| marker.sample.energy)),
+                .chain(self.markers.iter().map(|marker| marker.sample.energy))
+                .chain(
+                    self.markers
+                        .iter()
+                        .filter_map(|marker| marker.connector_from)
+                        .map(|sample| sample.energy),
+                ),
             true,
         )
     }
@@ -208,19 +259,28 @@ impl Profile {
         } else {
             vec![]
         };
-        let show_models = bounds.width >= 360. && bounds.height >= 200.;
+        let show_models = bounds.width >= 260. && bounds.height >= 140.;
         let model_markers: Vec<_> = self
             .markers
             .iter()
-            .filter(|_| show_models)
+            .filter(|marker| show_models && finite(marker.sample))
             .filter_map(|marker| Some((marker, marker.thumbnail?)))
             .collect();
+        let model_markers = if width < model_markers.len() as f32 * (MODEL_SIZE + 6.) {
+            vec![]
+        } else {
+            model_markers
+        };
         let mut models = vec![];
-        let model_height = if model_markers.is_empty() { 0. } else { 44. };
+        let model_height = if model_markers.is_empty() {
+            0.
+        } else {
+            MODEL_SIZE + 2.
+        };
         if !model_markers.is_empty() {
             let slot_width = width / model_markers.len() as f32;
             for (slot, (marker, thumbnail)) in model_markers.into_iter().enumerate() {
-                let size = Size::new((slot_width - 6.).min(88.), 40.);
+                let size = Size::new((slot_width - 6.).clamp(MODEL_SIZE, 88.), MODEL_SIZE);
                 let ideal = self.x(marker.sample.x, bounds);
                 let center = ideal.clamp(
                     LEFT + slot as f32 * slot_width + size.width / 2.,
@@ -241,7 +301,7 @@ impl Profile {
             let mut markers: Vec<_> = self
                 .markers
                 .iter()
-                .filter(|marker| marker.side == side)
+                .filter(|marker| marker.side == side && finite(marker.sample))
                 .collect();
             markers.sort_by(|a, b| a.sample.x.total_cmp(&b.sample.x));
             let mut row = 0;
@@ -273,38 +333,66 @@ impl Profile {
             }
         }
         let mut note_lines = vec![];
-        for marker in &self.markers {
+        for marker in self.markers.iter().filter(|marker| finite(marker.sample)) {
             if let Some(note) = &marker.note {
                 let x = self.x(marker.sample.x, bounds);
                 note_lines.extend(wrap_note(note, width).into_iter().map(|line| (line, x)));
             }
         }
-        let footer_legend = !self.overlay.is_empty() && bounds.height < 200. && width >= 240.;
-        let legend_y = (!self.overlay.is_empty()).then_some(if footer_legend {
-            bounds.height - 14.
+        let relaxed = self
+            .markers
+            .iter()
+            .any(|marker| marker.connector_from.is_some_and(finite) && finite(marker.sample));
+        let has_legend = !self.overlay.is_empty() || relaxed;
+        let legend_rows = if relaxed && !self.overlay.is_empty() && width < 252. {
+            2
         } else {
-            3. + model_height
+            1
+        };
+        let footer_legend = has_legend && bounds.height < 200.;
+        // An overlay-only legend shares the wide footer with the x title. A
+        // relaxation key gets its own row so its meaning is never abbreviated.
+        let separate_footer = footer_legend && (relaxed || width < 240.);
+        let padding = if bounds.height < 160. { 1. } else { 3. };
+        let legend_y = has_legend.then_some(if footer_legend {
+            bounds.height
+                - 14.
+                - if separate_footer {
+                    legend_rows as f32 * LINE
+                } else {
+                    0.
+                }
+        } else {
+            padding + model_height
         });
         let legend_height = if legend_y.is_some() && !footer_legend {
-            LINE
+            legend_rows as f32 * LINE
         } else {
             0.
         };
-        let top = 3. + model_height + legend_height + rows[0] as f32 * LINE;
+        let top = padding + model_height + legend_height + rows[0] as f32 * LINE;
         let tick_height = if self.x_ticks { 15. } else { 0. };
-        let footer = 22. + tick_height + rows[1] as f32 * LINE;
+        let footer = 22.
+            + tick_height
+            + rows[1] as f32 * LINE
+            + if separate_footer {
+                legend_rows as f32 * LINE
+            } else {
+                0.
+            };
         // Leave a readable trace when a plan has many forming distances. The
         // accessible figure name retains the entire annotation.
-        let max_lines = ((bounds.height - footer - top - 40.) / LINE)
+        let max_lines = ((bounds.height - footer - top - 36.) / LINE)
             .floor()
-            .max(1.) as usize;
+            .max(0.) as usize;
         if note_lines.len() > max_lines {
             note_lines.truncate(max_lines);
             if let Some((last, _)) = note_lines.last_mut() {
                 last.push('…');
             }
         }
-        let plot_top = top + note_lines.len() as f32 * LINE + 10.;
+        let plot_top =
+            top + note_lines.len() as f32 * LINE + if bounds.height < 160. { 2. } else { 6. };
         let plot = Rectangle::new(
             Point::new(LEFT, plot_top),
             Size::new(width, (bounds.height - footer - plot_top).max(1.)),
@@ -312,7 +400,7 @@ impl Profile {
         for label in &mut labels {
             label.bounds.y += match label.marker.map(|m| m.side) {
                 None => continue,
-                Some(Side::Above) => 3. + model_height + legend_height,
+                Some(Side::Above) => padding + model_height + legend_height,
                 Some(Side::Below) => plot.y + plot.height + tick_height + 5.,
             };
         }
@@ -328,16 +416,134 @@ impl Profile {
                 marker: None,
             });
         }
-        ProfileLayout {
+        let mut layout = ProfileLayout {
             plot,
             labels,
             models,
+            connectors: vec![],
             energy_ticks,
             coordinate_ticks,
             legend_y,
             footer_legend,
+            legend_rows,
             x_range,
             energy_range,
+        };
+        layout.connectors = self
+            .markers
+            .iter()
+            .filter_map(|marker| {
+                let from = marker.connector_from?;
+                (finite(from) && finite(marker.sample)).then(|| EndpointConnector {
+                    from: layout.point(from),
+                    to: layout.point(marker.sample),
+                    marker,
+                })
+            })
+            .collect();
+        layout
+    }
+
+    /// The NEB comparison dots must remain visible when methods agree exactly.
+    fn dots_in_draw_order(&self) -> impl Iterator<Item = PlotDot<'_>> {
+        self.markers
+            .iter()
+            .filter(|marker| finite(marker.sample))
+            .map(PlotDot::Marker)
+            .chain(
+                self.overlay
+                    .iter()
+                    .copied()
+                    .filter(|sample| finite(*sample))
+                    .map(PlotDot::Overlay),
+            )
+    }
+
+    pub(crate) fn hover_text(&self, point: Point, layout: &ProfileLayout<'_>) -> Option<String> {
+        let marker = self.markers.iter().find(|marker| {
+            finite(marker.sample)
+                && (layout.point(marker.sample).distance(point) <= 8.
+                    || layout.labels.iter().any(|label| {
+                        label
+                            .marker
+                            .is_some_and(|candidate| std::ptr::eq(candidate, *marker))
+                            && label.bounds.contains(point)
+                    })
+                    || layout.models.iter().any(|model| {
+                        marker.thumbnail == Some(model.thumbnail) && model.bounds.contains(point)
+                    }))
+        });
+        if let Some(marker) = marker {
+            let mut text = format!(
+                "{} · {} {}",
+                marker.tooltip.as_deref().unwrap_or(&marker.label),
+                self.unit.number(marker.sample.energy),
+                self.unit.label()
+            );
+            if marker.connector_from.is_some() {
+                text.push_str(&format!(" · {RELAXED_LEGEND}"));
+            }
+            if let Some(note) = &marker.note {
+                text.push_str(&format!(" · {note}"));
+            }
+            return Some(text);
+        }
+        layout
+            .connectors
+            .iter()
+            .find(|connector| {
+                let vector = connector.to - connector.from;
+                let length_squared = vector.x * vector.x + vector.y * vector.y;
+                let along = if length_squared > 0. {
+                    let offset = point - connector.from;
+                    ((offset.x * vector.x + offset.y * vector.y) / length_squared).clamp(0., 1.)
+                } else {
+                    0.
+                };
+                (connector.from + vector * along).distance(point) <= 5.
+            })
+            .map(|connector| format!("{} · {RELAXED_LEGEND}", connector.marker.label))
+    }
+
+    pub(crate) fn draw_hover(
+        &self,
+        frame: &mut Frame,
+        theme: &Theme,
+        layout: &ProfileLayout<'_>,
+        point: Option<Point>,
+    ) {
+        let Some(point) = point else {
+            return;
+        };
+        let Some(text) = self.hover_text(point, layout) else {
+            return;
+        };
+        let width = text_width(&text).min((frame.width() - 12.).max(1.));
+        let lines = wrap_note(&text, width);
+        let height = lines.len() as f32 * LINE + 8.;
+        let origin = Point::new(
+            (point.x + 10.).min(frame.width() - width - 10.).max(2.),
+            (point.y - height - 6.).max(2.),
+        );
+        frame.fill_rectangle(
+            origin,
+            Size::new(width + 8., height),
+            theme.palette().background,
+        );
+        frame.stroke(
+            &Path::rectangle(origin, Size::new(width + 8., height)),
+            Stroke::default()
+                .with_color(crate::appearance::muted(theme))
+                .with_width(0.8),
+        );
+        for (index, content) in lines.into_iter().enumerate() {
+            frame.fill_text(Text {
+                content,
+                position: origin + iced::Vector::new(4., 4. + index as f32 * LINE),
+                color: theme.palette().text,
+                size: FONT.into(),
+                ..Text::default()
+            });
         }
     }
 
@@ -503,10 +709,11 @@ impl Profile {
                 );
             }
         }
-        for sample in &self.overlay {
-            if sample.x.is_finite() && sample.energy.is_finite() {
-                frame.fill(&Path::circle(layout.point(*sample), 2.5), muted);
-            }
+        for connector in &layout.connectors {
+            frame.stroke(
+                &Path::line(connector.from, connector.to),
+                relaxation_stroke(muted),
+            );
         }
         for model in &layout.models {
             let point = layout.point(model.sample);
@@ -552,7 +759,14 @@ impl Profile {
                 );
             }
         }
-        for marker in &self.markers {
+        for dot in self.dots_in_draw_order() {
+            let marker = match dot {
+                PlotDot::Marker(marker) => marker,
+                PlotDot::Overlay(sample) => {
+                    frame.fill(&Path::circle(layout.point(sample), 2.5), muted);
+                    continue;
+                }
+            };
             let point = layout.point(marker.sample);
             if marker.transition {
                 let diamond = Path::new(|path| {
@@ -613,28 +827,61 @@ impl Profile {
         );
         if let Some(y) = layout.legend_y {
             // The legend has its own annotation lane, outside the curve.
-            let x = layout.plot.x + layout.plot.width - 88.;
-            frame.stroke(
-                &Path::line(Point::new(x, y + 5.), Point::new(x + 14., y + 5.)),
-                Stroke::default().with_color(curve).with_width(1.7),
-            );
-            label(
-                frame,
-                "IRC".into(),
-                Point::new(x + 18., y),
-                muted,
-                9.,
-                iced::alignment::Horizontal::Left.into(),
-            );
-            frame.fill(&Path::circle(Point::new(x + 47., y + 5.), 2.3), muted);
-            label(
-                frame,
-                "NEB".into(),
-                Point::new(x + 54., y),
-                muted,
-                9.,
-                iced::alignment::Horizontal::Left.into(),
-            );
+            let relaxed = !layout.connectors.is_empty();
+            let overlay = !self.overlay.is_empty();
+            let key_width = (if overlay { 88. } else { 0. })
+                + if relaxed {
+                    text_width(RELAXED_LEGEND) * 9. / FONT + 22.
+                } else {
+                    0.
+                };
+            let x = if layout.legend_rows > 1 {
+                layout.plot.x
+            } else {
+                (layout.plot.x + layout.plot.width - key_width).max(layout.plot.x)
+            };
+            if overlay {
+                frame.stroke(
+                    &Path::line(Point::new(x, y + 5.), Point::new(x + 14., y + 5.)),
+                    Stroke::default().with_color(curve).with_width(1.7),
+                );
+                label(
+                    frame,
+                    "IRC".into(),
+                    Point::new(x + 18., y),
+                    muted,
+                    9.,
+                    iced::alignment::Horizontal::Left.into(),
+                );
+                frame.fill(&Path::circle(Point::new(x + 47., y + 5.), 2.3), muted);
+                label(
+                    frame,
+                    "NEB".into(),
+                    Point::new(x + 54., y),
+                    muted,
+                    9.,
+                    iced::alignment::Horizontal::Left.into(),
+                );
+            }
+            if relaxed {
+                let (x, y) = if layout.legend_rows > 1 && overlay {
+                    (x, y + LINE)
+                } else {
+                    (x + if overlay { 88. } else { 0. }, y)
+                };
+                frame.stroke(
+                    &Path::line(Point::new(x, y + 5.), Point::new(x + 14., y + 5.)),
+                    relaxation_stroke(muted),
+                );
+                label(
+                    frame,
+                    RELAXED_LEGEND.into(),
+                    Point::new(x + 20., y),
+                    muted,
+                    9.,
+                    iced::alignment::Horizontal::Left.into(),
+                );
+            }
         }
     }
 }

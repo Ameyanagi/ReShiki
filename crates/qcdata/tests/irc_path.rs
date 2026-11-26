@@ -1,31 +1,45 @@
 use reshiki_qcdata::{
-    ANGSTROM_PER_BOHR, CalcResult, Endpoints, Frame, IrcEndpoint, IrcPath, Provenance, RunSummary,
-    Settings, Source, Status, Task, Trajectory, TransitionStateMapping, TransitionStateRun,
-    XtbMethod, XtbSettings,
+    ANGSTROM_PER_BOHR, CalcResult, Endpoints, Frame, IrcEndpoint, IrcPath, IrcRelaxedEnd,
+    Provenance, RunSummary, Settings, Source, Status, Task, Trajectory, TransitionStateMapping,
+    TransitionStateRun, XtbMethod, XtbSettings,
 };
 
+fn evidence() -> serde_json::Value {
+    serde_json::from_str(include_str!("fixtures/claisen-irc.json")).unwrap()
+}
+
 fn fixture() -> (Frame, CalcResult) {
-    let value: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/claisen-irc.json")).unwrap();
-    let trajectory: Trajectory = serde_json::from_value(value["irc"].clone()).unwrap();
+    let value = evidence();
+    let mut trajectory: Trajectory = serde_json::from_value(value["irc"].clone()).unwrap();
     let neb: Trajectory = serde_json::from_value(value["neb"].clone()).unwrap();
     let ts_index = value["ts_index"].as_u64().unwrap() as usize;
     let climbing = value["climbing_index"].as_u64().unwrap() as usize;
     let frame = trajectory.frame(ts_index).unwrap();
     let endpoints = Endpoints {
-        reactant: trajectory.frame(0).unwrap().hash(),
-        product: trajectory.frame(trajectory.steps() - 1).unwrap().hash(),
+        reactant: neb.frame(0).unwrap().hash(),
+        product: neb.frame(neb.steps() - 1).unwrap().hash(),
     };
+    let last = trajectory.steps() - 1;
+    let width = trajectory.numbers.len() * 3;
+    let relaxed = [0, last].map(|i| IrcRelaxedEnd {
+        energy_hartree: trajectory.energies_hartree[i],
+        positions_angstrom: trajectory.positions_angstrom[i * width..(i + 1) * width].to_vec(),
+    });
+    trajectory.energies_hartree = trajectory.energies_hartree[1..last].to_vec();
+    trajectory.positions_angstrom = trajectory.positions_angstrom[width..last * width].to_vec();
     let mut irc = IrcPath::new(
         trajectory,
-        ts_index,
+        ts_index - 1,
         [IrcEndpoint::Reactant, IrcEndpoint::Product],
         serde_json::from_value(value["completed"].clone()).unwrap(),
+        relaxed,
     )
     .unwrap();
     irc.project_neb(&neb, climbing).unwrap();
-    let mut saved_neb = neb;
-    saved_neb.positions_angstrom.clear();
+    let endpoint_energies = [
+        neb.energies_hartree[0],
+        *neb.energies_hartree.last().unwrap(),
+    ];
     let result = CalcResult {
         frame: frame.hash(),
         input_frame: None,
@@ -54,7 +68,7 @@ fn fixture() -> (Frame, CalcResult) {
             },
         },
         status: Status::Converged,
-        energy_hartree: Some(irc.trajectory.energies_hartree[ts_index]),
+        energy_hartree: Some(irc.trajectory.energies_hartree[irc.ts_index]),
         energy_terms: Default::default(),
         gradient_hartree_per_bohr: vec![],
         hessian_hartree_per_bohr2: vec![],
@@ -64,7 +78,7 @@ fn fixture() -> (Frame, CalcResult) {
         orbitals: None,
         vibrations: None,
         thermo: None,
-        trajectory: Some(saved_neb),
+        trajectory: Some(neb),
         keep_full: true,
         omitted_bytes: None,
         run: Some(RunSummary {
@@ -77,7 +91,7 @@ fn fixture() -> (Frame, CalcResult) {
                 arrow: None,
                 context: None,
                 free_energy: false,
-                endpoint_energies_hartree: None,
+                endpoint_energies_hartree: Some(endpoint_energies),
                 endpoint_thermo: None,
                 reached_positions_angstrom: vec![],
                 forming_bonds: vec![],
@@ -127,9 +141,15 @@ fn full_and_light_irc_round_trip_and_older_files_remain_readable() {
         .as_ref()
         .unwrap();
     assert!(full_path.has_frames());
-    assert_eq!(full_path.steps(), 123);
-    assert_eq!(full_path.ts_index, 61);
-    assert_eq!(full_path.frame(61), Some(frame.clone()));
+    assert_eq!(full_path.steps(), 121);
+    assert_eq!(full_path.ts_index, 60);
+    assert_eq!(full_path.frame(60), Some(frame.clone()));
+    assert_ne!(full_path.relaxed_frame(0), full_path.frame(0));
+    assert_ne!(full_path.relaxed_frame(1), full_path.frame(120));
+    let s = &full_path.arc_lengths_sqrt_amu_bohr;
+    assert!((s[120] - s[119] - 0.07).abs() < 0.01);
+    let terminal_neb_s = full_path.neb_arc_lengths_sqrt_amu_bohr.last();
+    assert_eq!(terminal_neb_s, s.last());
     assert_eq!(
         full_path.reached,
         [IrcEndpoint::Reactant, IrcEndpoint::Product]
@@ -144,6 +164,13 @@ fn full_and_light_irc_round_trip_and_older_files_remain_readable() {
     let light_path = details(&mut light).irc.as_ref().unwrap();
     assert!(!light_path.has_frames());
     assert_eq!(light_path.frame(0), None);
+    for branch in 0..2 {
+        assert!(light_path.relaxed_frame(branch).is_none());
+        assert_eq!(
+            light_path.relaxed_ends.as_ref().unwrap()[branch].energy_hartree,
+            full_path.relaxed_ends.as_ref().unwrap()[branch].energy_hartree
+        );
+    }
     assert_eq!(light_path.steps(), full_path.steps());
     assert_eq!(
         light_path.trajectory.energies_hartree,
@@ -169,6 +196,96 @@ fn full_and_light_irc_round_trip_and_older_files_remain_readable() {
 }
 
 #[test]
+fn scaled_saved_arcs_are_recomputed_with_frames_and_preserved_without_them() {
+    let (frame, result) = fixture();
+    for full in [true, false] {
+        let mut saved = if full {
+            result.clone()
+        } else {
+            result.light(&[])
+        };
+        let path = details(&mut saved).irc.as_mut().unwrap();
+        for s in path
+            .arc_lengths_sqrt_amu_bohr
+            .iter_mut()
+            .chain(&mut path.neb_arc_lengths_sqrt_amu_bohr)
+        {
+            *s *= ANGSTROM_PER_BOHR;
+        }
+        saved.validate(&frame).unwrap();
+        let mut loaded: CalcResult =
+            serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        loaded.validate(&frame).unwrap();
+        let mut expected = if full { result.clone() } else { saved };
+        assert_eq!(details(&mut loaded).irc, details(&mut expected).irc);
+    }
+}
+
+#[test]
+fn legacy_full_and_light_claisen_saves_separate_the_relaxed_ends() {
+    let (frame, mut result) = fixture();
+    let trajectory: Trajectory = serde_json::from_value(evidence()["irc"].clone()).unwrap();
+    for full in [true, false] {
+        let mut legacy = if full {
+            result.clone()
+        } else {
+            result.light(&[])
+        };
+        let band = result.trajectory.as_ref().unwrap();
+        let mut old = details(&mut legacy).irc.take().unwrap();
+        old.trajectory = trajectory.clone();
+        old.ts_index += 1;
+        old.arc_lengths_sqrt_amu_bohr =
+            IrcPath::geometric_arc_lengths(&old.trajectory, old.ts_index).unwrap();
+        old.project_neb(
+            band,
+            evidence()["climbing_index"].as_u64().unwrap() as usize,
+        )
+        .unwrap();
+        if !full {
+            old.trajectory.positions_angstrom.clear();
+        }
+        legacy
+            .trajectory
+            .as_mut()
+            .unwrap()
+            .positions_angstrom
+            .clear();
+        details(&mut legacy).irc = Some(old);
+        let mut wire = serde_json::to_value(legacy).unwrap();
+        wire["run"]["transition_state"]["irc"]
+            .as_object_mut()
+            .unwrap()
+            .remove("relaxed_ends");
+        let mut loaded: CalcResult = serde_json::from_value(wire).unwrap();
+        loaded.validate(&frame).unwrap();
+        let path = details(&mut loaded).irc.as_ref().unwrap();
+        let expected = details(&mut result).irc.as_ref().unwrap();
+        assert_eq!(
+            path.arc_lengths_sqrt_amu_bohr,
+            expected.arc_lengths_sqrt_amu_bohr
+        );
+        for (actual, expected) in path
+            .neb_arc_lengths_sqrt_amu_bohr
+            .iter()
+            .zip(&expected.neb_arc_lengths_sqrt_amu_bohr)
+        {
+            assert!((actual - expected).abs() < 1e-12);
+        }
+        for branch in 0..2 {
+            assert_eq!(
+                path.relaxed_frame(branch),
+                if full {
+                    expected.relaxed_frame(branch)
+                } else {
+                    None
+                }
+            );
+        }
+    }
+}
+
+#[test]
 fn geometric_arc_uses_actual_steps_masses_and_bohr_units() {
     let trajectory = Trajectory {
         numbers: vec![1, 1],
@@ -191,6 +308,10 @@ fn geometric_arc_uses_actual_steps_masses_and_bohr_units() {
         2,
         [IrcEndpoint::Reactant, IrcEndpoint::Product],
         [true, true],
+        std::array::from_fn(|_| IrcRelaxedEnd {
+            energy_hartree: -2.,
+            positions_angstrom: vec![],
+        }),
     )
     .unwrap();
     for (actual, expected) in irc
@@ -268,11 +389,14 @@ fn claisen_irc_reports_added_full_and_light_saved_sizes() {
     let added_full = full_bytes - baseline_full_bytes;
     let added_light = light_bytes - baseline_light_bytes;
     println!(
-        "14-atom Claisen, 123 IRC frames, 15 NEB images: full {baseline_full_bytes} → {full_bytes} bytes (+{added_full}); light {baseline_light_bytes} → {light_bytes} bytes (+{added_light}); IRC geometries {} bytes",
-        added_full - added_light
+        "14-atom Claisen, 121 IRC frames, 2 relaxed ends, 15 NEB images: full {baseline_full_bytes} → {full_bytes} bytes (+{added_full}); light {baseline_light_bytes} → {light_bytes} bytes (+{added_light}); full minus light {} bytes",
+        full_bytes - light_bytes
     );
     assert!(added_full < 40_000);
     assert!(added_light < 12_000);
     assert!(added_full > added_light);
-    assert_eq!(result.heavy_bytes(), added_full - added_light);
+    assert_eq!(
+        result.heavy_bytes(),
+        serde_json::to_vec_pretty(&result).unwrap().len() - light_bytes
+    );
 }

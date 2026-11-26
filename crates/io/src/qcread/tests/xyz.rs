@@ -5,6 +5,57 @@ use crate::qcread::{
 use reshiki_qcdata::{MAX_FRAME_ATOMS, MAX_FRAMES};
 
 #[test]
+fn irc_xyz_round_trips_traced_frames_and_hartree_energies() -> anyhow::Result<()> {
+    use reshiki_qcdata::{IrcEndpoint, IrcPath, IrcRelaxedEnd, KCAL_PER_HARTREE, Trajectory};
+
+    let energies = [-5.00123456789, -4.99, -5.0201];
+    let positions = [-0.25, 0., 0.5].into_iter().flat_map(|x| [x, 0., 0.]);
+    let path = IrcPath::new(
+        Trajectory {
+            numbers: vec![2],
+            isotopes: vec![],
+            masses_amu: vec![4.],
+            charge: 0,
+            multiplicity: 1,
+            positions_angstrom: positions.collect(),
+            energies_hartree: energies.to_vec(),
+            labels: vec![],
+            minimizer_energies_hartree: vec![],
+            cluster_sizes: vec![],
+            rmsd_to_best_angstrom: vec![],
+        },
+        1,
+        [IrcEndpoint::Reactant, IrcEndpoint::Product],
+        [false; 2],
+        [-0.8, 1.2].map(|x| IrcRelaxedEnd {
+            energy_hartree: -5.04,
+            positions_angstrom: vec![x, 0., 0.],
+        }),
+    )?;
+    let xyz = crate::qc_input::write_irc_xyz(&path, -5., KCAL_PER_HARTREE, "kcal/mol")?;
+    let file = read("reaction-irc.xyz", xyz.as_bytes())?;
+    let steps = &file.jobs[0].steps;
+    assert_eq!(steps.len(), path.steps());
+    for (i, (step, energy)) in steps.iter().zip(energies).enumerate() {
+        assert_eq!(step.energy_hartree, Some(energy));
+        assert_eq!(
+            step.frame.positions_angstrom,
+            path.frame(i).unwrap().positions_angstrom
+        );
+        let s = path.arc_lengths_sqrt_amu_bohr[i];
+        let delta = (energy + 5.) * KCAL_PER_HARTREE;
+        assert_eq!(
+            step.label.as_deref(),
+            Some(
+                format!("E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} kcal/mol")
+                    .as_str()
+            )
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn extended_xyz_accepts_atomic_number_property_columns() -> anyhow::Result<()> {
     let bytes = fixture("cclib/uracil_two.xyz");
     let text = std::str::from_utf8(&bytes)?;

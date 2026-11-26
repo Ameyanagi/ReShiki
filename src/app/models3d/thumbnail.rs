@@ -17,7 +17,7 @@ struct Change {
 
 #[derive(Clone, Debug)]
 pub(in crate::app) struct Thumbnail {
-    image: ModelImage,
+    images: [ModelImage; 2],
     lo: World,
     hi: World,
     changes: Vec<Change>,
@@ -99,16 +99,26 @@ impl Thumbnail {
             });
         }
         doc.models.push(model);
-        let primitives = models3d::primitives(&doc);
-        if primitives.is_empty() {
+        let artwork = themed_primitives(&mut doc);
+        if artwork.iter().any(Vec::is_empty) {
             return None;
         }
-        let (lo, hi) = reshiki::scene::bounds(&primitives);
+        let bounds = artwork
+            .each_ref()
+            .map(|primitives| reshiki::scene::bounds(primitives));
+        let lo = World::new(
+            bounds[0].0.x.min(bounds[1].0.x),
+            bounds[0].0.y.min(bounds[1].0.y),
+        );
+        let hi = World::new(
+            bounds[0].1.x.max(bounds[1].1.x),
+            bounds[0].1.y.max(bounds[1].1.y),
+        );
         // Keep outlines and the antialiased sphere edges inside the image.
         let lo = lo.offset(-1., -1.);
         let hi = hi.offset(1., 1.);
         Some(Self {
-            image: ModelImage::new(primitives, lo, hi),
+            images: artwork.map(|primitives| ModelImage::new(primitives, lo, hi)),
             lo,
             hi,
             changes,
@@ -150,11 +160,11 @@ impl Thumbnail {
         let project = |point: World| {
             origin + Vector::new((point.x - self.lo.x) * scale, (point.y - self.lo.y) * scale)
         };
-        let dark = crate::appearance::is_dark(theme);
-        let mode = if dark {
-            CanvasTheme::Dark
+        let [light, dark] = &self.images;
+        let (mode, image) = if crate::appearance::is_dark(theme) {
+            (CanvasTheme::Dark, dark)
         } else {
-            CanvasTheme::Light
+            (CanvasTheme::Light, light)
         };
         for change in &self.changes {
             let color = self.change_color(change.kind, mode);
@@ -170,8 +180,21 @@ impl Thumbnail {
         }
         // Canvas paints images above strokes, so the atom balls naturally
         // cover the dashed bond ends, exactly as they cover ordinary sticks.
-        self.image.draw(frame, origin, scale, mode);
+        image.draw(frame, origin, scale, mode);
     }
+}
+
+/// Model shading resolves depth fade, backdrop and outlines before rasterizing.
+/// Keep both variants with the prepared geometry rather than recolouring a
+/// light-mode raster when the application theme changes.
+fn themed_primitives(doc: &mut Document) -> [Vec<reshiki::scene::Primitive>; 2] {
+    let original = doc.canvas_theme;
+    let artwork = CanvasTheme::ALL.map(|mode| {
+        doc.canvas_theme = mode;
+        models3d::primitives(doc)
+    });
+    doc.canvas_theme = original;
+    artwork
 }
 
 #[cfg(test)]
@@ -217,6 +240,93 @@ mod tests {
         let mut invalid = frame();
         invalid.positions_angstrom[0][0] = f64::NAN;
         assert!(Thumbnail::new(&invalid, &[], &[], &[], [1., 0., 0., 0.]).is_none());
+    }
+
+    #[test]
+    fn dark_thumbnail_prepares_dark_backdrop_shading_and_outlines_before_rasterization() {
+        use reshiki::scene::{self, Primitive};
+
+        let geometry = frame();
+        let mut doc = Document::default();
+        let atoms = geometry
+            .numbers
+            .iter()
+            .zip(&geometry.positions_angstrom)
+            .map(|(&number, xyz)| {
+                let xyz = xyz.map(|value| value as f32);
+                Placed {
+                    id: doc.add_atom(
+                        reshiki::editing::ELEMENTS[usize::from(number) - 1],
+                        World::new(xyz[0] * 30., xyz[1] * 30.),
+                    ),
+                    xyz,
+                }
+            })
+            .collect::<Vec<_>>();
+        for pair in atoms.windows(2) {
+            doc.add_bond(pair[0].id, pair[1].id, 1, "plain");
+        }
+        let mut model = Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s);
+        model.display = Display::ThreeD;
+        model.rotation = [1., 0., 0., 0.];
+        model.size = 100.;
+        model.perspective = 0.;
+        model.depth_fade = 0.8;
+        doc.models.push(model);
+        doc.canvas_theme = CanvasTheme::Dark;
+        let [light, dark] = themed_primitives(&mut doc);
+        assert_eq!(doc.canvas_theme, CanvasTheme::Dark);
+        let spheres = |artwork: &[Primitive]| {
+            artwork
+                .iter()
+                .filter_map(|primitive| match primitive {
+                    Primitive::Sphere { stops, outline, .. } => Some((stops.clone(), *outline)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let light_spheres = spheres(&light);
+        let dark_spheres = spheres(&dark);
+        assert!(!light_spheres.is_empty());
+        assert_eq!(light_spheres.len(), dark_spheres.len());
+        for ((light_stops, light_outline), (dark_stops, dark_outline)) in
+            light_spheres.iter().zip(&dark_spheres)
+        {
+            assert_ne!(
+                light_stops, dark_stops,
+                "depth shading must resolve against the selected backdrop"
+            );
+            assert_ne!(
+                light_outline, dark_outline,
+                "dark thumbnails need the model renderer's light rim"
+            );
+        }
+        let (lo, hi) = scene::bounds(&light);
+        let raster = |artwork: &[Primitive], mode: CanvasTheme| {
+            let svg = scene::svg_part_on(artwork, lo, hi, mode, Some(mode.background()));
+            let tree = reshiki::export::parse_svg(svg).unwrap();
+            let mut pixels = resvg::tiny_skia::Pixmap::new(160, 120).unwrap();
+            resvg::render(
+                &tree,
+                resvg::tiny_skia::Transform::from_scale(160. / (hi.x - lo.x), 120. / (hi.y - lo.y)),
+                &mut pixels.as_mut(),
+            );
+            pixels.data().to_vec()
+        };
+        let light_pixels = raster(&light, CanvasTheme::Light);
+        let dark_pixels = raster(&dark, CanvasTheme::Dark);
+        assert_ne!(light_pixels, dark_pixels);
+        // Changing only the raster theme used to leave the prepared molecule
+        // unchanged. This also compares under one raster theme to isolate the
+        // sphere/bond shading from the raster theme and its cache key.
+        assert_ne!(raster(&light, CanvasTheme::Dark), dark_pixels);
+        assert!(
+            dark_pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[3] > 0)
+        );
     }
 
     #[test]

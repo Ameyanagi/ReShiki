@@ -176,7 +176,11 @@ pub(in crate::app::xtb) fn presentation(
         && connects
         && accepted;
     let energies = super::path_energies(result);
-    let (deltas, candidate) = relative_energies(energies, result.energy_hartree);
+    let (deltas, candidate) = relative_energies(
+        energies,
+        result.energy_hartree,
+        super::optimized_reactant_energy(result),
+    );
     let refined_kcal = candidate.filter(|value| reliable && value.is_finite());
     let recovery = match reported {
         _ if disagreement.is_some() => Recovery::FinerPath,
@@ -375,8 +379,12 @@ fn selection_label(delta: f64, unit: EnergyUnit) -> String {
     format!("ΔE {}", unit.format(delta))
 }
 
-fn relative_energies(energies: &[f64], saddle: Option<f64>) -> (Vec<f64>, Option<f64>) {
-    let Some(&reactant) = energies.first() else {
+fn relative_energies(
+    energies: &[f64],
+    saddle: Option<f64>,
+    reference: Option<f64>,
+) -> (Vec<f64>, Option<f64>) {
+    let Some(reactant) = reference.or_else(|| energies.first().copied()) else {
         return (vec![], None);
     };
     let delta = |energy| (energy - reactant) * KCAL_PER_HARTREE;
@@ -483,7 +491,11 @@ pub(in crate::app::xtb) fn path_rows(
     unit: EnergyUnit,
     reference: Option<&str>,
 ) -> Vec<(String, String)> {
-    let (deltas, _) = relative_energies(super::path_energies(result), None);
+    let (deltas, _) = relative_energies(
+        super::path_energies(result),
+        None,
+        super::optimized_reactant_energy(result),
+    );
     let mut rows: Vec<_> = deltas
         .iter()
         .enumerate()
@@ -526,7 +538,8 @@ impl App {
 
         let result = &shown.stored.result;
         let energies = super::path_energies(result);
-        let (neb, _) = relative_energies(energies, None);
+        let reference = super::optimized_reactant_energy(result);
+        let (neb, _) = relative_energies(energies, None, reference);
         let search = super::saved_search(result);
         let mut chart = PathChart {
             selected: self.xtb_step().filter(|&index| index < energies.len()),
@@ -547,10 +560,11 @@ impl App {
             neb_overlay: vec![],
             thumbnails: vec![],
             endpoint_labels: ["R", "P"],
+            relaxed_deltas: None,
             irc: false,
         };
         if let Some(path) = irc::saved(result).filter(|_| self.xtb_profile(result) == Profile::Irc)
-            && let Some(reference) = irc::reactant_energy(path, result)
+            && let Some(reference) = reference
         {
             let delta = |energy: f64| (energy - reference) * KCAL_PER_HARTREE;
             chart.irc = true;
@@ -571,7 +585,10 @@ impl App {
                 .copied()
                 .map(delta)
                 .collect();
-            chart.refined_delta = refined_delta.and_then(|_| result.energy_hartree.map(delta));
+            chart.relaxed_deltas = path
+                .relaxed_ends
+                .as_ref()
+                .map(|ends| ends.each_ref().map(|end| delta(end.energy_hartree)));
             chart.endpoint_labels = path.reached.map(|reached| match reached {
                 Reactant => "R",
                 Product => "P",
@@ -659,7 +676,7 @@ impl App {
             None => "No IRC energies were saved with this result",
             Some(path) if !path.has_frames() => "Open the full file to animate the IRC",
             _ => {
-                "ΔE is relative to the reactant. Gray dots show NEB images matched by mass-weighted arc length on each side of the saddle."
+                "ΔE is relative to the optimized reactant. Gray dots show NEB images matched by mass-weighted arc length on each side of the saddle."
             }
         };
         let tabs = row![
@@ -999,12 +1016,13 @@ struct PathChart {
     irc: bool,
     /// IRC reaches may differ from the optimized, intended R and P structures.
     endpoint_labels: [&'static str; 2],
+    relaxed_deltas: Option<[f64; 2]>,
 }
 
 impl PathChart {
     fn live(energies: &[f64], unit: EnergyUnit) -> Self {
         Self {
-            deltas: relative_energies(energies, None).0,
+            deltas: relative_energies(energies, None, None).0,
             refined_delta: None,
             selected: None,
             climbing: 0,
@@ -1018,6 +1036,7 @@ impl PathChart {
             thumbnails: vec![],
             irc: false,
             endpoint_labels: ["R", "P"],
+            relaxed_deltas: None,
         }
     }
 
@@ -1041,25 +1060,30 @@ impl PathChart {
         use crate::app::energy_plot::profile::{Marker, Profile, Sample, Side, Style};
         let mut markers = vec![];
         if !self.live && !self.deltas.is_empty() {
-            for (label, (index, thumbnail)) in self
-                .endpoint_labels
+            let relaxed = self
+                .relaxed_deltas
+                .map_or([None; 2], |deltas| deltas.map(Some));
+            for ((index, thumbnail), (label, relaxed)) in [(0, 0), (self.deltas.len() - 1, 2)]
                 .into_iter()
-                .zip([(0, 0), (self.deltas.len() - 1, 2)])
+                .zip(self.endpoint_labels.into_iter().zip(relaxed))
             {
-                if index == 0 && thumbnail == 2 {
+                if !self.irc && index == 0 && thumbnail == 2 {
                     continue;
                 }
                 if let Some(&energy) = self.deltas.get(index).filter(|e| e.is_finite()) {
+                    let x = self.coordinate(index);
                     markers.push(Marker {
                         sample: Sample {
-                            x: self.coordinate(index),
-                            energy,
+                            x,
+                            energy: relaxed.unwrap_or(energy),
                         },
                         label: label.into(),
                         side: Side::Below,
                         transition: false,
                         note: None,
                         thumbnail: (self.thumbnails.len() > thumbnail).then_some(thumbnail),
+                        connector_from: relaxed.map(|_| Sample { x, energy }),
+                        tooltip: relaxed.map(|_| "relaxed IRC end".into()),
                     });
                 }
             }
@@ -1076,6 +1100,8 @@ impl PathChart {
                     transition: true,
                     note: self.ts_note.clone(),
                     thumbnail: (self.thumbnails.len() > 1).then_some(1),
+                    connector_from: None,
+                    tooltip: None,
                 });
             }
         }
@@ -1137,19 +1163,20 @@ impl PathChart {
         format!("ΔE ({})", self.unit.label())
     }
 
-    fn endpoint_marker(&self, index: usize) -> Option<String> {
+    fn endpoint_marker(&self, branch: usize) -> Option<String> {
         if self.live {
             return None;
         }
-        let [left, right] = self.endpoint_labels;
-        let label = if index == 0 {
-            left
-        } else if index + 1 == self.deltas.len() {
-            right
+        let label = self.endpoint_labels.get(branch)?;
+        let traced = if branch == 0 {
+            self.deltas.first()
         } else {
-            return None;
+            self.deltas.last()
         };
-        let energy = *self.deltas.get(index)?;
+        let energy = self
+            .relaxed_deltas
+            .and_then(|deltas| deltas.get(branch).copied())
+            .or(traced.copied())?;
         Some(format!("{label} {}", self.unit.number(energy)))
     }
 
@@ -1175,9 +1202,14 @@ impl PathChart {
             if !self.neb_overlay.is_empty() {
                 name.push_str(" · Gray dots show NEB images matched by arc length");
             }
+            if self.relaxed_deltas.is_some() {
+                name.push_str(
+                    " · Dotted connectors show where the IRC end was relaxed to the minimum",
+                );
+            }
         }
-        for index in [0, self.deltas.len().saturating_sub(1)] {
-            if let Some(marker) = self.endpoint_marker(index) {
+        for branch in 0..2 {
+            if let Some(marker) = self.endpoint_marker(branch) {
                 name.push_str(&format!(" · {marker} {}", self.unit.label()));
             }
         }
@@ -1207,6 +1239,14 @@ impl canvas::Program<Message> for PathChart {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        if self.irc
+            && matches!(
+                event,
+                iced::Event::Mouse(mouse::Event::CursorMoved { .. } | mouse::Event::CursorLeft)
+            )
+        {
+            return Some(canvas::Action::request_redraw());
+        }
         let iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event else {
             return None;
         };
@@ -1236,7 +1276,7 @@ impl canvas::Program<Message> for PathChart {
         renderer: &Renderer,
         theme: &Theme,
         bounds: Rectangle,
-        _: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let profile = self.profile();
@@ -1252,6 +1292,7 @@ impl canvas::Program<Message> for PathChart {
                 );
             }
         }
+        profile.draw_hover(&mut frame, theme, &layout, cursor.position_in(bounds));
         vec![frame.into_geometry()]
     }
 }

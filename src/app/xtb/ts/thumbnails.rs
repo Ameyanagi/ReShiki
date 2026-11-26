@@ -108,9 +108,9 @@ pub(in crate::app) fn from_irc(
     result: &CalcResult,
     path: &IrcPath,
 ) -> Option<[Thumbnail; 3]> {
-    let reactant = path.frame(0)?;
+    let reactant = path.relaxed_frame(0)?;
     let transition = path.frame(path.ts_index)?;
-    let product = path.frame(path.steps().checked_sub(1)?)?;
+    let product = path.relaxed_frame(1)?;
     let frames = [&reactant, &transition, &product];
     // Hash only these three displayed frames, never the full IRC trajectory.
     let hashes = frames.map(Frame::hash);
@@ -253,8 +253,8 @@ mod tests {
     }
 
     #[test]
-    fn irc_models_use_actual_terminal_frames_without_neb_endpoint_substitution() {
-        use reshiki::qcdata::{IrcEndpoint, Trajectory};
+    fn irc_models_use_relaxed_ends_without_neb_endpoint_substitution() {
+        use reshiki::qcdata::{IrcEndpoint, IrcRelaxedEnd, Trajectory};
         let frames = [
             frame(vec![[0., 0., 0.], [1.4, 0., 0.], [4., 0., 0.]]),
             frame(vec![[0., 0., 0.], [2., 0.2, 0.], [3., 0., 0.]]),
@@ -281,6 +281,15 @@ mod tests {
             1,
             [IrcEndpoint::Reactant, IrcEndpoint::Product],
             [true; 2],
+            [0, 2].map(|i| IrcRelaxedEnd {
+                energy_hartree: -5.05,
+                positions_angstrom: frames[i]
+                    .positions_angstrom
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .collect(),
+            }),
         )
         .unwrap();
         let doc = Document::default();
@@ -288,10 +297,11 @@ mod tests {
         // There are no optimized endpoint frames to fall back to in this doc.
         assert!(from_result(&doc, &result).is_none());
         assert!(from_irc(&doc, &result, &path).is_some());
-        let hashes = [0, 1, 2].map(|index| path.frame(index).unwrap().hash());
+        let hashes = [path.relaxed_frame(0), path.frame(1), path.relaxed_frame(1)]
+            .map(|frame| frame.unwrap().hash());
         PREPARED.with_borrow(|cache| assert_eq!(cache.front().unwrap().0.frames, hashes));
         // The same saddle with a different terminal geometry has a distinct key.
-        path.trajectory.positions_angstrom[24] += 0.5;
+        path.relaxed_ends.as_mut().unwrap()[1].positions_angstrom[6] += 0.5;
         assert!(from_irc(&doc, &result, &path).is_some());
         PREPARED.with_borrow(|cache| {
             let actual = cache.front().unwrap().0.frames;

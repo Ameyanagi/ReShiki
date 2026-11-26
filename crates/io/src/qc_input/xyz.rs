@@ -2,7 +2,7 @@
 use std::fmt::Write;
 
 use crate::{
-    qcdata::{MAX_FRAME_ATOMS, Trajectory},
+    qcdata::{IrcPath, MAX_FRAME_ATOMS, Trajectory},
     qcread::xyz_species,
 };
 
@@ -29,6 +29,24 @@ pub fn write_xyz_trajectory(path: &Trajectory, title: &str) -> Result<String, Er
         comment
     });
     write_xyz_trajectory_with_comments(path, comments)
+}
+
+/// Write the traced IRC frames with absolute and reactant-relative energies.
+pub fn write_irc_xyz(
+    path: &IrcPath,
+    reference_hartree: f64,
+    units_per_hartree: f64,
+    unit: &str,
+) -> Result<String, Error> {
+    let comments = path
+        .arc_lengths_sqrt_amu_bohr
+        .iter()
+        .zip(&path.trajectory.energies_hartree)
+        .map(|(s, energy)| {
+            let delta = (energy - reference_hartree) * units_per_hartree;
+            format!("E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {unit}")
+        });
+    write_xyz_trajectory_with_comments(&path.trajectory, comments)
 }
 
 /// Write ångström frames in trajectory order, with one comment line per frame.

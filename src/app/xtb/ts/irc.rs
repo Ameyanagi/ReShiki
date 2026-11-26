@@ -1,6 +1,6 @@
 //! Select the saved reaction path, preview its geometries, and export its XYZ trajectory.
-use super::super::{EnergyUnit, palette::Shown, results::View};
-use super::{path_energies, saved_search};
+use super::super::{palette::Shown, results::View};
+use super::{optimized_reactant_energy, saved_search};
 use crate::app::figure_export::{Kind, Prepared};
 use crate::app::{App, Message};
 use iced::Task;
@@ -18,17 +18,6 @@ pub(super) fn saved(result: &CalcResult) -> Option<&IrcPath> {
     saved_search(result)?.irc.as_ref()
 }
 
-/// Use the relaxed IRC reactant for the trace, NEB comparison and export.
-/// If the trace missed the reactant, the optimized NEB reactant is still known.
-pub(super) fn reactant_energy(path: &IrcPath, result: &CalcResult) -> Option<f64> {
-    if path.reached[0] == IrcEndpoint::Reactant {
-        return path.trajectory.energies_hartree.first().copied();
-    }
-    saved_search(result)
-        .and_then(|search| search.endpoint_energies_hartree.map(|[r, _]| r))
-        .or_else(|| path_energies(result).first().copied())
-}
-
 pub(in crate::app::xtb) struct Playback {
     result: Weak<CalcResult>,
     attachment: u64,
@@ -40,6 +29,10 @@ pub(in crate::app::xtb) struct Playback {
 }
 
 impl App {
+    pub(in crate::app) fn xtb_irc_leave(&mut self) {
+        self.tab.xtb.palette.irc_playback = None;
+    }
+
     pub(super) fn xtb_profile(&self, result: &CalcResult) -> Profile {
         let Some(path) = saved(result) else {
             return Profile::Neb;
@@ -154,12 +147,19 @@ impl App {
     pub(super) fn xtb_prepare_irc(&self, shown: &Shown<'_>) -> Option<Result<Prepared, String>> {
         let result = &shown.stored.result;
         let path = saved(result).filter(|p| p.has_frames())?;
-        let reference = reactant_energy(path, result)?;
+        let reference = optimized_reactant_energy(result)?;
         let source = self.xtb_ts_export_source(result, shown.arrow)?;
         let stem = source.stem(reshiki::qc_input::Job::Irc);
+        let unit = self.appearance.energy_unit;
         Some(
-            irc_xyz(path, reference, self.appearance.energy_unit)
-                .map(|xyz| Prepared::new(xyz.into_bytes(), "xyz", Some(stem), vec![], Kind::Irc)),
+            reshiki::qc_input::write_irc_xyz(
+                path,
+                reference,
+                unit.convert_kcal(KCAL_PER_HARTREE),
+                unit.label(),
+            )
+            .map(|xyz| Prepared::new(xyz.into_bytes(), "xyz", Some(stem), vec![], Kind::Irc))
+            .map_err(|error| error.to_string()),
         )
     }
 
@@ -175,17 +175,4 @@ impl App {
             None => Task::none(),
         }
     }
-}
-
-fn irc_xyz(path: &IrcPath, reference: f64, unit: EnergyUnit) -> Result<String, String> {
-    let comments = path
-        .arc_lengths_sqrt_amu_bohr
-        .iter()
-        .zip(&path.trajectory.energies_hartree)
-        .map(|(s, energy)| {
-            let delta = unit.convert_kcal((energy - reference) * KCAL_PER_HARTREE);
-            format!("s = {s:.6} amu½·bohr  ΔE = {delta:.6} {}", unit.label())
-        });
-    reshiki::qc_input::write_xyz_trajectory_with_comments(&path.trajectory, comments)
-        .map_err(|error| error.to_string())
 }

@@ -20,7 +20,7 @@ fn live_path_chart_uses_the_saved_chart_axes_without_point_labels() {
     assert!(next.deltas[2] < chart.deltas[2]);
     assert!(!next.interactive);
     assert_eq!(next.endpoint_marker(0), None);
-    assert_eq!(next.endpoint_marker(2), None);
+    assert_eq!(next.endpoint_marker(1), None);
     assert_eq!(next.refined_ts_marker(), None);
 }
 
@@ -66,8 +66,11 @@ fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
 fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
     let reactant = -5.;
     let energy = |delta| reactant + delta / KCAL_PER_HARTREE;
-    let (deltas, refined_delta) =
-        relative_energies(&[reactant, energy(30.2), energy(-8.2)], Some(energy(26.5)));
+    let (deltas, refined_delta) = relative_energies(
+        &[reactant, energy(30.2), energy(-8.2)],
+        Some(energy(26.5)),
+        None,
+    );
     let chart = PathChart {
         deltas,
         refined_delta,
@@ -127,7 +130,7 @@ fn irc_markers_show_the_actual_reached_ends_and_refined_saddle() {
     assert_eq!((ts.sample.x, ts.sample.energy), (0., 26.5));
     assert_eq!(chart.energy_bounds(), (-8.44, 30.2));
     assert_eq!(chart.endpoint_marker(0).as_deref(), Some("R 0.0"));
-    assert_eq!(chart.endpoint_marker(4).as_deref(), Some("P −7.2"));
+    assert_eq!(chart.endpoint_marker(1).as_deref(), Some("P −7.2"));
     assert_eq!(chart.deltas[0], 0.);
     assert_eq!(chart.deltas[4], -7.2);
     assert!(chart.accessible_name().contains("reactant side negative"));
@@ -137,10 +140,47 @@ fn irc_markers_show_the_actual_reached_ends_and_refined_saddle() {
         ..chart
     };
     assert_eq!(
-        reached.endpoint_marker(4).as_deref(),
+        reached.endpoint_marker(1).as_deref(),
         Some("Other endpoint −7.2")
     );
     assert!(!reached.accessible_name().contains("P −8.4"));
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn irc_chart_ts_label_matches_the_card_barrier_and_relaxed_r_is_off_zero() {
+    let (mut app, _) = super::super::tests::finished_irc();
+    for unit in EnergyUnit::ALL {
+        app.appearance.energy_unit = unit;
+        let shown = app.xtb_shown().unwrap();
+        let result = &shown.stored.result;
+        let card = presentation(result, app.xtb_ts_refinement_session(result));
+        let chart = app.xtb_ts_path_chart(&shown, card.refined_kcal);
+        let expected = (result.energy_hartree.unwrap() + 5.) * KCAL_PER_HARTREE;
+        assert_eq!(
+            card.barrier_line(unit),
+            Some(format!("ΔE‡ {}", unit.format(expected)))
+        );
+        assert_eq!(
+            chart.refined_ts_marker(),
+            Some((expected, format!("TS‡ {}", unit.number(expected))))
+        );
+
+        let profile = chart.profile();
+        let reactant = profile
+            .markers
+            .iter()
+            .find(|marker| marker.label == "R")
+            .unwrap();
+        let relaxed = (-5.003 + 5.) * KCAL_PER_HARTREE;
+        assert_eq!(reactant.sample.energy, relaxed);
+        assert_eq!(reactant.tooltip.as_deref(), Some("relaxed IRC end"));
+        let traced_end = reactant.connector_from.unwrap();
+        assert_eq!(traced_end.x, reactant.sample.x);
+        assert_eq!(traced_end.energy, profile.samples[0].energy);
+        assert_ne!(traced_end.energy, relaxed);
+        assert_eq!(profile.samples.len(), irc::saved(result).unwrap().steps());
+    }
 }
 
 #[test]
