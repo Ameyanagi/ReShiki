@@ -1357,11 +1357,10 @@ impl MoleculeCanvas<'_> {
     }
 }
 
-/// Keep badges away from visible bonds, including opposite bonds whose
-/// outward vectors cancel (for example, the carbon in vertical CO₂).
+/// Put badges in the middle of the largest angular gap between visible
+/// bonds. Bond lengths and cancelling directions do not shrink that gap.
 fn result_label_direction(doc: &Document, atom: &Atom) -> Vector {
-    let mut away = Vector::ZERO;
-    let mut first = None;
+    let mut angles = Vec::new();
     for bond in doc
         .bonds
         .iter()
@@ -1376,22 +1375,30 @@ fn result_label_direction(doc: &Document, atom: &Atom) -> Vector {
         };
         if let Some(neighbor) = doc.atom(neighbor) {
             let vector = Vector::new(
-                atom.position.x - neighbor.position.x,
-                atom.position.y - neighbor.position.y,
+                neighbor.position.x - atom.position.x,
+                neighbor.position.y - atom.position.y,
             );
-            away += vector;
             let length = vector.x.hypot(vector.y);
-            if first.is_none() && length > 1e-4 {
-                first = Some(vector / length);
+            if length > 1e-4 {
+                angles.push(vector.y.atan2(vector.x).rem_euclid(std::f32::consts::TAU));
             }
         }
     }
-    let length = away.x.hypot(away.y);
-    if length > 1e-4 {
-        away / length
-    } else {
-        first.map_or(Vector::new(0., -1.), |bond| Vector::new(-bond.y, bond.x))
+    angles.sort_by(f32::total_cmp);
+    let (Some(&first), Some(&last)) = (angles.first(), angles.last()) else {
+        return Vector::new(0., -1.);
+    };
+    let mut start = last;
+    let mut widest = first + std::f32::consts::TAU - last;
+    for pair in angles.windows(2) {
+        let gap = pair[1] - pair[0];
+        if gap > widest {
+            start = pair[0];
+            widest = gap;
+        }
     }
+    let (sin, cos) = (start + widest / 2.).sin_cos();
+    Vector::new(cos, sin)
 }
 
 #[cfg(test)]
@@ -1418,6 +1425,51 @@ mod result_label_tests {
     }
 
     #[test]
+    fn cross_bonds_put_charge_badges_between_bonds() {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", World::default());
+        for position in [
+            World::new(42., 0.),
+            World::new(0., 42.),
+            World::new(-42., 0.),
+            World::new(0., -42.),
+        ] {
+            let neighbor = doc.add_atom("F", position);
+            doc.add_bond(c, neighbor, 1, "plain");
+        }
+        let direction = result_label_direction(&doc, doc.atom(c).unwrap());
+        let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+        assert!((direction.x.abs() - diagonal).abs() < 1e-4);
+        assert!((direction.y.abs() - diagonal).abs() < 1e-4);
+    }
+
+    #[test]
+    fn charge_badges_use_the_middle_of_the_largest_angular_gap() {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", World::default());
+        // Unequal bond lengths must not move the lower-left midpoint of
+        // the 270-degree empty arc between the right and upward bonds.
+        for position in [World::new(84., 0.), World::new(0., -21.)] {
+            let neighbor = doc.add_atom("O", position);
+            doc.add_bond(c, neighbor, 1, "plain");
+        }
+        let direction = result_label_direction(&doc, doc.atom(c).unwrap());
+        let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+        assert!((direction.x + diagonal).abs() < 1e-4);
+        assert!((direction.y - diagonal).abs() < 1e-4);
+    }
+
+    #[test]
+    fn unbonded_atoms_put_charge_badges_straight_up() {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", World::default());
+        assert_eq!(
+            result_label_direction(&doc, doc.atom(c).unwrap()),
+            Vector::new(0., -1.)
+        );
+    }
+
+    #[test]
     fn hidden_abbreviation_bonds_do_not_steer_charge_badges() {
         let mut doc = Document::default();
         let anchor = doc.add_atom("C", World::default());
@@ -1427,10 +1479,9 @@ mod result_label_tests {
         doc.add_bond(anchor, outside, 1, "plain");
         doc.contract(&[anchor, hidden], "Et", "Et").unwrap();
         let drawn = doc.abbreviation_render_copy();
-        assert_eq!(
-            result_label_direction(&drawn, drawn.atom(anchor).unwrap()),
-            Vector::new(-1., 0.)
-        );
+        let direction = result_label_direction(&drawn, drawn.atom(anchor).unwrap());
+        assert!((direction.x + 1.).abs() < 1e-4);
+        assert!(direction.y.abs() < 1e-4);
     }
 }
 

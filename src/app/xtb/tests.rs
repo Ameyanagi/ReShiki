@@ -892,6 +892,14 @@ fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
     let shown = reopened.xtb_shown().expect("the palette shows the result");
     assert!(shown.info.is_none());
     let result = &shown.stored.result;
+    assert_eq!(
+        result.provenance.method.as_deref(),
+        Some("GFN2-xTB · optimizer TRIC")
+    );
+    assert_eq!(
+        results::headline(result, shown.frame),
+        "Converged in 1 step · GFN2-xTB · gas phase · neutral singlet"
+    );
     let run = result.run.as_ref().expect("saved run summary");
     assert!(run.seconds >= 1.);
     assert!(shown.rows().contains(&(
@@ -903,7 +911,16 @@ fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
         .expect("RFC 3339 finish time")
         .with_timezone(&chrono::Local);
     let method = shown.method();
-    assert!(method.ends_with(&format!(" · {}", local.format("%-d %b %Y %H:%M"))));
+    assert_eq!(
+        method,
+        format!(
+            "GFN2-xTB · axtb 0.2.0 · gas phase · charge 0 · multiplicity 1 · {}",
+            local.format("%-d %b %Y %H:%M")
+        )
+    );
+    let table = results::tsv(&method, &shown.rows());
+    assert!(table.starts_with(&format!("# {method}\nQuantity\tValue\n")));
+    assert!(!table.contains(" · optimizer "));
     let log = results::log(result, shown.frame, shown.info, &method);
     assert!(log.contains("task optimize · 3 threads · tight convergence · 2 atoms held fixed"));
     let mut table = log
@@ -948,18 +965,28 @@ fn a_reopened_legacy_optimization_recalculates_with_defaults() {
         .as_object_mut()
         .unwrap();
     assert!(result.remove("run").is_some());
+    result["provenance"]["method"] = "GFN2-xTB".into();
     let settings = result["settings"]["xtb"].as_object_mut().unwrap();
     for key in ["threads", "convergence", "fixed_atoms"] {
         assert!(settings.remove(key).is_some());
     }
     let mut reopened = reopen_result(&serde_json::to_vec(&json).unwrap());
     let shown = reopened.xtb_shown().expect("the palette shows the result");
-    let log = results::log(
-        &shown.stored.result,
-        shown.frame,
-        shown.info,
-        &shown.method(),
+    let result = &shown.stored.result;
+    assert_eq!(result.provenance.method.as_deref(), Some("GFN2-xTB"));
+    assert_eq!(
+        results::headline(result, shown.frame),
+        "Converged in 1 step · GFN2-xTB · gas phase · neutral singlet"
     );
+    let method = shown.method();
+    assert_eq!(
+        method,
+        "GFN2-xTB · axtb 0.2.0 · gas phase · charge 0 · multiplicity 1"
+    );
+    let table = results::tsv(&method, &shown.rows());
+    assert!(table.starts_with(&format!("# {method}\nQuantity\tValue\n")));
+    assert!(!table.contains(" · optimizer "));
+    let log = results::log(result, shown.frame, shown.info, &method);
     assert!(log.lines().any(|line| line == "task optimize"));
     assert!(log.contains("SCF details were not saved with this result; recalculate to see them."));
 
@@ -1174,7 +1201,7 @@ fn history_names_xtb_results_and_the_restored_model() {
 
         let _ = app.update(Message::Redo);
         let source = if task.optimizes() {
-            "GFN2-xTB optimized"
+            "GFN2-xTB optimized geometry"
         } else {
             "MMFF94s force-field model"
         };
@@ -1210,7 +1237,7 @@ fn history_names_attached_geometry_changes_and_leaves_view_edits_generic() {
     let _ = app.update(Message::Undo);
     assert_eq!(
         app.status,
-        "Undid the 3D model change · now the GFN2-xTB optimized"
+        "Undid the 3D model change · now the GFN2-xTB optimized geometry"
     );
     assert_eq!(model(&app.tab.doc), f32s(&MOVED));
     let _ = app.update(Message::Redo);

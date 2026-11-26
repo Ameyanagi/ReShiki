@@ -132,14 +132,10 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
     assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
 }
 
-#[test]
-fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
-    use reshiki::atom_labels::shift_label_style;
+fn charged_halocarbon() -> (App, u64) {
     use reshiki::qcdata::{AtomicCharges, ChargeScheme};
-    use reshiki::scene::{Primitive, primitives};
-    use std::sync::Arc;
 
-    let (mut app, _, start) = halocarbon();
+    let (mut app, carbon, start) = halocarbon();
     let Event::Done(Ok(mut report)) = optimized(&start, &start) else {
         unreachable!()
     };
@@ -148,6 +144,14 @@ fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
         values: vec![-0.561, 0.2805, -0.0001, 0.0, 0.2806],
     });
     event(&mut app, Event::Done(Ok(report)));
+    (app, carbon)
+}
+
+#[test]
+fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
+    use reshiki::scene::{Primitive, primitives};
+
+    let (mut app, _) = charged_halocarbon();
     let shown = app.xtb_shown().expect("the new result");
     let ids: Vec<_> = shown.atoms.iter().flatten().copied().collect();
     assert_eq!(ids.len(), 4);
@@ -160,7 +164,7 @@ fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
     );
     let style = shift_label_style(&app.tab.doc);
     let drawing = primitives(&app.tab.doc);
-    for (id, expected) in ids.into_iter().zip(["−0.56", "+0.28", "0.00", "0.00"]) {
+    for (id, expected) in ids.into_iter().zip(["−0.56", "+0.28", "+0.00", "+0.00"]) {
         let label = app
             .tab
             .doc
@@ -194,78 +198,78 @@ fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
 }
 
 #[test]
-fn placing_charges_preserves_other_labels_and_refreshes_previous_charges() {
-    use reshiki::qcdata::{AtomicCharges, ChargeScheme};
-
-    for text in ["#3 · 7.21 ppm", "#3", "7.21", "+1", "−2", "custom label"] {
-        let (mut app, _, start) = halocarbon();
-        let Event::Done(Ok(mut report)) = optimized(&start, &start) else {
-            unreachable!()
-        };
-        Arc::get_mut(&mut report).unwrap().computed.charges = Some(AtomicCharges {
-            scheme: ChargeScheme::Cm5,
-            values: vec![-0.561, 0.2805, -0.0001, 0.0, 0.2806],
-        });
-        event(&mut app, Event::Done(Ok(report)));
-        let ids: Vec<_> = app
-            .xtb_shown()
-            .unwrap()
-            .atoms
-            .iter()
-            .flatten()
-            .copied()
-            .collect();
+fn placing_charges_preserves_other_labels() {
+    for (text, custom_style, offset) in [
+        ("#3 · 7.21 ppm", false, None),
+        ("#3", false, None),
+        ("7.21", false, None),
+        ("+1", false, None),
+        ("−2", false, None),
+        ("custom label", false, None),
+        ("0.00", false, None),
+        ("+0.28", true, None),
+        ("−0.56", false, Some(Point::new(17., -23.))),
+        ("+0.00", false, Some(Point::default())),
+    ] {
+        let (mut app, carbon) = charged_halocarbon();
         let own = Number {
             text: text.into(),
             style: reshiki::typography::TextStyle {
-                size_pt: 14.,
-                bold: true,
-                ..Default::default()
+                bold: custom_style,
+                ..shift_label_style(&app.tab.doc)
             },
-            offset: Some(Point::new(17., -23.)),
+            offset,
         };
-        app.tab.doc.atom_mut(ids[0]).unwrap().display.number = Some(own.clone());
-        for (id, text) in ids[1..].iter().zip(["+0.28", "−0.56", "0.00"]) {
-            app.tab.doc.atom_mut(*id).unwrap().display.number = Some(Number {
-                text: text.into(),
-                ..own.clone()
-            });
-        }
-        let before = app.tab.doc.clone();
+        app.tab.doc.atom_mut(carbon).unwrap().display.number = Some(own.clone());
         palette(&mut app, Action::PlaceCharges);
         assert_eq!(
             app.status,
             "Placed 3 CM5 charges as atom labels · ⌘Z undoes · 1 atoms kept their own labels"
         );
-        assert_eq!(app.tab.doc.atom(ids[0]).unwrap().display.number, Some(own));
-        for (id, text) in ids[1..].iter().zip(["+0.28", "0.00", "0.00"]) {
-            assert_eq!(
-                app.tab.doc.atom(*id).unwrap().display.number,
-                Some(Number {
-                    text: text.into(),
-                    style: shift_label_style(&app.tab.doc),
-                    offset: None,
-                })
-            );
-        }
-        let _ = app.update(Message::Undo);
-        assert_eq!(app.tab.doc.atoms, before.atoms);
+        assert_eq!(app.tab.doc.atom(carbon).unwrap().display.number, Some(own));
     }
 }
 
 #[test]
-fn hidden_abbreviation_members_wait_for_expansion_to_get_charges() {
-    use reshiki::qcdata::{AtomicCharges, ChargeScheme};
+fn placing_charges_refreshes_previous_charges() {
+    let (mut app, _) = charged_halocarbon();
+    let shown = app.xtb_shown().expect("the new result");
+    let ids: Vec<_> = shown.atoms.iter().flatten().copied().collect();
+    let style = shift_label_style(&app.tab.doc);
+    for (id, text) in ids
+        .iter()
+        .copied()
+        .zip(["+0.00", "−0.56", "+0.28", "−0.03"])
+    {
+        app.tab.doc.atom_mut(id).unwrap().display.number = Some(Number {
+            text: text.into(),
+            style: style.clone(),
+            offset: None,
+        });
+    }
+    let before = app.tab.doc.clone();
+    palette(&mut app, Action::PlaceCharges);
+    assert_eq!(
+        app.status,
+        "Placed 4 CM5 charges as atom labels · ⌘Z undoes"
+    );
+    for (id, text) in ids.into_iter().zip(["−0.56", "+0.28", "+0.00", "+0.00"]) {
+        assert_eq!(
+            app.tab.doc.atom(id).unwrap().display.number,
+            Some(Number {
+                text: text.into(),
+                style: style.clone(),
+                offset: None,
+            })
+        );
+    }
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms, before.atoms);
+}
 
-    let (mut app, c, start) = halocarbon();
-    let Event::Done(Ok(mut report)) = optimized(&start, &start) else {
-        unreachable!()
-    };
-    Arc::get_mut(&mut report).unwrap().computed.charges = Some(AtomicCharges {
-        scheme: ChargeScheme::Cm5,
-        values: vec![-0.561, 0.2805, -0.0001, 0.0, 0.2806],
-    });
-    event(&mut app, Event::Done(Ok(report)));
+#[test]
+fn hidden_abbreviation_members_wait_for_expansion_to_get_charges() {
+    let (mut app, c) = charged_halocarbon();
     let hidden = app
         .tab
         .doc
@@ -303,8 +307,24 @@ fn hidden_abbreviation_members_wait_for_expansion_to_get_charges() {
 #[tokio::test]
 #[ignore = "Opt-in layout check. Use --features iced/tiny-skia without a GPU"]
 async fn bottom_dock_keeps_its_tabs_and_footer_at_the_same_height() {
-    use iced::advanced::{renderer::Headless, widget::operation};
+    use iced::advanced::{
+        renderer::Headless,
+        widget::{Id, Operation, operation},
+    };
     use iced::{Rectangle, Size};
+
+    #[derive(Default)]
+    struct TextBounds(Vec<(String, Rectangle)>);
+
+    impl Operation for TextBounds {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn text(&mut self, _: Option<&Id>, bounds: Rectangle, text: &str) {
+            self.0.push((text.into(), bounds));
+        }
+    }
 
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -380,6 +400,36 @@ async fn bottom_dock_keeps_its_tabs_and_footer_at_the_same_height() {
                     assert_eq!(found, before, "{size:?}, {view:?}");
                 }
                 before = Some(found);
+                let note_prefix = match view {
+                    View::Vibrations => Some("Normal modes are recomputed"),
+                    View::Steps => Some("The file keeps the first and last steps"),
+                    View::Orbitals => Some("Orbitals are recomputed"),
+                    View::Conformers => Some("Kept conformers are saved"),
+                    _ => None,
+                };
+                if let Some(prefix) = note_prefix {
+                    let mut texts = TextBounds::default();
+                    ui.operate(&renderer, &mut texts);
+                    let (_, note) = texts
+                        .0
+                        .iter()
+                        .find(|(text, _)| text.starts_with(prefix))
+                        .expect("the footer explains how the result is saved");
+                    assert!(
+                        note.width > 0.
+                            && note.height > 0.
+                            && note.x >= 16.
+                            && note.x + note.width <= size.width - 16. + 0.01
+                            && note.y + note.height <= keep.y,
+                        "{size:?}, {view:?} footer note is clipped: {note:?}, keep: {keep:?}"
+                    );
+                    if size.width == 480. && view == View::Vibrations {
+                        assert!(
+                            note.height > 20.,
+                            "the full Vibrations note should wrap at {size:?}: {note:?}"
+                        );
+                    }
+                }
                 if view == View::Summary {
                     let actions = [
                         "xtb-copy-methods",

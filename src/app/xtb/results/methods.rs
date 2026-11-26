@@ -1,21 +1,23 @@
 //! The methods paragraph Copy methods text writes for a stored result, citing
 //! the BibTeX keys of docs/references/xtb.bib for what actually ran.
-use super::{OPTIMIZER_SEPARATOR, solvent_model};
+use super::{OPTIMIZER_SEPARATOR, energies, solvent_model};
 use reshiki::qcdata::{
     self, CalcResult, Convergence, Frame, Settings, Source, Status, Task, XtbConventions,
 };
 
 /// A methods paragraph with the citation keys in ReShiki's xTB bibliography.
 pub(crate) fn methods_text(result: &CalcResult, frame: &Frame) -> String {
-    let version = env!("CARGO_PKG_VERSION");
     let provenance = &result.provenance;
     let program = match &provenance.program_version {
         Some(version) => format!("{} {version}", provenance.program),
         None => provenance.program.clone(),
     };
     let Settings::Xtb(settings) = &result.settings else {
-        return imported_methods(result, &program, version);
+        return imported_methods(result, &program);
     };
+    let converged_at_start = result.task == Task::Optimize
+        && result.status == Status::Converged
+        && energies(result).len() == 1;
 
     let mut text = String::new();
     let start_minimizer = provenance
@@ -54,6 +56,7 @@ pub(crate) fn methods_text(result: &CalcResult, frame: &Frame) -> String {
         )
     });
     text.push_str(match result.task {
+        Task::Optimize if converged_at_start => "The start geometry was evaluated",
         Task::Optimize => "Geometries were optimized",
         Task::Hessian if thermochemistry.is_some() => "Harmonic frequencies and",
         Task::Hessian => "Harmonic frequencies were calculated",
@@ -82,7 +85,7 @@ pub(crate) fn methods_text(result: &CalcResult, frame: &Frame) -> String {
         ""
     };
     text.push_str(&format!(
-        " with {} [{citation}{extension}] as implemented in ReShiki {version} [ReShiki] ({program} [Axtb])",
+        " with {} [{citation}{extension}] as implemented in ReShiki [ReShiki] ({program} [Axtb])",
         method.label(),
     ));
     if let Some(solvent) = &settings.solvent {
@@ -100,7 +103,16 @@ pub(crate) fn methods_text(result: &CalcResult, frame: &Frame) -> String {
         text.push_str(" in the gas phase");
     }
     if matches!(result.task, Task::Optimize | Task::Conformers) {
-        text.push_str(&optimization_details(result, settings.convergence));
+        text.push_str(&optimization_details(
+            result,
+            settings.convergence,
+            converged_at_start,
+        ));
+    }
+    if !settings.fixed_atoms.is_empty() {
+        let count = settings.fixed_atoms.len();
+        let unit = if count == 1 { "atom" } else { "atoms" };
+        text.push_str(&format!(" with {count} {unit} held fixed"));
     }
     if settings.conventions == XtbConventions::Xtb68 {
         text.push_str(", using xtb 6.8 compatible conventions [Bannwarth2021Xtb]");
@@ -126,7 +138,7 @@ pub(crate) fn methods_text(result: &CalcResult, frame: &Frame) -> String {
     text
 }
 
-fn imported_methods(result: &CalcResult, program: &str, version: &str) -> String {
+fn imported_methods(result: &CalcResult, program: &str) -> String {
     let provenance = &result.provenance;
     let method = match (&provenance.method, &provenance.basis) {
         (Some(method), Some(basis)) => format!(" using {method}/{basis}"),
@@ -137,28 +149,46 @@ fn imported_methods(result: &CalcResult, program: &str, version: &str) -> String
     if let Source::Imported {
         format, file_name, ..
     } = &provenance.source
-        && (provenance.program.trim().is_empty()
-            || provenance.program.eq_ignore_ascii_case("unknown")
-            || provenance.program.eq_ignore_ascii_case(format))
     {
-        let citation = if format.eq_ignore_ascii_case("Molden") {
-            "; MoldenFormat; Schaftenaar2000Molden"
-        } else {
-            ""
-        };
-        let energies = if result.energy_hartree.is_some()
-            || result
-                .trajectory
-                .as_ref()
-                .is_some_and(|trajectory| !trajectory.energies_hartree.is_empty())
-        {
-            " and energies"
-        } else {
-            ""
-        };
-        return format!(
-            "Geometries{energies} were read from {file_name} ({format} format){method} and imported into ReShiki {version} [ReShiki{citation}]."
-        );
+        let name = provenance.program.trim();
+        let is_format = |label: &str| format.eq_ignore_ascii_case(label);
+        let is_program = |label: &str| name.eq_ignore_ascii_case(label);
+        // These readers identify the calculation program in its job output.
+        // Gaussian is also the format default for fchk, even without a version record.
+        let gaussian_fchk = is_format("Gaussian fchk") && is_program("Gaussian");
+        let calculator_known = (is_format("ORCA output") && is_program("ORCA"))
+            || (is_format("Gaussian log") && is_program("Gaussian"))
+            || (gaussian_fchk && provenance.program_version.is_some());
+        if !calculator_known {
+            let writer = if name.is_empty()
+                || is_program("unknown")
+                || is_program(format)
+                || is_program(&format!("{format} file"))
+                || gaussian_fchk
+            {
+                String::new()
+            } else {
+                format!(", written by {program}")
+            };
+            let citation = if format.eq_ignore_ascii_case("Molden") {
+                "; MoldenFormat; Schaftenaar2000Molden"
+            } else {
+                ""
+            };
+            let energies = if result.energy_hartree.is_some()
+                || result
+                    .trajectory
+                    .as_ref()
+                    .is_some_and(|trajectory| !trajectory.energies_hartree.is_empty())
+            {
+                " and energies"
+            } else {
+                ""
+            };
+            return format!(
+                "Geometries{energies} were read from {file_name} ({format} format{writer}){method} and imported into ReShiki [ReShiki{citation}]."
+            );
+        }
     }
     let citation = if provenance.program.eq_ignore_ascii_case("ORCA")
         && provenance
@@ -173,16 +203,23 @@ fn imported_methods(result: &CalcResult, program: &str, version: &str) -> String
         ""
     };
     format!(
-        "Results computed with {program}{citation}{method} were imported into ReShiki {version} [ReShiki]."
+        "Results computed with {program}{citation}{method} were imported into ReShiki [ReShiki]."
     )
 }
 
-fn optimization_details(result: &CalcResult, convergence: Option<Convergence>) -> String {
+fn optimization_details(
+    result: &CalcResult,
+    convergence: Option<Convergence>,
+    converged_at_start: bool,
+) -> String {
     let criteria = match convergence {
         Some(Convergence::Normal) => "the normal convergence criteria",
         Some(Convergence::Tight) => "the tight convergence criteria",
         None => "convergence (criteria were not recorded)",
     };
+    if converged_at_start {
+        return format!(", and the start geometry already met {criteria}");
+    }
     // Every retained conformer has a converged optimization report, even if
     // the search was canceled before all representatives could be processed.
     let mut text = if result.task == Task::Conformers || result.status == Status::Converged {

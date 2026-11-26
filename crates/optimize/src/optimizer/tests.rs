@@ -101,6 +101,7 @@ fn invalid_input_never_reaches_the_potential_or_callback() {
         let result = optimize(&mut p, &z, &x, &opts, |_| panic!("invalid input callback"));
         assert!(matches!(result.status, Status::Failed(_)));
         assert_eq!(result.evaluations, 0);
+        assert!(result.methods.is_empty());
         assert!(result.energy.is_nan());
     }
 }
@@ -122,6 +123,10 @@ fn callback_can_cancel_at_initial_or_accepted_points() {
             });
             assert_eq!(result.status, Status::Cancelled);
             assert_eq!(result.steps, stop);
+            assert_eq!(
+                result.methods.first().copied(),
+                (stop > 0).then_some(method)
+            );
             assert_eq!(result.energies.len(), stop + 1);
             assert_eq!(result.positions, accepted[stop].0);
             assert_eq!(result.energy, accepted[stop].1);
@@ -144,7 +149,7 @@ fn failed_evaluations_preserve_the_last_accepted_sample() {
                 Status::Failed("worker".into()),
             ),
         ] {
-            for fail_at in [1, 4] {
+            for fail_at in [1, 2, 4] {
                 let mut calls = 0;
                 let mut p = surface(|x, g, _| {
                     calls += 1;
@@ -162,6 +167,10 @@ fn failed_evaluations_preserve_the_last_accepted_sample() {
                 });
                 assert_eq!(result.status, status);
                 assert_eq!(result.evaluations, fail_at);
+                assert_eq!(
+                    result.methods.first().copied(),
+                    (fail_at > 1).then_some(method)
+                );
                 if fail_at == 1 {
                     assert_eq!(result.positions, INITIAL);
                     assert!(result.energy.is_nan());
@@ -171,6 +180,36 @@ fn failed_evaluations_preserve_the_last_accepted_sample() {
                     assert_eq!(result.gradient, last);
                     assert_eq!(result.energy, 0.5 * dot(&last, &last));
                 }
+            }
+        }
+    }
+}
+
+#[test]
+fn input_convergence_does_not_record_an_optimizer_algorithm() {
+    for method in [Method::Internal, Method::AncRfo, Method::Lbfgs] {
+        for adaptive_accuracy in [false, true] {
+            for tight_final in [false, true] {
+                let mut p = surface(|_, g, _| {
+                    g.fill(0.);
+                    Ok(0.)
+                });
+                let options = Options {
+                    adaptive_accuracy,
+                    tight_final,
+                    initial_hessian: InitialHessian::Potential,
+                    ..anchored(method)
+                };
+                let out = optimize(&mut p, &[1, 1], &INITIAL, &options, proceed);
+                assert_eq!(out.status, Status::Converged);
+                assert_eq!(out.steps, 0);
+                assert_eq!(
+                    out.evaluations,
+                    1 + usize::from(adaptive_accuracy) + usize::from(tight_final)
+                );
+                assert_eq!(out.hessian_evaluations, 0);
+                assert_eq!(out.method, method);
+                assert!(out.methods.is_empty());
             }
         }
     }
@@ -674,6 +713,38 @@ fn singular_model_falls_back_without_evaluating_the_input_twice() {
 }
 
 #[test]
+fn failed_first_fallback_trial_records_every_attempted_optimizer() {
+    for (method, methods) in [
+        (
+            Method::Internal,
+            vec![Method::Internal, Method::AncRfo, Method::Lbfgs],
+        ),
+        (Method::AncRfo, vec![Method::AncRfo, Method::Lbfgs]),
+        (Method::Lbfgs, vec![Method::Lbfgs]),
+    ] {
+        let mut calls = 0;
+        let mut p = surface(|_, g, _| {
+            calls += 1;
+            if calls == 2 {
+                return Err(EvalError::Scf("trial failed".into()));
+            }
+            g.fill(0.);
+            g[3] = -1.;
+            Ok(0.5)
+        });
+        // Coincident atoms prevent both internal and ANC model construction,
+        // so the first evaluated trial belongs to the L-BFGS fallback.
+        let out = optimize(&mut p, &[1, 1], &[0.; 6], &anchored(method), proceed);
+        assert_eq!(out.status, Status::ScfFailure("trial failed".into()));
+        assert_eq!((out.steps, out.evaluations), (0, 2));
+        assert_eq!(out.method, Method::Lbfgs);
+        assert_eq!(out.methods, methods);
+        assert_eq!(out.positions, [0.; 6]);
+        assert_eq!(out.energies, [0.5]);
+    }
+}
+
+#[test]
 fn tight_final_reuses_the_normal_displacement_with_a_fresh_tight_gradient() {
     let mut p = surface(|x, g, a| {
         g.fill(0.);
@@ -721,6 +792,7 @@ fn energy_gradient_small_gradient_converges_at_a_constant_minimum() {
     });
     assert_eq!(out.status, Status::Converged);
     assert_eq!((out.steps, out.evaluations), (0, 2));
+    assert!(out.methods.is_empty());
     assert_eq!(out.positions, [0.; 3]);
     assert_eq!(trace, [(0, Accuracy::Normal), (0, Accuracy::Tight)]);
 }
@@ -1346,6 +1418,7 @@ fn no_hessian_is_requested_without_a_first_step() {
             );
             assert_eq!(out.status, status);
             assert_eq!(out.hessian_evaluations, 0);
+            assert!(out.methods.is_empty());
         }
     }
 }
@@ -1385,6 +1458,7 @@ fn unusable_potential_hessian_falls_back_to_the_model() {
         }
         let out = run(InitialHessian::Potential, Some(EvalError::Cancelled));
         assert_eq!(out.status, Status::Cancelled);
+        assert!(out.methods.is_empty());
         assert_eq!(
             (out.steps, out.evaluations, out.hessian_evaluations),
             (0, 1, 1)
