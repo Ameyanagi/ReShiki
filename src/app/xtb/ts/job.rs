@@ -43,6 +43,7 @@ pub(crate) struct Report {
 pub(super) fn start(
     launch: Launch,
     plan: TsPlan,
+    drawn_bonds: Vec<(u64, u64)>,
     images: usize,
     cancel: Cancel,
 ) -> impl Stream<Item = Event> + Send + 'static {
@@ -51,7 +52,7 @@ pub(super) fn start(
     let thread = std::thread::Builder::new()
         .name("xtb-ts-run".into())
         .spawn(move || {
-            let result = run(&launch, &plan, images, &cancel, &events);
+            let result = run(&launch, &plan, &drawn_bonds, images, &cancel, &events);
             let _ = events.unbounded_send(Event::Done(result.map(Arc::new)));
             events.close_channel();
         });
@@ -65,6 +66,7 @@ pub(super) fn start(
 fn run(
     launch: &Launch,
     plan: &TsPlan,
+    drawn_bonds: &[(u64, u64)],
     images: usize,
     cancel: &Cancel,
     tx: &mpsc::UnboundedSender<Event>,
@@ -79,6 +81,7 @@ fn run(
     }
     check_cancel(cancel)?;
     let changes = changes(launch, plan)?;
+    check_drawn_bonds(launch, drawn_bonds)?;
     let masses = engine_masses(&launch.frame)?;
     let limits = Limits::default();
     let executable = std::env::current_exe().map_err(|error| Failure::Other(error.to_string()))?;
@@ -348,6 +351,36 @@ fn changes(launch: &Launch, plan: &TsPlan) -> Result<Changes, Failure> {
     break_.sort_unstable();
     break_.dedup();
     Ok(Changes { form, break_ })
+}
+
+/// The start geometry must still have the drawn bonds: an earlier
+/// optimization can open a strained ring while the drawing stays the same,
+/// and the search would then follow a different reaction.
+fn check_drawn_bonds(launch: &Launch, drawn: &[(u64, u64)]) -> Result<(), Failure> {
+    let index = |id: u64| launch.atoms.iter().position(|&atom| atom == Some(id));
+    let want: BTreeSet<_> = drawn
+        .iter()
+        .filter_map(|&(a, b)| Some(pair(index(a)?, index(b)?)))
+        .collect();
+    let frame = &launch.frame;
+    let have: BTreeSet<_> = ts::bonds(&frame.numbers, &bohr(&frame.positions_angstrom))
+        .map_err(failed)?
+        .into_iter()
+        .filter(|&(a, b)| {
+            [a, b]
+                .iter()
+                .all(|&i| matches!(launch.atoms.get(i), Some(Some(_))))
+        })
+        .map(|(a, b)| pair(a, b))
+        .collect();
+    if want == have {
+        Ok(())
+    } else {
+        Err(Failure::Other(
+            "The 3D model's bonds no longer match the drawing. Rebuild the 3D model, then run again."
+                .into(),
+        ))
+    }
 }
 
 fn pair(a: usize, b: usize) -> (usize, usize) {
