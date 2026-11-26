@@ -15,7 +15,7 @@ fn label<'a>(content: &'a str) -> Element<'a, Message> {
 }
 
 /// One segment of a segmented control; `None` leaves it disabled with `hint`.
-fn segment<'a>(
+pub(super) fn segment<'a>(
     id: String,
     name: &'a str,
     active: bool,
@@ -82,7 +82,12 @@ impl App {
             }
             return container(body).padding(10).width(WIDE).into();
         }
-        let settings = &self.xtb.settings;
+        // A search whose minimizer is an xTB method runs with it: the card
+        // shows and checks that method.
+        let settings = &super::conformers::effective(&self.xtb.settings, &self.xtb.conformers);
+        let fixed_method = settings.method != self.xtb.settings.method
+            || (settings.task == CalcTask::Conformers
+                && self.xtb.conformers.minimizer.xtb().is_some());
         let run = self.tab.xtb.run.as_ref();
         let idle = run.is_none();
         let target = self.xtb_target().filter(|atoms| !atoms.is_empty());
@@ -128,8 +133,8 @@ impl App {
                 format!("xtb-method-{}", method.label().to_lowercase()),
                 method.label(),
                 settings.method == method,
-                set(Action::Method(method)),
-                None,
+                set(Action::Method(method)).filter(|_| !fixed_method),
+                fixed_method.then_some("The search's minimizer sets the method"),
             )
         }))
         .spacing(4);
@@ -190,7 +195,7 @@ impl App {
         let config = Settings {
             charge: charge_text,
             unpaired: unpaired_text,
-            ..settings.clone()
+            ..super::conformers::effective(settings, &self.xtb.conformers)
         }
         .config(drawn, true, vec![]);
         let check = match (&config, &numbers) {
@@ -321,6 +326,10 @@ impl App {
         if optimize {
             body = body.push(hold);
         }
+        let search = settings.task == CalcTask::Conformers;
+        if search {
+            body = body.push(self.xtb_conformer_fields(idle, numbers.as_deref()));
+        }
         body = body.push(self.xtb_advanced(idle, electronic));
 
         // Run; while running, the progress row above replaces it.
@@ -328,8 +337,14 @@ impl App {
             .as_ref()
             .map_or_else(|| target.as_ref().map_or(0, Vec::len), Vec::len);
         let too_many = count > state::MAX_ATOMS;
+        let search_ok = !search
+            || self
+                .xtb
+                .conformers
+                .config(numbers.as_ref().map(Vec::len))
+                .is_ok();
         if run.is_none() {
-            let ready = target.is_some() && check.is_ok() && !too_many;
+            let ready = target.is_some() && check.is_ok() && !too_many && search_ok;
             body = body.push(
                 row![
                     hover_hint(
@@ -536,7 +551,10 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
     let text_line = line(
         run.launch.as_ref().map_or_else(
             || "Making the 3D model first (MMFF94s)".into(),
-            |_| run.progress.line(run.config.task, run.seconds()),
+            |_| match &run.search {
+                Some(live) => live.line(run.seconds()),
+                None => run.progress.line(run.config.task, run.seconds()),
+            },
         ),
         Tone::Muted,
     );
@@ -555,6 +573,10 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
     }
     controls = controls.push(Space::new().width(Length::Fill)).push(cancel);
     rows = rows.push(controls);
+    if let Some(live) = run.search.as_ref().filter(|_| run.launch.is_some()) {
+        // Embedding has no count yet: the bar waits at the start.
+        rows = rows.push(progress_bar(0.0..=1.0, live.fraction().unwrap_or(0.)).girth(3));
+    }
     if optimizing {
         rows = rows.push(
             progress_bar(

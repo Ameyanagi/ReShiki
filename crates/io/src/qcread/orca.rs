@@ -63,6 +63,12 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         has_output |= prologue || has_geometry || trimmed == "INPUT FILE" || terminated;
     }
     boundaries.push(lines.len());
+    if boundaries.len() > super::MAX_JOBS + 1 {
+        return Err(Error::Unsupported(format!(
+            "The file holds more than {} ORCA jobs",
+            super::MAX_JOBS
+        )));
+    }
     let mut jobs = Vec::new();
     let mut inputs = Vec::new();
     let mut next_input = 0;

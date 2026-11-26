@@ -19,7 +19,7 @@ mod tests;
 
 pub use hess::{read_orca_hess, write_orca_hess};
 pub use sdf::{SdfEntry, write_sdf};
-pub use xyz::write_xyz_trajectory;
+pub use xyz::{parse_xyz, write_xyz_trajectory};
 
 /// The zero-based species and first Cartesian coordinate columns in an XYZ file.
 pub struct XyzColumns {
