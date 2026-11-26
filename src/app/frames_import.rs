@@ -1,8 +1,5 @@
-//! Opening a file that holds several geometries of one molecule (a
-//! multi-frame XYZ such as a trajectory or a CREST ensemble, or an SD file
-//! of conformers): choose the first, the last, the lowest-energy or any
-//! frame, and optionally keep every frame as an ensemble in the results
-//! palette's Conformers tab.
+//! Choose the job or geometry to open from a calculation or a multi-frame
+//! file. An XYZ or SD file can also be kept as a conformer ensemble.
 use super::energy_plot::{EnergyPlot, Layout};
 use super::{
     App, Message,
@@ -20,17 +17,32 @@ use reshiki::qcdata::{
 use reshiki::qcread::{self, Format, QcFile};
 use std::path::PathBuf;
 
+pub(super) fn molecule(frame: &Frame) -> String {
+    const DIGITS: [char; 10] = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+    super::xtb::formula(&frame.numbers)
+        .chars()
+        .map(|c| {
+            c.to_digit(10)
+                .and_then(|digit| DIGITS.get(digit as usize))
+                .copied()
+                .unwrap_or(c)
+        })
+        .collect()
+}
+
 const KCAL_PER_HARTREE: f64 = 627.509_474_063;
+const SHEET_WIDTH: f32 = 1100.;
+const SHEET_HEIGHT: f32 = 640.;
 /// The sheet previews frames up to this many atoms.
 const PREVIEW_ATOMS: usize = 500;
 
-/// Which frame opens.
+/// Which row opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Choice {
     First,
     Last,
     Lowest,
-    /// A frame by its index, picked in the list.
+    /// A job or frame by its index, picked in the list.
     Frame(usize),
 }
 
@@ -40,6 +52,7 @@ pub(crate) enum Action {
     /// Move the picked frame by this many rows.
     Move(isize),
     Keep(bool),
+    Add2d(bool),
     /// Draw the lowest-energy frame faint behind the previewed one.
     Overlay(bool),
     /// Turn the preview by a drag of this many pixels.
@@ -50,12 +63,13 @@ pub(crate) enum Action {
     Next,
 }
 
-/// A file of several frames of one molecule, read.
+/// A file with a choice of jobs or frames, read.
 #[derive(Clone, Debug)]
 pub(crate) struct File {
     name: String,
     file: QcFile,
-    sha256: String,
+    /// The source hash for an XYZ or SD file if it is kept as an ensemble.
+    sha256: Option<String>,
     /// The SD file's text, to open the chosen record with its own chemistry.
     sdf: Option<String>,
 }
@@ -66,6 +80,7 @@ pub(crate) struct Dialog {
     file: File,
     choice: Choice,
     keep: bool,
+    add_2d: bool,
     overlay: bool,
     /// The chosen frame as a 3D model, turned as the user turned it.
     preview: Option<reshiki::document::Document>,
@@ -118,7 +133,7 @@ pub(super) fn detect(path: &std::path::Path, contents: &[u8]) -> Option<File> {
     Some(File {
         name,
         file,
-        sha256,
+        sha256: Some(sha256),
         sdf,
     })
 }
@@ -138,16 +153,94 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
 }
 
 impl File {
+    pub(super) fn calculation(name: String, file: QcFile) -> Self {
+        Self {
+            name,
+            file,
+            sha256: None,
+            sdf: None,
+        }
+    }
+
+    fn calculation_output(&self) -> bool {
+        self.file.format.has_results()
+    }
+
+    fn job_rows(&self) -> bool {
+        self.file.jobs.len() > 1
+    }
+
+    fn count(&self) -> usize {
+        if self.job_rows() {
+            self.file.jobs.len()
+        } else {
+            self.steps().len()
+        }
+    }
+
+    fn step(&self, index: usize) -> Option<&qcread::Step> {
+        if self.job_rows() {
+            self.file.jobs.get(index)?.steps.last()
+        } else {
+            self.steps().get(index)
+        }
+    }
+
+    fn subtitle(&self) -> String {
+        let name = &self.name;
+        let format = self.file.format.name();
+        let program = self.file.program.as_ref().map(|program| {
+            super::files::program_label(program, self.file.program_version.as_deref())
+        });
+        let count = self.count();
+        if self.calculation_output() {
+            let kind = if self.job_rows() { "jobs" } else { "steps" };
+            format!(
+                "{name} · {} · {count} {kind}",
+                program.as_deref().unwrap_or(format)
+            )
+        } else {
+            let atoms = self
+                .steps()
+                .first()
+                .map_or(0, |step| step.frame.numbers.len());
+            let mut subtitle = format!("{name} · {format} · {count} frames · {atoms} atoms");
+            if let Some(program) = program {
+                subtitle.push_str(&format!(" · written by {program}"));
+            }
+            subtitle
+        }
+    }
+
     fn steps(&self) -> &[qcread::Step] {
+        if self.job_rows() {
+            return &[];
+        }
         self.file
             .jobs
             .first()
             .map_or(&[], |job| job.steps.as_slice())
     }
 
+    fn step_energy(&self, step: &qcread::Step) -> Option<f64> {
+        step.energy_hartree.or_else(|| {
+            let job = self.file.jobs.first()?;
+            let result = job.result.as_ref()?;
+            // Gaussian can repeat the converged geometry after its last SCF
+            // energy. Both rows describe the same evaluated structure.
+            (step.frame.hash() == result.frame).then_some(())?;
+            job.result_step()
+                .and_then(|step| step.energy_hartree)
+                .or(result.energy_hartree)
+        })
+    }
+
     /// Every frame's energy, when the file gives one for each.
     fn energies(&self) -> Option<Vec<f64>> {
-        self.steps().iter().map(|s| s.energy_hartree).collect()
+        if self.job_rows() {
+            return None;
+        }
+        self.steps().iter().map(|s| self.step_energy(s)).collect()
     }
 
     /// The lowest-energy frame.
@@ -166,26 +259,34 @@ impl File {
     fn layout(&self) -> Option<Layout> {
         let energies = self.energies()?;
         let sorted = energies.windows(2).all(|pair| pair.first() <= pair.get(1));
-        Some(if self.sdf.is_some() || sorted {
-            Layout::Levels
-        } else {
-            Layout::Line
-        })
+        Some(
+            if !self.calculation_output() && (self.sdf.is_some() || sorted) {
+                Layout::Levels
+            } else {
+                Layout::Line
+            },
+        )
     }
 }
 
 impl Dialog {
-    pub(super) fn new(path: PathBuf, file: File) -> Self {
+    fn new(path: PathBuf, file: File) -> Self {
         // An ensemble opens its lowest member; a trajectory its last frame.
-        let choice = match file.layout() {
-            Some(Layout::Levels) => Choice::Lowest,
-            _ => Choice::Last,
+        let keep = file.layout() == Some(Layout::Levels);
+        let choice = if file.job_rows() {
+            Choice::Frame(file.file.default_job().unwrap_or(0))
+        } else if keep {
+            Choice::Lowest
+        } else {
+            Choice::Last
         };
+        let add_2d = file.calculation_output();
         let mut dialog = Self {
             path,
             file,
             choice,
-            keep: false,
+            keep,
+            add_2d,
             overlay: false,
             preview: None,
         };
@@ -196,9 +297,8 @@ impl Dialog {
     /// Build the preview of the chosen frame, keeping the view's turn, with
     /// the lowest-energy frame superposed behind it when asked.
     fn refresh(&mut self) {
-        let index = self.index();
-        let steps = self.file.steps();
-        let Some(step) = steps.get(index) else {
+        let Some(step) = self.file.step(self.index()) else {
+            self.preview = None;
             return;
         };
         // Bonds are perceived for the preview; large frames open without one.
@@ -216,10 +316,10 @@ impl Dialog {
             return;
         };
         let lowest = self
-            .file
-            .lowest()
-            .and_then(|i| steps.get(i))
-            .filter(|_| self.overlay);
+            .overlay
+            .then(|| self.file.lowest())
+            .flatten()
+            .and_then(|i| self.file.step(i));
         if let Some(model) = doc.models.first_mut() {
             if let Some(rotation) = rotation {
                 model.rotation = rotation;
@@ -233,10 +333,14 @@ impl Dialog {
         self.preview = Some(doc);
     }
 
-    /// The frame `choice` names.
+    /// The row `choice` names.
     fn index(&self) -> usize {
-        let last = self.file.steps().len().saturating_sub(1);
-        match self.choice {
+        self.choice_index(self.choice)
+    }
+
+    fn choice_index(&self, choice: Choice) -> usize {
+        let last = self.file.count().saturating_sub(1);
+        match choice {
             Choice::First => 0,
             Choice::Last => last,
             Choice::Lowest => self.file.lowest().unwrap_or(0),
@@ -246,17 +350,25 @@ impl Dialog {
 }
 
 impl App {
+    pub(super) fn ask_frames_import(&mut self, path: PathBuf, file: File) {
+        let kind = if file.job_rows() {
+            "jobs"
+        } else if file.calculation_output() {
+            "steps"
+        } else {
+            "frames"
+        };
+        self.status = format!("{} has several {kind}. Choose what to open.", file.name);
+        self.error = false;
+        self.frames_import = Some(Dialog::new(path, file));
+    }
+
     pub(super) fn frames_import_action(&mut self, action: Action) -> Task<Message> {
         let Some(dialog) = self.frames_import.as_mut() else {
             if matches!(action, Action::Next)
                 && let Some((path, file)) = self.frames_queue.pop_front()
             {
-                self.status = format!(
-                    "{} has several frames: choose which to open",
-                    super::import::name(&path)
-                );
-                self.error = false;
-                self.frames_import = Some(Dialog::new(path, file));
+                self.ask_frames_import(path, file);
             }
             return Task::none();
         };
@@ -266,21 +378,34 @@ impl App {
             Action::Choose(Choice::Lowest) if dialog.file.energies().is_none() => {}
             Action::Choose(choice) => {
                 let before = dialog.index();
-                dialog.choice = choice;
-                if dialog.index() != before {
-                    dialog.refresh();
+                let index = dialog.choice_index(choice);
+                if dialog.file.step(index).is_some() {
+                    dialog.choice = choice;
+                    if index != before {
+                        dialog.refresh();
+                    }
                 }
             }
             Action::Move(step) => {
-                let count = dialog.file.steps().len() as isize;
+                let count = dialog.file.count();
                 let before = dialog.index();
-                let index = (before as isize + step).clamp(0, count - 1) as usize;
-                dialog.choice = Choice::Frame(index);
-                if index != before {
+                let target = (before as isize + step).clamp(0, count as isize - 1) as usize;
+                let available = |&i: &usize| dialog.file.step(i).is_some();
+                let next = if step < 0 {
+                    (0..=target).rev().find(available)
+                } else {
+                    (target..count).find(available)
+                };
+                if let Some(index) = next.filter(|index| *index != before) {
+                    dialog.choice = Choice::Frame(index);
                     dialog.refresh();
                 }
             }
-            Action::Keep(keep) => dialog.keep = keep && dialog.file.energies().is_some(),
+            Action::Keep(keep) => {
+                dialog.keep =
+                    keep && !dialog.file.calculation_output() && dialog.file.energies().is_some();
+            }
+            Action::Add2d(add) => dialog.add_2d = add,
             Action::Overlay(on) => {
                 dialog.overlay = on;
                 dialog.refresh();
@@ -323,8 +448,29 @@ impl App {
     /// model from the coordinates, with the ensemble kept when asked.
     fn frames_import_open(&mut self, dialog: Dialog) -> Task<Message> {
         let index = dialog.index();
-        let count = dialog.file.steps().len();
-        let path = dialog.path.clone();
+        let path = dialog.path;
+        if dialog.file.calculation_output() {
+            let (job, step) = if dialog.file.job_rows() {
+                (index, None)
+            } else {
+                (0, Some(index))
+            };
+            let file = dialog.file.file;
+            let add_2d = dialog.add_2d;
+            return Task::perform(
+                async move {
+                    let result = reshiki::task::spawn_blocking(move || {
+                        super::files::prepare_qc_drawing(file, job, step, add_2d)
+                    })
+                    .await
+                    .map_err(|error| error.to_string())
+                    .and_then(|result| result);
+                    Some((path, result))
+                },
+                Message::FilePrepared,
+            );
+        }
+        let count = dialog.file.count();
         if let (Some(text), false) = (&dialog.file.sdf, dialog.keep)
             && let Some(record) = record(text, index)
         {
@@ -423,16 +569,12 @@ impl App {
         let steps = file.steps();
         let energies = file.energies();
         let index = dialog.index();
-        let atoms = steps.first().map_or(0, |s| s.frame.numbers.len());
-        let mut subtitle = format!(
-            "{} · {} · {} frames · {atoms} atoms",
-            file.name,
-            file.file.format.name(),
-            steps.len()
-        );
-        if let Some(program) = &file.file.program {
-            subtitle.push_str(&format!(" · written by {program}"));
-        }
+        let job_rows = file.job_rows();
+        let frame_name = if file.calculation_output() {
+            "Step"
+        } else {
+            "Frame"
+        };
         let choices = [
             (Choice::First, "First"),
             (Choice::Last, "Last"),
@@ -460,7 +602,7 @@ impl App {
                 text(if picked {
                     "Picked in the list"
                 } else {
-                    "or pick a frame below"
+                    "or pick a row below"
                 })
                 .size(12)
                 .style(muted_text),
@@ -474,7 +616,7 @@ impl App {
         let cell = |content: String, width: Length| text(content).size(12).width(width);
         let header = container(
             row![
-                cell("#".into(), Length::Fixed(40.)),
+                cell(frame_name.into(), Length::Fixed(40.)),
                 cell("Comment".into(), Length::Fill),
                 cell("Energy (Eh)".into(), Length::Fixed(120.)),
                 cell("ΔE (kcal/mol)".into(), Length::Fixed(100.)),
@@ -491,20 +633,17 @@ impl App {
                 .chars()
                 .take(60)
                 .collect();
-            let energy = step.energy_hartree;
+            let energy = file.step_energy(step);
             let delta = energy
                 .zip(lowest)
                 .map(|(e, low)| (e - low) * KCAL_PER_HARTREE);
             reshiki::accessibility::button(
                 format!("frames-row-{i}"),
-                format!("Frame {}", i + 1),
+                format!("{frame_name} {}", i + 1),
                 row![
                     cell((i + 1).to_string(), Length::Fixed(40.)),
                     cell(comment, Length::Fill),
-                    cell(
-                        energy.map_or_else(|| "—".into(), |e| minus(format!("{e:.6}"))),
-                        Length::Fixed(120.)
-                    ),
+                    cell(eh(energy, file.calculation_output()), Length::Fixed(120.)),
                     cell(
                         delta.map_or_else(|| "—".into(), |d| format!("{d:.2}")),
                         Length::Fixed(100.)
@@ -520,7 +659,16 @@ impl App {
             .into()
         }))
         .spacing(1);
-        let list = scrollable(rows).id("frames-import-list").height(280);
+        let list = if job_rows {
+            job_list(file, index)
+        } else {
+            column![
+                header,
+                scrollable(rows).id("frames-import-list").height(280)
+            ]
+            .spacing(2)
+            .into()
+        };
 
         let keep = accessible_checkbox(
             "frames-keep-ensemble",
@@ -535,25 +683,44 @@ impl App {
         } else {
             "Up to 32 frames, the lowest in energy, are kept with the molecule and saved in the file."
         };
-        let message = format!(
-            "Frame {} of {} opens{}. ⌘Return imports.",
-            index + 1,
-            steps.len(),
-            match (dialog.choice, energies.as_ref()) {
-                (Choice::Lowest, _) => " (lowest energy)".to_owned(),
-                (_, Some(energies)) => energies
-                    .get(index)
-                    .zip(lowest)
-                    .map(|(energy, low)| {
-                        format!(
-                            ", {:.2} kcal/mol above the lowest",
-                            (energy - low) * KCAL_PER_HARTREE
-                        )
-                    })
-                    .unwrap_or_default(),
-                _ => String::new(),
-            }
-        );
+        let message = if job_rows {
+            let result_at_earlier_geometry = file
+                .file
+                .jobs
+                .get(index)
+                .and_then(|job| job.result.as_ref().zip(job.steps.last()))
+                .is_some_and(|(result, last)| result.frame != last.frame.hash());
+            let geometry = if result_at_earlier_geometry {
+                " at the geometry with results"
+            } else {
+                ""
+            };
+            format!(
+                "Job {} of {} opens{geometry}. ⌘Return imports.",
+                index + 1,
+                file.count()
+            )
+        } else {
+            format!(
+                "{frame_name} {} of {} opens{}. ⌘Return imports.",
+                index + 1,
+                steps.len(),
+                match (dialog.choice, energies.as_ref()) {
+                    (Choice::Lowest, _) => " (lowest energy)".to_owned(),
+                    (_, Some(energies)) => energies
+                        .get(index)
+                        .zip(lowest)
+                        .map(|(energy, low)| {
+                            format!(
+                                ", {:.2} kcal/mol above the lowest",
+                                (energy - low) * KCAL_PER_HARTREE
+                            )
+                        })
+                        .unwrap_or_default(),
+                    _ => String::new(),
+                }
+            )
+        };
         let footer = row![
             text(message).size(12).style(muted_text).width(Length::Fill),
             accessible_command("frames-cancel", "Cancel", "Cancel").on_press(send(Action::Close)),
@@ -612,25 +779,37 @@ impl App {
                 .style(muted_text)
                 .into(),
         };
-        let side = column![
+        let mut side = column![
             preview,
-            overlay,
             text("Drag to turn the model.").size(11).style(muted_text),
-            diagram,
         ]
         .spacing(8)
         .width(330);
-        let main = column![
-            quick,
-            column![header, list].spacing(2),
-            column![keep, text(keep_note).size(11).style(muted_text)].spacing(4),
-        ]
-        .spacing(12)
-        .width(Length::Fill);
+        if !job_rows {
+            side = side.push(overlay).push(diagram);
+        }
+        let mut main = column![].spacing(12).width(Length::Fill);
+        if !job_rows {
+            main = main.push(quick);
+        }
+        let options: Element<'_, Message> = if file.calculation_output() {
+            accessible_checkbox(
+                "frames-add-2d",
+                "Add 2D structure",
+                dialog.add_2d,
+                Some(send(Action::Add2d(!dialog.add_2d))),
+            )
+            .into()
+        } else {
+            column![keep, text(keep_note).size(11).style(muted_text)]
+                .spacing(4)
+                .into()
+        };
+        main = main.push(list).push(options);
         let mut content = column![
             column![
                 text("Choose what to import").size(15),
-                text(subtitle).size(12).style(muted_text),
+                text(file.subtitle()).size(12).style(muted_text),
             ]
             .spacing(2),
             row![main, side].spacing(18),
@@ -639,16 +818,95 @@ impl App {
         for warning in &file.file.warnings {
             content = content.push(text(warning.clone()).size(11).style(muted_text));
         }
-        content = content.push(footer);
         modal(
             base,
-            container(content).padding(16).into(),
-            1100.,
-            640.,
+            sheet_content(content.into(), footer.into()),
+            SHEET_WIDTH,
+            SHEET_HEIGHT,
             Placement::Fit,
             send(Action::Close),
         )
     }
+}
+
+/// Reserve room for both actions even when the table and warnings overflow.
+fn sheet_content<'a, R: iced::advanced::text::Renderer + 'a>(
+    body: Element<'a, Message, iced::Theme, R>,
+    footer: Element<'a, Message, iced::Theme, R>,
+) -> Element<'a, Message, iced::Theme, R> {
+    container(column![scrollable(body).height(Length::Fill), footer].spacing(12))
+        .padding(16)
+        .into()
+}
+
+fn eh(energy: Option<f64>, calculation: bool) -> String {
+    let decimals = if calculation { 9 } else { 6 };
+    energy.map_or_else(|| "—".into(), |e| minus(format!("{e:.decimals$}")))
+}
+
+fn job_cells(job: &qcread::Job) -> [String; 5] {
+    let last = job.steps.last();
+    let energy = job
+        .result
+        .as_ref()
+        .and_then(|result| result.energy_hartree)
+        .or_else(|| last.and_then(|step| step.energy_hartree));
+    [
+        (job.index + 1).to_string(),
+        last.map_or_else(|| "—".into(), |step| molecule(&step.frame)),
+        job.title(),
+        job.completion
+            .as_ref()
+            .map_or("—", qcread::Completion::name)
+            .into(),
+        eh(energy, true),
+    ]
+}
+
+fn job_list(file: &File, selected: usize) -> Element<'static, Message> {
+    let columns = |cells: [String; 5]| {
+        row(cells
+            .into_iter()
+            .zip([
+                Length::Fixed(38.),
+                Length::Fixed(78.),
+                Length::Fill,
+                Length::Fixed(118.),
+                Length::Fixed(116.),
+            ])
+            .map(|(cell, width)| text(cell).size(12).width(width).into()))
+        .spacing(8)
+        .align_y(Alignment::Center)
+    };
+    let header = container(columns(
+        ["Job", "Molecule", "Type", "Ended", "Energy (Eh)"].map(str::to_owned),
+    ))
+    .padding([2, 8]);
+    let rows = Column::with_children(file.file.jobs.iter().enumerate().map(|(i, job)| {
+        let cells = job_cells(job);
+        let label = format!(
+            "Job {} · {} · {} · {}",
+            cells[0], cells[1], cells[2], cells[3]
+        );
+        let active = i == selected;
+        reshiki::accessibility::button(format!("frames-row-{i}"), label, columns(cells))
+            .padding([3, 8])
+            .width(Length::Fill)
+            .checked(active)
+            .style(control(active))
+            .on_press_maybe(
+                (!job.steps.is_empty())
+                    .then_some(Message::FramesImport(Action::Choose(Choice::Frame(i)))),
+            )
+            .into()
+    }))
+    .spacing(1);
+    column![
+        header,
+        scrollable(rows).id("frames-import-list").height(280)
+    ]
+    .spacing(2)
+    .into()
 }
 
 /// The chosen frame's 3D model; a drag turns it.
@@ -771,7 +1029,7 @@ fn record(text: &str, index: usize) -> Option<String> {
 }
 
 /// A drawing whose 3D model is `frame`, as program outputs open.
-fn drawing(frame: &Frame) -> Result<(reshiki::document::Document, Vec<String>), String> {
+pub(super) fn drawing(frame: &Frame) -> Result<(reshiki::document::Document, Vec<String>), String> {
     let mut xyz = format!("{}\n\n", frame.numbers.len());
     for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
         xyz.push_str(&format!("{number} {x} {y} {z}\n"));
@@ -865,7 +1123,7 @@ fn ensemble(
             source: Source::Imported {
                 format: source.format.name().into(),
                 file_name: file.name.clone(),
-                file_sha256: Some(file.sha256.clone()),
+                file_sha256: file.sha256.clone(),
                 job: 0,
             },
         },
