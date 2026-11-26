@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import check_runtime_dependencies as runtime
 from agent_api_client import (
+    BASE_TOOLS,
     LEGACY_REVISIONS,
     MODERN,
     TOOLS,
@@ -125,7 +126,8 @@ class Server:
         if method == "initialize":
             return {"protocolVersion": params["protocolVersion"], "capabilities": {}}
         if method == "tools/list":
-            return {"tools": [{"name": name} for name in TOOLS]}
+            names = TOOLS if "calculate" in self.faults else BASE_TOOLS
+            return {"tools": [{"name": name} for name in names]}
         return self.tool(params["name"], params["arguments"])
 
     def tool(self, name, arguments):
@@ -218,10 +220,12 @@ class PackagedAgentApiTests(unittest.TestCase):
         return servers
 
     def test_well_behaved_server_and_cli_pass(self):
-        servers = self.verify()
-        # The granted session, one per legacy revision and, on Unix, one through a symlink.
-        self.assertEqual(len(servers), 1 + len(LEGACY_REVISIONS) + (os.name != "nt"))
-        self.assertTrue(all(server.returncode == 0 for server in servers))
+        for faults in ((), ("calculate",)):
+            with self.subTest(faults=faults):
+                servers = self.verify(*faults)
+                # The granted session, one per legacy revision and, on Unix, one through a symlink.
+                self.assertEqual(len(servers), 1 + len(LEGACY_REVISIONS) + (os.name != "nt"))
+                self.assertTrue(all(server.returncode == 0 for server in servers))
 
     def test_both_cancellation_outcomes_pass(self):
         for faults, renders in (((), 2), (("suppress_cancelled",), 1)):
@@ -349,7 +353,39 @@ class PackagedAgentApiTests(unittest.TestCase):
         catalog = json.loads(
             (ROOT / "tests/fixtures/agent-contract/ops-catalog.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(TOOLS, tuple(tool["name"] for tool in catalog))
+        names = tuple(tool["name"] for tool in catalog)
+        self.assertEqual(names[-1], "calculate")
+        self.assertEqual(BASE_TOOLS, names[:-1])
+        self.assertEqual(TOOLS, names)
+
+    def test_packaged_catalog_requires_the_ordered_base_and_optional_calculate_last(self):
+        catalog = json.loads(
+            (ROOT / "tests/fixtures/agent-contract/ops-catalog.json").read_text(encoding="utf-8")
+        )
+        full = tuple(tool["name"] for tool in catalog)
+        base = full[:-1]
+
+        def check(names):
+            client = types.SimpleNamespace(
+                call=lambda *args: {"result": {"tools": [{"name": name} for name in names]}}
+            )
+            runtime._check_tools(client)
+
+        for names in (base, full):
+            with self.subTest(names=names):
+                check(names)
+        for names in (
+            base[:-2],  # The former 18-tool catalog.
+            base[:-1],
+            (*base[1:], base[0]),
+            (*base, "unexpected"),
+            (*base, base[-1]),
+            ("calculate", *base),
+            (*full, "calculate"),
+            (*full, "unexpected"),
+        ):
+            with self.subTest(names=names), self.assertRaisesRegex(ValueError, "lists .* not"):
+                check(names)
 
     def test_revisions_match_the_server(self):
         source = (ROOT / "crates/mcp/src/server.rs").read_text(encoding="utf-8")

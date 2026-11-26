@@ -317,6 +317,7 @@ impl Session {
                 rotor_cutoff_cm1: t.rotor_cutoff,
                 imaginary_cutoff_cm1: t.imaginary_cutoff,
                 symmetry_number: t.symmetry_number,
+                point_group: Some(t.point_group),
             });
             VibrationsReport {
                 conventions: v.vibrational_conventions.into(),
