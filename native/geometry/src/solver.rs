@@ -1,7 +1,7 @@
 //! Bounded adapter to the Rust COSMolKit molecular mechanics implementation.
 use super::{
     Ensemble, EnsembleMember, ForceField, MAX_COORDINATES, Operation, Request, Response,
-    cage::Cage, valid_coordinate,
+    cage::Cage, uff_shape_refusal, valid_coordinate,
 };
 use cosmolkit::{
     AddHsParams, AtomId, AtomSpec, BondOrder, BondSpec, BondStereo, ChiralTag, Element,
@@ -391,22 +391,13 @@ fn validate_geometry(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
 /// bonded noble gas. Two- and six-coordinate f-block centres (uranyl, UF6,
 /// hexanitratocerate) come out right and are built.
 fn refuse_shapes_uff_gets_wrong(request: &Request) -> Result<()> {
-    let mut bonds = vec![0; request.atoms.len()];
-    for bond in &request.bonds {
-        bonds[bond.a] += 1;
-        bonds[bond.b] += 1;
-    }
-    for (atom, count) in request.atoms.iter().zip(bonds) {
-        let number = atom.atomic_number;
-        let f_block = matches!(number, 57..=71 | 89..=103) && matches!(count, 3 | 4);
-        let noble_gas = matches!(number, 2 | 10 | 18 | 36 | 54 | 86 | 118) && count > 0;
-        if f_block || noble_gas {
-            let symbol = cosmolkit_core::rdkit_element_symbol(number as u8).unwrap_or("?");
-            return Err(format!(
-                "ReShiki can't build a reliable 3D shape for this yet: UFF has no correct geometry for 3- and 4-coordinate lanthanides/actinides or noble-gas compounds such as XeF2 ({symbol} has {count} bond{})",
-                if count == 1 { "" } else { "s" }
-            ));
-        }
+    if let Some((index, count)) = uff_shape_refusal(&request.atoms, &request.bonds) {
+        let number = request.atoms[index].atomic_number;
+        let symbol = cosmolkit_core::rdkit_element_symbol(number as u8).unwrap_or("?");
+        return Err(format!(
+            "ReShiki can't build a reliable 3D shape for this yet: UFF has no correct geometry for 3- and 4-coordinate lanthanides/actinides or noble-gas compounds such as XeF2 ({symbol} has {count} bond{})",
+            if count == 1 { "" } else { "s" }
+        ));
     }
     Ok(())
 }

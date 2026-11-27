@@ -487,6 +487,19 @@ fn cancelled_failed_modal_and_outdated_updates_keep_the_previous_model() {
         assert_eq!(frames(&app), count, "{outcome}");
         assert!(app.tab.model_job.is_none(), "{outcome}");
         assert!(app.tab.doc.models[0].is_stale(&app.tab.doc), "{outcome}");
+        if outcome == "failure" {
+            assert!(app.error);
+            assert_eq!(
+                app.status,
+                "Can't build a starting 3D structure: No conformer"
+            );
+            let failure = app.tab.model_failure.as_ref().expect("a current failure");
+            assert_eq!(failure.epoch, app.tab.file_epoch);
+            assert_eq!(failure.revision, app.tab.revision);
+            assert_eq!(failure.molecule, atoms);
+            assert_eq!(failure.message, app.status);
+            assert_eq!(failure.atom, None);
+        }
     }
 }
 

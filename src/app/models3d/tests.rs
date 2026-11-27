@@ -373,13 +373,20 @@ fn a_result_for_a_changed_drawing_is_dropped() {
 
 #[test]
 fn errors_and_other_selections_leave_the_drawing_alone() {
-    let (mut app, _, water) = drawing();
+    let (mut app, atoms, water) = drawing();
     let original = app.tab.doc.clone();
     show(&mut app, Display::ThreeD);
     let (key, _) = generated(&app);
     let _ = app.update(Message::Models3d(Action::Generated(key, Err("no".into()))));
     assert!(app.error);
+    assert_eq!(app.status, "Can't build a starting 3D structure: no");
     assert_eq!(app.tab.doc, original);
+    let failure = app.tab.model_failure.as_ref().expect("a current failure");
+    assert_eq!(failure.epoch, app.tab.file_epoch);
+    assert_eq!(failure.revision, app.tab.revision);
+    assert_eq!(failure.molecule, atoms);
+    assert_eq!(failure.message, app.status);
+    assert_eq!(failure.atom, None);
 
     app.tab.selected = vec![original.atoms[0].id, water];
     show(&mut app, Display::ThreeD);
@@ -1291,8 +1298,8 @@ fn every_style_flattens_from_the_3d_view() {
 
 #[test]
 fn the_structure_note_names_the_current_style() {
-    let (mut app, atoms) = with_model(Display::ThreeD);
-    let note = |app: &App| subtitle(app.pending(&atoms), app.tab.doc.models.first());
+    let (mut app, _) = with_model(Display::ThreeD);
+    let note = |app: &App| subtitle(None, app.tab.doc.models.first());
     assert_eq!(
         note(&app),
         "Ball & stick · Chemistry and atom IDs stay the same"
@@ -1917,9 +1924,144 @@ fn a_molecule_strict_checks_refuse_gets_an_approximate_model_with_the_reason() {
     assert_eq!(app.tab.doc.models.len(), 1);
     assert_eq!(
         app.status,
-        "Shown as 3D model · Approximate UFF geometry with relaxed checks (strict: \
-         3D geometry does not support elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I)"
+        "Shown as 3D model · Approximate UFF model · MMFF has no parameters for U (uranium)"
     );
+}
+
+#[test]
+fn an_unsupported_cerium_shape_rings_the_atom_and_keeps_the_selection() {
+    let mut app = star("Ce", "F", 3, 1);
+    let cerium = app.tab.doc.atoms[0].id;
+    let atoms: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    app.tab.selected = atoms.clone();
+    let original = app.tab.doc.clone();
+    show(&mut app, Display::ThreeD);
+    assert!(app.tab.model_job.is_none());
+    assert!(app.error);
+    assert_eq!(
+        app.status,
+        "Can't build a starting 3D structure for Ce (cerium). The force field gives cerium with 3 bonds the wrong shape."
+    );
+    // The selection stays on the molecule, so Structure keeps its next step.
+    assert_eq!(app.tab.selected, atoms);
+    assert_eq!(app.model_failure_atom(), Some(cerium));
+    assert_eq!(app.tab.doc, original);
+    assert_eq!(frames(&app), 0);
+    let failure = app.tab.model_failure.as_ref().expect("a current failure");
+    assert_eq!(failure.epoch, app.tab.file_epoch);
+    assert_eq!(failure.revision, app.tab.revision);
+    assert_eq!(failure.molecule, atoms);
+    assert_eq!(failure.message, app.status);
+    assert_eq!(failure.atom, Some(cerium));
+}
+
+#[test]
+fn a_propyl_radical_builds_from_propane_and_removes_only_its_extra_hydrogen() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let atoms: Vec<_> = (0..3)
+        .map(|i| app.tab.doc.add_atom("C", Point::new(i as f32 * 36., 0.)))
+        .collect();
+    for pair in atoms.windows(2) {
+        app.tab.doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    app.tab.doc.atom_mut(atoms[0]).unwrap().radical_electrons = 1;
+    app.tab.selected = vec![atoms[0]];
+    let original = app.tab.doc.clone();
+    show(&mut app, Display::ThreeD);
+    assert!(!app.error, "{}", app.status);
+    let job = app.tab.model_job.as_ref().expect("a strict radical model");
+    assert_eq!(job.prepared.mode(), reshiki::geometry::Mode::Strict);
+    assert_eq!(job.prepared.ids(), atoms);
+    let radical = job.prepared.radicals();
+    assert_eq!((radical[0].atom, radical[0].electrons), (atoms[0], 1));
+    assert_eq!(
+        subtitle(Some(job), None),
+        "Generating the conformer · closed-shell parent, then MMFF94s"
+    );
+    assert_eq!(
+        app.status,
+        "C1 is a radical · Building the 3D start from its closed-shell parent…"
+    );
+
+    let key = job.key;
+    let parents = [0, 0, 0, 1, 1, 2, 2, 2];
+    let optimized = Optimized {
+        conformer: Conformer {
+            // Carbons 1.5 Å apart; each hydrogen 1.1 Å from its own carbon.
+            positions: (0..atoms.len())
+                .map(|i| Point3 {
+                    x: i as f64 * 1.5,
+                    y: 0.,
+                    z: 0.,
+                })
+                .chain(parents.iter().enumerate().map(|(k, &parent)| {
+                    let turn = k as f64 * 2.1;
+                    Point3 {
+                        x: parent as f64 * 1.5,
+                        y: 1.1 * turn.cos(),
+                        z: 1.1 * turn.sin(),
+                    }
+                }))
+                .collect(),
+            original_atom_count: atoms.len(),
+            hydrogen_parents: parents.to_vec(),
+        },
+        ensemble: vec![],
+        initial_energy: 1.,
+        energy: 1.,
+        gradient: None,
+        converged: true,
+        iterations: 1,
+        force_field: job.force_field,
+        diagnostics: vec![],
+        approximations: vec![],
+    };
+    let _ = app.update(Message::Models3d(Action::Generated(
+        key,
+        Ok(Arc::new(optimized)),
+    )));
+    assert!(
+        app.status.contains("its closed-shell parent"),
+        "{}",
+        app.status
+    );
+    let model = (app.tab.file_epoch, app.tab.model_serial);
+    // A name for another file's model never lands here.
+    let _ = app.update(Message::Models3d(Action::ParentNamed(
+        (model.0 + 1, model.1),
+        "butane".into(),
+    )));
+    assert!(
+        app.status.contains("its closed-shell parent"),
+        "{}",
+        app.status
+    );
+    let _ = app.update(Message::Models3d(Action::ParentNamed(
+        model,
+        "propane".into(),
+    )));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
+    assert_eq!(app.tab.doc.bonds, original.bonds);
+    assert_eq!(app.tab.doc.models.len(), 1);
+    let model = &app.tab.doc.models[0];
+    assert_eq!(model.hydrogens.len(), 7);
+    // Generated models store hydrogen parents as model atom indices.
+    for (index, expected) in [2, 2, 3].into_iter().enumerate() {
+        assert_eq!(
+            model
+                .hydrogens
+                .iter()
+                .filter(|h| h.parent == index as u64)
+                .count(),
+            expected,
+            "Hydrogens on carbon {index}"
+        );
+    }
+    assert!(app.status.contains("propane"), "{}", app.status);
+    assert!(app.status.contains("radical"), "{}", app.status);
+    assert_eq!(frames(&app), 1);
 }
 
 #[test]

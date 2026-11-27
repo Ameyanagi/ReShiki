@@ -79,6 +79,7 @@ pub(super) struct DocumentTab {
     pub(super) optimization: Option<super::optimization::Session>,
     pub(super) optimization_serial: u64,
     pub(super) model_job: Option<super::models3d::Job>,
+    pub(super) model_failure: Option<super::models3d::ModelFailure>,
     pub(super) model_serial: u64,
     pub(super) model_stale: std::cell::RefCell<super::models3d::StaleCache>,
     /// The revision, model and slider a 3D-model slider drag has reached;
@@ -230,6 +231,7 @@ impl DocumentTab {
             optimization: None,
             optimization_serial: 0,
             model_job: None,
+            model_failure: None,
             model_serial: 0,
             model_stale: Default::default(),
             model_sliding: None,

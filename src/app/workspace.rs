@@ -302,6 +302,7 @@ impl App {
             locant_highlight: self
                 .pulse_atoms()
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
+            problem_atom: self.model_failure_atom(),
             reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
             tube_bend,
@@ -3110,22 +3111,20 @@ impl App {
         let amber = self.github.amber.as_deref() == Some(self.status.as_str());
         #[cfg(target_arch = "wasm32")]
         let amber = false;
-        let style = move |theme: &Theme| iced::widget::text::Style {
-            color: Some(if error {
-                crate::appearance::readable(
-                    crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
-                    &[theme.palette().background],
-                    reshiki::color_contrast::TEXT_TARGET,
-                )
+        let style = move |theme: &Theme| {
+            if error {
+                error_text(theme)
             } else if amber {
-                crate::appearance::readable(
-                    theme.palette().warning,
-                    &[theme.palette().background],
-                    reshiki::color_contrast::TEXT_TARGET,
-                )
+                text::Style {
+                    color: Some(crate::appearance::readable(
+                        theme.palette().warning,
+                        &[theme.palette().background],
+                        reshiki::color_contrast::TEXT_TARGET,
+                    )),
+                }
             } else {
-                crate::appearance::muted(theme)
-            }),
+                muted_text(theme)
+            }
         };
         // One line in the room left beside the controls; the full text of
         // long or multi-line messages is a tooltip.
@@ -3904,6 +3903,17 @@ pub(super) fn muted_text(theme: &Theme) -> iced::widget::text::Style {
         color: Some(crate::appearance::muted(theme)),
     }
 }
+
+pub(super) fn error_text(theme: &Theme) -> iced::widget::text::Style {
+    iced::widget::text::Style {
+        color: Some(crate::appearance::readable(
+            crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
+            &[theme.palette().background],
+            reshiki::color_contrast::TEXT_TARGET,
+        )),
+    }
+}
+
 pub(super) fn muted() -> Color {
     Color::from_rgb8(107, 116, 127)
 }

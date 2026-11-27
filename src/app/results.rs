@@ -16,7 +16,7 @@ enum Completion {
     Engine,
     /// Optimization(WorkerDone).
     Optimization,
-    /// Models3d(Generated).
+    /// Models3d(Generated | ParentNamed).
     Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
@@ -473,7 +473,9 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         Message::Models3d(action) => match action {
-            super::models3d::Action::Generated(..) => Some(Completion::Models3d),
+            super::models3d::Action::Generated(..) | super::models3d::Action::ParentNamed(..) => {
+                Some(Completion::Models3d)
+            }
             super::models3d::Action::Show(..)
             | super::models3d::Action::Update
             | super::models3d::Action::Regenerate
