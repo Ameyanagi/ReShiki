@@ -402,8 +402,16 @@ impl<'a> Layout<'a> {
         let closed =
             mo.columns.len() == 1 && mo.columns.first().is_some_and(|c| c.label.is_empty());
         let width_of = |text: &str, size| style::styled_text_width(text, size, &font);
-        let homo = frontier(&mo.columns, Column::homo, f64::total_cmp);
-        let lumo = frontier(&mo.columns, Column::lumo, |a, b| b.total_cmp(a));
+        // Shared α/β orbitals (xTB open shells) have α's own gap, as the
+        // Summary reports it; separate spins take the extremes of both.
+        let shared = matches!(&mo.columns[..], [a, b] if a.energies_ev == b.energies_ev);
+        let gap_columns = if shared {
+            mo.columns.get(..1).unwrap_or_default()
+        } else {
+            &mo.columns
+        };
+        let homo = frontier(gap_columns, Column::homo, f64::total_cmp);
+        let lumo = frontier(gap_columns, Column::lumo, |a, b| b.total_cmp(a));
         let (column_groups, energies) =
             shared_rows(mo, closed, [homo.map(|(at, _)| at), lumo.map(|(at, _)| at)]);
 
@@ -808,7 +816,12 @@ fn group(
         .flatten()
         .filter(|i| levels.contains(i))
         .collect();
-    let label_index = labelled.first().copied().unwrap_or(*levels.start());
+    // A group is named after its level nearest the gap.
+    let nearest_gap = match c.homo() {
+        Some(homo) if *levels.end() <= homo => *levels.end(),
+        _ => *levels.start(),
+    };
+    let label_index = labelled.first().copied().unwrap_or(nearest_gap);
     let energy = *c.energies_ev.get(frontier.unwrap_or(label_index))?;
     if closed && labelled.is_empty() {
         labelled.push(label_index);
@@ -904,6 +917,8 @@ fn axis_ticks(energies: impl Iterator<Item = f64>) -> (Vec<f64>, f64) {
 }
 
 fn signed(value: f64) -> String {
+    // No "−0.00" for a value that rounds to zero.
+    let value = if value.abs() < 0.005 { 0. } else { value };
     if value.abs() >= 1e8 {
         format!("{value:.2e}")
     } else {

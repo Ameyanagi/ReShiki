@@ -577,3 +577,39 @@ fn a_finite_wide_frame_keeps_a_finite_picture_scale() {
     let side = layout.picture_world_side(&g);
     assert!(side.is_finite() && side > 0.);
 }
+
+#[test]
+fn a_group_below_the_homo_is_named_by_its_level_nearest_the_gap() {
+    let mo = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![column(
+            Spin::Alpha,
+            "",
+            &[-11.47, -11.47, -10.95, -10.95, -6.02, -6.02, -2.45],
+            4,
+        )],
+    );
+    let (_, labels) = placed(mo, &style::DEFAULT).mo_parts(&style::DEFAULT);
+    let texts: Vec<_> = labels.iter().map(|a| a.text.as_str()).collect();
+    assert!(texts.contains(&"HOMO−2  −11.47 eV · 2-fold"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.starts_with("HOMO−3")));
+}
+
+#[test]
+fn shared_open_shell_orbitals_take_the_alpha_gap() {
+    // Triplet O2 in GFN2-xTB: both spins share the levels; α fills the π* pair.
+    let energies = [-20.1, -17.37, -17.37, -12.05, -12.05, 3.36];
+    let mo = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![
+            column(Spin::Alpha, "α", &energies, 5),
+            column(Spin::Alpha, "β", &energies, 3),
+        ],
+    );
+    let (_, labels) = placed(mo, &style::DEFAULT).mo_parts(&style::DEFAULT);
+    let texts: Vec<_> = labels.iter().map(|a| a.text.as_str()).collect();
+    assert!(texts.contains(&"gap 15.41 eV"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.contains("−0.00")));
+}
