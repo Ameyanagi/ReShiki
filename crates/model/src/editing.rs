@@ -513,6 +513,18 @@ fn mapped_append_part(
     if matches!(mode, AppendMode::Ordinary | AppendMode::PreserveLayout) {
         crate::highlights::preserve_style(&mut part, doc.highlight_style);
         crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
+        for profile in part
+            .graphics
+            .iter_mut()
+            .filter_map(|g| g.energy_profile.as_deref_mut())
+        {
+            if profile
+                .source
+                .is_none_or(|id| !source.arrows.iter().any(|arrow| arrow.id == id))
+            {
+                profile.unlink();
+            }
+        }
     }
     remap_ids(&mut part, &mapping)?;
     for a in &mut part.atoms {

@@ -106,10 +106,9 @@ fn finish_model(app: &mut App) {
     );
     let run = app.tab.xtb.run.as_ref().unwrap();
     let launch = run.launch.as_ref().unwrap();
-    assert_eq!(
-        launch.frame.numbers.len(),
-        run.ts.as_ref().unwrap().request.plan.atoms
-    );
+    if let Some(ts) = &run.ts {
+        assert_eq!(launch.frame.numbers.len(), ts.request.plan.atoms);
+    }
     assert_eq!(launch.frame.numbers.iter().filter(|&&z| z == 1).count(), 8);
 }
 

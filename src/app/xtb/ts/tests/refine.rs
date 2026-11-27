@@ -2,11 +2,54 @@ use super::*;
 
 #[test]
 fn saved_gfn2_coordinates_seed_gxtb_and_both_results_survive_a_failed_refinement() {
-    let (app, arrow) = irc_profile::finished();
+    let (mut app, arrow) = irc_profile::finished();
+    send(
+        &mut app,
+        XtbAction::Ts(Action::PlaceEnergyProfile(Some(arrow))),
+    );
+    assert_eq!(
+        app.tab.doc.graphics[0]
+            .energy_profile
+            .as_ref()
+            .unwrap()
+            .states
+            .len(),
+        3
+    );
+    select(&mut app, arrow);
+    let reaction = &app.tab.doc.reactions[0];
+    let species = [&reaction.reactants[0], &reaction.products[0]]
+        .into_iter()
+        .zip([false, true])
+        .map(|(participant, product)| energy::Species {
+            atoms: participant.atoms.clone(),
+            coefficient: u32::from(participant.coefficient),
+            product,
+            charge: 0,
+            multiplicity: 1,
+        })
+        .collect();
+    let _ = app.xtb_reaction_energy_begin(arrow, species, state::Task::Optimize, None);
+    for _ in 0..2 {
+        if app.tab.model_job.is_some() {
+            finish_model(&mut app);
+        }
+        let run = app.tab.xtb.run.as_ref().unwrap();
+        let positions = run
+            .launch
+            .as_ref()
+            .unwrap()
+            .frame
+            .positions_angstrom
+            .clone();
+        app.xtb_test_finish_optimization(&positions, &positions);
+    }
     let mut app = reaction_app(
         Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
         arrow,
     );
+    let placed = app.tab.doc.graphics[0].clone();
+    assert_eq!(placed.energy_profile.as_ref().unwrap().states.len(), 2);
     let source = app.tab.doc.science.results[0].result.clone();
     send(
         &mut app,
@@ -52,15 +95,20 @@ fn saved_gfn2_coordinates_seed_gxtb_and_both_results_survive_a_failed_refinement
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
     );
+    assert!(matches!(
+        app.xtb_ts_card_display_result(arrow),
+        card::ArrowResult::Found(result) if Arc::ptr_eq(result, &source)
+    ));
+    assert_eq!(app.tab.doc.graphics[0], placed);
 
     let mut app = reaction_app(
         Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
         arrow,
     );
     let stored = &app.tab.doc.science.results;
-    assert_eq!(stored.len(), 2);
+    assert_eq!(stored.len(), 4);
     let [parent, refined] = app
-        .xtb_ts_linked_pair(&stored[1].result)
+        .xtb_ts_linked_pair(&stored.last().unwrap().result)
         .unwrap()
         .map(Arc::clone);
     assert_eq!(*parent, *source);

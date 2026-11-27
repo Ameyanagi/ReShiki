@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn native_copy_preserves_profile_links_and_clipboard_origin() {
+async fn native_copy_preserves_profiles_that_carry_their_source_arrows() {
     use crate::{
         arrows::{ArrowStyle, Preset},
         document::{Arrow, Point},
@@ -46,13 +46,11 @@ async fn native_copy_preserves_profile_links_and_clipboard_origin() {
         profile,
         Default::default(),
     ));
-    let origin = CopyOrigin::local(42);
     for browser in [false, true] {
-        let (_, mut representations) =
+        let (_, representations) =
             prepare_copy_for(LocalEngine::in_process(), source.clone(), false, browser)
                 .await
                 .unwrap();
-        stamp_origin(&mut representations, origin).unwrap();
         let native = representations
             .into_iter()
             .find(|item| item.kind == NATIVE)
@@ -79,20 +77,8 @@ async fn native_copy_preserves_profile_links_and_clipboard_origin() {
                 .unwrap();
             assert!(profile.linked);
             assert_eq!(profile.source, Some(1));
-            assert_eq!(restored.origin, Some(origin));
-            assert!(
-                !String::from_utf8(restored.document.file_json().unwrap())
-                    .unwrap()
-                    .contains("clipboard_origin")
-            );
         }
     }
-    assert_eq!(
-        PasteOutcome::from_native_json(&source.file_json().unwrap())
-            .unwrap()
-            .origin,
-        None
-    );
 }
 
 #[tokio::test]

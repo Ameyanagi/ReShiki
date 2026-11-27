@@ -212,8 +212,9 @@ async fn energy_profile_native_files_and_figure_payloads_keep_the_complete_linke
     let embedded = crate::payload::decode(&crate::payload::encode(&doc).unwrap()).unwrap();
     assert_eq!(embedded.graphics, doc.graphics);
 
-    let mut clipboard = embedded;
-    crate::payload::unlink_energy_profiles(&mut clipboard);
+    let selection = crate::editing::selection(&embedded, &[embedded.graphics[0].id]);
+    let mut clipboard = Document::default();
+    crate::editing::append_preserving_layout(&mut clipboard, &selection, Point::default());
     clipboard.validate().unwrap();
     let snapshot = clipboard.graphics[0].energy_profile.as_ref().unwrap();
     assert!(!snapshot.linked);

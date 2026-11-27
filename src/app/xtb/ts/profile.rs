@@ -11,6 +11,7 @@ use reshiki::reactions::{self, Reaction, Role};
 use reshiki::scene;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Edit {
@@ -25,9 +26,10 @@ pub(in crate::app) fn edit_message(id: u64, edit: Edit) -> Message {
 }
 
 /// Hash the role chemistry and correspondence in drawing order. Atom
-/// positions within each side survive insertion ID remaps and map relabeling.
+/// positions and first-seen stereo group labels survive paste renumbering.
 pub(in crate::app) fn source_key(doc: &Document, reaction: &Reaction) -> String {
     let mut mapped = [HashMap::<u32, Vec<usize>>::new(), HashMap::new()];
+    let mut stereo_groups = HashMap::new();
     let roles = Role::ALL.map(|role| {
         let mut participants: Vec<_> = reaction
             .participants(role)
@@ -59,7 +61,13 @@ pub(in crate::app) fn source_key(doc: &Document, reaction: &Reaction) -> String 
             .into_iter()
             .map(|(atoms, coefficient)| {
                 let ids: Vec<_> = atoms.iter().map(|(_, atom)| atom.id).collect();
-                (coefficient, reshiki::science::baseline(doc, &ids))
+                let baseline =
+                    reshiki::science::baseline_with_stereo_groups(doc, &ids, |mut group| {
+                        let next = stereo_groups.len() as u32 + 1;
+                        group.number = *stereo_groups.entry(group).or_insert(next);
+                        group
+                    });
+                (coefficient, baseline)
             })
             .collect::<Vec<_>>()
     });
@@ -103,11 +111,15 @@ fn refresh(doc: &mut Document, fresh: EnergyProfile) {
     }
 }
 
-fn has_link(doc: &Document, arrow: u64) -> bool {
-    doc.graphics
+fn linked_reaction(doc: &Document, arrow: u64) -> Option<Reaction> {
+    let linked = doc
+        .graphics
         .iter()
         .filter_map(|g| g.energy_profile.as_deref())
-        .any(|profile| profile.linked && profile.source == Some(arrow))
+        .any(|profile| profile.linked && profile.source == Some(arrow));
+    linked
+        .then(|| reactions::preview(doc, arrow).ok())
+        .flatten()
 }
 
 impl App {
@@ -332,37 +344,37 @@ impl App {
         )
     }
 
-    fn xtb_linked_profile_update(
-        &self,
-        doc: &Document,
-        arrow: u64,
-        finishing_serial: Option<u64>,
-    ) -> Option<EnergyProfile> {
-        if !has_link(doc, arrow) {
-            return None;
-        }
-        let reaction = reactions::preview(doc, arrow).ok()?;
-        let answer = self.xtb_resolve_reaction(doc, arrow, finishing_serial);
-        if finishing_serial.is_some() && answer.batch.is_none() {
-            return None;
-        }
-        self.xtb_resolved_profile(doc, &reaction, answer)
-    }
-
     pub(in crate::app::xtb) fn xtb_refresh_reaction_profile(
         &self,
         doc: &mut Document,
         arrow: u64,
         finishing_serial: Option<u64>,
     ) {
-        if let Some(fresh) = self.xtb_linked_profile_update(doc, arrow, finishing_serial) {
+        let Some(reaction) = linked_reaction(doc, arrow) else {
+            return;
+        };
+        let answer = self.xtb_resolve_reaction(doc, arrow, finishing_serial);
+        // An unsuccessful search or refinement can leave the card on an older result.
+        let new_answer = if finishing_serial.is_some() {
+            answer.batch.is_some()
+        } else {
+            answer
+                .result
+                .zip(doc.science.results.last())
+                .is_some_and(|(shown, stored)| Arc::ptr_eq(shown, &stored.result))
+        };
+        if new_answer && let Some(fresh) = self.xtb_resolved_profile(doc, &reaction, answer) {
             refresh(doc, fresh);
         }
     }
 
     pub(super) fn xtb_follow_energy_batch_profile(&mut self, arrow: u64) {
-        if let Some(fresh) = self.xtb_linked_profile_update(&self.tab.doc, arrow, None) {
-            let before = self.tab.doc.clone();
+        let doc = &self.tab.doc;
+        if let Some(reaction) = linked_reaction(doc, arrow)
+            && let Some(batch) = self.xtb_resolve_reaction(doc, arrow, None).batch
+        {
+            let fresh = self.xtb_endpoint_energy_profile(doc, &reaction, batch);
+            let before = doc.clone();
             refresh(&mut self.tab.doc, fresh);
             if self.tab.doc != before {
                 let status = self.status.clone();

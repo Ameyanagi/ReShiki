@@ -194,69 +194,12 @@ pub struct CopyOutcome {
     pub notices: Vec<String>,
 }
 
-/// Identifies the live source drawing without making it part of a saved file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CopyOrigin {
-    session: [u64; 2],
-    document: u64,
-}
-impl CopyOrigin {
-    /// Document epochs are unique across the application's open tabs.
-    pub fn local(document: u64) -> Self {
-        static SESSION: std::sync::OnceLock<[u64; 2]> = std::sync::OnceLock::new();
-        let session = *SESSION.get_or_init(|| {
-            #[cfg(target_arch = "wasm32")]
-            {
-                [
-                    js_sys::Math::random().to_bits(),
-                    js_sys::Math::random().to_bits(),
-                ]
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                use std::hash::BuildHasher;
-                let random = std::collections::hash_map::RandomState::new();
-                [random.hash_one(0_u8), random.hash_one(1_u8)]
-            }
-        });
-        Self { session, document }
-    }
-}
-
-/// Native clipboard JSON remains a drawing older readers can open.
-pub fn native_json(document: &Document, origin: Option<CopyOrigin>) -> Result<Vec<u8>, String> {
-    #[derive(Serialize)]
-    struct Drawing<'a> {
-        #[serde(flatten)]
-        document: &'a Document,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        clipboard_origin: Option<CopyOrigin>,
-    }
-    serde_json::to_vec(&Drawing {
-        document,
-        clipboard_origin: origin,
-    })
-    .map_err(|e| e.to_string())
-}
-
-fn stamp_origin(representations: &mut [Representation], origin: CopyOrigin) -> Result<(), String> {
-    for item in representations
-        .iter_mut()
-        .filter(|item| item.kind == NATIVE)
-    {
-        let document = Document::from_json(&item.bytes()?)?;
-        *item = Representation::new(NATIVE, &native_json(&document, Some(origin))?);
-    }
-    Ok(())
-}
-
 #[derive(Debug, Clone)]
 pub struct PasteOutcome {
     pub document: Document,
     pub warnings: Vec<String>,
     /// ReShiki's own drawing data, whose palette colors can follow the target.
     pub native: bool,
-    pub origin: Option<CopyOrigin>,
 }
 impl PasteOutcome {
     pub fn native(document: Document) -> Self {
@@ -267,17 +210,7 @@ impl PasteOutcome {
     }
 
     pub fn from_native_json(bytes: &[u8]) -> Result<Self, String> {
-        #[derive(Deserialize)]
-        struct Origin {
-            clipboard_origin: Option<CopyOrigin>,
-        }
-        let origin = serde_json::from_slice::<Origin>(bytes)
-            .ok()
-            .and_then(|metadata| metadata.clipboard_origin);
-        Ok(Self {
-            origin,
-            ..Self::native(Document::from_json(bytes)?)
-        })
+        Document::from_json(bytes).map(Self::native)
     }
 }
 impl From<Document> for PasteOutcome {
@@ -286,7 +219,6 @@ impl From<Document> for PasteOutcome {
             document,
             warnings: Vec::new(),
             native: false,
-            origin: None,
         }
     }
 }
@@ -450,37 +382,11 @@ pub async fn copy(
     image_only: bool,
     pictures: Pictures,
 ) -> Result<CopyOutcome, String> {
-    copy_with_origin(engine, original, image_only, pictures, None).await
-}
-
-pub async fn copy_from(
-    engine: LocalEngine,
-    original: Document,
-    image_only: bool,
-    pictures: Pictures,
-    origin: CopyOrigin,
-) -> Result<CopyOutcome, String> {
-    copy_with_origin(engine, original, image_only, pictures, Some(origin)).await
-}
-
-async fn copy_with_origin(
-    engine: LocalEngine,
-    original: Document,
-    image_only: bool,
-    pictures: Pictures,
-    origin: Option<CopyOrigin>,
-) -> Result<CopyOutcome, String> {
-    let origin = origin.filter(|_| {
-        original
-            .graphics
-            .iter()
-            .any(|g| g.energy_profile.as_deref().is_some_and(|p| p.linked))
-    });
     #[cfg(target_arch = "wasm32")]
     let prepared = worker::prepare(&original, image_only, pictures).await?;
     #[cfg(not(target_arch = "wasm32"))]
     let prepared = None;
-    let (outcome, mut representations) = match prepared {
+    let (outcome, representations) = match prepared {
         Some(prepared) => prepared,
         None => {
             prepare_copy_with_limit(
@@ -494,9 +400,6 @@ async fn copy_with_origin(
             .await?
         }
     };
-    if let Some(origin) = origin {
-        stamp_origin(&mut representations, origin)?;
-    }
     // Office's embedded object is the drawing, so it follows the switch too.
     // It needs the Office preview, which a see-through or glowing drawing
     // cannot have; that copy is written without the embedded object.
@@ -1149,7 +1052,6 @@ async fn import_candidate(
                                 document,
                                 warnings: vec![RESTORED_DRAWING_NOTICE.into()],
                                 native: true,
-                                origin: None,
                             }));
                         }
                         Some(Err(error)) => Some(format!(
@@ -1186,7 +1088,6 @@ async fn import_candidate(
                     document,
                     warnings: vec![RESTORED_DRAWING_NOTICE.into()],
                     native: true,
-                    origin: None,
                 })
                 .map(Some)
                 .map_err(|error| {
@@ -1243,7 +1144,6 @@ async fn import_candidate(
             document: doc,
             warnings: response.warnings,
             native: false,
-            origin: None,
         }))
     }
     .await;

@@ -1,6 +1,6 @@
 use super::{App, Document, InspectorTab, Job, Message, Point, Tool, editing, input_request};
 use iced::{Subscription, Task, time::Instant, window};
-use reshiki::clipboard::{CopyFormat, CopyOrigin, CopyOutcome, PasteOutcome, PreparedCopy};
+use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
 
 // Plain text goes through iced's clipboard, or the page's in the browser,
 // where reshiki::clipboard otherwise copies and pastes every format.
@@ -469,24 +469,7 @@ impl App {
     }
 
     pub(super) fn native_copy_snapshot(&self) -> Document {
-        let mut snapshot =
-            reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
-        // A profile copied on its own can still follow its arrow when pasted
-        // back here. Only the native clipboard origin authorizes that link.
-        for graphic in &mut snapshot.graphics {
-            if let Some(profile) = &mut graphic.energy_profile
-                && let Some(original) = self
-                    .tab
-                    .doc
-                    .graphics
-                    .iter()
-                    .find(|original| original.id == graphic.id)
-                    .and_then(|original| original.energy_profile.as_deref())
-            {
-                profile.source = original.source;
-                profile.linked = original.linked;
-            }
-        }
+        let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
         self.tab.xtb.orbitals.save_snapshot(snapshot)
     }
 
@@ -527,12 +510,11 @@ impl App {
         self.error = false;
         self.status = "Preparing clipboard…".into();
         Task::perform(
-            reshiki::clipboard::copy_from(
+            reshiki::clipboard::copy(
                 self.engine.clone(),
                 snapshot,
                 image_only,
                 self.copy_pictures(once),
-                CopyOrigin::local(epoch),
             ),
             move |result| Message::ClipboardWritten {
                 epoch,
@@ -635,14 +617,8 @@ impl App {
             self.status = "Drawing changed during paste · Paste again".into();
             return;
         }
-        let same_document = result.as_ref().is_ok_and(|outcome| {
-            outcome.native && outcome.origin == Some(CopyOrigin::local(self.tab.file_epoch))
-        });
         let outcome = match result.and_then(|mut outcome| {
             outcome.document.validate()?;
-            if !same_document {
-                reshiki::payload::unlink_energy_profiles(&mut outcome.document);
-            }
             normalize_pasted_captions(&mut outcome.document);
             Ok(outcome)
         }) {
@@ -663,7 +639,7 @@ impl App {
             part.atom_labels = self.tab.doc.atom_labels.clone();
             part
         };
-        if !self.append_pasted_in_document(&part, same_document) {
+        if !self.append_pasted(&part) {
             self.status = "Could not insert the clipboard drawing".into();
             self.error = true;
             return;
@@ -696,10 +672,6 @@ impl App {
     /// such as a cleared one, the part lands in the panel's middle. The view
     /// pans if the pasted items are clipped and keeps its zoom.
     pub(super) fn append_pasted(&mut self, part: &Document) -> bool {
-        self.append_pasted_in_document(part, false)
-    }
-
-    fn append_pasted_in_document(&mut self, part: &Document, same_document: bool) -> bool {
         let before = self.tab.doc.clone();
         let center = editing::center(part, &part.all_ids());
         let view = self.guides.paper(iced::Rectangle::with_size(self.viewport));
@@ -744,24 +716,6 @@ impl App {
             }
         }
         let pasted = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
-        if same_document {
-            // Insertion preserves graphic order. Resolve external links
-            // against the arrows that existed before the insertion.
-            let inserted = self.tab.doc.graphics.iter_mut().skip(before.graphics.len());
-            for (original, graphic) in part.graphics.iter().zip(inserted) {
-                if let Some(source) = original.energy_profile.as_deref().filter(|p| p.linked)
-                    && let Some(profile) = graphic.energy_profile.as_deref_mut()
-                    && !source
-                        .source
-                        .is_some_and(|id| part.arrows.iter().any(|a| a.id == id))
-                {
-                    profile.source = source
-                        .source
-                        .filter(|id| before.arrows.iter().any(|a| a.id == *id));
-                    profile.linked = profile.source.is_some();
-                }
-            }
-        }
         if pasted.is_empty() || self.tab.doc.validate().is_err() {
             self.tab.doc = before;
             return false;
@@ -804,17 +758,10 @@ impl App {
             return Task::none();
         }
         let selection = self.native_copy_snapshot();
-        let Ok(json) = reshiki::clipboard::native_json(
-            &selection.current(),
-            Some(CopyOrigin::local(self.tab.file_epoch)),
-        ) else {
+        let Ok(json) = serde_json::to_string(&selection.current()) else {
             return Task::none();
         };
-        let text = format!(
-            "{}{}",
-            editing::CLIPBOARD_PREFIX,
-            String::from_utf8_lossy(&json)
-        );
+        let text = format!("{}{json}", editing::CLIPBOARD_PREFIX);
         if cut {
             let before = self.tab.doc.clone();
             let ids = reshiki::shape_text::with_texts(
@@ -858,18 +805,13 @@ impl App {
             if let Some(json) = editing::clipboard_json(&contents) {
                 match PasteOutcome::from_native_json(json.as_bytes()) {
                     Ok(outcome) => {
-                        let same_document =
-                            outcome.origin == Some(CopyOrigin::local(self.tab.file_epoch));
                         let mut part = outcome.document;
-                        if !same_document {
-                            reshiki::payload::unlink_energy_profiles(&mut part);
-                        }
                         normalize_pasted_captions(&mut part);
                         let part = reshiki::canvas_theme::for_native_paste(
                             part,
                             self.tab.doc.canvas_theme,
                         );
-                        self.append_pasted_in_document(&part, same_document);
+                        self.append_pasted(&part);
                         self.tool = Tool::Select;
                         self.status = "Selection pasted".into();
                     }
