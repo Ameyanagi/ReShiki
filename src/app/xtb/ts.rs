@@ -406,6 +406,12 @@ fn saved_search_stale(doc: &Document, search: &TransitionStateRun) -> bool {
         || context.product_chemistry != endpoint_chemistry(doc, reaction, Role::Product)
 }
 
+pub(super) fn placement_arrow(doc: &Document, result: &CalcResult) -> Option<u64> {
+    let search = saved_search(result)?;
+    let arrow = search.arrow?;
+    (!saved_search_stale(doc, search)).then_some(arrow)
+}
+
 impl App {
     pub(super) fn xtb_ts_search_stale(&self, result: &Arc<CalcResult>) -> bool {
         let Some(search) = saved_search(result) else {
@@ -492,6 +498,15 @@ pub(super) fn unique_matching_plan(doc: &Document, atoms: &[Option<u64>]) -> Opt
     let mut candidates = matching_plans(doc, atoms);
     let candidate = candidates.next()?;
     candidates.next().is_none().then_some(candidate)
+}
+
+/// Keep the starting species in the scheme while showing the path geometry
+/// in a separate frame. The preview model keeps its index for playback.
+pub(super) fn show_path_model(original: &Document, doc: &mut Document, index: usize, arrow: u64) {
+    if let Some(model) = original.models.get(index) {
+        doc.models.push(model.clone());
+        reshiki::models3d::place_reaction_row(doc, arrow, Some(index));
+    }
 }
 
 /// Copy a NEB path image's coordinates, retaining the starting topology.
@@ -763,6 +778,7 @@ impl App {
             keep_full: false,
             start: None,
             search: None,
+            reaction: Some(arrow),
             ts: Some(Request {
                 arrow,
                 free_energy,
@@ -965,6 +981,9 @@ impl App {
                     notes: vec![],
                     info,
                     attempt: Some(attempt),
+                    generated: run.generated.take(),
+                    energy_serial: None,
+                    reaction_epoch: Some(run.revision.0),
                 };
                 self.tab.xtb.run = None;
                 self.xtb_store_with_session(pending, false, Some(session));
