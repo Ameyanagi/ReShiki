@@ -37,6 +37,8 @@ ROOT = Path(__file__).resolve().parents[1]
 XTB_SYSTEMS = {"macos", "linux"}
 XTB_FIXTURES = ROOT / "tests/fixtures/xtb"
 XTB_HEADER = struct.Struct("<8sHHI")
+# Must match crates/xtb-worker/src/protocol.rs VERSION.
+XTB_PROTOCOL = 2
 XTB_VERIFY_TIMEOUT_SECONDS = 60
 
 
@@ -236,13 +238,17 @@ def verify_xtb_worker(binary, metadata):
 
         def request(request_id, op, **fields):
             body = json.dumps(dict(id=request_id, op=op, **fields)).encode()
-            stdin.write(XTB_HEADER.pack(b"RSHXTBWK", 1, 0, len(body)) + body)
+            stdin.write(XTB_HEADER.pack(b"RSHXTBWK", XTB_PROTOCOL, 0, len(body)) + body)
             stdin.flush()
             header = stdout.read(XTB_HEADER.size)
             if len(header) != XTB_HEADER.size:
                 raise ValueError(f"xTB worker returned an incomplete {op} header")
             magic, protocol, kind, length = XTB_HEADER.unpack(header)
-            if (magic, protocol, kind) != (b"RSHXTBWK", 1, 0) or length > 4 * 1024 * 1024:
+            if (magic, protocol, kind) != (
+                b"RSHXTBWK",
+                XTB_PROTOCOL,
+                0,
+            ) or length > 4 * 1024 * 1024:
                 raise ValueError(f"xTB worker returned an incompatible {op} frame")
             body = stdout.read(length)
             if len(body) != length:
@@ -254,7 +260,7 @@ def verify_xtb_worker(binary, metadata):
 
         def evaluate():
             hello = request(1, "hello")
-            if hello["protocol"] != 1:
+            if hello["protocol"] != XTB_PROTOCOL:
                 raise ValueError(f"xTB worker reported an incompatible protocol: {hello}")
             if xtb["included"]:
                 engine = hello["engine"] or {}
@@ -307,7 +313,7 @@ def verify_xtb_worker(binary, metadata):
                     raise ValueError(f"xTB worker unexpectedly included an engine: {hello}")
                 # The stub exits on EOF because it has no session to close.
                 stdin.close()
-                summary = "xTB worker protocol 1 verified with no engine."
+                summary = f"xTB worker protocol {XTB_PROTOCOL} verified with no engine."
 
             if stdout.read(1):
                 raise ValueError("xTB worker returned unexpected data after the last response")
