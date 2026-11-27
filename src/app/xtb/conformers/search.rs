@@ -320,7 +320,9 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         .search
         .as_ref()
         .ok_or_else(|| state::Failure::Other("not a conformer search".into()))?;
-    pending_for(launch, &run.config, &live.config, run.keep_full, found)
+    let mut pending = pending_for(launch, &run.config, &live.config, run.keep_full, found)?;
+    pending.notes.extend(run.model_notes.iter().cloned());
+    Ok(pending)
 }
 
 /// The result to store from a finished search: the lowest conformer is its

@@ -27,11 +27,11 @@ pub(super) use conformers::superposed;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
-mod run;
+pub(super) mod run;
 mod selection;
 mod source;
 pub(super) use source::Source;
-mod state;
+pub(super) mod state;
 mod tone;
 pub(super) mod ts;
 pub(crate) mod vibrations;
@@ -148,6 +148,8 @@ pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
     selection_hint: Option<String>,
+    /// The generation whose notes belong to this run or its last outcome.
+    model_notes_source: Option<(u64, u64)>,
     serial: u64,
     pub(super) palette: palette::Palette,
     conformer_stereo: std::cell::RefCell<conformers::CardStereo>,
@@ -218,6 +220,8 @@ pub(crate) struct Run {
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
     model: Option<super::models3d::Key>,
+    /// Starting-model cautions and refinement details retained by the card.
+    model_notes: Vec<String>,
     generated: Option<super::models3d::CalculationModel>,
     reaction: Option<u64>,
     started: iced::time::Instant,
@@ -290,6 +294,11 @@ impl Failed {
 
     /// The error card's sentence and its second line.
     fn explain(&self, retry: bool) -> (String, String) {
+        if let state::Failure::Other(message) = self.failure.reason()
+            && message.starts_with("xTB not started")
+        {
+            return (message.clone(), String::new());
+        }
         let (title, detail) = self.failure.explain(self.method(), &self.numbers);
         if retry && let Some(n) = self.scf_iteration_limit() {
             return (
@@ -383,7 +392,10 @@ struct Attempt {
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
-    if matches!(message, Message::Xtb(Action::TsEvent(..))) {
+    if matches!(
+        message,
+        Message::Xtb(Action::TsEvent(..)) | Message::Models3d(super::models3d::Action::Refined(..))
+    ) {
         return true;
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -802,6 +814,7 @@ impl App {
         }
         self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
         self.tab.xtb.outcome = None;
+        self.tab.xtb.model_notes_source = None;
         self.tab.xtb.run = Some(Run {
             serial: self.tab.xtb.serial,
             atoms: request.atoms,
@@ -817,6 +830,7 @@ impl App {
             start: request.start,
             launch: None,
             model: None,
+            model_notes: Vec::new(),
             generated: None,
             reaction: request.reaction,
             started: iced::time::Instant::now(),
@@ -897,16 +911,30 @@ impl App {
                     )));
                     return Task::none();
                 };
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                let preserve_model_status = self
+                    .tab
+                    .model_job
+                    .as_ref()
+                    .is_some_and(|job| job.is_rough());
+                #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
+                let preserve_model_status = false;
                 if let Some(run) = &mut self.tab.xtb.run {
                     run.model = Some(key);
                     run.started = iced::time::Instant::now();
-                    self.status = run.status();
+                    if !preserve_model_status {
+                        self.status = run.status();
+                    }
                 }
                 self.error = false;
                 task
             }
             Err(error @ (science::ScienceError::NoModel | science::ScienceError::StaleModel)) => {
-                self.xtb_fail(state::Failure::Other(format!("xTB not started: {error}")));
+                let message = self.model_failure_message(&run.atoms).map_or_else(
+                    || format!("xTB not started: {error}"),
+                    |message| format!("xTB not started · {message}"),
+                );
+                self.xtb_fail(state::Failure::Other(message));
                 Task::none()
             }
             Err(error) => {
@@ -928,19 +956,64 @@ impl App {
         }
     }
 
+    /// Keep the starting model's explanation with the calculation it belongs to.
+    pub(super) fn xtb_model_notes(
+        &mut self,
+        key: super::models3d::Key,
+        notes: impl IntoIterator<Item = String>,
+    ) {
+        if let Some(run) = &mut self.tab.xtb.run
+            && run.model == Some(key)
+        {
+            run.model_notes.extend(notes);
+            self.tab.xtb.model_notes_source = Some((self.tab.file_epoch, self.tab.model_serial));
+        }
+    }
+
+    /// An asynchronous closed-shell parent name also belongs in the card's notes.
+    pub(super) fn xtb_model_parent_named(&mut self, model: (u64, u64), unnamed: &str, name: &str) {
+        if self.tab.xtb.model_notes_source != Some(model) || model.0 != self.tab.file_epoch {
+            return;
+        }
+        let replace = |notes: &mut Vec<String>| {
+            for note in notes {
+                *note = note.replacen(unnamed, name, 1);
+            }
+        };
+        if let Some(run) = &mut self.tab.xtb.run {
+            replace(&mut run.model_notes);
+        }
+        match &mut self.tab.xtb.outcome {
+            Some(Outcome::Done { notes, .. }) => replace(notes),
+            Some(Outcome::Review(review)) => replace(&mut review.pending.notes),
+            _ => {}
+        }
+    }
+
     /// The model generation `key` ended, in any way (done, failed, dropped,
     /// canceled or replaced): a run waiting for it starts or stops.
-    pub(super) fn xtb_model_finished(&mut self, key: super::models3d::Key) -> Task<Message> {
+    pub(super) fn xtb_model_finished(
+        &mut self,
+        key: super::models3d::Key,
+        canceled: bool,
+    ) -> Task<Message> {
         let waiting = self
             .tab
             .xtb
             .run
             .as_ref()
             .is_some_and(|run| run.launch.is_none() && run.model == Some(key));
-        if waiting {
-            return self.xtb_launch();
+        if !waiting {
+            return Task::none();
         }
-        Task::none()
+        if canceled {
+            self.xtb_fail(state::Failure::Other(
+                "xTB not started · 3D model canceled".into(),
+            ));
+            Task::none()
+        } else {
+            self.xtb_launch()
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -1137,6 +1210,17 @@ impl App {
     /// Cancel stops the worker (or the model generation) and applies nothing.
     pub(super) fn xtb_cancel(&mut self) -> Task<Message> {
         if self.xtb_search_stop() {
+            return Task::none();
+        }
+        let waiting_for_model = self.tab.xtb.run.as_ref().is_some_and(|run| {
+            run.launch.is_none()
+                && self
+                    .tab
+                    .model_job
+                    .as_ref()
+                    .is_some_and(|job| run.model == Some(job.key))
+        });
+        if waiting_for_model && self.cancel_model_generation() {
             return Task::none();
         }
         let reaction_energy = self.tab.xtb.energy_state.stop("Reaction energy canceled");
@@ -1425,7 +1509,7 @@ impl Run {
 
 /// The worker job for `config` on `frame`, holding frame atoms `fixed`.
 #[cfg(not(target_arch = "wasm32"))]
-fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
+pub(super) fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
     use reshiki_xtb_jobs::{method, run::worker_method};
     use reshiki_xtb_worker::protocol::{Conventions, ScfSettings, SolventModel};
 
@@ -1627,7 +1711,7 @@ fn pending(run: &mut Run, report: &run::Report) -> Result<Pending, state::Failur
     result.status = status;
     result.trajectory = trajectory;
     result.keep_full = run.keep_full;
-    let mut notes = Vec::new();
+    let mut notes = run.model_notes.clone();
     if computed.near_degenerate {
         notes.push(state::NEAR_DEGENERATE.into());
     }
@@ -1659,8 +1743,10 @@ fn pending(run: &mut Run, report: &run::Report) -> Result<Pending, state::Failur
     })
 }
 
+#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "xtb")))]
+pub(super) use run::Event as RunEvent;
 #[cfg(test)]
-pub(super) use run::{Event as RunEvent, Report as RunReport, example_computed, example_engine};
+pub(super) use run::{Report as RunReport, example_computed, example_engine};
 
 #[cfg(test)]
 impl App {

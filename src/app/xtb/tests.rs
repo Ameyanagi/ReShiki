@@ -454,6 +454,96 @@ fn a_worker_failure_applies_nothing() {
 }
 
 #[test]
+fn a_starting_model_failure_keeps_its_reason_in_the_calculate_card() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let oxygen = app.tab.doc.add_atom("O", Point::default());
+    app.tab.selected = vec![oxygen];
+    send(&mut app, Action::Run);
+    let key = app.tab.model_job.as_ref().expect("a model in flight").key;
+
+    let _ = app.update(Message::Models3d(crate::app::models3d::Action::Generated(
+        key,
+        Err("conformer embedding failed".into()),
+    )));
+
+    assert!(!app.xtb_running());
+    assert!(app.tab.doc.models.is_empty());
+    assert!(app.tab.doc.science.results.is_empty());
+    let Some(Outcome::Failed(failed)) = app.xtb_outcome() else {
+        panic!("the Calculate card should retain the model failure");
+    };
+    assert_eq!(
+        failed.explain(app.xtb_can_retry(failed)).0,
+        "xTB not started · Can't build a starting 3D structure: conformer embedding failed"
+    );
+}
+
+#[test]
+fn a_uff_starting_model_note_stays_in_the_finished_calculate_card() {
+    use reshiki::geometry::{Conformer, ForceField, Optimized};
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let oxygen = app.tab.doc.add_atom("O", Point::default());
+    app.tab.selected = vec![oxygen];
+    send(&mut app, Action::Run);
+    let key = app.tab.model_job.as_ref().expect("a model in flight").key;
+    let generated = Optimized {
+        conformer: Conformer {
+            positions: START.map(|[x, y, z]| Point3 { x, y, z }).to_vec(),
+            original_atom_count: 1,
+            hydrogen_parents: vec![0, 0],
+        },
+        initial_energy: 1.,
+        energy: 1.,
+        gradient: None,
+        converged: true,
+        iterations: 1,
+        force_field: ForceField::Uff,
+        diagnostics: vec![],
+        approximations: vec![],
+        ensemble: vec![],
+    };
+    let _ = app.update(Message::Models3d(crate::app::models3d::Action::Generated(
+        key,
+        Ok(Arc::new(generated)),
+    )));
+    #[cfg(feature = "xtb")]
+    if app.tab.model_job.is_some() {
+        let _ = app.update(Message::Models3d(crate::app::models3d::Action::Refined(
+            key,
+            RunEvent::Done(Err(state::Failure::Other("test refinement failure".into()))),
+        )));
+    }
+    assert!(
+        app.tab
+            .xtb
+            .run
+            .as_ref()
+            .is_some_and(|run| run.launch.is_some()),
+        "xTB starts from the retained starting model: {}",
+        app.status
+    );
+
+    event(&mut app, optimized(&START, &MOVED));
+
+    let Some(Outcome::Done { notes, .. }) = app.xtb_outcome() else {
+        panic!("the Calculate card should show the finished calculation");
+    };
+    assert!(
+        notes.iter().any(|note| note.contains("UFF")),
+        "the UFF starting-model explanation survives xTB completion: {notes:?}"
+    );
+    #[cfg(not(feature = "xtb"))]
+    assert!(
+        notes
+            .iter()
+            .any(|note| { note == "UFF used: no MMFF94s parameters for this molecule" })
+    );
+}
+
+#[test]
 fn an_scf_failure_retains_the_request_for_retry() {
     let (mut app, o) = water(CalcTask::Optimize);
     send(&mut app, Action::Cancel);
@@ -580,7 +670,37 @@ fn choosing_2d_while_the_model_is_made_stops_the_run() {
     )));
     assert!(app.tab.model_job.is_none());
     assert!(!app.xtb_running());
-    assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Failed(_))));
+    let Some(Outcome::Failed(failed)) = app.xtb_outcome() else {
+        panic!("the Calculate card should explain the canceled model");
+    };
+    assert_eq!(
+        failed.explain(app.xtb_can_retry(failed)).0,
+        "xTB not started · 3D model canceled"
+    );
+}
+
+#[test]
+fn canceling_the_calculate_card_while_waiting_for_a_model_explains_why_it_did_not_start() {
+    for cancel in [Message::Xtb(Action::Cancel), Message::Escape] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let oxygen = app.tab.doc.add_atom("O", Point::default());
+        app.tab.selected = vec![oxygen];
+        send(&mut app, Action::Run);
+        assert!(app.tab.model_job.is_some());
+
+        let _ = app.update(cancel);
+
+        assert!(app.tab.model_job.is_none());
+        assert!(!app.xtb_running());
+        let Some(Outcome::Failed(failed)) = app.xtb_outcome() else {
+            panic!("the Calculate card should explain the canceled model");
+        };
+        assert_eq!(
+            failed.explain(app.xtb_can_retry(failed)).0,
+            "xTB not started · 3D model canceled"
+        );
+    }
 }
 
 #[test]

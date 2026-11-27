@@ -1017,7 +1017,7 @@ impl App {
                     frames,
                     result,
                     line,
-                    notes: vec![],
+                    notes: std::mem::take(&mut run.model_notes),
                     info,
                     attempt: Some(attempt),
                     generated: run.generated.take(),
