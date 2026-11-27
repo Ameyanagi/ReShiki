@@ -1,5 +1,5 @@
 //! Predict controls and results for a single selected reaction arrow.
-use super::{Action as TsAction, Live, StepState, review, view};
+use super::{Action as TsAction, Live, StepState, energy::EndpointResult, review, view};
 use crate::app::workspace::{
     accessible_checkbox, accessible_command, horizontal_line, hover_hint, muted_text,
 };
@@ -121,36 +121,22 @@ impl ReactionLabel {
         self.line(false)
     }
 
+    pub(super) fn endpoint_names(&self) -> [String; 2] {
+        [
+            species_line(&self.reactants, false, "Reactants"),
+            species_line(&self.products, false, "Products"),
+        ]
+    }
+
     fn formula(&self) -> String {
         self.line(true)
     }
 
     fn line(&self, formula: bool) -> String {
-        let side = |species: &[SpeciesLabel], empty: &str| {
-            if species.is_empty() {
-                return empty.to_owned();
-            }
-            species
-                .iter()
-                .map(|species| {
-                    let name = if formula {
-                        &species.formula
-                    } else {
-                        &species.name
-                    };
-                    if species.coefficient == 1 {
-                        name.clone()
-                    } else {
-                        format!("{} {name}", species.coefficient)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" + ")
-        };
         format!(
             "{} → {}",
-            side(&self.reactants, "Reactants"),
-            side(&self.products, "Products")
+            species_line(&self.reactants, formula, "Reactants"),
+            species_line(&self.products, formula, "Products")
         )
     }
 
@@ -163,6 +149,28 @@ impl ReactionLabel {
             .first()
             .map(|species| species.formula.as_str())
     }
+}
+
+fn species_line(species: &[SpeciesLabel], formula: bool, empty: &str) -> String {
+    if species.is_empty() {
+        return empty.to_owned();
+    }
+    species
+        .iter()
+        .map(|species| {
+            let name = if formula {
+                &species.formula
+            } else {
+                &species.name
+            };
+            if species.coefficient == 1 {
+                name.clone()
+            } else {
+                format!("{} {name}", species.coefficient)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 fn drawn_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
@@ -344,6 +352,25 @@ pub(in crate::app::xtb) enum ArrowResult<'a> {
     Found(&'a Arc<CalcResult>),
     Ambiguous,
     Missing,
+}
+
+impl<'a> ArrowResult<'a> {
+    fn found(self) -> Option<&'a Arc<CalcResult>> {
+        match self {
+            Self::Found(result) => Some(result),
+            _ => None,
+        }
+    }
+}
+
+pub(super) struct ReactionAnswer<'a> {
+    pub(super) result: Option<&'a Arc<CalcResult>>,
+    pub(super) stale: bool,
+    pub(super) presentation: Option<view::Presentation>,
+    pub(super) endpoint_energy: Option<f64>,
+    pub(super) batch: Option<EndpointResult<'a>>,
+    batch_refusal: Option<&'a str>,
+    linked: Option<[&'a Arc<CalcResult>; 2]>,
 }
 
 impl App {
@@ -556,7 +583,10 @@ impl App {
 
     /// Follow this arrow's TS result even when another calculation is shown.
     pub(in crate::app::xtb) fn xtb_ts_card_result(&self, arrow: u64) -> ArrowResult<'_> {
-        let doc = &self.tab.doc;
+        self.xtb_ts_arrow_result(&self.tab.doc, arrow)
+    }
+
+    fn xtb_ts_arrow_result<'a>(&self, doc: &'a Document, arrow: u64) -> ArrowResult<'a> {
         let mut ambiguous = false;
         for stored in doc.science.results.iter().rev() {
             let result = &stored.result;
@@ -598,13 +628,66 @@ impl App {
 
     /// The retained source remains the card's answer after an unsuccessful refine.
     pub(in crate::app::xtb) fn xtb_ts_card_display_result(&self, arrow: u64) -> ArrowResult<'_> {
-        match self.xtb_ts_card_result(arrow) {
-            ArrowResult::Found(result) => ArrowResult::Found(
-                self.xtb_ts_linked_pair(result)
-                    .filter(|pair| !view::presentation(pair[1], None).reliable())
-                    .map_or(result, |pair| pair[0]),
-            ),
-            other => other,
+        self.xtb_ts_answer(&self.tab.doc, arrow).0
+    }
+
+    fn xtb_ts_answer<'a>(
+        &self,
+        doc: &'a Document,
+        arrow: u64,
+    ) -> (ArrowResult<'a>, Option<[&'a Arc<CalcResult>; 2]>) {
+        let latest = self.xtb_ts_arrow_result(doc, arrow);
+        let ArrowResult::Found(result) = latest else {
+            return (latest, None);
+        };
+        let linked = super::refine::linked_pair(doc, result).filter(|pair| {
+            pair.iter().all(|result| {
+                doc.science
+                    .results
+                    .iter()
+                    .find(|stored| Arc::ptr_eq(&stored.result, result))
+                    .and_then(|stored| doc.science.attachment(stored.attachment))
+                    .is_some_and(|link| super::bound_arrow(doc, arrow, &link.atoms).is_some())
+            })
+        });
+        let answer = linked
+            .filter(|pair| !view::presentation(pair[1], None).reliable())
+            .map_or(latest, |pair| ArrowResult::Found(pair[0]));
+        (answer, linked)
+    }
+
+    pub(super) fn xtb_resolve_reaction<'a>(
+        &'a self,
+        doc: &'a Document,
+        arrow: u64,
+        finishing_serial: Option<u64>,
+    ) -> ReactionAnswer<'a> {
+        let (answer, linked) = self.xtb_ts_answer(doc, arrow);
+        let result = answer.found();
+        let stale = result.is_some_and(|result| self.xtb_ts_result_stale_in(doc, result));
+        let presentation =
+            result.map(|result| view::presentation(result, self.xtb_ts_refinement_session(result)));
+        let endpoint_energy = result
+            .zip(presentation.as_ref())
+            .filter(|(result, view)| {
+                view.reliable()
+                    || super::saved_search(result).is_none_or(|s| s.refined_from.is_none())
+            })
+            .and_then(|(result, _)| view::reaction_energy_kcal(result));
+        let (batch, batch_refusal) = self.xtb_endpoint_result(
+            doc,
+            arrow,
+            result.filter(|_| endpoint_energy.is_some()),
+            finishing_serial,
+        );
+        ReactionAnswer {
+            result,
+            stale,
+            presentation,
+            endpoint_energy,
+            batch,
+            batch_refusal,
+            linked,
         }
     }
 
@@ -718,20 +801,16 @@ impl App {
         let state = &self.tab.xtb.ts_card;
         let label = self.xtb_reaction_label(arrow);
         let plan = review::scheme_plan(doc, arrow);
-        let latest_result = match self.xtb_ts_card_result(arrow) {
-            ArrowResult::Found(result) => Some(result),
-            _ => None,
-        };
-        let linked = latest_result.and_then(|result| self.xtb_ts_linked_pair(result));
-        // A failed g-xTB refine retains the source's verified answer.
-        let result = linked
-            .filter(|pair| !view::presentation(pair[1], None).reliable())
-            .map(|pair| pair[0])
-            .or(latest_result);
-        let stale = result.is_some_and(|result| self.xtb_ts_result_stale(result));
-        let endpoint_energy = result.and_then(|result| view::reaction_energy_kcal(result));
-        let (batch, batch_refusal) =
-            self.xtb_energy_result(arrow, result.filter(|_| endpoint_energy.is_some()));
+        let ReactionAnswer {
+            result,
+            stale,
+            presentation,
+            endpoint_energy,
+            batch,
+            batch_refusal,
+            linked,
+        } = self.xtb_resolve_reaction(doc, arrow, None);
+        let batch = batch.map(|batch| batch.totals);
         let barrier_refusal = state
             .barrier
             .then(|| {
@@ -742,8 +821,6 @@ impl App {
             })
             .flatten();
         let search = result.and_then(|result| super::saved_search(result));
-        let presentation =
-            result.map(|result| view::presentation(result, self.xtb_ts_refinement_session(result)));
         let failed = match &self.tab.xtb.outcome {
             Some(Outcome::Failed(failed))
                 if failed.ts().is_some_and(|request| request.arrow == arrow) =>
@@ -860,6 +937,21 @@ impl App {
                 .spacing(12),
             )
         };
+        if reaction.is_some() {
+            content = content.push(
+                accessible_command(
+                    "xtb-ts-place-energy-profile",
+                    "Place energy profile",
+                    "Place energy profile",
+                )
+                .style(crate::appearance::secondary)
+                .on_press_maybe(
+                    (idle && (batch.is_some() || !stale)).then_some(Message::Xtb(XtbAction::Ts(
+                        TsAction::PlaceEnergyProfile(Some(arrow)),
+                    ))),
+                ),
+            );
+        }
         if let Some(failed) = refine_failed {
             let (reason, detail) = failed.explain(self.xtb_can_retry(failed));
             content = content

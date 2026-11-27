@@ -398,7 +398,8 @@ fn legacy_scheme_bottom(
         .reduce(f32::max)
 }
 
-fn zero_order_obstacles(doc: &Document) -> Vec<InkBox> {
+/// Bounds of visible zero-order bonds, including spans between molecules.
+pub fn zero_order_obstacles(doc: &Document) -> Vec<InkBox> {
     if !doc.bonds.iter().any(|bond| bond.order == 0) {
         return Vec::new();
     }

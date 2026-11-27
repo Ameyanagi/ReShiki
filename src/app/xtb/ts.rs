@@ -26,6 +26,7 @@ pub(in crate::app) mod export;
 pub(in crate::app) mod irc;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod job;
+pub(in crate::app) mod profile;
 mod refine;
 pub(in crate::app) mod review;
 pub(in crate::app) mod thumbnails;
@@ -37,6 +38,8 @@ pub(super) use job::Event;
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Card(card::Action),
+    PlaceEnergyProfile(Option<u64>),
+    EditEnergyProfile(u64, profile::Edit),
     Calculate(u64),
     RefineGxtb(u64, Arc<CalcResult>),
     Review(review::Mode, Option<u64>),
@@ -438,13 +441,19 @@ pub(super) fn placement_arrow(doc: &Document, result: &CalcResult) -> Option<u64
 
 impl App {
     pub(super) fn xtb_ts_search_stale(&self, result: &Arc<CalcResult>) -> bool {
+        self.xtb_ts_search_stale_in(&self.tab.doc, result)
+    }
+
+    fn xtb_ts_search_stale_in(&self, doc: &Document, result: &Arc<CalcResult>) -> bool {
         let Some(search) = saved_search(result) else {
             return true;
         };
-        let doc = &self.tab.doc;
-        match self.tab.xtb.ts_sessions.get(result) {
-            Some(session) => session.stale(doc, search, (self.tab.file_epoch, self.tab.revision)),
-            None => saved_search_stale(doc, search),
+        if std::ptr::eq(doc, &self.tab.doc)
+            && let Some(session) = self.tab.xtb.ts_sessions.get(result)
+        {
+            session.stale(doc, search, (self.tab.file_epoch, self.tab.revision))
+        } else {
+            saved_search_stale(doc, search)
         }
     }
 
@@ -603,6 +612,14 @@ impl App {
     pub(super) fn xtb_ts_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Card(action) => self.xtb_ts_card_action(action),
+            Action::PlaceEnergyProfile(arrow) => {
+                self.xtb_place_energy_profile(arrow);
+                Task::none()
+            }
+            Action::EditEnergyProfile(id, edit) => {
+                self.xtb_edit_energy_profile(id, edit);
+                Task::none()
+            }
             Action::Calculate(arrow) => self.xtb_calculate_reaction(arrow),
             Action::RefineGxtb(arrow, source) => self.xtb_refine_gxtb(arrow, &source),
             Action::Review(mode, arrow) => self.xtb_review_open(mode, arrow),
@@ -687,14 +704,17 @@ impl App {
     }
 
     fn xtb_ts_result_stale(&self, result: &Arc<CalcResult>) -> bool {
-        let doc = &self.tab.doc;
+        self.xtb_ts_result_stale_in(&self.tab.doc, result)
+    }
+
+    fn xtb_ts_result_stale_in(&self, doc: &Document, result: &Arc<CalcResult>) -> bool {
         doc.science
             .results
             .iter()
             .find(|stored| Arc::ptr_eq(result, &stored.result))
             .and_then(|stored| doc.science.attachment(stored.attachment))
             .is_none_or(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
-            || self.xtb_ts_search_stale(result)
+            || self.xtb_ts_search_stale_in(doc, result)
     }
 
     fn xtb_ts_refinement_available(&self, arrow: u64) -> bool {

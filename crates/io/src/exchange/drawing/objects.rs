@@ -642,8 +642,11 @@ impl Writer<'_> {
                 self.objects.push((g.id, n));
                 continue;
             }
-            let (supplied_parts, mo_labels) = if g.kind == GraphicKind::MoDiagram {
+            let (supplied_parts, generated_labels) = if g.kind == GraphicKind::MoDiagram {
                 let (parts, labels) = g.mo_parts(&doc.drawing_style);
+                (Some(parts), labels)
+            } else if g.kind == GraphicKind::EnergyProfile {
+                let (parts, labels) = g.energy_profile_parts(&doc.drawing_style);
                 (Some(parts), labels)
             } else {
                 (
@@ -831,7 +834,7 @@ impl Writer<'_> {
                 || g.panel.is_some()
                 || !panel_parts.is_empty()
                 || !panel_titles.is_empty()
-                || !mo_labels.is_empty()
+                || !generated_labels.is_empty()
                 || parsed.len() > 1
                 || parsed
                     .iter()
@@ -912,21 +915,29 @@ impl Writer<'_> {
                 self.tree.set(parent, crate::exchange::PANEL, record)?;
                 object = Some(parent);
             }
-            for mut label in mo_labels {
+            for mut label in generated_labels {
                 let supported = label.format.style.size_pt.clamp(4., 144.);
                 if supported != label.format.style.size_pt {
-                    // Generated MO text is placed by its left edge's midpoint.
-                    // Keep that point on its row when the supported font size
-                    // changes its box, including for a turned diagram.
                     let (width, height) = label.size();
                     let centre = label.position.offset(width / 2., height / 2.);
-                    let left = label
-                        .position
-                        .offset(0., height / 2.)
-                        .turned(centre, label.angle);
+                    // MO rows use their left edge; energy-profile labels are
+                    // centred on their state or tick. Retain each anchor when
+                    // a supported font size changes the box, including turns.
+                    let anchor = if g.kind == GraphicKind::EnergyProfile {
+                        centre
+                    } else {
+                        label
+                            .position
+                            .offset(0., height / 2.)
+                            .turned(centre, label.angle)
+                    };
                     label.format.style.size_pt = supported;
                     let (width, height) = label.size();
-                    let centre = left.offset(width / 2., 0.).turned(left, label.angle);
+                    let centre = if g.kind == GraphicKind::EnergyProfile {
+                        anchor
+                    } else {
+                        anchor.offset(width / 2., 0.).turned(anchor, label.angle)
+                    };
                     label.position = centre.offset(-width / 2., -height / 2.);
                 }
                 let layout = crate::typography::layout(&label.text, &label.format);

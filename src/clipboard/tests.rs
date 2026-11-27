@@ -1,6 +1,87 @@
 use super::*;
 
 #[tokio::test]
+async fn native_copy_preserves_profiles_that_carry_their_source_arrows() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::{Arrow, Point},
+        graphics::{
+            EnergyProfile, EnergyProfileState, EnergyProfileStateKind as Kind, EnergyProfileStep,
+            Graphic,
+        },
+    };
+    let mut source = Document::default();
+    source.arrows.push(Arrow::new(
+        1,
+        Point::default(),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    let profile = EnergyProfile::new(
+        1,
+        "a".repeat(64),
+        "GFN2-xTB".into(),
+        [Kind::Reactant, Kind::Product]
+            .into_iter()
+            .enumerate()
+            .map(|(i, kind)| EnergyProfileState {
+                kind,
+                label: if i == 0 { "R" } else { "P" }.into(),
+                energy_kcal: -(i as f64),
+                geometry: None,
+            })
+            .collect(),
+        vec![EnergyProfileStep {
+            from: 0,
+            to: 1,
+            transition: None,
+            irc: vec![],
+        }],
+    );
+    source.graphics.push(Graphic::energy_profile(
+        2,
+        Point::new(0., 80.),
+        Point::new(240., 140.),
+        profile,
+        Default::default(),
+    ));
+    for browser in [false, true] {
+        let (_, representations) =
+            prepare_copy_for(LocalEngine::in_process(), source.clone(), false, browser)
+                .await
+                .unwrap();
+        let native = representations
+            .into_iter()
+            .find(|item| item.kind == NATIVE)
+            .unwrap();
+        for text in [false, true] {
+            let item = if text {
+                Representation::new(
+                    "public.utf8-plain-text",
+                    &[
+                        editing::CLIPBOARD_PREFIX.as_bytes(),
+                        &native.bytes().unwrap(),
+                    ]
+                    .concat(),
+                )
+            } else {
+                native.clone()
+            };
+            let restored = paste_representation(LocalEngine::in_process(), item, false)
+                .await
+                .unwrap();
+            let profile = restored.document.graphics[0]
+                .energy_profile
+                .as_deref()
+                .unwrap();
+            assert!(profile.linked);
+            assert_eq!(profile.source, Some(1));
+        }
+    }
+}
+
+#[tokio::test]
 async fn copied_pictures_restore_the_visible_snapshot_on_desktop_and_browser() {
     use crate::{
         document::Point,

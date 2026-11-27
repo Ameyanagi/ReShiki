@@ -9,6 +9,73 @@ use crate::{
 };
 
 #[test]
+fn prepared_two_variant_expansion_preserves_each_linked_energy_profile() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+        graphics::{
+            EnergyProfile, EnergyProfileState, EnergyProfileStateKind, EnergyProfileStep, Graphic,
+        },
+    };
+    let mut source = generic::test_support::alternative_document();
+    let arrow = source.next_id();
+    source.arrows.push(Arrow::new(
+        arrow,
+        Point::new(200., 0.),
+        Point::new(320., 0.),
+        Preset::Forward,
+        ArrowStyle::preset(Preset::Forward),
+    ));
+    let profile = EnergyProfile::new(
+        arrow,
+        "a".repeat(64),
+        "GFN2-xTB".into(),
+        vec![
+            EnergyProfileState {
+                kind: EnergyProfileStateKind::Reactant,
+                label: "R".into(),
+                energy_kcal: 0.,
+                geometry: None,
+            },
+            EnergyProfileState {
+                kind: EnergyProfileStateKind::Product,
+                label: "P".into(),
+                energy_kcal: -4.25,
+                geometry: None,
+            },
+        ],
+        vec![EnergyProfileStep {
+            from: 0,
+            to: 1,
+            transition: None,
+            irc: vec![],
+        }],
+    );
+    let (width, height) = profile.natural_size(&source.drawing_style);
+    source.graphics.push(Graphic::energy_profile(
+        source.next_id(),
+        Point::new(180., 80.),
+        Point::new(width, height),
+        profile.clone(),
+        Default::default(),
+    ));
+    let before = source.clone();
+    let prepared = generic::prepare_expansion(&source, Limits::default()).unwrap();
+    assert_eq!(prepared.count(), 2);
+    let output = prepared.take().unwrap();
+    assert_eq!(output.arrows.len(), 2);
+    assert_eq!(output.graphics.len(), 2);
+    assert_ne!(output.arrows[0].id, output.arrows[1].id);
+    for (arrow, graphic) in output.arrows.iter().zip(&output.graphics) {
+        let mut expected = profile.clone();
+        expected.source = Some(arrow.id);
+        assert_eq!(graphic.energy_profile.as_deref(), Some(&expected));
+    }
+    output.validate().unwrap();
+    assert_eq!(source, before);
+}
+
+#[test]
 fn prepared_multinode_arrow_preserves_and_certifies_every_node_coordinate_and_kind() {
     let mut source = Document::default();
     let mut arrow = crate::document::Arrow::new(

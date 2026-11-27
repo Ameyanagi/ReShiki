@@ -119,6 +119,7 @@ fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
         }
         GraphicKind::Picture
         | GraphicKind::MoDiagram
+        | GraphicKind::EnergyProfile
         | GraphicKind::Table
         | GraphicKind::Rectangle
         | GraphicKind::RoundedRectangle

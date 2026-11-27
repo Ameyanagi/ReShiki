@@ -1665,6 +1665,13 @@ fn analysis(app: &App) -> Vec<Command> {
             for_selection: true,
         })),
     ));
+    list.push(send(
+        "Place energy profile",
+        Analyze,
+        "Place the calculated reaction energies and 3D models under the scheme",
+        "reaction energy profile diagram barrier transition state irc xtb",
+        Message::Xtb(xtb::Action::Ts(xtb::ts::Action::PlaceEnergyProfile(None))),
+    ));
     // Builds that cannot calculate hide it, as they hide Run.
     if xtb::available() {
         list.push(Command::new(

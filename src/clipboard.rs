@@ -208,6 +208,10 @@ impl PasteOutcome {
             ..document.into()
         }
     }
+
+    pub fn from_native_json(bytes: &[u8]) -> Result<Self, String> {
+        Document::from_json(bytes).map(Self::native)
+    }
 }
 impl From<Document> for PasteOutcome {
     fn from(document: Document) -> Self {
@@ -1031,10 +1035,9 @@ async fn import_candidate(
     let result = async {
         let data = item.bytes()?;
         if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
-            return crate::task::spawn_blocking(move || Document::from_json(&data))
+            return crate::task::spawn_blocking(move || PasteOutcome::from_native_json(&data))
                 .await
                 .map_err(|e| e.to_string())?
-                .map(PasteOutcome::native)
                 .map(Some);
         }
         if matches!(
@@ -1116,9 +1119,7 @@ async fn import_candidate(
                 .or_else(|| text.trim_start().starts_with('{').then_some(text))
             {
                 drawing = true;
-                return Document::from_json(json.as_bytes())
-                    .map(PasteOutcome::native)
-                    .map(Some);
+                return PasteOutcome::from_native_json(json.as_bytes()).map(Some);
             }
             text_request(text)
         } else {

@@ -1633,7 +1633,10 @@ fn selections_bounds_with_indicators(
     }
     // Only selected objects are measured, so one small selection stays cheap.
     for g in doc.graphics.iter().filter(|g| owners.contains_key(&g.id)) {
-        if g.kind == crate::graphics::GraphicKind::MoDiagram {
+        if matches!(
+            g.kind,
+            crate::graphics::GraphicKind::MoDiagram | crate::graphics::GraphicKind::EnergyProfile
+        ) {
             for corner in g.frame_corners() {
                 grow(g.id, &mut std::iter::once(corner));
             }
@@ -2676,6 +2679,8 @@ fn graphic_primitive(
 ) -> Vec<Primitive> {
     let diagram = if let Some(mo) = &g.mo {
         Some(mo.draw(g, &doc.drawing_style, source))
+    } else if let Some(profile) = &g.energy_profile {
+        Some(profile.draw(g, &doc.drawing_style, source))
     } else if g.kind == crate::graphics::GraphicKind::TlcPlate {
         Some((g.parts(), g.tlc_labels(), vec![]))
     } else {

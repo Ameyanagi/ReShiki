@@ -106,10 +106,9 @@ fn finish_model(app: &mut App) {
     );
     let run = app.tab.xtb.run.as_ref().unwrap();
     let launch = run.launch.as_ref().unwrap();
-    assert_eq!(
-        launch.frame.numbers.len(),
-        run.ts.as_ref().unwrap().request.plan.atoms
-    );
+    if let Some(ts) = &run.ts {
+        assert_eq!(launch.frame.numbers.len(), ts.request.plan.atoms);
+    }
     assert_eq!(launch.frame.numbers.iter().filter(|&&z| z == 1).count(), 8);
 }
 
@@ -2418,6 +2417,7 @@ fn cancel_drops_generation_and_a_late_finish_cannot_attach() {
 }
 
 mod irc_profile;
+mod placed_profile;
 mod refine;
 pub(super) use irc_profile::finished as finished_irc;
 mod tab_playback;

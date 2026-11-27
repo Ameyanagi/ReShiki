@@ -571,7 +571,10 @@ impl Graphic {
         if self.kind == GraphicKind::TlcPlate {
             return self.tlc.as_deref().map_or_else(Vec::new, |t| t.parts(self));
         }
-        if self.kind == GraphicKind::MoDiagram {
+        if matches!(
+            self.kind,
+            GraphicKind::MoDiagram | GraphicKind::EnergyProfile
+        ) {
             return vec![Part {
                 commands: self.commands(),
                 style: self.style.clone(),

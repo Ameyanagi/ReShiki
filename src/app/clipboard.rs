@@ -757,7 +757,7 @@ impl App {
             self.status = "Select objects to copy".into();
             return Task::none();
         }
-        let selection = editing::selection(&self.tab.doc, &self.tab.selected);
+        let selection = self.native_copy_snapshot();
         let Ok(json) = serde_json::to_string(&selection.current()) else {
             return Task::none();
         };
@@ -803,8 +803,9 @@ impl App {
     pub(super) fn pasted(&mut self, contents: Option<String>) -> Task<Message> {
         if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
             if let Some(json) = editing::clipboard_json(&contents) {
-                match Document::from_json(json.as_bytes()) {
-                    Ok(mut part) => {
+                match PasteOutcome::from_native_json(json.as_bytes()) {
+                    Ok(outcome) => {
+                        let mut part = outcome.document;
                         normalize_pasted_captions(&mut part);
                         let part = reshiki::canvas_theme::for_native_paste(
                             part,

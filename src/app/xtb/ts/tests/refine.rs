@@ -2,11 +2,54 @@ use super::*;
 
 #[test]
 fn saved_gfn2_coordinates_seed_gxtb_and_both_results_survive_a_failed_refinement() {
-    let (app, arrow) = irc_profile::finished();
+    let (mut app, arrow) = irc_profile::finished();
+    send(
+        &mut app,
+        XtbAction::Ts(Action::PlaceEnergyProfile(Some(arrow))),
+    );
+    assert_eq!(
+        app.tab.doc.graphics[0]
+            .energy_profile
+            .as_ref()
+            .unwrap()
+            .states
+            .len(),
+        3
+    );
+    select(&mut app, arrow);
+    let reaction = &app.tab.doc.reactions[0];
+    let species = [&reaction.reactants[0], &reaction.products[0]]
+        .into_iter()
+        .zip([false, true])
+        .map(|(participant, product)| energy::Species {
+            atoms: participant.atoms.clone(),
+            coefficient: u32::from(participant.coefficient),
+            product,
+            charge: 0,
+            multiplicity: 1,
+        })
+        .collect();
+    let _ = app.xtb_reaction_energy_begin(arrow, species, state::Task::Optimize, None);
+    for _ in 0..2 {
+        if app.tab.model_job.is_some() {
+            finish_model(&mut app);
+        }
+        let run = app.tab.xtb.run.as_ref().unwrap();
+        let positions = run
+            .launch
+            .as_ref()
+            .unwrap()
+            .frame
+            .positions_angstrom
+            .clone();
+        app.xtb_test_finish_optimization(&positions, &positions);
+    }
     let mut app = reaction_app(
         Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
         arrow,
     );
+    let placed = app.tab.doc.graphics[0].clone();
+    assert_eq!(placed.energy_profile.as_ref().unwrap().states.len(), 2);
     let source = app.tab.doc.science.results[0].result.clone();
     send(
         &mut app,
@@ -52,15 +95,20 @@ fn saved_gfn2_coordinates_seed_gxtb_and_both_results_survive_a_failed_refinement
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
     );
+    assert!(matches!(
+        app.xtb_ts_card_display_result(arrow),
+        card::ArrowResult::Found(result) if Arc::ptr_eq(result, &source)
+    ));
+    assert_eq!(app.tab.doc.graphics[0], placed);
 
     let mut app = reaction_app(
         Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
         arrow,
     );
     let stored = &app.tab.doc.science.results;
-    assert_eq!(stored.len(), 2);
+    assert_eq!(stored.len(), 4);
     let [parent, refined] = app
-        .xtb_ts_linked_pair(&stored[1].result)
+        .xtb_ts_linked_pair(&stored.last().unwrap().result)
         .unwrap()
         .map(Arc::clone);
     assert_eq!(*parent, *source);
@@ -196,6 +244,12 @@ async fn running_gxtb_search_and_refine_keep_saved_gfn2_rows_labeled() {
 #[test]
 fn show_where_previews_the_failed_gxtb_endpoint_with_a_verified_parent() {
     let (mut app, arrow) = irc_profile::finished();
+    send(
+        &mut app,
+        XtbAction::Ts(Action::PlaceEnergyProfile(Some(arrow))),
+    );
+    let original_profile = app.tab.doc.graphics.last().unwrap().clone();
+    select(&mut app, arrow);
     let parent = app.tab.doc.science.results[0].result.clone();
     send(
         &mut app,
@@ -224,6 +278,7 @@ fn show_where_previews_the_failed_gxtb_endpoint_with_a_verified_parent() {
     );
 
     let child = app.tab.doc.science.results[1].result.clone();
+    assert_eq!(app.tab.doc.graphics.last(), Some(&original_profile));
     assert_eq!(
         view::presentation(&child, None).recovery,
         view::Recovery::ShowWhere
@@ -246,6 +301,12 @@ fn show_where_previews_the_failed_gxtb_endpoint_with_a_verified_parent() {
 #[test]
 fn verified_refinement_reopens_on_its_own_irc_and_switches_back_to_the_source() {
     let (mut app, arrow) = irc_profile::finished();
+    send(
+        &mut app,
+        XtbAction::Ts(Action::PlaceEnergyProfile(Some(arrow))),
+    );
+    select(&mut app, arrow);
+    let original_profile = app.tab.doc.graphics.last().unwrap().clone();
     let source = app.tab.doc.science.results[0].result.clone();
     send(
         &mut app,
@@ -279,8 +340,21 @@ fn verified_refinement_reopens_on_its_own_irc_and_switches_back_to_the_source() 
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
     );
+    let saved = app.tab.doc.clone();
+    let updated = saved.graphics.last().unwrap();
+    assert_eq!(
+        (updated.origin, updated.axis_x, updated.axis_y),
+        (
+            original_profile.origin,
+            original_profile.axis_x,
+            original_profile.axis_y
+        ),
+    );
+    assert_eq!(updated.energy_profile.as_ref().unwrap().method, "g-xTB");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.graphics.last(), Some(&original_profile));
     let mut app = reaction_app(
-        Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
+        Document::from_native_file(&saved.file_json().unwrap()).unwrap(),
         arrow,
     );
     assert_eq!(app.tab.doc.science.results.len(), 2);

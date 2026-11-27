@@ -509,10 +509,56 @@ mod execution {
             "{}",
             app.status
         );
-        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize, None);
         assert!(app.tab.xtb.run.is_none(), "both current results are reused");
         assert_eq!(app.tab.doc.science.results.len(), 2);
         assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
+        let before = app.tab.doc.clone();
+        send(
+            &mut app,
+            xtb::Action::Ts(xtb::ts::Action::PlaceEnergyProfile(Some(arrow))),
+        );
+        let diagram = app
+            .tab
+            .doc
+            .graphics
+            .last()
+            .unwrap()
+            .energy_profile
+            .as_ref()
+            .unwrap();
+        use reshiki::graphics::EnergyProfileStateKind::{Product, Reactant};
+        assert_eq!(
+            [diagram.states[0].kind, diagram.states[1].kind],
+            [Reactant, Product]
+        );
+        assert_eq!(diagram.states.len(), 2);
+        assert!(diagram.states.iter().all(|s| s.geometry.is_some()));
+        assert!(diagram.steps[0].transition.is_none() && diagram.steps[0].irc.is_empty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+
+        send(
+            &mut app,
+            xtb::Action::Ts(xtb::ts::Action::PlaceEnergyProfile(Some(arrow))),
+        );
+        app.xtb.settings.barrier_method = qcdata::XtbMethod::GXtb;
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        event(&mut app, optimized_method(qcdata::XtbMethod::GXtb));
+        let before_last = app.tab.doc.clone();
+        event(&mut app, optimized_method(qcdata::XtbMethod::GXtb));
+        let diagram = app
+            .tab
+            .doc
+            .graphics
+            .last()
+            .unwrap()
+            .energy_profile
+            .as_ref()
+            .unwrap();
+        assert_eq!(diagram.method, "g-xTB");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before_last);
     }
 
     #[test]

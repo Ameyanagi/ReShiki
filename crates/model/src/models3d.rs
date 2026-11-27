@@ -1529,7 +1529,7 @@ fn layout_bounds(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
 type InkBox = (Point, Point);
 
 mod reaction_row;
-pub use reaction_row::place_reaction_row;
+pub use reaction_row::{place_reaction_row, zero_order_obstacles};
 
 /// Show the molecule of model `index` as `display`; returns whether it changed.
 /// Show both to the right when there is room, otherwise below the scheme,

@@ -2,6 +2,7 @@
 
 use crate::app::models3d::thumbnail::Thumbnail;
 use reshiki::document::Document;
+use reshiki::graphics::EnergyProfileGeometry;
 use reshiki::qcdata::{CalcResult, Frame, FrameHash, IrcPath};
 use std::cell::RefCell;
 use std::collections::{BTreeSet, VecDeque};
@@ -69,6 +70,109 @@ fn bonds(frame: &Frame) -> Option<Vec<[usize; 2]>> {
     reshiki_optimize::ts::bonds(&frame.numbers, &positions)
         .ok()
         .map(|pairs| pairs.into_iter().map(|(a, b)| [a, b]).collect())
+}
+
+fn stable_bonds(reactant: &[[usize; 2]], product: &[[usize; 2]]) -> Vec<[usize; 2]> {
+    reactant
+        .iter()
+        .chain(product)
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+/// Keep the same view and changing bonds as the Path thumbnails in vector
+/// figures. Save the geometry without drawing atom references.
+pub(super) fn profile_geometry(
+    doc: &Document,
+    result: &CalcResult,
+) -> Option<([EnergyProfileGeometry; 3], [f32; 4])> {
+    let ends = result.endpoints?;
+    let [r, ts, p] = [ends.reactant, result.frame, ends.product]
+        .map(|hash| doc.science.frame(&hash).map(AsRef::as_ref));
+    let (r, ts, p) = (r?, ts?, p?);
+    if r.numbers != ts.numbers || r.numbers != p.numbers {
+        return None;
+    }
+    let points: Vec<_> = ts
+        .positions_angstrom
+        .iter()
+        .map(|xyz| xyz.map(|n| n as f32))
+        .collect();
+    let rotation = reshiki::models3d::initial_rotation(&points);
+    let (rb, pb) = (bonds(r)?, bonds(p)?);
+    let changes = bond_changes(result, r, p);
+    let geometry = |frame: &Frame, bonds, changes: BondChanges| {
+        let mut frame = frame.clone();
+        frame.drawing_atoms.clear();
+        EnergyProfileGeometry {
+            frame,
+            bonds,
+            forming: changes.forming,
+            breaking: changes.breaking,
+        }
+    };
+    let tb = stable_bonds(&rb, &pb);
+    Some((
+        [
+            geometry(r, rb, BondChanges::default()),
+            geometry(ts, tb, changes),
+            geometry(p, pb, BondChanges::default()),
+        ],
+        rotation,
+    ))
+}
+
+/// Optimized species from an energy-only run have independent coordinates.
+/// Arrange them side by side while retaining their separate bond graphs.
+pub(super) fn profile_side(frames: &[&Frame]) -> Option<EnergyProfileGeometry> {
+    let mut geometry = EnergyProfileGeometry {
+        frame: Frame {
+            numbers: vec![],
+            positions_angstrom: vec![],
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            drawing_atoms: vec![],
+        },
+        bonds: vec![],
+        forming: vec![],
+        breaking: vec![],
+    };
+    let mut x = 0.;
+    for &frame in frames {
+        let offset = geometry.frame.numbers.len();
+        let positions = &frame.positions_angstrom;
+        let [left, right] = positions
+            .iter()
+            .map(|p| [p[0], p[0]])
+            .reduce(|[left, right], [x, _]| [left.min(x), right.max(x)])?;
+        geometry.frame.charge = geometry.frame.charge.checked_add(frame.charge)?;
+        geometry.frame.multiplicity = geometry
+            .frame
+            .multiplicity
+            .checked_add(frame.multiplicity - 1)?;
+        let n = positions.len() as f64;
+        let [y, z] = positions
+            .iter()
+            .fold([0., 0.], |[y, z], p| [y + p[1] / n, z + p[2] / n]);
+        geometry.frame.numbers.extend_from_slice(&frame.numbers);
+        geometry.frame.positions_angstrom.extend(
+            positions
+                .iter()
+                .map(|p| [p[0] + x - left, p[1] - y, p[2] - z]),
+        );
+        geometry.bonds.extend(
+            bonds(frame)?
+                .into_iter()
+                .map(|pair| pair.map(|i| i + offset)),
+        );
+        x += right - left + 2.5;
+    }
+    geometry.validate().ok()?;
+    Some(geometry)
 }
 
 #[derive(PartialEq, Eq)]
@@ -149,13 +253,7 @@ fn prepare(
     let changes = bond_changes(result, reactant, product);
     // Retain stable endpoint bonds at the saddle. Planned changing bonds get
     // dashed overlays even when their TS distances exceed the bond cutoff.
-    let transition_bonds: Vec<_> = reactant_bonds
-        .iter()
-        .chain(&product_bonds)
-        .copied()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
+    let transition_bonds = stable_bonds(&reactant_bonds, &product_bonds);
     let points: Vec<_> = transition
         .positions_angstrom
         .iter()

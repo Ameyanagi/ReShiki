@@ -5,6 +5,7 @@ use super::workspace::{
 use super::xtb::{
     self,
     orbitals::{self, DiagramEdit},
+    ts::profile,
 };
 use super::{App, InspectorTab, Message};
 use crate::appearance::ChemDrawFormat;
@@ -1127,6 +1128,9 @@ impl App {
         }
         if let Some(mo) = self.mo_diagram_card() {
             body = body.push(card(container(mo).padding(12)));
+        }
+        if let Some(energy) = self.energy_profile_card() {
+            body = body.push(card(container(energy).padding(12)));
         }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
@@ -2897,6 +2901,72 @@ impl App {
         }
         Task::none()
     }
+    fn energy_profile_card(&self) -> Option<Element<'_, Message>> {
+        use reshiki::graphics::EnergyProfileModels::{AtLevels, Off, RowAbove};
+
+        let &[id] = self.tab.selected.as_slice() else {
+            return None;
+        };
+        let doc = &self.tab.doc;
+        let figure = doc
+            .graphics
+            .iter()
+            .find(|g| g.id == id)?
+            .energy_profile
+            .as_deref()?;
+        let mut link = row![
+            text(if !figure.linked {
+                "Unlinked"
+            } else if profile::source_current(doc, figure) {
+                "Linked to the reaction"
+            } else {
+                "Source reaction changed or was removed"
+            })
+            .size(11)
+            .width(Length::Fill)
+        ]
+        .spacing(4)
+        .align_y(Alignment::Center);
+        if figure.linked {
+            link = link.push(
+                accessible_command("energy-profile-unlink", "Unlink", "Unlink")
+                    .on_press(profile::edit_message(id, profile::Edit::Unlink)),
+            );
+        }
+        let models = row([
+            (AtLevels, "energy-profile-models-at-levels", "At each level"),
+            (RowAbove, "energy-profile-models-row", "In a row above"),
+            (Off, "energy-profile-models-off", "Off"),
+        ]
+        .into_iter()
+        .map(|(mode, key, label)| {
+            accessible_command(key, format!("3D models · {label}"), label)
+                .style(if figure.models == mode {
+                    crate::appearance::secondary
+                } else {
+                    crate::appearance::outline
+                })
+                .on_press_maybe(
+                    (figure.models != mode)
+                        .then(|| profile::edit_message(id, profile::Edit::Models(mode))),
+                )
+                .into()
+        }))
+        .spacing(4)
+        .wrap()
+        .vertical_spacing(4);
+        Some(
+            column![
+                section("Energy profile"),
+                link,
+                text("3D models").size(11),
+                models
+            ]
+            .spacing(8)
+            .into(),
+        )
+    }
+
     fn mo_diagram_card(&self) -> Option<Element<'_, Message>> {
         let [id] = self.tab.selected.as_slice() else {
             return None;

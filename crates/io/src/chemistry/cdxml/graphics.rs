@@ -203,6 +203,7 @@ impl NativeGraphic {
             tlc: self.tlc,
             ir: self.ir,
             mo: None,
+            energy_profile: None,
         };
         graphic.validate().map_err(Error::Document)?;
         Ok(graphic)

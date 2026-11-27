@@ -173,6 +173,7 @@ impl Graphic {
             GraphicKind::Picture
                 | GraphicKind::TlcPlate
                 | GraphicKind::MoDiagram
+                | GraphicKind::EnergyProfile
                 | GraphicKind::Symbol(_)
                 | GraphicKind::Orbital(_)
                 | GraphicKind::Icon

@@ -389,6 +389,16 @@ impl Prepared {
                     mo.molecule = old.molecule.and_then(|id| joined_mapping.get(&id).copied());
                     mo.linked = mo.molecule.is_some() && old.linked;
                 }
+                if let Some((profile, old)) = graphic
+                    .energy_profile
+                    .as_deref_mut()
+                    .zip(original.energy_profile.as_deref())
+                {
+                    // Arrow identity is unchanged by atom attachment. The
+                    // detached preparation may have temporarily lost the link.
+                    profile.source = old.source;
+                    profile.linked = old.linked;
+                }
             }
         }
         // Shared attachment sites cannot carry positioned marks. Other moved

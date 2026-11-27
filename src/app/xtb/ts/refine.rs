@@ -3,11 +3,39 @@ use super::{Retry, saved_search, view};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::{
+    document::Document,
     qcdata::{CalcResult, TransitionStateId, XtbMethod},
     reactions::ts_plan,
     science::Stored,
 };
 use std::sync::Arc;
+
+pub(super) fn linked_pair<'a>(
+    doc: &'a Document,
+    result: &Arc<CalcResult>,
+) -> Option<[&'a Arc<CalcResult>; 2]> {
+    let search = saved_search(result)?;
+    let arrow = search.arrow?;
+    let runs = &doc.science.results;
+    let shown = &runs.iter().find(|s| Arc::ptr_eq(&s.result, result))?.result;
+    if let Some(id) = search.refined_from {
+        return Some([&source(doc, arrow, id)?.result, shown]);
+    }
+    let id = result.transition_state_id()?;
+    let child = runs.iter().rfind(|s| {
+        saved_search(&s.result)
+            .is_some_and(|run| run.arrow == Some(arrow) && run.refined_from == Some(id))
+    })?;
+    Some([shown, &child.result])
+}
+
+fn source(doc: &Document, arrow: u64, id: TransitionStateId) -> Option<&Stored> {
+    doc.science.results.iter().rev().find(|stored| {
+        saved_search(&stored.result)
+            .is_some_and(|s| s.arrow == Some(arrow) && s.method == XtbMethod::Gfn2Xtb)
+            && stored.result.transition_state_id() == Some(id)
+    })
+}
 
 impl App {
     /// Resolve both profiles through the saved source calculation on this arrow.
@@ -15,27 +43,11 @@ impl App {
         &self,
         result: &Arc<CalcResult>,
     ) -> Option<[&Arc<CalcResult>; 2]> {
-        let search = saved_search(result)?;
-        let arrow = search.arrow?;
-        let runs = &self.tab.doc.science.results;
-        let shown = &runs.iter().find(|s| Arc::ptr_eq(&s.result, result))?.result;
-        if let Some(id) = search.refined_from {
-            return Some([&self.xtb_ts_source(arrow, id)?.result, shown]);
-        }
-        let id = result.transition_state_id()?;
-        let child = runs.iter().rfind(|s| {
-            saved_search(&s.result)
-                .is_some_and(|run| run.arrow == Some(arrow) && run.refined_from == Some(id))
-        })?;
-        Some([shown, &child.result])
+        linked_pair(&self.tab.doc, result)
     }
 
     pub(super) fn xtb_ts_source(&self, arrow: u64, id: TransitionStateId) -> Option<&Stored> {
-        self.tab.doc.science.results.iter().rev().find(|stored| {
-            saved_search(&stored.result)
-                .is_some_and(|s| s.arrow == Some(arrow) && s.method == XtbMethod::Gfn2Xtb)
-                && stored.result.transition_state_id() == Some(id)
-        })
+        source(&self.tab.doc, arrow, id)
     }
 
     fn xtb_gxtb_source(&self, arrow: u64, id: TransitionStateId) -> Option<&Stored> {

@@ -107,6 +107,9 @@ fn drawing_losses(
         notices.extend(crate::exchange::drawing::mo_diagram_export_notice(
             appearance,
         ));
+        notices.extend(crate::exchange::drawing::energy_profile_export_notice(
+            appearance,
+        ));
         notices.extend(chemdraw_lacks(appearance, format));
     }
     // Preparation can change appearance, so rear opacity reads the source document.

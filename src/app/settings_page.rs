@@ -384,6 +384,9 @@ impl App {
                 self.sync_drawing_style_unit();
             }
             Action::EnergyUnit(unit) => {
+                if self.appearance.energy_unit != unit {
+                    self.update_energy_profile_units(unit);
+                }
                 self.appearance.energy_unit = unit;
                 self.save_preference(Section::Calculations, "energy unit");
             }
@@ -463,7 +466,7 @@ impl App {
     }
 
     /// Puts the section's preferences back to the built-in ones. Saved colors
-    /// stay. They are preferences, so there is no Undo.
+    /// stay. A changed energy unit also updates linked figures.
     fn restore_defaults(&mut self, section: Section) -> Task<Message> {
         self.status = format!("{} restored to defaults", section.label());
         self.error = false;
@@ -472,6 +475,7 @@ impl App {
             Section::Assistant => self.restore_assistant_defaults(),
             Section::Updates => return self.restore_update_defaults(),
             _ => {
+                let previous_unit = self.appearance.energy_unit;
                 self.appearance = restored(section, &self.appearance);
                 match section {
                     Section::Drawing => {
@@ -485,6 +489,9 @@ impl App {
                     Section::Names => {
                         self.tab.naming.structure = None;
                         self.tab.stereo_notes.clear();
+                    }
+                    Section::Calculations if self.appearance.energy_unit != previous_unit => {
+                        self.update_energy_profile_units(self.appearance.energy_unit);
                     }
                     _ => {}
                 }

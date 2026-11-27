@@ -1,6 +1,7 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
 mod arc;
 mod effects;
+pub mod energy_profile;
 mod heads;
 mod ir_figure;
 pub mod mo_diagram;
@@ -15,6 +16,10 @@ pub(crate) use effects::bounding_frame;
 pub use effects::{
     EXPORT_NOTICE, Effects, GLOW_NOTICE, Gradient, GradientKind, SHADOW_RGB, export_notice,
     lobe_shading, shade, tiled, wave_radius, wavy,
+};
+pub use energy_profile::{
+    EnergyProfile, EnergyProfileGeometry, EnergyProfileKind, EnergyProfileModels,
+    EnergyProfileSample, EnergyProfileState, EnergyProfileStateKind, EnergyProfileStep, EnergyUnit,
 };
 pub use heads::PathHeads;
 pub use ir_figure::{BandShape, Columns, Frame, IrFigure, Journal, YAxis};
@@ -32,6 +37,7 @@ pub enum GraphicKind {
     /// An editable thin-layer chromatography plate with owned lanes and spots.
     TlcPlate,
     MoDiagram,
+    EnergyProfile,
     /// Lab equipment drawn from a piece definition; see [`crate::equipment`].
     Piece,
     Symbol(crate::scientific::SymbolKind),
@@ -74,7 +80,7 @@ impl GraphicKind {
         matches!(self, Self::Brackets | Self::Parentheses | Self::Braces)
     }
     pub(crate) fn frame_hit(self) -> bool {
-        matches!(self, Self::Picture | Self::MoDiagram)
+        matches!(self, Self::Picture | Self::MoDiagram | Self::EnergyProfile)
     }
 }
 impl std::fmt::Display for GraphicKind {
@@ -95,6 +101,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Picture => "Picture",
             Self::TlcPlate => "TLC plate",
             Self::MoDiagram => "MO diagram",
+            Self::EnergyProfile => "Energy profile",
             Self::Piece => "Equipment piece",
             Self::Icon => "Icon",
             Self::Table => "Table",
@@ -374,6 +381,8 @@ pub struct Graphic {
     pub tlc: Option<Box<TlcPlate>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mo: Option<Box<MoDiagram>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub energy_profile: Option<Box<EnergyProfile>>,
     /// Original IR bands and presentation parameters for a spectrum pen path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ir: Option<Box<IrFigure>>,
@@ -525,6 +534,7 @@ impl Graphic {
                 icon: None,
                 tlc: None,
                 mo: None,
+                energy_profile: None,
                 ir: None,
                 id,
                 kind,
@@ -583,6 +593,7 @@ impl Graphic {
             icon: None,
             tlc: None,
             mo: None,
+            energy_profile: None,
             ir: None,
             id,
             kind,
@@ -642,7 +653,10 @@ impl Graphic {
         let p = Point::new;
         let k = 0.552_284_8;
         let local = match self.kind {
-            GraphicKind::Rectangle | GraphicKind::Picture | GraphicKind::MoDiagram => vec![
+            GraphicKind::Rectangle
+            | GraphicKind::Picture
+            | GraphicKind::MoDiagram
+            | GraphicKind::EnergyProfile => vec![
                 Move(p(0., 0.)),
                 Line(p(1., 0.)),
                 Line(p(1., 1.)),
@@ -782,7 +796,10 @@ impl Graphic {
         // A cycle keeps Ellipse as its stored host kind. Measure the same
         // effective perimeter that paints its chosen shape, including the
         // legacy mean-radius circle, rather than that storage placeholder.
-        let commands = if self.kind == GraphicKind::MoDiagram {
+        let commands = if matches!(
+            self.kind,
+            GraphicKind::MoDiagram | GraphicKind::EnergyProfile
+        ) {
             self.commands()
         } else {
             crate::cycles::outline(self)
@@ -807,7 +824,7 @@ impl Graphic {
                 .iter()
                 .map(|p| p.style.width() * 0.5)
                 .fold(0., f32::max),
-            GraphicKind::Picture | GraphicKind::MoDiagram => 0.,
+            GraphicKind::Picture | GraphicKind::MoDiagram | GraphicKind::EnergyProfile => 0.,
             // A piece's outline is painted twice as wide as its style says.
             GraphicKind::Piece => self.style.width(),
             _ => self.style.width() * 0.5,
@@ -901,7 +918,10 @@ impl Graphic {
         if self.table.is_some() {
             return Err("Resize table cells with their table controls".into());
         }
-        if matches!(self.kind, GraphicKind::TlcPlate | GraphicKind::MoDiagram) {
+        if matches!(
+            self.kind,
+            GraphicKind::TlcPlate | GraphicKind::MoDiagram | GraphicKind::EnergyProfile
+        ) {
             return Ok(());
         }
         // Dragging a callout leader's end releases it from its target, and
@@ -980,6 +1000,12 @@ impl Graphic {
         }
         if let Some(mo) = &self.mo {
             mo.validate(self)?;
+        }
+        if (self.kind == GraphicKind::EnergyProfile) != self.energy_profile.is_some() {
+            return Err("Energy profile data does not match the graphic kind".into());
+        }
+        if let Some(profile) = &self.energy_profile {
+            profile.validate(self)?;
         }
         if self.ir.is_some() && self.kind != GraphicKind::Path {
             return Err("IR figure parameters require a pen path".into());

@@ -1299,7 +1299,7 @@ impl App {
                 }
             }
         }
-        let reaction = if same_file && !moved && attached.freshness == Freshness::Current {
+        let reaction = if same_file && attached.freshness == Freshness::Current {
             pending
                 .energy_serial
                 .and_then(|serial| {
@@ -1312,8 +1312,11 @@ impl App {
         } else {
             None
         };
+        if same_file && let Some(arrow) = reaction_arrow.or(reaction) {
+            self.xtb_refresh_reaction_profile(&mut doc, arrow, pending.energy_serial);
+        }
         let before = std::mem::replace(&mut self.tab.doc, doc);
-        self.changed_with_reaction_row(before, reaction);
+        self.changed_with_reaction_row(before, reaction.filter(|_| !moved));
         if self.error {
             self.xtb_store_failed(pending, self.status.clone());
             return;

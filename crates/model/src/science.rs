@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::document::Document;
+use crate::stereo_groups::StereoGroup;
 
 /// Heap bytes of frames and results one document may hold, each stored
 /// result counted, as a file stores them.
@@ -661,13 +662,22 @@ pub fn prune(doc: &mut Document) {
 /// choice, which sets the spin a calculation describes, and its enhanced
 /// stereo group, which the digest leaves out.
 pub fn baseline(doc: &Document, ids: &[u64]) -> String {
+    baseline_with_stereo_groups(doc, ids, |group| group)
+}
+
+/// Build a baseline with caller-defined labels for enhanced stereo groups.
+pub fn baseline_with_stereo_groups(
+    doc: &Document,
+    ids: &[u64],
+    mut label: impl FnMut(StereoGroup) -> StereoGroup,
+) -> String {
     let mut text = crate::models3d::fingerprint(doc, ids);
     text.push('/');
     let mut groups = String::new();
     for atom in ids.iter().filter_map(|id| doc.atom(*id)) {
         text.push(if atom.singlet { '1' } else { '0' });
-        if let Some(group) = &atom.stereo_group {
-            groups.push_str(&serde_json::to_string(group).unwrap_or_default());
+        if let Some(group) = atom.stereo_group {
+            groups.push_str(&serde_json::to_string(&label(group)).unwrap_or_default());
         }
         groups.push(',');
     }
