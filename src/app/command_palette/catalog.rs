@@ -368,7 +368,7 @@ const ATOM_KEYS: &[(&str, &str, &str, &str)] = &[
 
 /// English element name for `symbol`, read from OPSIN's element token list
 /// (which names every element except hydrogen).
-fn element_name(symbol: &str) -> Option<String> {
+pub(crate) fn element_name(symbol: &str) -> Option<String> {
     if symbol == "H" {
         return Some("Hydrogen".into());
     }

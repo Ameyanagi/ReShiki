@@ -742,6 +742,8 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     /// Session-only feedback from the hovered locant in a chemical name.
     pub(crate) locant_highlight: &'a [u64],
+    /// The atom a failed 3D build names, ringed until the drawing changes.
+    pub(crate) problem_atom: Option<u64>,
     /// Outlines what takes part in a reaction until the next edit.
     pub(crate) reaction_preview: Option<&'a reshiki::reactions::Reaction>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
@@ -808,6 +810,7 @@ impl<'a> MoleculeCanvas<'a> {
         Self {
             nmr: None,
             locant_highlight: &[],
+            problem_atom: None,
             reaction_preview: None,
             optimizer: None,
             equipment_authoring: None,
@@ -937,6 +940,25 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 Stroke::default()
                     .with_width(2.)
                     .with_color(overlay::ACCENT_STRONG),
+            );
+        }
+        if let Some(atom) = self
+            .problem_atom
+            .and_then(|id| self.doc.atom(id).filter(|_| self.doc.atom_visible(id)))
+        {
+            let ring = Path::circle(self.camera.screen(atom.position, paper), 16.);
+            frame.fill(
+                &ring,
+                Color {
+                    a: 0.12,
+                    ..overlay::PROBLEM
+                },
+            );
+            frame.stroke(
+                &ring,
+                Stroke::default()
+                    .with_width(2.5)
+                    .with_color(overlay::PROBLEM),
             );
         }
         purpose::draw_cues(self.doc, &mut frame, self.camera, paper);
