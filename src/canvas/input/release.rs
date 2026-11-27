@@ -534,6 +534,16 @@ impl MoleculeCanvas<'_> {
         let click_slop = self.camera.world_len(CLICK_SLOP_PX);
         ControlFlow::Continue(if start.distance(p) < click_slop {
             if !state.modifiers.shift()
+                && let [id] = self.selected
+                && clicked.as_slice() == [*id]
+                && let Some(g) = self.doc.graphics.iter().find(|g| g.id == *id)
+                && let Some(mo) = &g.mo
+                && let Some((column, index)) = mo.level_at_with_style(g, p, &self.doc.drawing_style)
+            {
+                state.last_click = None;
+                return ControlFlow::Continue(Edit::MoLevelClick(*id, column, index));
+            }
+            if !state.modifiers.shift()
                 && let Some(label) = hit_object(self.doc, p, self.camera.world_len(HANDLE_PICK_PX))
                     .filter(|id| {
                         self.doc.annotations.iter().any(|a| a.id == *id)

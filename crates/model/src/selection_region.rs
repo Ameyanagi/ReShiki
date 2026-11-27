@@ -209,7 +209,7 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
             continue;
         }
         if let Some(frame) = cells.frame(g.id) {
-            let picture = g.kind == crate::graphics::GraphicKind::Picture;
+            let framed = g.kind.frame_hit();
             let visible: Vec<_> = g
                 .parts()
                 .iter()
@@ -218,12 +218,8 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
                         polygon,
                         frame,
                         &part.commands,
-                        if picture {
-                            0.
-                        } else {
-                            part.style.width() * 0.5
-                        },
-                        picture || (part.filled && part.style.fill.is_some()),
+                        if framed { 0. } else { part.style.width() * 0.5 },
+                        framed || (part.filled && part.style.fill.is_some()),
                         part.style.round_caps(),
                     )
                 })

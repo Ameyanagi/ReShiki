@@ -223,7 +223,8 @@ explains how the crates and modules fit together.
 - `src/app/xtb/history.rs`: Name the calculation or attached geometry restored by drawing history.
 - `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
 - `src/app/xtb/orbitals/compute.rs`: Work off the UI thread
-- `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
+- `src/app/xtb/orbitals/diagram.rs`: Placed MO diagram edits and the orbital rows a picture is waiting for.
+- `src/app/xtb/orbitals/levels.rs`: The Orbitals tab's visible range and level diagram.
 - `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
 - `src/app/xtb/palette.rs`: The xTB results palette
 - `src/app/xtb/palette/sizing.rs`: The bottom dock's window budget and short-window collapse behavior.
@@ -880,6 +881,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
 - `crates/model/src/graphics/heads.rs`
 - `crates/model/src/graphics/ir_figure.rs`: Stored parameters for a placed, editable infrared spectrum figure.
+- `crates/model/src/graphics/mo_diagram.rs`: A placed molecular orbital diagram and its vector layout.
 - `crates/model/src/graphics/panel.rs`: Figure panels, rectangles with a tint, rounded corners, titles and dividers.
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`
@@ -920,6 +922,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/models3d/surface/mesh.rs`: Closed surfaces of a signed scalar field, in model coordinates (Å).
 - `crates/model/src/models3d/surface/orbital.rs`: A molecular orbital in the model frame (Å), evaluated from normalized Gaussian AOs.
 - `crates/model/src/models3d/surface/orbital/timing.rs`: Manual timings
+- `crates/model/src/models3d/surface/signing.rs`
 - `crates/model/src/models3d/surface/snapshot.rs`: Compact snapshots of the merged 2D shapes of an orbital surface.
 - `crates/model/src/models3d/surface/visible.rs`: Screen-affine hidden-surface clipping and merged, nested shading regions.
 - `crates/model/src/models3d/surface/visible/coverage.rs`
@@ -929,6 +932,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/molecule_names/identity.rs`: Canonical molecular identity, independent of document selection and captions.
 - `crates/model/src/molecule_names/identity_parity.rs`: Keep the app's chemistry copy and the standalone kernel identity in agreement.
 - `crates/model/src/molecule_names/ir.rs`: Direct preparation of naming IR, preserving its atom and bond identities.
+- `crates/model/src/orbital_levels.rs`: Molecular-orbital levels
 - `crates/model/src/pages.rs`: Physical publication pages, independent of viewport zoom and molecular scale.
 - `crates/model/src/palette.rs`: Theme palettes
 - `crates/model/src/pictures.rs`: Self-contained pictures with a portable PNG preview.

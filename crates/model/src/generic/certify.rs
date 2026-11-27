@@ -3,7 +3,10 @@ use super::{
     errors::retained,
     geometry::{at, finite},
 };
-use crate::document::{Document, Point};
+use crate::{
+    document::{Document, Point},
+    models3d::surface::keep_signed,
+};
 use std::collections::HashMap;
 
 pub(super) fn preserve(
@@ -54,21 +57,6 @@ pub(super) fn certify_translation(
     if inverse.len() != mapping.len() {
         return Err("Prepared tile has an ambiguous ID remap".into());
     }
-    let undo = |id: &mut u64| -> Result<(), String> {
-        *id = *inverse.get(id).ok_or("Prepared tile has an unmapped ID")?;
-        Ok(())
-    };
-    let check_shift = |old: Point, new: Point| -> Result<(), String> {
-        finite(new)?;
-        let error_x = (f64::from(new.x) - f64::from(old.x) - f64::from(shift.x)).abs();
-        let error_y = (f64::from(new.y) - f64::from(old.y) - f64::from(shift.y)).abs();
-        if error_x > 0.01 || error_y > 0.01 {
-            return Err(retained(
-                "Prepared tile loses local geometry at these finite coordinates",
-            ));
-        }
-        Ok(())
-    };
     let relative = |a: Point, b: Point, x: Point, y: Point| -> Result<(), String> {
         let dx = ((f64::from(y.x) - f64::from(x.x)) - (f64::from(b.x) - f64::from(a.x))).abs();
         let dy = ((f64::from(y.y) - f64::from(x.y)) - (f64::from(b.y) - f64::from(a.y))).abs();
@@ -135,6 +123,37 @@ pub(super) fn certify_translation(
         relative(a.position, old.position, z.position, new.position)?;
     }
     let mut restored = part.clone();
+    keep_signed(&mut restored, |restored| {
+        restore_translation(source, restored, mapping, &inverse, shift)
+    })?;
+    if &restored != source {
+        return Err("Prepared tile changed noncoordinate native data".into());
+    }
+    Ok(())
+}
+
+fn restore_translation(
+    source: &Document,
+    restored: &mut Document,
+    mapping: &HashMap<u64, u64>,
+    inverse: &HashMap<u64, u64>,
+    shift: Point,
+) -> Result<(), String> {
+    let undo = |id: &mut u64| -> Result<(), String> {
+        *id = *inverse.get(id).ok_or("Prepared tile has an unmapped ID")?;
+        Ok(())
+    };
+    let check_shift = |old: Point, new: Point| -> Result<(), String> {
+        finite(new)?;
+        let error_x = (f64::from(new.x) - f64::from(old.x) - f64::from(shift.x)).abs();
+        let error_y = (f64::from(new.y) - f64::from(old.y) - f64::from(shift.y)).abs();
+        if error_x > 0.01 || error_y > 0.01 {
+            return Err(retained(
+                "Prepared tile loses local geometry at these finite coordinates",
+            ));
+        }
+        Ok(())
+    };
     // Fields bound to `_` are compared verbatim by the final document equality.
     let Document {
         generic,
@@ -166,7 +185,7 @@ pub(super) fn certify_translation(
         on_other_canvas: _,
         seats: _,
         science,
-    } = &mut restored;
+    } = restored;
     for attachment in &mut science.attachments {
         for id in attachment.atoms.iter_mut().flatten() {
             undo(id)?;
@@ -277,6 +296,9 @@ pub(super) fn certify_translation(
         if let Some(text) = actual.text.as_mut() {
             undo(text)?;
         }
+        if let Some(id) = actual.mo.as_deref_mut().and_then(|mo| mo.molecule.as_mut()) {
+            undo(id)?;
+        }
         if let Some(leader) = actual.leader.as_mut() {
             for target in [&mut leader.start, &mut leader.end].into_iter().flatten() {
                 for id in target.ids_mut() {
@@ -311,7 +333,7 @@ pub(super) fn certify_translation(
         }
     }
     for r in reactions {
-        r.remap(&inverse).ok_or("Missing reaction remap")?;
+        r.remap(inverse).ok_or("Missing reaction remap")?;
     }
     for l in arrow_labels {
         undo(&mut l.arrow)?;
@@ -338,13 +360,10 @@ pub(super) fn certify_translation(
         }
     }
     for m in models {
-        m.remap(&inverse).ok_or("Missing 3D model remap")?;
+        m.remap(inverse).ok_or("Missing 3D model remap")?;
     }
-    *depth_appearance = crate::depth_appearance::remap(depth_appearance, &inverse);
-    generic.remap(&inverse).ok_or("Missing generic remap")?;
-    if &restored != source {
-        return Err("Prepared tile changed noncoordinate native data".into());
-    }
+    *depth_appearance = crate::depth_appearance::remap(depth_appearance, inverse);
+    generic.remap(inverse).ok_or("Missing generic remap")?;
     Ok(())
 }
 

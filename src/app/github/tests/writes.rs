@@ -31,9 +31,8 @@ async fn a_save_reads_back_only_its_own_drawing() {
     // Changed in another app: a save of ring.rsk does not look at it.
     std::fs::write(&other, drawing(70.)).unwrap();
     std::fs::write(&path, drawing(50.)).unwrap();
-    let doc = Document::from_native_file(&drawing(50.)).unwrap();
     app.github_unread(&path);
-    let task = app.github_saved(true, Some((path.clone(), doc)));
+    let task = app.github_saved(true, Some((path.clone(), Ok(drawing(50.)))));
     // Counted at once, before it is read back, so the count never dips.
     assert_eq!(unsent(&app), ["ring.rsk"]);
     run(&mut app, task).await;
@@ -99,7 +98,7 @@ fn a_save_that_goes_on_with_a_close_still_asks_to_send() {
     std::fs::write(&path, app.tab.doc.file_json().unwrap()).unwrap();
     (app.file_io.saving, app.file_io.saving_tab) = (true, Some(id));
     let (epoch, doc) = (app.tab.file_epoch, Box::new(app.tab.doc.clone()));
-    let _ = app.update(Message::Saved(epoch, doc, Ok(Some(path))));
+    let _ = app.update(Message::Saved(epoch, doc, Ok(Some(path.into()))));
     assert!(matches!(app.github.closing, Some(Closing::Tab(asked, _)) if asked == id));
     assert!(app.strip().any(|tab| tab.id == id), "still open");
 }

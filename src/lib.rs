@@ -24,11 +24,11 @@ pub use reshiki_model::{
     attachments, bonds, canvas_theme, chains, color_contrast, common_groups, compare,
     compound_numbers, crossings, cycles, depiction, depth_appearance, document, editing, equipment,
     erasing, fischer, generic, graphics, grouping, haworth, highlights, ionic, joining, layouts,
-    leaders, ligands, line_icons, linked_properties, models3d, molecule_names, pages, palette,
-    pictures, projection, purpose, reaction_cleanup, reaction_colors, reaction_mapping, reactions,
-    rear_opacity, ring_arcs, ring_fills, rings, scene, science, scientific, selection_region,
-    shape_text, stereo_groups, stereochemistry, storage, style, symbols, templates, theme_files,
-    theme_generator, transaction, typography,
+    leaders, ligands, line_icons, linked_properties, models3d, molecule_names, orbital_levels,
+    pages, palette, pictures, projection, purpose, reaction_cleanup, reaction_colors,
+    reaction_mapping, reactions, rear_opacity, ring_arcs, ring_fills, rings, scene, science,
+    scientific, selection_region, shape_text, stereo_groups, stereochemistry, storage, style,
+    symbols, templates, theme_files, theme_generator, transaction, typography,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
