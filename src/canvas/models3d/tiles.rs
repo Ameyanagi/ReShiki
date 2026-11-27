@@ -72,6 +72,11 @@ thread_local! {
     static SAMPLES: std::cell::Cell<f32> = const { std::cell::Cell::new(OVERSAMPLE) };
 }
 
+#[cfg(test)]
+thread_local! {
+    pub(in crate::canvas) static TILE_RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// A small prepared model image outside the paper, rasterized and cached by
 /// the same SVG path as its canvas tiles and figure exports.
 #[derive(Clone, Debug)]
@@ -539,6 +544,8 @@ fn draw_tiles(
         let [x0, y0, x1, y1] = tile.rect;
         let size = [(x1 - x0) as u32, (y1 - y0) as u32];
         let render = || {
+            #[cfg(test)]
+            TILE_RENDERS.with(|n| n.set(n.get() + 1));
             pixels_on(
                 &primitives(run, &tile.parts),
                 world(x0, y0),

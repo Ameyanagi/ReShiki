@@ -169,6 +169,14 @@ fn inflate(mut packed: &[u8]) -> Result<Vec<u8>, String> {
 
 /// Decodes an RSF2 surface and places it at `origin`.
 pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
+    decode_scaled(text, origin, 1.)
+}
+
+pub(in crate::models3d) fn decode_scaled(
+    text: &str,
+    origin: Point,
+    scale: f32,
+) -> Result<Primitive, String> {
     if text.len() > MAX_BYTES {
         return Err("Snapshot is too large".into());
     }
@@ -196,12 +204,12 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
         let mut fills = Vec::with_capacity(fill_count);
         for _ in 0..fill_count {
             let color = take(&mut bytes)?;
-            let region = read_path(&mut bytes, origin, &mut total_path_commands)?;
+            let region = read_path(&mut bytes, origin, scale, &mut total_path_commands)?;
             let tone_count = read_count(&mut bytes, 3 + MIN_PATH_BYTES)?;
             let mut tones = Vec::with_capacity(tone_count);
             for _ in 0..tone_count {
                 let color = take(&mut bytes)?;
-                let path = read_path(&mut bytes, origin, &mut total_path_commands)?;
+                let path = read_path(&mut bytes, origin, scale, &mut total_path_commands)?;
                 tones.push((path, color));
             }
             fills.push(SurfaceFill {
@@ -216,12 +224,12 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
             let outline = Outline {
                 color: take(&mut bytes)?,
                 alpha: f32::from_le_bytes(take(&mut bytes)?),
-                width: f32::from_le_bytes(take(&mut bytes)?),
+                width: f32::from_le_bytes(take(&mut bytes)?) * scale,
             };
             if !valid_outline(&outline) {
                 return Err("Invalid snapshot outline".into());
             }
-            let paths = read_path(&mut bytes, origin, &mut total_path_commands)?;
+            let paths = read_path(&mut bytes, origin, scale, &mut total_path_commands)?;
             strokes.push(SurfaceStroke { paths, outline });
         }
         groups.push(SurfaceGroup {
@@ -253,6 +261,7 @@ fn read_count(bytes: &mut &[u8], item_bytes: usize) -> Result<usize, String> {
 fn read_path(
     bytes: &mut &[u8],
     origin: Point,
+    scale: f32,
     total_path_commands: &mut usize,
 ) -> Result<Vec<PathCommand>, String> {
     // Close is the smallest command, occupying just its tag byte.
@@ -274,13 +283,13 @@ fn read_path(
         let command = match tag {
             0 => {
                 subpath_open = true;
-                PathCommand::Move(read_point(bytes, origin)?)
+                PathCommand::Move(read_point(bytes, origin, scale)?)
             }
-            1 => PathCommand::Line(read_point(bytes, origin)?),
+            1 => PathCommand::Line(read_point(bytes, origin, scale)?),
             2 => PathCommand::Cubic(
-                read_point(bytes, origin)?,
-                read_point(bytes, origin)?,
-                read_point(bytes, origin)?,
+                read_point(bytes, origin, scale)?,
+                read_point(bytes, origin, scale)?,
+                read_point(bytes, origin, scale)?,
             ),
             3 => {
                 if !subpath_open
@@ -302,10 +311,10 @@ fn read_path(
     Ok(path)
 }
 
-fn read_point(bytes: &mut &[u8], origin: Point) -> Result<Point, String> {
+fn read_point(bytes: &mut &[u8], origin: Point, scale: f32) -> Result<Point, String> {
     let x = f32::from_le_bytes(take(bytes)?);
     let y = f32::from_le_bytes(take(bytes)?);
-    let point = origin.offset(x, y);
+    let point = origin.offset(x * scale, y * scale);
     if !point.is_finite() {
         return Err("Non-finite snapshot coordinate".into());
     }

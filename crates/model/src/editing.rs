@@ -90,15 +90,16 @@ pub enum Arrange {
 /// The selected part as its own document: [`crate::attachments::selection`],
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
+    selection_with_diagrams(doc, ids, &[])
+}
+
+pub(crate) fn selection_with_diagrams(
+    doc: &Document,
+    ids: &[u64],
+    stationary: &[&crate::graphics::MoDiagram],
+) -> Document {
     let mut part = selection_part(doc, ids);
-    if part
-        .models
-        .iter()
-        .any(|model| model.figures().next().is_some())
-    {
-        part.science = doc.science.clone();
-        part.science = crate::science::for_figures(&part);
-    }
+    part.science = crate::science::for_figures_from(&part, &doc.science, stationary);
     part
 }
 
@@ -251,6 +252,12 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
     part.annotations.retain(|a| ids.contains(&a.id));
     part.arrows.retain(|a| ids.contains(&a.id));
     part.graphics.retain(|g| ids.contains(&g.id));
+    for mo in part.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
+        if mo.molecule.is_some_and(|id| !ids.contains(&id)) {
+            mo.molecule = None;
+            mo.linked = false;
+        }
+    }
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
     part.abbreviations
@@ -559,46 +566,10 @@ fn mapped_append_part(
 /// when one has no entry in `mapping`. The destructure names every field, so
 /// a new collection does not compile until its IDs are handled here.
 pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
-    let snapshots: Vec<usize> = doc
-        .models
-        .iter()
-        .enumerate()
-        .filter(|(_, model)| {
-            model
-                .surface
-                .as_ref()
-                .and_then(|figure| figure.snapshot.as_ref())
-                .is_some_and(|snapshot| {
-                    snapshot.view == crate::models3d::surface::draw::view_signature(doc, model)
-                })
-        })
-        .map(|(index, _)| index)
-        .collect();
-    // Panels keep snapshots signed by their small model copies.
-    let panel_snapshots: Vec<(usize, usize)> = doc
-        .models
-        .iter()
-        .enumerate()
-        .flat_map(|(index, model)| {
-            let doc = &*doc;
-            model
-                .panels
-                .iter()
-                .enumerate()
-                .filter_map(move |(k, panel)| {
-                    let small = crate::models3d::panel_model(model, &panel.figure);
-                    panel
-                        .figure
-                        .snapshot
-                        .as_ref()
-                        .is_some_and(|snapshot| {
-                            snapshot.view
-                                == crate::models3d::surface::draw::view_signature(doc, &small)
-                        })
-                        .then_some((index, k))
-                })
-        })
-        .collect();
+    crate::models3d::surface::keep_signed(doc, |doc| rename_ids(doc, mapping))
+}
+
+fn rename_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
     let Document {
         generic,
         canvas_theme: _,
@@ -675,6 +646,12 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         crate::leaders::remap(g, mapping);
         crate::cycles::remap(g, mapping);
         crate::graphics::table::remap(g, mapping)?;
+        if let Some(mo) = &mut g.mo {
+            mo.molecule = mo.molecule.and_then(|id| mapping.get(&id).copied());
+            if mo.molecule.is_none() {
+                mo.linked = false;
+            }
+        }
         if let Some(text) = &mut g.text {
             map(text)?;
         }
@@ -736,35 +713,6 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         }
     }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
-    // ID changes preserve a matching picture, while invalid snapshots stay invalid.
-    for index in snapshots {
-        let view = crate::models3d::surface::draw::view_signature(doc, doc.models.get(index)?);
-        if let Some(snapshot) = doc
-            .models
-            .get_mut(index)?
-            .surface
-            .as_mut()
-            .and_then(|figure| figure.snapshot.as_mut())
-        {
-            snapshot.view = view;
-        }
-    }
-    for (index, k) in panel_snapshots {
-        let model = doc.models.get(index)?;
-        let small = crate::models3d::panel_model(model, &model.panels.get(k)?.figure);
-        let view = crate::models3d::surface::draw::view_signature(doc, &small);
-        if let Some(snapshot) = doc
-            .models
-            .get_mut(index)?
-            .panels
-            .get_mut(k)?
-            .figure
-            .snapshot
-            .as_mut()
-        {
-            snapshot.view = view;
-        }
-    }
     Some(())
 }
 pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {

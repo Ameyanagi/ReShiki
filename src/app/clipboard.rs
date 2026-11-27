@@ -468,6 +468,11 @@ impl App {
         )))
     }
 
+    pub(super) fn native_copy_snapshot(&self) -> Document {
+        let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
+        self.tab.xtb.orbitals.save_snapshot(snapshot)
+    }
+
     fn copy_native_in_scope(
         &mut self,
         cut: bool,
@@ -490,7 +495,7 @@ impl App {
             self.status = "There is nothing to copy".into();
             return Task::none();
         }
-        let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
+        let snapshot = self.native_copy_snapshot();
         let cut_ids = if cut {
             reshiki::shape_text::with_texts(
                 &self.tab.doc,

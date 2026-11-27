@@ -1187,6 +1187,66 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
     }
 }
 
+#[test]
+fn mo_diagram_level_click_requires_an_already_selected_diagram_and_no_drag() {
+    use reshiki::graphics::{Graphic, MoDiagram};
+    use reshiki::orbital_levels::Column;
+    use reshiki::qcdata::Spin;
+    use std::ops::ControlFlow;
+
+    let mut doc = Document::default();
+    let atom = doc.add_atom("C", World::default());
+    let id = doc.next_id();
+    let mo = MoDiagram::new(
+        atom,
+        "result".into(),
+        vec![Column {
+            spin: Spin::Alpha,
+            label: String::new(),
+            energies_ev: vec![-2., 1.],
+            occupations: vec![2., 0.],
+            occupied: Some(1),
+        }],
+    );
+    let (w, h) = mo.natural_size(&doc.drawing_style);
+    doc.graphics.push(Graphic::mo_diagram(
+        id,
+        World::new(50., 0.),
+        World::new(w, h),
+        mo,
+        GraphicStyle::default(),
+    ));
+    let (_, labels) = doc.graphics[0].mo_parts(&doc.drawing_style);
+    let point = labels
+        .iter()
+        .find(|a| a.text.starts_with("HOMO"))
+        .unwrap()
+        .centre();
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    let mut state = State::default();
+    let bounds = Rectangle::with_size(iced::Size::new(800., 600.));
+    let selected = [id];
+    assert!(
+        matches!(canvas.release_move(&mut state, point, vec![id], vec![id], point, bounds), ControlFlow::Continue(Edit::Select(ids)) if ids == selected)
+    );
+    canvas.selected = &selected;
+    assert!(
+        matches!(canvas.release_move(&mut state, point, vec![id], vec![id], point, bounds), ControlFlow::Continue(Edit::MoLevelClick(hit, 0, 0)) if hit == id)
+    );
+    assert!(matches!(
+        canvas.release_move(
+            &mut state,
+            point,
+            vec![id],
+            vec![id],
+            point.offset(30., 0.),
+            bounds
+        ),
+        ControlFlow::Continue(Edit::Move(..))
+    ));
+}
+
 fn tilt_pointer(
     canvas: &MoleculeCanvas<'_>,
     state: &mut State,
@@ -2862,6 +2922,74 @@ fn ending_a_command_drag_releases_its_copy() {
         assert!(state.gesture.is_none(), "{end_drag:?}");
         assert_eq!(std::rc::Rc::strong_count(&copy), 1, "{end_drag:?}");
     }
+}
+
+#[test]
+fn ending_a_move_or_changing_the_document_releases_its_fragment() {
+    use iced::keyboard::{Event as Key, Location, Modifiers, key};
+
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-21., 0.));
+    let b = doc.add_atom("O", World::new(21., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.add_atom("N", World::new(150., 80.));
+    let ids = [a, b];
+    let part = reshiki::editing::preserved_expansion_selection(&doc, &ids).unwrap();
+    let canvas = MoleculeCanvas {
+        tool: Tool::Select,
+        selected: &ids,
+        ..chain_canvas(&doc, ChainMode::Straight)
+    };
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let start = doc.atoms[0].position;
+    let cursor = canvas.camera.screen(start.offset(50., 0.), bounds);
+    let active_move = || {
+        let mut state = State {
+            cursor: Some(cursor),
+            gesture: Some(Gesture::Move {
+                start,
+                ids: ids.to_vec(),
+                clicked: ids.to_vec(),
+            }),
+            ..Default::default()
+        };
+        let cache = state.scene.get_mut();
+        cache.moved_part(&doc, &ids, &part);
+        cache.moved_geometry = Some(paper::SceneGeometryCache::default());
+        state
+    };
+    let released = |state: &State| {
+        let cache = state.scene.borrow();
+        cache.retained_moved_scene().is_none() && cache.moved_geometry.is_none()
+    };
+    let escape = key::Key::Named(key::Named::Escape);
+    for event in [
+        Event::Keyboard(Key::KeyPressed {
+            key: escape.clone(),
+            modified_key: escape,
+            physical_key: key::Physical::Code(key::Code::Escape),
+            location: Location::Standard,
+            modifiers: Modifiers::default(),
+            text: None,
+            repeat: false,
+        }),
+        Event::Window(iced::window::Event::Unfocused),
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)),
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+    ] {
+        let mut state = active_move();
+        canvas.update(&mut state, &event, bounds, mouse::Cursor::Available(cursor));
+        assert!(released(&state), "{event:?}");
+    }
+
+    let mut state = active_move();
+    let mut edited = doc.clone();
+    edited.atoms[0].position.x -= 10.;
+    // An input lookup can see the edit before the next draw.
+    state.scene.get_mut().opacity(&edited);
+    assert!(released(&state));
+    assert!(matches!(state.gesture, Some(Gesture::Move { .. })));
 }
 
 #[test]

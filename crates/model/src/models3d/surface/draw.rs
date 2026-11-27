@@ -13,6 +13,7 @@ use serde::{Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 /// Triangles for the drawing and export, and while the model turns.
@@ -265,17 +266,31 @@ pub fn view_signature(doc: &Document, model: &Model3d) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+pub(crate) fn supports_style(style: Style) -> bool {
+    !matches!(style, Style::Wireframe | Style::Ellipsoids)
+}
+
 fn supported(model: &Model3d) -> bool {
-    model.cell.is_none() && !matches!(model.style, Style::Wireframe | Style::Ellipsoids)
+    model.cell.is_none() && supports_style(model.style)
 }
 
 /// Whether this figure's molecule and displayed geometry still match its result.
 pub fn figure_ready(doc: &Document, model: &Model3d) -> bool {
-    supported(model) && current(doc, model).is_some()
+    model
+        .surface
+        .as_ref()
+        .is_some_and(|figure| ready_result(doc, model, &figure.orbital).is_some())
 }
 
-fn current(doc: &Document, model: &Model3d) -> Option<()> {
-    let (_, stored) = science::figure_result(doc, model)?;
+pub(crate) fn ready_result<'a>(
+    doc: &'a Document,
+    model: &Model3d,
+    orbital: &OrbitalRef,
+) -> Option<(usize, &'a science::Stored)> {
+    if !supported(model) {
+        return None;
+    }
+    let (index, stored) = science::figure_result_for(doc, model, orbital)?;
     let attachment = doc.science.attachment(stored.attachment)?;
     if attachment.freshness(doc) != Freshness::Current {
         return None;
@@ -299,7 +314,7 @@ fn current(doc: &Document, model: &Model3d) -> Option<()> {
                         .sum::<f64>()
                         <= 1e-6
             }))
-    .then_some(())
+    .then_some((index, stored))
 }
 
 pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {
@@ -637,37 +652,176 @@ fn phase_tone_counts(
     }
 }
 
+#[derive(PartialEq)]
+pub(in crate::models3d) struct SurfacePaint {
+    pub colors: [[f32; 3]; 2],
+    pub backdrop: [f32; 3],
+    pub fade: f32,
+    pub painted: f32,
+    pub outline: Option<Outline>,
+    pub line_width: f32,
+}
+
+#[derive(PartialEq)]
+struct LiveKey {
+    // The signature covers model rotation, size, perspective and the 3D points.
+    signature: String,
+    turning: bool,
+    look: Look,
+    paint: SurfacePaint,
+    // Document bonds can affect the occluders and which hydrogens are shown.
+    shown: Vec<bool>,
+    bonds: Vec<(usize, usize)>,
+}
+
+struct LiveEntry {
+    meshes: Meshes,
+    key: LiveKey,
+    origin: Point,
+    prepared: Rc<Prepared>,
+    primitive: Option<Primitive>,
+}
+
+thread_local! {
+    static LIVE: RefCell<Vec<LiveEntry>> = const { RefCell::new(Vec::new()) };
+    static LAST_TURN: std::cell::Cell<Option<[f32; 4]>> = const { std::cell::Cell::new(None) };
+}
+const LIVE_LIMIT: usize = 4;
+
+pub(in crate::models3d) fn live(
+    doc: &Document,
+    model: &Model3d,
+    view: &View,
+    paint: SurfacePaint,
+) -> Option<(Rc<Prepared>, Option<Primitive>)> {
+    let meshes = view.orbital_meshes.as_ref()?;
+    if model.morph.is_some_and(|m| m < 1.) {
+        return None;
+    }
+    let look = match &model.surface {
+        Some(figure) => figure.look,
+        None => switch()?.2,
+    };
+    // Changing angles need fresh coarse geometry. Skip key construction and
+    // retention until a turning view is requested again at the same angle.
+    if model.turning && LAST_TURN.replace(Some(model.rotation)) != Some(model.rotation) {
+        let (prepared, primitive) = prepare(meshes, model, view, look, &paint);
+        return Some((Rc::new(prepared), primitive));
+    }
+    let key = LiveKey {
+        signature: view_signature(doc, model),
+        turning: model.turning,
+        look,
+        paint,
+        shown: view.shown.clone(),
+        bonds: view.bonds.clone(),
+    };
+    LIVE.with_borrow_mut(|entries| {
+        if let Some(index) = entries
+            .iter()
+            .position(|entry| Arc::ptr_eq(&entry.meshes, meshes) && entry.key == key)
+        {
+            let entry = entries.remove(index);
+            let origin = entry.origin;
+            let result = if origin == view.origin {
+                (entry.prepared.clone(), entry.primitive.clone())
+            } else {
+                let (dx, dy) = (view.origin.x - origin.x, view.origin.y - origin.y);
+                let mut prepared = (*entry.prepared).clone();
+                for [x, y, _] in &mut prepared.positions {
+                    *x += dx;
+                    *y += dy;
+                }
+                let primitive = entry.primitive.as_ref().map(|p| translated(p, dx, dy));
+                (Rc::new(prepared), primitive)
+            };
+            entries.push(entry);
+            return Some(result);
+        }
+        let (prepared, primitive) = prepare(meshes, model, view, look, &key.paint);
+        let prepared = Rc::new(prepared);
+        if entries.len() == LIVE_LIMIT {
+            entries.remove(0);
+        }
+        entries.push(LiveEntry {
+            meshes: meshes.clone(),
+            key,
+            origin: view.origin,
+            prepared: prepared.clone(),
+            primitive: primitive.clone(),
+        });
+        Some((prepared, primitive))
+    })
+}
+
+fn prepare(
+    meshes: &[Mesh; 2],
+    model: &Model3d,
+    view: &View,
+    look: Look,
+    paint: &SurfacePaint,
+) -> (Prepared, Option<Primitive>) {
+    let prepared = Prepared::new(meshes, model, view, look, paint);
+    let primitive = prepared.paint(
+        paint.colors,
+        paint.backdrop,
+        paint.fade,
+        paint.outline,
+        paint.line_width,
+    );
+    (prepared, primitive)
+}
+
+fn translated(primitive: &Primitive, dx: f32, dy: f32) -> Primitive {
+    let mut moved = primitive.clone();
+    if let Primitive::Surface { groups } = &mut moved {
+        let move_path = |path: &mut [crate::graphics::PathCommand]| {
+            for command in path {
+                *command = command.map(|p| p.offset(dx, dy));
+            }
+        };
+        for group in groups {
+            for fill in &mut group.fills {
+                move_path(&mut fill.region);
+                for (path, _) in &mut fill.tones {
+                    move_path(path);
+                }
+            }
+            for stroke in &mut group.strokes {
+                move_path(&mut stroke.paths);
+            }
+        }
+    }
+    moved
+}
+
 /// The surface cut and merged for `view`, ready to draw after the molecule.
+#[derive(Clone)]
 pub(in crate::models3d) struct Prepared {
     positions: Vec<[f32; 3]>,
-    triangles: Vec<[u32; 3]>,
-    front: Vec<bool>,
-    visible: Visible,
+    triangles: Rc<[[u32; 3]]>,
+    front: Rc<[bool]>,
+    visible: Rc<Visible>,
     look: Look,
     tones: Vec<usize>,
 }
 
 impl Prepared {
-    /// Cuts the model's surface for the view, or `None` without one or
-    /// during the 2D → 3D morph.
-    /// `outline` is the width of the balls' painted outline.
-    pub(in crate::models3d) fn new(
+    /// Cuts the model's surface for the view.
+    fn new(
         meshes: &[Mesh; 2],
         model: &Model3d,
         view: &View,
-        outline: f32,
-        colors: [[f32; 3]; 2],
-        backdrop: [f32; 3],
-        fade: f32,
-    ) -> Option<Self> {
-        if model.morph.is_some_and(|m| m < 1.) {
-            return None;
-        }
-        let look = if let Some(figure) = &model.surface {
-            figure.look
-        } else {
-            switch()?.2
-        };
+        look: Look,
+        paint: &SurfacePaint,
+    ) -> Self {
+        let SurfacePaint {
+            colors,
+            backdrop,
+            fade,
+            painted,
+            ..
+        } = *paint;
         let mesh = &meshes[usize::from(model.turning)];
         let rotated: Vec<[f32; 3]> = mesh
             .positions
@@ -725,7 +879,7 @@ impl Prepared {
         } else {
             Vec::new()
         };
-        let occluders = occluders(view, model, outline / 2.);
+        let occluders = occluders(view, model, painted / 2.);
         let visible = visible::visible(&Input {
             positions: &positions,
             triangles: &mesh.triangles,
@@ -737,14 +891,14 @@ impl Prepared {
             lines: &lines,
             tolerance: TOLERANCE,
         });
-        Some(Prepared {
+        Prepared {
             positions,
-            triangles: mesh.triangles.clone(),
-            front,
-            visible,
+            triangles: Rc::from(mesh.triangles.as_slice()),
+            front: front.into(),
+            visible: Rc::new(visible),
             look,
             tones,
-        })
+        }
     }
 
     /// Whether nothing of the surface lies in front of the ball of `radius`

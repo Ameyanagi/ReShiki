@@ -202,6 +202,7 @@ impl NativeGraphic {
             table: None,
             tlc: self.tlc,
             ir: self.ir,
+            mo: None,
         };
         graphic.validate().map_err(Error::Document)?;
         Ok(graphic)

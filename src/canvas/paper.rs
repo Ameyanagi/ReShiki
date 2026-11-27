@@ -3,7 +3,9 @@
 mod bond_text;
 mod draft;
 mod fragment;
-pub(super) use fragment::Remainder;
+#[cfg(test)]
+pub(super) use fragment::SPLIT;
+pub(super) use fragment::ScenePart;
 mod geometry;
 pub(super) use geometry::SceneGeometryCache;
 mod memo;
@@ -44,6 +46,7 @@ struct Draft<'d> {
     template_notice: Option<(String, bool)>,
     rejection: Option<reshiki::editing::RingRejection>,
     translation: Option<World>,
+    move_delta: Option<World>,
     smart: Vec<Guide>,
     /// Where a part would join a catalytic cycle if dropped now.
     cycle_drop: Option<reshiki::cycles::Target>,
@@ -90,6 +93,7 @@ impl<'d> Draft<'d> {
             template_notice: None,
             rejection: None,
             translation: None,
+            move_delta: None,
             smart: Vec::new(),
             cycle_drop: None,
             seat_hint: None,
@@ -106,6 +110,7 @@ impl<'d> Draft<'d> {
             template_notice: self.template_notice,
             rejection: self.rejection,
             translation: self.translation,
+            move_delta: self.move_delta,
             smart: self.smart,
             cycle_drop: self.cycle_drop,
             seat_hint: self.seat_hint,
@@ -231,6 +236,7 @@ impl MoleculeCanvas<'_> {
             template_notice,
             rejection,
             translation,
+            move_delta,
             smart,
             cycle_drop,
             seat_hint,
@@ -274,6 +280,7 @@ impl MoleculeCanvas<'_> {
                             self.doc,
                             preview,
                             self.camera,
+                            *move_delta,
                         )
                     })
                     .flatten()
@@ -302,7 +309,25 @@ impl MoleculeCanvas<'_> {
                 &[],
                 self.reviewing_pair,
             );
-            if let Some(record) = &memo
+            if let Some(delta) = fragment.shift {
+                let camera = Camera {
+                    center: self.camera.center.offset(-delta.x, -delta.y),
+                    ..self.camera
+                };
+                state
+                    .scene
+                    .borrow_mut()
+                    .moved_geometry
+                    .get_or_insert_with(SceneGeometryCache::with_pan_margin)
+                    .draw(
+                        frame,
+                        (fragment.remainder.markers.clone(), fragment.scene.clone()),
+                        camera,
+                        bounds,
+                        &[],
+                        self.reviewing_pair,
+                    );
+            } else if let Some(record) = &memo
                 && self.tool == Tool::Equipment
             {
                 record.geometry.borrow_mut().draw(

@@ -128,7 +128,7 @@ fn chemdraw_and_mol_files_open_unchanged_and_ask_once_how_to_save() {
         let _ = app.update(Message::Saved(
             app.tab.file_epoch,
             snapshot,
-            Ok(Some(path.clone())),
+            Ok(Some(path.clone().into())),
         ));
         assert_eq!(app.tab.path.as_ref(), Some(&path));
 

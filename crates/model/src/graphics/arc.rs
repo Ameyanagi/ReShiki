@@ -120,7 +120,7 @@ impl Graphic {
 
     /// Arc endpoints stay parametric; other graphics expose their Bézier points.
     pub fn edit_points(&self) -> Vec<Point> {
-        if self.kind == GraphicKind::TlcPlate {
+        if matches!(self.kind, GraphicKind::TlcPlate | GraphicKind::MoDiagram) {
             return vec![];
         }
         if self.kind == GraphicKind::Arc {

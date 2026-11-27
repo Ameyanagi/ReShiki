@@ -2,8 +2,8 @@
 //! Place on canvas.
 // Column and level indices come from the choice made for these columns.
 #![allow(clippy::indexing_slicing)]
-use super::levels::Diagram;
-use super::{Action, ISO_RANGE, LookChoice, PRESETS, send};
+use super::levels::{Diagram, window};
+use super::{Action, DiagramEdit, ISO_RANGE, LookChoice, PRESETS, send};
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use crate::app::xtb::palette::Shown;
 use crate::app::xtb::tone::{Tone, line};
@@ -64,7 +64,7 @@ impl App {
                     reshiki::accessibility::button(
                         format!("xtb-orbital-spin-{index}"),
                         format!("{} spin orbitals", column.label),
-                        text(column.label).size(12),
+                        text(column.label.clone()).size(12),
                     )
                     .padding([4, 10])
                     .checked(on)
@@ -74,7 +74,7 @@ impl App {
             }
         }
         list = list.push(head);
-        for index in spectrum.window(Some(choice.index)).rev() {
+        for index in window(spectrum, Some(choice.index)).rev() {
             let on = index == choice.index;
             let group = spectrum.group(index);
             let fold = group.end() - group.start() + 1;
@@ -284,9 +284,57 @@ impl App {
             )
             .into()
         };
-        let mut controls = column![row![frontier, this].spacing(10).align_y(Alignment::Center)]
-            .spacing(8)
-            .max_width(400);
+        let diagram = if let Some(id) = target.diagram {
+            accessible_command(
+                "xtb-orbital-remove-diagram",
+                "Remove MO diagram",
+                "Remove MO diagram",
+            )
+            .on_press(send(Action::EditDiagram(id, DiagramEdit::Remove)))
+        } else {
+            accessible_command(
+                "xtb-orbital-place-diagram",
+                "Place MO diagram",
+                "Place MO diagram",
+            )
+            .on_press_maybe((live && self.xtb_orbital_frontier_ready(target)).then(
+                || {
+                    send(Action::PlaceDiagram {
+                        for_selection: false,
+                    })
+                },
+            ))
+        };
+        let mut chosen = row![this].spacing(10).align_y(Alignment::Center);
+        if let Some(id) = target.diagram
+            && let Some(mo) = self
+                .tab
+                .doc
+                .graphics
+                .iter()
+                .find(|g| g.id == id)
+                .and_then(|g| g.mo.as_deref())
+            && let Some(column) = mo.columns.iter().position(|c| c.label == column.label)
+        {
+            let column = column as u8;
+            let label = if super::diagram::has_picture(mo, column, choice.index) {
+                "Remove from MO diagram"
+            } else {
+                "Add to MO diagram"
+            };
+            chosen = chosen.push(
+                accessible_command("xtb-orbital-toggle-diagram-picture", label, label)
+                    .on_press(send(Action::ToggleDiagramPicture(id, column, choice.index))),
+            );
+        }
+        let mut controls = column![
+            row![frontier, diagram]
+                .spacing(10)
+                .align_y(Alignment::Center),
+            chosen,
+        ]
+        .spacing(8)
+        .max_width(400);
         // A degenerate level: which member is shown, and its partner.
         let group = column.group(choice.index);
         if group.end() > group.start() {
