@@ -532,9 +532,9 @@ impl App {
             .models
             .iter()
             .position(|m| m.linked_atoms.contains(&atom))?;
-        let rest = doc.models.get(index)?.clone();
-        let (size, reach) = (rest.size, rest.reach(&doc));
-        let mut frames = Vec::with_capacity(positions.len());
+        let mut rest = doc.models.get(index)?.clone();
+        let (size, reach) = (rest.size, rest.reach(&doc).max(1e-3));
+        let mut models = Vec::with_capacity(positions.len());
         for positions in &positions {
             let model = doc.models.get_mut(index)?;
             let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
@@ -545,7 +545,38 @@ impl App {
                 hydrogen.xyz = p;
             }
             let reach_now = doc.models.get(index)?.reach(&doc);
-            doc.models.get_mut(index)?.size = size * reach_now / reach.max(1e-3);
+            let model = doc.models.get_mut(index)?;
+            model.size = size * reach_now / reach;
+            models.push(model.clone());
+        }
+
+        *doc.models.get_mut(index)? = rest.clone();
+        let row = if let Some(arrow) = shown.arrow {
+            // Reserve the widest phase, keeping a single drawing scale as
+            // the animated geometry expands and contracts.
+            let envelope = models
+                .iter()
+                .map(|model| model.size)
+                .fold(rest.size, f32::max);
+            doc.models.get_mut(index)?.size = envelope;
+            super::ts::show_path_model(&self.tab.doc, &mut doc, index, arrow);
+            rest = doc.models.get(index)?.clone();
+            let (lo, _) = reshiki::models3d::frame(&doc, &rest)?;
+            Some((lo.y, rest.size / envelope))
+        } else {
+            None
+        };
+
+        let mut frames = Vec::with_capacity(positions.len());
+        for (mut model, positions) in models.into_iter().zip(&positions) {
+            if let Some((top, scale)) = row {
+                model.display = rest.display;
+                model.offset = rest.offset;
+                model.size *= scale;
+                let (lo, _) = reshiki::models3d::frame(&doc, &model)?;
+                model.offset.y += top - lo.y;
+            }
+            *doc.models.get_mut(index)? = model;
             let arrows = if key.arrows {
                 arrows(&doc, index, positions, mode, key.amplitude)?
             } else {
@@ -1348,6 +1379,7 @@ impl App {
             start: Some(Start { positions, from }),
             search: None,
             ts: None,
+            reaction: None,
         };
         self.xtb_begin(request)
     }

@@ -285,6 +285,7 @@ mod execution {
         let a = app.tab.doc.add_atom("O", Point::default());
         let b = app.tab.doc.add_atom("O", Point::new(100., 50.));
         let (arrow, species) = reaction(&mut app, a, b);
+        let bounds = reshiki::scene::selections_bounds(&app.tab.doc, &[vec![a], vec![b]]);
         let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize, None);
         assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [a]);
         model(&mut app);
@@ -301,10 +302,13 @@ mod execution {
         let [(a_lo, a_hi), (b_lo, b_hi)] = frames[..] else {
             panic!("one model per species");
         };
-        assert!(
-            a_hi.x <= b_lo.x || b_hi.x <= a_lo.x || a_hi.y <= b_lo.y || b_hi.y <= a_lo.y,
-            "the species' models do not overlap"
-        );
+        for ((lo, hi), (species_lo, species_hi)) in frames.iter().zip(bounds.into_iter().flatten())
+        {
+            assert!(((lo.x + hi.x - species_lo.x - species_hi.x) / 2.).abs() < 0.01);
+            assert!(lo.y >= species_hi.y + doc.drawing_style.bond_length_world - 0.01);
+        }
+        assert!((a_lo.y - b_lo.y).abs() < 0.01);
+        assert!(a_hi.x <= b_lo.x + 0.001 && b_lo.x < b_hi.x && a_lo.y < a_hi.y);
         event(&mut app, optimized(&START, &MOVED));
         assert_eq!(app.tab.doc.science.results.len(), 2, "{}", app.status);
         assert!(
@@ -326,6 +330,61 @@ mod execution {
         assert!(app.tab.xtb.run.is_none(), "both current results are reused");
         assert_eq!(app.tab.doc.science.results.len(), 2);
         assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
+    }
+
+    #[test]
+    fn optimization_relocates_existing_models_in_its_own_undo_step() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("O", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(100., 50.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        use reshiki::models3d::{ForceField, Hydrogen, Model3d, Placed, frame};
+
+        for (id, offset) in [(a, Point::new(70., 40.)), (b, Point::new(100., 0.))] {
+            let mut model = Model3d::new(
+                &app.tab.doc,
+                vec![Placed {
+                    id,
+                    xyz: START[0].map(|v| v as f32),
+                }],
+                START[1..]
+                    .iter()
+                    .map(|xyz| Hydrogen {
+                        parent: id,
+                        xyz: xyz.map(|v| v as f32),
+                    })
+                    .collect(),
+                ForceField::default(),
+            );
+            model.offset = offset;
+            app.tab.doc.models.push(model);
+        }
+        reshiki::models3d::require_version(&mut app.tab.doc);
+        let original = app.tab.doc.models.clone();
+
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        assert!(app.tab.model_job.is_none(), "{}", app.status);
+        assert!(!app.tab.history.can_undo());
+        event(&mut app, optimized(&START, &MOVED));
+        assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
+        let laid_out = app.tab.doc.models.clone();
+        assert_ne!(laid_out[0].offset, original[0].offset);
+        assert_ne!(laid_out[1].offset, original[1].offset);
+        assert!(
+            (frame(&app.tab.doc, &laid_out[0]).unwrap().0.y
+                - frame(&app.tab.doc, &laid_out[1]).unwrap().0.y)
+                .abs()
+                < 0.01
+        );
+        let _ = app.update(Message::Undo);
+        assert!(app.tab.doc.science.results.is_empty());
+        assert_eq!(app.tab.doc.models, original);
+        assert!(!app.tab.history.can_undo());
+
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc.science.results.len(), 1);
+        assert_eq!(app.tab.doc.models, laid_out);
     }
 
     #[test]

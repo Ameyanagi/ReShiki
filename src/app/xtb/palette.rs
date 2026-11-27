@@ -1057,13 +1057,22 @@ impl App {
                 failure = Some(error.to_string());
                 return None;
             }
-            // A model shown as 2D only appears beside the drawing.
             let atom = shown.atoms.iter().flatten().next()?;
-            let model = doc.models.iter().position(|m| {
-                m.linked_atoms.contains(atom) && m.display == reshiki::models3d::Display::TwoD
-            });
-            if let Some(model) = model {
-                reshiki::models3d::set_display(&mut doc, model, reshiki::models3d::Display::Both);
+            if let Some((index, model)) = doc
+                .models
+                .iter()
+                .enumerate()
+                .find(|(_, m)| m.linked_atoms.contains(atom))
+            {
+                if let Some(arrow) = shown.arrow {
+                    ts::show_path_model(&self.tab.doc, &mut doc, index, arrow);
+                } else if model.display == reshiki::models3d::Display::TwoD {
+                    reshiki::models3d::set_display(
+                        &mut doc,
+                        index,
+                        reshiki::models3d::Display::Both,
+                    );
+                }
             }
             if self.tab.xtb.palette.ensemble.overlay
                 && let Some(table) = &table
@@ -1247,6 +1256,7 @@ impl App {
             keep_full: shown.stored.keep_full,
             start: None,
             ts: None,
+            reaction: None,
         };
         self.xtb_end_preview();
         self.xtb_begin(request)

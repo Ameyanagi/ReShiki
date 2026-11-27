@@ -494,6 +494,15 @@ pub(super) fn unique_matching_plan(doc: &Document, atoms: &[Option<u64>]) -> Opt
     candidates.next().is_none().then_some(candidate)
 }
 
+/// Keep the starting species in the scheme while showing the path geometry
+/// in a separate frame. The preview model keeps its index for playback.
+pub(super) fn show_path_model(original: &Document, doc: &mut Document, index: usize, arrow: u64) {
+    if let Some(model) = original.models.get(index) {
+        doc.models.push(model.clone());
+        reshiki::models3d::place_reaction_row(doc, arrow, Some(index));
+    }
+}
+
 /// Copy a NEB path image's coordinates, retaining the starting topology.
 /// Reached endpoints use their own perceived graph instead.
 pub(super) fn preview_image(
@@ -763,6 +772,7 @@ impl App {
             keep_full: false,
             start: None,
             search: None,
+            reaction: Some(arrow),
             ts: Some(Request {
                 arrow,
                 free_energy,
