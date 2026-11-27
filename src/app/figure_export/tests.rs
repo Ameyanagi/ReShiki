@@ -547,7 +547,7 @@ async fn naming_or_renaming_the_same_drawing_keeps_its_repeat_target_after_resta
         let _ = app.update(Message::Saved(
             app.tab.file_epoch,
             Box::new(snapshot),
-            Ok(Some(source)),
+            Ok(Some(source.into())),
         ));
         let record = directory.path().join("recent.json");
         app.recent_export
@@ -568,7 +568,7 @@ async fn naming_or_renaming_the_same_drawing_keeps_its_repeat_target_after_resta
     let _ = app.update(Message::Saved(
         app.tab.file_epoch,
         Box::new(app.tab.doc.clone()),
-        Ok(Some(directory.path().join("other.rsk"))),
+        Ok(Some(directory.path().join("other.rsk").into())),
     ));
     assert_eq!(
         app.recent_export.as_ref().unwrap().recipe.source,
@@ -589,7 +589,7 @@ async fn saving_while_picture_preparation_is_pending_keeps_the_completed_source_
     let _ = app.update(Message::Saved(
         app.tab.file_epoch,
         Box::new(snapshot),
-        Ok(Some(source)),
+        Ok(Some(source.into())),
     ));
     let _ = app.update(export.completed(Ok(Some(directory.path().join("figure.svg")))));
     let record = directory.path().join("recent.json");

@@ -1176,7 +1176,14 @@ pub fn figure_result<'a>(
     doc: &'a Document,
     model: &crate::models3d::Model3d,
 ) -> Option<(usize, &'a Stored)> {
-    let figure = model.surface.as_ref()?;
+    figure_result_for(doc, model, &model.surface.as_ref()?.orbital)
+}
+
+pub(crate) fn figure_result_for<'a>(
+    doc: &'a Document,
+    model: &crate::models3d::Model3d,
+    orbital: &crate::models3d::surface::OrbitalRef,
+) -> Option<(usize, &'a Stored)> {
     let atom = model.linked_atoms.first()?;
     let mut matches = doc
         .science
@@ -1194,7 +1201,7 @@ pub fn figure_result<'a>(
                             .iter()
                             .flatten()
                             .all(|id| model.contains(*id))
-                        && result_key(&stored.result) == figure.orbital.result
+                        && result_key(&stored.result) == orbital.result
                 })
         });
     // A repeated calculation shares the key: the figure stays with the
@@ -1202,11 +1209,11 @@ pub fn figure_result<'a>(
     let newest = matches.next()?;
     let keeps = |stored: &Stored| {
         stored.result.orbitals.as_ref().is_some_and(|orbitals| {
-            let set = match (&orbitals.beta, figure.orbital.spin) {
+            let set = match (&orbitals.beta, orbital.spin) {
                 (Beta::Unrestricted(beta), Spin::Beta) => beta,
                 _ => &orbitals.alpha,
             };
-            set.rows.binary_search(&figure.orbital.index).is_ok()
+            set.rows.binary_search(&orbital.index).is_ok()
         })
     };
     if keeps(newest.1) {
@@ -1219,25 +1226,60 @@ pub fn figure_result<'a>(
 /// Only their linked molecules' referenced results survive, in light form with
 /// the figures' coefficient rows and basis. Other calculation data stays behind.
 pub fn for_figures(doc: &Document) -> Science {
+    for_figures_from(doc, &doc.science, &[])
+}
+
+pub(crate) fn for_figures_from(
+    doc: &Document,
+    source: &Science,
+    stationary: &[&crate::graphics::MoDiagram],
+) -> Science {
     let mut molecules = HashMap::<&str, Vec<HashSet<u64>>>::new();
+    let mut pins = HashMap::<&str, Vec<_>>::new();
     for model in &doc.models {
         for figure in model.figures() {
+            let orbital = &figure.orbital;
             molecules
-                .entry(&figure.orbital.result)
+                .entry(&orbital.result)
                 .or_default()
                 .push(model.linked_atoms.iter().copied().collect());
+            pins.entry(&orbital.result)
+                .or_default()
+                .push((orbital.spin, orbital.index));
+        }
+    }
+    for mo in doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.mo.as_deref())
+        .chain(stationary.iter().copied())
+    {
+        if let Some(model) = mo.model(doc) {
+            molecules
+                .entry(&mo.result)
+                .or_default()
+                .push(model.linked_atoms.iter().copied().collect());
+            for orbital in mo.pictures.iter().map(|p| &p.figure.orbital) {
+                if orbital.result != mo.result {
+                    molecules
+                        .entry(&orbital.result)
+                        .or_default()
+                        .push(model.linked_atoms.iter().copied().collect());
+                }
+                pins.entry(&orbital.result)
+                    .or_default()
+                    .push((orbital.spin, orbital.index));
+            }
         }
     }
     if molecules.is_empty() {
         return Science::default();
     }
-    let pins = doc.orbital_pins();
-    let results: Vec<_> = doc
-        .science
+    let results: Vec<_> = source
         .results
         .iter()
         .filter_map(|stored| {
-            let attachment = doc.science.attachment(stored.attachment)?;
+            let attachment = source.attachment(stored.attachment)?;
             let key = result_key(&stored.result);
             let linked = molecules.get(key.as_str())?;
             let belongs = linked.iter().any(|atoms| {
@@ -1254,16 +1296,15 @@ pub fn for_figures(doc: &Document) -> Science {
                 result: Arc::new(
                     stored
                         .result
-                        .light(pins.get(&key).map_or(&[][..], Vec::as_slice)),
+                        .light(pins.get(key.as_str()).map_or(&[][..], Vec::as_slice)),
                 ),
             })
         })
         .collect();
     let attachments: HashSet<u64> = results.iter().map(|stored| stored.attachment).collect();
     let mut science = Science {
-        frames: doc.science.frames.clone(),
-        attachments: doc
-            .science
+        frames: source.frames.clone(),
+        attachments: source
             .attachments
             .iter()
             .filter(|attachment| attachments.contains(&attachment.id))

@@ -1979,6 +1979,20 @@ fn xtb_commands_rank_first_for_calculation_intents() {
 }
 
 #[test]
+fn mo_diagram_command_from_command_k_dispatches_the_orbitals_action() {
+    use crate::app::xtb::{self, orbitals};
+    let mut app = app();
+    let key = Key::Character("k".into());
+    let _ = app.update(crate::app::shortcuts::key_message(&key, &key, Modifiers::COMMAND).unwrap());
+    let _ = app.update(Message::Commands(Action::Query("mo diagram".into())));
+    let index = row(&app, "Place MO diagram");
+    assert!(matches!(&app.commands.items[index].run, Run::Send(messages)
+        if matches!(messages.as_slice(), [Message::Xtb(xtb::Action::Orbitals(orbitals::Action::PlaceDiagram { for_selection: true }))])));
+    let _ = app.update(Message::Commands(Action::Run(index)));
+    assert_eq!(app.status, "Run a calculation with orbitals first");
+}
+
+#[test]
 fn xtb_direct_commands_route_calculations_and_require_a_molecule() {
     use crate::app::xtb::{self, CalcTask, Entry};
     if !xtb::available() {

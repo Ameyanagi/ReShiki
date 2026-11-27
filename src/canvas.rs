@@ -192,6 +192,7 @@ pub enum Edit {
     /// as the live preview uses them; a chemical symbol's attachment is separate.
     Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
+    MoLevelClick(u64, u8, usize),
     /// Move a connected path handle, optionally breaking its node's tangency.
     PathPoint {
         id: u64,
@@ -510,11 +511,16 @@ struct HandleClick {
     position: Point,
 }
 impl State {
-    /// Every drag ends here, so a Ctrl/Cmd drag copy never outlives its drag.
+    /// Release the data retained for the active drag.
     fn end_gesture(&mut self) -> Option<Gesture> {
-        self.scene.get_mut().release_copy();
+        let scene = self.scene.get_mut();
+        scene.release_copy();
+        let gesture = self.gesture.take();
+        if matches!(gesture, Some(Gesture::Move { .. })) {
+            scene.release_move();
+        }
         self.bond_text_hover = None;
-        self.gesture.take()
+        gesture
     }
 }
 #[derive(Debug)]

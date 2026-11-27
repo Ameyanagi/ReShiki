@@ -1339,6 +1339,14 @@ impl View<'_> {
     /// farthest drawn ball edge from the centre) in any rotation, perspective
     /// included, so the frame keeps its size and place while the model turns.
     fn bounds(&self) -> (Point, Point) {
+        let half = self.half_side();
+        (
+            self.origin.offset(-half, -half),
+            self.origin.offset(half, half),
+        )
+    }
+
+    fn half_side(&self) -> f32 {
         // Seen from the camera, a sphere of radius r spans r / √(1 − (r/c)²)
         // on the plane through its centre; the camera is always beyond reach.
         let spread = if self.perspective > 0. {
@@ -1353,11 +1361,7 @@ impl View<'_> {
         } else {
             0.
         };
-        let half = self.reach * self.scale * spread + dot;
-        (
-            self.origin.offset(-half, -half),
-            self.origin.offset(half, half),
-        )
+        self.reach * self.scale * spread + dot
     }
 }
 
@@ -3348,29 +3352,30 @@ impl ModelPaint {
 impl View<'_> {
     fn live_surface(
         &self,
+        doc: &Document,
         model: &Model3d,
         paint: &ModelPaint,
-    ) -> Option<(surface::draw::Prepared, Option<Primitive>)> {
-        let meshes = self.orbital_meshes.as_deref()?;
+    ) -> Option<(std::rc::Rc<surface::draw::Prepared>, Option<Primitive>)> {
+        self.orbital_meshes.as_ref()?;
         // Stick draws a contour twice as wide.
         let painted = match (paint.glossy, model.style) {
             (true, _) => 0.,
             (false, Style::Stick) => paint.line * 2.,
             (false, _) => paint.line,
         };
-        let colors = surface::draw::phase_colors(model, paint.dark);
-        let backdrop = float(paint.backdrop);
-        let fade = paint.fade(self.reach, 0.);
-        let prepared =
-            surface::draw::Prepared::new(meshes, model, self, painted, colors, backdrop, fade)?;
-        let primitive = prepared.paint(
-            colors,
-            backdrop,
-            fade,
-            paint.outline(paint.line),
-            paint.line,
-        );
-        Some((prepared, primitive))
+        surface::draw::live(
+            doc,
+            model,
+            self,
+            surface::draw::SurfacePaint {
+                colors: surface::draw::phase_colors(model, paint.dark),
+                backdrop: float(paint.backdrop),
+                fade: paint.fade(self.reach, 0.),
+                painted,
+                outline: paint.outline(paint.line),
+                line_width: paint.line,
+            },
+        )
     }
 }
 
@@ -3401,7 +3406,7 @@ pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
         return;
     };
     let snapshot = View::with_meshes(doc, model, Some(meshes)).and_then(|view| {
-        let (_, primitive) = view.live_surface(model, &ModelPaint::new(doc, model))?;
+        let (_, primitive) = view.live_surface(doc, model, &ModelPaint::new(doc, model))?;
         // Even when occluded, the mesh still sets the projection scale.
         let primitive = primitive.unwrap_or_else(|| Primitive::Surface { groups: vec![] });
         Some(surface::Snapshot {
@@ -3416,7 +3421,37 @@ pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
 }
 
 fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Option<()> {
+    paint_model(doc, model, View::new(doc, model)?, 1., out)
+}
+
+/// Place a small orbital model while retaining its saved view at its reference scale.
+pub(crate) fn push_orbital_picture(
+    doc: &Document,
+    model: &Model3d,
+    centre: Point,
+    side: f32,
+    out: &mut Vec<Primitive>,
+) -> Option<()> {
     let mut view = View::new(doc, model)?;
+    if view.orbital_meshes.is_none() && view.orbital_snapshot_reach.is_none() {
+        return None;
+    }
+    let scale = side / (2. * view.half_side());
+    if !scale.is_finite() || scale <= 0. {
+        return None;
+    }
+    view.origin = centre;
+    view.scale *= scale;
+    paint_model(doc, model, view, scale, out)
+}
+
+fn paint_model(
+    doc: &Document,
+    model: &Model3d,
+    mut view: View<'_>,
+    snapshot_scale: f32,
+    out: &mut Vec<Primitive>,
+) -> Option<()> {
     // The 2D → 3D morph, eased as in the prototype; hydrogens fade in.
     let grown = model.morph.filter(|m| *m < 1.).map_or(1., |m| {
         let m = m.max(0.);
@@ -3429,7 +3464,9 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         e
     });
     let (reach, style) = (view.reach, model.style);
-    let paint = ModelPaint::new(doc, model);
+    let size = model.size * snapshot_scale;
+    let mut paint = ModelPaint::new(doc, model);
+    paint.line *= snapshot_scale;
     let ModelPaint {
         card,
         card_edge,
@@ -3443,7 +3480,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     // Labels of atoms in front of the surface, drawn after it.
     let mut late = vec![];
     let orbital = view
-        .live_surface(model, &paint)
+        .live_surface(doc, model, &paint)
         .and_then(|(prepared, primitive)| Some((prepared, primitive?)));
     let side_outline = || {
         outline(line * 2.).map(|o| Outline {
@@ -3454,12 +3491,12 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     };
     if model.background == Background::Card {
         let (lo, hi) = view.bounds();
-        let width = model.size / 340.;
+        let width = size / 340.;
         let inset = width / 2.;
         out.push(Primitive::Card {
             lo: lo.offset(inset, inset),
             hi: hi.offset(-inset, -inset),
-            radius: (model.size * 10. / 340.).min((hi.x - lo.x).min(hi.y - lo.y) / 2.),
+            radius: (size * 10. / 340.).min((hi.x - lo.x).min(hi.y - lo.y) / 2.),
             fill: card,
             outline: Outline {
                 color: card_edge,
@@ -3629,7 +3666,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         let primitive = match item {
             Item::Label(i) => {
                 let (center, factor) = view.project(*rotated.get(i)?);
-                let size = (view.scale * factor * 0.34).clamp(model.size / 55., model.size / 16.);
+                let size = (view.scale * factor * 0.34).clamp(size / 55., size / 16.);
                 let style = crate::typography::TextStyle {
                     bold: true,
                     ..Default::default()
@@ -3973,7 +4010,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             return None;
         }
         let saved = model.surface.as_ref()?.snapshot.as_ref()?;
-        let primitive = surface::snapshot::decode(&saved.shapes, view.origin).ok()?;
+        let primitive =
+            surface::snapshot::decode_scaled(&saved.shapes, view.origin, snapshot_scale).ok()?;
         matches!(&primitive, Primitive::Surface { groups } if !groups.is_empty())
             .then_some(primitive)
     }) {

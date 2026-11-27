@@ -642,67 +642,79 @@ impl Writer<'_> {
                 self.objects.push((g.id, n));
                 continue;
             }
-            let mut parts =
-                if let Some(parts) = self.options.graphic_parts.and_then(|p| p.get(&g.id)) {
-                    parts.clone()
-                } else {
-                    if matches!(
-                        g.kind,
-                        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
-                    ) {
-                        return Err(invalid(
-                            "Scientific drawing export requires styled vector parts",
-                        ));
-                    }
-                    let commands = self
-                        .options
-                        .graphic_paths
+            let (supplied_parts, mo_labels) = if g.kind == GraphicKind::MoDiagram {
+                let (parts, labels) = g.mo_parts(&doc.drawing_style);
+                (Some(parts), labels)
+            } else {
+                (
+                    self.options
+                        .graphic_parts
                         .and_then(|p| p.get(&g.id))
-                        .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
-                        .clone();
-                    // A borderless panel keeps only its fill.
-                    let borderless = g.panel.as_ref().is_some_and(|p| !p.border);
-                    let mut style = g.style.clone();
-                    if borderless {
-                        style.width_pt = 0.;
-                    }
-                    // Border titles break the outline, never the fill.
-                    let breaks = g.outline_breaks(&doc.drawing_style.text_style());
-                    if breaks.is_empty() {
-                        vec![crate::scientific::Part {
-                            commands,
-                            style,
-                            filled: borderless,
-                        }]
-                    } else {
-                        let outline = crate::scientific::Part {
-                            commands: crate::graphics::panel::broken_outline(&commands, &breaks),
-                            // A filled panel's effects belong to its body; an
-                            // unfilled panel's are its outline's.
-                            style: crate::graphics::GraphicStyle {
-                                fill: None,
-                                effects: if style.fill.is_some() {
-                                    Default::default()
-                                } else {
-                                    style.effects
-                                },
-                                ..style.clone()
+                        .cloned(),
+                    vec![],
+                )
+            };
+            let mut parts = if let Some(parts) = supplied_parts {
+                parts
+            } else {
+                if matches!(
+                    g.kind,
+                    GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+                ) {
+                    return Err(invalid(
+                        "Scientific drawing export requires styled vector parts",
+                    ));
+                }
+                let commands = self
+                    .options
+                    .graphic_paths
+                    .and_then(|p| p.get(&g.id))
+                    .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
+                    .clone();
+                // A borderless panel keeps only its fill.
+                let borderless = g.panel.as_ref().is_some_and(|p| !p.border);
+                let mut style = g.style.clone();
+                if borderless {
+                    style.width_pt = 0.;
+                }
+                // Border titles break the outline, never the fill.
+                let breaks = g.outline_breaks(&doc.drawing_style.text_style());
+                if breaks.is_empty() {
+                    vec![crate::scientific::Part {
+                        commands,
+                        style,
+                        filled: borderless,
+                    }]
+                } else {
+                    let outline = crate::scientific::Part {
+                        commands: crate::graphics::panel::broken_outline(&commands, &breaks),
+                        // A filled panel's effects belong to its body; an
+                        // unfilled panel's are its outline's.
+                        style: crate::graphics::GraphicStyle {
+                            fill: None,
+                            effects: if style.fill.is_some() {
+                                Default::default()
+                            } else {
+                                style.effects
                             },
-                            filled: false,
-                        };
-                        // A shadow fills an unfilled body with the page below.
-                        let body = (style.fill.is_some() || g.shadow_commands().is_some())
-                            .then_some(crate::scientific::Part {
-                                commands,
-                                style: crate::graphics::GraphicStyle {
-                                    width_pt: 0.,
-                                    ..style
-                                },
-                                filled: true,
-                            });
-                        body.into_iter().chain([outline]).collect()
-                    }
-                };
+                            ..style.clone()
+                        },
+                        filled: false,
+                    };
+                    // A shadow fills an unfilled body with the page below.
+                    let body = (style.fill.is_some() || g.shadow_commands().is_some()).then_some(
+                        crate::scientific::Part {
+                            commands,
+                            style: crate::graphics::GraphicStyle {
+                                width_pt: 0.,
+                                ..style
+                            },
+                            filled: true,
+                        },
+                    );
+                    body.into_iter().chain([outline]).collect()
+                }
+            };
             let page = crate::palette::Color::Custom(doc.canvas_theme.background());
             // ChemDraw draws no shadow on curves: it goes first as a grey
             // shape, and an unfilled outline shows the page inside, as the
@@ -819,6 +831,7 @@ impl Writer<'_> {
                 || g.panel.is_some()
                 || !panel_parts.is_empty()
                 || !panel_titles.is_empty()
+                || !mo_labels.is_empty()
                 || parsed.len() > 1
                 || parsed
                     .iter()
@@ -897,6 +910,35 @@ impl Writer<'_> {
                 self.panel(panel_parts, &panel_titles, parent, z)?;
                 let record = self.panel_record(g)?;
                 self.tree.set(parent, crate::exchange::PANEL, record)?;
+                object = Some(parent);
+            }
+            for mut label in mo_labels {
+                let supported = label.format.style.size_pt.clamp(4., 144.);
+                if supported != label.format.style.size_pt {
+                    // Generated MO text is placed by its left edge's midpoint.
+                    // Keep that point on its row when the supported font size
+                    // changes its box, including for a turned diagram.
+                    let (width, height) = label.size();
+                    let centre = label.position.offset(width / 2., height / 2.);
+                    let left = label
+                        .position
+                        .offset(0., height / 2.)
+                        .turned(centre, label.angle);
+                    label.format.style.size_pt = supported;
+                    let (width, height) = label.size();
+                    let centre = left.offset(width / 2., 0.).turned(left, label.angle);
+                    label.position = centre.offset(-width / 2., -height / 2.);
+                }
+                let layout = crate::typography::layout(&label.text, &label.format);
+                let scale = crate::style::DEFAULT.points_per_world();
+                let measured = TextMetrics {
+                    width: layout.width * scale,
+                    height: layout.height * scale,
+                    baseline: crate::style::text_ascent(&label.format.style) * scale,
+                };
+                let text = self.annotation(&label, Some(&measured))?;
+                self.tree.set(text, "Z", z.to_string())?;
+                self.tree.attach(parent, text)?;
                 object = Some(parent);
             }
             if let Some(n) = object {

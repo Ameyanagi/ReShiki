@@ -575,6 +575,11 @@ fn filled(set: &OrbitalSet, occupations: &[f64]) -> Option<usize> {
         .then(|| occupations.iter().sum::<f64>().round() as usize)
 }
 
+/// g-xTB in its own (xtb68) conventions reports the α frontier gap.
+pub(crate) fn xtb68(result: &CalcResult) -> bool {
+    matches!(&result.settings, Settings::Xtb(s) if s.conventions == XtbConventions::Xtb68)
+}
+
 /// LUMO − HOMO (Eh) as the engine reports it: the alpha frontier, except
 /// that unrestricted g-xTB in its own conventions takes the highest
 /// occupied and lowest empty level of either spin.
@@ -582,10 +587,8 @@ fn gap_hartree(result: &CalcResult) -> Option<f64> {
     let orbitals = result.orbitals.as_ref()?;
     let alpha = &orbitals.alpha.energies_hartree;
     let n = alpha_electrons(orbitals)?;
-    let xtb68 =
-        matches!(&result.settings, Settings::Xtb(s) if s.conventions == XtbConventions::Xtb68);
     match &orbitals.beta {
-        Beta::Unrestricted(beta) if !xtb68 => {
+        Beta::Unrestricted(beta) if !xtb68(result) => {
             let m = filled(beta, &beta.occupations)?;
             let both = |levels: &[f64], k: usize| k > 0 && k < levels.len();
             if !both(alpha, n) && !both(&beta.energies_hartree, m) {
