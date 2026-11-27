@@ -566,23 +566,13 @@ fn preview_model<'a>(
         || count != atoms.len()
         || count != image.numbers.len()
         || count != positions.len()
-        || !model
-            .geometry_sources()
-            .into_iter()
-            .chain(std::iter::repeat_n(None, model.hydrogens.len()))
-            .eq(atoms.iter().copied())
+        || model.frame_sources() != atoms
         || !positions.iter().flatten().all(|x| x.is_finite())
     {
         return Err(ScienceError::ModelMismatch);
     }
-    for (position, xyz) in model
-        .atoms
-        .iter_mut()
-        .map(|a| &mut a.xyz)
-        .chain(model.hydrogens.iter_mut().map(|h| &mut h.xyz))
-        .zip(positions)
-    {
-        *position = xyz;
+    if !model.set_frame_positions(&image.positions_angstrom) {
+        return Err(ScienceError::ModelMismatch);
     }
     Ok(model)
 }

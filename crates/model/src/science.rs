@@ -795,8 +795,15 @@ pub fn isotope_masses(frame: &Frame) -> Option<Vec<f64>> {
 /// For each frame atom the 3D model added (a hydrogen the drawing does not
 /// show), the drawing atom it is bonded to.
 pub fn hydrogen_parents(doc: &Document, launch: &Launch) -> Option<Vec<Option<u64>>> {
-    let first = launch.atoms.iter().flatten().next()?;
-    let model = doc.models.iter().find(|m| m.linked_atoms.contains(first))?;
+    frame_hydrogen_parents(doc, &launch.atoms)
+}
+
+fn frame_hydrogen_parents(doc: &Document, atoms: &[Option<u64>]) -> Option<Vec<Option<u64>>> {
+    let first = *atoms.iter().flatten().next()?;
+    let model = doc.models.get(model_of(doc, first)?)?;
+    if model.frame_sources() != atoms {
+        return None;
+    }
     let sources = model.geometry_sources();
     let heavy = model.atoms.len();
     let mut parents = vec![None; heavy];
@@ -809,54 +816,54 @@ pub fn hydrogen_parents(doc: &Document, launch: &Launch) -> Option<Vec<Option<u6
         };
         parents.push(Some(parent?));
     }
-    (parents.len() == launch.atoms.len()).then(|| model.in_frame_order(parents))
+    Some(model.in_frame_order(parents))
 }
 
-/// Drawing bonds in frame order, with each model hydrogen joined to its nearest linked atom.
+/// Drawing bonds in frame order, including bonds to each model hydrogen's recorded parent.
 pub fn frame_bonds(
     doc: &Document,
     atoms: &[Option<u64>],
-    positions: &[[f64; 3]],
-) -> Vec<(usize, usize, u8)> {
-    let linked: HashMap<_, _> = atoms
-        .iter()
-        .enumerate()
-        .filter_map(|(index, id)| id.map(|id| (id, index)))
-        .collect();
-    let mut bonds: Vec<_> = doc
-        .bonds
-        .iter()
-        .filter_map(|bond| {
-            let (&a, &b) = (linked.get(&bond.a)?, linked.get(&bond.b)?);
-            (a != b).then_some((a.min(b), a.max(b), bond.order))
-        })
-        .collect();
-
-    let located_atoms = atoms.iter().zip(positions).enumerate();
-    let linked_positions: Vec<_> = located_atoms
-        .clone()
-        .filter_map(|(index, (id, position))| id.is_some().then_some((index, position)))
-        .collect();
-    for (hydrogen, (_, position)) in located_atoms.filter(|(_, (id, _))| id.is_none()) {
-        let nearest = linked_positions
-            .iter()
-            .map(|&(index, candidate)| {
-                let squared_distance = position
-                    .iter()
-                    .zip(candidate)
-                    .map(|(a, b)| (a - b).powi(2))
-                    .sum::<f64>();
-                (index, squared_distance)
-            })
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        if let Some((neighbor, _)) = nearest {
-            bonds.push((hydrogen.min(neighbor), hydrogen.max(neighbor), 1));
+) -> Result<Vec<(usize, usize, u8)>, ScienceError> {
+    let linked = frame_atom_indices(atoms);
+    let mut bonds = linked_bonds(doc, &linked);
+    if atoms.contains(&None) {
+        let parents = frame_hydrogen_parents(doc, atoms).ok_or(ScienceError::ModelMismatch)?;
+        for (hydrogen, (source, parent)) in atoms.iter().zip(parents).enumerate() {
+            if source.is_none() {
+                let parent = parent
+                    .and_then(|id| linked.get(&id))
+                    .ok_or(ScienceError::ModelMismatch)?;
+                bonds.push((hydrogen.min(*parent), hydrogen.max(*parent), 1));
+            }
         }
     }
 
     bonds.sort_by_key(|&(a, b, _)| (a, b));
     bonds.dedup_by_key(|bond| (bond.0, bond.1));
-    bonds
+    Ok(bonds)
+}
+
+/// Bonds between drawn atoms in a frame, for analyses that can use a partial graph.
+pub fn frame_drawing_bonds(doc: &Document, atoms: &[Option<u64>]) -> Vec<(usize, usize, u8)> {
+    linked_bonds(doc, &frame_atom_indices(atoms))
+}
+
+fn frame_atom_indices(atoms: &[Option<u64>]) -> HashMap<u64, usize> {
+    atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(index, id)| id.map(|id| (id, index)))
+        .collect()
+}
+
+fn linked_bonds(doc: &Document, linked: &HashMap<u64, usize>) -> Vec<(usize, usize, u8)> {
+    doc.bonds
+        .iter()
+        .filter_map(|bond| {
+            let (&a, &b) = (linked.get(&bond.a)?, linked.get(&bond.b)?);
+            (a != b).then_some((a.min(b), a.max(b), bond.order))
+        })
+        .collect()
 }
 
 /// The calculation input for the molecule of `atom`: its 3D model's

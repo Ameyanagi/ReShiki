@@ -16,6 +16,15 @@ const FOOTER_LINE_HEIGHT: f32 = 32.;
 const DETAILS_HEIGHT: f32 = 150.;
 const LABEL_WIDTH: f32 = 130.;
 
+/// The selected tab can be absent from another molecule's result.
+pub(super) fn effective_view(selected: View, available: &[View]) -> View {
+    if available.contains(&selected) {
+        selected
+    } else {
+        View::Summary
+    }
+}
+
 fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Palette(action))
 }
@@ -193,11 +202,7 @@ impl App {
         };
         let palette = &self.tab.xtb.palette;
         let views = View::available(&shown.stored.result);
-        let view = if views.contains(&palette.view) {
-            palette.view
-        } else {
-            View::Summary
-        };
+        let view = effective_view(palette.view, &views);
         let header = self.xtb_palette_header(title, views, view, inspector);
         if collapsed {
             return Some(header);

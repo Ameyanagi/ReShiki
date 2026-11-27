@@ -5,8 +5,8 @@ use std::path::PathBuf;
 pub(in crate::app) enum StatusKind {
     Palette,
     Mode,
-    /// Applied geometry belongs to this molecule's drawn atom.
-    Geometry(u64),
+    /// Completion feedback belongs to this molecule's drawn atom.
+    Molecule(u64),
 }
 
 impl App {
@@ -72,27 +72,33 @@ impl App {
         }
     }
 
-    pub(in crate::app::xtb) fn xtb_set_geometry_status(
+    pub(in crate::app::xtb) fn xtb_set_molecule_status(
         &mut self,
         text: impl Into<String>,
         atoms: &[Option<u64>],
     ) {
-        self.xtb_set_result_status(text, false);
-        if let Some(atom) = atoms.iter().flatten().next()
-            && let Some((kind, _)) = &mut self.tab.xtb.palette.status
+        if let Some(&atom) = atoms.iter().flatten().next()
+            && self
+                .xtb_target()
+                .is_some_and(|target| target.contains(&atom))
         {
-            *kind = StatusKind::Geometry(*atom);
+            let mut text = text.into();
+            if let Some((limit, _)) = text.char_indices().nth(60) {
+                let end = text.get(..limit).and_then(|prefix| prefix.rfind(" · "));
+                text.truncate(end.unwrap_or(limit));
+            }
+            self.xtb_set_palette_status(StatusKind::Molecule(atom), text, false);
         }
     }
 
-    /// A different molecule retires only the geometry feedback we still own.
-    pub(in crate::app::xtb) fn xtb_clear_other_geometry_status(&mut self) {
-        let Some((StatusKind::Geometry(atom), text)) = &self.tab.xtb.palette.status else {
+    /// Retire owned feedback unless the effective target is still its molecule.
+    pub(in crate::app::xtb) fn xtb_clear_other_molecule_status(&mut self) {
+        let Some((StatusKind::Molecule(atom), text)) = &self.tab.xtb.palette.status else {
             return;
         };
         if self.status != *text {
             self.tab.xtb.palette.status = None;
-        } else if self.xtb_target().is_some_and(|atoms| !atoms.contains(atom)) {
+        } else if !self.xtb_target().is_some_and(|atoms| atoms.contains(atom)) {
             self.xtb_clear_palette_status(None);
         }
     }

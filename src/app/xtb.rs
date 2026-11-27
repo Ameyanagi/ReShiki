@@ -1345,7 +1345,7 @@ impl App {
         }
         if applied {
             let energy = pending.line.split(" · ").next().unwrap_or_default();
-            self.xtb_set_geometry_status(
+            self.xtb_set_molecule_status(
                 format!("Applied xTB geometry · {energy} · ⌘Z undoes"),
                 &pending.launch.atoms,
             );
@@ -1355,7 +1355,7 @@ impl App {
                 Some((arrow, ts::card::Status::TransitionState, status.clone()));
             self.status = status;
         } else {
-            self.status = format!("xTB · {}", pending.line);
+            self.xtb_set_molecule_status(format!("xTB · {}", pending.line), &pending.launch.atoms);
         }
         self.tab.xtb.outcome = Some(Outcome::Done {
             atoms: pending.launch.atoms.into_iter().flatten().collect(),

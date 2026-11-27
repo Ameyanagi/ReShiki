@@ -337,6 +337,7 @@ impl MoleculeCanvas<'_> {
             placements(preview, context, self.camera, bounds).into()
         };
         for assignment in assignments.iter() {
+            frame.reserve_overlay(assignment.bounds);
             let selected = selected.contains(&assignment.atom_id);
             let color = if selected { rgb([19, 105, 89]) } else { ACCENT };
             // Close labels need no callout. A displaced crowded label still

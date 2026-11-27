@@ -5,6 +5,98 @@ use reshiki::document::{Document, Point};
 use rfd::MessageDialogResult as Answer;
 
 #[test]
+fn calculation_output_draws_the_wedge_from_2_butanol_geometry() {
+    use reshiki::chemistry::document::{for_drawing, prepare};
+    use reshiki::qcread::{self, Format};
+
+    // An S-2-butanol conformer with all ten hydrogens, followed by its mirror.
+    let xyz = "15\n2-butanol\n\
+        C 1.25803 -0.24884 -1.03575\n\
+        C 0.71249 0.40000 0.22840\n\
+        O 1.69559 0.24011 1.25103\n\
+        C -0.60148 -0.22109 0.71030\n\
+        C -1.75492 -0.03925 -0.26243\n\
+        H 1.39531 -1.32664 -0.89494\n\
+        H 2.24368 0.16273 -1.27992\n\
+        H 0.59910 -0.08740 -1.89329\n\
+        H 0.58481 1.47497 0.05823\n\
+        H 1.36811 0.69385 2.04631\n\
+        H -0.45617 -1.28893 0.91627\n\
+        H -0.87532 0.22784 1.67349\n\
+        H -1.90477 1.01849 -0.50054\n\
+        H -1.58306 -0.58423 -1.19518\n\
+        H -2.68140 -0.42161 0.17801\n";
+    let mut file = qcread::read("butanol.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    for expected in ["S", "R"] {
+        let frame = &file.jobs[0].steps[0].frame;
+        let Prepared::Calculation(batch) = prepare_qc_drawing(file.clone(), 0, None, true).unwrap()
+        else {
+            panic!("expected a calculation output");
+        };
+        let mut doc = batch.drawings.into_iter().next().unwrap();
+        assert_eq!(doc.atoms.len(), 5);
+        assert_eq!(doc.models[0].hydrogens.len(), 10);
+        assert_eq!(
+            doc.models[0].frame_positions(),
+            frame
+                .positions_angstrom
+                .iter()
+                .map(|p| p.map(|v| v as f32))
+                .collect::<Vec<_>>()
+        );
+        let centre = doc.atoms[1].id;
+        assert!(
+            doc.bonds
+                .iter()
+                .any(|bond| bond.a == centre && matches!(bond.display.as_str(), "wedge" | "hash"))
+        );
+        // Read only the visible wedge, without the stored winding or label.
+        doc.atoms[1].stereo = None;
+        doc.atoms[1].cip_label = None;
+        let drawing = for_drawing(&prepare(&doc).unwrap(), &doc).unwrap();
+        assert_eq!(
+            drawing.labels().unwrap().atoms[1].as_deref(),
+            Some(expected)
+        );
+        for point in &mut file.jobs[0].steps[0].frame.positions_angstrom {
+            point[2] = -point[2];
+        }
+    }
+}
+
+#[test]
+fn calculation_output_retains_alkene_geometry_when_hydrogens_fold() {
+    use reshiki::qcread::{self, Format};
+
+    // E-2-butene with its double bond inclined to the input coordinate plane.
+    let xyz = "12\n2-butene\n\
+        C 1.93881 0.08271 -0.19188\n\
+        C 0.53485 0.30156 0.27016\n\
+        C -0.53485 -0.30156 -0.27017\n\
+        C -1.93881 -0.08271 0.19188\n\
+        H 1.99548 -0.62717 -1.02310\n\
+        H 2.37417 1.03072 -0.52222\n\
+        H 2.54540 -0.30653 0.63149\n\
+        H 0.40429 0.99746 1.09615\n\
+        H -0.40429 -0.99746 -1.09615\n\
+        H -2.37417 -1.03072 0.52221\n\
+        H -1.99548 0.62717 1.02311\n\
+        H -2.54540 0.30653 -0.63148\n";
+    let mut file = qcread::read("butene.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+        panic!("expected a calculation output");
+    };
+    let doc = batch.drawings.into_iter().next().unwrap();
+    assert_eq!(doc.atoms.len(), 4);
+    assert_eq!(doc.models[0].hydrogens.len(), 8);
+    let bond = doc.bonds.iter().find(|bond| bond.order == 2).unwrap();
+    assert!(matches!(bond.stereo.as_deref(), Some("e" | "trans")));
+    assert_eq!(bond.stereo_atoms, [doc.atoms[0].id, doc.atoms[3].id]);
+}
+
+#[test]
 fn each_office_host_selects_its_save_backend() {
     for (host, expected) in [
         (None, SaveBackend::Atomic),

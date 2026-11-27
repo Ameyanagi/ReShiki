@@ -186,17 +186,20 @@ pub(crate) fn set_irc_topology(
         .map(|x| x / reshiki_optimize::ANGSTROM_PER_BOHR)
         .collect();
     let bonds = reshiki_optimize::ts::bonds(numbers, &bohr).map_err(|e| e.to_string())?;
-    let mut sources = model.geometry_sources();
-    sources.resize(count, None);
-    model.atoms.extend(
-        model
-            .hydrogens
-            .drain(..)
-            .map(|h| Placed { id: 0, xyz: h.xyz }),
-    );
-    for (index, atom) in model.atoms.iter_mut().enumerate() {
-        atom.id = index as u64;
-    }
+    let sources = model.frame_sources();
+    // The perceived graph and element numbers use calculation frame order.
+    // Store the endpoint geometry in that order too, including imported H.
+    model.atoms = model
+        .frame_positions()
+        .into_iter()
+        .enumerate()
+        .map(|(index, xyz)| Placed {
+            id: index as u64,
+            xyz,
+        })
+        .collect();
+    model.hydrogens.clear();
+    model.frame_atom_order.clear();
     model.generated = Some(Generated {
         sources,
         elements: numbers

@@ -115,10 +115,7 @@ pub(crate) fn sdf(
     unit: EnergyUnit,
 ) -> Result<String, String> {
     let (path, ranked) = ranked_trajectory(result.trajectory.as_ref())?;
-    let first = ranked
-        .first()
-        .ok_or("This result has no saved conformer positions.")?;
-    let bonds = frame_bonds(doc, atoms, &first.frame.positions_angstrom);
+    let bonds = frame_bonds(doc, atoms).map_err(|error| error.to_string())?;
     let formal_charges: Vec<_> = atoms
         .iter()
         .map(|id| id.and_then(|id| doc.atom(id)).map_or(0, |atom| atom.charge))
@@ -180,6 +177,7 @@ pub(crate) fn sdf(
 mod tests {
     use super::*;
     use reshiki::document::Point;
+    use reshiki::models3d::{ForceField, Hydrogen, Model3d, Placed};
     use reshiki::qcdata::{Provenance, Settings, Source, Status, Task, Trajectory};
 
     const LOWEST: [[f64; 3]; 3] = [[-0.24, 0.93, 0.0], [0.0, 0.0, 0.0], [0.96, 0.0, 0.0]];
@@ -194,6 +192,24 @@ mod tests {
         doc.atom_mut(oxygen).unwrap().charge = 1;
         doc.add_bond(oxygen, hydrogen, 1, "plain");
         let atoms = [Some(hydrogen), Some(oxygen), None];
+        let model = Model3d::new(
+            &doc,
+            [hydrogen, oxygen]
+                .into_iter()
+                .zip(LOWEST)
+                .map(|(id, xyz)| Placed {
+                    id,
+                    xyz: xyz.map(|v| v as f32),
+                })
+                .collect(),
+            vec![Hydrogen {
+                parent: oxygen,
+                xyz: LOWEST[2].map(|v| v as f32),
+            }],
+            ForceField::default(),
+        )
+        .with_cell(&doc, None, vec![]);
+        doc.models.push(model);
         let path = Trajectory {
             numbers: vec![1, 8, 1],
             isotopes: vec![],
@@ -251,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_bonds_keep_drawing_orders_and_use_nearest_linked_atoms() {
+    fn frame_bonds_keep_drawing_orders_and_ignore_other_atoms() {
         let mut doc = Document::default();
         let carbon = doc.add_atom("C", Point::default());
         let nitrogen = doc.add_atom("N", Point::default());
@@ -260,12 +276,8 @@ mod tests {
         doc.add_bond(carbon, outside, 1, "plain");
         doc.bonds.push(doc.bonds[0].clone());
 
-        let atoms = [None, Some(nitrogen), Some(carbon), None];
-        let positions = [[0., 0., -1.], [0., 0., 0.], [1.4, 0., 0.], [2.4, 0., 0.]];
-        assert_eq!(
-            frame_bonds(&doc, &atoms, &positions),
-            vec![(0, 1, 1), (1, 2, 4), (2, 3, 1)]
-        );
+        let atoms = [Some(nitrogen), Some(carbon)];
+        assert_eq!(frame_bonds(&doc, &atoms).unwrap(), vec![(0, 1, 4)]);
     }
 
     #[test]
@@ -366,6 +378,17 @@ mod tests {
                 )
             );
         }
+    }
+
+    #[test]
+    fn sdf_requires_the_recorded_parent_for_each_model_hydrogen() {
+        let (mut doc, atoms, result) = water();
+        doc.models.clear();
+        assert_eq!(
+            sdf(&doc, &atoms, &result, "Water", EnergyUnit::default()).unwrap_err(),
+            "The 3D model no longer matches this calculation"
+        );
+        assert!(xyz(&result, "Water", EnergyUnit::default()).is_ok());
     }
 
     #[test]

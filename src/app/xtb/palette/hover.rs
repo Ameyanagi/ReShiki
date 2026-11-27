@@ -55,11 +55,15 @@ pub(super) fn row<'a, R: iced::advanced::Renderer + 'a>(
 impl App {
     fn xtb_bond_row_visible(&self, bond: &BondHover) -> bool {
         self.xtb_palette_body_visible()
-            && self.tab.xtb.palette.view == View::Summary
             && self.tab.xtb.run.is_none()
             && !self.xtb_palette_has_failure()
             && self.xtb_shown_entry().is_some_and(|(_, stored)| {
-                stored.attachment == bond.attachment && is(&bond.result, &stored.result)
+                super::view::effective_view(
+                    self.tab.xtb.palette.view,
+                    &View::available(&stored.result),
+                ) == View::Summary
+                    && stored.attachment == bond.attachment
+                    && is(&bond.result, &stored.result)
             })
     }
 

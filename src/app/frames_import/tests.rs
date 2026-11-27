@@ -344,6 +344,34 @@ fn the_lowest_frame_opens_with_the_ensemble_kept() {
 }
 
 #[test]
+fn hydrogens_on_metals_bridges_and_isotopes_stay_explicit() {
+    for (xyz, isotope, link_count, folded_count) in [
+        ("2\n\nFe 0 0 0\nH 1.6 0 0\n", 0, 1, 0),
+        ("3\n\nB -1.2 0 0\nH 0 0 0\nB 1.2 0 0\n", 0, 2, 0),
+        ("3\n\nO 0 0 0\nH 0.97 0 0\nH -0.3 0.92 0\n", 2, 1, 1),
+    ] {
+        let file = qcread::read("hydrogen.xyz", xyz.as_bytes()).unwrap();
+        let mut frame = file.jobs[0].steps[0].frame.clone();
+        frame.isotopes = vec![0; frame.numbers.len()];
+        frame.isotopes[1] = isotope;
+        let (mut doc, _) = drawing(&frame).unwrap();
+        let hydrogen = doc.atoms[1].id;
+        fold_calculation_hydrogens(&mut doc, &frame);
+        assert_eq!(doc.atom(hydrogen).unwrap().isotope, u32::from(isotope));
+        assert_eq!(
+            doc.bonds
+                .iter()
+                .filter(|b| b.a == hydrogen || b.b == hydrogen)
+                .count(),
+            link_count
+        );
+        assert_eq!(doc.models[0].hydrogens.len(), folded_count);
+        assert_eq!(doc.models[0].frame_sources()[1], Some(hydrogen));
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
 fn ensemble_uses_file_order_with_folded_hydrogens() {
     let text = "3\n -5.100000\nH 0.97 0 0\nO 0 0 0\nH -0.30 0.90 0\n\
                 3\n -5.000000\nH 0.96 0 0\nO 0 0 0\nH -0.24 0.93 0\n";

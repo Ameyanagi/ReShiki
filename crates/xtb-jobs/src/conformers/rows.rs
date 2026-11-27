@@ -24,9 +24,8 @@ pub fn populations(energies_hartree: &[f64]) -> Vec<f64> {
     boltzmann_weights(energies_hartree, 298.15).unwrap_or_default()
 }
 
-/// Statistics in trajectory order. For older results without recorded RMSDs,
-/// infer the topology from the drawing bonds and hydrogen neighbors in the
-/// first saved conformer.
+/// Statistics in trajectory order. Recompute RMSDs for older results that
+/// do not store them.
 pub fn trajectory_rows(
     doc: &Document,
     atoms: &[Option<u64>],
@@ -40,21 +39,62 @@ pub fn trajectory_rows(
     rows
 }
 
-/// Symmetry-aware alignment built from the drawing bonds and the original
-/// hydrogen neighbours in the first saved frame.
+/// Symmetry-aware alignment prefers recorded model hydrogen parents. Saved
+/// results without a matching model can still use the legacy RMSD estimate.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn trajectory_alignment(
     doc: &Document,
     atoms: &[Option<u64>],
     first: &reshiki_qcdata::Frame,
 ) -> Option<(Topology, Automorphisms)> {
-    let bonds = reshiki_model::science::frame_bonds(doc, atoms, &first.positions_angstrom)
-        .into_iter()
-        .map(|(a, b, _)| [a, b])
-        .collect();
+    let (bonds, legacy) = match reshiki_model::science::frame_bonds(doc, atoms) {
+        Ok(bonds) => (bonds, false),
+        Err(_) => (
+            reshiki_model::science::frame_drawing_bonds(doc, atoms),
+            true,
+        ),
+    };
+    let mut bonds: Vec<_> = bonds.into_iter().map(|(a, b, _)| [a, b]).collect();
+    if legacy {
+        bonds.extend(legacy_alignment_hydrogens(atoms, first));
+        bonds.sort_unstable();
+        bonds.dedup();
+    }
     let topology = Topology::new(first.numbers.clone(), bonds).ok()?;
     let autos = topology.automorphisms(Settings::default().automorphism_cap);
     Some((topology, autos))
+}
+
+/// Estimate missing links for comparing saved coordinates. The estimate is
+/// only used for alignment and never becomes an exported bond.
+#[cfg(not(target_arch = "wasm32"))]
+fn legacy_alignment_hydrogens(
+    atoms: &[Option<u64>],
+    first: &reshiki_qcdata::Frame,
+) -> Vec<[usize; 2]> {
+    let sites = atoms.iter().zip(&first.positions_angstrom).enumerate();
+    let linked: Vec<_> = sites
+        .clone()
+        .filter_map(|(i, (id, p))| id.is_some().then_some((i, p)))
+        .collect();
+    sites
+        .filter_map(|(i, (id, position))| {
+            if id.is_some() || first.numbers.get(i) != Some(&1) {
+                return None;
+            }
+            let distance = |candidate: &[f64; 3]| {
+                position
+                    .iter()
+                    .zip(candidate)
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f64>()
+            };
+            let &(parent, _) = linked
+                .iter()
+                .min_by(|a, b| distance(a.1).total_cmp(&distance(b.1)))?;
+            Some([parent.min(i), parent.max(i)])
+        })
+        .collect()
 }
 
 fn measure_rmsds(
@@ -176,7 +216,9 @@ mod tests {
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
-    fn rmsd_uses_hydrogen_topology_of_first_saved_frame() {
+    fn rmsd_prefers_recorded_parents_and_keeps_the_legacy_estimate() {
+        use reshiki_model::models3d::{ForceField, Hydrogen, Model3d, Placed};
+
         let mut doc = Document::default();
         let ids: Vec<_> = (0..3)
             .map(|_| doc.add_atom("C", Point::default()))
@@ -210,6 +252,24 @@ mod tests {
         )
         .unwrap();
         assert!(launch_rmsd < 1e-12);
+        let model = Model3d::new(
+            &doc,
+            ids.iter()
+                .zip(best)
+                .map(|(&id, xyz)| Placed {
+                    id,
+                    xyz: xyz.map(|v| v as f32),
+                })
+                .collect(),
+            vec![Hydrogen {
+                parent: ids[1],
+                xyz: best[3].map(|v| v as f32),
+            }],
+            ForceField::default(),
+        );
+        doc.models.push(model);
+        let rows = trajectory_rows(&doc, &atoms, &path, -5.);
+        assert_eq!(rows[1].rmsd, Some(launch_rmsd));
     }
 
     #[test]

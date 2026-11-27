@@ -827,7 +827,11 @@ impl App {
                 atom.display.number = Some(label);
             }
         }
+        let revision = self.tab.revision;
         self.changed(before);
+        if self.tab.revision != revision {
+            self.tab.history.set_last_operation("Place charges");
+        }
         self.status = status;
         self.error = false;
     }
@@ -1229,7 +1233,7 @@ impl App {
                 }
                 _ => format!("Applied xTB geometry of step {index} · ⌘Z undoes"),
             };
-            self.xtb_set_geometry_status(text, &atoms);
+            self.xtb_set_molecule_status(text, &atoms);
         }
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();

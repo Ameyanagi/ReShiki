@@ -700,6 +700,38 @@ impl Model3d {
         self
     }
 
+    /// Move explicit XYZ hydrogens to the model's hydrogen slots after their
+    /// drawing atoms have been folded. Preserve the original file atom order.
+    pub fn fold_file_hydrogens(&mut self, doc: &Document, parents: &HashMap<u64, u64>) {
+        let kept = self
+            .atoms
+            .iter()
+            .filter(|atom| !parents.contains_key(&atom.id))
+            .count();
+        let mut order = Vec::with_capacity(self.atoms.len());
+        let mut next_atom = 0;
+        self.atoms.retain(|atom| {
+            if let Some(&parent) = parents.get(&atom.id) {
+                order.push(kept + self.hydrogens.len());
+                self.hydrogens.push(Hydrogen {
+                    parent,
+                    xyz: atom.xyz,
+                });
+                false
+            } else {
+                order.push(next_atom);
+                next_atom += 1;
+                true
+            }
+        });
+        self.linked_atoms.retain(|id| !parents.contains_key(id));
+        if order.iter().copied().eq(0..order.len()) {
+            order.clear();
+        }
+        self.frame_atom_order = order;
+        self.fit(doc);
+    }
+
     /// Face the opening view and size the frame at the drawing's scale.
     fn fit(&mut self, doc: &Document) {
         self.rotation = self.initial_view(doc);

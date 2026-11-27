@@ -6,6 +6,7 @@ impl App {
     pub(super) fn step_history(&mut self, redo: bool) {
         self.tab.erase_stroke = false;
         let before = self.tab.doc.clone();
+        let operation = self.tab.history.operation(redo);
         let selected_group = !before.outer_selected_groups(&self.tab.selected).is_empty();
         let changed = if !redo {
             self.tab.history.undo(&mut self.tab.doc)
@@ -80,8 +81,12 @@ impl App {
                     self.fit();
                 }
             }
-            self.status = self
-                .xtb_history_status(before, redo)
+            self.status = operation
+                .map(|operation| {
+                    let action = if redo { "Redo" } else { "Undo" };
+                    format!("{action} {operation}")
+                })
+                .or_else(|| self.xtb_history_status(before, redo))
                 .unwrap_or_else(|| "History restored".into());
         }
     }

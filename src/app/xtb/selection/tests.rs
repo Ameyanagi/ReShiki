@@ -3,7 +3,7 @@ use crate::app::{Message, xtb};
 use crate::canvas::Edit;
 use reshiki::document::{Annotation, Arrow, Point};
 
-fn reaction(app: &mut App, reactant: u64, product: u64) {
+fn reaction(app: &mut App, reactant: u64, product: u64) -> u64 {
     use reshiki::reactions::{self, Role};
 
     let before = app.tab.doc.clone();
@@ -18,31 +18,85 @@ fn reaction(app: &mut App, reactant: u64, product: u64) {
     reactions::assign(&mut app.tab.doc, arrow, &[reactant], Role::Reactant).unwrap();
     reactions::assign(&mut app.tab.doc, arrow, &[product], Role::Product).unwrap();
     app.changed(before);
+    arrow
 }
 
 #[test]
-fn finished_geometry_feedback_clears_when_selecting_the_product() {
+fn molecule_completion_feedback_follows_the_effective_selection() {
     use xtb::tests::{MOVED, START, optimized, water};
 
-    let (mut app, reactant) = water(xtb::CalcTask::Optimize);
-    let product = app.tab.doc.add_atom("O", Point::new(220., 0.));
-    reaction(&mut app, reactant, product);
-    let serial = app.tab.xtb.run.as_ref().unwrap().serial;
-    let _ = app.update(Message::Xtb(xtb::Action::Event(
-        serial,
-        optimized(&START, &MOVED),
-    )));
-    assert!(app.status.starts_with("Applied xTB geometry ·"));
-    let applied = app.status.clone();
+    for task in [xtb::CalcTask::Optimize, xtb::CalcTask::Energy] {
+        for selection in ["product", "none", "both", "arrow"] {
+            for unrelated in [false, true] {
+                let (mut app, reactant) = water(task);
+                let product = app.tab.doc.add_atom("O", Point::new(220., 0.));
+                let arrow = reaction(&mut app, reactant, product);
+                let serial = app.tab.xtb.run.as_ref().unwrap().serial;
+                let _ = app.update(Message::Xtb(xtb::Action::Event(
+                    serial,
+                    optimized(&START, &MOVED),
+                )));
+                let prefix = if task == xtb::CalcTask::Optimize {
+                    "Applied xTB geometry ·"
+                } else {
+                    "xTB · E −5.070176 Eh"
+                };
+                assert!(app.status.starts_with(prefix), "{}", app.status);
+                let completed = app.status.clone();
+                let _ = app.update(Message::Canvas(Edit::Select(vec![reactant])));
+                assert_eq!(
+                    app.status, completed,
+                    "the same molecule keeps its feedback"
+                );
+                if unrelated {
+                    app.status = "Could not save the drawing".into();
+                    app.error = true;
+                }
 
-    let _ = app.update(Message::Canvas(Edit::Select(vec![reactant])));
-    assert_eq!(app.status, applied, "the same molecule keeps its feedback");
-    let _ = app.update(Message::Canvas(Edit::SelectAt(
-        vec![product],
-        Point::new(220., 0.),
-    )));
-    assert!(app.status.is_empty(), "{}", app.status);
-    assert!(!app.error);
+                let selected = match selection {
+                    "product" => vec![product],
+                    "none" => vec![],
+                    "both" => vec![reactant, product],
+                    "arrow" => vec![arrow],
+                    _ => unreachable!(),
+                };
+                let _ = app.update(Message::Canvas(Edit::SelectAt(
+                    selected,
+                    Point::new(220., 0.),
+                )));
+                if unrelated {
+                    assert_eq!(app.status, "Could not save the drawing");
+                    assert!(app.error);
+                } else {
+                    assert!(
+                        app.status.is_empty(),
+                        "{task:?} · {selection}: {}",
+                        app.status
+                    );
+                    assert!(!app.error);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn clearing_selection_keeps_completion_feedback_for_the_only_molecule() {
+    use xtb::tests::{MOVED, START, optimized, water};
+
+    for task in [xtb::CalcTask::Optimize, xtb::CalcTask::Energy] {
+        let (mut app, molecule) = water(task);
+        let serial = app.tab.xtb.run.as_ref().unwrap().serial;
+        let _ = app.update(Message::Xtb(xtb::Action::Event(
+            serial,
+            optimized(&START, &MOVED),
+        )));
+        let completed = app.status.clone();
+        assert!(!completed.is_empty());
+        let _ = app.update(Message::Canvas(Edit::Select(vec![])));
+        assert_eq!(app.xtb_target(), Some(vec![molecule]));
+        assert_eq!(app.status, completed);
+    }
 }
 
 #[test]

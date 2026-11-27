@@ -180,6 +180,8 @@ pub struct Frame<'a> {
     layers: Vec<canvas::Geometry>,
     shifts: Shifts,
     dark: bool,
+    /// Screen-space labels and badges already drawn above the document.
+    overlay_obstacles: Vec<Rectangle>,
     pub(super) text_cache: Option<&'a std::cell::RefCell<super::text_cache::TextCache>>,
 }
 impl<'a> Frame<'a> {
@@ -197,6 +199,7 @@ impl<'a> Frame<'a> {
             layers: vec![],
             shifts: vec![],
             dark: false,
+            overlay_obstacles: vec![],
             text_cache: None,
         }
     }
@@ -210,6 +213,13 @@ impl<'a> Frame<'a> {
         } else {
             reshiki::canvas_theme::CanvasTheme::Light
         }
+    }
+    /// Reserve visible overlay ink for later badges to avoid.
+    pub(super) fn reserve_overlay(&mut self, bounds: Rectangle) {
+        self.overlay_obstacles.push(bounds);
+    }
+    pub(super) fn overlay_obstacles(&self) -> &[Rectangle] {
+        &self.overlay_obstacles
     }
     pub(super) fn with_text_cache(
         mut self,

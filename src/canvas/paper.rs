@@ -287,6 +287,7 @@ impl MoleculeCanvas<'_> {
             })
             .as_ref();
         if let Some(fragment) = fragment {
+            self.reserve_result_label_ink(frame, &fragment.remainder.scene, self.camera, bounds);
             if !self.reviewing_pair {
                 let live_markers;
                 let markers = if let Some(record) = &memo {
@@ -314,6 +315,7 @@ impl MoleculeCanvas<'_> {
                     center: self.camera.center.offset(-delta.x, -delta.y),
                     ..self.camera
                 };
+                self.reserve_result_label_ink(frame, &fragment.scene, camera, bounds);
                 state
                     .scene
                     .borrow_mut()
@@ -330,6 +332,7 @@ impl MoleculeCanvas<'_> {
             } else if let Some(record) = &memo
                 && self.tool == Tool::Equipment
             {
+                self.reserve_result_label_ink(frame, &fragment.scene, self.camera, bounds);
                 record.geometry.borrow_mut().draw(
                     frame,
                     (fragment.remainder.markers.clone(), fragment.scene.clone()),
@@ -339,10 +342,12 @@ impl MoleculeCanvas<'_> {
                     self.reviewing_pair,
                 );
             } else {
+                self.reserve_result_label_ink(frame, &fragment.scene, self.camera, bounds);
                 draw_primitives(frame, &fragment.scene, self.camera, bounds, 0.);
             }
         } else if let Some(camera) = cached_camera {
             let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
+            self.reserve_result_label_ink(frame, &scene, camera, bounds);
             if rotating {
                 rotation_ink = reshiki::scene::label_ink_boxes(&scene);
             }
@@ -367,6 +372,7 @@ impl MoleculeCanvas<'_> {
             let scene = record
                 .whole
                 .get_or_init(|| reshiki::scene::primitives(preview).into());
+            self.reserve_result_label_ink(frame, scene, self.camera, bounds);
             draw_primitives(frame, scene, self.camera, bounds, 0.);
         } else {
             if !self.reviewing_pair {
@@ -378,9 +384,12 @@ impl MoleculeCanvas<'_> {
                     &nmr_ids,
                 );
             }
-            if rotating {
+            if rotating || self.result_label.is_some() {
                 let scene = reshiki::scene::primitives(preview);
-                rotation_ink = reshiki::scene::label_ink_boxes(&scene);
+                if rotating {
+                    rotation_ink = reshiki::scene::label_ink_boxes(&scene);
+                }
+                self.reserve_result_label_ink(frame, &scene, self.camera, bounds);
                 draw_primitives(frame, &scene, self.camera, bounds, 0.);
             } else {
                 draw_document(frame, preview, self.camera, bounds);

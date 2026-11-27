@@ -12,15 +12,6 @@ impl App {
         redo: bool,
     ) -> Option<String> {
         let after = &self.tab.doc;
-        let (unplaced, placed) = if redo {
-            (&before, after)
-        } else {
-            (after, &before)
-        };
-        if charges_placed(unplaced, placed) {
-            let action = if redo { "Redo" } else { "Undo" };
-            return Some(format!("{action} Place charges"));
-        }
         let previous = &before.science.results;
         let restored = &after.science.results;
         if previous.is_empty() && restored.is_empty()
@@ -97,42 +88,6 @@ impl App {
         }
         Some(status)
     }
-}
-
-fn charges_placed(before: &Document, after: &Document) -> bool {
-    if before.atoms == after.atoms {
-        return false;
-    }
-    before.science.results.iter().any(|stored| {
-        let Some(charges) = stored.result.charges.first() else {
-            return false;
-        };
-        let Some(link) = before.science.attachment(stored.attachment) else {
-            return false;
-        };
-        if link.freshness(before) != reshiki::science::Freshness::Current {
-            return false;
-        }
-        let (labels, _) = super::palette::placed_charge_labels(before, &link.atoms, charges);
-        if !labels.iter().all(|(id, label)| {
-            after
-                .atom(*id)
-                .is_some_and(|atom| atom.display.number.as_ref() == Some(label))
-        }) || !labels.iter().any(|(id, label)| {
-            before
-                .atom(*id)
-                .is_some_and(|atom| atom.display.number.as_ref() != Some(label))
-        }) {
-            return false;
-        }
-        let mut expected = before.clone();
-        for (id, label) in labels {
-            if let Some(atom) = expected.atom_mut(id) {
-                atom.display.number = Some(label);
-            }
-        }
-        expected == *after
-    })
 }
 
 fn what(result: &CalcResult) -> Option<&'static str> {

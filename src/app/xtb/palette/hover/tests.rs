@@ -131,6 +131,59 @@ fn summary_bond_hover_keeps_frame_indices_after_filtering_and_requires_a_drawn_b
 }
 
 #[test]
+fn summary_fallback_keeps_bond_hover_after_selecting_another_molecule() {
+    for selected in [View::Orbitals, View::Vibrations] {
+        let (mut app, pairs) = summary();
+        let original = app.tab.selected.clone();
+        let copied = duplicate_molecule(&mut app);
+        // Give the original molecule both optional tabs, while the copy keeps
+        // its independent attachment to the result without either tab.
+        let mut result = app.tab.doc.science.results[0].result.as_ref().clone();
+        result.orbitals = Some(
+            serde_json::from_value(serde_json::json!({
+                "alpha": { "energies_hartree": [-0.5, 0.2],
+                           "occupations": [2., 0.] },
+                "beta": "restricted"
+            }))
+            .unwrap(),
+        );
+        result.vibrations = Some(
+            serde_json::from_value(serde_json::json!({
+                "frequencies_cm1": [1590.13]
+            }))
+            .unwrap(),
+        );
+        app.tab.doc.science.results[0].result = Arc::new(result);
+        let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(original)));
+        palette(&mut app, Action::Show);
+        palette(&mut app, Action::View(selected));
+        assert!(View::available(&app.xtb_shown().unwrap().stored.result).contains(&selected));
+        let original_bond = token(&app, pairs[1]);
+        hover(&mut app, &original_bond, true);
+        assert!(app.xtb_bond_hover_preview().is_none());
+
+        let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(copied)));
+        let shown = app.xtb_shown().unwrap();
+        let available = View::available(&shown.stored.result);
+        assert!(!available.contains(&selected));
+        assert_eq!(app.tab.xtb.palette.view, selected);
+        assert_eq!(
+            super::super::view::effective_view(selected, &available),
+            View::Summary
+        );
+        assert!(app.xtb_bottom_palette().is_some());
+        let bond = token(&app, pairs[1]);
+        hover(&mut app, &bond, true);
+        let preview = app.xtb_bond_hover_preview().expect("visible Summary row");
+        let [a, b] = pairs[1].map(|index| app.xtb_shown().unwrap().atoms[index as usize].unwrap());
+        assert_eq!(
+            preview.bond_between(a, b).unwrap().1.highlight,
+            Some(Color::Palette(Hue::Teal, Row::Tint)),
+        );
+    }
+}
+
+#[test]
 fn summary_bond_hover_ends_when_the_row_is_hidden_or_its_attachment_changes() {
     for action in [
         Action::Close,
