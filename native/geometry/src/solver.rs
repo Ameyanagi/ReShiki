@@ -459,7 +459,15 @@ fn has_three_dimensional_extent(coordinates: &[[f64; 3]]) -> bool {
             }
         }
     }
-    // Jacobi diagonalization of this small symmetric matrix.
+    let (mut extents, _) = principal_axes(covariance);
+    extents.sort_by(f64::total_cmp);
+    extents[0] > 1e-4 && extents[0] > extents[2] * 1e-4
+}
+
+// Jacobi diagonalization of a 3×3 symmetric matrix. Each axis is paired
+// with the diagonal entry for its eigenvalue.
+fn principal_axes(mut covariance: [[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
+    let mut axes = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
     for _ in 0..24 {
         let (p, q) = [(0, 1), (0, 2), (1, 2)]
             .into_iter()
@@ -486,10 +494,11 @@ fn has_three_dimensional_extent(coordinates: &[[f64; 3]]) -> bool {
         covariance[p][other] = covariance[other][p];
         covariance[other][q] = sin * op + cos * oq;
         covariance[q][other] = covariance[other][q];
+        let (u, v) = (axes[p], axes[q]);
+        axes[p] = std::array::from_fn(|i| cos * u[i] - sin * v[i]);
+        axes[q] = std::array::from_fn(|i| sin * u[i] + cos * v[i]);
     }
-    let mut extents = [covariance[0][0], covariance[1][1], covariance[2][2]];
-    extents.sort_by(f64::total_cmp);
-    extents[0] > 1e-4 && extents[0] > extents[2] * 1e-4
+    ([covariance[0][0], covariance[1][1], covariance[2][2]], axes)
 }
 
 fn existing_coordinates(
@@ -803,10 +812,16 @@ fn minimized(
         final_energy <= initial + 1e-6,
         "force-field minimization increased the energy",
     )?;
-    let result = field.positions();
+    let mut result = field.positions();
+    if request.rough {
+        relaxed::spread_misshaped_centres(mol, &mut result);
+    }
     validate_geometry(mol, &result)?;
     // Only generated geometry: Relax may hold an angle the caller pinned.
-    if request.field == ForceField::UFF && request.operation == Operation::Generate {
+    if !request.rough
+        && request.field == ForceField::UFF
+        && request.operation == Operation::Generate
+    {
         reject_collapsed_ligands(mol, &result)?;
     }
     expected.validate(mol, &result)?;
@@ -863,7 +878,7 @@ pub(super) fn solve_with_threads(
     let expected = StereoExpectation::new(&mol)?;
     // MMFF types none of these elements, so this is the UFF that generation
     // would fall back to; refuse before typing, which may fail for Og first.
-    if request.operation == Operation::Generate {
+    if request.operation == Operation::Generate && !request.rough {
         refuse_shapes_uff_gets_wrong(request)?;
     }
     let check = |field| {
@@ -920,6 +935,11 @@ pub(super) fn solve_with_threads(
             .collect(),
     };
     if request.operation == Operation::Generate {
+        if request.rough && request.ensemble != Some(Ensemble::Embedded) {
+            response
+                .approximations
+                .extend(relaxed::rough_start_notes(&mol));
+        }
         let minimize_seed = |coordinates: Vec<[f64; 3]>| {
             // The optimizer scales its stopping test by absolute XYZ. Center
             // these unpinned seeds, then restore the drawing's location.

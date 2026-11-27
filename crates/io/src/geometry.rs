@@ -311,6 +311,7 @@ pub struct Prepared {
     drawing_positions: Vec<Point3>,
     units: f64,
     mode: Mode,
+    rough: bool,
     skipped_checks: Vec<String>,
     has_metal: bool,
     radicals: Vec<Radical>,
@@ -326,6 +327,12 @@ impl Prepared {
     /// Structural, identity and machine-budget checks remain mandatory.
     pub fn relaxed(source: &Document, selection: &[u64]) -> Result<Self, Error> {
         Self::with_mode(source, selection, Limits::default(), Mode::Relaxed, false)
+    }
+
+    /// A rough start for an xTB refinement; see [`reshiki_geometry::Request::rough`].
+    pub fn rough(mut self) -> Self {
+        self.rough = true;
+        self
     }
 
     /// Explicit budgets support reproducible checks and advanced callers.
@@ -582,6 +589,7 @@ impl Prepared {
             drawing_positions,
             units,
             mode,
+            rough: false,
             skipped_checks,
             has_metal,
             radicals,
@@ -981,6 +989,7 @@ impl Prepared {
         }
         let request = reshiki_geometry::Request {
             relaxed: self.mode == Mode::Relaxed,
+            rough: self.rough && operation == reshiki_geometry::Operation::Generate,
             atoms,
             bonds,
             field: field.native(),
@@ -998,7 +1007,8 @@ impl Prepared {
 
     /// Refuse, before any worker starts, drawings whose shape the UFF
     /// fallback gets wrong (3- or 4-coordinate f block, bonded noble gas),
-    /// naming the atom. Only new geometry: existing coordinates stay usable.
+    /// naming the atom, unless a rough start was requested. Only new geometry:
+    /// existing coordinates stay usable.
     pub fn check_generation(&self) -> Result<(), Error> {
         let request = self.native_request(
             ForceField::default(),
@@ -1014,8 +1024,12 @@ impl Prepared {
             .position(|atom| atom.atomic_number > 103)
             .map(|index| (index, AtomProblem::NoParameters))
             .or_else(|| {
-                reshiki_geometry::uff_shape_refusal(&request.atoms, &request.bonds)
-                    .map(|(index, bonds)| (index, AtomProblem::WrongShape { bonds }))
+                if self.rough {
+                    None
+                } else {
+                    reshiki_geometry::uff_shape_refusal(&request.atoms, &request.bonds)
+                        .map(|(index, bonds)| (index, AtomProblem::WrongShape { bonds }))
+                }
             });
         match refusal {
             Some((index, problem)) => {

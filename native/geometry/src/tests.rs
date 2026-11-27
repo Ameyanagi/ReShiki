@@ -89,6 +89,7 @@ fn ethanol(field: ForceField) -> Request {
             .collect(),
         field,
         relaxed: false,
+        rough: false,
         operation: Operation::Generate,
         ensemble: None,
         coordinates: Vec::new(),
@@ -518,6 +519,36 @@ fn ensembles_require_strict_unseeded_generation_and_bound_atom_sampling() {
                 .contains("atom/conformer budget")
         );
     }
+}
+
+#[test]
+fn rough_starts_are_only_available_for_generation() {
+    let mut request = ethanol(ForceField::UFF);
+    request.rough = true;
+    assert!(request.validate().is_ok());
+    for operation in [Operation::Relax, Operation::Evaluate] {
+        request.operation = operation;
+        request.coordinates = vec![[0.; 3]; request.atoms.len()];
+        let message = request.validate().unwrap_err();
+        let lowercase = message.to_lowercase();
+        assert!(
+            lowercase.contains("rough") && lowercase.contains("generat"),
+            "{message}"
+        );
+    }
+}
+
+#[test]
+fn rough_wire_flag_defaults_to_false_and_round_trips_only_when_enabled() {
+    let mut request = ethanol(ForceField::UFF);
+    let legacy = serde_json::to_value(&request).unwrap();
+    assert!(legacy.get("rough").is_none());
+    assert!(!serde_json::from_value::<Request>(legacy).unwrap().rough);
+
+    request.rough = true;
+    let rough = serde_json::to_value(&request).unwrap();
+    assert_eq!(rough["rough"], true);
+    assert!(serde_json::from_value::<Request>(rough).unwrap().rough);
 }
 
 #[test]
