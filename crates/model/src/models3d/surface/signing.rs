@@ -75,13 +75,6 @@ pub(crate) fn keep_signed<R>(doc: &mut Document, renumber: impl FnOnce(&mut Docu
     result
 }
 
-/// Keep a copied diagram's saved picture when pasted onto a different canvas.
-pub(crate) fn keep_mo_signed(doc: &mut Document, change: impl FnOnce(&mut Document)) {
-    let signed = signed_slots(doc, mo_slots(doc));
-    change(doc);
-    restore_signatures(doc, signed);
-}
-
 fn mo_slots(doc: &Document) -> impl Iterator<Item = SnapshotSlot> + '_ {
     doc.graphics
         .iter()

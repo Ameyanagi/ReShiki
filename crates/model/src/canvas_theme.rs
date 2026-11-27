@@ -77,9 +77,9 @@ pub fn for_native_paste(
     target: CanvasTheme,
 ) -> crate::document::Document {
     keep_typography(&mut doc);
-    if doc.canvas_theme != target {
-        crate::models3d::surface::keep_mo_signed(&mut doc, |doc| doc.canvas_theme = target);
-    }
+    // Saved orbital pictures contain fixed theme colors, so a different canvas
+    // must invalidate their signatures.
+    doc.canvas_theme = target;
     doc
 }
 

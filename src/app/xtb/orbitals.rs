@@ -151,6 +151,8 @@ pub(crate) struct Orbitals {
     /// computed: applied when they arrive.
     pending: Option<Choice>,
     pending_pictures: Vec<PendingPicture>,
+    /// The result and drawing revision whose Undo step can absorb relinked rows.
+    pub(super) mo_relink: Option<(String, (u64, u64))>,
     /// Orbitals the worker recomputed, by result key.
     computed: Vec<(String, Arc<qcdata::Orbitals>)>,
     computing: Option<Computing>,
@@ -177,6 +179,7 @@ impl Default for Orbitals {
             keys: None,
             pending: None,
             pending_pictures: vec![],
+            mo_relink: None,
             computed: vec![],
             computing: None,
             building: None,
@@ -746,13 +749,12 @@ impl App {
                 match outcome {
                     Ok(orbitals) => {
                         state.computed.retain(|(k, _)| *k != key);
-                        state.computed.push((key.clone(), orbitals));
+                        state.computed.push((key.clone(), Arc::clone(&orbitals)));
                         if state.computed.len() > COMPUTED {
                             state.computed.remove(0);
                         }
                         let pending = state.pending.take_if(|p| p.result == key);
-                        // Linked pictures use these cached rows for drawing. Save-time
-                        // snapshots keep their appearance without another history edit.
+                        self.xtb_mo_pin_pictures(&key, &orbitals);
                         self.xtb_mo_finish_pictures(&key);
                         // A level chosen for this result while it ran.
                         if let Some(pending) = pending
