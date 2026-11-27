@@ -183,7 +183,14 @@ fn leader_edge(outside: Point, inside: Point, plot: Rectangle) -> Point {
         return inside;
     }
     let edge_y = outside.y.clamp(plot.y, plot.y + plot.height);
-    outside + (inside - outside) * ((edge_y - outside.y) / dy).clamp(0., 1.)
+    let t = ((edge_y - outside.y) / dy).clamp(0., 1.);
+    // Land exactly on the edge row; interpolating y can miss it by an ulp.
+    let y = if t > 0. && t < 1. {
+        edge_y
+    } else {
+        outside.y + dy * t
+    };
+    Point::new(outside.x + (inside.x - outside.x) * t, y)
 }
 
 fn wrap_note(text: &str, width: f32) -> Vec<String> {
