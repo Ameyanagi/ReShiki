@@ -46,6 +46,7 @@ pub(super) enum Motion {
     Irc {
         trajectory: Box<Trajectory>,
         samples: Vec<PathSample>,
+        ts_index: usize,
         unit: EnergyUnit,
     },
 }
@@ -53,7 +54,9 @@ pub(super) enum Motion {
 impl Source {
     fn sequence(&self) -> Vec<usize> {
         match &self.motion {
-            Motion::Irc { samples, .. } => encode::irc_frames(samples.len(), self.mode, self.speed),
+            Motion::Irc {
+                samples, ts_index, ..
+            } => encode::irc_frames(samples.len(), *ts_index, self.mode, self.speed),
             Motion::Mode(frames) => {
                 let count = (FPS as f32 / self.speed).round() as usize;
                 // One period wraps directly from the last sample to the first.
@@ -425,6 +428,7 @@ fn render(
             trajectory,
             samples,
             unit,
+            ..
         } => {
             let width = trajectory.numbers.len() * 3;
             if width == 0 || trajectory.positions_angstrom.len() != width * samples.len() {

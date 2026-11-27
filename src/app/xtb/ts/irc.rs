@@ -259,6 +259,7 @@ impl App {
             motion: Motion::Irc {
                 trajectory: Box::new(path.trajectory.clone()),
                 samples,
+                ts_index: path.ts_index,
                 unit: self.appearance.energy_unit,
             },
             mode: self.appearance.playback_mode,

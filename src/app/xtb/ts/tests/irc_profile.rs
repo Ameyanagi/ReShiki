@@ -261,12 +261,14 @@ fn irc_gif_uses_the_current_preview_and_the_same_reactant_energy_reference() {
     let Motion::Irc {
         trajectory,
         samples,
+        ts_index,
         unit,
     } = source.motion
     else {
         panic!("IRC export must use the traced trajectory")
     };
     assert_eq!(*trajectory, path.trajectory);
+    assert_eq!(ts_index, path.ts_index);
     assert_eq!(unit, EnergyUnit::KjPerMol);
     for (index, sample) in samples.iter().enumerate() {
         assert_eq!(sample.s, path.arc_lengths_sqrt_amu_bohr[index]);
