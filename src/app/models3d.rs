@@ -129,6 +129,10 @@ pub(super) struct CalculationModel {
 }
 
 impl CalculationModel {
+    pub(super) fn notes(&self) -> &[String] {
+        &self.model.notes
+    }
+
     fn new(doc: &Document, mut model: models3d::Model3d, target: Option<usize>) -> Self {
         let mut previous = Vec::new();
         let mut position = None;
@@ -318,6 +322,13 @@ impl App {
             .model_failure
             .take_if(|failure| failure.molecule.iter().any(|id| ids.contains(id)));
         model.seed = job.seed;
+        let radical = radical_subject(job.prepared.radicals())
+            .map(|who| format!("{who}: start built from {UNNAMED_PARENT}, added H removed"));
+        let name_parent = radical.is_some();
+        // The model keeps how it was built, through Undo, files and any
+        // calculation that starts from it.
+        model.notes = notes.into_iter().chain(radical).collect();
+        let notes = model.notes.clone();
         if job.reaction.is_some() {
             let model = CalculationModel::new(&self.tab.doc, model, job.target);
             self.xtb_stage_model(job.key, model);
@@ -327,17 +338,11 @@ impl App {
             self.add_model(model, job.display);
         }
         if !self.error {
-            let radical = radical_subject(job.prepared.radicals())
-                .map(|who| format!("{who}: start built from {UNNAMED_PARENT}, added H removed"));
-            let name_parent = radical.is_some();
-            let notes: Vec<_> = notes.into_iter().chain(radical).collect();
             for note in &notes {
                 self.status.push_str(" · ");
                 self.status.push_str(note);
             }
-            if let Some(&atom) = ids.first() {
-                self.xtb_model_notes(job.key, atom, notes);
-            }
+            self.xtb_model_notes();
             if name_parent {
                 return self.name_parent(&job.prepared);
             }

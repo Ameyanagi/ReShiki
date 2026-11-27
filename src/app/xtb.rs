@@ -150,10 +150,6 @@ pub(crate) struct State {
     selection_hint: Option<String>,
     /// The generation whose notes belong to this run or its last outcome.
     model_notes_source: Option<(u64, u64)>,
-    /// Each molecule's latest 3D build notes (UFF used, radical parent,
-    /// refinement), by its first atom, for calculations that reuse the model.
-    /// Session only; every build replaces its molecule's entry.
-    build_notes: std::collections::HashMap<u64, Vec<String>>,
     serial: u64,
     pub(super) palette: palette::Palette,
     conformer_stereo: std::cell::RefCell<conformers::CardStereo>,
@@ -823,13 +819,6 @@ impl App {
         if request.ts.is_none() {
             self.xtb_end_preview();
         }
-        // A model built earlier keeps its notes; a new build replaces them.
-        let model_notes = request
-            .atoms
-            .first()
-            .and_then(|atom| self.tab.xtb.build_notes.get(atom))
-            .cloned()
-            .unwrap_or_default();
         self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
         self.tab.xtb.outcome = None;
         self.tab.xtb.model_notes_source = None;
@@ -850,7 +839,7 @@ impl App {
             launch: None,
             model: None,
             model_stage: None,
-            model_notes,
+            model_notes: Vec::new(),
             generated: None,
             reaction: request.reaction,
             started: iced::time::Instant::now(),
@@ -977,19 +966,9 @@ impl App {
     }
 
     /// Keep the starting model's explanation with the calculation it belongs to.
-    pub(super) fn xtb_model_notes(
-        &mut self,
-        key: super::models3d::Key,
-        atom: u64,
-        notes: Vec<String>,
-    ) {
+    /// The latest build's notes are the ones a late parent name completes.
+    pub(super) fn xtb_model_notes(&mut self) {
         self.tab.xtb.model_notes_source = Some((self.tab.file_epoch, self.tab.model_serial));
-        if let Some(run) = &mut self.tab.xtb.run
-            && run.model == Some(key)
-        {
-            run.model_notes.clone_from(&notes);
-        }
-        self.tab.xtb.build_notes.insert(atom, notes);
     }
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -1040,7 +1019,6 @@ impl App {
         if let Some(run) = &mut self.tab.xtb.run {
             replace(&mut run.model_notes);
         }
-        self.tab.xtb.build_notes.values_mut().for_each(replace);
         match &mut self.tab.xtb.outcome {
             Some(Outcome::Done { notes, .. }) => replace(notes),
             Some(Outcome::Review(review)) => replace(&mut review.pending.notes),
@@ -1086,6 +1064,17 @@ impl App {
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
         };
+        // The notes of the model it starts from: how that model was built.
+        let built = run
+            .generated
+            .as_ref()
+            .map(|model| model.notes().to_vec())
+            .or_else(|| {
+                let first = launch.atoms.iter().flatten().next()?;
+                let model = self.tab.doc.models.iter().find(|m| m.contains(*first))?;
+                Some(model.notes.clone())
+            });
+        run.model_notes.splice(0..0, built.unwrap_or_default());
         if run.search.is_some() {
             return self.xtb_search_start(launch);
         }
