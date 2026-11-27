@@ -233,6 +233,74 @@ fn an_optional_refinement_that_inverts_a_wedge_keeps_the_uff_model() {
 }
 
 #[test]
+fn unreadable_stereochemistry_blocks_refinement_only_when_drawn() {
+    if !xtb::available() {
+        return;
+    }
+    for wedged in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let doc = &mut app.tab.doc;
+        let kr = doc.add_atom("Kr", Point::default());
+        let left = doc.add_atom("F", Point::new(-42., 0.));
+        let right = doc.add_atom("F", Point::new(42., 0.));
+        doc.add_bond(kr, left, 1, "plain");
+        doc.add_bond(kr, right, 1, "plain");
+        let mut positions = vec![[0., 0., 0.], [-2., 0., 0.], [2., 0., 0.]];
+        if wedged {
+            let fe = doc.add_atom("Fe", Point::new(84., 0.));
+            let c = doc.add_atom("C", Point::new(126., 0.));
+            doc.add_bond(right, fe, 5, "plain");
+            doc.add_bond(fe, c, 1, "plain");
+            positions.extend([[4., 0., 0.], [6., 0., 0.]]);
+            for (element, xyz, display) in [
+                ("F", [7., 0., 1.], "wedge"),
+                ("Cl", [6.5, -1.5, -0.5], "plain"),
+                ("Br", [6.5, 1.5, -0.5], "plain"),
+            ] {
+                let ligand = doc.add_atom(
+                    element,
+                    Point::new(xyz[0] as f32 * 21., xyz[1] as f32 * 21.),
+                );
+                doc.add_bond(c, ligand, 1, display);
+                positions.push(xyz);
+            }
+        }
+        assert!(reshiki::chemistry::document::prepare(doc).is_err());
+        app.tab.selected = vec![kr];
+        show(&mut app);
+        let job = app.tab.model_job.as_ref().expect("a rough generation");
+        assert!(job.rough.is_some());
+        let key = job.key;
+        generated(&mut app, &positions, vec![], false);
+        refined(
+            &mut app,
+            key,
+            Ok(Arc::new(run::Report {
+                positions,
+                ..report()
+            })),
+        );
+
+        if wedged {
+            assert!(app.tab.doc.models.is_empty());
+            assert!(
+                app.status.ends_with("could not check the stereochemistry."),
+                "{}",
+                app.status
+            );
+        } else {
+            assert_eq!(app.tab.doc.models.len(), 1);
+            assert!(
+                app.status.contains("Refined with GFN2-xTB"),
+                "{}",
+                app.status
+            );
+        }
+    }
+}
+
+#[test]
 fn a_rough_refinement_with_a_short_reply_names_the_atom_and_applies_nothing() {
     if !xtb::available() {
         return;
@@ -254,30 +322,95 @@ fn a_rough_refinement_with_a_short_reply_names_the_atom_and_applies_nothing() {
 #[test]
 fn a_hydrogen_that_moved_to_another_atom_is_caught() {
     use super::refine::hydrogens_kept;
-    let mut model = models3d::Model3d::new(
-        &Document::default(),
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let prepared = Prepared::new(&doc, &[a]).unwrap();
+    let model = models3d::Model3d::new(
+        &doc,
         vec![
             models3d::Placed {
-                id: 0,
+                id: a,
                 xyz: [0., 0., 0.],
             },
             models3d::Placed {
-                id: 1,
+                id: b,
                 xyz: [3., 0., 0.],
             },
         ],
         vec![models3d::Hydrogen {
-            parent: 0,
+            parent: a,
             xyz: [0.96, 0., 0.],
         }],
         models3d::ForceField::Uff,
     );
-    // Generated models index their hydrogens' parents.
-    model.hydrogens[0].parent = 0;
     let kept = [[0., 0., 0.], [3., 0., 0.], [0.96, 0., 0.]];
     let moved = [[0., 0., 0.], [3., 0., 0.], [2.04, 0., 0.]];
-    assert!(hydrogens_kept(&model, &kept));
-    assert!(!hydrogens_kept(&model, &moved));
+    assert!(hydrogens_kept(&prepared, &model, &kept));
+    assert!(!hydrogens_kept(&prepared, &model, &moved));
+}
+
+#[test]
+fn a_drawn_alcohol_hydrogen_must_stay_with_oxygen_during_refinement() {
+    if !xtb::available() {
+        return;
+    }
+    let start = [
+        [0., -1.4, 0.],
+        [0., 0., 0.],
+        [0.96, 0., 0.],
+        [1.4, 1.9, 0.],
+        [2.8, 0., 0.],
+        [0., -1.8, 1.],
+        [0., -1.8, -1.],
+        [-0.92, -1.95, 0.],
+        [2.8, -0.95, 0.],
+        [3.1, 0.25, 0.9],
+        [3.1, 0.25, -0.9],
+    ];
+    for (hydrogen_x, accepted) in [(1., true), (1.84, false)] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let doc = &mut app.tab.doc;
+        let [c, o, h, fe, n] = ["C", "O", "H", "Fe", "N"].map(|element| {
+            let [x, y, _] = start[doc.atoms.len()];
+            doc.add_atom(element, Point::new(x as f32 * 28., y as f32 * 28.))
+        });
+        doc.add_bond(c, o, 1, "plain");
+        doc.add_bond(o, h, 1, "plain");
+        doc.add_bond(o, fe, 5, "plain");
+        doc.add_bond(n, fe, 5, "plain");
+        app.tab.selected = vec![fe];
+        show(&mut app);
+        let job = app.tab.model_job.as_ref().expect("a generation");
+        let key = job.key;
+        assert_eq!(job.prepared.ids(), [c, o, h, fe, n]);
+        generated(&mut app, &start, vec![0, 0, 0, 4, 4, 4], false);
+        let mut result = report();
+        result.positions = start.to_vec();
+        result.positions[2][0] = hydrogen_x;
+        refined(&mut app, key, Ok(Arc::new(result)));
+
+        let [model] = app.tab.doc.models.as_slice() else {
+            panic!("the model should be shown: {}", app.status);
+        };
+        if accepted {
+            assert!(
+                app.status.contains("Refined with GFN2-xTB"),
+                "{}",
+                app.status
+            );
+            assert_eq!(model.atoms[2].xyz[0], hydrogen_x as f32);
+        } else {
+            assert!(
+                app.status.contains("moved a hydrogen to another atom"),
+                "{}",
+                app.status
+            );
+            assert_eq!(model.atoms[2].xyz[0], start[2][0] as f32);
+        }
+    }
 }
 
 const WATER: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];

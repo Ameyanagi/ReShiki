@@ -519,6 +519,38 @@ fn misshaped_centres(mol: &Molecule) -> impl Iterator<Item = &Atom> {
     })
 }
 
+pub(super) fn star_seed_after_embedding_error(mol: &Molecule) -> Option<Vec<[f64; 3]>> {
+    let mut centres = misshaped_centres(mol);
+    let (Some(atom), None) = (centres.next(), centres.next()) else {
+        return None;
+    };
+    let centre = atom.id().index();
+    let neighbors = mol.topology().adjacency.neighbors_of(centre);
+    // Only a complete star with terminal ligands needs no internal conformer
+    // search. Chelates, bridges, and larger ligands still belong to ETKDG.
+    if !matches!(neighbors.len(), 2..=4)
+        || mol.num_atoms() != neighbors.len() + 1
+        || mol.num_bonds() != neighbors.len()
+        || cosmolkit_core::assign_valence_for_topology(
+            mol.topology(),
+            cosmolkit_core::ValenceModel::RdkitLike,
+        )
+        .is_ok()
+    {
+        return None;
+    }
+    // COSMolKit's embedder recomputes strict valence before using its options;
+    // e.g. bonded Kr is rejected despite the prepared nonstrict property cache.
+    // Supply a bent seed for the normal UFF minimization and rough spreading.
+    let mut points = vec![[0.; 3]; mol.num_atoms()];
+    let step = TAU / neighbors.len().max(3) as f64;
+    for (rank, neighbor) in neighbors.iter().enumerate() {
+        let angle = step * rank as f64;
+        points[neighbor.atom_index] = [2.1 * angle.cos(), 2.1 * angle.sin(), 0.];
+    }
+    Some(points)
+}
+
 // Translating donors independently would stretch a chelate or a shared
 // bridge. With the centre removed, each donor must own a separate component.
 fn independent_ligands(mol: &Molecule, centre: usize, donors: &[usize]) -> bool {

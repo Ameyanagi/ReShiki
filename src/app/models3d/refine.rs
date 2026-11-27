@@ -68,7 +68,7 @@ pub(super) fn refine_method(numbers: &[u8]) -> XtbMethod {
     }
 }
 
-pub(super) fn unpaired_electrons(numbers: &[u8], charge: i32, unpaired: u32) -> u32 {
+pub(in crate::app) fn unpaired_electrons(numbers: &[u8], charge: i32, unpaired: u32) -> u32 {
     let electrons = numbers.iter().map(|&z| i64::from(z)).sum::<i64>() - i64::from(charge);
     unpaired + u32::from((electrons - i64::from(unpaired)).rem_euclid(2) != 0)
 }
@@ -312,15 +312,33 @@ impl App {
                     return Err("returned a different number of atoms".into());
                 }
                 frame.positions_angstrom.clone_from(&report.positions);
-                // A drawing ordinary chemistry can't read (KrF₂) defines no
-                // stereo to keep, so only an observed change counts.
-                if science::stereo_changes(&self.tab.doc, &frame.drawing_atoms, frame)
-                    .is_ok_and(|changes| !changes.is_empty())
-                {
-                    return Err("changed the stereochemistry".into());
+                let doc = &self.tab.doc;
+                match science::stereo_changes(doc, &frame.drawing_atoms, frame) {
+                    Ok(changes) if !changes.is_empty() => {
+                        return Err("changed the stereochemistry".into());
+                    }
+                    Err(_) => {
+                        let ids = job.prepared.ids();
+                        if doc
+                            .atoms
+                            .iter()
+                            .any(|atom| atom.stereo.is_some() && ids.contains(&atom.id))
+                            || doc.bonds.iter().any(|bond| {
+                                (bond.stereo.is_some()
+                                    || bond.order == 1
+                                        && !bond.projection
+                                        && reshiki::bonds::is_stereo_marker(&bond.display))
+                                    && ids.contains(&bond.a)
+                                    && ids.contains(&bond.b)
+                            })
+                        {
+                            return Err("could not check the stereochemistry".into());
+                        }
+                    }
+                    Ok(_) => {}
                 }
                 // Each hydrogen must stay nearest the atom it belongs to.
-                if !hydrogens_kept(&refining.model, &report.positions) {
+                if !hydrogens_kept(&job.prepared, &refining.model, &report.positions) {
                     return Err("moved a hydrogen to another atom".into());
                 }
                 Ok(report)
@@ -367,20 +385,50 @@ impl App {
     }
 }
 
-/// Whether every hydrogen in `positions` (model atoms, then hydrogens) is
-/// nearest its own parent atom, as `science::move_model` requires later.
-pub(super) fn hydrogens_kept(model: &Model3d, positions: &[[f64; 3]]) -> bool {
-    let (heavy, hydrogens) = positions.split_at(model.atoms.len().min(positions.len()));
+/// Whether the drawn and generated hydrogens are still nearest their bonded atoms.
+pub(super) fn hydrogens_kept(prepared: &Prepared, model: &Model3d, positions: &[[f64; 3]]) -> bool {
+    let graph = &prepared.molecule().state.graph;
+    let Some((drawn, generated)) = positions.split_at_checked(graph.atoms.len()) else {
+        return false;
+    };
     let distance =
         |a: &[f64; 3], b: &[f64; 3]| a.iter().zip(b).map(|(a, b)| (a - b).powi(2)).sum::<f64>();
-    model.hydrogens.iter().zip(hydrogens).all(|(hydrogen, at)| {
-        let nearest = heavy
+    let nearest = |at: &[f64; 3], non_hydrogen: bool| {
+        drawn
             .iter()
+            .zip(&graph.atoms)
             .enumerate()
-            .min_by(|(_, a), (_, b)| distance(a, at).total_cmp(&distance(b, at)))
-            .map(|(index, _)| index as u64);
-        nearest == Some(hydrogen.parent)
-    })
+            .filter(|(_, (_, atom))| !non_hydrogen || atom.atomic_number != 1)
+            .min_by(|(_, (a, _)), (_, (b, _))| distance(a, at).total_cmp(&distance(b, at)))
+            .map(|(index, _)| index)
+    };
+    let generated_kept = model.hydrogens.iter().zip(generated).all(|(hydrogen, at)| {
+        nearest(at, false).map(|index| index as u64) == Some(hydrogen.parent)
+    });
+    generated_kept
+        && graph
+            .atoms
+            .iter()
+            .zip(drawn)
+            .enumerate()
+            .all(|(index, (atom, at))| {
+                if atom.atomic_number != 1 {
+                    return true;
+                }
+                let mut neighbors = graph.bonds.iter().filter_map(|bond| {
+                    if bond.a == index {
+                        Some(bond.b)
+                    } else if bond.b == index {
+                        Some(bond.a)
+                    } else {
+                        None
+                    }
+                });
+                match (neighbors.next(), neighbors.next()) {
+                    (Some(parent), None) => nearest(at, true) == Some(parent),
+                    _ => true,
+                }
+            })
 }
 
 fn refined_note(refining: &Refining, report: &xtb::run::Report) -> String {

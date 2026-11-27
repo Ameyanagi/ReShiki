@@ -603,6 +603,7 @@ impl App {
             let task = self.xtb_begin(Request {
                 atoms: species.atoms,
                 config,
+                spin_typed: false,
                 keep_full: false,
                 start: None,
                 search: None,

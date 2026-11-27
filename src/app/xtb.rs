@@ -189,6 +189,8 @@ fn is(weak: &Weak<CalcResult>, result: &Arc<CalcResult>) -> bool {
 pub(crate) struct Request {
     atoms: Vec<u64>,
     config: state::Config,
+    /// Unpaired was explicitly entered for these atoms, including a typed 0.
+    spin_typed: bool,
     /// "Keep full results in this file" for the new result.
     keep_full: bool,
     /// Start here (Å, frame order) instead of the model: "Push along mode".
@@ -211,6 +213,7 @@ pub(crate) struct Run {
     serial: u64,
     atoms: Vec<u64>,
     config: state::Config,
+    spin_typed: bool,
     keep_full: bool,
     start: Option<Start>,
     /// A conformer search's settings and progress.
@@ -788,6 +791,7 @@ impl App {
         let request = Request {
             atoms,
             config,
+            spin_typed: typed && !settings.unpaired.trim().is_empty(),
             keep_full: false,
             start: None,
             search,
@@ -828,6 +832,7 @@ impl App {
             }),
             ts: request.ts.map(ts::Live::new),
             config: request.config,
+            spin_typed: request.spin_typed,
             keep_full: request.keep_full,
             start: request.start,
             launch: None,
@@ -985,19 +990,21 @@ impl App {
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     pub(super) fn xtb_model_spin(&mut self, key: super::models3d::Key, frame: &Frame) {
-        let unpaired = frame.multiplicity - 1;
-        // Only a blank Unpaired field follows the drawing; a typed value,
-        // including 0, stays. A typed charge can give a different parity.
-        let blank = self.xtb.settings.unpaired.trim().is_empty();
-        if blank
-            && let Some(run) = &mut self.tab.xtb.run
+        if let Some(run) = &mut self.tab.xtb.run
             && run.launch.is_none()
             && run.model == Some(key)
+            && !run.spin_typed
             && let Some(&first) = run.atoms.first()
-            && run.config.unpaired == science::drawn_state(&self.tab.doc, first).1 - 1
-            && run.config.unpaired != unpaired
-            && run.config.charge.abs_diff(frame.charge).is_multiple_of(2)
         {
+            let (_, multiplicity) = science::drawn_state(&self.tab.doc, first);
+            let unpaired = super::models3d::refine::unpaired_electrons(
+                &frame.numbers,
+                run.config.charge,
+                multiplicity - 1,
+            );
+            if run.config.unpaired == unpaired {
+                return;
+            }
             run.config.unpaired = unpaired;
             let plural = if unpaired == 1 { "" } else { "s" };
             run.model_notes.push(format!(
@@ -1497,6 +1504,7 @@ impl Run {
             request: Box::new(Request {
                 atoms: self.atoms.clone(),
                 config: self.config.clone(),
+                spin_typed: self.spin_typed,
                 keep_full: self.keep_full,
                 start: self.start.clone(),
                 search: self.search.as_ref().map(|live| live.config.clone()),

@@ -280,6 +280,7 @@ fn frequencies_reject_a_target_above_the_hessian_limit() {
     let _ = app.xtb_begin(Request {
         atoms: (1..=201).collect(),
         config: settings.config((0, 0), false, vec![]).unwrap(),
+        spin_typed: false,
         keep_full: false,
         start: None,
         search: None,
@@ -772,10 +773,17 @@ fn a_waiting_cef3_run_inherits_the_refined_spin_when_unpaired_is_blank() {
         ("", "3", 3, &[][..]),
         ("1", "", 0, &[][..]),
     ] {
-        let (mut app, _) = refine_tests::cerium();
+        let (mut app, atoms) = refine_tests::cerium();
         send(&mut app, Action::Method(qcdata::XtbMethod::GXtb));
-        send(&mut app, Action::Charge(charge.into()));
-        send(&mut app, Action::Unpaired(typed.into()));
+        if charge.is_empty() && typed.is_empty() {
+            let water = app.tab.doc.add_atom("O", Point::new(200., 0.));
+            app.tab.selected = vec![water];
+            send(&mut app, Action::Unpaired("0".into()));
+            app.tab.selected = atoms;
+        } else {
+            send(&mut app, Action::Charge(charge.into()));
+            send(&mut app, Action::Unpaired(typed.into()));
+        }
         send(&mut app, Action::Run);
         let key = refine_tests::finish_cerium_generation(&mut app, true);
 
@@ -795,6 +803,80 @@ fn a_waiting_cef3_run_inherits_the_refined_spin_when_unpaired_is_blank() {
             .filter(|line| line.starts_with("Odd electron count"))
             .collect();
         assert_eq!(spin_notes, expected_notes);
+    }
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn a_waiting_uf6_run_uses_its_own_charge_and_keeps_typed_spin() {
+    use crate::app::models3d::{self, refine_tests};
+    if !available() {
+        return;
+    }
+    let positions = [
+        [0., 0., 0.],
+        [2., 0., 0.],
+        [-2., 0., 0.],
+        [0., 2., 0.],
+        [0., -2., 0.],
+        [0., 0., 2.],
+        [0., 0., -2.],
+    ];
+    for unpaired in ["", "0"] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let u = app.tab.doc.add_atom("U", Point::default());
+        for i in 0..6 {
+            let angle = std::f32::consts::TAU * i as f32 / 6.;
+            let f = app
+                .tab
+                .doc
+                .add_atom("F", Point::new(42. * angle.cos(), 42. * angle.sin()));
+            app.tab.doc.add_bond(u, f, 1, "plain");
+        }
+        app.tab.selected = vec![u];
+        send(&mut app, Action::Method(qcdata::XtbMethod::GXtb));
+        send(&mut app, Action::Charge("1".into()));
+        send(&mut app, Action::Unpaired(unpaired.into()));
+        send(&mut app, Action::Run);
+        let key = app.tab.model_job.as_ref().expect("a generation").key;
+        let _ = app.finish_model(
+            positions.map(|[x, y, z]| Point3 { x, y, z }).to_vec(),
+            vec![],
+        );
+        assert!(app.tab.model_job.as_ref().is_some_and(|job| job.key == key));
+        send(&mut app, Action::Unpaired(String::new()));
+
+        let _ = app.update(Message::Models3d(models3d::Action::Refined(
+            key,
+            Event::Done(Ok(Arc::new(Report {
+                positions: positions.to_vec(),
+                ..refine_tests::report()
+            }))),
+        )));
+
+        if unpaired.is_empty() {
+            let run = app.tab.xtb.run.as_ref().expect("the calculation launched");
+            let frame = &run.launch.as_ref().unwrap().frame;
+            assert_eq!((frame.charge, frame.multiplicity), (1, 2));
+            assert_eq!(run.config.unpaired, 1);
+            assert!(
+                run.model_notes
+                    .iter()
+                    .any(|note| note == "Odd electron count: calculated with 1 unpaired electron")
+            );
+        } else {
+            let Some(Outcome::Failed(failed)) = app.xtb_outcome() else {
+                panic!("the typed 0 disagrees with the charged molecule's electron count");
+            };
+            assert_eq!(failed.request.as_ref().unwrap().config.unpaired, 0);
+            assert!(
+                app.status
+                    .contains("electron count and spin multiplicity disagree"),
+                "{}",
+                app.status
+            );
+        }
     }
 }
 

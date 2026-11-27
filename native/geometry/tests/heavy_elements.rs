@@ -136,6 +136,23 @@ fn rough_flat_heavy_element_drawings_spread_ligands_for_xtb_refinement() {
 }
 
 #[test]
+fn rough_krypton_difluoride_without_coordinates_is_linear() {
+    let mut request = flat_star(36, 9, 2);
+    request.rough = true;
+    request.field = ForceField::MMFF94s;
+    // The GUI omits coordinates for flat drawings, so Generate uses ETKDG.
+    request.coordinates.clear();
+    request.validate().unwrap();
+
+    let response = solve(&request).unwrap();
+    assert_eq!(response.field, ForceField::UFF);
+    assert_eq!(response.original_count, 3);
+    assert_eq!(response.coordinates.len(), 3);
+    let degrees = ligand_angles(&response, 0, &[1, 2])[0];
+    assert!((degrees - 180.).abs() <= 2., "F-Kr-F: {degrees} degrees");
+}
+
+#[test]
 fn rough_thorium_methoxide_keeps_ligands_and_added_hydrogens_intact() {
     let mut request = flat_star(90, 8, 4);
     request.rough = true;

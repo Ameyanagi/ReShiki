@@ -20,7 +20,7 @@ use reshiki::models3d::{
 use std::sync::Arc;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
-mod refine;
+pub(super) mod refine;
 pub(in crate::app) mod thumbnail;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

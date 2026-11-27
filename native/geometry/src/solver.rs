@@ -670,9 +670,35 @@ fn embed(
     }
     loop {
         calls += 1;
-        let embedded = mol
-            .with_3d_conformers_result_with_params(conformers, &parameters)
-            .map_err(|error| error.to_string())?;
+        let embedded = match mol.with_3d_conformers_result_with_params(conformers, &parameters) {
+            Ok(embedded) => embedded,
+            Err(error) => {
+                if request.relaxed
+                    && request.rough
+                    && request.ensemble.is_none()
+                    && request.coordinates.is_empty()
+                    && let Some(points) = relaxed::star_seed_after_embedding_error(mol)
+                {
+                    diagnostics.push(format!(
+                        "initialization=rough-star; terminal ligands around one unsupported UFF shape; ETKDG strict-valence rejection={}",
+                        error.to_string().chars().take(512).collect::<String>()
+                    ));
+                    let molecule = mol
+                        .with_only_3d_conformer(rows(&points))
+                        .map_err(|error| error.to_string())?;
+                    return Ok((
+                        EmbedMultipleConfsResult {
+                            molecule,
+                            conf_ids: vec![0],
+                            requested_num_confs: conformers,
+                            params: parameters,
+                        },
+                        "Rust rough star",
+                    ));
+                }
+                return Err(error.to_string());
+            }
+        };
         // Each call retains its 100-attempt/10-second limits; the disposable
         // worker also bounds the entire operation. Count the cage pilot here.
         if calls >= 3 {

@@ -805,6 +805,7 @@ impl App {
         self.xtb_begin(super::Request {
             atoms: plan.start_atoms.clone(),
             config,
+            spin_typed: false,
             keep_full: false,
             start: None,
             search: None,

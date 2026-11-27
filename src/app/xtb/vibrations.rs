@@ -1416,6 +1416,7 @@ impl App {
         let request = Request {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),
             config,
+            spin_typed: false,
             keep_full: shown.stored.keep_full,
             start: Some(Start { positions, from }),
             search: None,
