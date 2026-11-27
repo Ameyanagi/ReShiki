@@ -29,6 +29,9 @@ pub struct MoDiagram {
     pub below: u8,
     pub above: u8,
     pub pictures: Vec<MoPicture>,
+    /// The gap is the α frontier's, as g-xTB's xtb68 conventions report it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub alpha_gap: bool,
 }
 
 /// A picture belongs to a displayed column, even when both columns share rows.
@@ -49,6 +52,7 @@ impl MoDiagram {
             below: 2,
             above: 2,
             pictures: vec![],
+            alpha_gap: false,
         }
     }
 
@@ -402,13 +406,17 @@ impl<'a> Layout<'a> {
         let closed =
             mo.columns.len() == 1 && mo.columns.first().is_some_and(|c| c.label.is_empty());
         let width_of = |text: &str, size| style::styled_text_width(text, size, &font);
-        // Shared α/β orbitals (xTB open shells) have α's own gap, as the
-        // Summary reports it; separate spins take the extremes of both.
-        let shared = matches!(&mo.columns[..], [a, b] if a.energies_ev == b.energies_ev);
-        let gap_columns = if shared {
-            mo.columns.get(..1).unwrap_or_default()
-        } else {
-            &mo.columns
+        // The gap as the Summary reports it: a closed shell's own; the α
+        // frontier for shared α/β orbitals (xTB open shells) and for xtb68
+        // conventions; otherwise the extremes of both spins, when both have
+        // occupations and one has a whole frontier.
+        let whole = |c: &Column| c.homo().is_some() && c.lumo().is_some();
+        let gap_columns: &[Column] = match &mo.columns[..] {
+            [a, b] if a.spin == b.spin || mo.alpha_gap => std::slice::from_ref(a),
+            [a, b] if a.occupied.is_none() || b.occupied.is_none() || !(whole(a) || whole(b)) => {
+                &[]
+            }
+            columns => columns,
         };
         let homo = frontier(gap_columns, Column::homo, f64::total_cmp);
         let lumo = frontier(gap_columns, Column::lumo, |a, b| b.total_cmp(a));

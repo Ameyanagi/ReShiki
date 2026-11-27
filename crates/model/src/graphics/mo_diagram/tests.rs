@@ -249,7 +249,7 @@ fn nearby_spin_groups_share_a_row_without_merging_alpha_groups() {
 }
 
 #[test]
-fn beta_without_occupations_does_not_collapse_the_alpha_gap() {
+fn beta_without_occupations_keeps_the_alpha_frontier_rows_apart() {
     let mo = MoDiagram::new(
         1,
         "old".into(),
@@ -267,14 +267,12 @@ fn beta_without_occupations_does_not_collapse_the_alpha_gap() {
     let beta = group_y(&layout.columns, (1, 0)).unwrap();
     assert!(lumo < homo);
     assert!(beta == lumo || beta == homo);
-    assert!(layout.lines.iter().any(|line| {
-        matches!(line.as_slice(), [_, start, end, _] if start.y == homo && end.y == lumo)
-    }));
+    // Separate spins without β occupations have no gap, as in the Summary.
     assert!(
-        layout
+        !layout
             .labels
             .iter()
-            .any(|label| label.text == "gap 0.01 eV")
+            .any(|label| label.text.starts_with("gap"))
     );
     assert!(
         !layout
@@ -612,4 +610,46 @@ fn shared_open_shell_orbitals_take_the_alpha_gap() {
     let texts: Vec<_> = labels.iter().map(|a| a.text.as_str()).collect();
     assert!(texts.contains(&"gap 15.41 eV"), "{texts:?}");
     assert!(!texts.iter().any(|t| t.contains("−0.00")));
+}
+
+#[test]
+fn the_gap_follows_the_summary_rule_for_separate_spins() {
+    let gap = |mo: MoDiagram| -> Option<String> {
+        let (_, labels) = placed(mo, &style::DEFAULT).mo_parts(&style::DEFAULT);
+        labels
+            .into_iter()
+            .find(|a| a.text.starts_with("gap"))
+            .map(|a| a.text)
+    };
+    let ev = [-16.33, -10.88, 5.44];
+    let unrestricted = |alpha: usize, beta: Option<usize>| {
+        let mut b = column(Spin::Beta, "β", &ev, beta.unwrap_or(0));
+        b.occupied = beta;
+        MoDiagram::new(
+            1,
+            "old".into(),
+            vec![column(Spin::Alpha, "α", &ev, alpha), b],
+        )
+    };
+    // Equal energies but separate spins: the extremes of both.
+    assert_eq!(
+        gap(unrestricted(2, Some(1))).as_deref(),
+        Some("gap 0.00 eV")
+    );
+    // xtb68 conventions take the α frontier.
+    let mut mo = unrestricted(2, Some(1));
+    mo.alpha_gap = true;
+    assert_eq!(gap(mo).as_deref(), Some("gap 16.32 eV"));
+    // A spin without occupations: no gap, as the Summary omits it.
+    assert_eq!(gap(unrestricted(2, None)), None);
+    // An H atom: α's only level filled, β's empty; neither spin has a whole frontier.
+    let h = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![
+            column(Spin::Alpha, "α", &[-13.6], 1),
+            column(Spin::Beta, "β", &[-10.88], 0),
+        ],
+    );
+    assert_eq!(gap(h), None);
 }
