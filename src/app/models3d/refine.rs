@@ -3,7 +3,7 @@ use super::{Failure, Job, Key, element_name, force_field_caution, radical_subjec
 use crate::app::{App, Message, xtb};
 use iced::{Task, time::Instant};
 use reshiki::{
-    geometry::{AtomProblem, Error, ForceField, Prepared},
+    geometry::{AtomProblem, Error, ForceField, Optimized, Prepared},
     models3d::Model3d,
     qcdata::{Frame, XtbMethod},
     science,
@@ -49,6 +49,7 @@ pub(super) fn prepare(prepared: Prepared, rough: &mut Option<Rough>) -> Result<P
 pub(super) fn needed(job: &Job, field: ForceField) -> bool {
     xtb::available()
         && (job.rough.is_some()
+            || job.force_field == ForceField::Uff
             || field != job.force_field
             || job.strict_error.is_some()
             || !job.prepared.radicals().is_empty())
@@ -116,7 +117,13 @@ fn frame(doc: &reshiki::document::Document, prepared: &Prepared, model: &Model3d
         masses_amu: vec![],
         charge,
         multiplicity: unpaired + 1,
-        drawing_atoms: vec![],
+        drawing_atoms: prepared
+            .ids()
+            .iter()
+            .copied()
+            .map(Some)
+            .chain(std::iter::repeat_n(None, model.hydrogens.len()))
+            .collect(),
     })
 }
 
@@ -124,9 +131,12 @@ pub(super) struct Refining {
     method: XtbMethod,
     model: Model3d,
     field: ForceField,
+    frame: Frame,
+    spread: Option<String>,
     /// Step index and its energy in Hartree, when the optimizer reports one.
     last_step: Option<(usize, f64)>,
     started: Instant,
+    status: String,
     _worker: Worker,
 }
 
@@ -172,11 +182,11 @@ impl App {
         &mut self,
         mut model_job: Job,
         model: Model3d,
-        field: ForceField,
+        optimized: &Optimized,
     ) -> Task<Message> {
         let Some(frame) = frame(&self.tab.doc, &model_job.prepared, &model) else {
             self.record_model_failure(vec![], Failure::other("No atoms to refine"));
-            return Task::none();
+            return self.xtb_model_finished(model_job.key, None);
         };
         let method = refine_method(&frame.numbers);
         let config = xtb::state::Config {
@@ -203,19 +213,28 @@ impl App {
             Message::Models3d(super::Action::Refined(key, event))
         })
         .abortable();
-        let refining = Refining {
+        let mut refining = Refining {
             method,
             model,
-            field,
+            field: optimized.force_field,
+            frame,
+            spread: optimized.approximations.iter().find_map(|note| {
+                note.strip_prefix("Rough start for an xTB refinement: ")
+                    .map(str::to_owned)
+            }),
             last_step: None,
             started: Instant::now(),
+            status: String::new(),
             _worker: Worker {
                 cancel,
                 _handle: handle.abort_on_drop(),
             },
         };
-        self.status = format!("{} · Esc cancels", refining.line(&model_job.prepared));
+        let line = refining.line(&model_job.prepared);
+        refining.status = format!("{line} · Esc cancels");
+        self.status.clone_from(&refining.status);
         self.error = false;
+        self.xtb_model_stage(key, line);
         model_job.refining = Some(refining);
         self.tab.model_job = Some(model_job);
         task
@@ -231,15 +250,17 @@ impl App {
         };
         match event {
             xtb::RunEvent::Done(result) => {
-                let applied = if let Some(mut job) = self.tab.model_job.take()
-                    && let Some(refining) = job.refining.take()
-                    && self.model_job_applies(&job)
-                {
-                    self.finish_model_refinement(&job, refining, result)
-                } else {
-                    Task::none()
+                let Some(mut job) = self.tab.model_job.take() else {
+                    return Task::none();
                 };
-                return Task::batch([applied, self.xtb_model_finished(key, false)]);
+                if let Err(reason) = self.model_job_applies(&job) {
+                    return self.xtb_model_finished(key, Some(reason));
+                }
+                let Some(refining) = job.refining.take() else {
+                    return Task::none();
+                };
+                let applied = self.finish_model_refinement(&job, refining, result);
+                return Task::batch([applied, self.xtb_model_finished(key, None)]);
             }
             xtb::RunEvent::Steps {
                 first, energies, ..
@@ -248,11 +269,17 @@ impl App {
                     refining.last_step = Some((first + energies.len() - 1, energy));
                 }
             }
-            xtb::RunEvent::Hessian | xtb::RunEvent::Tick => {}
+            xtb::RunEvent::Hessian => return Task::none(),
+            xtb::RunEvent::Tick => {}
         }
         if job.current == current {
-            self.status = format!("{} · Esc cancels", refining.line(&job.prepared));
-            self.error = false;
+            let line = refining.line(&job.prepared);
+            if self.status == refining.status {
+                refining.status = format!("{line} · Esc cancels");
+                self.status.clone_from(&refining.status);
+                self.error = false;
+            }
+            self.xtb_model_stage(key, line);
         }
         Task::none()
     }
@@ -263,9 +290,26 @@ impl App {
         mut refining: Refining,
         result: Result<std::sync::Arc<xtb::run::Report>, reshiki_xtb_jobs::Failure>,
     ) -> Task<Message> {
-        match result {
+        let result = result
+            .map_err(|error| {
+                let action = if job.rough.is_some() {
+                    "stopped"
+                } else {
+                    "failed"
+                };
+                format!("{action}: {}", error.to_string().trim_end_matches('.'))
+            })
+            .and_then(|report| {
+                let frame = &mut refining.frame;
+                frame.positions_angstrom.clone_from(&report.positions);
+                science::stereo_changes(&self.tab.doc, &frame.drawing_atoms, frame)
+                    .is_ok_and(|changes| changes.is_empty())
+                    .then_some(report)
+                    .ok_or_else(|| "changed the stereochemistry".into())
+            });
+        let note = match result {
             Ok(report) => {
-                let note = refined_note(job, &refining, &report);
+                let note = refined_note(&refining, &report);
                 let model = &mut refining.model;
                 let positions = model
                     .atoms
@@ -275,35 +319,37 @@ impl App {
                 for (xyz, position) in positions.zip(&report.positions) {
                     *xyz = position.map(|coordinate| coordinate as f32);
                 }
-                self.model_succeeded(job, refining.model, Some(note))
+                note
             }
-            Err(error) => {
-                let error = error.to_string();
-                let reason = error.trim_end_matches('.');
+            Err(reason) => {
                 if let Some(rough) = &job.rough {
                     let symbol = &rough.symbol;
                     let name = element_name(symbol);
                     let method = refining.method.label();
                     self.record_model_failure(job.prepared.ids().to_vec(), Failure {
-                        message: format!("Can't build a starting 3D structure for {symbol} ({name}): {method} stopped: {reason}."),
+                        message: format!("Can't build a starting 3D structure for {symbol} ({name}): {method} {reason}."),
                         atom: Some(rough.atom),
                     });
-                    Task::none()
-                } else {
-                    let field = refining.field;
-                    let failed =
-                        format!("xTB refinement failed: {reason}; showing the {field} model");
-                    let note = force_field_caution(job, field)
-                        .map(|caution| format!("{caution} · {failed}"))
-                        .unwrap_or(failed);
-                    self.model_succeeded(job, refining.model, Some(note))
+                    return Task::none();
                 }
+                format!(
+                    "xTB refinement {reason}; showing the {} model",
+                    refining.field
+                )
             }
+        };
+        let notes = force_field_caution(job, refining.field)
+            .into_iter()
+            .chain([note]);
+        let named = self.model_succeeded(job, refining.model, notes);
+        if !self.error {
+            self.xtb_model_spin(job.key, &refining.frame);
         }
+        named
     }
 }
 
-fn refined_note(job: &Job, refining: &Refining, report: &xtb::run::Report) -> String {
+fn refined_note(refining: &Refining, report: &xtb::run::Report) -> String {
     let method = refining.method.label();
     let steps = report.steps;
     let seconds = refining.seconds();
@@ -313,12 +359,8 @@ fn refined_note(job: &Job, refining: &Refining, report: &xtb::run::Report) -> St
     } else {
         format!("Refined with {method} · stopped after {steps} steps, not converged")
     };
-    if let Some(rough) = &job.rough {
-        note.push_str(&format!(" (start: {} ligands spread out)", rough.symbol));
-    } else if job.strict_error.is_some() {
-        note.push_str(" (start: approximate UFF model)");
-    } else if refining.field != job.force_field {
-        note.push_str(" (MMFF has no parameters)");
+    if let Some(spread) = &refining.spread {
+        note.push_str(&format!(" (start: {spread})"));
     }
     note
 }

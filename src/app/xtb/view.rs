@@ -592,7 +592,13 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
             .on_press(Message::Xtb(Action::Cancel));
     let text_line = line(
         run.launch.as_ref().map_or_else(
-            || "Making the 3D model first (MMFF94s)".into(),
+            || {
+                if run.model_stage.is_some() {
+                    run.status()
+                } else {
+                    "Making the 3D model first (MMFF94s)".into()
+                }
+            },
             |_| match &run.search {
                 Some(live) => live.line(run.seconds()),
                 None => run.progress.line(run.config.task, run.seconds()),

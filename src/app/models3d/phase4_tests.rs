@@ -121,6 +121,8 @@ fn updating_replaces_only_the_conformer_and_is_one_undo_step() {
     let (key, mut result) = generated(&app);
     Arc::make_mut(&mut result).conformer.positions[1].z += 0.4;
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    super::super::refine_tests::fail_optional_refinement(&mut app, key);
     assert!(!app.error, "{}", app.status);
     assert_eq!(frames(&app), count + 1);
     assert_eq!(app.tab.doc.atoms, original.atoms);

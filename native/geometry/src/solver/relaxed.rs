@@ -515,91 +515,120 @@ fn misshaped_centres(mol: &Molecule) -> impl Iterator<Item = &Atom> {
             .adjacency
             .neighbors_of(atom.id().index())
             .len();
-        matches!(count, 2..=4) && uff_misshaped(u32::from(atom.atomic_number()), count)
+        uff_misshaped(u32::from(atom.atomic_number()), count)
     })
 }
 
-pub(super) fn rough_start_notes(mol: &Molecule) -> impl Iterator<Item = String> + '_ {
-    misshaped_centres(mol).map(|atom| {
-        format!(
-            "Rough start for an xTB refinement: {} ligands spread out",
-            symbol(atom)
-        )
-    })
-}
-
-pub(super) fn spread_misshaped_centres(mol: &Molecule, points: &mut [[f64; 3]]) {
-    for atom in misshaped_centres(mol) {
-        let centre = atom.id().index();
-        let mut ligands: Vec<_> = mol
-            .topology()
-            .adjacency
-            .neighbors_of(centre)
-            .iter()
-            .map(|neighbor| {
-                let donor = neighbor.atom_index;
-                let offset = sub(points[donor], points[centre]);
-                let length = norm(offset);
-                let direction = if length > 0. {
-                    scale(offset, length.recip())
-                } else {
-                    offset
-                };
-                (donor, direction, length)
-            })
-            .collect();
-
-        let covariance = std::array::from_fn(|row| {
-            std::array::from_fn(|column| ligands.iter().map(|(_, u, _)| u[row] * u[column]).sum())
-        });
-        let (values, axes) = principal_axes(covariance);
-        let normal = axes[(0..3)
-            .min_by(|&a, &b| values[a].total_cmp(&values[b]))
-            .unwrap()];
-        let project = |u| sub(u, scale(normal, dot(u, normal)));
-        // Start at the first ligand with a direction in the plane.
-        let Some(anchor) = ligands
-            .iter()
-            .position(|&(_, u, _)| norm(project(u)) > 1e-6)
-        else {
-            continue;
-        };
-        ligands.swap(0, anchor);
-        let first = project(ligands[0].1);
-        let first = scale(first, norm(first).recip());
-        let second = cross(normal, first);
-        let turn = |u| dot(u, second).atan2(dot(u, first)).rem_euclid(TAU);
-        ligands[1..].sort_by(|a, b| turn(a.1).total_cmp(&turn(b.1)));
-
-        let count = ligands.len();
-        // Sine of the lift angle: 19.47° for a trigonal pyramid and
-        // 35.26° on alternating sides for a tetrahedron.
-        let height = match count {
-            3 => 1. / 3.,
-            4 => (1_f64 / 3.).sqrt(),
-            _ => 0.,
-        };
-        let radius = (1. - height * height).sqrt();
-        let (donors, displacements): (Vec<_>, Vec<_>) = ligands
-            .into_iter()
-            .enumerate()
-            .map(|(rank, (donor, _, length))| {
-                let (sin, cos) = (TAU * rank as f64 / count as f64).sin_cos();
-                let lift = if count == 4 && rank % 2 == 1 {
-                    -height
-                } else {
-                    height
-                };
-                let target = std::array::from_fn(|axis| {
-                    let direction =
-                        radius * (cos * first[axis] + sin * second[axis]) + lift * normal[axis];
-                    points[centre][axis] + length * direction
-                });
-                (donor, sub(target, points[donor]))
-            })
-            .unzip();
-        translate_ligands(mol, points, centre, &donors, &displacements);
+// Translating donors independently would stretch a chelate or a shared
+// bridge. With the centre removed, each donor must own a separate component.
+fn independent_ligands(mol: &Molecule, centre: usize, donors: &[usize]) -> bool {
+    let mut owners = vec![None; mol.num_atoms()];
+    let mut pending = VecDeque::new();
+    for &donor in donors {
+        owners[donor] = Some(donor);
+        pending.push_back(donor);
     }
+    while let Some(index) = pending.pop_front() {
+        for neighbor in mol.topology().adjacency.neighbors_of(index) {
+            let next = neighbor.atom_index;
+            if next == centre {
+                continue;
+            }
+            match owners[next] {
+                Some(owner) if Some(owner) != owners[index] => return false,
+                Some(_) => {}
+                None => {
+                    owners[next] = owners[index];
+                    pending.push_back(next);
+                }
+            }
+        }
+    }
+    true
+}
+
+pub(super) fn spread_misshaped_centres(mol: &Molecule, points: &mut [[f64; 3]]) -> Option<String> {
+    // Independent moves at two centres could pull their shared bridge apart.
+    let mut centres = misshaped_centres(mol);
+    let (Some(atom), None) = (centres.next(), centres.next()) else {
+        return None;
+    };
+    let centre = atom.id().index();
+    let neighbors = mol.topology().adjacency.neighbors_of(centre);
+    if !matches!(neighbors.len(), 2..=4) {
+        return None;
+    }
+    let mut ligands: Vec<_> = neighbors
+        .iter()
+        .map(|neighbor| {
+            let donor = neighbor.atom_index;
+            let offset = sub(points[donor], points[centre]);
+            let length = norm(offset);
+            let direction = if length > 0. {
+                scale(offset, length.recip())
+            } else {
+                offset
+            };
+            (donor, direction, length)
+        })
+        .collect();
+
+    let donors: Vec<_> = ligands.iter().map(|&(donor, _, _)| donor).collect();
+    if !independent_ligands(mol, centre, &donors) {
+        return None;
+    }
+
+    let covariance = std::array::from_fn(|row| {
+        std::array::from_fn(|column| ligands.iter().map(|(_, u, _)| u[row] * u[column]).sum())
+    });
+    let (values, axes) = principal_axes(covariance);
+    let normal = axes[(0..3)
+        .min_by(|&a, &b| values[a].total_cmp(&values[b]))
+        .unwrap()];
+    let project = |u| sub(u, scale(normal, dot(u, normal)));
+    // Start at the first ligand with a direction in the plane.
+    let anchor = ligands
+        .iter()
+        .position(|&(_, u, _)| norm(project(u)) > 1e-6)?;
+    ligands.swap(0, anchor);
+    let first = project(ligands[0].1);
+    let first = scale(first, norm(first).recip());
+    let second = cross(normal, first);
+    let turn = |u| dot(u, second).atan2(dot(u, first)).rem_euclid(TAU);
+    ligands[1..].sort_by(|a, b| turn(a.1).total_cmp(&turn(b.1)));
+
+    let count = ligands.len();
+    // Sine of the lift angle: 19.47° for a trigonal pyramid and
+    // 35.26° on alternating sides for a tetrahedron.
+    let height = match count {
+        3 => 1. / 3.,
+        4 => (1_f64 / 3.).sqrt(),
+        _ => 0.,
+    };
+    let radius = (1. - height * height).sqrt();
+    let (donors, displacements): (Vec<_>, Vec<_>) = ligands
+        .into_iter()
+        .enumerate()
+        .map(|(rank, (donor, _, length))| {
+            let (sin, cos) = (TAU * rank as f64 / count as f64).sin_cos();
+            let lift = if count == 4 && rank % 2 == 1 {
+                -height
+            } else {
+                height
+            };
+            let target = std::array::from_fn(|axis| {
+                let direction =
+                    radius * (cos * first[axis] + sin * second[axis]) + lift * normal[axis];
+                points[centre][axis] + length * direction
+            });
+            (donor, sub(target, points[donor]))
+        })
+        .unzip();
+    translate_ligands(mol, points, centre, &donors, &displacements);
+    Some(format!(
+        "Rough start for an xTB refinement: {} ligands spread out",
+        symbol(atom)
+    ))
 }
 
 fn norm(vector: [f64; 3]) -> f64 {

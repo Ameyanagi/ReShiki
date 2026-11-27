@@ -476,7 +476,12 @@ impl App {
                 format!(
                     "Recalculating with the same settings · {}",
                     run.launch.as_ref().map_or_else(
-                        || "making the 3D model first (MMFF94s)".into(),
+                        || {
+                            run.model_stage
+                                .as_deref()
+                                .unwrap_or("making the 3D model first (MMFF94s)")
+                                .to_owned()
+                        },
                         |_| run.progress.line(run.config.task, run.seconds())
                     )
                 ),

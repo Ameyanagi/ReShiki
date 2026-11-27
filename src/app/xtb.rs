@@ -220,6 +220,8 @@ pub(crate) struct Run {
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
     model: Option<super::models3d::Key>,
+    /// Progress from refinement while the calculation waits for that model.
+    model_stage: Option<String>,
     /// Starting-model cautions and refinement details retained by the card.
     model_notes: Vec<String>,
     generated: Option<super::models3d::CalculationModel>,
@@ -830,6 +832,7 @@ impl App {
             start: request.start,
             launch: None,
             model: None,
+            model_stage: None,
             model_notes: Vec::new(),
             generated: None,
             reaction: request.reaction,
@@ -970,6 +973,36 @@ impl App {
         }
     }
 
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    pub(super) fn xtb_model_stage(&mut self, key: super::models3d::Key, line: String) {
+        if let Some(run) = &mut self.tab.xtb.run
+            && run.launch.is_none()
+            && run.model == Some(key)
+        {
+            run.model_stage = Some(line);
+        }
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    pub(super) fn xtb_model_spin(&mut self, key: super::models3d::Key, frame: &Frame) {
+        let unpaired = frame.multiplicity - 1;
+        // A typed charge can give Calculate a different electron parity.
+        if let Some(run) = &mut self.tab.xtb.run
+            && run.launch.is_none()
+            && run.model == Some(key)
+            && let Some(&first) = run.atoms.first()
+            && run.config.unpaired == science::drawn_state(&self.tab.doc, first).1 - 1
+            && run.config.unpaired != unpaired
+            && run.config.charge.abs_diff(frame.charge).is_multiple_of(2)
+        {
+            run.config.unpaired = unpaired;
+            let plural = if unpaired == 1 { "" } else { "s" };
+            run.model_notes.push(format!(
+                "Odd electron count: calculated with {unpaired} unpaired electron{plural}"
+            ));
+        }
+    }
+
     /// An asynchronous closed-shell parent name also belongs in the card's notes.
     pub(super) fn xtb_model_parent_named(&mut self, model: (u64, u64), unnamed: &str, name: &str) {
         if self.tab.xtb.model_notes_source != Some(model) || model.0 != self.tab.file_epoch {
@@ -995,7 +1028,7 @@ impl App {
     pub(super) fn xtb_model_finished(
         &mut self,
         key: super::models3d::Key,
-        canceled: bool,
+        stopped: Option<&str>,
     ) -> Task<Message> {
         let waiting = self
             .tab
@@ -1006,10 +1039,8 @@ impl App {
         if !waiting {
             return Task::none();
         }
-        if canceled {
-            self.xtb_fail(state::Failure::Other(
-                "xTB not started · 3D model canceled".into(),
-            ));
+        if let Some(reason) = stopped {
+            self.xtb_fail(state::Failure::Other(format!("xTB not started · {reason}")));
             Task::none()
         } else {
             self.xtb_launch()
@@ -1210,17 +1241,6 @@ impl App {
     /// Cancel stops the worker (or the model generation) and applies nothing.
     pub(super) fn xtb_cancel(&mut self) -> Task<Message> {
         if self.xtb_search_stop() {
-            return Task::none();
-        }
-        let waiting_for_model = self.tab.xtb.run.as_ref().is_some_and(|run| {
-            run.launch.is_none()
-                && self
-                    .tab
-                    .model_job
-                    .as_ref()
-                    .is_some_and(|job| run.model == Some(job.key))
-        });
-        if waiting_for_model && self.cancel_model_generation() {
             return Task::none();
         }
         let reaction_energy = self.tab.xtb.energy_state.stop("Reaction energy canceled");
@@ -1490,6 +1510,11 @@ impl Run {
     }
 
     fn status(&self) -> String {
+        if self.launch.is_none()
+            && let Some(line) = &self.model_stage
+        {
+            return format!("xTB · {line}");
+        }
         if let Some(live) = &self.ts {
             return format!("{} · {}", live.request.method.label(), live.line());
         }

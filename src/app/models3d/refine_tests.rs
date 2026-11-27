@@ -73,7 +73,7 @@ fn refinement_nudges_are_deterministic_small_and_break_coordinate_symmetry() {
 }
 
 /// A selected CeF3 whose unsupported force-field shape needs a rough start.
-fn cerium() -> (App, Vec<u64>) {
+pub(in crate::app) fn cerium() -> (App, Vec<u64>) {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let ce = app.tab.doc.add_atom("Ce", Point::default());
@@ -95,14 +95,43 @@ fn show(app: &mut App) {
     let _ = app.update(Message::Models3d(Action::Show(Display::Both)));
 }
 
+fn generated(app: &mut App, positions: &[[f64; 3]], parents: Vec<usize>, spread: bool) {
+    let job = app.tab.model_job.as_ref().expect("a generation");
+    let result = Optimized {
+        conformer: geometry::Conformer {
+            positions: positions
+                .iter()
+                .map(|&[x, y, z]| Point3 { x, y, z })
+                .collect(),
+            original_atom_count: job.prepared.ids().len(),
+            hydrogen_parents: parents,
+        },
+        initial_energy: 1.,
+        energy: 1.,
+        gradient: None,
+        converged: true,
+        iterations: 1,
+        force_field: ForceField::Uff,
+        diagnostics: vec![],
+        approximations: spread
+            .then(|| "Rough start for an xTB refinement: Ce ligands spread out".into())
+            .into_iter()
+            .collect(),
+        ensemble: vec![],
+    };
+    let _ = app.update(Message::Models3d(Action::Generated(
+        job.key,
+        Ok(Arc::new(result)),
+    )));
+}
+
 /// Complete only the geometry worker; refinement remains in flight.
-fn start_refinement(app: &mut App) -> Key {
-    show(app);
+pub(in crate::app) fn finish_cerium_generation(app: &mut App, spread: bool) -> Key {
     let job = app.tab.model_job.as_ref().expect("a rough generation");
     let key = job.key;
     assert!(job.rough.is_some());
     assert!(job.refining.is_none());
-    let _ = app.finish_model(START.map(|[x, y, z]| Point3 { x, y, z }).to_vec(), vec![]);
+    generated(app, &START, vec![], spread);
     let job = app.tab.model_job.as_ref().expect("refinement in flight");
     assert_eq!(job.key, key, "both stages answer the same generation key");
     assert!(job.refining.is_some());
@@ -114,12 +143,17 @@ fn start_refinement(app: &mut App) -> Key {
     key
 }
 
-fn report() -> Arc<run::Report> {
+fn start_refinement(app: &mut App) -> Key {
+    show(app);
+    finish_cerium_generation(app, true)
+}
+
+pub(in crate::app) fn report() -> run::Report {
     let mut computed = run::example_computed(-25., 2.);
     computed.method = reshiki_xtb_worker::protocol::Method::Gxtb;
     computed.settings.uhf = 1;
     computed.gradient = Some(vec![[0.; 3]; REFINED.len()]);
-    Arc::new(run::Report {
+    run::Report {
         engine: run::example_engine(),
         computed,
         energy: -25.,
@@ -130,7 +164,177 @@ fn report() -> Arc<run::Report> {
         energies: vec![-24., -25.],
         path: [START.as_flattened(), REFINED.as_flattened()].concat(),
         evaluations: vec![],
+    }
+}
+
+#[test]
+fn an_optional_refinement_that_inverts_a_wedge_keeps_the_uff_model() {
+    if !xtb::available() {
+        return;
+    }
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let doc = &mut app.tab.doc;
+    let c = doc.add_atom("C", Point::default());
+    let f = doc.add_atom("F", Point::new(0., -28.));
+    let cl = doc.add_atom("Cl", Point::new(-28., 14.));
+    let br = doc.add_atom("Br", Point::new(28., 14.));
+    doc.add_bond(c, f, 1, "wedge");
+    doc.add_bond(c, cl, 1, "plain");
+    doc.add_bond(c, br, 1, "plain");
+    app.tab.selected = vec![c];
+    show(&mut app);
+    let job = app.tab.model_job.as_ref().expect("a generation");
+    let key = job.key;
+    let ids = job.prepared.ids();
+    let mut start: Vec<_> = ids
+        .iter()
+        .map(|&id| {
+            if id == f {
+                [0., 1., 0.8]
+            } else if id == cl {
+                [-1., -0.5, 0.]
+            } else if id == br {
+                [1., -0.5, 0.]
+            } else {
+                [0., 0., 0.]
+            }
+        })
+        .collect();
+    start.push([0., 0., -1.]);
+    let parent = ids.iter().position(|&id| id == c).unwrap();
+    generated(&mut app, &start, vec![parent], false);
+    let mut result = report();
+    result.positions = start.iter().map(|&[x, y, z]| [-x, y, z]).collect();
+    refined(&mut app, key, Ok(Arc::new(result)));
+
+    let [model] = app.tab.doc.models.as_slice() else {
+        panic!("the UFF model is shown")
+    };
+    let positions: Vec<_> = model
+        .atoms
+        .iter()
+        .map(|a| a.xyz)
+        .chain(model.hydrogens.iter().map(|h| h.xyz))
+        .collect();
+    assert_eq!(
+        positions,
+        start
+            .iter()
+            .map(|xyz| xyz.map(|n| n as f32))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        app.status
+            .ends_with(" · xTB refinement changed the stereochemistry; showing the UFF model"),
+        "{}",
+        app.status
+    );
+}
+
+#[test]
+fn a_rough_refinement_with_a_stereo_check_error_names_the_atom_and_applies_nothing() {
+    if !xtb::available() {
+        return;
+    }
+    let (mut app, atoms) = cerium();
+    let key = start_refinement(&mut app);
+    let mut result = report();
+    assert!(result.positions.pop().is_some());
+    refined(&mut app, key, Ok(Arc::new(result)));
+
+    assert!(app.tab.doc.models.is_empty());
+    assert_eq!(app.model_failure_atom(), atoms.first().copied());
+    assert_eq!(
+        app.status,
+        "Can't build a starting 3D structure for Ce (cerium): g-xTB changed the stereochemistry."
+    );
+}
+
+const WATER: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];
+
+fn water() -> App {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.selected = vec![app.tab.doc.add_atom("O", Point::default())];
+    show(&mut app);
+    app
+}
+
+fn water_report() -> Arc<run::Report> {
+    Arc::new(run::Report {
+        positions: WATER.to_vec(),
+        steps: 12,
+        ..report()
     })
+}
+
+#[test]
+fn regenerating_a_saved_uff_model_starts_refinement_again() {
+    if !xtb::available() {
+        return;
+    }
+    let mut app = water();
+    let key = app
+        .tab
+        .model_job
+        .as_ref()
+        .expect("generation in flight")
+        .key;
+    generated(&mut app, &WATER, vec![0, 0], false);
+    refined(&mut app, key, Ok(water_report()));
+    let [model] = app.tab.doc.models.as_slice() else {
+        panic!("one UFF model")
+    };
+    assert_eq!(model.force_field, models3d::ForceField::Uff);
+    let before = app.tab.doc.clone();
+
+    let _ = app.update(Message::Models3d(Action::Regenerate));
+    assert_eq!(
+        app.tab.model_job.as_ref().unwrap().force_field,
+        ForceField::Uff
+    );
+    generated(&mut app, &WATER, vec![0, 0], false);
+    assert!(
+        app.tab
+            .model_job
+            .as_ref()
+            .is_some_and(|job| job.refining.is_some())
+    );
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn a_successful_refinement_appends_its_note_after_the_uff_fallback_caution() {
+    if !xtb::available() {
+        return;
+    }
+    let mut app = water();
+    let key = app
+        .tab
+        .model_job
+        .as_ref()
+        .expect("generation in flight")
+        .key;
+    generated(&mut app, &WATER, vec![0, 0], false);
+    refined(&mut app, key, Ok(water_report()));
+
+    assert!(app.status.contains(" · UFF used: no MMFF94s parameters for this molecule · Refined with GFN2-xTB · 12 steps, "), "{}", app.status);
+    assert!(app.status.ends_with(" s"), "{}", app.status);
+}
+
+#[test]
+fn a_rough_start_that_was_not_spread_does_not_claim_spreading() {
+    if !xtb::available() {
+        return;
+    }
+    let (mut app, _) = cerium();
+    show(&mut app);
+    let key = finish_cerium_generation(&mut app, false);
+    refined(&mut app, key, Ok(Arc::new(report())));
+
+    assert!(app.status.contains("Refined with g-xTB"), "{}", app.status);
+    assert!(!app.status.contains("ligands spread out"), "{}", app.status);
 }
 
 fn refined(app: &mut App, key: Key, result: Result<Arc<run::Report>, XtbFailure>) {
@@ -144,7 +348,6 @@ pub(super) fn fail_optional_refinement(app: &mut App, key: Key) {
     if xtb::available() {
         let job = app.tab.model_job.as_ref().expect("refinement in flight");
         assert!(job.refining.is_some());
-        assert!(app.tab.doc.models.is_empty());
         refined(
             app,
             key,
@@ -224,7 +427,7 @@ fn refined_cerium_positions_are_applied_in_one_undo_step_with_the_method_and_sta
     let (mut app, atoms) = cerium();
     let before = app.tab.doc.clone();
     let key = start_refinement(&mut app);
-    refined(&mut app, key, Ok(report()));
+    refined(&mut app, key, Ok(Arc::new(report())));
     assert!(app.tab.model_job.is_none());
     assert!(app.tab.model_failure.is_none());
     assert!(!app.error, "{}", app.status);
@@ -294,7 +497,7 @@ fn canceling_refinement_discards_the_job_and_ignores_a_late_result() {
     assert_eq!(app.tab.selected, atoms);
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.tab.history.undo_frames().count(), 0);
-    refined(&mut app, key, Ok(report()));
+    refined(&mut app, key, Ok(Arc::new(report())));
     assert_eq!(
         app.tab.doc, before,
         "a late result cannot apply after cancellation"

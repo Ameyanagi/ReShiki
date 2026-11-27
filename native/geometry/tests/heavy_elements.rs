@@ -172,6 +172,108 @@ fn rough_thorium_methoxide_keeps_ligands_and_added_hydrogens_intact() {
     }
 }
 
+// These starts already span 3D, so Generate and Relax use the same seed.
+// Center it to match generation's optimizer origin.
+fn rough_and_uff(mut request: Request) -> (Response, Response) {
+    let origin = std::array::from_fn::<_, 3, _>(|axis| {
+        request.coordinates.iter().map(|p| p[axis]).sum::<f64>() / request.coordinates.len() as f64
+    });
+    for point in &mut request.coordinates {
+        for axis in 0..3 {
+            point[axis] -= origin[axis];
+        }
+    }
+    let uff = solve(&Request {
+        operation: Operation::Relax,
+        ..request.clone()
+    })
+    .unwrap();
+    request.rough = true;
+    let rough = solve(&request).unwrap();
+    assert!(
+        !rough
+            .approximations
+            .iter()
+            .any(|note| note.contains("ligands spread out")),
+        "{:?}",
+        rough.approximations
+    );
+    (rough, uff)
+}
+
+#[test]
+fn rough_cerium_chelate_keeps_uff_carbon_oxygen_lengths() {
+    let mut request = flat_star(58, 8, 3);
+    request.atoms[3] = atom(9);
+    request.atoms.push(atom(6));
+    request.bonds.extend([single_bond(1, 4), single_bond(2, 4)]);
+    request.coordinates = vec![
+        [0., 0., 0.],
+        [2., 0., 0.],
+        [0., 2., 0.],
+        [-1.7, -1.2, 0.4],
+        [1.6, 1.6, 0.3],
+    ];
+    let (rough, uff) = rough_and_uff(request);
+    for oxygen in [1, 2] {
+        let [actual, expected] = [&rough, &uff].map(|r| distance(r, oxygen, 4));
+        assert!(
+            (actual - expected).abs() <= 0.02,
+            "O{oxygen}-C: rough {actual} A, UFF {expected} A"
+        );
+    }
+}
+
+#[test]
+fn rough_bridged_cerium_dimer_keeps_uff_coordinates() {
+    let mut request = flat_star(58, 9, 3);
+    request.atoms = [58, 58, 8, 9, 9, 9, 9].into_iter().map(atom).collect();
+    request.bonds = [(0, 2), (1, 2), (0, 3), (0, 4), (1, 5), (1, 6)]
+        .into_iter()
+        .map(|(a, b)| single_bond(a, b))
+        .collect();
+    request.coordinates = vec![
+        [-2., 0., 0.],
+        [2., 0., 0.],
+        [0., 0., 0.],
+        [-2., -2., 0.5],
+        [-2., 2., -0.5],
+        [2., -2., -0.5],
+        [2., 2., 0.5],
+    ];
+    let (rough, uff) = rough_and_uff(request);
+    for (actual, expected) in rough
+        .coordinates
+        .iter()
+        .flatten()
+        .zip(uff.coordinates.iter().flatten())
+    {
+        assert!((actual - expected).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn rough_directly_bonded_donors_keep_uff_coordinates() {
+    let mut request = flat_star(58, 8, 3);
+    request.atoms[3] = atom(9);
+    request.bonds.push(single_bond(1, 2));
+    request.coordinates = vec![
+        [0., 0., 0.],
+        [2., 0., 0.],
+        [1.5, 1.3, 0.3],
+        [-2., -0.5, -0.5],
+    ];
+    let (rough, uff) = rough_and_uff(request);
+    for (actual, expected) in rough
+        .coordinates
+        .iter()
+        .flatten()
+        .zip(uff.coordinates.iter().flatten())
+    {
+        assert!((actual - expected).abs() < 1e-6);
+    }
+}
+
 #[test]
 fn rough_option_preserves_the_existing_uranium_hexafluoride_geometry() {
     let request = request(include_str!("fixtures/uf6-request.json"));

@@ -245,19 +245,7 @@ impl App {
                 }
                 Task::none()
             }
-            Action::Generated(key, result) => {
-                let named = self.model_generated(key, result);
-                // A calculation waiting for this model also waits for its refinement.
-                if self
-                    .tab
-                    .model_job
-                    .as_ref()
-                    .is_some_and(|job| job.key == key)
-                {
-                    return named;
-                }
-                Task::batch([named, self.xtb_model_finished(key, false)])
-            }
+            Action::Generated(key, result) => self.model_generated(key, result),
             #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
             Action::Refined(key, event) => self.model_refined(key, event),
             #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -277,20 +265,21 @@ impl App {
         let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
             return Task::none();
         };
-        if !self.model_job_applies(&job) {
-            return Task::none();
+        if let Err(reason) = self.model_job_applies(&job) {
+            return self.xtb_model_finished(key, Some(reason));
         }
         let model = result.map_err(Failure::other).and_then(|optimized| {
             job.prepared
                 .model(&optimized)
-                .map(|model| (model, optimized.force_field))
+                .map(|model| (model, optimized))
                 .map_err(|error| build_failure(&error))
         });
-        match model {
-            Ok((model, field)) => {
+        let named = match model {
+            Ok((model, optimized)) => {
+                let field = optimized.force_field;
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
                 if refine::needed(&job, field) {
-                    return self.start_model_refinement(job, model, field);
+                    return self.start_model_refinement(job, model, &optimized);
                 }
                 self.model_succeeded(&job, model, force_field_caution(&job, field))
             }
@@ -298,28 +287,31 @@ impl App {
                 self.record_model_failure(job.prepared.ids().to_vec(), failure);
                 Task::none()
             }
-        }
+        };
+        Task::batch([named, self.xtb_model_finished(key, None)])
     }
 
-    fn model_job_applies(&mut self, job: &Job) -> bool {
+    fn model_job_applies(&mut self, job: &Job) -> Result<(), &'static str> {
         // A preview or label editor owns the drawing; adding a model
         // under it would cancel or outdate it.
-        if job.current != self.model_key() {
+        let reason = if job.current != self.model_key() {
             self.status = "Drawing changed · 3D model not applied".into();
+            "Drawing changed"
         } else if self.tab.drawing_edit_active() {
             self.status = "3D model not applied · Choose 3D again after this edit".into();
+            "Finish the current edit, then run again"
         } else {
-            return true;
-        }
+            return Ok(());
+        };
         self.error = false;
-        false
+        Err(reason)
     }
 
     fn model_succeeded(
         &mut self,
         job: &Job,
         mut model: models3d::Model3d,
-        caution: Option<String>,
+        notes: impl IntoIterator<Item = String>,
     ) -> Task<Message> {
         let ids = job.prepared.ids();
         self.tab
@@ -337,12 +329,13 @@ impl App {
         if !self.error {
             let radical = radical_subject(job.prepared.radicals())
                 .map(|who| format!("{who}: start built from {UNNAMED_PARENT}, added H removed"));
-            for note in caution.iter().chain(&radical) {
+            let name_parent = radical.is_some();
+            let notes: Vec<_> = notes.into_iter().chain(radical).collect();
+            for note in &notes {
                 self.status.push_str(" · ");
                 self.status.push_str(note);
             }
-            let name_parent = radical.is_some();
-            self.xtb_model_notes(job.key, caution.into_iter().chain(radical));
+            self.xtb_model_notes(job.key, notes);
             if name_parent {
                 return self.name_parent(&job.prepared);
             }
@@ -476,7 +469,7 @@ impl App {
         self.status = "3D model canceled · Drawing unchanged".into();
         self.error = false;
         // A calculation waiting for this model stops too.
-        let _ = self.xtb_model_finished(job.key, true);
+        let _ = self.xtb_model_finished(job.key, Some("3D model canceled"));
         true
     }
 
@@ -729,7 +722,7 @@ impl App {
         .abortable();
         // A calculation waiting for a replaced generation stops.
         if let Some(old) = self.tab.model_job.take() {
-            let _ = self.xtb_model_finished(old.key, false);
+            let _ = self.xtb_model_finished(old.key, None);
         }
         self.status = if let Some(who) = who {
             format!("{who} · Building the 3D start from its closed-shell parent…")
@@ -2115,4 +2108,4 @@ mod crystal_tests;
 mod ortep_tests;
 
 #[cfg(all(test, not(target_arch = "wasm32"), feature = "xtb"))]
-mod refine_tests;
+pub(super) mod refine_tests;

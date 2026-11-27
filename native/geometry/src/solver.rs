@@ -723,6 +723,7 @@ struct Candidate {
     initial_energy: f64,
     energy: f64,
     converged: bool,
+    rough_start_note: Option<String>,
 }
 
 fn embedded_candidate(
@@ -747,6 +748,7 @@ fn embedded_candidate(
         initial_energy: energy,
         energy,
         converged: false,
+        rough_start_note: None,
     })
 }
 
@@ -813,9 +815,11 @@ fn minimized(
         "force-field minimization increased the energy",
     )?;
     let mut result = field.positions();
-    if request.rough {
-        relaxed::spread_misshaped_centres(mol, &mut result);
-    }
+    let rough_start_note = if request.rough {
+        relaxed::spread_misshaped_centres(mol, &mut result)
+    } else {
+        None
+    };
     validate_geometry(mol, &result)?;
     // Only generated geometry: Relax may hold an angle the caller pinned.
     if !request.rough
@@ -839,6 +843,7 @@ fn minimized(
         initial_energy: initial,
         energy: final_energy,
         converged: outcome.converged(),
+        rough_start_note,
     })
 }
 
@@ -935,11 +940,6 @@ pub(super) fn solve_with_threads(
             .collect(),
     };
     if request.operation == Operation::Generate {
-        if request.rough && request.ensemble != Some(Ensemble::Embedded) {
-            response
-                .approximations
-                .extend(relaxed::rough_start_notes(&mol));
-        }
         let minimize_seed = |coordinates: Vec<[f64; 3]>| {
             // The optimizer scales its stopping test by absolute XYZ. Center
             // these unpinned seeds, then restore the drawing's location.
@@ -985,6 +985,7 @@ pub(super) fn solve_with_threads(
                     response.initial_energy = candidate.initial_energy;
                     response.energy = candidate.energy;
                     response.converged = candidate.converged;
+                    response.approximations.extend(candidate.rough_start_note);
                     response
                         .approximations
                         .push("Started from the drawn coordinates".into());
@@ -1008,6 +1009,7 @@ pub(super) fn solve_with_threads(
                     response.initial_energy = candidate.initial_energy;
                     response.energy = candidate.energy;
                     response.converged = candidate.converged;
+                    response.approximations.extend(candidate.rough_start_note);
                     response.diagnostics.push(format!(
                         "initialization=existing-3d; reused existing original-atom 3D coordinates; temporary hydrogens added with coordinate-aware AddHs; selection=validated existing geometry; iteration_limit={}; converged={}",
                         request.max_iterations, response.converged
@@ -1065,6 +1067,7 @@ pub(super) fn solve_with_threads(
         let mut valid = 0;
         let mut rejected = 0;
         let mut last_failure = String::new();
+        let mut rough_start_note = None;
         let mut ids: Vec<_> = valid_conformer_ids(&embedded.conf_ids).collect();
         if request.ensemble.is_some() {
             ids.sort_unstable();
@@ -1117,6 +1120,7 @@ pub(super) fn solve_with_threads(
                     response.initial_energy = candidate.initial_energy;
                     response.energy = candidate.energy;
                     response.converged = candidate.converged;
+                    rough_start_note = candidate.rough_start_note;
                 }
             }
             Err(error) => {
@@ -1161,6 +1165,7 @@ pub(super) fn solve_with_threads(
             format!("all generated conformers failed validation: {last_failure}"),
         )
         .map_err(generation_error)?;
+        response.approximations.extend(rough_start_note);
         let mut sampling = format!(
             "{method}; requested={}; actual_count={}; embedded={embedded_count}; failed_embedding_ids={failed_embedding_ids}; valid={valid}; rejected={rejected}; seed={}; selection=lowest energy among valid generated conformers; iteration_limit={}; converged={}; embedding_failure_counters={failures}",
             request.conformers,

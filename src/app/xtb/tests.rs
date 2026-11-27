@@ -680,7 +680,7 @@ fn choosing_2d_while_the_model_is_made_stops_the_run() {
 }
 
 #[test]
-fn canceling_the_calculate_card_while_waiting_for_a_model_explains_why_it_did_not_start() {
+fn canceling_the_calculate_card_while_waiting_also_drops_its_model_job() {
     for cancel in [Message::Xtb(Action::Cancel), Message::Escape] {
         let (mut app, _) = App::new();
         app.tab.busy = false;
@@ -693,14 +693,142 @@ fn canceling_the_calculate_card_while_waiting_for_a_model_explains_why_it_did_no
 
         assert!(app.tab.model_job.is_none());
         assert!(!app.xtb_running());
-        let Some(Outcome::Failed(failed)) = app.xtb_outcome() else {
-            panic!("the Calculate card should explain the canceled model");
-        };
-        assert_eq!(
-            failed.explain(app.xtb_can_retry(failed)).0,
-            "xTB not started · 3D model canceled"
-        );
+        assert!(app.xtb_outcome().is_none());
+        assert_eq!(app.status, "Calculation canceled");
     }
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn dropping_a_refinement_for_a_changed_drawing_stops_the_waiting_run() {
+    use crate::app::models3d::{self, refine_tests};
+    if !available() {
+        return;
+    }
+    let (mut app, _) = refine_tests::cerium();
+    send(&mut app, Action::Run);
+    let key = refine_tests::finish_cerium_generation(&mut app, true);
+    assert!(
+        app.tab
+            .xtb
+            .run
+            .as_ref()
+            .is_some_and(|run| run.launch.is_none())
+    );
+    app.tab.revision += 1;
+
+    let _ = app.update(Message::Models3d(models3d::Action::Refined(
+        key,
+        Event::Done(Ok(Arc::new(refine_tests::report()))),
+    )));
+
+    assert!(!app.xtb_running());
+    assert!(app.tab.doc.models.is_empty());
+    let Some(Outcome::Failed(failed)) = app.xtb_outcome() else {
+        panic!("the Calculate card should explain why the run stopped");
+    };
+    assert_eq!(failed.explain(false).0, "xTB not started · Drawing changed");
+}
+
+#[test]
+fn dropping_a_generation_for_an_open_edit_stops_the_waiting_run() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let oxygen = app.tab.doc.add_atom("O", Point::default());
+    app.tab.selected = vec![oxygen];
+    send(&mut app, Action::Run);
+    let _ = app.update(Message::AtomText(crate::app::atom_text::Action::Begin(
+        Some(oxygen),
+    )));
+    assert!(app.tab.drawing_edit_active());
+
+    let _ = app.finish_model(
+        START.map(|[x, y, z]| Point3 { x, y, z }).to_vec(),
+        vec![0, 0],
+    );
+
+    assert!(!app.xtb_running());
+    assert!(app.tab.drawing_edit_active());
+    assert!(app.tab.doc.models.is_empty());
+    let Some(Outcome::Failed(failed)) = app.xtb_outcome() else {
+        panic!("the Calculate card should explain why the run stopped");
+    };
+    assert_eq!(
+        failed.explain(false).0,
+        "xTB not started · Finish the current edit, then run again"
+    );
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn a_waiting_cef3_run_inherits_the_refined_spin_when_unpaired_is_blank() {
+    use crate::app::models3d::{self, refine_tests};
+    if !available() {
+        return;
+    }
+    let note = "Odd electron count: calculated with 1 unpaired electron";
+    for (charge, typed, expected, expected_notes) in [
+        ("", "", 1, &[note][..]),
+        ("", "3", 3, &[][..]),
+        ("1", "", 0, &[][..]),
+    ] {
+        let (mut app, _) = refine_tests::cerium();
+        send(&mut app, Action::Method(qcdata::XtbMethod::GXtb));
+        send(&mut app, Action::Charge(charge.into()));
+        send(&mut app, Action::Unpaired(typed.into()));
+        send(&mut app, Action::Run);
+        let key = refine_tests::finish_cerium_generation(&mut app, true);
+
+        let _ = app.update(Message::Models3d(models3d::Action::Refined(
+            key,
+            Event::Done(Ok(Arc::new(refine_tests::report()))),
+        )));
+
+        let run = app.tab.xtb.run.as_ref().expect("a calculation in flight");
+        let launch = run.launch.as_ref().expect("the refined model launched");
+        assert_eq!(launch.frame.multiplicity, expected + 1);
+        assert_eq!(job(&run.config, &launch.frame, vec![]).uhf, expected);
+        let spin_notes: Vec<_> = run
+            .model_notes
+            .iter()
+            .map(String::as_str)
+            .filter(|line| line.starts_with("Odd electron count"))
+            .collect();
+        assert_eq!(spin_notes, expected_notes);
+    }
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn refinement_updates_the_calculate_card_without_overwriting_a_later_status() {
+    use crate::app::models3d::{self, refine_tests};
+    if !available() {
+        return;
+    }
+    let (mut app, _) = refine_tests::cerium();
+    send(&mut app, Action::Run);
+    let key = refine_tests::finish_cerium_generation(&mut app, true);
+    let status = |app: &App| app.tab.xtb.run.as_ref().unwrap().status();
+    let send = |app: &mut App, event| {
+        let _ = app.update(Message::Models3d(models3d::Action::Refined(key, event)));
+    };
+    assert!(status(&app).starts_with("xTB · Refining the 3D start with g-xTB · step 0 · "));
+    app.status = "Save failed".into();
+    app.error = true;
+
+    send(&mut app, Event::Tick);
+    send(
+        &mut app,
+        Event::Steps {
+            first: 12,
+            energies: vec![-25.],
+            positions: vec![],
+        },
+    );
+
+    assert_eq!(app.status, "Save failed");
+    assert!(app.error);
+    assert!(status(&app).starts_with("xTB · Refining the 3D start with g-xTB · step 12 · "));
 }
 
 #[test]
