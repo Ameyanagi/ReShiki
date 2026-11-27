@@ -149,13 +149,12 @@ fn assert_model_inside(model: &Primitive, check: &impl Fn(Point, f32, &str)) {
 
 fn assert_no_overlaps(g: &Graphic, layout: &Layout, parts: &[Part], labels: &[Annotation]) {
     let frame = g.shape_bounds();
-    let half = layout.picture_world_side(g) / 2.;
     let pictures: Vec<_> = layout
         .pictures
         .iter()
         .map(|m| {
-            let c = layout.world(g, m.centre);
-            (c.offset(-half, -half), c.offset(half, half))
+            let (lo, hi) = m.bounds();
+            (layout.world(g, lo), layout.world(g, hi))
         })
         .collect();
     let labels: Vec<_> = labels.iter().map(|l| (&l.text, l.bounds())).collect();
@@ -220,12 +219,76 @@ fn transition_state_labels_only_use_numbers_for_multiple_transitions() {
 }
 
 #[test]
-fn default_profile_is_compact_with_models_and_a_caption_inside_the_plot() {
-    let mut p = profile(&[0., 27.3, -7.6]);
-    p.states[0].label = "3-(ethenyloxy)prop-1-ene".into();
-    p.states[2].label = "pent-4-enal".into();
-    for method in ["GFN2-xTB", "g-xTB"] {
-        p.method = method.into();
+fn default_profiles_keep_the_caption_and_models_close_to_their_anchors() {
+    for (energies, reactant, product, ts) in [
+        (
+            [0., 27.3, -7.6],
+            "3-(ethenyloxy)prop-1-ene",
+            "pent-4-enal",
+            "TS‡ 27.3",
+        ),
+        (
+            [0., 7., -67.8],
+            "buta-1,3-diene + ethene",
+            "cyclohexene",
+            "TS‡ 7.0",
+        ),
+    ] {
+        let mut p = profile(&energies);
+        p.states[0].label = reactant.into();
+        p.states[2].label = product.into();
+        let layout = Layout::new(&p, &style::DEFAULT);
+        let g = placed(p.clone());
+        let (parts, labels, models) = g.energy_profile_scene(&style::DEFAULT, &Document::default());
+        assert_no_overlaps(&g, &layout, &parts, &labels);
+        assert_frame_contains(&g, &parts, &labels, &models);
+        let em = layout.font.size();
+        let axis = &layout.lines[0];
+        let plot = (
+            layout.world(&g, axis[0]),
+            layout.world(&g, Point::new(layout.width - em * 0.4, axis[1].y)),
+        );
+        let caption = labels.iter().find(|l| l.text == p.method).unwrap().bounds();
+        assert!(contains(plot, caption));
+        assert!(caption.0.x - plot.0.x < em * 0.5 && caption.0.y - plot.0.y < em * 0.5);
+
+        assert_eq!(layout.pictures.len(), 3);
+        let mut remaining = models.as_slice();
+        for (slot, (text, above)) in
+            layout
+                .pictures
+                .iter()
+                .zip([(reactant, false), (ts, true), (product, false)])
+        {
+            let (artwork, rest) = remaining.split_at(slot.artwork.len());
+            remaining = rest;
+            let (lo, hi) = crate::scene::bounds(artwork);
+            let (a, b) = labels.iter().find(|l| l.text == text).unwrap().bounds();
+            let padding = style::DEFAULT.world(4.);
+            let gap = if above {
+                a.y - (hi.y - padding)
+            } else {
+                lo.y + padding - b.y
+            };
+            assert!((0. ..em * 0.4).contains(&gap), "{text} model gap: {gap}");
+            assert!(((lo.x + hi.x) / 2. - (a.x + b.x) / 2.).abs() < 1e-3);
+        }
+        assert!(remaining.is_empty());
+        let (lo, hi) = g.shape_bounds();
+        let (model_lo, model_hi) = crate::scene::bounds(&models);
+        let padding = style::DEFAULT.world(4.);
+        assert!(model_lo.y + padding - lo.y < em * 0.4);
+        assert!(hi.y - (model_hi.y - padding) < em * 0.4);
+    }
+}
+
+#[test]
+fn blocked_method_caption_moves_to_the_top_right_inside_the_plot() {
+    let mut p = profile(&[0., -60.]);
+    p.models = EnergyProfileModels::Off;
+    p.states[0].label = "Reactant".into();
+    for method in ["GFN2-xTB + g-xTB".into(), "W".repeat(128)] {
+        p.method = method;
         let layout = Layout::new(&p, &style::DEFAULT);
         let g = placed(p.clone());
         let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
@@ -236,43 +299,16 @@ fn default_profile_is_compact_with_models_and_a_caption_inside_the_plot() {
             layout.world(&g, axis[0]),
             layout.world(&g, Point::new(layout.width - em * 0.4, axis[1].y)),
         );
-        let caption = labels.iter().find(|l| l.text == method).unwrap().bounds();
+        let caption = labels.iter().find(|l| l.text == p.method).unwrap().bounds();
         assert!(contains(plot, caption));
-        assert!(plot.1.x - caption.1.x < em * 0.5 && plot.1.y - caption.1.y < em * 0.5);
-
-        let coordinate = labels
-            .iter()
-            .find(|l| l.text == "Reaction coordinate")
-            .unwrap()
-            .bounds();
-        let title_gap_em = (coordinate.0.y - plot.1.y) / em;
-        assert!(
-            (0. ..0.45).contains(&title_gap_em),
-            "title gap: {title_gap_em} em"
-        );
-        let ts = &layout.pictures[1];
-        assert_eq!(ts.state, 1);
-        let model_bottom = ts.centre.y + layout.picture_side / 2.;
-        let model_gap_em = (layout.top - model_bottom) / em;
-        assert!(
-            (0. ..1.075).contains(&model_gap_em),
-            "TS model gap: {model_gap_em} em"
-        );
+        assert!(plot.1.x - caption.1.x < em * 0.5 && caption.0.y - plot.0.y < em * 0.5);
     }
-}
-
-#[test]
-fn blocked_method_caption_moves_to_the_top_of_the_energy_axis() {
-    let mut p = profile(&[0., 27.3, -7.6]);
-    p.method = "GFN2-xTB + g-xTB".into();
-    let layout = Layout::new(&p, &style::DEFAULT);
-    let g = placed(p.clone());
-    let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
-    assert_no_overlaps(&g, &layout, &parts, &labels);
-    let caption = labels.iter().find(|l| l.text == p.method).unwrap();
-    let axis_top = layout.world(&g, layout.lines[0][0]);
-    assert!((0. ..layout.font.size() * 0.5).contains(&(caption.bounds().0.x - axis_top.x)));
-    assert!((caption.centre().y - axis_top.y).abs() < 1e-3);
+    let mut compact = placed(p);
+    compact.axis_x = Point::new(10., 0.);
+    compact.style.width_pt = 12.;
+    let (parts, labels) = compact.energy_profile_parts(&style::DEFAULT);
+    assert_frame_contains(&compact, &parts, &labels, &[]);
+    assert!(parts.iter().all(|part| part.style.width_pt >= 0.1));
 }
 
 #[test]
@@ -292,7 +328,7 @@ fn axis_top_caption_clears_the_rendered_axis() {
             panic!("expected the energy axis");
         };
         assert_eq!(axis.style.width_pt, width_pt);
-        assert!((caption.centre().y - axis_top.y).abs() < 1e-3);
+        assert!(caption.bounds().0.y > axis_top.y);
         assert!(
             caption.bounds().0.x > axis_top.x + axis.style.width() / 2.,
             "caption intersects the axis at {width_pt} pt and scale {scale}"
@@ -301,7 +337,7 @@ fn axis_top_caption_clears_the_rendered_axis() {
 }
 
 #[test]
-fn bottom_bar_clears_the_reaction_coordinate_in_small_frames() {
+fn small_frames_contain_a_bar_at_the_bottom_of_the_plot() {
     let mut p = profile(&[0., 18., -20., 14., -5.]);
     for mode in EnergyProfileModels::ALL {
         p.models = mode;
@@ -315,28 +351,13 @@ fn bottom_bar_clears_the_reaction_coordinate_in_small_frames() {
             assert_eq!(models.is_empty(), mode == EnergyProfileModels::Off);
             assert_frame_contains(&g, &parts, &labels, &models);
             let bar = &parts[parts.len() - 3];
-            let [PathCommand::Move(left), PathCommand::Line(right)] = bar.commands.as_slice()
-            else {
+            let [PathCommand::Move(left), PathCommand::Line(_)] = bar.commands.as_slice() else {
                 panic!("expected the central bar");
             };
             let PathCommand::Line(plot_bottom) = parts[0].commands[1] else {
                 panic!("expected the bottom of the energy axis");
             };
             assert_eq!(left.y, plot_bottom.y);
-            if mode == EnergyProfileModels::Off {
-                let natural = Layout::new(&p, &style::DEFAULT);
-                let PathCommand::Move(axis_top) = parts[0].commands[0] else {
-                    panic!("expected the top of the energy axis");
-                };
-                assert!(plot_bottom.y - axis_top.y < scale * (natural.bottom - natural.top));
-            }
-            let (lo, hi) = labels
-                .iter()
-                .find(|label| label.text == "Reaction coordinate")
-                .unwrap()
-                .bounds();
-            assert!(left.x < hi.x && right.x > lo.x);
-            assert!(lo.y > left.y + bar.style.width() / 2.);
         }
     }
 }
@@ -363,7 +384,7 @@ fn compressed_affine_frame_reduces_effective_strokes() {
         assert!(
             parts
                 .iter()
-                .all(|p| (0. ..g.style.width_pt).contains(&p.style.width_pt))
+                .all(|p| (0.1..g.style.width_pt).contains(&p.style.width_pt))
         );
     }
 }
@@ -445,19 +466,18 @@ fn model_placement_uses_the_free_side_or_a_shared_top_row() {
     let mut p = profile(&[0., 18., -6., 14., -10.]);
     let levels = Layout::new(&p, &style::DEFAULT);
     assert_eq!(levels.pictures.len(), 5);
-    for model in &levels.pictures {
-        let state = &levels.states[model.state];
-        if p.states[model.state].kind == EnergyProfileStateKind::TransitionState {
-            assert!(model.centre.y + levels.picture_side / 2. < state.y);
+    for ((model, state), datum) in levels.pictures.iter().zip(&levels.states).zip(&p.states) {
+        let (lo, hi) = model.bounds();
+        if datum.kind == EnergyProfileStateKind::TransitionState {
+            assert!(hi.y < state.y);
         } else {
-            assert!(model.centre.y - levels.picture_side / 2. > state.y);
+            assert!(lo.y > state.y);
         }
     }
     assert!((1. ..=1.5).contains(&(levels.picture_side / levels.bar)));
     let picture = geometry_picture(
         &geometry(),
         p.rotation,
-        Point::default(),
         levels.picture_side,
         &Document::default(),
     )

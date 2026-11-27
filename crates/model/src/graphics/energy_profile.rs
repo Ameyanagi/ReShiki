@@ -346,23 +346,31 @@ impl EnergyProfile {
         style: &DrawingStyle,
         source: &Document,
     ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
-        let layout = Layout::with_frame(self, style, Some(g));
+        let mut layout = Layout::with_frame(self, style, Some(g), Some(source));
         let (parts, labels) = layout.ink(g);
         let side = layout.picture_world_side(g);
-        let pictures = layout
-            .pictures
-            .iter()
-            .filter_map(|slot| {
-                let geometry = self.states.get(slot.state)?.geometry.as_ref()?;
-                geometry_picture(
-                    geometry,
-                    self.rotation,
-                    layout.world(g, slot.centre),
-                    side,
-                    source,
-                )
+        let scale = side / layout.picture_side;
+        if !scale.is_finite() || scale <= 0. {
+            return (parts, labels, vec![]);
+        }
+        let change_bond_width = source.drawing_style.line_width_pt * 0.85;
+        let outline_width = (side / 400.).clamp(0.6, 1.1);
+        let pictures = std::mem::take(&mut layout.pictures)
+            .into_iter()
+            .flat_map(|slot| {
+                let centre = layout.world(g, slot.centre);
+                slot.artwork.into_iter().map(move |mut primitive| {
+                    place_picture_ink(
+                        &mut primitive,
+                        centre,
+                        slot.ink_centre,
+                        scale,
+                        change_bond_width,
+                        outline_width,
+                    );
+                    primitive
+                })
             })
-            .flatten()
             .collect();
         (parts, labels, pictures)
     }
@@ -399,7 +407,7 @@ impl Graphic {
         self.energy_profile
             .as_deref()
             .map_or_else(Default::default, |p| {
-                Layout::with_frame(p, style, Some(self)).ink(self)
+                Layout::with_frame(p, style, Some(self), None).ink(self)
             })
     }
     /// The same vector strokes, labels, and owned molecular artwork the canvas draws.
@@ -440,8 +448,16 @@ impl Label {
     }
 }
 struct PictureSlot {
-    state: usize,
     centre: Point,
+    half_size: Point,
+    ink_centre: Point,
+    artwork: Vec<Primitive>,
+}
+impl PictureSlot {
+    fn bounds(&self) -> (Point, Point) {
+        let Point { x, y } = self.half_size;
+        (self.centre.offset(-x, -y), self.centre.offset(x, y))
+    }
 }
 struct Layout {
     width: f32,
@@ -464,9 +480,14 @@ struct Layout {
 }
 impl Layout {
     fn new(profile: &EnergyProfile, style: &DrawingStyle) -> Self {
-        Self::with_frame(profile, style, None)
+        Self::with_frame(profile, style, None, None)
     }
-    fn with_frame(profile: &EnergyProfile, style: &DrawingStyle, g: Option<&Graphic>) -> Self {
+    fn with_frame(
+        profile: &EnergyProfile,
+        style: &DrawingStyle,
+        g: Option<&Graphic>,
+        source: Option<&Document>,
+    ) -> Self {
         let font = style.text_style();
         let em = font.size();
         let tick_size = em * 0.82;
@@ -527,25 +548,16 @@ impl Layout {
             .iter()
             .map(|(value, name)| width_of(value, value_size).max(width_of(name.unwrap_or(""), em)))
             .fold(0., f32::max);
-        let coordinate_title = "Reaction coordinate";
         let slots = profile.states.len().max(1) as f32;
         let slot = (slot + em * 1.2)
             .max(em * 9.)
-            .max(style.bond_length_world * 6.)
-            .max(width_of(coordinate_title, tick_size) / slots);
+            .max(style.bond_length_world * 6.);
         let plot_left = axis + em * 0.3;
         let plot_width = slot * slots;
         // Keep a gap even in long, multistep profiles.
         let bar = (plot_width * 0.11).min(slot * 0.55);
         let picture_side = bar * 1.5;
-        // Leave room on the right of the final bar for the method caption.
-        let plot_right = plot_left
-            + plot_width
-            + if profile.method.is_empty() {
-                0.
-            } else {
-                em * 1.4
-            };
+        let plot_right = plot_left + plot_width;
         let bottom = (em * 9.).max(width_of(&axis_title, tick_size));
         let factor = profile.unit.convert_kcal(1.);
         let line_width_pt = g.map_or(style.line_width_pt, |g| g.style.width_pt).min(12.);
@@ -610,6 +622,27 @@ impl Layout {
                 layout.connect(step.from, step.to, &step.irc, 0., 1.);
             }
         }
+        let default_source;
+        let source = if let Some(source) = source {
+            source
+        } else {
+            default_source = Document {
+                drawing_style: style.clone(),
+                ..Document::default()
+            };
+            &default_source
+        };
+        let projection = g.and_then(frame_projection);
+        let project_half_size = |half: Point| {
+            projection.map_or(half, |[x, y]| {
+                // The picture renders upright and scales to fit the frame.
+                let extent = |row: Point| {
+                    let (x, y) = (row.x.abs(), row.y.abs());
+                    (x * half.x + y * half.y) / (x + y)
+                };
+                Point::new(extent(x), extent(y))
+            })
+        };
         for (i, ((state, (value, name)), level)) in profile
             .states
             .iter()
@@ -617,60 +650,78 @@ impl Layout {
             .zip(layout.states.iter().copied())
             .enumerate()
         {
-            let Point { x, y } = level;
+            let x = level.x;
             let clear = |width, up| layout.clear_y(i, level, width / 2. + em * 0.15, up);
-            let value_y = clear(width_of(&value, value_size), true) - em * 0.9;
-            let name_y = name.map(|name| clear(width_of(name, em), false) + em);
-            if profile.models != EnergyProfileModels::Off && state.geometry.is_some() {
+            let mut value = Label::new(value, Point::new(x, 0.), value_size);
+            let value_width = width_of(&value.text, value_size);
+            value.centre.y = clear(value_width, true) - em * 0.9;
+            let mut name = name.map(|text| {
+                Label::new(
+                    text.into(),
+                    Point::new(x, clear(width_of(text, em), false) + em),
+                    em,
+                )
+            });
+            if let Some(geometry) = state.geometry.as_ref()
+                && profile.models != EnergyProfileModels::Off
+                && let Some(artwork) =
+                    geometry_picture(geometry, profile.rotation, picture_side, source)
+            {
+                let (lo, hi) = crate::scene::bounds(&artwork);
+                let ink_centre = lo.lerp(hi, 0.5);
+                // Scene bounds include a four-point export margin. Keep just
+                // enough extra for the bond outline, which those bounds omit.
+                let pad = style::DEFAULT.world(4.) - 0.55;
+                let half = project_half_size(Point::new(
+                    ((hi.x - lo.x) / 2. - pad).min(picture_side / 2.),
+                    ((hi.y - lo.y) / 2. - pad).min(picture_side / 2.),
+                ));
+                let gap = em * 0.25;
                 let model_y = if profile.models == EnergyProfileModels::RowAbove {
                     layout.top - em * 1.8 - picture_side / 2.
                 } else if state.kind == EnergyProfileStateKind::TransitionState {
-                    (clear(picture_side, true) - em * 0.4).min(value_y - em * 0.75)
-                        - picture_side / 2.
+                    let (_, h) = value.half_size(&font);
+                    value.centre.y = value
+                        .centre
+                        .y
+                        .min(clear(half.x * 2., true) - em * 0.4 + gap + h);
+                    value.centre.y - h - gap - half.y
                 } else {
-                    (clear(picture_side, false) + em * 0.4).max(name_y.map_or(y, |y| y + em * 0.75))
-                        + picture_side / 2.
+                    let label = if let Some(name) = &mut name {
+                        name
+                    } else {
+                        value.centre.y = clear(value_width, false) + em * 0.9;
+                        &mut value
+                    };
+                    let (_, h) = label.half_size(&font);
+                    label.centre.y = label
+                        .centre
+                        .y
+                        .max(clear(half.x * 2., false) + em * 0.4 - gap - h);
+                    label.centre.y + h + gap + half.y
                 };
                 layout.pictures.push(PictureSlot {
-                    state: i,
                     centre: Point::new(x, model_y),
+                    half_size: half,
+                    ink_centre,
+                    artwork,
                 });
             }
-            layout
-                .labels
-                .push(Label::new(value, Point::new(x, value_y), value_size));
-            if let Some((name, cy)) = name.zip(name_y) {
-                layout
-                    .labels
-                    .push(Label::new(name.into(), Point::new(x, cy), em));
-            }
+            layout.labels.push(value);
+            layout.labels.extend(name);
         }
-        let coordinate = Label::new(
-            coordinate_title.into(),
-            Point::new(plot_left + plot_width / 2., bottom),
-            tick_size,
-        );
         let caption = (!profile.method.is_empty())
             .then(|| Label::new(profile.method.clone(), Point::default(), em * 0.72));
         let leftmost_tick = axis - em * 0.25;
         let rightmost_bar = plot_left + plot_width - (slot - bar) / 2.;
-        layout.fit_frame(
-            g,
-            plot_right,
-            leftmost_tick,
-            rightmost_bar,
-            coordinate,
-            caption,
-        );
+        layout.fit_frame(g, plot_right, leftmost_tick, rightmost_bar, caption);
         layout
     }
     fn label_and_model_bounds(&self) -> impl Iterator<Item = (Point, Point)> {
-        let half = self.picture_side / 2.;
-        self.labels.iter().map(|l| l.bounds(&self.font)).chain(
-            self.pictures
-                .iter()
-                .map(move |m| (m.centre.offset(-half, -half), m.centre.offset(half, half))),
-        )
+        self.labels
+            .iter()
+            .map(|l| l.bounds(&self.font))
+            .chain(self.pictures.iter().map(PictureSlot::bounds))
     }
     fn fit_frame(
         &mut self,
@@ -678,20 +729,12 @@ impl Layout {
         plot_right: f32,
         leftmost_tick: f32,
         rightmost_bar: f32,
-        mut coordinate: Label,
         caption: Option<Label>,
     ) {
-        const MIN_STROKE_PT: f32 = 0.1;
-        const MAX_VERTICAL_INSET: f32 = 0.25;
+        const MAX_STROKE_INSET: f32 = 0.25;
 
         let gap = self.font.size() * 0.3;
         let axis_top = self.lines.first().and_then(|line| line.first()).copied();
-        let mut caption = caption.zip(axis_top);
-        if let Some((caption, axis_top)) = &caption {
-            self.width = self
-                .width
-                .max(axis_top.x + 2. * caption.half_size(&self.font).0 + 2. * gap);
-        }
         let projection = g
             .and_then(frame_projection)
             .map(|[x, y]| Point::new(x.x.hypot(x.y), y.x.hypot(y.y)));
@@ -699,75 +742,68 @@ impl Layout {
             // Preserve horizontal room for the axis and bars. In height, leave
             // at least half the frame for the plot, text, and model slots.
             let horizontal = (leftmost_tick.min(self.width - rightmost_bar) - gap) / self.width;
-            let max_half = (horizontal / projection.x).min(MAX_VERTICAL_INSET / projection.y);
-            let scale = (2. * max_half / style::DEFAULT.world(self.bar_width_pt)).min(1.);
-            self.line_width_pt = (self.line_width_pt * scale).max(MIN_STROKE_PT);
-            self.bar_width_pt = (self.bar_width_pt * scale).max(MIN_STROKE_PT);
+            let max_half = (horizontal / projection.x).min(MAX_STROKE_INSET / projection.y);
+            self.fit_strokes(max_half);
         }
-        let (w, h) = coordinate.half_size(&self.font);
-        let (top, bottom, title_top) = self.label_and_model_bounds().fold(
-            (self.top, self.bottom, self.bottom),
-            |(top, bottom, title_top), (a, b)| {
-                let title_top =
-                    if a.x < coordinate.centre.x + w + gap && b.x > coordinate.centre.x - w - gap {
-                        title_top.max(b.y)
-                    } else {
-                        title_top
-                    };
-                (top.min(a.y), bottom.max(b.y), title_top)
-            },
-        );
-        let bar_half = style::DEFAULT.world(self.bar_width_pt) / 2.;
-        let title_room = gap + 2. * h;
-        let fit = |caption_room: f32| {
-            let fixed_edges = (
-                top - gap - caption_room,
-                bottom.max(title_top + title_room) + gap,
-            );
-            let stroked_edges = (
-                self.top - gap - caption_room,
-                self.bottom + title_room + gap,
-            );
-            let half = projection.map_or(bar_half, |p| {
-                // The editable stroke minimum can exceed the room available in
-                // a very thin frame. Limit the layout inset and allow overflow.
-                let fraction = (p.y * bar_half).min(MAX_VERTICAL_INSET);
-                // The local stroke inset grows with the height of the fitted
-                // layout. Solve for each possible pair of limiting edges.
-                let height = (fixed_edges.1 - fixed_edges.0)
-                    .max(
-                        (stroked_edges.1 - fixed_edges.0).max(fixed_edges.1 - stroked_edges.0)
-                            / (1. - fraction),
-                    )
-                    .max((stroked_edges.1 - stroked_edges.0) / (1. - 2. * fraction));
-                fraction * height
+        let (top, bottom) = self
+            .label_and_model_bounds()
+            .fold((self.top, self.bottom), |(top, bottom), (a, b)| {
+                (top.min(a.y), bottom.max(b.y))
             });
-            let min_y = fixed_edges.0.min(stroked_edges.0 - half);
-            (
-                min_y,
-                fixed_edges.1.max(stroked_edges.1 + half) - min_y,
-                half,
-            )
-        };
-        let (mut min_y, mut height, mut bar_half_y) = fit(0.);
-        if let Some((caption, axis_top)) = &mut caption {
-            let bar_half = Point::new(
+        let bar_half = style::DEFAULT.world(self.bar_width_pt) / 2.;
+        let fixed_edges = (top - gap, bottom + gap);
+        let stroked_edges = (self.top - gap, self.bottom + gap);
+        let bar_half_y = projection.map_or(bar_half, |p| {
+            // The local stroke inset grows with the height of the fitted
+            // layout. Solve for each possible pair of limiting edges.
+            let fraction = (p.y * bar_half).min(MAX_STROKE_INSET);
+            let height = (fixed_edges.1 - fixed_edges.0)
+                .max(
+                    (stroked_edges.1 - fixed_edges.0).max(fixed_edges.1 - stroked_edges.0)
+                        / (1. - fraction),
+                )
+                .max((stroked_edges.1 - stroked_edges.0) / (1. - 2. * fraction));
+            fraction * height
+        });
+        self.min_y = fixed_edges.0.min(stroked_edges.0 - bar_half_y);
+        self.height = fixed_edges.1.max(stroked_edges.1 + bar_half_y) - self.min_y;
+        if let Some((mut caption, axis_top)) = caption.zip(axis_top) {
+            let bar_half_local = Point::new(
                 bar_half * projection.map_or(1., |p| self.width * p.x),
                 bar_half_y,
             );
             let ratio = self.line_width_pt / self.bar_width_pt;
-            let line_half = Point::new(bar_half.x * ratio, bar_half.y * ratio);
-            if !self.place_method(caption, *axis_top, plot_right, line_half, bar_half) {
+            let line_half = Point::new(bar_half_local.x * ratio, bar_half_local.y * ratio);
+            if !self.place_method(
+                &mut caption,
+                axis_top,
+                plot_right,
+                line_half,
+                bar_half_local,
+            ) {
+                // Make a clear top-right corner inside the plot when both
+                // corners are busy. Reserve the horizontal stroke inset at
+                // the new width, where a world-space stroke takes more room.
                 let (w, h) = caption.half_size(&self.font);
-                (min_y, height, bar_half_y) = fit(2. * h + gap);
-                caption.centre = Point::new(axis_top.x + gap + w, min_y + gap + h);
+                let frame_margin = self.width - plot_right;
+                let mut width = self.width + 2. * w + 2. * gap;
+                width = projection.map_or(width + bar_half, |p| {
+                    width / (1. - (p.x * bar_half).min(MAX_STROKE_INSET))
+                });
+                self.width = width;
+                if let Some(p) = projection {
+                    self.fit_strokes((leftmost_tick - gap) / (width * p.x));
+                }
+                caption.centre = Point::new(width - frame_margin - gap - w, axis_top.y + gap + h);
             }
+            self.labels.push(caption);
         }
-        coordinate.centre.y = title_top.max(self.bottom + bar_half_y) + gap + h;
-        self.min_y = min_y;
-        self.height = height;
-        self.labels.push(coordinate);
-        self.labels.extend(caption.map(|(caption, _)| caption));
+    }
+    fn fit_strokes(&mut self, max_half: f32) {
+        const MIN_STROKE_PT: f32 = 0.1;
+        let scale = (2. * max_half / style::DEFAULT.world(self.bar_width_pt)).min(1.);
+        self.line_width_pt = (self.line_width_pt * scale).max(MIN_STROKE_PT);
+        self.bar_width_pt = (self.bar_width_pt * scale).max(MIN_STROKE_PT);
     }
     fn place_method(
         &self,
@@ -811,13 +847,14 @@ impl Layout {
                     )
                 })
         };
-        caption.centre = Point::new(plot_right - inset - w, self.bottom - inset - h);
-        if caption.centre.x - w >= axis_top.x && is_clear(caption.centre) {
+        let y = axis_top.y + inset + h;
+        let left = axis_top.x + inset.max(line_half.x + 2. * clearance);
+        caption.centre = Point::new(left + w, y);
+        if left + 2. * w <= plot_right - inset && is_clear(caption.centre) {
             return true;
         }
-        let left = axis_top.x + inset.max(line_half.x + 2. * clearance);
-        caption.centre = Point::new(left + w, axis_top.y);
-        left + 2. * w <= self.width - inset && is_clear(caption.centre)
+        caption.centre = Point::new(plot_right - inset - w, y);
+        caption.centre.x - w >= axis_top.x && is_clear(caption.centre)
     }
     fn energy_y(&self, energy: f64) -> f32 {
         self.top + (self.bottom - self.top) * ((self.high - energy) / (self.high - self.low)) as f32
@@ -1089,7 +1126,6 @@ fn tick_text(value: f64) -> String {
 fn geometry_picture(
     geometry: &EnergyProfileGeometry,
     rotation: [f32; 4],
-    centre: Point,
     side: f32,
     source: &Document,
 ) -> Option<Vec<Primitive>> {
@@ -1143,8 +1179,8 @@ fn geometry_picture(
     model.size = side;
     model.perspective = 0.;
     model.depth_fade = 0.16;
-    let (lo, hi) = models3d::frame(&doc, &model)?;
-    model.offset = Point::new(centre.x - (lo.x + hi.x) / 2., centre.y - (lo.y + hi.y) / 2.);
+    let origin = models3d::frame_origin(&doc, &model)?;
+    model.offset = Point::new(-origin.x, -origin.y);
     let projected = models3d::project(&doc, &model, &positions)?;
     let mut out = vec![];
     for (pairs, hue, crossed) in [
@@ -1203,7 +1239,81 @@ fn geometry_picture(
         }
         primitive
     }));
-    Some(out)
+    (!out.is_empty()).then_some(out)
+}
+
+/// Move and scale the measured ball-and-stick artwork into its frame slot.
+fn place_picture_ink(
+    primitive: &mut Primitive,
+    centre: Point,
+    ink: Point,
+    scale: f32,
+    change_bond_width: f32,
+    outline_width: f32,
+) {
+    let place = |p: Point| centre.offset((p.x - ink.x) * scale, (p.y - ink.y) * scale);
+    match primitive {
+        Primitive::Opacity { primitive, .. } => {
+            place_picture_ink(
+                primitive,
+                centre,
+                ink,
+                scale,
+                change_bond_width,
+                outline_width,
+            );
+        }
+        Primitive::Path {
+            commands, style, ..
+        } => {
+            for command in commands {
+                *command = command.map(place);
+            }
+            style.width_pt = (style.width_pt * scale).min(change_bond_width);
+        }
+        Primitive::Sphere {
+            center,
+            radius,
+            focal,
+            outline,
+            contact,
+            ..
+        } => {
+            *center = place(*center);
+            *radius *= scale;
+            *focal = place(*focal);
+            if let Some(outline) = outline {
+                outline.width = (outline.width * scale).min(outline_width);
+            }
+            if let Some(contact) = contact {
+                for p in [&mut contact.region, &mut contact.rim, &mut contact.seams]
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                {
+                    *p = place(*p);
+                }
+            }
+        }
+        Primitive::ShadedQuad {
+            corners,
+            cap,
+            from,
+            to,
+            outline,
+            ..
+        } => {
+            for p in corners.iter_mut().chain(cap) {
+                *p = place(*p);
+            }
+            *from = place(*from);
+            *to = place(*to);
+            if let Some(outline) = outline {
+                outline.width = (outline.width * scale).min(outline_width * 0.8);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
