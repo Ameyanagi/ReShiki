@@ -7,14 +7,22 @@ use reshiki::graphics::{
     EnergyProfile, EnergyProfileGeometry, EnergyProfileModels, EnergyProfileSample,
     EnergyProfileStateKind as Kind,
 };
+use serde::{Deserialize, Serialize};
 
 const STATE_SECONDS: f32 = 0.8;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Motion {
     #[default]
     Steps,
     Smooth,
+}
+
+impl Motion {
+    pub(super) fn available(self, smooth: bool) -> Self {
+        if smooth { self } else { Self::Steps }
+    }
 }
 
 impl std::fmt::Display for Motion {

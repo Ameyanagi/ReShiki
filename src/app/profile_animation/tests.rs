@@ -345,6 +345,7 @@ fn no_op_canvas_move_and_resize_pause_playback_without_desynchronizing_the_overl
             id,
             app.profile_animation_overlay().unwrap(),
             resize,
+            false,
         );
         assert!(
             groups[0]
@@ -371,6 +372,78 @@ fn no_op_canvas_move_and_resize_pause_playback_without_desynchronizing_the_overl
         assert!(!app.tab.history.can_undo());
         assert!(!app.dirty());
     }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn moving_and_resizing_a_profile_preserves_the_smooth_session() {
+    let (mut app, arrow) = ts::tests::finished_irc();
+    let _ = app.update(Message::Xtb(xtb::Action::Ts(
+        ts::Action::PlaceEnergyProfile(Some(arrow)),
+    )));
+    let id = app.selected_energy_profile().unwrap().id;
+    let play = || Message::ProfileAnimation(Action::Toggle);
+    let _ = app.update(Message::ProfileAnimation(Action::Motion(Motion::Smooth)));
+    let _ = app.update(play());
+    finish_hold(&mut app);
+    let session = app.current_profile_animation().unwrap();
+    let frame = session.position.frame;
+    let sample = session.timeline.frame(frame).unwrap().sample().unwrap();
+
+    for resize in [false, true] {
+        let before = app.selected_energy_profile().unwrap().clone();
+        let deadline = app.current_profile_animation().unwrap().deadline;
+        let revision = app.tab.revision;
+        let animation = app.profile_animation_overlay().unwrap();
+        let ink = format!("{:?}", animation.ink);
+        let gestures =
+            crate::canvas::profile_animation_gesture(&app.tab.doc, id, animation, resize, true);
+        for edits in gestures {
+            for edit in edits {
+                let _ = app.update(Message::Canvas(edit));
+            }
+            tick(&mut app, deadline, deadline + Duration::from_secs(10));
+            let session = app.current_profile_animation().unwrap();
+            assert!(!session.position.playing);
+            assert_eq!(session.motion, Motion::Smooth);
+            assert_eq!(session.position.frame, frame);
+            assert_eq!(
+                session.timeline.frame(frame).unwrap().sample(),
+                Some(sample)
+            );
+        }
+        let graphic = app.selected_energy_profile().unwrap();
+        if resize {
+            assert_ne!(graphic.axis_x, before.axis_x);
+        } else {
+            assert_ne!(graphic.origin, before.origin);
+        }
+        assert_eq!(app.tab.revision, revision + 1);
+        assert_ne!(
+            format!("{:?}", app.profile_animation_overlay().unwrap().ink),
+            ink
+        );
+        let _ = app.update(play());
+        let position = &app.current_profile_animation().unwrap().position;
+        assert!(position.playing);
+        assert_eq!(position.frame, frame);
+    }
+    finish_hold(&mut app);
+    assert_eq!(
+        app.current_profile_animation().unwrap().position.frame,
+        frame + 1
+    );
+
+    let _ = app.update(ts::profile::edit_message(
+        id,
+        ts::profile::Edit::Models(reshiki::graphics::EnergyProfileModels::Off),
+    ));
+    assert!(app.profile_animation.is_none());
+    let _ = app.update(play());
+    assert_eq!(
+        app.current_profile_animation().unwrap().motion,
+        Motion::Smooth
+    );
 }
 
 #[test]

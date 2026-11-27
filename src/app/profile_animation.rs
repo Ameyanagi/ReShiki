@@ -67,8 +67,9 @@ impl Session {
         graphic: &Graphic,
         profile: &EnergyProfile,
         paths: Vec<Option<ProfileIrc>>,
+        preference: Motion,
     ) -> Self {
-        let motion = Motion::Steps;
+        let motion = preference.available(paths.iter().any(Option::is_some));
         let timeline = Timeline::new(profile, &paths, motion);
         let mut position = Playback::default();
         position.seek(0, timeline.len());
@@ -167,6 +168,53 @@ impl App {
         }
     }
 
+    pub(super) fn retain_transformed_profile_animation(&mut self, before: &Document) {
+        let Some(id) = self.current_profile_animation().map(|s| s.target.graphic) else {
+            return;
+        };
+        let doc = &mut self.tab.doc;
+        let Some((index, graphic)) = doc
+            .graphics
+            .iter_mut()
+            .enumerate()
+            .find(|(_, g)| g.id == id)
+        else {
+            return;
+        };
+        let Some(old) = before.graphics.get(index) else {
+            return;
+        };
+        let frame = |g: &Graphic| (g.origin, g.axis_x, g.axis_y, g.depth);
+        let (current, previous) = (frame(graphic), frame(old));
+        if current == previous {
+            return;
+        }
+        // Compare the reconciled drawing with the profile's old frame in place.
+        (
+            graphic.origin,
+            graphic.axis_x,
+            graphic.axis_y,
+            graphic.depth,
+        ) = previous;
+        let transform_only = *doc == *before;
+        let Some(graphic) = doc.graphics.get_mut(index) else {
+            return;
+        };
+        (
+            graphic.origin,
+            graphic.axis_x,
+            graphic.axis_y,
+            graphic.depth,
+        ) = current;
+        if transform_only
+            && let Some(session) = &mut self.profile_animation
+            && let Some(graphic) = doc.graphics.get(index)
+        {
+            session.target.revision = self.tab.revision.wrapping_add(1);
+            session.show(doc, graphic);
+        }
+    }
+
     pub(super) fn pause_profile_animation(&mut self) {
         if let Some(session) = &mut self.profile_animation {
             session.position.playing = false;
@@ -251,6 +299,7 @@ impl App {
                 graphic,
                 profile,
                 self.energy_profile_paths(profile),
+                self.appearance.profile_motion,
             )
         });
         let len = session.timeline.len();
@@ -284,6 +333,12 @@ impl App {
             _ => {}
         }
         session.show(&self.tab.doc, graphic);
+        if let Action::Motion(motion) = action
+            && session.motion == motion
+        {
+            self.appearance.profile_motion = motion;
+            let _ = self.appearance.save();
+        }
         if restart_hold {
             session.start_hold(self.appearance.playback_speed, Instant::now());
         }
@@ -339,7 +394,9 @@ impl App {
         } else {
             &[Motion::Steps][..]
         };
-        let motion = active.map_or(Motion::Steps, |s| s.motion);
+        let motion = active.map_or(self.appearance.profile_motion.available(smooth), |s| {
+            s.motion
+        });
         let repeat = self.appearance.playback_mode;
         let speed = self.appearance.playback_speed;
         let readout = active
@@ -403,13 +460,17 @@ impl App {
         }
         let graphic = self.selected_energy_profile()?;
         let profile = graphic.energy_profile.as_deref()?;
-        let motion = self
-            .current_profile_animation()
-            .map_or(Motion::Steps, |s| s.motion);
-        let timeline = self
-            .current_profile_animation()
-            .map(|s| s.timeline.clone())
-            .unwrap_or_else(|| Timeline::new(profile, &[], Motion::Steps));
+        let (timeline, motion) = self.current_profile_animation().map_or_else(
+            || {
+                let paths = self.energy_profile_paths(profile);
+                let motion = self
+                    .appearance
+                    .profile_motion
+                    .available(paths.iter().any(Option::is_some));
+                (Timeline::new(profile, &paths, motion), motion)
+            },
+            |s| (s.timeline.clone(), s.motion),
+        );
         Some(Source {
             name: "energy-profile".into(),
             doc: self.tab.doc.clone(),

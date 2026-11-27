@@ -105,7 +105,7 @@ mod pictures;
 mod piece_libraries;
 mod popover;
 mod printing;
-mod profile_animation;
+pub(crate) mod profile_animation;
 mod prompt;
 mod qc_export;
 mod reaction_mapping;
@@ -1052,6 +1052,7 @@ impl App {
                         && old.atoms.iter().all(|atom| m.contains(atom.id))
                 })
         });
+        self.retain_transformed_profile_animation(reconciled.before());
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         if committed.recorded {
             self.trim_histories(tabs::HISTORY_BYTES);

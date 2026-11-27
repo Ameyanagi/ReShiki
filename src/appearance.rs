@@ -141,6 +141,7 @@ pub struct Settings {
     pub energy_unit: EnergyUnit,
     pub(crate) playback_mode: crate::app::animation::PlaybackMode,
     pub(crate) playback_speed: crate::app::animation::PlaybackSpeed,
+    pub(crate) profile_motion: crate::app::profile_animation::Motion,
     /// Draw at the drawing style's bond length when using Clean up.
     pub cleanup_style_bond_length: bool,
     /// Background of copied pictures (transparent by default).
@@ -180,6 +181,7 @@ impl Default for Settings {
             energy_unit: Default::default(),
             playback_mode: Default::default(),
             playback_speed: Default::default(),
+            profile_motion: Default::default(),
             cleanup_style_bond_length: false,
             copy_background: Background::Transparent,
             export_background: Background::Canvas,

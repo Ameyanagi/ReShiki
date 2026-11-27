@@ -3183,12 +3183,13 @@ pub(super) fn guided_drag(
     (edits, preview)
 }
 
-/// Press, move out and back, then release a profile through the real canvas.
+/// Move or resize a profile through the real canvas, optionally back to its start.
 pub(crate) fn profile_animation_gesture(
     doc: &Document,
     id: u64,
     animation: ProfileAnimation<'_>,
     resize: bool,
+    commit: bool,
 ) -> [Vec<Edit>; 3] {
     let selected = [id];
     let mut canvas = chain_canvas(doc, ChainMode::Straight);
@@ -3204,16 +3205,17 @@ pub(crate) fn profile_animation_gesture(
         canvas.camera.screen(lo.lerp(hi, 0.5), bounds)
     };
     let away = start + Vector::new(30., 20.);
+    let mut moves = vec![mouse::Event::CursorMoved { position: away }];
+    if !commit {
+        moves.push(mouse::Event::CursorMoved { position: start });
+    }
     let mut state = State::default();
     let groups = [
         vec![
             mouse::Event::CursorMoved { position: start },
             mouse::Event::ButtonPressed(mouse::Button::Left),
         ],
-        vec![
-            mouse::Event::CursorMoved { position: away },
-            mouse::Event::CursorMoved { position: start },
-        ],
+        moves,
         vec![mouse::Event::ButtonReleased(mouse::Button::Left)],
     ];
     let mut phase = 0;
