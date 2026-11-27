@@ -3348,29 +3348,30 @@ impl ModelPaint {
 impl View<'_> {
     fn live_surface(
         &self,
+        doc: &Document,
         model: &Model3d,
         paint: &ModelPaint,
-    ) -> Option<(surface::draw::Prepared, Option<Primitive>)> {
-        let meshes = self.orbital_meshes.as_deref()?;
+    ) -> Option<(std::rc::Rc<surface::draw::Prepared>, Option<Primitive>)> {
+        self.orbital_meshes.as_ref()?;
         // Stick draws a contour twice as wide.
         let painted = match (paint.glossy, model.style) {
             (true, _) => 0.,
             (false, Style::Stick) => paint.line * 2.,
             (false, _) => paint.line,
         };
-        let colors = surface::draw::phase_colors(model, paint.dark);
-        let backdrop = float(paint.backdrop);
-        let fade = paint.fade(self.reach, 0.);
-        let prepared =
-            surface::draw::Prepared::new(meshes, model, self, painted, colors, backdrop, fade)?;
-        let primitive = prepared.paint(
-            colors,
-            backdrop,
-            fade,
-            paint.outline(paint.line),
-            paint.line,
-        );
-        Some((prepared, primitive))
+        surface::draw::live(
+            doc,
+            model,
+            self,
+            surface::draw::SurfacePaint {
+                colors: surface::draw::phase_colors(model, paint.dark),
+                backdrop: float(paint.backdrop),
+                fade: paint.fade(self.reach, 0.),
+                painted,
+                outline: paint.outline(paint.line),
+                line_width: paint.line,
+            },
+        )
     }
 }
 
@@ -3401,7 +3402,7 @@ pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
         return;
     };
     let snapshot = View::with_meshes(doc, model, Some(meshes)).and_then(|view| {
-        let (_, primitive) = view.live_surface(model, &ModelPaint::new(doc, model))?;
+        let (_, primitive) = view.live_surface(doc, model, &ModelPaint::new(doc, model))?;
         // Even when occluded, the mesh still sets the projection scale.
         let primitive = primitive.unwrap_or_else(|| Primitive::Surface { groups: vec![] });
         Some(surface::Snapshot {
@@ -3443,7 +3444,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     // Labels of atoms in front of the surface, drawn after it.
     let mut late = vec![];
     let orbital = view
-        .live_surface(model, &paint)
+        .live_surface(doc, model, &paint)
         .and_then(|(prepared, primitive)| Some((prepared, primitive?)));
     let side_outline = || {
         outline(line * 2.).map(|o| Outline {

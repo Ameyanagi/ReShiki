@@ -9,7 +9,10 @@ use reshiki::scene::Primitive;
 use std::rc::Rc;
 
 #[derive(Default)]
-pub(in crate::canvas) struct SceneGeometryCache(Option<Entry>);
+pub(in crate::canvas) struct SceneGeometryCache {
+    entry: Option<Entry>,
+    pan_margin: bool,
+}
 
 struct Entry {
     scene: Rc<[Primitive]>,
@@ -44,6 +47,13 @@ struct View {
 }
 
 impl SceneGeometryCache {
+    pub(super) fn with_pan_margin() -> Self {
+        Self {
+            pan_margin: true,
+            ..Self::default()
+        }
+    }
+
     pub(in crate::canvas) fn draw(
         &mut self,
         frame: &mut layered::Frame<'_>,
@@ -66,7 +76,7 @@ impl SceneGeometryCache {
             frame: frame.key(),
             reviewing_pair,
         };
-        let same = self.0.as_ref().filter(|entry| {
+        let same = self.entry.as_ref().filter(|entry| {
             Rc::ptr_eq(&entry.scene, &scene)
                 && Rc::ptr_eq(&entry.markers, &markers)
                 && entry.view == view
@@ -83,7 +93,7 @@ impl SceneGeometryCache {
         });
         if !reuse {
             // Only a pan pays for the margin; edits and zooms tessellate the view.
-            let margin = if shift.is_some() {
+            let margin = if self.pan_margin || shift.is_some() {
                 Vector::new(bounds.width / 2., bounds.height / 2.)
             } else {
                 Vector::ZERO
@@ -106,7 +116,7 @@ impl SceneGeometryCache {
             // View/selection changes need new vector geometry, but an unchanged
             // immutable scene keeps each raster run's bounds and content hashes.
             let mut raster = self
-                .0
+                .entry
                 .as_mut()
                 .filter(|entry| Rc::ptr_eq(&entry.scene, &scene))
                 .map(|entry| std::mem::take(&mut entry.raster))
@@ -136,7 +146,7 @@ impl SceneGeometryCache {
                 start = end;
             }
             layers.push(retain(vector));
-            self.0 = Some(Entry {
+            self.entry = Some(Entry {
                 scene: scene.clone(),
                 markers: markers.clone(),
                 view,
@@ -147,7 +157,7 @@ impl SceneGeometryCache {
                 raster,
             });
         }
-        if let Some(entry) = self.0.as_mut() {
+        if let Some(entry) = self.entry.as_mut() {
             let shift = Vector::new(
                 (entry.center.x - camera.center.x) * camera.zoom,
                 (entry.center.y - camera.center.y) * camera.zoom,

@@ -14,6 +14,8 @@ use std::time::Duration;
 
 mod tiles;
 pub(crate) use tiles::ModelImage;
+#[cfg(test)]
+pub(super) use tiles::TILE_RENDERS;
 pub(super) use tiles::{PreparedRun, begin, draw, end, is_model};
 
 /// Screen pixels on either side of the drawn selection outline that move it.
