@@ -501,14 +501,17 @@ class ReleaseTests(unittest.TestCase):
             "${{ startsWith(matrix.artifact, 'macos') && 'symbols' || 'none' }}",
             "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: "
             "${{ startsWith(matrix.artifact, 'linux') && 'off' || 'packed' }}",
-            # A fat-LTO link needs more memory than the macOS arm64 and Linux
-            # arm64 runners have. Linux arm64 builds without LTO across crates, with the
-            # release profile's 16 codegen units; "false" is a non-empty
-            # string, so the expression yields it.
+            # A fat-LTO link needs more memory than the macOS arm64, Linux
+            # arm64 and Windows x64 runners have. Linux arm64 and Windows x64
+            # build without LTO across crates, with the release profile's 16
+            # codegen units; "false" is a non-empty string, so the expression
+            # yields it.
             "CARGO_PROFILE_DIST_LTO: ${{ startsWith(matrix.artifact, 'macos') && 'thin' || "
-            "matrix.artifact == 'linux-arm64' && 'false' || 'fat' }}",
+            "matrix.artifact == 'linux-arm64' && 'false' || "
+            "matrix.artifact == 'windows-x64' && 'false' || 'fat' }}",
             "CARGO_PROFILE_DIST_CODEGEN_UNITS: "
-            "${{ matrix.artifact == 'linux-arm64' && '16' || '1' }}",
+            "${{ matrix.artifact == 'linux-arm64' && '16' || "
+            "matrix.artifact == 'windows-x64' && '16' || '1' }}",
         ):
             self.assertEqual(workflow.count(setting), 1, setting)
         for path in (
