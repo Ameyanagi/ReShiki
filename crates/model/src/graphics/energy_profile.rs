@@ -679,14 +679,18 @@ impl Layout {
         leftmost_tick: f32,
         rightmost_bar: f32,
         mut coordinate: Label,
-        mut caption: Option<Label>,
+        caption: Option<Label>,
     ) {
+        const MIN_STROKE_PT: f32 = 0.1;
+        const MAX_VERTICAL_INSET: f32 = 0.25;
+
         let gap = self.font.size() * 0.3;
-        if let Some(caption) = &caption {
-            let axis = self.lines[0][0].x;
+        let axis_top = self.lines.first().and_then(|line| line.first()).copied();
+        let mut caption = caption.zip(axis_top);
+        if let Some((caption, axis_top)) = &caption {
             self.width = self
                 .width
-                .max(axis + 2. * caption.half_size(&self.font).0 + 2. * gap);
+                .max(axis_top.x + 2. * caption.half_size(&self.font).0 + 2. * gap);
         }
         let projection = g
             .and_then(frame_projection)
@@ -695,10 +699,10 @@ impl Layout {
             // Preserve horizontal room for the axis and bars. In height, leave
             // at least half the frame for the plot, text, and model slots.
             let horizontal = (leftmost_tick.min(self.width - rightmost_bar) - gap) / self.width;
-            let max_half = (horizontal / projection.x).min(0.25 / projection.y);
+            let max_half = (horizontal / projection.x).min(MAX_VERTICAL_INSET / projection.y);
             let scale = (2. * max_half / style::DEFAULT.world(self.bar_width_pt)).min(1.);
-            self.line_width_pt *= scale;
-            self.bar_width_pt *= scale;
+            self.line_width_pt = (self.line_width_pt * scale).max(MIN_STROKE_PT);
+            self.bar_width_pt = (self.bar_width_pt * scale).max(MIN_STROKE_PT);
         }
         let (w, h) = coordinate.half_size(&self.font);
         let (top, bottom, title_top) = self.label_and_model_bounds().fold(
@@ -725,7 +729,9 @@ impl Layout {
                 self.bottom + title_room + gap,
             );
             let half = projection.map_or(bar_half, |p| {
-                let fraction = p.y * bar_half;
+                // The editable stroke minimum can exceed the room available in
+                // a very thin frame. Limit the layout inset and allow overflow.
+                let fraction = (p.y * bar_half).min(MAX_VERTICAL_INSET);
                 // The local stroke inset grows with the height of the fitted
                 // layout. Solve for each possible pair of limiting edges.
                 let height = (fixed_edges.1 - fixed_edges.0)
@@ -744,37 +750,35 @@ impl Layout {
             )
         };
         let (mut min_y, mut height, mut bar_half_y) = fit(0.);
-        if let Some(caption) = &mut caption {
+        if let Some((caption, axis_top)) = &mut caption {
             let bar_half = Point::new(
                 bar_half * projection.map_or(1., |p| self.width * p.x),
                 bar_half_y,
             );
             let ratio = self.line_width_pt / self.bar_width_pt;
             let line_half = Point::new(bar_half.x * ratio, bar_half.y * ratio);
-            if !self.place_method(caption, plot_right, line_half, bar_half) {
+            if !self.place_method(caption, *axis_top, plot_right, line_half, bar_half) {
                 let (w, h) = caption.half_size(&self.font);
                 (min_y, height, bar_half_y) = fit(2. * h + gap);
-                caption.centre = Point::new(self.lines[0][0].x + gap + w, min_y + gap + h);
+                caption.centre = Point::new(axis_top.x + gap + w, min_y + gap + h);
             }
         }
         coordinate.centre.y = title_top.max(self.bottom + bar_half_y) + gap + h;
         self.min_y = min_y;
         self.height = height;
         self.labels.push(coordinate);
-        self.labels.extend(caption);
+        self.labels.extend(caption.map(|(caption, _)| caption));
     }
     fn place_method(
         &self,
         caption: &mut Label,
+        axis_top: Point,
         plot_right: f32,
         line_half: Point,
         bar_half: Point,
     ) -> bool {
         use crate::atom_labels::segment_hits_rect;
 
-        let Some(&axis_top) = self.lines.first().and_then(|line| line.first()) else {
-            return false;
-        };
         let (w, h) = caption.half_size(&self.font);
         let em = self.font.size();
         let inset = em * 0.3;
@@ -1111,10 +1115,11 @@ fn geometry_picture(
         .iter()
         .zip(&positions)
         .map(|(&z, &xyz)| {
+            let [x, y, _] = xyz;
             Some(Placed {
                 id: doc.add_atom(
                     crate::editing::ELEMENTS.get(usize::from(z).checked_sub(1)?)?,
-                    Point::new(xyz[0] * 30., xyz[1] * 30.),
+                    Point::new(x * 30., y * 30.),
                 ),
                 xyz,
             })

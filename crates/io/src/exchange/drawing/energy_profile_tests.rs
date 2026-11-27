@@ -114,6 +114,25 @@ fn energy_profile_exports_grouped_vectors_and_labels_through_cdxml_and_cdx() {
 }
 
 #[test]
+fn thin_energy_profile_frames_keep_exportable_strokes() {
+    let mut doc = profile();
+    for height in [1., 0.1] {
+        doc.graphics[0].axis_y = Point::new(0., height);
+        doc.validate().unwrap();
+        let (parts, _) = doc.graphics[0].energy_profile_parts(&doc.drawing_style);
+        assert!(!parts.is_empty());
+        assert!(parts.iter().all(|part| part.style.width_pt >= 0.1));
+
+        let xml = write(&doc, Options::default()).unwrap();
+        let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+        for xml in [&xml, &decoded] {
+            let tree = roxmltree::Document::parse(xml).unwrap();
+            assert!(tree.descendants().any(|node| node.has_tag_name("curve")));
+        }
+    }
+}
+
+#[test]
 fn resized_energy_profile_labels_roundtrip_in_the_strict_cdxml_and_cdx_reader() {
     for (font, scale, angle) in [(10., 0.1, 0.), (4., 1., 0.), (10., 40., 37.)] {
         let doc = scaled_profile(font, scale, angle);
