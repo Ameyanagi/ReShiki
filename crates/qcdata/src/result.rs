@@ -18,6 +18,7 @@ use crate::{
 
 /// One calculation or imported job step tied to an exact frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(remote = "CalcResult")]
 pub struct CalcResult {
     /// Geometry the values describe.
     pub frame: FrameHash,
@@ -87,6 +88,28 @@ pub struct CalcResult {
     pub run: Option<RunSummary>,
 }
 
+impl Serialize for CalcResult {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        CalcResult::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for CalcResult {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut result = CalcResult::deserialize(deserializer)?;
+        if let Some(search) = result
+            .run
+            .as_mut()
+            .and_then(|run| run.transition_state.as_mut())
+            && let Some(irc) = &mut search.irc
+        {
+            irc.restore(result.trajectory.as_ref(), search.climbing_image)
+                .map_err(serde::de::Error::custom)?;
+        }
+        Ok(result)
+    }
+}
+
 /// Wall time, SCF effort, and optional search details for one run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunSummary {
@@ -109,17 +132,39 @@ pub struct RunSummary {
 /// Interpretation and audit details of one transition-state search.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransitionStateRun {
+    /// Ordered IRC geometries and scalar profile. Light saves omit only the geometries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irc: Option<crate::IrcPath>,
     /// Drawing arrow, if it still belongs to the document containing this result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arrow: Option<u64>,
     /// Chemistry and export labels captured when the search was requested.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<TransitionStateContext>,
+    /// Whether endpoint thermochemistry was requested for this search.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub free_energy: bool,
+    /// Electronic energies of the search's optimized [reactant, product], in hartree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_energies_hartree: Option<[f64; 2]>,
+    /// Corrections for those same endpoints, in [reactant, product] order.
+    /// A missing slot means that endpoint's frequency analysis failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_thermo: Option<[Option<Thermo>; 2]>,
+    /// A relaxed reaction-path end that led away from the requested reaction.
+    /// Positions are in the same atom order as the transition-state frame.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reached_positions_angstrom: Vec<[f64; 3]>,
     pub saddle_converged: bool,
     pub imaginary: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaginary_cm1: Option<f64>,
     pub climbing_image: usize,
+    /// Planned bond changes in frame atom order, from reactant to product.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub forming_bonds: Vec<[usize; 2]>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub breaking_bonds: Vec<[usize; 2]>,
     pub mapping: TransitionStateMapping,
     pub diagnostics: Vec<(String, String)>,
 }
@@ -135,6 +180,9 @@ pub struct TransitionStateContext {
     pub title: String,
     /// First reactant label used by exported file names.
     pub reactant: String,
+    /// Whether one endpoint represents multiple species optimized together.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint_complex: Option<bool>,
 }
 
 /// Atom labels are captured at run start, in the direction of the reaction arrow.
@@ -153,7 +201,63 @@ pub struct MappedAtom {
 }
 
 impl TransitionStateRun {
-    fn validate(&self, result: &CalcResult, atoms: usize) -> Result<(), Error> {
+    fn light(&self) -> Self {
+        Self {
+            irc: self.irc.as_ref().map(crate::IrcPath::light),
+            arrow: self.arrow,
+            context: self.context.clone(),
+            free_energy: self.free_energy,
+            endpoint_energies_hartree: self.endpoint_energies_hartree,
+            endpoint_thermo: self.endpoint_thermo.clone(),
+            reached_positions_angstrom: self.reached_positions_angstrom.clone(),
+            saddle_converged: self.saddle_converged,
+            imaginary: self.imaginary,
+            imaginary_cm1: self.imaginary_cm1,
+            climbing_image: self.climbing_image,
+            forming_bonds: self.forming_bonds.clone(),
+            breaking_bonds: self.breaking_bonds.clone(),
+            mapping: self.mapping.clone(),
+            diagnostics: self.diagnostics.clone(),
+        }
+    }
+
+    /// Optimized product minus reactant electronic energy, independent of the saddle check.
+    pub fn reaction_energy_hartree(&self) -> Option<f64> {
+        let [reactant, product] = self.endpoint_energies_hartree?;
+        let delta = product - reactant;
+        delta.is_finite().then_some(delta)
+    }
+
+    /// Optimized product minus reactant Gibbs energy at the saved analysis conditions.
+    pub fn reaction_gibbs_hartree(&self) -> Option<f64> {
+        let [reactant, product] = self.endpoint_energies_hartree?;
+        let [reactant_thermo, product_thermo] = self.endpoint_thermo.as_ref()?;
+        let (reactant_thermo, product_thermo) =
+            (reactant_thermo.as_ref()?, product_thermo.as_ref()?);
+        let delta = (product + product_thermo.gibbs_correction_hartree)
+            - (reactant + reactant_thermo.gibbs_correction_hartree);
+        delta.is_finite().then_some(delta)
+    }
+
+    fn validate(&self, result: &CalcResult, frame: &Frame) -> Result<(), Error> {
+        let atoms = frame.numbers.len();
+        if let Some(irc) = &self.irc {
+            irc.validate_for(frame, result.energy_hartree)?;
+            let neb = &irc.neb_arc_lengths_sqrt_amu_bohr;
+            if !neb.is_empty()
+                && (result
+                    .trajectory
+                    .as_ref()
+                    .is_none_or(|path| neb.len() != path.steps())
+                    || neb.get(self.climbing_image) != Some(&0.)
+                    || neb.first() != irc.arc_lengths_sqrt_amu_bohr.first()
+                    || neb.last() != irc.arc_lengths_sqrt_amu_bohr.last())
+            {
+                return Err(Error::Invalid(
+                    "IRC comparison does not match the NEB band".into(),
+                ));
+            }
+        }
         let valid_pairs = |pairs: &[[MappedAtom; 2]]| {
             pairs.len() <= atoms * atoms
                 && pairs.iter().flatten().all(|atom| {
@@ -164,6 +268,21 @@ impl TransitionStateRun {
         };
         if result.task != Task::TransitionState
             || self.arrow == Some(0)
+            || self.endpoint_energies_hartree.is_some_and(|energies| {
+                result.endpoints.is_none() || energies.iter().any(|energy| !energy.is_finite())
+            })
+            || self.endpoint_thermo.as_ref().is_some_and(|corrections| {
+                !self.free_energy
+                    || self.endpoint_energies_hartree.is_none()
+                    || corrections.iter().flatten().any(|thermo| {
+                        (thermo.temperature_k - 298.15).abs() > 1e-6
+                            || (thermo.pressure_pa - 101_325.).abs() > 1e-3
+                            || (thermo.frequency_scale - 1.).abs() > 1e-12
+                            || (thermo.rotor_cutoff_cm1 - 50.).abs() > 1e-12
+                            || (thermo.imaginary_cutoff_cm1 - 20.).abs() > 1e-12
+                            || thermo.symmetry_number == 0
+                    })
+            })
             || self.context.as_ref().is_some_and(|context| {
                 [&context.reactant_chemistry, &context.product_chemistry]
                     .into_iter()
@@ -177,6 +296,13 @@ impl TransitionStateRun {
                     || context.reactant.len() > 256 * 1024
             })
             || self.imaginary > 3 * atoms
+            || (!self.reached_positions_angstrom.is_empty()
+                && (self.reached_positions_angstrom.len() != atoms
+                    || self
+                        .reached_positions_angstrom
+                        .iter()
+                        .flatten()
+                        .any(|x| !x.is_finite())))
             || self
                 .imaginary_cm1
                 .is_some_and(|value| !value.is_finite() || value >= 0.)
@@ -184,6 +310,11 @@ impl TransitionStateRun {
                 .trajectory
                 .as_ref()
                 .is_none_or(|path| self.climbing_image >= path.energies_hartree.len())
+            || self
+                .forming_bonds
+                .iter()
+                .chain(&self.breaking_bonds)
+                .any(|&[a, b]| a >= atoms || b >= atoms || a == b)
             || !valid_pairs(&self.mapping.formed)
             || !valid_pairs(&self.mapping.broken)
             || !valid_pairs(&self.mapping.hydrogen_moves)
@@ -210,12 +341,23 @@ impl TransitionStateRun {
                     .sum::<usize>()
         };
         size_of::<Self>()
+            + self.irc.as_ref().map_or(0, crate::IrcPath::heap_bytes)
+            + self.reached_positions_angstrom.capacity() * size_of::<[f64; 3]>()
+            + self.endpoint_thermo.as_ref().map_or(0, |corrections| {
+                corrections
+                    .iter()
+                    .flatten()
+                    .map(|thermo| thermo.point_group.as_ref().map_or(0, String::len))
+                    .sum::<usize>()
+            })
             + self.context.as_ref().map_or(0, |context| {
                 context.reactant_chemistry.len()
                     + context.product_chemistry.len()
                     + context.title.len()
                     + context.reactant.len()
             })
+            + size_of_val(self.forming_bonds.as_slice())
+            + size_of_val(self.breaking_bonds.as_slice())
             + pairs(&self.mapping.formed)
             + pairs(&self.mapping.broken)
             + pairs(&self.mapping.hydrogen_moves)
@@ -646,7 +788,7 @@ impl CalcResult {
                 });
             }
             if let Some(ts) = &run.transition_state {
-                ts.validate(self, frame.numbers.len())?;
+                ts.validate(self, frame)?;
             }
         }
         let n_atoms = frame.numbers.len();
@@ -745,7 +887,15 @@ impl CalcResult {
                 ));
             }
         }
-        if let Some(t) = &self.thermo {
+        for t in self.thermo.iter().chain(
+            self.run
+                .as_ref()
+                .and_then(|run| run.transition_state.as_ref())
+                .and_then(|search| search.endpoint_thermo.as_ref())
+                .into_iter()
+                .flatten()
+                .flatten(),
+        ) {
             if [
                 t.temperature_k,
                 t.pressure_pa,
@@ -926,7 +1076,13 @@ impl CalcResult {
             }),
             keep_full: self.keep_full,
             omitted_bytes: self.omitted_bytes,
-            run: self.run.clone(),
+            run: self.run.as_ref().map(|run| RunSummary {
+                seconds: run.seconds,
+                scf_iterations: run.scf_iterations.clone(),
+                finished: run.finished.clone(),
+                search: run.search.clone(),
+                transition_state: run.transition_state.as_ref().map(|ts| Box::new(ts.light())),
+            }),
         }
     }
 

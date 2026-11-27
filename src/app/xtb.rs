@@ -8,6 +8,7 @@
 // The browser editor shows only a note: runs, previews and results are desktop-only.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_variables))]
 use super::{App, Message};
+use crate::appearance::EnergyUnit;
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
@@ -383,7 +384,10 @@ pub(super) fn is_progress(message: &Message) -> bool {
     return matches!(
         message,
         Message::Xtb(
-            Action::Event(..) | Action::Search(..) | Action::Vibrations(vibrations::Action::Tick)
+            Action::Event(..)
+                | Action::Search(..)
+                | Action::Vibrations(vibrations::Action::Tick)
+                | Action::Ts(ts::Action::Tick)
         )
     );
     #[cfg(target_arch = "wasm32")]
@@ -622,11 +626,12 @@ impl App {
     }
 
     /// The model preview while a run is current, else a previewed step,
-    /// else an animated vibration.
+    /// else an animated IRC, vibration or orbital preview.
     pub(super) fn xtb_preview(&self) -> Option<&Document> {
         let Some(run) = self.tab.xtb.run.as_ref() else {
             return self
                 .xtb_step_preview()
+                .or_else(|| self.xtb_irc_preview())
                 .or_else(|| self.xtb_vibration_preview())
                 .or_else(|| self.xtb_orbital_preview());
         };
@@ -686,6 +691,11 @@ impl App {
     }
 
     fn xtb_entry(&mut self, entry: Entry) -> Task<Message> {
+        if matches!(entry, Entry::Rerun)
+            && let Some(arrow) = self.xtb_selected_reaction()
+        {
+            return self.xtb_ts_action(ts::Action::Calculate(arrow));
+        }
         if !available() || !self.xtb_can_start() {
             return Task::none();
         }
@@ -780,7 +790,9 @@ impl App {
             self.xtb.conformer_inversion_target = None;
             self.xtb.conformers.invert_undefined_stereo = false;
         }
-        self.xtb_end_preview();
+        if request.ts.is_none() {
+            self.xtb_end_preview();
+        }
         self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
         self.tab.xtb.outcome = None;
         self.tab.xtb.run = Some(Run {
@@ -807,6 +819,7 @@ impl App {
             cancel: Default::default(),
             handle: None,
         });
+        self.xtb_ts_palette_started();
         self.xtb_vibrations_sync();
         self.xtb_launch()
     }
@@ -1105,6 +1118,11 @@ impl App {
         forced: bool,
         ts: Option<Rc<ts::Session>>,
     ) {
+        let reaction_arrow = ts.as_ref().map(|session| session.arrow);
+        // A completed search stays in the card when the dock was closed or
+        // used to inspect another result during the run.
+        let show_result =
+            reaction_arrow.is_none_or(|arrow| self.xtb_palette_follows_live_ts(arrow));
         let mut doc = self.tab.doc.clone();
         let attached = match science::attach(
             &mut doc,
@@ -1221,7 +1239,7 @@ impl App {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
             if let Some(ts) = ts {
                 self.tab.xtb.ts_sessions.remember(&result, ts);
-                if self.tabs.temporary_depth == 0 {
+                if show_result && self.tabs.temporary_depth == 0 {
                     self.tab.xtb.palette.collapsed = false;
                     if self.xtb.dock.inspector {
                         self.xtb.page = Page::Xtb;
@@ -1229,7 +1247,9 @@ impl App {
                     }
                 }
             }
-            self.xtb_show_result(&result);
+            if show_result {
+                self.xtb_show_result(&result);
+            }
             // After a push the question was the imaginary mode: show its answer.
             if pending.pushed && applied {
                 self.tab.xtb.palette.view = results::View::Vibrations;
@@ -1237,6 +1257,11 @@ impl App {
         }
         self.status = if applied {
             format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
+        } else if let Some(arrow) = reaction_arrow {
+            let status = pending.line.clone();
+            self.tab.xtb.ts_card.status =
+                Some((arrow, ts::card::Status::TransitionState, status.clone()));
+            status
         } else {
             format!("xTB · {}", pending.line)
         };

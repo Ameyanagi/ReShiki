@@ -306,6 +306,7 @@ impl Progress {
                 max_force,
                 climbing,
                 energies,
+                ..
             } => {
                 if self.trace {
                     let peak = energies.iter().copied().fold(f64::NEG_INFINITY, f64::max);

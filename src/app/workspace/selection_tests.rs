@@ -226,10 +226,9 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
 }
 
 #[test]
-fn reaction_calculation_row_commands_review_one_selected_arrow_when_xtb_is_available() {
+fn reaction_calculation_row_command_uses_one_selected_arrow_when_xtb_is_available() {
     use crate::app::xtb::{self, ts};
     use reshiki::{arrows::Preset, document::Arrow, purpose::Purpose};
-    use ts::review::Mode;
 
     let (mut app, _) = App::new();
     app.tab.doc = Default::default();
@@ -252,7 +251,7 @@ fn reaction_calculation_row_commands_review_one_selected_arrow_when_xtb_is_avail
             .filter(|command| {
                 matches!(
                     command.message,
-                    Message::Xtb(xtb::Action::Ts(ts::Action::Review(..)))
+                    Message::Xtb(xtb::Action::Ts(ts::Action::Calculate(_)))
                 )
             })
             .collect::<Vec<_>>()
@@ -267,20 +266,12 @@ fn reaction_calculation_row_commands_review_one_selected_arrow_when_xtb_is_avail
                 .iter()
                 .map(|command| command.label)
                 .collect::<Vec<_>>(),
-            ["Find transition state (GFN2-xTB)", "Reaction energy"]
+            ["Calculate (xTB)"]
         );
         assert!(commands.iter().all(|command| command.enabled));
         assert!(matches!(
             commands[0].message,
-            Message::Xtb(xtb::Action::Ts(ts::Action::Review(
-                Mode::TransitionState,
-                Some(id)
-            ))) if id == arrows[1]
-        ));
-        assert!(matches!(
-            commands[1].message,
-            Message::Xtb(xtb::Action::Ts(ts::Action::Review(Mode::Energy, Some(id))))
-                if id == arrows[1]
+            Message::Xtb(xtb::Action::Ts(ts::Action::Calculate(id))) if id == arrows[1]
         ));
     } else {
         assert!(

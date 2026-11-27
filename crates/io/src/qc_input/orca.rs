@@ -109,15 +109,19 @@ pub(super) fn write(
     }
     let _ = writeln!(text, "%maxcore {}", maxcore(settings));
 
+    let has_companions = endpoints.is_some()
+        || (matches!(settings.job, Job::TransitionState | Job::Irc)
+            && geometry.hessian().is_some());
+    let safe = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
+    if has_companions && !stem.chars().any(safe) {
+        return Err(Error::Invalid(
+            "Choose an input file name with an ASCII letter, digit, period, underscore or hyphen for ORCA companion files."
+                .into(),
+        ));
+    }
     let companion_stem: String = stem
         .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
-                c
-            } else {
-                '_'
-            }
-        })
+        .map(|c| if safe(c) { c } else { '_' })
         .collect();
     let mut files = Vec::new();
     let frame = geometry.frame;

@@ -34,6 +34,7 @@ mod input;
 pub mod layered;
 mod markers;
 mod models3d;
+pub(crate) use models3d::ModelImage;
 mod movement;
 pub(crate) mod nmr;
 pub(crate) mod optimization;
@@ -82,6 +83,8 @@ pub use hit::{bond_text_at, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub(crate) use paper::HINT_STRIP_HEIGHT_PX;
+pub(crate) use paper::{BondChangeKind, BondChangeMark, draw_bond_changes};
+pub(crate) use previews::BondChangeThumbnail;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub use previews::DrawingPreview;
 pub use previews::{
@@ -756,6 +759,7 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
     /// On-screen xTB energy and partial charges.
     pub(crate) result_label: Option<ResultLabel>,
+    pub(crate) bond_changes: Vec<BondChangeMark>,
     /// Linked atoms of outdated models, for editing aids absent from exports.
     pub(crate) outdated_models: Vec<&'a [u64]>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
@@ -822,6 +826,7 @@ impl<'a> MoleculeCanvas<'a> {
             morph: None,
             model_generation: None,
             result_label: None,
+            bond_changes: vec![],
             outdated_models: vec![],
             joining: None,
             hidden_annotation: None,

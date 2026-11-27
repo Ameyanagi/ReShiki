@@ -116,6 +116,21 @@ impl App {
             return None;
         }
         let collapsed = self.tab.xtb.palette.collapsed && !inspector;
+        if let Some(live) = self.xtb_palette_live_ts() {
+            let title = results::title(None, Some(&live.request.context.title));
+            let header = self.xtb_palette_header(title, vec![View::Path], View::Path, inspector);
+            return Some(if collapsed {
+                header
+            } else {
+                let chart = self.xtb_ts_live_path(live);
+                let body = if inspector {
+                    chart
+                } else {
+                    scrollable(chart).height(Length::Fill).into()
+                };
+                column![header, body].spacing(8).into()
+            });
+        }
         let shown = self.xtb_shown();
         let arrow = self.xtb_palette_arrow(shown.as_ref());
         let failed = self.xtb_palette_failure(arrow);
@@ -193,17 +208,22 @@ impl App {
                 Tone::Muted,
             ));
         }
-        let mut content =
-            column![text(results::headline(&shown.stored.result, shown.frame)).size(12)].spacing(4);
+        let mut content = column![].spacing(4);
+        if view != View::Path {
+            content =
+                content.push(text(results::headline(&shown.stored.result, shown.frame)).size(12));
+        }
         // The Conformers table lists every energy; its rows need the room.
-        if view != View::Conformers {
+        if !matches!(view, View::Conformers | View::Path) {
             content = content.extend(key_tiles(&shown, inspector, false));
         }
         // The semi-empirical caveat is about xTB, not imported results.
-        if matches!(
-            shown.stored.result.settings,
-            reshiki::qcdata::Settings::Xtb(_)
-        ) {
+        if view != View::Path
+            && matches!(
+                shown.stored.result.settings,
+                reshiki::qcdata::Settings::Xtb(_)
+            )
+        {
             content = content.push(line(results::LIMITATIONS, Tone::Muted));
         }
         if shown.stale {
@@ -219,7 +239,7 @@ impl App {
             View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Path => self.xtb_ts_path(&shown, inspector),
-            View::Log => log(&shown, &shown.method()),
+            View::Log => log(&shown, &shown.method(), self.appearance.energy_unit),
         };
         content = content.push(container(body).padding([6, 0]));
         let middle: Element<'_, Message> = if inspector {
@@ -697,6 +717,7 @@ impl App {
                     text::Wrapping::default(),
                 ));
             }
+            View::Path if !inspector => actions = actions.push(self.xtb_profile_controls(shown)),
             View::Path => {}
             View::Log => {
                 actions = actions.push(
@@ -735,7 +756,11 @@ impl App {
         let main = column![
             container(actions.wrap().vertical_spacing(4))
                 .width(Length::Fill)
-                .center_y(2. * FOOTER_LINE_HEIGHT + 4.)
+                .center_y(if view == View::Path {
+                    FOOTER_LINE_HEIGHT
+                } else {
+                    2. * FOOTER_LINE_HEIGHT + 4.
+                })
                 .clip(true),
             container(sizes)
                 .width(Length::Fill)
@@ -922,13 +947,18 @@ fn tables<'a>(shown: &Shown<'a>) -> Option<Element<'a, Message>> {
     Some(both.into())
 }
 
-fn log<'a>(shown: &Shown<'a>, method: &str) -> Element<'a, Message> {
+fn log<'a>(
+    shown: &Shown<'a>,
+    method: &str,
+    unit: super::super::EnergyUnit,
+) -> Element<'a, Message> {
     let log = results::log_with_ts(
         &shown.stored.result,
         shown.frame,
         shown.info,
         method,
         shown.ts,
+        unit,
     );
     text(log)
         .size(11)

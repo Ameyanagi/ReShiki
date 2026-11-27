@@ -22,10 +22,7 @@ pub use optimizer::{
     Status, Step, Trust, Update, optimize,
 };
 
-/// Hartree in kcal/mol (CODATA 2022 hartree, thermochemical calorie).
-pub const KCAL_PER_HARTREE: f64 = 627.509_474_063;
-/// Ångströms per bohr, as used by the saved scientific data.
-pub use reshiki_qcdata::ANGSTROM_PER_BOHR;
+pub use reshiki_qcdata::{ANGSTROM_PER_BOHR, KCAL_PER_HARTREE};
 
 /// Accuracy a potential should use for one evaluation.
 ///

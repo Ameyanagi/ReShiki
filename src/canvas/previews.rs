@@ -1,7 +1,7 @@
 //! Thumbnail, inspector, palette and proposal canvas programs; they render through the same scene path as the paper.
 
 use super::render::{draw_document, draw_document_with_minimum_stroke};
-use super::{Camera, Document, World, layered};
+use super::{BondChangeKind, BondChangeMark, Camera, Document, World, draw_bond_changes, layered};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, mouse};
 
@@ -9,6 +9,46 @@ use iced::{Color, Event, Point, Rectangle, Renderer, Theme, mouse};
 /// With a focus, it frames that part of the document, such as the reaction
 /// under review, and clips the rest.
 pub struct TemplateThumbnail<'a>(pub &'a Document, pub Option<(World, World)>);
+
+fn thumbnail_camera(
+    document: &Document,
+    focus: Option<(World, World)>,
+    bounds: Rectangle,
+    margin: f32,
+) -> Camera {
+    let (lo, hi) = focus.unwrap_or_else(|| {
+        reshiki::scene::selection_bounds(document, &document.all_ids())
+            .unwrap_or_else(|| document.bounds())
+    });
+    let width = bounds.width - (bounds.width * 0.16).min(24.0).max(2. * margin);
+    let height = bounds.height - (bounds.height * 0.14).min(20.0).max(2. * margin);
+    Camera {
+        center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+        zoom: (width.max(1.) / (hi.x - lo.x).max(60.0))
+            .min(height.max(1.) / (hi.y - lo.y).max(50.0))
+            .min(0.85),
+    }
+}
+
+impl TemplateThumbnail<'_> {
+    fn draw_with_margin(
+        &self,
+        state: &PreviewState,
+        renderer: &Renderer,
+        bounds: Rectangle,
+        margin: f32,
+    ) -> Vec<Geometry> {
+        state.draw(self.0, self.1, bounds.size(), margin, || {
+            let mut frame =
+                layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
+            frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+            let camera = thumbnail_camera(self.0, self.1, bounds, margin);
+            draw_document(&mut frame, self.0, camera, bounds);
+            frame.finish()
+        })
+    }
+}
+
 impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
     type State = PreviewState;
     fn draw(
@@ -19,27 +59,100 @@ impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        state.draw(self.0, self.1, bounds.size(), || {
-            let mut frame =
-                layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
-            frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
-            let (lo, hi) = self.1.unwrap_or_else(|| {
-                reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
-                    .unwrap_or_else(|| self.0.bounds())
-            });
-            let camera = Camera {
-                center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
-                zoom: ((bounds.width - (bounds.width * 0.16).min(24.0)) / (hi.x - lo.x).max(60.0))
-                    .min(
-                        (bounds.height - (bounds.height * 0.14).min(20.0))
-                            / (hi.y - lo.y).max(50.0),
-                    )
-                    .min(0.85),
-            };
-            draw_document(&mut frame, self.0, camera, bounds);
-            frame.finish()
-        })
+        self.draw_with_margin(state, renderer, bounds, 0.)
     }
+}
+
+/// Temporary reaction changes over the same cached drawing as other thumbnails.
+/// Marks are drawn separately so changing a proposal cannot reuse old marks.
+pub(crate) struct BondChangeThumbnail<'a> {
+    pub document: &'a Document,
+    pub focus: Option<(World, World)>,
+    pub marks: &'a [BondChangeMark],
+}
+
+impl BondChangeThumbnail<'_> {
+    fn margin(&self) -> f32 {
+        if self
+            .marks
+            .iter()
+            .any(|mark| mark.kind == BondChangeKind::Form)
+        {
+            BondChangeMark::FORMING_ARC_MARGIN
+        } else {
+            0.
+        }
+    }
+}
+
+impl<Message> canvas::Program<Message> for BondChangeThumbnail<'_> {
+    type State = PreviewState;
+
+    fn draw(
+        &self,
+        state: &Self::State,
+        renderer: &Renderer,
+        _: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let margin = self.margin();
+        let mut geometry = TemplateThumbnail(self.document, self.focus)
+            .draw_with_margin(state, renderer, bounds, margin);
+        let mut frame =
+            layered::Frame::new(renderer, bounds.size()).with_canvas(self.document.canvas_theme);
+        draw_bond_changes(
+            &mut frame,
+            self.document,
+            self.marks,
+            thumbnail_camera(self.document, self.focus, bounds, margin),
+            bounds,
+        );
+        geometry.extend(frame.finish());
+        geometry
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn tall_u_shaped_thumbnail_keeps_the_forming_arc_inside() {
+    let mut doc = Document::default();
+    doc.atom_labels.maps = true;
+    let positions = [
+        (-210., 0.),
+        (-200., 140.),
+        (-180., 330.),
+        (180., 330.),
+        (200., 140.),
+        (210., 0.),
+    ];
+    let atoms = positions.map(|(x, y)| doc.add_atom("C", World::new(x, y)));
+    for (index, (&id, (x, _))) in atoms.iter().zip(positions).enumerate() {
+        let atom = doc.atom_mut(id).unwrap();
+        atom.map_num = index as u32 + 1;
+        atom.display.mapping.offset = Some(World::new(if x < 0. { 12. } else { -12. }, 20.));
+    }
+    for (pair, order) in atoms.windows(2).zip([2, 1, 2, 1, 2]) {
+        doc.add_bond(pair[0], pair[1], order, "plain");
+    }
+    let [a, b] = [atoms[0], atoms[5]];
+    let thumbnail = BondChangeThumbnail {
+        document: &doc,
+        focus: None,
+        marks: &[BondChangeMark {
+            kind: BondChangeKind::Form,
+            atoms: [a, b],
+            highlighted: false,
+        }],
+    };
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(300., 160.));
+    let arc_top = |margin| {
+        let camera = thumbnail_camera(&doc, thumbnail.focus, bounds, margin);
+        let [from, to] = [a, b].map(|id| camera.screen(doc.atom(id).unwrap().position, bounds));
+        from.y - BondChangeMark::forming_arc_height(from.distance(to))
+    };
+    assert!(arc_top(0.) < 0.);
+    assert!(arc_top(thumbnail.margin()) >= 1.);
 }
 
 /// Owns a temporary diagram for a tool inspector preview.
@@ -337,6 +450,7 @@ struct PreviewCache {
     document: Document,
     focus: Option<(World, World)>,
     size: iced::Size,
+    margin: f32,
     fonts: usize,
     geometry: Vec<<Geometry as iced::advanced::graphics::cache::Cached>::Cache>,
 }
@@ -346,6 +460,7 @@ impl PreviewState {
         document: &Document,
         focus: Option<(World, World)>,
         size: iced::Size,
+        margin: f32,
         build: impl FnOnce() -> Vec<Geometry>,
     ) -> Vec<Geometry> {
         use iced::advanced::graphics::cache::Cached;
@@ -353,6 +468,7 @@ impl PreviewState {
         let mut cache = self.0.borrow_mut();
         if let Some(cached) = cache.as_ref()
             && cached.size == size
+            && cached.margin == margin
             && cached.fonts == fonts
             && cached.focus == focus
             && &cached.document == document
@@ -370,6 +486,7 @@ impl PreviewState {
             document: document.clone(),
             focus,
             size,
+            margin,
             fonts,
             geometry,
         });
@@ -394,7 +511,7 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        state.draw(self.0, None, bounds.size(), || {
+        state.draw(self.0, None, bounds.size(), 0., || {
             let mut frame =
                 layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
             frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);

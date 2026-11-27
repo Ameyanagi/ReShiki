@@ -435,6 +435,14 @@ fn atom_limit_includes_implicit_hydrogens() {
     let right = molecule(&mut doc, &atoms, &bonds);
     let arrow = assign(&mut doc, &[&left], &[&right]);
     assert_eq!(plan(&doc, arrow), Err(TsPlanError::TooLarge { atoms: 122 }));
+    let mut unmapped = doc.clone();
+    for atom in &mut unmapped.atoms {
+        atom.map_num = 0;
+    }
+    assert_eq!(
+        plan_for_review(&unmapped, arrow),
+        Err(TsPlanError::TooLarge { atoms: 122 })
+    );
     doc.add_bond(left[&1], left[&2], 2, "plain");
     doc.add_bond(right[&1], right[&2], 2, "plain");
     assert_eq!(plan(&doc, arrow), Err(TsPlanError::NoChange));

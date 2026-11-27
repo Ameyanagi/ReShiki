@@ -265,6 +265,7 @@ pub enum Message {
     AtomSinglet(bool),
     ToggleInspector,
     Inspector(InspectorTab),
+    ReactionBondHover(u64, canvas::BondChangeKind, [u32; 2], bool),
     Imports(import::Action),
     Naming(naming::Action),
     InsertInput,
@@ -1177,6 +1178,10 @@ impl App {
         self.update(message)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::ReactionBondHover(arrow, kind, pair, entered) = message {
+            self.xtb_hover_bond((arrow, kind, pair), entered);
+            return Task::none();
+        }
         // Modifier releases must reach buttons even when a widget or modal captures input.
         if let Message::ModifiersChanged(modifiers) = message {
             self.shift_held = modifiers.shift();

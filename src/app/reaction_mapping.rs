@@ -72,6 +72,7 @@ impl Preview {
         preview
     }
 
+    #[cfg(test)]
     pub(super) fn for_reaction(mut doc: Document, arrow: u64) -> Self {
         for atom in &mut doc.atoms {
             if atom.map_num != 0 {
@@ -80,6 +81,22 @@ impl Preview {
         }
         let mut preview = Self::empty((0, 0), &doc, true);
         preview.set_drawing(Some(doc), arrow);
+        preview
+    }
+
+    /// One reaction side, detached from the full scheme for a map-choice card.
+    pub(super) fn for_atoms(doc: &Document, atoms: &[u64]) -> Self {
+        let mut document = reshiki::editing::selection(doc, atoms);
+        document.atom_labels.maps = true;
+        for atom in &mut document.atoms {
+            atom.display.mapping.show = Some(true);
+            if atom.map_num != 0 {
+                atom.display.mapping.style.color = map_label_color(atom.map_num);
+            }
+        }
+        let mut preview = Self::empty((0, 0), &document, true);
+        preview.focus = reshiki::scene::selection_bounds(&document, &document.all_ids());
+        preview.document = Some(document);
         preview
     }
 
@@ -116,6 +133,23 @@ impl Preview {
                 self.document.as_ref()?,
                 self.focus,
             ))
+            .width(Length::Fill)
+            .height(height)
+            .into(),
+        )
+    }
+
+    pub(super) fn marked_thumbnail<'a>(
+        &'a self,
+        marks: &'a [crate::canvas::BondChangeMark],
+        height: u32,
+    ) -> Option<Element<'a, Message>> {
+        Some(
+            crate::canvas::layered::canvas(crate::canvas::BondChangeThumbnail {
+                document: self.document.as_ref()?,
+                focus: self.focus,
+                marks,
+            })
             .width(Length::Fill)
             .height(height)
             .into(),
