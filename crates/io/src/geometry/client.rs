@@ -188,6 +188,7 @@ impl Client {
         let mut remaining = starts;
         let mut result = Starts {
             conformers: Vec::new(),
+            field,
             batches: 0,
             stopped: None,
         };
@@ -223,6 +224,7 @@ impl Client {
                     Some("Temporary hydrogen identities changed between batches".into());
                 break;
             }
+            result.field = batch.force_field;
             result.conformers.extend(batch.ensemble);
             result.batches += 1;
             remaining -= operation.conformers;

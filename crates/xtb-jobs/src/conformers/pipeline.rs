@@ -409,7 +409,7 @@ fn sample(
     on_event(Phase::Starts);
     let minimizer = search.config.minimizer;
     let embedded = minimizer.xtb().is_some();
-    let (field, effective) = sampling_minimizer(minimizer, search.prepared.mmff_available());
+    let (field, mut effective) = sampling_minimizer(minimizer, search.prepared.mmff_available());
     if effective != minimizer {
         notes.push("MMFF cannot type this molecule (it has a metal); UFF minimized the starts. GFN-FF is recommended for metal complexes.".into());
     }
@@ -431,6 +431,15 @@ fn sample(
             |done| on_event(Phase::Sampled { done, total }),
         ),
     )?;
+    // The worker falls back to UFF when MMFF has no parameters (boron, O2, CO):
+    // name the field that actually minimized the starts.
+    if sampled.field != field && effective == minimizer && !embedded {
+        effective = Minimizer::Uff;
+        notes.push(format!(
+            "MMFF has no parameters for this molecule; {} minimized the starts.",
+            sampled.field.name()
+        ));
+    }
     let count = sampled.conformers.len();
     if let Some(reason) = sampled.stopped {
         notes.push(format!(

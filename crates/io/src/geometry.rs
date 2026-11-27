@@ -239,6 +239,9 @@ pub struct Optimized {
 #[derive(Clone, Debug)]
 pub struct Starts {
     pub conformers: Vec<EnsembleConformer>,
+    /// The field the worker minimized with: the requested one, or UFF when
+    /// the requested field has no parameters for this molecule.
+    pub field: ForceField,
     /// Completed worker batches.
     pub batches: u32,
     /// Why sampling stopped before every requested batch ran: the deadline or a

@@ -158,11 +158,24 @@ impl Request {
         let threads = reshiki_xtb_jobs::threads(self.threads.unwrap_or_default());
         let job = self.settings.job(&geometry, uhf, method, threads);
 
-        let method_line = config.describe(method);
         let force_field = config.minimizer.xtb().is_none();
-        let search =
-            Search::from_launch(&doc, &ids, &launch, config, job, client, Some(executable))?;
+        let search = Search::from_launch(
+            &doc,
+            &ids,
+            &launch,
+            config.clone(),
+            job,
+            client,
+            Some(executable),
+        )?;
         let found = conformers::search_conformers(search, cancel, |_| {})?;
+        // Name the minimizer that actually ran, as the app does: MMFF falls
+        // back to UFF for molecules it cannot type.
+        let method_line = conformers::Config {
+            minimizer: found.minimizer,
+            ..config
+        }
+        .describe(method);
         let path = found.trajectory(&launch.frame)?;
         let (_, ranked) =
             conformers::ranked_trajectory(Some(&path)).map_err(SearchError::Failed)?;
