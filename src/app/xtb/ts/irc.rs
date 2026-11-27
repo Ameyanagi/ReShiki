@@ -99,6 +99,13 @@ impl App {
         let doc = shown.atoms.iter().flatten().next().and_then(|&atom| {
             let mut doc = super::super::preview(&self.tab.doc, atom, &frame.positions_angstrom)?;
             super::preview_endpoint_image(&mut doc, shown.atoms, shown.input, &frame).ok()?;
+            if let Some(arrow) = shown.arrow {
+                let index = doc
+                    .models
+                    .iter()
+                    .position(|m| m.linked_atoms.contains(&atom))?;
+                super::show_path_model(&self.tab.doc, &mut doc, index, arrow);
+            }
             Some(doc)
         });
         let Some(doc) = doc else {
