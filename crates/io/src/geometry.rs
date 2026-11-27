@@ -346,7 +346,13 @@ impl Prepared {
             let state = &mut molecule.state;
             for (index, (atom, drawn)) in state.graph.atoms.iter_mut().zip(&part.atoms).enumerate()
             {
-                if drawn.radical_electrons == 0 || atom.radical_electrons == 0 {
+                // A metal or noble-gas radical has no hydride parent worth
+                // building; it stays as drawn, so the shape rule sees it.
+                if drawn.radical_electrons == 0
+                    || atom.radical_electrons == 0
+                    || reshiki_geometry::is_metal_atomic_number(u32::from(atom.atomic_number))
+                    || matches!(atom.atomic_number, 2 | 10 | 18 | 36 | 54 | 86 | 118)
+                {
                     continue;
                 }
                 let hydrogens = u32::from(atom.explicit_hydrogens)
@@ -764,19 +770,13 @@ impl Prepared {
     /// fallback gets wrong (3- or 4-coordinate f block, bonded noble gas),
     /// naming the atom. Only new geometry: existing coordinates stay usable.
     pub fn check_generation(&self) -> Result<(), Error> {
-        let mut request = self.native_request(
+        let request = self.native_request(
             ForceField::default(),
             reshiki_geometry::Operation::Generate,
             None,
             &[],
             500,
         )?;
-        // The shape is the drawn one: radical caps are not ligands.
-        for (atom, id) in request.atoms.iter_mut().zip(&self.ids) {
-            if let Some(radical) = self.radicals.iter().find(|r| r.atom == *id) {
-                atom.explicit_h = atom.explicit_h.saturating_sub(u32::from(radical.electrons));
-            }
-        }
         // UFF, the fallback for everything MMFF cannot type, ends at Lr.
         let refusal = request
             .atoms

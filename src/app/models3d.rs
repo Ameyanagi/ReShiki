@@ -309,15 +309,19 @@ impl App {
                 atom.explicit_h = u32::from(capped.explicit_hydrogens);
             }
         }
-        let Ok(identity) = reshiki::naming::selected_identity(&parent, prepared.ids()) else {
-            return Task::none();
-        };
+        let atoms = prepared.ids().to_vec();
         let model = (self.tab.file_epoch, self.tab.model_serial);
         Task::future(async move {
+            let identity = reshiki::task::spawn_blocking(move || {
+                reshiki::naming::selected_identity(&parent, &atoms)
+            })
+            .await
+            .ok()?
+            .ok()?;
             reshiki::naming::generate_name(&identity, reshiki::naming::Cancel::default())
                 .await
-                .ok()
-                .and_then(|record| record.systematic_name)
+                .ok()?
+                .systematic_name
         })
         .and_then(move |name| Task::done(Message::Models3d(Action::ParentNamed(model, name))))
     }

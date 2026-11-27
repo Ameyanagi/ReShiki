@@ -448,7 +448,7 @@ fn atom_range_and_parameter_errors_are_typed() {
                 if label == "O3"
         ));
     }
-    // Radical caps are not ligands: a radical CeF4 is still 4-coordinate.
+    // A metal radical is not capped, so a radical CeF4 is still 4-coordinate.
     let mut source = Document::default();
     let cerium = source.add_atom("Ce", Point::default());
     for i in 0..4 {
@@ -458,6 +458,7 @@ fn atom_range_and_parameter_errors_are_typed() {
     }
     source.atom_mut(cerium).unwrap().radical_electrons = 1;
     let prepared = Prepared::starting(&source, &[], Mode::Relaxed).unwrap();
+    assert!(prepared.radicals().is_empty());
     assert!(matches!(
         prepared.check_generation(),
         Err(Error::Atom { atom, problem: AtomProblem::WrongShape { bonds: 4 }, .. })
