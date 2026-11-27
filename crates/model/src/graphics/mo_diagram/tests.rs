@@ -417,7 +417,7 @@ fn shared_rows_hit_and_relink_by_column() {
 }
 
 #[test]
-fn both_spin_picture_lanes_and_connectors_clear_the_other_column() {
+fn both_spin_connectors_clear_other_columns_and_shared_row_labels() {
     use crate::atom_labels::segment_hits_rect;
 
     let energies = [-12., -10., -10., -8., -5., -3.];
@@ -454,8 +454,15 @@ fn both_spin_picture_lanes_and_connectors_clear_the_other_column() {
         let bounds = |a: &Annotation| layout.annotation_x_bounds(&g, a);
         let side = layout.picture_world_side(&g);
         for slot in &layout.pictures {
-            let column = mo.pictures[slot.index].column;
+            let picture = &mo.pictures[slot.index];
+            let column = picture.column;
             let own = &layout.columns[usize::from(column)];
+            let orbital = (column, picture.figure.orbital.index as usize);
+            let row = own
+                .groups
+                .iter()
+                .find(|group| group.levels.contains(&orbital.1))
+                .unwrap();
             let lane_left = own.picture_x - layout.picture_side / 2.;
             let lane_right = own.picture_x + layout.picture_side / 2.;
             assert!(layout.labels.iter().zip(&annotations).all(|(label, a)| {
@@ -467,36 +474,71 @@ fn both_spin_picture_lanes_and_connectors_clear_the_other_column() {
             if column == 0 {
                 assert!(lane_right < layout.columns[1].left);
             }
-            let [from, to] = layout
+            let connector = layout
                 .picture_connector(&g, slot, &annotations, side)
                 .unwrap();
-            let (start, end) = (local(from), local(to));
+            let points: Vec<_> = connector
+                .iter()
+                .flat_map(PathCommand::iter_points)
+                .collect();
+            let (start, end) = (local(points[0]), local(*points.last().unwrap()));
             assert!(start.x > own.left && start.x < lane_left);
             assert!(end.x >= lane_left - 1e-3 && end.x <= own.picture_x);
             assert!((start.y - slot.connector.y).abs() < 1e-3);
             assert!((end.y - slot.centre.y).abs() < 1e-3);
-            if let Some(label) = slot.label {
-                assert!((start.x - bounds(&annotations[label]).1 - em * 0.63).abs() < 1e-3);
+            if let Some((i, label)) = layout
+                .labels
+                .iter()
+                .enumerate()
+                .find(|(_, label)| label.orbital == Some(orbital))
+            {
+                let right = bounds(&annotations[i]).1;
+                if let Some((j, _)) =
+                    layout
+                        .labels
+                        .iter()
+                        .enumerate()
+                        .skip(i + 1)
+                        .find(|(_, next)| {
+                            next.left.y == label.left.y
+                                && next.orbital.is_some_and(|(c, _)| c == column)
+                        })
+                {
+                    assert!(start.x > right && start.x < bounds(&annotations[j]).0);
+                    assert!(
+                        points.len() > 2,
+                        "the connector must go around the next label"
+                    );
+                } else {
+                    assert!((start.x - right - em * 0.63).abs() < 1e-3);
+                }
             }
-            for other in layout.columns.iter().filter(|c| c.index != column) {
-                for group in &other.groups {
-                    for (_, left, right) in other.bars(group, em) {
-                        assert!(
-                            !segment_hits_rect(
-                                start,
-                                end,
-                                Point::new(left, group.y),
-                                Point::new(right, group.y)
-                            ),
-                            "spin {column} connector crosses spin {} bar with transformed={transformed}",
-                            other.index
-                        );
+            for segment in points.windows(2) {
+                let (from, to) = (segment[0], segment[1]);
+                for other in layout.columns.iter().filter(|c| c.index != column) {
+                    for group in &other.groups {
+                        for (_, left, right) in other.bars(group, em) {
+                            assert!(
+                                !segment_hits_rect(
+                                    local(from),
+                                    local(to),
+                                    Point::new(left, group.y),
+                                    Point::new(right, group.y)
+                                ),
+                                "spin {column} connector crosses spin {} bar with transformed={transformed}",
+                                other.index
+                            );
+                        }
                     }
                 }
                 for (label, annotation) in
                     layout.labels.iter().zip(&annotations).filter(|(label, _)| {
-                        label.orbital.is_some_and(|(c, _)| c == other.index)
-                            || label.text == other.column.label
+                        let check_column = |c| c != column || row.labels.len() > 1;
+                        label.orbital.is_some_and(|(c, _)| check_column(c))
+                            || layout
+                                .columns
+                                .iter()
+                                .any(|c| label.text == c.column.label && check_column(c.index))
                     })
                 {
                     let centre = annotation.centre();

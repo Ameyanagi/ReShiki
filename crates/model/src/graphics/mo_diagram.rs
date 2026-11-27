@@ -254,13 +254,8 @@ impl MoDiagram {
                 {
                     continue;
                 }
-                if let Some([start, left]) = layout.picture_connector(g, slot, &labels, side) {
-                    parts.push(line_part(
-                        g,
-                        vec![PathCommand::Move(start), PathCommand::Line(left)],
-                        LinePattern::Dashed,
-                        0.65,
-                    ));
+                if let Some(commands) = layout.picture_connector(g, slot, &labels, side) {
+                    parts.push(line_part(g, commands, LinePattern::Dashed, 0.65));
                 }
             }
         }
@@ -373,10 +368,11 @@ struct Label {
 
 struct PictureSlot {
     index: usize,
+    orbital: (u8, usize),
     centre: Point,
     connector: Point,
     label_width: f32,
-    label: Option<usize>,
+    row_labels: Range<usize>,
 }
 
 struct Layout<'a> {
@@ -564,9 +560,9 @@ impl<'a> Layout<'a> {
                 let right = c.bars(g, em).last().map_or(c.left, |(_, _, right)| right);
                 let label_x = right + em * 0.35;
                 let mut label_end = label_x;
-                let mut last_label = None;
+                let mut first_label = None;
                 for (index, text) in &g.labels {
-                    last_label = Some(label(
+                    first_label.get_or_insert(label(
                         text.clone(),
                         label_end,
                         g.y,
@@ -575,15 +571,19 @@ impl<'a> Layout<'a> {
                     ));
                     label_end += width_of(text, em) + em * 0.35;
                 }
+                let row_labels = first_label
+                    .map(|first| first..first + g.labels.len())
+                    .unwrap_or_default();
                 for (index, p) in mo.pictures.iter().enumerate() {
-                    if p.column == c.index && g.levels.contains(&(p.figure.orbital.index as usize))
-                    {
+                    let orbital = p.figure.orbital.index as usize;
+                    if p.column == c.index && g.levels.contains(&orbital) {
                         pictures.push(PictureSlot {
                             index,
+                            orbital: (c.index, orbital),
                             centre: Point::new(c.picture_x, g.y),
                             connector: Point::new(label_end + em * 0.28, g.y),
                             label_width: label_end - label_x,
-                            label: last_label,
+                            row_labels: row_labels.clone(),
                         });
                     }
                 }
@@ -693,7 +693,8 @@ impl<'a> Layout<'a> {
         slot: &PictureSlot,
         labels: &[Annotation],
         side: f32,
-    ) -> Option<[Point; 2]> {
+    ) -> Option<Vec<PathCommand>> {
+        let mut detour = None;
         let start = if self.closed {
             let angle = text_angle(g.axis_x, g.axis_y).to_radians();
             let (sin, cos) = angle.sin_cos();
@@ -701,13 +702,44 @@ impl<'a> Layout<'a> {
             self.world(g, slot.connector)
                 .offset(cos * extension, sin * extension)
         } else {
-            let x = slot
-                .label
-                .and_then(|index| labels.get(index))
-                .map_or(slot.connector.x, |a| {
-                    self.annotation_x_bounds(g, a).1 + self.font.size() * 0.63
-                });
-            self.world(g, Point::new(x, slot.connector.y))
+            let mut start = slot.connector;
+            let row = self.labels.get(slot.row_labels.clone())?;
+            let annotations = labels.get(slot.row_labels.clone())?;
+            let label = row
+                .iter()
+                .position(|label| label.orbital == Some(slot.orbital))
+                .or_else(|| row.len().checked_sub(1));
+            if let Some(i) = label {
+                let em = self.font.size();
+                let (_, right) = self.annotation_x_bounds(g, annotations.get(i)?);
+                start.x = right + em * 0.63;
+                if let Some(next) = annotations.get(i + 1) {
+                    // Step into the gap between the two labels, then go around
+                    // the following label in diagram coordinates.
+                    let (left, _) = self.annotation_x_bounds(g, next);
+                    start.x = (right + left) / 2.;
+                    let det = g.frame_determinant();
+                    let (top, bottom) = next
+                        .corners()
+                        .into_iter()
+                        .map(|p| g.world_to_local(p, det).y * self.height)
+                        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), y| {
+                            (lo.min(y), hi.max(y))
+                        });
+                    let above = top - em * 0.2;
+                    let below = bottom + em * 0.2;
+                    let y = if above >= 0.
+                        && (below > self.height
+                            || (above - slot.centre.y).abs() < (below - slot.centre.y).abs())
+                    {
+                        above
+                    } else {
+                        below
+                    };
+                    detour = Some([Point::new(start.x, y), Point::new(slot.connector.x, y)]);
+                }
+            }
+            self.world(g, start)
         };
         let centre = self.world(g, slot.centre);
         let half = side / 2.;
@@ -721,7 +753,14 @@ impl<'a> Layout<'a> {
             let det = g.frame_determinant();
             g.world_to_local(left, det).x > g.world_to_local(start, det).x
         };
-        forward.then_some([start, left])
+        forward.then(|| {
+            let mut commands = vec![PathCommand::Move(start)];
+            if let Some(bends) = detour {
+                commands.extend(bends.map(|p| PathCommand::Line(self.world(g, p))));
+            }
+            commands.push(PathCommand::Line(left));
+            commands
+        })
     }
 
     fn ink(&self, g: &Graphic) -> (Vec<Part>, Vec<Annotation>) {

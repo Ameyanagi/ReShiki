@@ -700,20 +700,121 @@ fn turning_caps_depth_groups_and_tones() {
 
 #[test]
 fn finishing_a_turn_restores_the_same_surface_primitives() {
-    let mut doc = tilted(benzene(), 55.);
-    let spec = "pi,look=shaded,opacity=50";
-    let rotation = doc.models[0].rotation;
-    let before = groups(&doc, spec);
-    assert!(!before.is_empty());
+    use super::figures::{energy_result, lock_registry, place};
+    use crate::models3d::surface::orbital::{OrbitalField, orbital_meshes};
+    use crate::models3d::{ModelPaint, float};
+    use reshiki_qcdata::{BasisSet, Shell};
 
-    doc.models[0].turning = true;
-    doc.models[0].rotation = crate::models3d::turn(rotation, 7., 2., false);
-    assert_ne!(groups(&doc, spec), before);
+    let _guard = lock_registry();
+    let render = |doc: &Document| {
+        let model = &doc.models[0];
+        View::new(doc, model)
+            .unwrap()
+            .live_surface(doc, model, &ModelPaint::new(doc, model))
+            .unwrap()
+    };
+    let surface_groups = |primitive| match primitive {
+        Some(Primitive::Surface { groups }) if !groups.is_empty() => groups,
+        _ => panic!("expected a visible orbital surface"),
+    };
+    let mut coarse_counts = Vec::new();
+    for (total, budget) in [(31, 4_000), (32, 1_600)] {
+        // A ten-carbon chain and 21 or 22 force-field hydrogens straddle the
+        // cutoff without either drawing reaching 32 heavy atoms.
+        let heavy: Vec<_> = (0..10)
+            .map(|i| ("C", [(i as f32 - 4.5) * 1.3, (i % 2) as f32 * 0.8, 0.]))
+            .collect();
+        let bonds: Vec<_> = (0..9).map(|i| (i, i + 1, 1)).collect();
+        let mut hydrogens: Vec<_> = heavy
+            .iter()
+            .enumerate()
+            .flat_map(|(i, &(_, [x, y, _]))| {
+                let y = y + if i % 2 == 0 { -0.6 } else { 0.6 };
+                [(i, [x, y, 0.8]), (i, [x, y, -0.8])]
+            })
+            .collect();
+        hydrogens.push((0, [heavy[0].1[0] - 1., heavy[0].1[1], 0.]));
+        if total == 32 {
+            hydrogens.push((9, [heavy[9].1[0] + 1., heavy[9].1[1], 0.]));
+        }
+        let mut doc = tilted(planar(&heavy, &bonds, &hydrogens), 55.);
+        let launch =
+            science::launch(&doc, doc.atoms[0].id, 0, if total == 31 { 2 } else { 1 }).unwrap();
+        let result = energy_result(&launch.frame);
+        place(&mut doc.models[0], &result);
+        let iso = 0.02;
+        let look = Look::new(Fill::Shaded, false, 50).unwrap();
+        let figure = doc.models[0].surface.as_mut().unwrap();
+        figure.iso = iso;
+        figure.look = look;
+        science::attach(&mut doc, &launch, vec![], result).unwrap();
+        let points: Vec<_> = doc.models[0]
+            .points(&doc)
+            .unwrap()
+            .into_iter()
+            .map(|(_, xyz)| xyz)
+            .collect();
+        assert_eq!(doc.models[0].atoms.len(), 10);
+        assert_eq!(doc.models[0].hydrogens.len(), total - 10);
+        assert_eq!(points.len(), total);
+        assert_eq!(turning_detail(points.len()), budget);
+        let basis = BasisSet {
+            shells: vec![Shell {
+                atom: 4,
+                l: 1,
+                pure: false,
+                exponents_per_bohr2: vec![0.15],
+                coefficients: vec![1.],
+            }],
+        };
+        let field =
+            OrbitalField::new(&basis, &[0., 0., 1.], &launch.frame.positions_angstrom).unwrap();
+        let meshes = Arc::new(orbital_meshes(&field, &points, iso).unwrap());
+        assert!(meshes[0].triangles.len() > meshes[1].triangles.len());
+        coarse_counts.push(meshes[1].triangles.len());
+        register(key(&doc, &doc.models[0]).unwrap(), Arc::clone(&meshes));
 
-    doc.models[0].rotation = rotation;
-    doc.models[0].turning = false;
-    LIVE.take();
-    assert_eq!(groups(&doc, spec), before);
+        let model = &doc.models[0];
+        let view = View::new(&doc, model).unwrap();
+        assert!(Arc::ptr_eq(view.orbital_meshes.as_ref().unwrap(), &meshes));
+        let paint = ModelPaint::new(&doc, model);
+        let inputs = SurfacePaint {
+            colors: phase_colors(model, paint.dark),
+            backdrop: float(paint.backdrop),
+            fade: paint.fade(view.reach, 0.),
+            painted: paint.line,
+            outline: paint.outline(paint.line),
+            line_width: paint.line,
+        };
+        // Build the resting baseline directly, without populating LIVE.
+        let (_, baseline) = prepare(&meshes, model, &view, look, &inputs);
+        let baseline = surface_groups(baseline);
+        LIVE.take();
+        LAST_TURN.set(None);
+        doc.models[0].turning = true;
+        let (_, preview) = render(&doc);
+        assert!(surface_groups(preview) != baseline, "{total} atoms");
+        let (held, _) = render(&doc);
+        let signature = view_signature(&doc, &doc.models[0]);
+        assert!(LIVE.with_borrow(|entries| entries.iter().any(|entry| {
+            entry.key.turning
+                && entry.key.signature == signature
+                && Arc::ptr_eq(&entry.meshes, &meshes)
+                && Rc::ptr_eq(&entry.prepared, &held)
+        })));
+        assert!(Rc::ptr_eq(&held, &render(&doc).0));
+        assert!(held.turning);
+        assert_eq!(held.triangles.as_ref(), meshes[1].triangles.as_slice());
+
+        // Release at the held angle. Keep its cached turning entry intact.
+        doc.models[0].turning = false;
+        let (released, primitive) = render(&doc);
+        assert!(!Rc::ptr_eq(&held, &released));
+        assert!(!released.turning);
+        assert_eq!(released.triangles.as_ref(), meshes[0].triangles.as_slice());
+        assert!(surface_groups(primitive) == baseline, "{total} atoms");
+    }
+    assert!(coarse_counts[1] < coarse_counts[0], "{coarse_counts:?}");
 }
 
 #[test]
