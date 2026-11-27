@@ -134,10 +134,21 @@ fn tetrahedral_candidate(
                 [a, b, c, d].map(|p| std::array::from_fn::<_, 3, _>(|i| p[i] - center[i]));
             let lengths = vectors.map(|v| v.iter().map(|x| x * x).sum::<f64>().sqrt());
             let scale = lengths.into_iter().fold(0.0_f64, f64::max);
-            // Reject flat ligand tetrahedra. Use the spatial stereo cutoff
-            // for nearly opposite ligands in seesaws and square planes.
+            // Reject flat ligand tetrahedra, and nearly opposite ligands
+            // (seesaws, square planes) with the spatial stereo cutoff. The
+            // centre must lie inside its ligand tetrahedron: at an inverted
+            // centre (a [1.1.1]propellane bridgehead) the winding read from
+            // the centre depends on the file's atom order.
             let total = signed_volume(a, [b, c, d]);
             total.abs() > 0.1 * scale.powi(3)
+                && [
+                    signed_volume(center, [b, c, d]),
+                    signed_volume(a, [center, c, d]),
+                    signed_volume(a, [b, center, d]),
+                    signed_volume(a, [b, c, center]),
+                ]
+                .iter()
+                .all(|part| part * total > 0.)
                 && !(0..4).any(|i| {
                     (0..i).any(|j| {
                         let dot: f64 = (0..3).map(|k| vectors[i][k] * vectors[j][k]).sum();
@@ -470,8 +481,10 @@ mod tests {
             bonds: (1..5).map(|i| single(0, i)).collect(),
         };
         let adjacent = adjacency(&graph);
+        // Shallow enough that no two ligands are nearly opposite: only the
+        // ligand volume rejects it.
         let near_planar = [
-            [0.0, 0.0, 0.05],
+            [0.0, 0.0, 0.40],
             [1.5, 0.0, 0.0],
             [0.0, 1.5, 0.0],
             [-1.5, 0.0, 0.0],

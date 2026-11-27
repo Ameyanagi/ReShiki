@@ -229,7 +229,7 @@ fn calculation_output_leaves_seesaw_sulfur_unwedged() {
 }
 
 #[test]
-fn calculation_output_wedges_inverted_propellane_bridgeheads() {
+fn calculation_output_leaves_inverted_propellane_bridgeheads_unwedged() {
     use reshiki::qcread::{self, Format};
 
     // C123C([12CH2]1)([13CH2]2)[14CH2]3 with explicit H, embedded with
@@ -258,14 +258,16 @@ fn calculation_output_wedges_inverted_propellane_bridgeheads() {
     );
     assert_eq!(doc.models[0].hydrogens.len(), 6);
     assert_eq!(doc.bonds.len(), 7);
+    // Their winding would depend on the file's atom order, so the import
+    // draws them without stereo rather than risk the wrong configuration.
     for bridgehead in &doc.atoms[..2] {
-        assert!(bridgehead.stereo.is_some());
-        assert!(
-            doc.bonds
-                .iter()
-                .any(|b| b.a == bridgehead.id && matches!(b.display.as_str(), "wedge" | "hash"))
-        );
+        assert!(bridgehead.stereo.is_none());
     }
+    assert!(
+        doc.bonds
+            .iter()
+            .all(|b| !matches!(b.display.as_str(), "wedge" | "hash"))
+    );
 }
 
 #[test]
