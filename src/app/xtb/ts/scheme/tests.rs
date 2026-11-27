@@ -92,3 +92,71 @@ fn command_palette_opens_the_scheme_with_its_balance_notes() {
     let _ = app.update(send(Action::Open));
     assert!(app.tab.xtb.scheme.as_ref().unwrap().options[0].barrier);
 }
+
+#[test]
+fn skipping_a_barrier_preserves_endpoint_choices_and_continues_the_map_queue() {
+    let (doc, plan) = Plan::example();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = doc.clone();
+    app.tab.selected = plan.arrows;
+    let _ = app.update(send(Action::Open));
+    let _ = app.update(send(Action::Toggle(0, Quantity::Energy)));
+    for quantity in [Quantity::FreeEnergy, Quantity::FreeBarrier] {
+        let _ = app.update(send(Action::Toggle(0, quantity)));
+    }
+    let _ = app.update(send(Action::Run));
+    let _ = app.update(Message::Xtb(xtb::Action::Ts(TsAction::ReviewSheet(
+        review::Action::SkipBarrier,
+    ))));
+    let state = app.tab.xtb.scheme.as_ref().unwrap();
+    assert_eq!(
+        state.options[0],
+        StepOptions {
+            reaction_energy: true,
+            barrier: false,
+            free_energy: true,
+            free_barrier: false,
+        }
+    );
+    assert!(state.options[1].barrier);
+    let reviews = state.reviews.as_ref().unwrap();
+    assert!(matches!(reviews.inputs[0], Ok(None)));
+    assert_eq!(reviews.active, None);
+    assert_eq!(reviews.pending.iter().copied().collect::<Vec<_>>(), [1]);
+    let next = reviews.id;
+    let _ = app.update(send(Action::Next(next)));
+    assert_eq!(
+        app.tab
+            .xtb
+            .scheme
+            .as_ref()
+            .unwrap()
+            .reviews
+            .as_ref()
+            .unwrap()
+            .active,
+        Some(1)
+    );
+    assert!(app.ts_review_open());
+    assert_eq!(app.tab.doc, doc);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn a_late_event_after_cancel_cannot_replace_status_after_a_chemistry_edit() {
+    let (doc, plan) = Plan::example();
+    let (mut app, _) = App::new();
+    app.tab.doc = doc;
+    app.tab.selected = plan.arrows;
+    app.tab.busy = false;
+    let _ = app.update(send(Action::Open));
+    let work = &mut app.tab.xtb.scheme.as_mut().unwrap().work;
+    let late = work.completion_event();
+    work.cancel();
+    app.tab.doc.atoms[0].charge += 1;
+    app.tab.revision += 1;
+    app.status = "The user's next action".into();
+    let _ = app.update(send(Action::Event(Box::new(late))));
+    assert_eq!(app.status, "The user's next action");
+}

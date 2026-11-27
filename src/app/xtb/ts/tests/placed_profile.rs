@@ -370,6 +370,7 @@ fn smooth_profile_uses_saved_frames_and_includes_each_state_in_the_movie() {
         from: 2,
         to: 4,
         transition: Some(3),
+        source: None,
         source_key: None,
         irc: vec![],
     });

@@ -170,7 +170,10 @@ pub struct EnergyProfileStep {
     pub from: usize,
     pub to: usize,
     pub transition: Option<usize>,
-    /// Saved chemistry key for a later arrow, resolved from the shared intermediate.
+    /// Source arrow for a later step. The first arrow belongs to the profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<u64>,
+    /// Chemistry fingerprint for the later arrow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_key: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -227,6 +230,19 @@ impl EnergyProfile {
     pub fn unlink(&mut self) {
         self.source = None;
         self.linked = false;
+        for step in &mut self.steps {
+            step.source = None;
+        }
+    }
+    pub(crate) fn source_ids(&self) -> impl Iterator<Item = u64> + '_ {
+        self.source
+            .into_iter()
+            .chain(self.steps.iter().filter_map(|s| s.source))
+    }
+    pub(crate) fn source_ids_mut(&mut self) -> impl Iterator<Item = &mut u64> {
+        self.source
+            .iter_mut()
+            .chain(self.steps.iter_mut().filter_map(|s| s.source.as_mut()))
     }
     /// Replace calculation data while retaining the user's molecular view and placement.
     /// The caller retains the Graphic frame and its line/text style.
@@ -339,6 +355,9 @@ impl EnergyProfile {
                 };
                 s.from != from
                     || s.to != to
+                    || s.source.is_some_and(|id| {
+                        id == 0 || id == u64::MAX || s.from == 0 || s.source_key.is_none()
+                    })
                     || s.source_key
                         .as_deref()
                         .is_some_and(|key| !valid_source_key(key))

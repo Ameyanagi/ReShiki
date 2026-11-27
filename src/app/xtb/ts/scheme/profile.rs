@@ -1,7 +1,8 @@
 //! The scheme's common-reference figure uses the same native graphic, model
 //! placement, link editing and undo path as a single-arrow energy profile.
+use super::plan::preview;
 use super::{
-    plan::{Plan, Term},
+    plan::{Level, Plan, Term, sum_energy},
     run::Report,
 };
 use crate::app::{
@@ -14,11 +15,10 @@ use reshiki::graphics::{
     EnergyProfileStep, EnergyUnit, Graphic, GraphicStyle,
 };
 use reshiki::qcdata::{CalcResult, Frame, KCAL_PER_HARTREE};
-use reshiki::reactions;
 use std::sync::Arc;
 
-/// Minima are accumulated reaction changes, so a later step may add or remove
-/// a co-reactant without comparing the absolute energies of different systems.
+/// Every level describes the same chemical inventory, including co-reactants
+/// waiting for later steps and coproducts retained from earlier steps.
 pub(super) fn build(
     doc: &Document,
     plan: &Plan,
@@ -26,26 +26,36 @@ pub(super) fn build(
     gibbs: bool,
     unit: EnergyUnit,
 ) -> Option<EnergyProfile> {
-    let deltas = profile_deltas(plan, report, gibbs)?;
+    let levels = profile_levels(plan, report, gibbs)?;
     let first = plan.steps.first()?;
-    let reaction = reactions::preview(doc, first.arrow).ok()?;
-    let mut reactant = profile::state(Kind::Reactant, plan.endpoint_label(0, false), 0.);
-    reactant.geometry = side_geometry(plan, report, &first.reactants);
+    let reaction = preview(doc, first.arrow).ok()?;
+    let (initial, _) = levels.first()?;
+    let mut reactant = profile::state(Kind::Reactant, initial.label(), 0.);
+    reactant.geometry = side_geometry(plan, report, initial.terms(), None);
     let mut states = vec![reactant];
     let mut steps = Vec::new();
-    let mut level = 0.;
     let mut rotation = None;
     for (index, step) in plan.steps.iter().enumerate() {
         let value = report.steps.get(index)?.as_ref()?;
-        if value.arrow != step.arrow {
-            return None;
-        }
-        let delta = *deltas.get(index)?;
+        let (inventory, level) = levels.get(index)?;
+        let (minimum, next_level) = levels.get(index + 1)?;
+        let (level, next_level) = (*level, *next_level);
+        let delta = next_level - level;
         let from = states.len() - 1;
         let barrier = if gibbs {
             value.free_barrier
         } else {
-            value.barrier
+            value.barrier.or_else(|| {
+                let result = value.ts.as_ref()?;
+                if result.status != reshiki::qcdata::Status::Converged {
+                    return None;
+                }
+                let saddle = result.energy_hartree?;
+                let reactant = sum_energy(step.reactants.iter().copied(), |index| {
+                    super::run::species_energy(report.species(index)?, false)
+                })?;
+                Some((saddle - reactant) * KCAL_PER_HARTREE)
+            })
         }
         .filter(|value| value.is_finite());
         let transition = barrier.map(|barrier| {
@@ -77,7 +87,9 @@ pub(super) fn build(
                     && let Some(([_, ts, _], view)) =
                         thumbnails::profile_geometry_from_frames(result, r, ts, p)
                 {
-                    states.get_mut(transition)?.geometry = Some(ts);
+                    let spectators = inventory.spectators(&step.reactants)?;
+                    states.get_mut(transition)?.geometry =
+                        side_geometry(plan, report, spectators.terms(), Some(ts));
                     rotation.get_or_insert(view);
                 }
             }
@@ -94,24 +106,20 @@ pub(super) fn build(
                 }
             }
         }
-        level += delta;
-        if !level.is_finite() {
-            return None;
-        }
         let kind = if index + 1 == plan.steps.len() {
             Kind::Product
         } else {
             Kind::Intermediate
         };
-        let minimum = minimum_terms(plan, index);
-        let mut state = profile::state(kind, plan.minimum_label(index), level);
-        state.geometry = side_geometry(plan, report, &minimum);
+        let mut state = profile::state(kind, minimum.label(), next_level);
+        state.geometry = side_geometry(plan, report, minimum.terms(), None);
         states.push(state);
-        let current = reactions::preview(doc, step.arrow).ok()?;
+        let current = preview(doc, step.arrow).ok()?;
         steps.push(EnergyProfileStep {
             from,
             to: states.len() - 1,
             transition,
+            source: (index > 0).then_some(step.arrow),
             source_key: (index > 0).then(|| profile::source_key(doc, &current)),
             irc: samples,
         });
@@ -136,77 +144,54 @@ pub(super) fn build(
     Some(figure)
 }
 
-fn side_energy(report: &Report, terms: &[Term], gibbs: bool) -> Option<f64> {
-    terms.iter().try_fold(0., |total, term| {
-        let value = report.species(term.species)?;
-        let energy = value.result.energy_hartree?;
-        let correction = if gibbs {
-            value.result.thermo.as_ref()?.gibbs_correction_hartree
-        } else {
-            0.
-        };
-        let total = total + f64::from(term.coefficient) * (energy + correction);
-        total.is_finite().then_some(total)
-    })
-}
-
-fn profile_deltas(plan: &Plan, report: &Report, gibbs: bool) -> Option<Vec<f64>> {
-    report.species.first()?;
-    let mut level = 0.;
-    plan.steps
-        .iter()
-        .enumerate()
-        .map(|(index, step)| {
-            let value = report.steps.get(index)?.as_ref()?;
-            if value.arrow != step.arrow {
-                return None;
-            }
-            let delta = if gibbs { value.gibbs } else { value.energy }
-                .or_else(|| {
-                    Some(
-                        (side_energy(report, &step.products, gibbs)?
-                            - side_energy(report, &step.reactants, gibbs)?)
-                            * KCAL_PER_HARTREE,
-                    )
-                })
-                .filter(|value| value.is_finite())?;
-            level += delta;
-            level.is_finite().then_some(delta)
+fn profile_levels(plan: &Plan, report: &Report, gibbs: bool) -> Option<Vec<(Level, f64)>> {
+    for (index, step) in plan.steps.iter().enumerate() {
+        if report.steps.get(index)?.as_ref()?.arrow != step.arrow {
+            return None;
+        }
+    }
+    let mut reference = None;
+    plan.levels()?
+        .into_iter()
+        .map(|level| {
+            let energy = sum_energy(level.terms(), |index| {
+                super::run::species_energy(report.species(index)?, gibbs)
+            })?;
+            let energy = (energy - *reference.get_or_insert(energy)) * KCAL_PER_HARTREE;
+            energy.is_finite().then_some((level, energy))
         })
         .collect()
 }
 
-fn default_gibbs(options: &[super::run::StepOptions]) -> bool {
+pub(super) fn overall(plan: &Plan, report: &Report, gibbs: bool) -> Option<f64> {
+    profile_levels(plan, report, gibbs)?
+        .last()
+        .map(|(_, energy)| *energy)
+}
+
+fn default_gibbs(
+    plan: &Plan,
+    report: &Report,
+    options: &[super::run::StepOptions],
+) -> Option<bool> {
     let mut active = options.iter().filter(|options| options.any()).peekable();
-    active.peek().is_some() && active.all(|options| !options.reaction_energy && !options.barrier)
+    let preferred = active.peek().is_some()
+        && active.all(|options| !options.reaction_energy && !options.barrier);
+    [preferred, !preferred]
+        .into_iter()
+        .find(|gibbs| profile_levels(plan, report, *gibbs).is_some())
 }
 
-/// The shared level also names any additional material entering the next
-/// arrow. Keeping the maximum drawn coefficient avoids naming a shared
-/// intermediate twice and retains coproducts from the preceding arrow.
-fn minimum_terms(plan: &Plan, index: usize) -> Vec<Term> {
-    let Some(step) = plan.steps.get(index) else {
-        return vec![];
-    };
-    let mut terms = step.products.clone();
-    if let Some(next) = plan.steps.get(index + 1) {
-        for term in &next.reactants {
-            if let Some(existing) = terms
-                .iter_mut()
-                .find(|existing| existing.species == term.species)
-            {
-                existing.coefficient = existing.coefficient.max(term.coefficient);
-            } else {
-                terms.push(*term);
-            }
-        }
-    }
-    terms
-}
-
-fn side_geometry(plan: &Plan, report: &Report, terms: &[Term]) -> Option<EnergyProfileGeometry> {
-    let mut frames: Vec<&Frame> = Vec::new();
-    let mut count = 0usize;
+fn side_geometry(
+    plan: &Plan,
+    report: &Report,
+    terms: impl IntoIterator<Item = Term>,
+    saddle: Option<EnergyProfileGeometry>,
+) -> Option<EnergyProfileGeometry> {
+    let mut frames: Vec<&Frame> = saddle.iter().map(|geometry| &geometry.frame).collect();
+    let mut count = saddle
+        .as_ref()
+        .map_or(0, |geometry| geometry.frame.numbers.len());
     for term in terms {
         plan.species.get(term.species)?;
         let frame = report.species(term.species)?.frame.as_ref();
@@ -216,17 +201,20 @@ fn side_geometry(plan: &Plan, report: &Report, terms: &[Term]) -> Option<EnergyP
         }
         frames.extend(std::iter::repeat_n(frame, term.coefficient as usize));
     }
-    thumbnails::profile_side(&frames)
-}
-
-fn same_scheme(a: &EnergyProfile, b: &EnergyProfile) -> bool {
-    a.source == b.source
-        && a.source_key == b.source_key
-        && a.steps.len() == b.steps.len()
-        && a.steps
-            .iter()
-            .zip(&b.steps)
-            .all(|(a, b)| a.source_key == b.source_key)
+    if frames.len() == 1 && saddle.is_some() {
+        return saddle;
+    }
+    let mut geometry = thumbnails::profile_side(&frames)?;
+    if let Some(saddle) = saddle {
+        let count = saddle.frame.numbers.len();
+        geometry
+            .bonds
+            .retain(|pair| pair.iter().all(|index| *index >= count));
+        geometry.bonds.extend(saddle.bonds);
+        geometry.forming = saddle.forming;
+        geometry.breaking = saddle.breaking;
+    }
+    Some(geometry)
 }
 
 impl App {
@@ -246,18 +234,17 @@ impl App {
 
     pub(in crate::app) fn xtb_scheme_profile(&self) -> Option<EnergyProfile> {
         let state = self.tab.xtb.scheme.as_ref()?;
-        self.xtb_scheme_profile_for(default_gibbs(&state.options))
+        self.xtb_scheme_profile_for(default_gibbs(
+            &state.plan,
+            &state.work.report,
+            &state.options,
+        )?)
     }
 
     pub(in crate::app) fn xtb_scheme_profile_available(&self) -> bool {
         self.xtb_scheme_current()
             && self.tab.xtb.scheme.as_ref().is_some_and(|state| {
-                profile_deltas(
-                    &state.plan,
-                    &state.work.report,
-                    default_gibbs(&state.options),
-                )
-                .is_some()
+                default_gibbs(&state.plan, &state.work.report, &state.options).is_some()
             })
     }
 
@@ -271,24 +258,7 @@ impl App {
         let Some(state) = &self.tab.xtb.scheme else {
             return vec![];
         };
-        if !self.xtb_scheme_current()
-            || figure.source != state.plan.arrows.first().copied()
-            || figure.steps.len() != state.plan.steps.len()
-            || !profile::source_current(&self.tab.doc, figure)
-            || figure
-                .steps
-                .iter()
-                .skip(1)
-                .zip(state.plan.steps.iter().skip(1))
-                .any(|(figure, step)| {
-                    reactions::preview(&self.tab.doc, step.arrow)
-                        .ok()
-                        .is_none_or(|reaction| {
-                            figure.source_key.as_deref()
-                                != Some(profile::source_key(&self.tab.doc, &reaction).as_str())
-                        })
-                })
-        {
+        if !self.xtb_scheme_current() || !state.follows(&self.tab.doc, figure) {
             return vec![];
         }
         state
@@ -318,21 +288,22 @@ impl App {
             self.error = true;
             return;
         }
+        let Some(state) = &self.tab.xtb.scheme else {
+            return;
+        };
         if let Some(id) = self.tab.doc.graphics.iter().find_map(|g| {
             let profile = g.energy_profile.as_deref()?;
-            (profile.linked && same_scheme(profile, &fresh)).then_some(g.id)
+            (profile.energy_kind == fresh.energy_kind && state.follows(&self.tab.doc, profile))
+                .then_some(g.id)
         }) {
             self.select_energy_profile(id);
             return;
         }
-        let Some(state) = &self.tab.xtb.scheme else {
-            return;
-        };
         let ids: Vec<_> = state
             .plan
             .arrows
             .iter()
-            .filter_map(|arrow| reactions::preview(&self.tab.doc, *arrow).ok())
+            .filter_map(|arrow| preview(&self.tab.doc, *arrow).ok())
             .flat_map(|reaction| reaction.ids())
             .collect();
         let (width, height) = fresh.natural_size(&self.tab.doc.drawing_style);
@@ -363,6 +334,9 @@ impl App {
     pub(in crate::app) fn xtb_refresh_scheme_profile(&mut self, before: Document) {
         let electronic = self.xtb_scheme_profile_for(false);
         let gibbs = self.xtb_scheme_profile_for(true);
+        let Some(state) = &self.tab.xtb.scheme else {
+            return;
+        };
         for profile in self
             .tab
             .doc
@@ -374,10 +348,9 @@ impl App {
                 EnergyProfileKind::Electronic => electronic.as_ref(),
                 EnergyProfileKind::Gibbs => gibbs.as_ref(),
             };
-            if profile.linked
-                && let Some(fresh) = fresh
+            if let Some(fresh) = fresh
                 && fresh.states.len() <= EnergyProfile::MAX_STATES
-                && same_scheme(profile, fresh)
+                && state.follows(&before, profile)
             {
                 profile.relink(fresh.clone());
             }

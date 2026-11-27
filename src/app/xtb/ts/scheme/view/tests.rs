@@ -77,18 +77,6 @@ fn result_rows_never_present_a_missing_barrier_as_zero() {
     assert_eq!(signed_energy(EnergyUnit::KcalPerMol, 0.), "0.0 kcal/mol");
 }
 
-#[test]
-fn overall_requires_every_step_and_keeps_reaction_direction() {
-    assert_eq!(
-        total_energies([Some(9.9), Some(-5.1), Some(-6.7)])
-            .map(|value| (value * 10.).round() / 10.),
-        Some(-1.9)
-    );
-    assert_eq!(total_energies([Some(9.9), None, Some(-6.7)]), None);
-    assert_eq!(total_energies([]), None);
-    assert_eq!(total_energies([Some(f64::INFINITY)]), None);
-}
-
 fn profile() -> EnergyProfile {
     let states = [
         ("1", EnergyProfileStateKind::Reactant, 0.),
@@ -108,6 +96,7 @@ fn profile() -> EnergyProfile {
             from: 0,
             to: 1,
             transition: Some(2),
+            source: None,
             source_key: None,
             irc: vec![],
         },
@@ -115,6 +104,7 @@ fn profile() -> EnergyProfile {
             from: 1,
             to: 3,
             transition: None,
+            source: None,
             source_key: None,
             irc: vec![],
         },
@@ -345,4 +335,20 @@ async fn atom_map_review_preparation_has_progress_and_cancel_in_the_card() {
             super::super::super::Action::Scheme(Action::Cancel)
         )))
     ));
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "xtb")))]
+#[test]
+fn predict_scheme_calculate_is_disabled_without_xtb_like_the_context_menu() {
+    let (doc, plan) = super::super::plan::Plan::example();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = doc;
+    app.tab.selected = plan.arrows;
+    assert!(
+        !app.context_commands()
+            .iter()
+            .any(|command| command.menu == "Calculate scheme…")
+    );
+    assert!(app.xtb_scheme_open_action().is_none());
 }

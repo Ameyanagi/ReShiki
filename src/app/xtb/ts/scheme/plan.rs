@@ -17,6 +17,8 @@ use chemistry::{Composition, molecule};
 pub(in crate::app::xtb::ts) struct Species {
     /// Representative drawing atoms. Empty for an added built-in molecule.
     pub atoms: Vec<u64>,
+    /// Every drawn copy remains eligible for existing calculation lookup.
+    pub instances: Vec<Vec<u64>>,
     /// Exactly one molecule, preserving its drawing stereo and eligible model.
     pub calculation: Document,
     pub label: String,
@@ -33,6 +35,86 @@ pub(in crate::app::xtb::ts) struct Species {
 pub(in crate::app::xtb::ts) struct Term {
     pub species: usize,
     pub coefficient: u32,
+}
+
+/// One complete chemical system at a minimum, retaining the labels of the
+/// drawn instances while sharing their molecular calculation identities.
+#[derive(Clone, Debug, Default)]
+pub(in crate::app::xtb::ts) struct Level {
+    entries: Vec<(Term, String)>,
+}
+
+impl Level {
+    pub fn terms(&self) -> impl Iterator<Item = Term> + '_ {
+        self.entries.iter().map(|(term, _)| *term)
+    }
+
+    pub fn label(&self) -> String {
+        self.entries
+            .iter()
+            .map(|(term, label)| {
+                if term.coefficient == 1 {
+                    label.clone()
+                } else {
+                    format!("{} {label}", term.coefficient)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" + ")
+    }
+
+    pub fn spectators(&self, reactants: &[Term]) -> Option<Self> {
+        let mut remaining = self.clone();
+        for &term in reactants {
+            if remaining.take(term, "") != 0 {
+                return None;
+            }
+        }
+        Some(remaining)
+    }
+
+    fn add(&mut self, term: Term, label: String) -> Option<()> {
+        if term.coefficient == 0 {
+            return Some(());
+        }
+        if let Some((existing, _)) = self
+            .entries
+            .iter_mut()
+            .find(|(existing, name)| existing.species == term.species && *name == label)
+        {
+            existing.coefficient = existing.coefficient.checked_add(term.coefficient)?;
+        } else {
+            self.entries.push((term, label));
+        }
+        Some(())
+    }
+
+    /// Prefer the requested drawn instance, then use chemically identical
+    /// material already present. Return only the missing quantity.
+    fn take(&mut self, term: Term, label: &str) -> u32 {
+        let mut needed = term.coefficient;
+        for matching_label in [true, false] {
+            for (available, name) in &mut self.entries {
+                if available.species == term.species && (name.as_str() == label) == matching_label {
+                    let used = available.coefficient.min(needed);
+                    available.coefficient -= used;
+                    needed -= used;
+                }
+            }
+        }
+        self.entries.retain(|(term, _)| term.coefficient != 0);
+        needed
+    }
+}
+
+pub(super) fn sum_energy(
+    terms: impl IntoIterator<Item = Term>,
+    mut energy: impl FnMut(usize) -> Option<f64>,
+) -> Option<f64> {
+    terms.into_iter().try_fold(0., |total, term| {
+        let total = total + f64::from(term.coefficient) * energy(term.species)?;
+        total.is_finite().then_some(total)
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -53,6 +135,19 @@ pub(in crate::app::xtb::ts) struct Step {
     drawn_products: Vec<DrawnTerm>,
 }
 
+impl Step {
+    pub fn has_added_copies(&self) -> bool {
+        let added = |terms: &[Term], drawn: &[DrawnTerm]| {
+            terms
+                .iter()
+                .map(|term| u64::from(term.coefficient))
+                .sum::<u64>()
+                > drawn.len() as u64
+        };
+        added(&self.reactants, &self.drawn_reactants) || added(&self.products, &self.drawn_products)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(in crate::app::xtb::ts) struct Plan {
     pub arrows: Vec<u64>,
@@ -71,7 +166,15 @@ impl Plan {
 
     pub fn read(doc: &Document, selected: &[u64]) -> Result<Self, String> {
         let selected: HashSet<_> = selected.iter().copied().collect();
-        let mut sources = Vec::new();
+        let mut plan = Self {
+            arrows: Vec::new(),
+            species: Vec::new(),
+            steps: Vec::new(),
+            notes: Vec::new(),
+            snapshot: String::new(),
+            cyclic: false,
+        };
+        let mut excluded = HashSet::new();
         for arrow in doc
             .arrows
             .iter()
@@ -80,7 +183,7 @@ impl Plan {
             if !super::super::review::reaction_arrow(doc, arrow.id) {
                 return Err("Select forward reaction arrows to calculate a scheme".into());
             }
-            let reaction = reactions::preview(doc, arrow.id).map_err(str::to_owned)?;
+            let reaction = preview(doc, arrow.id)?;
             if !reaction.ready() {
                 return Err(
                     "Each selected arrow needs starting material and product molecules".into(),
@@ -88,51 +191,52 @@ impl Plan {
             }
             validate_side(doc, &reaction.reactants)?;
             validate_side(doc, &reaction.products)?;
-            sources.push(reaction);
-        }
-        if sources.len() < 2 {
-            return Err("Select two or more consecutive reaction arrows".into());
-        }
-        let (order, cyclic) = order(doc, &sources)?;
-        let mut plan = Self {
-            arrows: Vec::new(),
-            species: Vec::new(),
-            steps: Vec::new(),
-            notes: Vec::new(),
-            snapshot: String::new(),
-            cyclic,
-        };
-        for index in order {
-            let reaction = sources.get(index).ok_or("The reaction path changed")?;
             let drawn_reactants = plan.read_side(doc, &reaction.reactants)?;
             let drawn_products = plan.read_side(doc, &reaction.products)?;
-            let mut notes = Vec::new();
             if !reaction.agents.is_empty() || !reaction.annotations.is_empty() {
-                notes.push("Reagents, catalysts and conditions are not included unless assigned a reactant or product role".into());
+                excluded.insert(reaction.arrow);
             }
-            plan.arrows.push(reaction.arrow);
             plan.steps.push(Step {
                 arrow: reaction.arrow,
                 reactants: terms(&drawn_reactants)?,
                 products: terms(&drawn_products)?,
-                notes,
+                notes: Vec::new(),
                 drawn_reactants,
                 drawn_products,
             });
+        }
+        if plan.steps.len() < 2 {
+            return Err("Select two or more consecutive reaction arrows".into());
+        }
+        let (order, cyclic) = order(&plan.steps)?;
+        plan.cyclic = cyclic;
+        plan.steps = order
+            .into_iter()
+            .map(|index| {
+                plan.steps
+                    .get(index)
+                    .cloned()
+                    .ok_or("The reaction path changed")
+            })
+            .collect::<Result<_, _>>()?;
+        for (index, step) in plan.steps.iter_mut().enumerate() {
+            plan.arrows.push(step.arrow);
+            if excluded.contains(&step.arrow) {
+                step.notes.push(format!(
+                    "Reagents and conditions are excluded from step {}.",
+                    index + 1
+                ));
+            }
         }
         // Discover every drawn candidate before balancing any step. A second
         // reactant elsewhere in the scheme can therefore balance an early step.
         let drawn_candidates = plan.species.len();
         let candidates = chemistry::candidates()?;
         for index in 0..plan.steps.len() {
-            plan.balance(index, drawn_candidates, &candidates)?;
+            plan.balance(doc, index, drawn_candidates, &candidates)?;
         }
-        for (index, step) in plan.steps.iter().enumerate() {
-            plan.notes.extend(
-                step.notes
-                    .iter()
-                    .map(|note| format!("Step {}: {note}", index + 1)),
-            );
+        for step in &plan.steps {
+            plan.notes.extend(step.notes.iter().cloned());
         }
         plan.snapshot = snapshot(doc, &plan.arrows)?;
         Ok(plan)
@@ -177,28 +281,6 @@ impl Plan {
         }
     }
 
-    pub fn side_label(&self, terms: &[Term]) -> String {
-        terms
-            .iter()
-            .filter_map(|term| {
-                let species = self.species.get(term.species)?;
-                let label = if !species.label.is_empty() {
-                    &species.label
-                } else if !species.name.is_empty() {
-                    &species.name
-                } else {
-                    &species.formula
-                };
-                Some(if term.coefficient == 1 {
-                    label.clone()
-                } else {
-                    format!("{} {label}", term.coefficient)
-                })
-            })
-            .collect::<Vec<_>>()
-            .join(" + ")
-    }
-
     pub fn step_label(&self, index: usize) -> String {
         self.steps.get(index).map_or_else(
             || "Reaction step".into(),
@@ -215,69 +297,88 @@ impl Plan {
     /// Labels belong to each drawn instance, even when two differently
     /// numbered structures share one molecular calculation.
     pub fn endpoint_label(&self, index: usize, product: bool) -> String {
-        label_line(self.endpoint_terms(index, product))
+        self.endpoint_terms(index, product)
+            .map_or_else(String::new, |level| level.label())
     }
 
-    /// A shared minimum can also hold a co-reactant for the next step. Include
-    /// only its excess over species already shown at this product endpoint.
-    pub fn minimum_label(&self, index: usize) -> String {
-        let mut labels = self.endpoint_terms(index, true);
-        let mut available = BTreeMap::<usize, u32>::new();
-        for (species, _, count) in &labels {
-            let entry = available.entry(*species).or_default();
-            *entry = entry.saturating_add(*count);
+    /// Carry the minimum starting inventory needed to complete every step.
+    /// Later co-reactants are present from the start; earlier coproducts remain
+    /// until consumed. The same entries drive labels, energies and models.
+    pub fn levels(&self) -> Option<Vec<Level>> {
+        if self.steps.is_empty() {
+            return None;
         }
-        if let Some(next) = index.checked_add(1).filter(|next| *next < self.steps.len()) {
-            for (species, label, count) in self.endpoint_terms(next, false) {
-                let used = available.entry(species).or_default();
-                let extra = count.saturating_sub(*used);
-                *used = used.saturating_sub(count);
-                if extra > 0 {
-                    add_label(&mut labels, species, label, extra);
+        let mut levels = vec![Level::default()];
+        for index in 0..self.steps.len() {
+            let reactants = self.endpoint_terms(index, false)?;
+            let products = self.endpoint_terms(index, true)?;
+            let mut available = levels.last()?.clone();
+            for (term, label) in &reactants.entries {
+                let missing = available.take(*term, label);
+                if missing > 0 {
+                    for level in &mut levels {
+                        level.add(
+                            Term {
+                                coefficient: missing,
+                                ..*term
+                            },
+                            label.clone(),
+                        )?;
+                    }
                 }
             }
+            let mut next = products;
+            for (term, label) in available.entries {
+                next.add(term, label)?;
+            }
+            levels.push(next);
         }
-        label_line(labels)
+        Some(levels)
     }
 
-    fn endpoint_terms(&self, index: usize, product: bool) -> Vec<(usize, String, u32)> {
-        let Some(step) = self.steps.get(index) else {
-            return Vec::new();
-        };
+    fn endpoint_terms(&self, index: usize, product: bool) -> Option<Level> {
+        let step = self.steps.get(index)?;
         let (drawn, balanced) = if product {
             (&step.drawn_products, &step.products)
         } else {
             (&step.drawn_reactants, &step.reactants)
         };
-        let mut labels = Vec::new();
+        let mut level = Level::default();
         let mut counts = BTreeMap::<usize, u32>::new();
         for term in drawn {
-            add_label(
-                &mut labels,
-                term.species,
+            level.add(
+                Term {
+                    species: term.species,
+                    coefficient: term.coefficient,
+                },
                 term.label.clone(),
-                term.coefficient,
-            );
+            )?;
             let count = counts.entry(term.species).or_default();
-            *count = count.saturating_add(term.coefficient);
+            *count = count.checked_add(term.coefficient)?;
         }
         for term in balanced {
             let added = term
                 .coefficient
                 .saturating_sub(counts.get(&term.species).copied().unwrap_or(0));
             if added > 0 {
-                add_label(
-                    &mut labels,
-                    term.species,
-                    self.side_label(&[Term {
-                        species: term.species,
-                        coefficient: 1,
-                    }]),
-                    added,
-                );
+                let species = self.species.get(term.species)?;
+                let label = if !species.label.is_empty() {
+                    &species.label
+                } else if !species.name.is_empty() {
+                    &species.name
+                } else {
+                    &species.formula
+                };
+                level.add(
+                    Term {
+                        coefficient: added,
+                        ..*term
+                    },
+                    label.clone(),
+                )?;
             }
         }
-        labels
+        Some(level)
     }
 
     pub fn title(&self) -> String {
@@ -348,16 +449,28 @@ impl Plan {
         for participant in participants {
             for mut atoms in reactions::molecules(doc, &participant.atoms) {
                 atoms.sort_unstable();
-                let species = molecule(doc, &atoms)?;
-                let label = species.label.clone();
-                let index = self
+                let known = self
                     .species
                     .iter()
-                    .position(|item| item.key == species.key)
-                    .unwrap_or(self.species.len());
-                if index == self.species.len() {
-                    self.species.push(species);
-                }
+                    .enumerate()
+                    .find(|(_, species)| species.instances.contains(&atoms));
+                let (index, label) = if let Some((index, species)) = known {
+                    (index, chemistry::labels(doc, &atoms, &species.formula).0)
+                } else {
+                    let species = molecule(doc, &atoms)?;
+                    let label = species.label.clone();
+                    let index = self
+                        .species
+                        .iter()
+                        .position(|item| item.key == species.key)
+                        .unwrap_or(self.species.len());
+                    if index == self.species.len() {
+                        self.species.push(species);
+                    } else if let Some(species) = self.species.get_mut(index) {
+                        species.instances.push(atoms.clone());
+                    }
+                    (index, label)
+                };
                 side.push(DrawnTerm {
                     species: index,
                     atoms,
@@ -371,6 +484,7 @@ impl Plan {
 
     fn balance(
         &mut self,
+        doc: &Document,
         index: usize,
         drawn_candidates: usize,
         builtins: &[Species],
@@ -410,15 +524,20 @@ impl Plan {
                 &mut step.reactants
             };
             add_term(side, species, 1)?;
-            format!(
-                "Added one copy of {} to the {} for calculation to balance atoms, isotopes and charge exactly",
-                candidate.label,
-                if product { "products" } else { "reactants" }
-            )
+            let label = if let Some(number) =
+                super::super::card::compound_label(doc, &candidate.atoms)
+            {
+                format!("another copy of compound {number}")
+            } else if let Some(builtin) = builtins.iter().find(|item| item.key == candidate.key) {
+                builtin.label.clone()
+            } else {
+                format!("another copy of {}", candidate.label)
+            };
+            format!("Balanced by adding {label} to step {}.", index + 1)
         } else if candidates.is_empty() {
             format!(
-                "Warning: {}. No single supported molecule balances this step exactly; proceeding as drawn",
-                difference.description()
+                "No single molecule balances step {}; continuing as drawn.",
+                index + 1
             )
         } else {
             let names = candidates
@@ -427,8 +546,8 @@ impl Plan {
                 .collect::<Vec<_>>()
                 .join(", ");
             format!(
-                "Warning: {}. More than one molecule could balance this step ({names}); proceeding as drawn",
-                difference.description()
+                "More than one molecule balances step {} ({names}); continuing as drawn.",
+                index + 1
             )
         };
         self.steps
@@ -515,36 +634,6 @@ impl Plan {
     }
 }
 
-fn add_label(
-    labels: &mut Vec<(usize, String, u32)>,
-    species: usize,
-    label: String,
-    coefficient: u32,
-) {
-    if let Some((_, _, count)) = labels
-        .iter_mut()
-        .find(|(item, name, _)| *item == species && *name == label)
-    {
-        *count = count.saturating_add(coefficient);
-    } else {
-        labels.push((species, label, coefficient));
-    }
-}
-
-fn label_line(labels: Vec<(usize, String, u32)>) -> String {
-    labels
-        .into_iter()
-        .map(|(_, label, coefficient)| {
-            if coefficient == 1 {
-                label
-            } else {
-                format!("{coefficient} {label}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" + ")
-}
-
 fn add_term(terms: &mut Vec<Term>, species: usize, coefficient: u32) -> Result<(), String> {
     if let Some(term) = terms.iter_mut().find(|term| term.species == species) {
         term.coefficient = term
@@ -585,31 +674,110 @@ fn validate_side(doc: &Document, participants: &[Participant]) -> Result<(), Str
     Ok(())
 }
 
-fn drawn_species(doc: &Document, participants: &[Participant]) -> BTreeSet<Vec<u64>> {
-    participants
+/// Scheme inference treats molecules above or below the shaft as agents even
+/// when they sit in its left or right half. Explicitly assigned roles win.
+pub(in crate::app::xtb::ts) fn preview(doc: &Document, arrow: u64) -> Result<Reaction, String> {
+    let mut reaction = reactions::preview(doc, arrow).map_err(str::to_owned)?;
+    if doc.reactions.iter().any(|reaction| reaction.arrow == arrow) {
+        return Ok(reaction);
+    }
+    let arrow = doc
+        .arrows
         .iter()
-        .flat_map(|participant| reactions::molecules(doc, &participant.atoms))
-        .map(|mut ids| {
-            ids.sort_unstable();
-            ids
-        })
-        .collect()
+        .find(|item| item.id == arrow)
+        .ok_or("The reaction arrow changed")?;
+    let dx = f64::from(arrow.end.x) - f64::from(arrow.start.x);
+    let dy = f64::from(arrow.end.y) - f64::from(arrow.start.y);
+    let length_squared = dx * dx + dy * dy;
+    let agent = |participant: &Participant| {
+        let (mut above, mut below) = (true, true);
+        let mut visible = false;
+        for atom in participant
+            .atoms
+            .iter()
+            .filter(|id| doc.atom_visible(**id))
+            .filter_map(|id| doc.atom(*id))
+        {
+            visible = true;
+            let x = f64::from(atom.position.x) - f64::from(arrow.start.x);
+            let y = f64::from(atom.position.y) - f64::from(arrow.start.y);
+            let along = (x * dx + y * dy) / length_squared;
+            if !(0. ..=1.).contains(&along) {
+                return false;
+            }
+            let across = (y * dx - x * dy) / length_squared;
+            above &= across < -1e-6;
+            below &= across > 1e-6;
+        }
+        visible && (above || below)
+    };
+    for side in [&mut reaction.reactants, &mut reaction.products] {
+        let mut participants = Vec::new();
+        for participant in std::mem::take(side) {
+            if agent(&participant) {
+                reaction.agents.push(participant);
+            } else {
+                participants.push(participant);
+            }
+        }
+        *side = participants;
+    }
+    Ok(reaction)
 }
 
-fn order(doc: &Document, sources: &[Reaction]) -> Result<(Vec<usize>, bool), String> {
-    let sides: Vec<_> = sources
-        .iter()
-        .map(|reaction| {
-            let mut reactants = drawn_species(doc, &reaction.reactants);
-            let mut products = drawn_species(doc, &reaction.products);
-            let spectators: BTreeSet<_> = reactants.intersection(&products).cloned().collect();
-            reactants.retain(|atoms| !spectators.contains(atoms));
-            products.retain(|atoms| !spectators.contains(atoms));
-            (reactants, products)
-        })
-        .collect();
-    let mut incoming = vec![Vec::new(); sources.len()];
-    let mut outgoing = vec![Vec::new(); sources.len()];
+type DrawnInstances = BTreeSet<Vec<u64>>;
+
+fn path_sides(step: &Step) -> Result<(DrawnInstances, DrawnInstances), String> {
+    let mut quantities = BTreeMap::<usize, [u32; 2]>::new();
+    for (drawn, product) in [(&step.drawn_reactants, false), (&step.drawn_products, true)] {
+        for term in drawn {
+            let [r, p] = quantities.entry(term.species).or_default();
+            let count = if product { p } else { r };
+            *count = count
+                .checked_add(term.coefficient)
+                .ok_or("The reaction coefficient is too large")?;
+        }
+    }
+    // Cancel common quantities by molecular identity before linking drawn
+    // instances. A wholly unchanged row can still link numbered copies of one
+    // compound; preserve that row because it has no distinguishable spectator.
+    let unchanged = quantities.values().all(|counts| counts[0] == counts[1]);
+    let remaining = |side: &[DrawnTerm]| {
+        let mut cancel: BTreeMap<_, _> = quantities
+            .iter()
+            .map(|(&species, counts)| {
+                (
+                    species,
+                    if unchanged {
+                        0
+                    } else {
+                        counts[0].min(counts[1])
+                    },
+                )
+            })
+            .collect();
+        let mut drawn: Vec<_> = side.iter().collect();
+        drawn.sort_by(|a, b| a.atoms.cmp(&b.atoms));
+        drawn
+            .into_iter()
+            .filter_map(|term| {
+                let count = cancel.get_mut(&term.species)?;
+                let used = (*count).min(term.coefficient);
+                *count -= used;
+                (used < term.coefficient).then(|| term.atoms.clone())
+            })
+            .collect()
+    };
+    Ok((
+        remaining(&step.drawn_reactants),
+        remaining(&step.drawn_products),
+    ))
+}
+
+fn order(steps: &[Step]) -> Result<(Vec<usize>, bool), String> {
+    let sides: Vec<_> = steps.iter().map(path_sides).collect::<Result<_, _>>()?;
+    let mut incoming = vec![Vec::new(); steps.len()];
+    let mut outgoing = vec![Vec::new(); steps.len()];
     for (from, (_, products)) in sides.iter().enumerate() {
         for (to, (reactants, _)) in sides.iter().enumerate() {
             if from != to && !products.is_disjoint(reactants) {
@@ -660,7 +828,7 @@ fn order(doc: &Document, sources: &[Reaction]) -> Result<(Vec<usize>, bool), Str
         order.push(index);
         next = outgoing.get(index).and_then(|edges| edges.first()).copied();
     }
-    if order.len() != sources.len() {
+    if order.len() != steps.len() {
         return Err("The selected arrows contain disconnected paths or cycles. Select one consecutive reaction path".into());
     }
     Ok((order, cyclic))
@@ -669,7 +837,7 @@ fn order(doc: &Document, sources: &[Reaction]) -> Result<(Vec<usize>, bool), Str
 fn snapshot(doc: &Document, arrows: &[u64]) -> Result<String, String> {
     let mut entries = Vec::new();
     for &arrow in arrows {
-        let reaction = reactions::preview(doc, arrow).map_err(str::to_owned)?;
+        let reaction = preview(doc, arrow)?;
         let mut atoms: Vec<_> = reaction
             .reactants
             .iter()

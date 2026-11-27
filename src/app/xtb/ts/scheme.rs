@@ -47,7 +47,7 @@ pub(crate) enum Action {
     Next(u64),
     Place,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
-    Event(run::Event),
+    Event(Box<run::Event>),
 }
 
 fn send(action: Action) -> Message {
@@ -90,6 +90,22 @@ pub(in crate::app::xtb) struct State {
 }
 
 impl State {
+    fn follows(
+        &self,
+        doc: &reshiki::document::Document,
+        figure: &reshiki::graphics::EnergyProfile,
+    ) -> bool {
+        figure.linked
+            && figure.source == self.plan.arrows.first().copied()
+            && figure.steps.len() == self.plan.steps.len()
+            && super::profile::source_reactions(doc, figure).is_some_and(|steps| {
+                steps
+                    .iter()
+                    .map(|step| step.arrow)
+                    .eq(self.plan.arrows.iter().copied())
+            })
+    }
+
     fn busy(&self) -> bool {
         self.reviews.is_some() || self.work.running()
     }
@@ -164,20 +180,7 @@ impl App {
             || self
                 .selected_energy_profile()
                 .and_then(|graphic| graphic.energy_profile.as_deref())
-                .is_some_and(|profile| {
-                    profile.linked
-                        && profile.steps.len() == state.plan.steps.len()
-                        && profile.source == state.plan.arrows.first().copied()
-                        && super::profile::source_reactions(&self.tab.doc, profile).is_some_and(
-                            |steps| {
-                                steps.iter().map(|step| step.arrow).eq(state
-                                    .plan
-                                    .arrows
-                                    .iter()
-                                    .copied())
-                            },
-                        )
-                })
+                .is_some_and(|profile| state.follows(&self.tab.doc, profile))
     }
 
     pub(in crate::app) fn xtb_can_open_scheme(&self) -> bool {
@@ -189,6 +192,10 @@ impl App {
             && self.tab.optimization.is_none()
             && self.tab.model_job.is_none()
             && !self.tab.drawing_edit_active()
+    }
+
+    pub(in crate::app) fn xtb_scheme_open_action(&self) -> Option<Message> {
+        self.xtb_can_open_scheme().then(open_message)
     }
 
     pub(in crate::app) fn scheme_sheet_visible(&self) -> bool {
@@ -207,17 +214,23 @@ impl App {
         if self.scheme_sheet_visible() || !self.xtb_can_open_scheme() {
             return Task::none();
         }
-        let selection = if self.selected_energy_profile().is_some() && self.xtb_scheme_selected() {
-            self.tab
-                .xtb
-                .scheme
-                .as_ref()
-                .map(|s| s.plan.arrows.as_slice())
-                .unwrap_or_default()
-        } else {
-            &self.tab.selected
+        let selected = self
+            .tab
+            .xtb
+            .scheme
+            .as_ref()
+            .filter(|_| self.xtb_scheme_selected());
+        let current = selected.is_some() && self.xtb_scheme_current();
+        let plan = match selected {
+            // Retained rows refer to this plan's species indices, including after
+            // reordering arrows in the drawing. Keep those indices on reopening.
+            Some(state) if current => Ok(state.plan.clone()),
+            Some(state) if self.selected_energy_profile().is_some() => {
+                Plan::read(&self.tab.doc, &state.plan.arrows)
+            }
+            _ => Plan::read(&self.tab.doc, &self.tab.selected),
         };
-        let mut plan = match Plan::read(&self.tab.doc, selection) {
+        let mut plan = match plan {
             Ok(plan) => plan,
             Err(reason) => {
                 self.status = reason;
@@ -229,11 +242,7 @@ impl App {
             self.xtb_existing_molecule_name(atoms).map(str::to_owned)
         });
         let state = &mut self.tab.xtb.scheme;
-        if let Some(existing) = state.as_mut()
-            && existing.epoch == self.tab.file_epoch
-            && existing.plan.arrows == plan.arrows
-            && existing.plan.snapshot == plan.snapshot
-        {
+        if let Some(existing) = state.as_mut().filter(|_| current) {
             existing.original = Some((existing.options.clone(), existing.method));
             existing.plan = plan;
             existing.sheet = true;
@@ -324,6 +333,9 @@ impl App {
             Action::Place => self.xtb_place_scheme_profile(),
             #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
             Action::Event(event) => {
+                if !state.work.accepts(&event) {
+                    return Task::none();
+                }
                 if state.epoch != self.tab.file_epoch
                     || (state.revision != self.tab.revision && !state.plan.current(&self.tab.doc))
                 {
@@ -334,7 +346,7 @@ impl App {
                 }
                 state.revision = self.tab.revision;
                 let finished = event.finished();
-                if state.work.accept(event) && finished {
+                if state.work.accept(*event) && finished {
                     self.status = if let Some(reason) = &state.work.error {
                         reason.clone()
                     } else {
@@ -428,8 +440,9 @@ impl App {
             };
             let arrow = step.arrow;
             let free = options.free_barrier;
+            let detached_map = step.has_added_copies();
             return match state.plan.review_document(index, &self.tab.doc) {
-                Ok(doc) => self.xtb_review_scheme_step(index, doc, arrow, free),
+                Ok(doc) => self.xtb_review_scheme_step(index, doc, arrow, free, detached_map),
                 Err(reason) => self.xtb_scheme_reviewed(index, Err(reason)),
             };
         }
@@ -453,7 +466,7 @@ impl App {
             palette.view = xtb::results::View::Path;
             self.status = "Calculating reaction scheme…".into();
             self.error = false;
-            return Task::run(events, |event| send(Action::Event(event)));
+            return Task::run(events, |event| send(Action::Event(Box::new(event))));
         }
         state.reviews = None;
         Task::none()
@@ -463,6 +476,34 @@ impl App {
         &mut self,
         index: usize,
         input: Result<TsInput, String>,
+    ) -> Task<Message> {
+        self.xtb_scheme_finish_review(index, input.map(Some))
+    }
+
+    pub(super) fn xtb_scheme_skip_barrier(&mut self, index: usize) -> Task<Message> {
+        let Some(state) = self.tab.xtb.scheme.as_mut() else {
+            return Task::none();
+        };
+        if !state
+            .reviews
+            .as_ref()
+            .is_some_and(|reviews| reviews.active == Some(index))
+        {
+            return Task::none();
+        }
+        let Some(options) = state.options.get_mut(index) else {
+            return Task::none();
+        };
+        options.barrier = false;
+        options.free_barrier = false;
+        options.reaction_energy = true;
+        self.xtb_scheme_finish_review(index, Ok(None))
+    }
+
+    fn xtb_scheme_finish_review(
+        &mut self,
+        index: usize,
+        input: Result<Option<TsInput>, String>,
     ) -> Task<Message> {
         let Some(reviews) = self
             .tab
@@ -480,7 +521,7 @@ impl App {
         let Some(entry) = reviews.inputs.get_mut(index) else {
             return self.xtb_scheme_action(Action::Cancel);
         };
-        *entry = input.map(Some);
+        *entry = input;
         Task::done(send(Action::Next(reviews.id)))
     }
 }

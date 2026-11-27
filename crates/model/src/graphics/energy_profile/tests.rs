@@ -56,6 +56,7 @@ fn profile(energies: &[f64]) -> EnergyProfile {
                 from,
                 to,
                 transition: (to == from + 2).then_some(from + 1),
+                source: None,
                 source_key: None,
                 irc: vec![],
             }
@@ -202,11 +203,11 @@ fn assert_no_overlaps(g: &Graphic, layout: &Layout, parts: &[Part], labels: &[An
 }
 
 #[test]
-fn transition_state_labels_only_use_numbers_for_multiple_transitions() {
+fn transition_state_labels_use_step_numbers_only_in_multistep_profiles() {
     // The fixture uses the numbered default names found in older saved profiles.
     for (energies, expected) in [
         (&[0., 27.3, -7.6][..], &["TS‡ 27.3"][..]),
-        (&[0., 27.3, -7.6, -4.], &["TS‡ 27.3"]),
+        (&[0., 27.3, -7.6, -4.], &["TS1‡ 27.3"]),
         (&[0., 27.3, -7.6, 18., -4.], &["TS1‡ 27.3", "TS2‡ 18.0"]),
     ] {
         let (_, labels) = placed(profile(energies)).energy_profile_parts(&style::DEFAULT);
@@ -743,7 +744,10 @@ fn native_roundtrip_budget_and_validation_cover_profile_payloads() {
 
 #[test]
 fn remap_preserves_source_and_provenance_and_deletion_leaves_stale_values() {
-    let g = placed(profile(&[0., 18., -6.]));
+    let mut figure = profile(&[0., 18., -6., 8., -4.]);
+    figure.steps[1].source = Some(3);
+    figure.steps[1].source_key = Some("b".repeat(64));
+    let g = placed(figure);
     let arrow = Arrow::new(
         1,
         Point::default(),
@@ -751,17 +755,27 @@ fn remap_preserves_source_and_provenance_and_deletion_leaves_stale_values() {
         Preset::Forward,
         ArrowStyle::default(),
     );
+    let second = Arrow {
+        id: 3,
+        ..arrow.clone()
+    };
     let mut doc = Document {
         graphics: vec![g],
-        arrows: vec![arrow],
+        arrows: vec![arrow, second],
         ..Document::default()
     };
-    crate::editing::remap_ids(&mut doc, &HashMap::from([(1, 10), (2, 20)])).unwrap();
+    assert_eq!(doc.file_version(), crate::document::SCHEME_PROFILE_LINKS);
+    crate::editing::remap_ids(&mut doc, &HashMap::from([(1, 10), (2, 20), (3, 30)])).unwrap();
     let p = doc.graphics[0].energy_profile.as_ref().unwrap();
     assert_eq!(p.source, Some(10));
+    assert_eq!(p.steps[1].source, Some(30));
     assert!(p.linked);
     assert_eq!(p.source_key, "a".repeat(64));
     let states = p.states.clone();
+    doc.delete(&[30]);
+    let p = doc.graphics[0].energy_profile.as_ref().unwrap();
+    assert_eq!(p.steps[1].source, None);
+    assert_eq!(p.steps[1].source_key, None);
     doc.delete(&[10]);
     let p = doc.graphics[0].energy_profile.as_ref().unwrap();
     assert_eq!(p.source, None);

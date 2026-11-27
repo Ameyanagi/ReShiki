@@ -158,6 +158,68 @@ fn optimized_start<'a>(
     candidates.next().is_none().then_some(launch)
 }
 
+fn endpoint_value(
+    request: &Request,
+    step: &super::super::plan::Step,
+    options: StepOptions,
+    values: &BTreeMap<usize, SpeciesValue>,
+    failures: &BTreeMap<usize, String>,
+    warnings: &BTreeMap<usize, String>,
+) -> StepValue {
+    let mut value = StepValue::empty(step.arrow, request.method);
+    let sum = |terms: &[super::super::plan::Term], free| {
+        super::super::plan::sum_energy(terms.iter().copied(), |index| {
+            species_energy(values.get(&index)?, free)
+        })
+    };
+    let kcal = qcdata::KCAL_PER_HARTREE;
+    if options.reaction_energy {
+        value.energy = sum(&step.reactants, false)
+            .zip(sum(&step.products, false))
+            .map(|(r, p)| (p - r) * kcal);
+    }
+    if options.free_energy {
+        value.gibbs = sum(&step.reactants, true)
+            .zip(sum(&step.products, true))
+            .map(|(r, p)| (p - r) * kcal);
+    }
+    let mut reasons: Vec<String> = step
+        .reactants
+        .iter()
+        .map(|term| (term, options.frequencies()))
+        .chain(step.products.iter().map(|term| (term, options.free_energy)))
+        .filter_map(|(term, needs_frequency)| {
+            failures
+                .get(&term.species)
+                .or_else(|| {
+                    needs_frequency
+                        .then(|| warnings.get(&term.species))
+                        .flatten()
+                })
+                .map(|reason| {
+                    format!(
+                        "{}: {reason}",
+                        request
+                            .plan
+                            .species
+                            .get(term.species)
+                            .map_or("Species", |species| species.label.as_str())
+                    )
+                })
+        })
+        .collect();
+    reasons.sort();
+    reasons.dedup();
+    if options.reaction_energy && value.energy.is_none() && reasons.is_empty() {
+        reasons.push("Reaction energy is unavailable".into());
+    }
+    if options.free_energy && value.gibbs.is_none() && reasons.is_empty() {
+        reasons.push("Reaction free energy is unavailable".into());
+    }
+    value.error = (!reasons.is_empty()).then(|| reasons.join("; "));
+    value
+}
+
 fn calculate(
     request: &Request,
     backend: &mut impl Backend,
@@ -189,15 +251,15 @@ fn calculate(
         .filter(|(_, ((_, options), _))| options.any())
         .map(|(index, ((step, options), input))| (index, step, *options, input))
         .collect();
-    let needed: BTreeSet<_> = active
-        .iter()
-        .flat_map(|(_, step, _, _)| {
-            step.reactants
-                .iter()
-                .chain(&step.products)
-                .map(|term| term.species)
-        })
-        .collect();
+    let mut needed = BTreeSet::new();
+    let mut owners = Vec::new();
+    for &(index, step, _, _) in &active {
+        for term in step.reactants.iter().chain(&step.products) {
+            if needed.insert(term.species) {
+                owners.push((term.species, index));
+            }
+        }
+    }
     let frequencies = frequency_species(
         &request.plan,
         &request.options,
@@ -206,15 +268,11 @@ fn calculate(
     let mut values = BTreeMap::new();
     let mut failures = BTreeMap::new();
     let mut warnings = BTreeMap::new();
-    let mut owners = BTreeMap::new();
-    for &(index, step, _, _) in &active {
-        for term in step.reactants.iter().chain(&step.products) {
-            owners.entry(term.species).or_insert(index);
-        }
-    }
+    let mut ready = BTreeSet::new();
+    let mut endpoints = BTreeMap::new();
     // Every required minimum is ready before a slow TS can hold up another
     // step's ground-state calculation. Each shared species is visited once.
-    for (&species_index, &index) in &owners {
+    for &(species_index, index) in &owners {
         checked(cancel)?;
         let Some(species) = request.plan.species.get(species_index) else {
             return Err("The scheme refers to a missing species".into());
@@ -278,18 +336,33 @@ fn calculate(
                 failures.insert(species_index, reason);
             }
         }
+        // Keep completed endpoint quantities available even when another
+        // species is slow or the user cancels before the minima phase ends.
+        for &(index, step, options, _) in &active {
+            if ready.contains(&index)
+                || !step.reactants.iter().chain(&step.products).all(|term| {
+                    values.contains_key(&term.species) || failures.contains_key(&term.species)
+                })
+            {
+                continue;
+            }
+            let value = endpoint_value(request, step, options, &values, &failures, &warnings);
+            if options.transition_state() {
+                emit(EventKind::Endpoints {
+                    index,
+                    value: value.clone(),
+                });
+                endpoints.insert(index, value);
+            } else {
+                emit(EventKind::Step { index, value });
+            }
+            ready.insert(index);
+        }
     }
-    // Endpoint-only steps finish immediately after the minima phase, before
-    // any saddle search, regardless of their position in the reaction path.
-    let step_order = active
-        .iter()
-        .filter(|(_, _, options, _)| !options.transition_state())
-        .chain(
-            active
-                .iter()
-                .filter(|(_, _, options, _)| options.transition_state()),
-        );
-    for &(index, step, options, input) in step_order {
+    for &(index, step, options, input) in &active {
+        if !options.transition_state() {
+            continue;
+        }
         checked(cancel)?;
         let mut progress = Progress {
             step: index,
@@ -300,159 +373,99 @@ fn calculate(
             stage: None,
         };
         emit(EventKind::Progress(progress.clone()));
-        let mut value = StepValue::empty(step.arrow, request.method);
-        let sum = |terms: &[super::super::plan::Term], free: bool| -> Option<f64> {
-            let mut sum = 0.;
-            for term in terms {
-                let species = values.get(&term.species)?;
-                let energy = species.result.energy_hartree.filter(|e| e.is_finite())?;
-                let correction = if free {
-                    if !has_thermo(species) {
-                        return None;
-                    }
-                    species.result.thermo.as_ref()?.gibbs_correction_hartree
-                } else {
-                    0.
-                };
-                sum += f64::from(term.coefficient) * (energy + correction);
-            }
-            sum.is_finite().then_some(sum)
+        let Some(mut value) = endpoints.remove(&index) else {
+            return Err("The scheme step has no endpoint results".into());
+        };
+        let sum = |terms: &[super::super::plan::Term], free| {
+            super::super::plan::sum_energy(terms.iter().copied(), |index| {
+                species_energy(values.get(&index)?, free)
+            })
         };
         let reactant = sum(&step.reactants, false);
-        let product = sum(&step.products, false);
         let reactant_g = options
             .frequencies()
             .then(|| sum(&step.reactants, true))
             .flatten();
-        let product_g = options
-            .free_energy
-            .then(|| sum(&step.products, true))
-            .flatten();
         let kcal = qcdata::KCAL_PER_HARTREE;
-        if options.reaction_energy {
-            value.energy = reactant.zip(product).map(|(r, p)| (p - r) * kcal);
-        }
-        if options.free_energy {
-            value.gibbs = reactant_g.zip(product_g).map(|(r, p)| (p - r) * kcal);
-        }
-        let mut reasons: Vec<String> = step
-            .reactants
-            .iter()
-            .map(|term| (term, options.frequencies()))
-            .chain(step.products.iter().map(|term| (term, options.free_energy)))
-            .filter_map(|(term, needs_frequency)| {
-                failures
-                    .get(&term.species)
-                    .or_else(|| {
-                        needs_frequency
-                            .then(|| warnings.get(&term.species))
-                            .flatten()
-                    })
-                    .map(|reason| {
-                        format!(
-                            "{}: {reason}",
-                            request
-                                .plan
-                                .species
-                                .get(term.species)
-                                .map_or("Species", |species| species.label.as_str())
-                        )
-                    })
-            })
-            .collect();
-        reasons.sort();
-        reasons.dedup();
-        if options.transition_state() {
-            match input {
-                Err(reason) => reasons.push(reason.clone()),
-                Ok(None) => reasons
-                    .push("Review the atom map before searching for a transition state".into()),
-                Ok(Some(input)) => {
-                    progress.species = None;
-                    progress.label = "Finding a transition state".into();
-                    progress.stage = Some(Stage::Endpoints);
-                    emit(EventKind::Progress(progress.clone()));
-                    let result = backend.transition(
-                        TransitionJob {
-                            input,
-                            optimized: optimized_start(input, values.values()),
-                            arrow: step.arrow,
-                            method: request.method,
-                            free: options.free_barrier,
-                        },
-                        cancel,
-                        &mut |event| {
-                            match event {
-                                job::Event::Stage(stage) => {
-                                    progress.stage = Some(stage);
-                                    progress.label = match stage {
-                                        Stage::Endpoints => "Building both ends",
-                                        Stage::Idpp | Stage::Neb => "Finding a path",
-                                        Stage::Saddle => "Refining the transition state",
-                                        Stage::Irc => "Checking where it leads",
-                                        Stage::Thermochemistry => "Calculating frequencies",
-                                    }
-                                    .into();
+        let mut reasons: Vec<_> = value.error.take().into_iter().collect();
+        match input {
+            Err(reason) => reasons.push(reason.clone()),
+            Ok(None) => {
+                reasons.push("Review the atom map before searching for a transition state".into())
+            }
+            Ok(Some(input)) => {
+                progress.species = None;
+                progress.label = "Finding a transition state".into();
+                progress.stage = Some(Stage::Endpoints);
+                emit(EventKind::Progress(progress.clone()));
+                let result = backend.transition(
+                    TransitionJob {
+                        input,
+                        optimized: optimized_start(input, values.values()),
+                        arrow: step.arrow,
+                        method: request.method,
+                        free: options.free_barrier,
+                    },
+                    cancel,
+                    &mut |event| {
+                        match event {
+                            job::Event::Stage(stage) => {
+                                progress.stage = Some(stage);
+                                progress.label = match stage {
+                                    Stage::Endpoints => "Building both ends",
+                                    Stage::Idpp | Stage::Neb => "Finding a path",
+                                    Stage::Saddle => "Refining the transition state",
+                                    Stage::Irc => "Checking where it leads",
+                                    Stage::Thermochemistry => "Calculating frequencies",
                                 }
-                                job::Event::Neb { iteration, .. } => {
-                                    progress.label =
-                                        format!("Finding a path · iteration {iteration}")
-                                }
-                                job::Event::Saddle { step } => {
-                                    progress.label =
-                                        format!("Refining the transition state · step {step}")
-                                }
-                                _ => return,
+                                .into();
                             }
-                            emit(EventKind::Progress(progress.clone()));
-                        },
-                    );
-                    checked(cancel)?;
-                    match result {
-                        Ok(ts) => {
-                            if ts.result.status == qcdata::Status::Converged {
-                                if options.barrier {
-                                    value.barrier = reactant
-                                        .zip(ts.result.energy_hartree)
-                                        .map(|(r, t)| (t - r) * kcal);
-                                }
-                                if options.free_barrier {
-                                    value.free_barrier = reactant_g
-                                        .zip(
-                                            ts.result.energy_hartree.zip(ts.result.thermo.as_ref()),
-                                        )
-                                        .map(|(r, (t, g))| {
-                                            (t + g.gibbs_correction_hartree - r) * kcal
-                                        })
-                                        .filter(|g| g.is_finite());
-                                    if value.free_barrier.is_none() {
-                                        reasons.push(
-                                            "Transition-state free energy is unavailable".into(),
-                                        );
-                                    }
-                                }
-                            } else {
-                                let reason = match &ts.result.status {
-                                    qcdata::Status::NotConverged { reason }
-                                    | qcdata::Status::Failed { reason } => reason.as_str(),
-                                    _ => "No reliable transition state found",
-                                };
-                                reasons.push(reason.into());
+                            job::Event::Neb { iteration, .. } => {
+                                progress.label = format!("Finding a path · iteration {iteration}")
                             }
-                            value.ts = Some(ts.result);
-                            value.frames = ts.frames;
-                            value.launch = Some(ts.launch);
+                            job::Event::Saddle { step } => {
+                                progress.label =
+                                    format!("Refining the transition state · step {step}")
+                            }
+                            _ => return,
                         }
-                        Err(reason) => reasons.push(reason),
+                        emit(EventKind::Progress(progress.clone()));
+                    },
+                );
+                checked(cancel)?;
+                match result {
+                    Ok(ts) => {
+                        if ts.result.status == qcdata::Status::Converged {
+                            if options.barrier {
+                                value.barrier = reactant
+                                    .zip(ts.result.energy_hartree)
+                                    .map(|(r, t)| (t - r) * kcal);
+                            }
+                            if options.free_barrier {
+                                value.free_barrier = reactant_g
+                                    .zip(ts.result.energy_hartree.zip(ts.result.thermo.as_ref()))
+                                    .map(|(r, (t, g))| (t + g.gibbs_correction_hartree - r) * kcal)
+                                    .filter(|g| g.is_finite());
+                                if value.free_barrier.is_none() {
+                                    reasons
+                                        .push("Transition-state free energy is unavailable".into());
+                                }
+                            }
+                        } else {
+                            let reason = match &ts.result.status {
+                                qcdata::Status::NotConverged { reason }
+                                | qcdata::Status::Failed { reason } => reason.as_str(),
+                                _ => "No reliable transition state found",
+                            };
+                            reasons.push(reason.into());
+                        }
+                        value.ts = Some(ts.result);
+                        value.frames = ts.frames;
+                        value.launch = Some(ts.launch);
                     }
+                    Err(reason) => reasons.push(reason),
                 }
             }
-        }
-        if options.reaction_energy && value.energy.is_none() && reasons.is_empty() {
-            reasons.push("Reaction energy is unavailable".into());
-        }
-        if options.free_energy && value.gibbs.is_none() && reasons.is_empty() {
-            reasons.push("Reaction free energy is unavailable".into());
         }
         value.error = (!reasons.is_empty()).then(|| reasons.join("; "));
         emit(EventKind::Step { index, value });

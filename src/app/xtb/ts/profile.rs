@@ -89,8 +89,7 @@ pub(in crate::app) fn source_current(doc: &Document, profile: &EnergyProfile) ->
 }
 
 /// Resolve every authored step before treating a linked figure as current.
-/// A shared drawn intermediate is preferred; a uniquely matching later arrow
-/// also supports schemes that repeat the intermediate drawing between steps.
+/// Version 43 figures may carry only a chemistry key for a later step.
 pub(in crate::app) fn source_reactions(
     doc: &Document,
     profile: &EnergyProfile,
@@ -105,10 +104,14 @@ pub(in crate::app) fn source_reaction_prefix(
     doc: &Document,
     profile: &EnergyProfile,
 ) -> Vec<Reaction> {
-    let Some(first) = profile
-        .source
-        .and_then(|id| reactions::preview(doc, id).ok())
-    else {
+    let preview = |id| {
+        if profile.steps.len() > 1 {
+            super::scheme::plan::preview(doc, id).ok()
+        } else {
+            reactions::preview(doc, id).ok()
+        }
+    };
+    let Some(first) = profile.source.and_then(preview) else {
         return vec![];
     };
     if source_key(doc, &first) != profile.source_key || profile.steps.is_empty() {
@@ -121,11 +124,20 @@ pub(in crate::app) fn source_reaction_prefix(
         let Some(key) = step.source_key.as_deref() else {
             break;
         };
+        if let Some(id) = step.source {
+            let Some(reaction) = preview(id) else { break };
+            if !visited.insert(id) || source_key(doc, &reaction) != key {
+                break;
+            }
+            reactions.push(reaction);
+            continue;
+        }
+        // Older figures have no arrow ID. Resolve only an unambiguous match.
         let candidates: Vec<_> = doc
             .arrows
             .iter()
             .filter(|arrow| !visited.contains(&arrow.id))
-            .filter_map(|arrow| reactions::preview(doc, arrow.id).ok())
+            .filter_map(|arrow| preview(arrow.id))
             .filter(|reaction| source_key(doc, reaction) == key)
             .collect();
         let side = |reaction: &Reaction, role| {
@@ -195,6 +207,10 @@ impl App {
         if self.tab.busy || self.tab.drawing_edit_active() {
             return;
         }
+        if arrow.is_none() && self.xtb_scheme_selected() && self.xtb_scheme_profile_available() {
+            self.xtb_place_scheme_profile();
+            return;
+        }
         if arrow.is_none()
             && let Some(graphic) = self.selected_energy_profile()
             && graphic
@@ -203,10 +219,6 @@ impl App {
                 .is_some_and(|profile| profile.steps.len() > 1)
         {
             self.select_energy_profile(graphic.id);
-            return;
-        }
-        if arrow.is_none() && self.xtb_scheme_selected() {
-            self.xtb_place_scheme_profile();
             return;
         }
         let arrow = arrow
@@ -398,6 +410,7 @@ impl App {
             from: 0,
             to,
             transition: (to == 2).then_some(1),
+            source: None,
             source_key: None,
             irc,
         };
@@ -524,9 +537,11 @@ impl App {
         profile: &EnergyProfile,
     ) -> Vec<Option<ProfileIrc>> {
         let doc = &self.tab.doc;
+        // A scheme can have several saddles and additional spectator models.
+        // Match its full geometry and trace below, step by step.
         let resolved = profile
             .source
-            .filter(|_| source_current(doc, profile))
+            .filter(|_| profile.steps.len() == 1 && source_current(doc, profile))
             .and_then(|arrow| self.xtb_resolve_reaction(doc, arrow, None).result);
         let transient = self.xtb_scheme_profile_results(profile);
         profile
@@ -740,6 +755,7 @@ mod tests {
                 from: index * 2,
                 to: index * 2 + 2,
                 transition: Some(index * 2 + 1),
+                source: None,
                 source_key: (index > 0).then(|| "b".repeat(64)),
                 irc: vec![],
             });

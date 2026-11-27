@@ -46,6 +46,7 @@ pub(crate) enum Action {
     PathPoints(String),
     Accept,
     EditMap,
+    SkipBarrier,
     Cancel,
 }
 
@@ -212,6 +213,7 @@ struct Picture {
 pub(in crate::app::xtb) struct Dialog {
     id: u64,
     scheme: Option<(usize, Arc<Document>)>,
+    detached_map: bool,
     at: (u64, u64),
     arrow: u64,
     mode: Mode,
@@ -636,6 +638,7 @@ impl App {
         document: Document,
         arrow: u64,
         free_energy: bool,
+        detached_map: bool,
     ) -> Task<Message> {
         let options = ReviewOptions {
             mode: Mode::TransitionState,
@@ -647,6 +650,7 @@ impl App {
         match self.prepare_review(&document, arrow, options) {
             Ok((mut dialog, task)) => {
                 dialog.scheme = Some((index, Arc::new(document)));
+                dialog.detached_map = detached_map;
                 self.show_prepared_review(dialog, task)
             }
             Err(reason) => self.xtb_scheme_reviewed(index, Err(reason)),
@@ -730,6 +734,7 @@ impl App {
         let mut dialog = Dialog {
             id,
             scheme: None,
+            detached_map: false,
             at: self.review_stamp(),
             arrow,
             mode,
@@ -869,19 +874,26 @@ impl App {
             Action::EditSpecies => dialog.edit_species = !dialog.edit_species,
             Action::Advanced => dialog.advanced = !dialog.advanced,
             Action::EditMap => {
-                if matches!(dialog.mapping, Mapping::Finding) {
+                if dialog.detached_map || matches!(dialog.mapping, Mapping::Finding) {
                     return Task::none();
                 }
                 let arrow = dialog.arrow;
-                let proposal = if dialog.scheme.is_some() {
-                    // A map can contain calculation-only atoms introduced for balance.
+                let proposal = dialog.mapping.proposal().cloned();
+                if dialog.scheme.is_some() {
                     let _ = self.xtb_scheme_action(scheme::Action::Cancel);
-                    None
-                } else {
-                    dialog.mapping.proposal().cloned()
-                };
+                }
                 self.tab.xtb.ts_review = None;
                 return self.open_reaction_map(arrow, proposal);
+            }
+            Action::SkipBarrier => {
+                if !dialog.detached_map {
+                    return Task::none();
+                }
+                let Some((index, _)) = dialog.scheme else {
+                    return Task::none();
+                };
+                self.tab.xtb.ts_review = None;
+                return self.xtb_scheme_skip_barrier(index);
             }
             Action::Accept => {
                 if dialog.validate().is_err() || (dialog.scheme.is_none() && !self.xtb_can_start())

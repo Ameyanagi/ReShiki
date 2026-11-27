@@ -82,6 +82,7 @@ fn fixture() -> (Document, u64, Vec<u64>, Vec<u64>) {
             from: 0,
             to: 2,
             transition: Some(1),
+            source: None,
             source_key: None,
             irc: vec![],
         }],
@@ -218,6 +219,7 @@ fn five_states_check_the_saved_chemistry_of_each_arrow() {
         from: 2,
         to: 4,
         transition: Some(3),
+        source: None,
         source_key: Some(key),
         irc: vec![],
     });

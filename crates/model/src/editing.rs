@@ -263,7 +263,7 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
         .iter_mut()
         .filter_map(|g| g.energy_profile.as_deref_mut())
     {
-        if profile.source.is_some_and(|id| !ids.contains(&id)) {
+        if profile.source_ids().any(|id| !ids.contains(&id)) {
             profile.unlink();
         }
     }
@@ -518,9 +518,10 @@ fn mapped_append_part(
             .iter_mut()
             .filter_map(|g| g.energy_profile.as_deref_mut())
         {
-            if profile
-                .source
-                .is_none_or(|id| !source.arrows.iter().any(|arrow| arrow.id == id))
+            if profile.source.is_none()
+                || profile
+                    .source_ids()
+                    .any(|id| !source.arrows.iter().any(|arrow| arrow.id == id))
             {
                 profile.unlink();
             }
@@ -673,12 +674,13 @@ fn rename_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
                 mo.linked = false;
             }
         }
-        if let Some(profile) = &mut g.energy_profile
-            && let Some(source) = profile.source
-        {
-            profile.source = mapping.get(&source).copied();
-            if profile.source.is_none() {
-                profile.linked = false;
+        if let Some(profile) = &mut g.energy_profile {
+            if profile.source_ids().any(|id| !mapping.contains_key(&id)) {
+                profile.unlink();
+            } else {
+                for id in profile.source_ids_mut() {
+                    map(id)?;
+                }
             }
         }
         if let Some(text) = &mut g.text {

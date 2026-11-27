@@ -68,11 +68,9 @@ impl Session {
         profile: &EnergyProfile,
         paths: Vec<Option<ProfileIrc>>,
         preference: Motion,
+        reduced_motion: bool,
     ) -> Self {
-        let motion = preference.preferred(
-            paths.iter().any(Option::is_some),
-            crate::platform::reduced_motion(),
-        );
+        let motion = preference.preferred(paths.iter().any(Option::is_some), reduced_motion);
         let timeline = Timeline::new(profile, &paths, motion);
         let mut position = Playback::default();
         position.seek(0, timeline.len());
@@ -126,6 +124,14 @@ impl Session {
 }
 
 impl App {
+    fn profile_animation_reduced_motion(&self) -> bool {
+        #[cfg(test)]
+        if let Some(preference) = self.profile_reduced_motion {
+            return preference;
+        }
+        crate::platform::reduced_motion()
+    }
+
     pub(super) fn selected_energy_profile(&self) -> Option<&Graphic> {
         let [id] = self.tab.selected.as_slice() else {
             return None;
@@ -173,14 +179,14 @@ impl App {
             .profile_animation
             .as_ref()
             .is_some_and(|session| session.motion == Motion::Smooth)
+            && self.profile_animation_reduced_motion()
         {
-            self.reduce_profile_animation(crate::platform::reduced_motion());
+            self.reduce_profile_animation();
         }
     }
 
-    fn reduce_profile_animation(&mut self, reduced_motion: bool) {
-        if reduced_motion
-            && let Some(session) = &mut self.profile_animation
+    fn reduce_profile_animation(&mut self) {
+        if let Some(session) = &mut self.profile_animation
             && session.motion == Motion::Smooth
             && let Some(graphic) = self
                 .tab
@@ -336,6 +342,7 @@ impl App {
                 profile,
                 self.energy_profile_paths(profile),
                 self.appearance.profile_motion,
+                self.profile_animation_reduced_motion(),
             )
         });
         let len = session.timeline.len();
@@ -347,7 +354,7 @@ impl App {
             }
             Action::Motion(motion) => {
                 if motion == Motion::Steps
-                    || !crate::platform::reduced_motion()
+                    || !self.profile_animation_reduced_motion()
                         && session.paths.iter().any(Option::is_some)
                 {
                     session.motion = motion;
@@ -420,7 +427,7 @@ impl App {
                 allowed.then_some(Message::GifExport(super::gif_export::Action::OpenProfile)),
             ),
         );
-        let smooth = !crate::platform::reduced_motion()
+        let smooth = !self.profile_animation_reduced_motion()
             && active.map_or_else(
                 || {
                     self.energy_profile_paths(profile)
@@ -491,17 +498,8 @@ impl App {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn profile_export_source(&mut self) -> Option<super::gif_export::Source> {
-        self.profile_export_source_with_motion(crate::platform::reduced_motion())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn profile_export_source_with_motion(
-        &mut self,
-        reduced_motion: bool,
-    ) -> Option<super::gif_export::Source> {
         use super::gif_export::{Motion as ExportMotion, Source};
         self.sync_profile_animation();
-        self.reduce_profile_animation(reduced_motion);
         if !self.profile_animation_allowed() {
             return None;
         }
@@ -513,10 +511,10 @@ impl App {
         let (timeline, motion, highlight) = self.current_profile_animation().map_or_else(
             || {
                 let paths = self.energy_profile_paths(profile);
-                let motion = self
-                    .appearance
-                    .profile_motion
-                    .preferred(paths.iter().any(Option::is_some), reduced_motion);
+                let motion = self.appearance.profile_motion.preferred(
+                    paths.iter().any(Option::is_some),
+                    self.profile_animation_reduced_motion(),
+                );
                 (Timeline::new(profile, &paths, motion), motion, true)
             },
             |s| (s.timeline.clone(), s.motion, s.highlight),

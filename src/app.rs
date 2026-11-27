@@ -572,6 +572,8 @@ pub struct App {
     #[cfg(not(target_arch = "wasm32"))]
     gif_export: Option<gif_export::Dialog>,
     profile_animation: Option<profile_animation::Session>,
+    #[cfg(test)]
+    profile_reduced_motion: Option<bool>,
     frames_import: Option<frames_import::Dialog>,
     /// Files of several frames opened together, asked about in turn.
     frames_queue: std::collections::VecDeque<(std::path::PathBuf, frames_import::File)>,
@@ -726,6 +728,8 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             gif_export: None,
             profile_animation: None,
+            #[cfg(test)]
+            profile_reduced_motion: Some(false),
             frames_import: None,
             frames_queue: Default::default(),
             xtb: xtb::Window::default(),

@@ -126,22 +126,9 @@ fn signed_energy(unit: EnergyUnit, value: f64) -> String {
     }
 }
 
-/// A sum is an overall reaction energy only when every step contributes.
+/// Use the same complete starting and final inventories as the plotted levels.
 fn overall(state: &State, free: bool) -> Option<f64> {
-    total_energies((0..state.plan.steps.len()).map(|index| {
-        let value = state.work.step(index)?;
-        if free { value.gibbs } else { value.energy }
-    }))
-}
-
-fn total_energies(values: impl IntoIterator<Item = Option<f64>>) -> Option<f64> {
-    let mut count = 0;
-    let total = values.into_iter().try_fold(0., |total, value| {
-        count += 1;
-        let total = total + value?;
-        total.is_finite().then_some(total)
-    })?;
-    (count != 0).then_some(total)
+    super::profile::overall(&state.plan, &state.work.report, free)
 }
 
 impl App {
@@ -321,7 +308,7 @@ impl App {
                 "Choose quantities for the reaction scheme",
                 "Calculate scheme…",
             )
-            .on_press_maybe((!self.xtb_running() && !self.tab.busy).then(|| send(Action::Open))),
+            .on_press_maybe(self.xtb_scheme_open_action()),
         );
         if let Some(state) = state {
             if !self.tab.xtb.palette.open && !state.work.steps.is_empty() {

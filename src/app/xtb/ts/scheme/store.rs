@@ -102,14 +102,18 @@ impl App {
             let Some(species) = state.plan.species.get(value.species) else {
                 continue;
             };
-            if let Err(reason) = save(
-                doc,
-                &species.atoms,
-                value.launch.as_ref(),
-                &value.result,
-                std::slice::from_ref(&value.frame),
-            ) {
-                errors.push(format!("{} · {reason}", species.label));
+            // Reused results keep the atom correspondence of their original
+            // drawing. Never attach a duplicate's frame to the representative.
+            for atoms in &species.instances {
+                if let Err(reason) = save(
+                    doc,
+                    atoms,
+                    value.launch.as_ref(),
+                    &value.result,
+                    std::slice::from_ref(&value.frame),
+                ) {
+                    errors.push(format!("{} · {reason}", species.label));
+                }
             }
         }
         for (index, step) in state.work.report.steps.iter().enumerate() {
@@ -163,12 +167,14 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::xtb::{self, run};
-    use reshiki::{document::Point, qcdata};
+    use reshiki::{
+        document::{Arrow, Point},
+        qcdata,
+        reactions::{Participant, Reaction},
+    };
+    use std::cell::Cell;
 
-    #[test]
-    fn finished_drawn_species_is_reusable_after_saving_and_added_water_stays_detached() {
-        let mut doc = Document::default();
-        let oxygen = doc.add_atom("O", Point::default());
+    fn water_result() -> (Arc<Frame>, Arc<CalcResult>) {
         let frame = Arc::new(Frame {
             numbers: vec![8, 1, 1],
             positions_angstrom: xtb::tests::START.to_vec(),
@@ -185,7 +191,14 @@ mod tests {
             settings.convergence = Some(qcdata::Convergence::Tight);
         }
         result.status = qcdata::Status::Converged;
-        let result = Arc::new(result);
+        (frame, Arc::new(result))
+    }
+
+    #[test]
+    fn finished_drawn_species_is_reusable_after_saving_and_added_water_stays_detached() {
+        let mut doc = Document::default();
+        let oxygen = doc.add_atom("O", Point::default());
+        let (frame, result) = water_result();
         let launch = Launch {
             atoms: vec![Some(oxygen), None, None],
             baseline: science::baseline(&doc, &[oxygen]),
@@ -210,5 +223,74 @@ mod tests {
             )
             .is_some()
         );
+    }
+
+    #[test]
+    fn a_duplicate_owned_result_is_saved_with_its_own_drawing_atoms() {
+        let mut doc = Document::default();
+        let atoms: Vec<_> = [0., 240., 480.]
+            .into_iter()
+            .map(|x| doc.add_atom("O", Point::new(x, 0.)))
+            .collect();
+        let mut arrows = Vec::new();
+        for index in 0..2 {
+            let arrow = doc.next_id();
+            doc.arrows.push(Arrow::new(
+                arrow,
+                Point::new(80. + index as f32 * 240., 0.),
+                Point::new(160. + index as f32 * 240., 0.),
+                Default::default(),
+                Default::default(),
+            ));
+            let mut reaction = Reaction::new(arrow);
+            reaction.reactants = vec![Participant {
+                atoms: vec![atoms[index]],
+                coefficient: 1,
+            }];
+            reaction.products = vec![Participant {
+                atoms: vec![atoms[index + 1]],
+                coefficient: 1,
+            }];
+            doc.reactions.push(reaction);
+            arrows.push(arrow);
+        }
+        let plan = super::super::plan::Plan::read(&doc, &arrows).unwrap();
+        assert_eq!(plan.species.len(), 1);
+        let second = plan.species[0].instances[1][0];
+        let (frame, result) = water_result();
+        let launch = Launch {
+            atoms: vec![Some(second), None, None],
+            baseline: science::baseline(&doc, &[second]),
+            frame: frame.clone(),
+        };
+        let mut work = super::super::run::State::default();
+        work.report.species.push(super::super::run::SpeciesValue {
+            species: 0,
+            method: qcdata::XtbMethod::Gfn2Xtb,
+            frame,
+            result,
+            launch: Some(launch),
+        });
+        let (mut app, _) = App::new();
+        app.tab.doc = doc;
+        app.tab.busy = false;
+        app.tab.xtb.scheme = Some(super::super::State {
+            options: vec![super::super::run::StepOptions::default(); 2],
+            plan,
+            method: qcdata::XtbMethod::Gfn2Xtb,
+            sheet: false,
+            original: None,
+            reviews: None,
+            work,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
+            checked: Cell::new(None),
+            pending_save: None,
+        });
+        app.xtb_store_scheme(false);
+        assert_eq!(app.tab.doc.science.results.len(), 1);
+        let link = &app.tab.doc.science.attachments[0];
+        assert!(same_atoms(&link.atoms, &[second]));
+        assert!(!link.atoms.contains(&Some(atoms[0])));
     }
 }

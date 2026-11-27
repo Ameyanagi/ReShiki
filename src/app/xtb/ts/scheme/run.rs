@@ -166,6 +166,7 @@ pub(crate) struct Event {
 enum EventKind {
     Progress(Progress),
     Species { key: String, value: SpeciesValue },
+    Endpoints { index: usize, value: StepValue },
     Step { index: usize, value: StepValue },
     Finished(Result<(), String>),
 }
@@ -228,14 +229,16 @@ impl State {
         let frequencies = frequency_species(plan, options, 0..plan.steps.len());
         for (index, species) in plan.species.iter().enumerate() {
             let lookup = |frequencies| {
-                crate::app::xtb::ts::energy::scheme_reusable(
-                    doc,
-                    &species.atoms,
-                    species.charge,
-                    species.multiplicity,
-                    method,
-                    frequencies,
-                )
+                species.instances.iter().find_map(|atoms| {
+                    crate::app::xtb::ts::energy::scheme_reusable(
+                        doc,
+                        atoms,
+                        species.charge,
+                        species.multiplicity,
+                        method,
+                        frequencies,
+                    )
+                })
             };
             let cached = frequencies
                 .contains(&index)
@@ -289,10 +292,22 @@ impl State {
         }
     }
 
-    /// Ignore late events from a cancelled or replaced run. Every accepted
-    /// species and step becomes available immediately to placement and retry.
+    /// Check before document freshness so canceled work cannot change status.
+    pub fn accepts(&self, event: &Event) -> bool {
+        event.serial == self.serial && self.running
+    }
+
+    #[cfg(test)]
+    pub(super) fn completion_event(&self) -> Event {
+        Event {
+            serial: self.serial,
+            kind: EventKind::Finished(Ok(())),
+        }
+    }
+
+    /// Every accepted species and step is available to placement and retry.
     pub fn accept(&mut self, event: Event) -> bool {
-        if event.serial != self.serial || !self.running {
+        if !self.accepts(&event) {
             return false;
         }
         match event.kind {
@@ -314,6 +329,11 @@ impl State {
                     .species
                     .retain(|old| old.species != value.species);
                 self.report.species.push(value);
+            }
+            EventKind::Endpoints { index, value } => {
+                if let Some(slot) = self.report.steps.get_mut(index) {
+                    *slot = Some(value);
+                }
             }
             EventKind::Step { index, value } => {
                 if let Some(status) = self.steps.get_mut(index) {
@@ -392,12 +412,55 @@ impl State {
                 inputs,
                 threads,
                 retry,
-                cache: self.cache.clone(),
+                cache: self.request_cache(plan, method, retry.is_some()),
                 serial: self.serial,
             },
             cancel,
         )
     }
+
+    fn request_cache(&self, plan: &Plan, method: XtbMethod, retry: bool) -> Vec<Cached> {
+        let mut cache = self.cache.clone();
+        if retry {
+            // A retained step is defined by the exact minima it originally
+            // used. A newer drawing result must not replace a shared minimum
+            // in just the retried step and break energy cancellation.
+            for value in &self.report.species {
+                let Some(species) = plan.species.get(value.species) else {
+                    continue;
+                };
+                if value.method != method {
+                    continue;
+                }
+                cache.retain(|old| old.key != species.key || old.method != method);
+                cache.push(Cached {
+                    key: species.key.clone(),
+                    method,
+                    frame: Arc::clone(&value.frame),
+                    result: Arc::clone(&value.result),
+                    launch: value.launch.clone(),
+                });
+            }
+        }
+        cache
+    }
+}
+
+pub(super) fn species_energy(value: &SpeciesValue, free: bool) -> Option<f64> {
+    let energy = value
+        .result
+        .energy_hartree
+        .filter(|energy| energy.is_finite())?;
+    let correction = if free {
+        if !transition_thermo(&value.result, &value.frame) {
+            return None;
+        }
+        value.result.thermo.as_ref()?.gibbs_correction_hartree
+    } else {
+        0.
+    };
+    let energy = energy + correction;
+    energy.is_finite().then_some(energy)
 }
 
 fn transition_thermo(result: &CalcResult, frame: &Frame) -> bool {

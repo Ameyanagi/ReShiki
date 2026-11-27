@@ -389,7 +389,11 @@ fn finish_mapping(app: &mut App) {
 fn finish_mapping_with(app: &mut App, change: impl FnOnce(&mut Proposal)) {
     let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
     assert!(matches!(dialog.mapping, Mapping::Finding));
-    let source = with_roles(&app.tab.doc, dialog.arrow).unwrap();
+    let document = dialog
+        .scheme
+        .as_ref()
+        .map_or(&app.tab.doc, |(_, document)| document.as_ref());
+    let source = with_roles(document, dialog.arrow).unwrap();
     let mut proposal =
         reshiki::reaction_mapping::propose(&source, dialog.arrow, Default::default()).unwrap();
     change(&mut proposal);
@@ -489,6 +493,63 @@ fn edit_map_hands_off_the_inferred_proposal_without_editing_the_drawing() {
     assert_eq!(app.tab.doc.reactions.len(), 1);
     assert!(app.tab.history.can_undo());
     assert!(!app.xtb_running());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn an_ambiguous_added_species_map_can_skip_its_barrier_and_keep_the_scheme_open() {
+    let (doc, plan) = scheme::plan::Plan::example();
+    let before = doc.clone();
+    let mut app = self::app(doc, plan.arrows[0]);
+    app.tab.selected = plan.arrows;
+    let scheme = |action| Message::Xtb(XtbAction::Ts(TsAction::Scheme(action)));
+    let _ = app.update(scheme(scheme::Action::Open));
+    for quantity in [scheme::Quantity::FreeEnergy, scheme::Quantity::FreeBarrier] {
+        let _ = app.update(scheme(scheme::Action::Toggle(0, quantity)));
+    }
+    let _ = app.update(scheme(scheme::Action::Run));
+    finish_mapping_with(&mut app, |proposal| proposal.multiple_best = true);
+    assert!(app.ts_review_visible());
+    assert!(app.tab.xtb.ts_review.as_ref().unwrap().detached_map);
+    let _ = app.update(send(Action::EditMap));
+    assert!(
+        app.ts_review_visible(),
+        "The detached map cannot open in the drawing"
+    );
+    let _ = app.update(send(Action::SkipBarrier));
+    assert!(!app.ts_review_open());
+    assert!(app.xtb_scheme_running());
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn a_drawn_only_scheme_map_still_opens_in_the_drawing() {
+    let (mut doc, first) = hydrogen_transfer();
+    let mut arrow = doc.arrows[0].clone();
+    arrow.id = doc.next_id();
+    let second = arrow.id;
+    doc.arrows.push(arrow);
+    let mut reverse = doc.reactions[0].clone();
+    reverse.arrow = second;
+    std::mem::swap(&mut reverse.reactants, &mut reverse.products);
+    doc.reactions.push(reverse);
+    let before = doc.clone();
+    let mut app = self::app(doc, first);
+    app.tab.selected = vec![first, second];
+    for action in [scheme::Action::Open, scheme::Action::Run] {
+        let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Scheme(action))));
+    }
+    let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
+    assert!(!dialog.detached_map);
+    let _ = app.update(send(Action::SkipBarrier));
+    assert!(app.ts_review_open());
+    let _ = app.update(send(Action::EditMap));
+    assert!(!app.ts_review_open());
+    assert!(!app.xtb_scheme_running());
+    assert_eq!(app.inspector_tab, InspectorTab::Reactions);
+    assert_eq!(app.tab.doc, before);
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]

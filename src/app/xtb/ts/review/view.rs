@@ -237,22 +237,32 @@ impl App {
             ));
         }
         let run = dialog.run_label();
+        let edit = if dialog.detached_map {
+            accessible_command(
+                "ts.review.skip-barrier",
+                "Skip barrier for this step",
+                "Skip barrier for this step",
+            )
+            .on_press_maybe(current.then(|| send(Action::SkipBarrier)))
+        } else {
+            accessible_command(
+                "ts.review.edit",
+                "Edit map",
+                if dialog.scheme.is_some() {
+                    "Edit map in drawing"
+                } else {
+                    "Edit map"
+                },
+            )
+            .on_press_maybe(
+                (current && !matches!(dialog.mapping, Mapping::Finding))
+                    .then(|| send(Action::EditMap)),
+            )
+        };
         content = content
             .push(
                 row![
-                    accessible_command(
-                        "ts.review.edit",
-                        "Edit map",
-                        if dialog.scheme.is_some() {
-                            "Edit map in drawing"
-                        } else {
-                            "Edit map"
-                        }
-                    )
-                    .on_press_maybe(
-                        (current && !matches!(dialog.mapping, Mapping::Finding))
-                            .then(|| send(Action::EditMap))
-                    ),
+                    edit,
                     Space::new().width(Length::Fill),
                     accessible_command("ts.review.cancel", "Cancel", "Cancel")
                         .on_press(send(Action::Cancel)),

@@ -843,7 +843,7 @@ impl App {
                 entries.push(command(
                     "Calculate scheme…",
                     super::xtb::ts::scheme::open_message(),
-                    self.xtb_can_open_scheme(),
+                    self.xtb_scheme_open_action().is_some(),
                 ));
             }
             if let Some(arrow) = self.context_calculate_reaction_arrow() {

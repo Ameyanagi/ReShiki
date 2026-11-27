@@ -2,7 +2,7 @@ use super::*;
 use reshiki::document::{Arrow, Point};
 use reshiki::reactions::{Participant, Reaction, ts_plan::Side};
 
-fn plan() -> Plan {
+fn drawing() -> (Document, Vec<u64>) {
     let mut doc = Document::default();
     let atoms: Vec<_> = [0., 240., 480.]
         .into_iter()
@@ -30,6 +30,11 @@ fn plan() -> Plan {
         doc.reactions.push(reaction);
         arrows.push(arrow);
     }
+    (doc, arrows)
+}
+
+fn plan() -> Plan {
+    let (doc, arrows) = drawing();
     Plan::read(&doc, &arrows).unwrap()
 }
 
@@ -67,6 +72,29 @@ fn request() -> Request {
         cache: Vec::new(),
         serial: 1,
     }
+}
+
+fn distinct_request() -> Request {
+    let mut request = request();
+    let representative = request.plan.species[0].clone();
+    request.plan.species = (0..3)
+        .map(|index| {
+            let mut species = representative.clone();
+            species.key = format!("fake species {index}");
+            species
+        })
+        .collect();
+    for (index, step) in request.plan.steps.iter_mut().enumerate() {
+        step.reactants = vec![super::super::super::plan::Term {
+            species: index,
+            coefficient: 1,
+        }];
+        step.products = vec![super::super::super::plan::Term {
+            species: index + 1,
+            coefficient: 1,
+        }];
+    }
+    request
 }
 
 fn species_value(index: usize, method: XtbMethod) -> SpeciesValue {
@@ -120,7 +148,11 @@ fn thermo_value(index: usize, energy: f64, correction: f64) -> SpeciesValue {
         )
         .unwrap();
     result.energy_hartree = Some(energy);
-    result.thermo.as_mut().unwrap().gibbs_correction_hartree = correction;
+    result.status = qcdata::Status::Converged;
+    let thermo = result.thermo.as_mut().unwrap();
+    thermo.gibbs_correction_hartree = correction;
+    thermo.enthalpy_correction_hartree =
+        correction + thermo.temperature_k * thermo.entropy_hartree_per_k;
     assert!(transition_thermo(&result, &frame));
     SpeciesValue {
         species: index,
@@ -144,6 +176,7 @@ struct Fake {
     fail_ts: BTreeSet<u64>,
     frequency_warning: bool,
     cancel_after_species: bool,
+    cancel_species: Option<usize>,
     optimized_starts: usize,
     order: Vec<Job>,
     thermo: bool,
@@ -165,7 +198,7 @@ impl Backend for Fake {
         } = job;
         self.species.push((index, frequencies));
         self.order.push(Job::Species(index));
-        if self.cancel_after_species {
+        if self.cancel_after_species || self.cancel_species == Some(index) {
             cancel.cancel();
         }
         Ok(SpeciesComputed {
@@ -456,6 +489,172 @@ fn retry_only_runs_the_requested_ts_and_reuses_shared_species() {
             .map(|(index, _)| *index)
             .collect::<Vec<_>>(),
         [1]
+    );
+}
+
+#[test]
+fn retry_keeps_the_exact_minima_used_by_retained_rows() {
+    let mut request = distinct_request();
+    let originals: Vec<_> = (0..3)
+        .map(|index| {
+            let mut value = species_value(index, request.method);
+            Arc::make_mut(&mut value.result).energy_hartree = Some(-1. - index as f64);
+            value
+        })
+        .collect();
+    let original = &originals[1];
+    let mut newer = (*original).clone();
+    Arc::make_mut(&mut newer.result).energy_hartree = Some(-2.01);
+    let mut state = State::default();
+    state.report.species = originals.clone();
+    let mut retained = StepValue::empty(request.plan.steps[0].arrow, request.method);
+    retained.energy = Some(-qcdata::KCAL_PER_HARTREE);
+    state.report.steps = vec![Some(retained), None];
+    state.cache_value(
+        request.plan.species[1].key.clone(),
+        request.method,
+        newer.frame,
+        newer.result,
+        None,
+    );
+    request.retry = Some(1);
+    request.cache = state.request_cache(&request.plan, request.method, true);
+    assert!(
+        request
+            .cache
+            .iter()
+            .any(|value| Arc::ptr_eq(&value.result, &original.result))
+    );
+    let mut fake = Fake::default();
+    let mut events = Vec::new();
+    calculate(&request, &mut fake, &Cancel::default(), |event| {
+        events.push(event)
+    })
+    .unwrap();
+    assert!(fake.species.is_empty());
+    let reused = events
+        .iter()
+        .find_map(|event| match event {
+            EventKind::Species { value, .. } if value.species == 1 => Some(value),
+            _ => None,
+        })
+        .unwrap();
+    assert!(Arc::ptr_eq(&reused.result, &original.result));
+    let overall =
+        state.step(0).unwrap().energy.unwrap() + step_values(&events)[0].1.energy.unwrap();
+    assert!((overall + 2. * qcdata::KCAL_PER_HARTREE).abs() < 1e-8);
+}
+
+#[test]
+fn cache_seeding_finds_an_eligible_result_on_a_later_drawn_copy() {
+    let (mut doc, arrows) = drawing();
+    // Isolated oxygen drawings are water, for which the existing minimum
+    // fixture supplies a valid atom order and ordinary-cache eligibility.
+    for atom in &mut doc.atoms {
+        atom.element = "O".into();
+    }
+    let plan = Plan::read(&doc, &arrows).unwrap();
+    assert_eq!(plan.species.len(), 1);
+    let species = &plan.species[0];
+    let second = species.instances[1][0];
+    let value = thermo_value(0, -1., 0.01);
+    let mut result = (*value.result).clone();
+    if let qcdata::Settings::Xtb(settings) = &mut result.settings {
+        settings.convergence = Some(qcdata::Convergence::Tight);
+    }
+    let launch = Launch {
+        frame: value.frame,
+        atoms: vec![Some(second), None, None],
+        baseline: science::baseline(&doc, &[second]),
+    };
+    science::attach(&mut doc, &launch, vec![(*launch.frame).clone()], result).unwrap();
+    let mut state = State::default();
+    state.seed(
+        &doc,
+        &plan,
+        XtbMethod::Gfn2Xtb,
+        &[StepOptions::default(); 2],
+    );
+    assert_eq!(state.cache.len(), 1);
+    assert_eq!(state.cache[0].launch.as_ref().unwrap().atoms, launch.atoms);
+    let mut request = request();
+    request.plan = plan;
+    request.cache = std::mem::take(&mut state.cache);
+    let mut fake = Fake::default();
+    calculate(&request, &mut fake, &Cancel::default(), |_| {}).unwrap();
+    assert!(
+        fake.species.is_empty(),
+        "the eligible duplicate must be reused"
+    );
+}
+
+#[test]
+fn endpoint_results_survive_cancel_during_an_unrelated_minimum_with_or_without_a_barrier() {
+    for barrier in [false, true] {
+        let mut request = distinct_request();
+        for options in &mut request.options {
+            options.barrier = barrier;
+        }
+        let mut fake = Fake {
+            cancel_species: Some(2),
+            ..Default::default()
+        };
+        let mut events = Vec::new();
+        assert!(
+            calculate(&request, &mut fake, &Cancel::default(), |event| events
+                .push(event))
+            .is_err()
+        );
+        let published: Vec<_> = events
+            .iter()
+            .filter_map(|event| match event {
+                EventKind::Step { index, .. } | EventKind::Endpoints { index, .. } => Some(*index),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(published, [0]);
+        let mut state = State::default();
+        state.serial = request.serial;
+        state.running = true;
+        state.steps = vec![StepStatus::Pending; 2];
+        state.report.steps = vec![None; 2];
+        for kind in events {
+            assert!(state.accept(Event {
+                serial: request.serial,
+                kind
+            }));
+        }
+        state.cancel();
+        assert_eq!(
+            state.steps[0],
+            if barrier {
+                StepStatus::Cancelled
+            } else {
+                StepStatus::Done
+            }
+        );
+        assert_eq!(state.steps[1], StepStatus::Cancelled);
+        assert_eq!(state.step(0).unwrap().energy, Some(0.));
+        assert!(state.step(0).unwrap().barrier.is_none());
+    }
+}
+
+#[test]
+fn a_balancing_species_is_visited_before_a_later_steps_unrelated_minimum() {
+    let mut request = distinct_request();
+    // Species 2 represents a detached balancing product discovered after all
+    // drawn species; it still belongs to the first row's dependency set.
+    request.plan.steps[0].products[0].species = 2;
+    request.plan.steps[1].reactants[0].species = 2;
+    request.plan.steps[1].products[0].species = 1;
+    let mut fake = Fake::default();
+    calculate(&request, &mut fake, &Cancel::default(), |_| {}).unwrap();
+    assert_eq!(
+        fake.species
+            .iter()
+            .map(|(index, _)| *index)
+            .collect::<Vec<_>>(),
+        [0, 2, 1]
     );
 }
 

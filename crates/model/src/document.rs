@@ -349,6 +349,8 @@ pub const TUBE_BENDS: u32 = 41;
 pub const CALCULATIONS: u32 = 42;
 /// Editable reaction energy profiles with linked calculation provenance.
 pub const ENERGY_PROFILES: u32 = 43;
+/// Per-step arrow links on reaction scheme energy profiles.
+pub const SCHEME_PROFILE_LINKS: u32 = 44;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
@@ -364,7 +366,7 @@ pub const ENERGY_PROFILES: u32 = 43;
 /// lasting layouts, arrow bodies, arcs, callout leaders, condition icons, catalytic
 /// cycles or equipment pieces require version 40. Custom compression-tube
 /// routes require version 41. Calculation frames and results require version 42.
-/// Reaction energy profiles require version 43.
+/// Reaction energy profiles require version 43 and per-step arrow links require version 44.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 /// Optional per-highlight style overrides belong to version 40's highlight
@@ -409,7 +411,8 @@ pub const ENERGY_PROFILES: u32 = 43;
 /// | 41 | Custom compression-tube routes with editable circular bends. |
 /// | 42 | Calculation frames and results linked to molecules; orbital surfaces placed on 3D models. |
 /// | 43 | Editable reaction energy profiles. |
-pub const VERSION: u32 = ENERGY_PROFILES;
+/// | 44 | Per-step arrow links on scheme energy profiles. |
+pub const VERSION: u32 = SCHEME_PROFILE_LINKS;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
@@ -769,7 +772,14 @@ impl Document {
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
         use crate::graphics::{GraphicKind, LinePattern};
-        if self.graphics.iter().any(|g| g.energy_profile.is_some()) {
+        if self
+            .graphics
+            .iter()
+            .filter_map(|g| g.energy_profile.as_ref())
+            .any(|p| p.steps.iter().any(|s| s.source.is_some()))
+        {
+            SCHEME_PROFILE_LINKS
+        } else if self.graphics.iter().any(|g| g.energy_profile.is_some()) {
             ENERGY_PROFILES
         } else if !self.science.is_empty()
             || self.orbital_figures().next().is_some()
@@ -1050,6 +1060,12 @@ impl Document {
                 // A removed source leaves a stale linked snapshot. Explicit
                 // Unlink is the action that makes it permanently static.
                 profile.source = None;
+            }
+            for step in &mut profile.steps {
+                if step.source.is_some_and(|id| ids.contains(&id)) {
+                    step.source = None;
+                    step.source_key = None;
+                }
             }
         }
         crate::equipment::solve::prune(self);

@@ -40,6 +40,7 @@ fn profile(kinds: &[Kind]) -> EnergyProfile {
                 return None;
             };
             Some(EnergyProfileStep {
+                source: None,
                 source_key: None,
                 from,
                 to,
@@ -292,6 +293,7 @@ fn changing_speed_restarts_the_current_state_hold() {
 #[test]
 fn switching_steps_and_smooth_restarts_equal_duration_state_holds() {
     let (mut app, arrow) = ts::tests::finished_irc();
+    app.profile_reduced_motion = Some(false);
     let _ = app.update(Message::Xtb(xtb::Action::Ts(
         ts::Action::PlaceEnergyProfile(Some(arrow)),
     )));
@@ -331,6 +333,7 @@ fn switching_steps_and_smooth_restarts_equal_duration_state_holds() {
 #[test]
 fn export_clamps_a_paused_smooth_session_when_reduced_motion_changes_before_the_next_tick() {
     let (mut app, arrow) = ts::tests::finished_irc();
+    app.profile_reduced_motion = Some(false);
     let _ = app.update(Message::Xtb(xtb::Action::Ts(
         ts::Action::PlaceEnergyProfile(Some(arrow)),
     )));
@@ -340,7 +343,8 @@ fn export_clamps_a_paused_smooth_session_when_reduced_motion_changes_before_the_
         Motion::Smooth
     );
     assert!(!app.current_profile_animation().unwrap().position.playing);
-    let source = app.profile_export_source_with_motion(true).unwrap();
+    app.profile_reduced_motion = Some(true);
+    let source = app.profile_export_source().unwrap();
     let crate::app::gif_export::Motion::Profile {
         timeline, motion, ..
     } = source.motion
@@ -354,6 +358,28 @@ fn export_clamps_a_paused_smooth_session_when_reduced_motion_changes_before_the_
         Motion::Steps
     );
     assert_eq!(app.appearance.profile_motion, Motion::Smooth);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn reduced_motion_blocks_smooth_playback_actions_without_replacing_the_saved_choice() {
+    let (mut app, arrow) = ts::tests::finished_irc();
+    app.profile_reduced_motion = Some(true);
+    app.appearance.profile_motion = Motion::Smooth;
+    let _ = app.update(Message::Xtb(xtb::Action::Ts(
+        ts::Action::PlaceEnergyProfile(Some(arrow)),
+    )));
+    let _ = app.update(Message::ProfileAnimation(Action::Motion(Motion::Smooth)));
+    let session = app.current_profile_animation().unwrap();
+    assert!(session.paths.iter().any(Option::is_some));
+    assert_eq!(session.motion, Motion::Steps);
+    assert_eq!(session.timeline.len(), 3);
+    assert_eq!(app.appearance.profile_motion, Motion::Smooth);
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    finish_hold(&mut app);
+    let session = app.current_profile_animation().unwrap();
+    assert_eq!(session.position.frame, 1);
+    assert!(session.timeline.frame(1).unwrap().sample().is_none());
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
@@ -439,6 +465,7 @@ fn no_op_canvas_move_and_resize_pause_playback_without_desynchronizing_the_overl
 #[test]
 fn moving_and_resizing_a_profile_preserves_the_smooth_session() {
     let (mut app, arrow) = ts::tests::finished_irc();
+    app.profile_reduced_motion = Some(false);
     let _ = app.update(Message::Xtb(xtb::Action::Ts(
         ts::Action::PlaceEnergyProfile(Some(arrow)),
     )));

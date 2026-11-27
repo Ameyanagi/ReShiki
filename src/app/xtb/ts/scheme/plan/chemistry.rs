@@ -66,25 +66,6 @@ impl Composition {
             .is_ok()
             && corrected.is_zero()
     }
-
-    pub(super) fn description(&self) -> String {
-        let mut details: Vec<_> = self
-            .atoms
-            .iter()
-            .map(|(&atom, &count)| {
-                format!(
-                    "{} {} {}",
-                    count.unsigned_abs(),
-                    if count > 0 { "more" } else { "fewer" },
-                    composition::symbol(atom)
-                )
-            })
-            .collect();
-        if self.charge != 0 {
-            details.push(format!("a charge difference of {:+}", self.charge));
-        }
-        format!("Products have {} relative to reactants", details.join(", "))
-    }
 }
 
 pub(super) fn difference(species: &[Species], step: &Step) -> Result<Composition, String> {
@@ -125,7 +106,7 @@ pub(super) fn molecule(doc: &Document, atoms: &[u64]) -> Result<Species, String>
     let calculation = calculation(doc, atoms);
     let prepared = document::prepare(&calculation).map_err(|error| error.to_string())?;
     let first = *atoms.first().ok_or("A reaction species has no atoms")?;
-    let (charge, multiplicity) = reshiki::science::drawn_state(doc, first);
+    let (charge, multiplicity) = reshiki::science::drawn_state(&calculation, first);
     let composition = Composition {
         atoms: composition::prepared_counts(&prepared)?,
         charge: i64::from(charge),
@@ -161,6 +142,7 @@ pub(super) fn molecule(doc: &Document, atoms: &[u64]) -> Result<Species, String>
     let (label, name) = labels(doc, atoms, &formula);
     Ok(Species {
         atoms: atoms.to_vec(),
+        instances: vec![atoms.to_vec()],
         calculation,
         label,
         name,
@@ -211,6 +193,7 @@ pub(super) fn candidates() -> Result<Vec<Species>, String> {
         }
         let mut species = molecule(&doc, &ids)?;
         species.atoms.clear();
+        species.instances.clear();
         species.label = label.into();
         species.name = name.into();
         candidates.push(species);
@@ -221,6 +204,27 @@ pub(super) fn candidates() -> Result<Vec<Species>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn isolated_species_does_not_inherit_hydrogen_bonded_charge_or_spin() {
+        let mut doc = Document::default();
+        let water = doc.add_atom("O", Point::default());
+        let neighbor = doc.add_atom("O", Point::new(80., 0.));
+        doc.atom_mut(neighbor).unwrap().charge = -1;
+        doc.add_bond(water, neighbor, 0, "plain");
+        assert_eq!(reshiki::science::drawn_state(&doc, water), (-1, 1));
+        let isolated = molecule(&doc, &[water]).unwrap();
+        assert_eq!((isolated.charge, isolated.multiplicity), (0, 1));
+        assert_eq!(isolated.formula, "H2O");
+        let atom = doc.atom_mut(neighbor).unwrap();
+        atom.charge = 0;
+        atom.explicit_h = 1;
+        atom.no_implicit = true;
+        atom.radical_electrons = 1;
+        assert_eq!(reshiki::science::drawn_state(&doc, water), (0, 2));
+        let isolated = molecule(&doc, &[water]).unwrap();
+        assert_eq!((isolated.charge, isolated.multiplicity), (0, 1));
+    }
 
     #[test]
     fn normalized_reuse_identity_retains_isotopic_tetrahedral_stereo() {

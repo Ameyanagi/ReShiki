@@ -95,11 +95,18 @@ fn order_comes_from_shared_drawn_species_and_balance_is_calculation_only() {
     assert_eq!(
         plan.notes
             .iter()
-            .filter(|note| note.contains("Added one"))
+            .filter(|note| note.starts_with("Balanced by adding"))
             .count(),
         2
     );
     assert_eq!(plan.species.len(), 5);
+    assert_eq!(
+        plan.notes,
+        [
+            "Balanced by adding H₂O to step 1.",
+            "Balanced by adding H₂ to step 2."
+        ]
+    );
     for species in &plan.species {
         assert_eq!(
             reactions::molecules(
@@ -119,6 +126,7 @@ fn order_comes_from_shared_drawn_species_and_balance_is_calculation_only() {
     }
     let review = plan.review_document(0, &doc).unwrap();
     assert_eq!(review.reactions[0].products.len(), 2);
+    assert!(plan.steps.iter().all(Step::has_added_copies));
     assert_eq!(doc, before);
     assert!(plan.current(&doc));
 }
@@ -154,7 +162,7 @@ fn a_three_step_chain_reuses_hydrogen_chloride_on_opposite_sides() {
     assert!(
         plan.notes
             .iter()
-            .any(|note| note.starts_with("Step 2") && note.contains("HCl"))
+            .any(|note| note == "Balanced by adding HCl to step 2.")
     );
 }
 
@@ -186,6 +194,40 @@ fn chemical_copies_do_not_connect_disconnected_drawings() {
 }
 
 #[test]
+fn inferred_scheme_agents_above_and_below_the_shaft_do_not_become_endpoints() {
+    let mut doc = Document::default();
+    let a = molecule_at(&mut doc, &["C"], &[], -80.);
+    let b = molecule_at(&mut doc, &["N"], &[], 180.);
+    let c = molecule_at(&mut doc, &["O"], &[], 440.);
+    let above = molecule_at(&mut doc, &["O"], &[], 30.);
+    let below = molecule_at(&mut doc, &["O"], &[], 70.);
+    doc.atom_mut(above[0]).unwrap().position.y = -20.;
+    doc.atom_mut(below[0]).unwrap().position.y = 20.;
+    let first = step(&mut doc, &[one(&a)], &[one(&b)], 0.);
+    let second = step(&mut doc, &[one(&b)], &[one(&c)], 260.);
+    doc.arrows[0].end.x = 100.;
+    doc.arrows[1].end.x = 360.;
+    doc.reactions.clear();
+    let shared = reactions::preview(&doc, first).unwrap();
+    assert!(shared.reactants.iter().any(|term| term.atoms == above));
+    assert!(shared.products.iter().any(|term| term.atoms == below));
+    let inferred = preview(&doc, first).unwrap();
+    assert_eq!(inferred.reactants[0].atoms, a);
+    assert_eq!(inferred.products[0].atoms, b);
+    assert_eq!(inferred.agents.len(), 2);
+    let plan = Plan::read(&doc, &[second, first]).unwrap();
+    assert_eq!(plan.steps[0].reactants.len(), 1);
+    assert_eq!(plan.steps[0].products.len(), 1);
+    assert_eq!(plan.species.len(), 3);
+    assert!(plan.current(&doc));
+    let mut explicit = inferred;
+    explicit.reactants.push(explicit.agents.remove(0));
+    doc.reactions.push(explicit.clone());
+    assert_eq!(preview(&doc, first).unwrap(), explicit);
+    assert!(!plan.current(&doc));
+}
+
+#[test]
 fn an_unbranched_cycle_starts_at_the_first_document_arrow() {
     let mut doc = Document::default();
     let a = molecule_at(&mut doc, &["C"], &[], 0.);
@@ -202,20 +244,90 @@ fn an_unbranched_cycle_starts_at_the_first_document_arrow() {
 #[test]
 fn a_shared_spectator_does_not_create_a_branch() {
     let (mut doc, plan) = two_step();
-    let spectator = molecule_at(&mut doc, &["Cl"], &[], -120.);
-    for reaction in &mut doc.reactions {
-        reaction.reactants.push(Participant {
-            atoms: spectator.clone(),
-            coefficient: 1,
-        });
-        reaction.products.push(Participant {
-            atoms: spectator.clone(),
+    let first_spectator = molecule_at(&mut doc, &["Cl"], &[], -120.);
+    let shared_spectator = molecule_at(&mut doc, &["Cl"], &[], 200.);
+    let last_spectator = molecule_at(&mut doc, &["Cl"], &[], 900.);
+    doc.reactions[0].reactants.push(Participant {
+        atoms: first_spectator,
+        coefficient: 2,
+    });
+    doc.reactions[0].products.push(Participant {
+        atoms: shared_spectator.clone(),
+        coefficient: 2,
+    });
+    let before = doc.reactions[1].products[0].atoms.clone();
+    let after = molecule_at(&mut doc, &["C", "C"], &[(0, 1, 3)], 720.);
+    let third = step(
+        &mut doc,
+        &[one(&before), (shared_spectator, 2)],
+        &[one(&after), (last_spectator, 2)],
+        600.,
+    );
+    reactions::validate(&doc).unwrap();
+    let arrows = [plan.arrows[0], plan.arrows[1], third];
+    let updated = Plan::read(&doc, &arrows).unwrap();
+    assert_eq!(updated.arrows, arrows);
+    assert!(!updated.cyclic);
+}
+
+#[test]
+fn spectator_cancellation_counts_coefficients_and_preserves_an_excess() {
+    let drawn = |species, atom, coefficient| DrawnTerm {
+        species,
+        atoms: vec![atom],
+        coefficient,
+        label: String::new(),
+    };
+    let mut source = Step {
+        arrow: 10,
+        reactants: Vec::new(),
+        products: Vec::new(),
+        notes: Vec::new(),
+        drawn_reactants: vec![drawn(0, 1, 1), drawn(2, 3, 2)],
+        drawn_products: vec![drawn(1, 2, 1), drawn(2, 4, 1)],
+    };
+    let (reactants, products) = path_sides(&source).unwrap();
+    assert!(reactants.contains(&vec![3]));
+    assert!(!products.contains(&vec![4]));
+    source.drawn_products[1].coefficient = 2;
+    let (reactants, products) = path_sides(&source).unwrap();
+    assert!(!reactants.contains(&vec![3]));
+    assert!(!products.contains(&vec![4]));
+    source.drawn_products[0].species = 0;
+    let (reactants, products) = path_sides(&source).unwrap();
+    assert_eq!(reactants, BTreeSet::from([vec![1], vec![3]]));
+    assert_eq!(products, BTreeSet::from([vec![2], vec![4]]));
+}
+
+#[test]
+fn canceling_one_of_distinct_copies_does_not_leave_a_false_shortcut() {
+    let (mut doc, plan) = two_step();
+    let initial = molecule_at(&mut doc, &["Cl"], &[], -120.);
+    let spectator = molecule_at(&mut doc, &["Cl"], &[], 200.);
+    let extra = molecule_at(&mut doc, &["Cl"], &[], 300.);
+    doc.reactions[0].reactants.push(Participant {
+        atoms: initial,
+        coefficient: 1,
+    });
+    for atoms in [spectator.clone(), extra] {
+        doc.reactions[0].products.push(Participant {
+            atoms,
             coefficient: 1,
         });
     }
-    let updated = Plan::read(&doc, &plan.arrows).unwrap();
-    assert_eq!(updated.arrows, plan.arrows);
-    assert!(!updated.cyclic);
+    let before = doc.reactions[1].products[0].atoms.clone();
+    let after = molecule_at(&mut doc, &["C", "C"], &[(0, 1, 3)], 720.);
+    let third = step(
+        &mut doc,
+        &[one(&before), one(&spectator)],
+        &[one(&after)],
+        600.,
+    );
+    reactions::validate(&doc).unwrap();
+    let arrows = [plan.arrows[0], plan.arrows[1], third];
+    assert_eq!(Plan::read(&doc, &arrows).unwrap().arrows, arrows);
+    doc.reactions[0].products.reverse();
+    assert_eq!(Plan::read(&doc, &arrows).unwrap().arrows, arrows);
 }
 
 #[test]
@@ -232,6 +344,7 @@ fn exactly_one_copy_of_a_drawn_species_can_balance_and_keeps_original_maps() {
     let another = molecule_at(&mut doc, &["C", "O"], &[(0, 1, 2)], 550.);
     let a = step(&mut doc, &[one(&formaldehyde)], &[one(&dimer)], 120.);
     let b = step(&mut doc, &[one(&dimer)], &[(another, 2)], 450.);
+    reshiki::compound_numbers::number(&mut doc, &formaldehyde, Default::default()).unwrap();
     let plan = Plan::read(&doc, &[a, b]).unwrap();
     assert_eq!(
         plan.species.len(),
@@ -239,7 +352,12 @@ fn exactly_one_copy_of_a_drawn_species_can_balance_and_keeps_original_maps() {
         "separate drawn copies share one calculation input"
     );
     assert_eq!(plan.steps[0].reactants[0].coefficient, 2);
-    assert!(plan.notes.iter().any(|note| note.contains("Added one")));
+    assert!(plan.steps.iter().all(Step::has_added_copies));
+    assert!(
+        plan.notes
+            .iter()
+            .any(|note| { note == "Balanced by adding another copy of compound 1 to step 1." })
+    );
     let review = plan.review_document(0, &doc).unwrap();
     assert_eq!(review.reactions[0].reactants.len(), 2);
     assert_eq!(review.atom(formaldehyde[0]).unwrap().map_num, 1);
@@ -289,7 +407,7 @@ fn equally_balancing_structural_isomers_are_ambiguous() {
         !plan.steps[0]
             .notes
             .iter()
-            .any(|note| note.contains("Added one"))
+            .any(|note| note.starts_with("Balanced by adding"))
     );
 }
 
@@ -301,10 +419,12 @@ fn explicit_water_and_builtin_water_are_one_balancing_candidate() {
         atoms: water.clone(),
         coefficient: 1,
     });
+    let other_water = molecule_at(&mut doc, &["H", "O", "H"], &[(0, 1, 1), (1, 2, 1)], 800.);
     doc.reactions[1].products.push(Participant {
-        atoms: water.clone(),
+        atoms: other_water,
         coefficient: 1,
     });
+    reactions::validate(&doc).unwrap();
     let plan = Plan::read(&doc, &original.arrows).unwrap();
     let waters: Vec<_> = plan
         .species
@@ -317,7 +437,7 @@ fn explicit_water_and_builtin_water_are_one_balancing_candidate() {
         plan.steps[0]
             .notes
             .iter()
-            .any(|note| note.contains("Added one"))
+            .any(|note| note.starts_with("Balanced by adding"))
     );
 }
 
@@ -336,7 +456,7 @@ fn isotopes_are_not_balanced_by_unlabelled_small_molecules() {
         plan.steps[0]
             .notes
             .iter()
-            .any(|note| note.contains("No single supported molecule"))
+            .any(|note| note.contains("No single molecule"))
     );
     assert_eq!(plan.species.len(), 2);
 }
@@ -378,6 +498,7 @@ fn every_supported_builtin_is_a_single_ready_molecule() {
     );
     for species in candidates {
         assert!(species.atoms.is_empty());
+        assert!(species.instances.is_empty());
         assert_eq!((species.charge, species.multiplicity), (0, 1));
         let ids: Vec<_> = species
             .calculation
@@ -402,6 +523,8 @@ fn compound_numbers_belong_to_drawn_instances_while_the_calculation_is_shared() 
     let second = step(&mut doc, &[one(&b)], &[one(&c)], 320.);
     let plan = Plan::read(&doc, &[first, second]).unwrap();
     assert_eq!(plan.species.len(), 1);
+    assert_eq!(plan.species[0].atoms, a);
+    assert_eq!(plan.species[0].instances, [a, b, c]);
     assert_eq!(plan.endpoint_label(0, false), "1");
     assert_eq!(plan.endpoint_label(0, true), "2");
     assert_eq!(plan.endpoint_label(1, true), "3");
@@ -439,30 +562,84 @@ fn neutral_hydrogen_chloride_cannot_fix_a_charge_difference() {
     );
     let plan = Plan::read(&doc, &[first, second]).unwrap();
     assert!(
-        plan.steps[0]
-            .notes
-            .iter()
-            .any(|note| note.contains("charge difference of +1"))
+        !chemistry::difference(&plan.species, &plan.steps[0])
+            .unwrap()
+            .is_zero()
     );
     assert!(
         plan.steps[0]
             .notes
             .iter()
-            .any(|note| note.contains("No single supported molecule"))
+            .any(|note| note.contains("No single molecule"))
     );
     assert!(
         !plan.steps[0]
             .notes
             .iter()
-            .any(|note| note.contains("Added one"))
+            .any(|note| note.starts_with("Balanced by adding"))
     );
 }
 
 #[test]
-fn minimum_labels_include_only_the_next_reactants_coefficient_excess() {
+fn whole_scheme_inventory_carries_later_reactants_and_earlier_coproducts() {
     let (_, plan) = two_step();
-    assert_eq!(plan.minimum_label(0), "C2H4 + H₂O + H₂");
-    assert_eq!(plan.minimum_label(1), "C2H6");
+    let levels = plan.levels().unwrap();
+    assert_eq!(
+        levels.iter().map(Level::label).collect::<Vec<_>>(),
+        ["C2H6O + H₂", "C2H4 + H₂O + H₂", "C2H6 + H₂O"]
+    );
+    for (level, formulas) in levels.iter().zip([
+        vec!["C2H6O", "H2"],
+        vec!["C2H4", "H2O", "H2"],
+        vec!["C2H6", "H2O"],
+    ]) {
+        assert_eq!(
+            level
+                .terms()
+                .map(|term| {
+                    assert_eq!(term.coefficient, 1);
+                    plan.species[term.species].formula.as_str()
+                })
+                .collect::<Vec<_>>(),
+            formulas
+        );
+    }
+}
+
+#[test]
+fn inventory_keeps_unused_copies_and_coefficient_weighted_energy() {
+    let (mut doc, original) = two_step();
+    let water = molecule_at(&mut doc, &["O"], &[], 700.);
+    let first = &mut doc.reactions[0];
+    first.reactants[0].coefficient = 2;
+    first.products[0].coefficient = 2;
+    first.products.push(Participant {
+        atoms: water,
+        coefficient: 2,
+    });
+    let plan = Plan::read(&doc, &original.arrows).unwrap();
+    let levels = plan.levels().unwrap();
+    assert_eq!(
+        levels.iter().map(Level::label).collect::<Vec<_>>(),
+        ["2 C2H6O + H₂", "2 C2H4 + 2 H2O + H₂", "C2H6 + C2H4 + 2 H2O"]
+    );
+    let energy = |index: usize| {
+        Some(match plan.species[index].formula.as_str() {
+            "C2H6O" => -1000.,
+            "C2H4" => -905.,
+            "C2H6" => -958.,
+            "H2O" => -100.,
+            "H2" => -50.,
+            formula => panic!("unexpected formula {formula}"),
+        })
+    };
+    let reference = sum_energy(levels[0].terms(), energy).unwrap();
+    assert_eq!(
+        sum_energy(levels[2].terms(), energy).unwrap() - reference,
+        -13.
+    );
+    assert_eq!(sum_energy(levels[2].terms(), |_| None), None);
+    assert_eq!(sum_energy(levels[2].terms(), |_| Some(f64::INFINITY)), None);
 }
 
 #[test]
