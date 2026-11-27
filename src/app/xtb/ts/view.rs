@@ -8,13 +8,34 @@ use crate::app::xtb::{Action as XtbAction, EnergyUnit, state};
 use crate::app::{App, Message};
 use iced::widget::{canvas, column, container, row, text, tooltip};
 use iced::{Element, Length, Rectangle, Renderer, Theme, mouse};
-use reshiki::qcdata::{CalcResult, Frame, KCAL_PER_HARTREE, Status};
+use reshiki::qcdata::{CalcResult, Frame, KCAL_PER_HARTREE, Status, XtbMethod};
 
 const IMAGINARY_CM1: f64 = 50.;
 pub(super) const THERMO_IMAGINARY_CM1: f64 = 20.;
 pub(super) const OPTIMIZED_COMPLEX: &str = "optimized complex";
 const RELOAD_NOTE: &str = "Run the search again to inspect structures along the saved path.";
 pub(super) const IRC_RETURNS_TO_REACTANT: &str = "IRC reaches the reactant on both sides";
+
+/// Use the saved calculation's electronic method throughout its presentation.
+pub(in crate::app::xtb) fn method_name(result: &CalcResult) -> &str {
+    if let reshiki::qcdata::Settings::Xtb(settings) = &result.settings {
+        return settings.method.label();
+    }
+    if let Some(search) = super::saved_search(result) {
+        return search.method.label();
+    }
+    result
+        .provenance
+        .method
+        .as_deref()
+        .map(super::super::results::method_without_optimizer)
+        .filter(|method| !method.trim().is_empty())
+        .unwrap_or("xTB")
+}
+
+pub(super) fn is_gfn2(result: &CalcResult) -> bool {
+    method_name(result) == XtbMethod::Gfn2Xtb.label()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Recovery {
@@ -31,6 +52,7 @@ impl Recovery {
         arrow: Option<u64>,
         enabled: bool,
         has_endpoint: bool,
+        show_where: Action,
     ) -> Element<'static, Message> {
         let label = match self {
             Self::CheckMap => "Check the atom map",
@@ -45,7 +67,7 @@ impl Recovery {
                 send(match self {
                     Self::CheckMap => Action::ReviewMap(arrow),
                     Self::RefineHighest => Action::Retry(arrow, super::Retry::RefineHighest),
-                    Self::ShowWhere => Action::ShowWhere(arrow),
+                    Self::ShowWhere => show_where,
                     Self::FinerPath => Action::Retry(arrow, super::Retry::FinerPath),
                 })
             }))
@@ -67,10 +89,10 @@ impl Recovery {
 /// A candidate's energy is never exposed as a barrier before these checks pass.
 #[derive(Debug, PartialEq)]
 pub(in crate::app::xtb) struct Presentation {
+    pub method: String,
     pub refined_kcal: Option<f64>,
     pub reason: Option<String>,
     pub(super) recovery: Recovery,
-    pub warning: Option<String>,
     pub highest_path_kcal: Option<f64>,
     pub verification: String,
 }
@@ -82,8 +104,8 @@ impl Presentation {
 
     pub fn status_line(&self, unit: EnergyUnit) -> String {
         match self.barrier_line(unit) {
-            Some(barrier) => format!("Transition state · {barrier}"),
-            None => "xTB · No reliable transition state found.".into(),
+            Some(barrier) => format!("Transition state · {} · {barrier}", self.method),
+            None => format!("{} · No reliable transition state found.", self.method),
         }
     }
 
@@ -168,10 +190,21 @@ pub(in crate::app::xtb) fn presentation(
         .map(|search| search.saddle_converged)
         .or_else(|| session.map(|s| s.extras.saddle_converged))
         .unwrap_or(accepted);
-    let connects = session.map_or(accepted, |s| s.extras.connects);
+    let gxtb = method_name(result) == XtbMethod::GXtb.label();
+    let connects = if gxtb {
+        use reshiki::qcdata::IrcEndpoint::{Product, Reactant};
+        saved
+            .and_then(|search| search.irc.as_ref())
+            .is_some_and(|path| matches!(path.reached, [Reactant, Product] | [Product, Reactant]))
+            && session.is_none_or(|s| s.extras.connects)
+    } else {
+        session.map_or(accepted, |s| s.extras.connects)
+    };
+    let worker_verified = !gxtb || saved_count == Some(1);
     let reliable = super::is_ts(result)
         && saddle_converged
         && count == Some(1)
+        && worker_verified
         && disagreement.is_none()
         && connects
         && accepted;
@@ -213,6 +246,10 @@ pub(in crate::app::xtb) fn presentation(
         Some(readable_reason(reason))
     } else if !saddle_converged {
         Some("The transition-state refinement did not converge.".into())
+    } else if gxtb && !worker_verified {
+        Some("The saved g-xTB result has no verified worker frequency spectrum.".into())
+    } else if gxtb && !connects {
+        Some("The saved g-xTB IRC does not verify both reactant and product endpoints.".into())
     } else {
         Some(
             "The saved result does not contain enough information to verify a transition state."
@@ -224,6 +261,8 @@ pub(in crate::app::xtb) fn presentation(
         .or_else(|| session.and_then(|s| s.extras.engine_imaginary))
         .or_else(|| frequencies.and_then(|f| f.iter().copied().find(|&f| f < -IMAGINARY_CM1)));
     let frequency_check = match (count, frequency) {
+        _ if disagreement.is_some() => "Frequency checks disagree".into(),
+        _ if !worker_verified => "Worker frequency check unavailable".into(),
         (Some(1), Some(frequency)) => {
             format!("✓ one imaginary frequency {:.0}i cm⁻¹", frequency.abs())
         }
@@ -235,27 +274,101 @@ pub(in crate::app::xtb) fn presentation(
     } else {
         frequency_check
     };
-    let diagnostics = saved
-        .map(|search| search.diagnostics.as_slice())
-        .or_else(|| session.map(|s| s.extras.diagnostics.as_slice()));
-    let warning = (reliable
-        && diagnostics.is_some_and(|rows| {
-            rows.iter().any(|(label, detail)| {
-                label.starts_with("IRC ") && detail.contains(" · downhill trace not converged · ")
-            })
-        }))
-    .then(|| "Reaction-path descent ended before gradient convergence.".into());
     Presentation {
+        method: method_name(result).to_owned(),
         refined_kcal,
         reason,
         recovery,
-        warning,
         highest_path_kcal: deltas
             .into_iter()
             .filter(|value| value.is_finite())
             .reduce(f64::max),
         verification,
     }
+}
+
+/// Explain a short trace beside its profile, separately from the card's checks.
+/// A saved relaxed end exists only after its minimization has converged.
+pub(super) fn irc_path_detail(
+    result: &CalcResult,
+    session: Option<&Session>,
+    stale: bool,
+) -> Option<String> {
+    use reshiki::qcdata::IrcEndpoint::{Other, Product, Reactant};
+
+    let Some(path) = irc::saved(result) else {
+        return legacy_irc_path_detail(result, session);
+    };
+    let negative_steps = path.ts_index;
+    let positive_steps = path.steps().checked_sub(negative_steps + 1)?;
+    let traced = reshiki::irc_summary::trace_detail(
+        [negative_steps, positive_steps],
+        path.completed,
+        path.reached,
+        path.relaxed_ends.is_some(),
+    )?;
+    let matching = match path.reached {
+        [Other, Other] if stale => {
+            "Neither end could be matched to an endpoint from the original run.".into()
+        }
+        [Other, Other] => "Neither end could be matched to a drawn endpoint.".into(),
+        reached => {
+            let (subject, endpoints) = match reached {
+                [Reactant, Product] | [Product, Reactant] => {
+                    ("The endpoints", "reactant and product")
+                }
+                [Reactant, Reactant] => ("Both endpoints", "reactant"),
+                [Product, Product] => ("Both endpoints", "product"),
+                [Reactant, _] | [_, Reactant] => ("One end", "reactant"),
+                _ => ("One end", "product"),
+            };
+            let one_end = reached.contains(&Other);
+            let mut text = if stale {
+                format!("{subject} matched the {endpoints} the run was started from.")
+            } else {
+                let verb = if one_end { "matches" } else { "match" };
+                format!("{subject} {verb} the drawn {endpoints}.")
+            };
+            if one_end {
+                text.push_str(" The other could not be matched.");
+            }
+            text
+        }
+    };
+    Some(format!("{traced} {matching}"))
+}
+
+fn step_count(steps: usize) -> String {
+    format!("{steps} {}", if steps == 1 { "step" } else { "steps" })
+}
+
+/// Older results retained branch diagnostics but no ordered path or relaxed ends.
+/// Keep their known side and step count without inventing missing geometries.
+fn legacy_irc_path_detail(result: &CalcResult, session: Option<&Session>) -> Option<String> {
+    let diagnostics = super::saved_search(result)
+        .map(|search| search.diagnostics.as_slice())
+        .or_else(|| session.map(|s| s.extras.diagnostics.as_slice()))?;
+    let traced = diagnostics
+        .iter()
+        .filter_map(|(label, detail)| {
+            if !matches!(label.as_str(), "IRC +mode" | "IRC −mode") {
+                return None;
+            }
+            let (endpoint, points) = detail.split_once(" · downhill trace not converged · ")?;
+            let steps = points.strip_suffix(" points")?.parse::<usize>().ok()?;
+            let side = match endpoint {
+                "reactant" => "on the reactant side",
+                "product" => "on the product side",
+                _ if label == "IRC +mode" => "in the +mode direction",
+                _ => "in the −mode direction",
+            };
+            Some(format!("{} {side}", step_count(steps)))
+        })
+        .collect::<Vec<_>>();
+    if traced.is_empty() {
+        return None;
+    }
+    Some(format!("The path stopped after {}.", traced.join(" and ")))
 }
 
 /// Technical search detail belongs in Log, including after the file is reopened.
@@ -327,10 +440,19 @@ pub(in crate::app::xtb) fn search_log(
             },
             |search| search.diagnostics.clone(),
         );
+    rows.retain(|(label, _)| label != "Electronic method");
     if let Some(run) = &result.run {
         rows.push(("Total time".into(), format!("{:.2} s", run.seconds)));
     }
-    let mut lines = vec!["Transition-state search".into()];
+    let mut lines = vec![
+        "Transition-state search".into(),
+        format!("Electronic method: {}", method_name(result)),
+    ];
+    if super::saved_search(result).is_some_and(|search| search.refined_from.is_some()) {
+        lines.push(
+            "Starting saddle: GFN2-xTB; saddle, Hessian and IRC recalculated with g-xTB".into(),
+        );
+    }
     lines.extend(rows.into_iter().map(|(label, value)| {
         if label == "Folded the starting conformer"
             && let Some((distances, energy)) = value.rsplit_once(" (")
@@ -491,25 +613,41 @@ pub(in crate::app::xtb) fn path_rows(
     unit: EnergyUnit,
     reference: Option<&str>,
 ) -> Vec<(String, String)> {
-    let (deltas, _) = relative_energies(
-        super::path_energies(result),
-        None,
-        super::optimized_reactant_energy(result),
+    let search = super::saved_search(result);
+    let refinement = search.is_some_and(|search| search.refined_from.is_some());
+    let deltas = if refinement {
+        search
+            .and_then(|search| search.endpoint_energies_hartree)
+            .map(|[reactant, product]| vec![0., (product - reactant) * KCAL_PER_HARTREE])
+            .unwrap_or_default()
+    } else {
+        relative_energies(
+            super::path_energies(result),
+            None,
+            super::optimized_reactant_energy(result),
+        )
+        .0
+    };
+    let mut rows = vec![("Electronic method".into(), method_name(result).into())];
+    rows.extend(
+        deltas
+            .iter()
+            .enumerate()
+            .map(|(index, &delta)| {
+                let label = if index == 0 {
+                    "R ΔE".into()
+                } else if index + 1 == deltas.len() {
+                    reference
+                        .map_or_else(|| "P ΔE".into(), |reference| format!("P ΔE ({reference})"))
+                } else if refinement {
+                    "TS candidate ΔE".into()
+                } else {
+                    format!("Image {} ΔE", index + 1)
+                };
+                (label, unit.format(delta))
+            })
+            .collect::<Vec<_>>(),
     );
-    let mut rows: Vec<_> = deltas
-        .iter()
-        .enumerate()
-        .map(|(index, &delta)| {
-            let label = if index == 0 {
-                "R ΔE".into()
-            } else if index + 1 == deltas.len() {
-                reference.map_or_else(|| "P ΔE".into(), |reference| format!("P ΔE ({reference})"))
-            } else {
-                format!("Image {} ΔE", index + 1)
-            };
-            (label, unit.format(delta))
-        })
-        .collect();
     if let Some(delta) = presentation(result, session).refined_kcal {
         rows.push(("TS‡ ΔE".into(), unit.format(delta)));
     }
@@ -541,6 +679,7 @@ impl App {
         let reference = super::optimized_reactant_energy(result);
         let (neb, _) = relative_energies(energies, None, reference);
         let search = super::saved_search(result);
+        let refinement = search.is_some_and(|search| search.refined_from.is_some());
         let mut chart = PathChart {
             selected: self.xtb_step().filter(|&index| index < energies.len()),
             climbing: climbing_image(
@@ -562,6 +701,7 @@ impl App {
             endpoint_labels: ["R", "P"],
             relaxed_deltas: None,
             irc: false,
+            refinement,
         };
         if let Some(path) = irc::saved(result).filter(|_| self.xtb_profile(result) == Profile::Irc)
             && let Some(reference) = reference
@@ -572,12 +712,14 @@ impl App {
             chart.selected = None;
             chart.climbing = path.ts_index;
             chart.coordinates = path.arc_lengths_sqrt_amu_bohr.clone();
-            chart.neb_overlay = path
-                .neb_arc_lengths_sqrt_amu_bohr
-                .iter()
-                .copied()
-                .zip(energies.iter().copied().map(delta))
-                .collect();
+            if !refinement {
+                chart.neb_overlay = path
+                    .neb_arc_lengths_sqrt_amu_bohr
+                    .iter()
+                    .copied()
+                    .zip(energies.iter().copied().map(delta))
+                    .collect();
+            }
             chart.deltas = path
                 .trajectory
                 .energies_hartree
@@ -665,6 +807,8 @@ impl App {
         let result = &shown.stored.result;
         let profile = self.xtb_profile(result);
         let path = irc::saved(result);
+        let refinement =
+            super::saved_search(result).is_some_and(|search| search.refined_from.is_some());
         let tab = |id, label, choice, enabled: bool| {
             accessible_command(id, label, label)
                 .checked(profile == choice)
@@ -675,21 +819,48 @@ impl App {
         let hint = match path {
             None => "No IRC energies were saved with this result",
             Some(path) if !path.has_frames() => "Open the full file to animate the IRC",
+            Some(_) if refinement => {
+                "ΔE is relative to the g-xTB optimized reactant. The saddle and both IRC branches use g-xTB."
+            }
             _ => {
                 "ΔE is relative to the optimized reactant. Gray dots show NEB images matched by mass-weighted arc length on each side of the saddle."
             }
         };
-        let tabs = row![
-            hover_hint(irc_tab, hint, tooltip::Position::Top),
-            tab(
+        let mut tabs = row![hover_hint(irc_tab, hint, tooltip::Position::Top)].spacing(1);
+        if !refinement {
+            tabs = tabs.push(tab(
                 "xtb-path-neb",
                 "NEB band",
                 Profile::Neb,
-                !super::path_energies(result).is_empty()
-            )
-        ]
-        .spacing(1);
-        let mut controls = row![tabs].spacing(6);
+                !super::path_energies(result).is_empty(),
+            ));
+        }
+        let mut controls = row![].spacing(6);
+        if let Some(pair) = self.xtb_ts_linked_pair(result) {
+            controls =
+                controls.push(
+                    row(pair.into_iter().map(|saved| {
+                        let active = std::sync::Arc::ptr_eq(saved, result);
+                        accessible_command(
+                            if is_gfn2(saved) {
+                                "xtb-path-method-gfn2"
+                            } else {
+                                "xtb-path-method-gxtb"
+                            },
+                            method_name(saved).to_owned(),
+                            method_name(saved).to_owned(),
+                        )
+                        .checked(active)
+                        .style(control(active))
+                        .on_press_maybe((!self.xtb_running()).then(|| {
+                            send(Action::Card(super::card::Action::Result(saved.clone())))
+                        }))
+                        .into()
+                    }))
+                    .spacing(1),
+                );
+        }
+        controls = controls.push(tabs);
         if profile == Profile::Irc && path.is_some_and(|p| p.has_frames()) {
             let playing = self.xtb_irc_preview().is_some();
             let label = if playing { "Stop" } else { "Animate IRC" };
@@ -734,13 +905,24 @@ impl App {
         if inspector {
             profile = profile.push(self.xtb_profile_controls(shown));
         }
-        let height = if inspector {
+        let has_models = !chart.thumbnails.is_empty();
+        // Narrow figures place TS above R/P. The extra model row is 76 px.
+        // Below about 780 px window width the dock's 3:2 columns also need it.
+        let narrow_models = has_models
+            && chart.refined_delta.is_some()
+            && (inspector || self.window_size.width < 780.);
+        let height = if inspector && has_models {
+            320.
+        } else if inspector {
             232.
-        } else {
+        } else if has_models {
             // Space remaining between the dock header and its pinned Path controls.
+            (crate::app::xtb::palette::path_dock_height(self.window_size.height) - 148.)
+                .clamp(240., 320.)
+        } else {
             (crate::app::xtb::palette::dock_height(self.window_size.height) - 148.)
                 .clamp(146., 212.)
-        };
+        } + if narrow_models { 76. } else { 0. };
         profile = profile.push(chart.widget_height(height));
         if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
             profile = profile.push(text(selection_label(delta, unit)).size(12));
@@ -815,7 +997,8 @@ impl App {
             } else {
                 "No reliable transition state found."
             })
-            .size(14)
+            .size(14),
+            line(method_name(result).to_owned(), Tone::Muted),
         ]
         .spacing(7);
         if let Some(reason) = &presentation.reason {
@@ -829,10 +1012,30 @@ impl App {
                 details = details.push(line(reason, Tone::Warning));
             }
         }
+        if presentation.reliable()
+            && is_gfn2(result)
+            && super::saved_search(result).is_some()
+            && crate::app::xtb::available()
+        {
+            details = details.push(
+                accessible_command(
+                    "xtb-path-refine-gxtb",
+                    "Refine with g-xTB",
+                    "Refine with g-xTB",
+                )
+                .style(crate::appearance::secondary)
+                .on_press_maybe(
+                    shown
+                        .arrow
+                        .filter(|_| !shown.stale && interactive)
+                        .map(|arrow| send(Action::RefineGxtb(arrow, result.clone()))),
+                ),
+            );
+        }
         details = details
             .push(reaction_gibbs_unavailable(result).map(|reason| line(reason, Tone::Warning)));
-        if let Some(warning) = &presentation.warning {
-            details = details.push(line(warning.clone(), Tone::Muted));
+        if let Some(detail) = irc_path_detail(result, shown.ts, shown.stale) {
+            details = details.push(line(detail, Tone::Muted));
         }
         if super::card::imaginary_mode(result).is_some() {
             details = details.push(
@@ -889,6 +1092,7 @@ impl App {
                 self.xtb_ts_can_rerun(shown)
                     && (presentation.recovery != Recovery::ShowWhere || !shown.stale),
                 has_reached_endpoint(result),
+                Action::ReachedEndpoint,
             ));
         }
         details = details.push(line(
@@ -1014,6 +1218,7 @@ struct PathChart {
     ts_note: Option<String>,
     thumbnails: Vec<crate::app::models3d::thumbnail::Thumbnail>,
     irc: bool,
+    refinement: bool,
     /// IRC reaches may differ from the optimized, intended R and P structures.
     endpoint_labels: [&'static str; 2],
     relaxed_deltas: Option<[f64; 2]>,
@@ -1035,6 +1240,7 @@ impl PathChart {
             ts_note: None,
             thumbnails: vec![],
             irc: false,
+            refinement: false,
             endpoint_labels: ["R", "P"],
             relaxed_deltas: None,
         }
@@ -1191,7 +1397,11 @@ impl PathChart {
         let mut name = format!(
             "{profile} energy profile · {} {} · {}",
             self.deltas.len(),
-            if self.irc { "points" } else { "images" },
+            if self.irc || self.refinement {
+                "points"
+            } else {
+                "images"
+            },
             self.axis_title()
         );
         if self.irc {

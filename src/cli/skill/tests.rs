@@ -293,6 +293,11 @@ fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/agent-skill/reshiki")
 }
 
+fn xtb_fixture(path: &str) -> Option<PathBuf> {
+    (cfg!(feature = "xtb") && matches!(path, SKILL_MD | CLI_REFERENCE))
+        .then(|| fixture().with_file_name("xtb").join(path))
+}
+
 #[test]
 fn golden_files_match_the_live_renderers() {
     let golden = snapshot(&fixture());
@@ -303,7 +308,9 @@ fn golden_files_match_the_live_renderers() {
         FILES
     );
     for (path, bytes) in rendered {
-        let expected = String::from_utf8(golden[path].clone())
+        let expected_bytes =
+            xtb_fixture(path).map_or_else(|| golden[path].clone(), |path| fs::read(path).unwrap());
+        let expected = String::from_utf8(expected_bytes)
             .unwrap()
             .replace("\r\n", "\n");
         assert_eq!(
@@ -324,7 +331,7 @@ fn golden_files_match_the_live_renderers() {
 #[ignore = "rewrites tests/fixtures/agent-skill/reshiki"]
 fn regenerate_the_golden() {
     for (path, bytes) in files(&inputs()) {
-        let target = fixture().join(path);
+        let target = xtb_fixture(path).unwrap_or_else(|| fixture().join(path));
         fs::create_dir_all(target.parent().unwrap()).unwrap();
         fs::write(target, bytes).unwrap();
     }

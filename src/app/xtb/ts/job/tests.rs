@@ -161,7 +161,7 @@ fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
     let branches = report.irc.as_mut().unwrap();
     branches[0].path = vec![point(-1.5, 2.75), point(-2., 2.5)];
     branches[0].energies = vec![-1., -1.5, -2., -3.];
-    branches[0].completed = false;
+    branches[0].reason = ts::IrcReason::LengthCap;
     branches[1].path = vec![point(-1.25, 3.25)];
     branches[1].energies = vec![-1., -1.25, -2.];
     let frame = Frame {
@@ -173,7 +173,7 @@ fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
         multiplicity: 1,
         drawing_atoms: vec![],
     };
-    let path = ordered_irc(&report, &frame).unwrap().unwrap();
+    let path = ordered_irc(&report, &frame, true).unwrap().unwrap();
     assert_eq!(path.steps(), 4);
     assert_eq!(path.ts_index, 2);
     assert_eq!(path.trajectory.energies_hartree, [-2., -1.5, -1., -1.25]);
@@ -209,7 +209,7 @@ fn ordered_irc_keeps_relaxed_ends_out_of_the_trace_and_neb_scaling() {
     // Reversing the arbitrary mode sign must not reverse the displayed reaction.
     report.irc.as_mut().unwrap().swap(0, 1);
     assert_eq!(
-        ordered_irc(&report, &path.frame(path.ts_index).unwrap()).unwrap(),
+        ordered_irc(&report, &path.frame(path.ts_index).unwrap(), true).unwrap(),
         Some(path)
     );
 }
@@ -235,13 +235,13 @@ fn ordered_irc_keeps_unknown_end_classes_and_handles_missing_branches() {
         for (branch, reached) in report.irc.as_mut().unwrap().iter_mut().zip(reached) {
             branch.reached = reached;
         }
-        let path = ordered_irc(&report, &frame).unwrap().unwrap();
+        let path = ordered_irc(&report, &frame, true).unwrap().unwrap();
         assert_ne!(path.reached[0], qcdata::IrcEndpoint::Product);
         assert_ne!(path.reached[1], qcdata::IrcEndpoint::Reactant);
         assert!(path.reached.contains(&qcdata::IrcEndpoint::Other));
     }
     report.irc = None;
-    assert_eq!(ordered_irc(&report, &frame).unwrap(), None);
+    assert_eq!(ordered_irc(&report, &frame, true).unwrap(), None);
 }
 
 fn point(energy: f64, distance: f64) -> Minimum {
@@ -272,14 +272,18 @@ fn ts_report() -> TsReport {
             IrcBranch {
                 energies: vec![-1., -3.],
                 path: Vec::new(),
-                completed: true,
+                reason: ts::IrcReason::Converged,
+                gradient_calls: 0,
+                path_length: 0.,
                 end: reactant,
                 reached: Reached::Reactant,
             },
             IrcBranch {
                 energies: vec![-1., -2.],
                 path: Vec::new(),
-                completed: true,
+                reason: ts::IrcReason::Converged,
+                gradient_calls: 0,
+                path_length: 0.,
                 end: product,
                 reached: Reached::Product,
             },
@@ -325,6 +329,7 @@ fn completion() -> (Launch, Completion) {
         report: ts_report(),
         checked: Ok(checked),
         endpoint_thermo: None,
+        method: qcdata::XtbMethod::Gfn2Xtb,
         engine: crate::app::xtb::run::example_engine(),
         changes: Changes {
             form: vec![(0, 1)],
@@ -404,6 +409,12 @@ fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
     done.trace.saddle_steps = Some(7);
     done.trace.times = vec![("CI-NEB".into(), 1.25), ("Worker check".into(), 0.5)];
     done.report.saddle_diagnostics = vec!["candidate recovered after Hessian rebuild".into()];
+    let branch = &mut done.report.irc.as_mut().unwrap()[0];
+    branch.path = vec![point(-2., 2.5)];
+    branch.energies = vec![-1., -2., -3.];
+    branch.reason = ts::IrcReason::LengthCap;
+    branch.gradient_calls = 7;
+    branch.path_length = 2.12654;
     let report = complete(&launch, done).unwrap();
     let value = |label| {
         report
@@ -419,8 +430,14 @@ fn search_diagnostics_record_the_algorithm_counts_checks_and_stage_times() {
     assert_eq!(value("NEB"), "34 iterations · converged");
     assert_eq!(value("Saddle"), "7 steps · converged · stationary");
     assert!(value("Worker check").contains("imaginary modes: engine 1 · worker 1 · agree"));
-    assert!(value("IRC +mode").starts_with("reactant"));
-    assert!(value("IRC −mode").starts_with("product"));
+    assert_eq!(
+        value("IRC +mode"),
+        "reactant · length cap · accepted steps: 1 · gradient calls: 7 · path length: 2.126540 amu½·bohr"
+    );
+    assert_eq!(
+        value("IRC −mode"),
+        "product · converged · accepted steps: 0 · gradient calls: 0 · path length: 0.000000 amu½·bohr"
+    );
     assert_eq!(value("Evaluations"), "12");
     assert_eq!(value("Hessians"), "2");
     assert_eq!(
@@ -573,7 +590,7 @@ fn wrong_irc_endpoint_classes_never_present_a_headline_barrier() {
 }
 
 #[test]
-fn worker_disagreement_or_failed_irc_keeps_candidate_with_cli_reason() {
+fn worker_disagreement_keeps_candidate_with_cli_reason() {
     let (launch, mut done) = completion();
     done.checked
         .as_mut()
@@ -590,17 +607,61 @@ fn worker_disagreement_or_failed_irc_keeps_candidate_with_cli_reason() {
         }
     );
     assert_eq!(report.result.hessian_hartree_per_bohr2.len(), 36);
-    let (launch, mut done) = completion();
-    done.report.connects = false;
-    done.report.irc_error = Some("-mode relaxation reached its step limit".into());
-    let report = complete(&launch, done).unwrap();
-    assert_eq!(
-        report.result.status,
-        qcdata::Status::NotConverged {
-            reason: "IRC failed: -mode relaxation reached its step limit".into(),
+}
+
+#[test]
+fn failed_endpoint_relaxation_keeps_all_finished_traces_in_the_log() {
+    for (index, failed_label) in [(0, "IRC +mode"), (1, "IRC −mode")] {
+        let (launch, mut done) = completion();
+        let mut traces = done.report.irc_diagnostics();
+        let failed = traces[index].as_mut().unwrap();
+        failed.reason = ts::IrcReason::LengthCap;
+        failed.steps = 2;
+        failed.gradient_calls = 9;
+        failed.reached = None;
+        if index == 0 {
+            traces[1] = None;
         }
-    );
-    assert!(!report.extras.connects);
+        done.report.connects = false;
+        done.report.irc = None;
+        done.report.irc_error = Some(ts::IrcFailure {
+            cause: ts::TsError::Failed("endpoint minimization reached its step limit".into()),
+            traces,
+        });
+        let report = complete(&launch, done).unwrap();
+        assert_eq!(
+            report.result.status,
+            qcdata::Status::NotConverged {
+                reason: "IRC failed: endpoint minimization reached its step limit".into(),
+            }
+        );
+        assert!(!report.extras.connects);
+        let session = super::super::Session {
+            extras: report.extras,
+            arrow: 1,
+            freshness: Default::default(),
+        };
+        let log = super::super::view::search_log(
+            &report.result,
+            Some(&session),
+            crate::appearance::EnergyUnit::default(),
+        );
+        assert!(log.contains(&format!("{failed_label}: endpoint relaxation failed · length cap · accepted steps: 2 · gradient calls: 9")), "{log}");
+        assert!(
+            log.contains("IRC error: endpoint minimization reached its step limit"),
+            "{log}"
+        );
+        if index == 0 {
+            assert!(!log.contains("IRC −mode:"));
+        } else {
+            assert!(
+                log.contains(
+                    "IRC +mode: reactant · converged · accepted steps: 0 · gradient calls: 0"
+                ),
+                "{log}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -652,6 +713,109 @@ fn failed_worker_check_keeps_engine_candidate_and_cancellation_discards_it() {
     assert!(
         matches!(complete(&launch, done), Err(Failure::Other(message)) if message == "Calculation canceled")
     );
+}
+
+#[test]
+fn target_method_records_checks_and_fallback_without_relabelling_source_data() {
+    use reshiki_xtb_worker::protocol::Method;
+
+    for method in [qcdata::XtbMethod::Gfn2Xtb, qcdata::XtbMethod::GXtb] {
+        for failed_check in [false, true] {
+            let (launch, mut done) = completion();
+            done.method = method;
+            done.checked.as_mut().unwrap().method = reshiki_xtb_jobs::run::worker_method(method);
+            if failed_check {
+                done.checked = Err(ts::TsError::Failed("frequency worker timed out".into()));
+            }
+            let report = complete(&launch, done).unwrap();
+            let qcdata::Settings::Xtb(settings) = &report.result.settings else {
+                panic!("xTB settings must be retained");
+            };
+            assert_eq!(settings.method, method);
+            assert_eq!(
+                report.result.provenance.method.as_deref(),
+                Some(method.label())
+            );
+            assert!(
+                report
+                    .extras
+                    .diagnostics
+                    .iter()
+                    .any(|(key, value)| key == "Electronic method" && value == method.label())
+            );
+            assert_eq!(
+                report.result.status == qcdata::Status::Converged,
+                !failed_check
+            );
+            if failed_check {
+                assert!(!super::super::view::presentation(&report.result, None).reliable());
+            }
+        }
+    }
+
+    // An unexpected response from another method is a failed independent check;
+    // neither its Hessian nor its frequencies become the target result.
+    let (launch, mut done) = completion();
+    done.method = qcdata::XtbMethod::GXtb;
+    assert_eq!(done.checked.as_ref().unwrap().method, Method::Gfn2);
+    let report = complete(&launch, done).unwrap();
+    assert!(
+        matches!(&report.result.status, qcdata::Status::NotConverged { reason }
+        if reason.contains("GFN2-xTB for a g-xTB calculation"))
+    );
+    assert_eq!(report.result.hessian_hartree_per_bohr2, [0.25; 36]);
+    assert!(report.extras.worker_frequencies.is_empty());
+    assert!(!super::super::view::presentation(&report.result, None).reliable());
+}
+
+#[test]
+fn method_refinement_keeps_target_endpoints_and_irc_without_inventing_a_neb_band() {
+    for failed_check in [false, true] {
+        let (launch, mut done) = completion();
+        done.method = qcdata::XtbMethod::GXtb;
+        done.checked.as_mut().unwrap().method = reshiki_xtb_worker::protocol::Method::Gxtb;
+        done.trace.retry = Some(Retry::Gxtb(
+            complete(&launch, completion().1)
+                .unwrap()
+                .result
+                .transition_state_id()
+                .unwrap(),
+        ));
+        done.report.neb_converged = false;
+        if failed_check {
+            done.checked = Err(ts::TsError::Failed("target check failed".into()));
+        }
+        let report = complete(&launch, done).unwrap();
+        assert!(report.result.trajectory.is_none());
+        assert!(report.extras.image_positions.is_empty());
+        assert!(!report.extras.neb_converged);
+        let irc = report.extras.irc.as_ref().unwrap();
+        assert!(irc.neb_arc_lengths_sqrt_amu_bohr.is_empty());
+        assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
+        assert_eq!(report.result.energy_hartree, Some(-1.));
+        assert!(
+            report
+                .extras
+                .diagnostics
+                .iter()
+                .any(|(key, value)| key == "NEB" && value.starts_with("not run"))
+        );
+        assert!(
+            report
+                .extras
+                .diagnostics
+                .iter()
+                .any(|(key, value)| key == "Method" && value.contains("fresh Hessian"))
+        );
+        assert_eq!(
+            report.result.status == qcdata::Status::Converged,
+            !failed_check
+        );
+        if failed_check {
+            assert!(!super::super::view::presentation(&report.result, None).reliable());
+        }
+        report.result.validate(&report.frames[0]).unwrap();
+    }
 }
 
 #[test]

@@ -43,7 +43,7 @@ pub struct IrcPath {
     /// Relaxed ends in branch order. Early files appended them to the trace instead.
     #[serde(default)]
     pub relaxed_ends: Option<[IrcRelaxedEnd; 2]>,
-    /// Whether each downhill branch reached its gradient tolerance before relaxation.
+    /// Whether each downhill branch converged before endpoint relaxation.
     /// This is independent of whether the relaxed end matches a requested endpoint.
     pub completed: [bool; 2],
 }

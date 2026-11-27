@@ -12,12 +12,9 @@ Commands:
   compose       Lay out an assistant Proposal (JSON) and write it as a file
   analyze       Print molecular properties as one JSON line
   predict-nmr   Print predicted NMR shifts as one JSON line
-  calculate     Print a compact xTB calculation summary as one JSON line
   read-output   Print quantum chemistry job summaries and calculated values as one JSON line
   export-input  Write a quantum-chemistry input from an XYZ structure
   name          Print the systematic name of a structure
-  calc          Print an xTB calculation as one JSON line
-  ts            Search for a transition state with GFN2-xTB
   pieces        Check or render equipment piece files
   info          Print versions, limits and formats as one JSON line
   tools         Print the agent tool catalog as one JSON line
@@ -25,7 +22,7 @@ Commands:
   skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
   help          Show this help, or a command's help: reshiki --cli help <command>
 
-Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.
+-- ends the options.
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -215,34 +212,6 @@ A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
 ```
 
-## reshiki --cli calculate
-
-```text
-Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli calculate [--task energy|optimize|frequencies|opt+freq]
-    [--method gfn2|gxtb|gfnff] [--charge N] [--uhf N] [--solvent NAME]
-    [--conventions axtb|xtb-6.8] [--etemp K] [--accuracy X] [--max-iter N]
-    [--threads N] [--convergence normal|tight] [--fix N,N,...] FILE.xyz
-
-Runs the calculate tool and prints its labelled result as one JSON line.
-Only available in builds with xTB. Reads at most 16777216 bytes and 500 atoms;
-frequencies allow at most 200 atoms. The calculation deadline is 30 minutes.
-
-Options:
-  --task TASK                Calculate energy (default), optimize, frequencies or opt+freq.
-  --method METHOD            Use gfn2 (default), gxtb or gfnff.
-  --charge N                 Set the molecular charge (default 0).
-  --uhf N                    Set unpaired electrons (default 0).
-  --solvent NAME             Use the named ALPB solvent.
-  --conventions MODE         Use axtb (default) or xtb-6.8 conventions.
-  --etemp K                  Set the electronic temperature in kelvin.
-  --accuracy X               Set a positive SCF accuracy multiplier.
-  --max-iter N               Set a positive SCF iteration limit.
-  --threads N                Use 1 to 64 worker threads (default available CPUs, at most 8).
-  --convergence LEVEL        Optimization convergence: normal (default) or tight.
-  --fix N,N,...              Fix unique XYZ atom numbers during optimization, counting from 1.
-```
-
 ## reshiki --cli read-output
 
 ```text
@@ -336,76 +305,6 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   alternatives   Other verified names, each with name, status and reason.
 With --locants, value also contains locants: one string or null per imported
 atom, in input atom order. Atoms outside the principal parent have null.
-```
-
-## reshiki --cli calc
-
-```text
-Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
-    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
-    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
-    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
-    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
-
-Options:
-  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
-  --method METHOD              Use gfn2 (default), gfnff or gxtb.
-  --energy                     Accepted for compatibility. Energy is always included.
-  --gradient                   Include the Cartesian energy gradient.
-  --wbo                        Include Mayer–Wiberg bond orders.
-  --charge N                   Set the molecular charge (default 0).
-  --uhf N                      Set unpaired electrons (default from valence count).
-  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
-  --alpb NAME                  Use the ALPB solvent model.
-  --gbsa NAME                  Use the GBSA solvent model.
-  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
-  --etemp K                    Set the electronic temperature in kelvin.
-  --thermo-temperature K       Thermochemistry temperature in kelvin (default 298.15)
-  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
-  --max-iter N                 Set the SCF iteration limit (default 250).
-  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
-  --threads N                  Use 1 to 64 worker threads (default 1).
-
-Use calculate for the compact calculation summary.
-See docs/xtb-worker.md (Command line)
-```
-
-## reshiki --cli ts
-
-```text
-Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
-    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
-    [--out-dir DIR] [--json FILE]
-
-Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.
-Supply two atom-mapped XYZ files or one XYZ file with the bond changes.
-Each structure must have 2 to 120 atoms. With two files, atom order
-defines the map. --remap-hydrogens requires two files and keeps heavy atoms
-mapped by order.
-
-Options:
-  --reactant R.xyz             Read the reactant from the first XYZ frame in angstroms.
-  --product P.xyz              Read the product from the first XYZ frame in angstroms.
-  --form I-J                   Form a bond from reactant to product (1-based atom numbers, repeatable).
-  --break I-J                  Break a bond from reactant to product (1-based atom numbers, repeatable).
-  --charge N                   Set the molecular charge (default 0).
-  --uhf N                      Set unpaired electrons (default from valence count).
-  --images N                   Use 5 to 24 NEB images including endpoints (default 15).
-  --workers N                  Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).
-  --remap-hydrogens            Reassign product hydrogens by least motion and list changed heavy-atom neighbors.
-  --keep-endpoints             Skip relaxation of the search endpoints.
-  --out-dir DIR                Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.
-  --json FILE                  Write a JSON report.
-
-Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both
-checks, and IRC branches whose relaxed ends match both endpoints. Progress
-and the hydrogen mapping review go to stderr.
-
-Examples:
-  reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
-  reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
 ```
 
 ## reshiki --cli pieces

@@ -47,14 +47,101 @@ fn totals_use_products_minus_reactants_and_each_coefficient() {
     let total = totals(
         [(&a_species, &a), (&b_species, &b), (&c_species, &c)],
         CalcTask::Optimize,
+        qcdata::XtbMethod::Gfn2Xtb,
     )
     .unwrap();
     assert!((total.energy - (-0.05 * KCAL_PER_HARTREE)).abs() < 1e-10);
     assert_eq!(total.gibbs, None);
+    assert_eq!(total.method, qcdata::XtbMethod::Gfn2Xtb);
     assert_eq!(
         total.line(EnergyUnit::default()),
-        "Reaction energy · ΔE −31.4 kcal/mol"
+        "Reaction energy · ΔE −31.4 kcal/mol · GFN2-xTB"
     );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn selected_method_is_required_for_reuse_and_all_total_terms() {
+    let (frame, gfn2) = result(-1.);
+    let (_, mut gxtb) = result(-0.9);
+    let qcdata::Settings::Xtb(settings) = &mut gxtb.settings else {
+        unreachable!()
+    };
+    settings.method = qcdata::XtbMethod::GXtb;
+    let reactant = species(false, 1);
+    let product = species(true, 1);
+    assert!(!matching(
+        &gfn2,
+        &frame,
+        &reactant,
+        CalcTask::Optimize,
+        qcdata::XtbMethod::GXtb
+    ));
+    assert!(!matching(
+        &gxtb,
+        &frame,
+        &product,
+        CalcTask::Optimize,
+        qcdata::XtbMethod::Gfn2Xtb
+    ));
+    assert!(matching(
+        &gxtb,
+        &frame,
+        &product,
+        CalcTask::Optimize,
+        qcdata::XtbMethod::GXtb
+    ));
+    assert!(
+        totals(
+            [(&reactant, &gfn2), (&product, &gxtb)],
+            CalcTask::Optimize,
+            qcdata::XtbMethod::GXtb
+        )
+        .is_none()
+    );
+    let total = totals(
+        [(&reactant, &gxtb), (&product, &gxtb)],
+        CalcTask::Optimize,
+        qcdata::XtbMethod::GXtb,
+    )
+    .unwrap();
+    assert_eq!(total.method, qcdata::XtbMethod::GXtb);
+    assert!(total.line(EnergyUnit::default()).contains("g-xTB"));
+    assert_eq!(total.energy, 0.);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn failed_or_unconverged_terms_never_produce_reaction_totals() {
+    let (frame, mut failed) = result(-1.);
+    let (_, product) = result(-0.9);
+    let reactant_species = species(false, 1);
+    let product_species = species(true, 1);
+    for status in [
+        qcdata::Status::Failed {
+            reason: "SCF failure".into(),
+        },
+        qcdata::Status::NotConverged {
+            reason: "step limit".into(),
+        },
+    ] {
+        failed.status = status;
+        assert!(!matching(
+            &failed,
+            &frame,
+            &reactant_species,
+            CalcTask::Optimize,
+            qcdata::XtbMethod::Gfn2Xtb
+        ));
+        assert!(
+            totals(
+                [(&reactant_species, &failed), (&product_species, &product)],
+                CalcTask::Optimize,
+                qcdata::XtbMethod::Gfn2Xtb
+            )
+            .is_none()
+        );
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -78,11 +165,18 @@ fn gibbs_includes_the_same_weighted_electronic_energies_and_thermal_corrections(
     let a_species = species(false, 2);
     let b_species = species(true, 1);
     let values = [(&a_species, &a), (&b_species, &b)];
-    let total = totals(values, CalcTask::OptFreq).unwrap();
+    let total = totals(values, CalcTask::OptFreq, qcdata::XtbMethod::Gfn2Xtb).unwrap();
     assert!((total.energy - -0.1 * KCAL_PER_HARTREE).abs() < 1e-10);
     assert!((total.gibbs.unwrap() - -0.11 * KCAL_PER_HARTREE).abs() < 1e-10);
     b.thermo = None;
-    assert!(totals([(&a_species, &a), (&b_species, &b)], CalcTask::OptFreq).is_none());
+    assert!(
+        totals(
+            [(&a_species, &a), (&b_species, &b)],
+            CalcTask::OptFreq,
+            qcdata::XtbMethod::Gfn2Xtb
+        )
+        .is_none()
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -90,8 +184,20 @@ fn gibbs_includes_the_same_weighted_electronic_energies_and_thermal_corrections(
 fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_convergence() {
     let (frame, result) = result(-1.);
     let species = species(false, 1);
-    assert!(matching(&result, &frame, &species, CalcTask::Optimize));
-    assert!(!matching(&result, &frame, &species, CalcTask::OptFreq));
+    assert!(matching(
+        &result,
+        &frame,
+        &species,
+        CalcTask::Optimize,
+        qcdata::XtbMethod::Gfn2Xtb
+    ));
+    assert!(!matching(
+        &result,
+        &frame,
+        &species,
+        CalcTask::OptFreq,
+        qcdata::XtbMethod::Gfn2Xtb
+    ));
     assert!(!matching(
         &result,
         &Frame {
@@ -99,7 +205,8 @@ fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_conver
             ..frame.clone()
         },
         &species,
-        CalcTask::Optimize
+        CalcTask::Optimize,
+        qcdata::XtbMethod::Gfn2Xtb
     ));
     assert!(!matching(
         &result,
@@ -108,7 +215,8 @@ fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_conver
             ..frame.clone()
         },
         &species,
-        CalcTask::Optimize
+        CalcTask::Optimize,
+        qcdata::XtbMethod::Gfn2Xtb
     ));
     for change in 0..7 {
         let mut result = result.clone();
@@ -128,7 +236,13 @@ fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_conver
                 }
             }
         }
-        assert!(!matching(&result, &frame, &species, CalcTask::Optimize));
+        assert!(!matching(
+            &result,
+            &frame,
+            &species,
+            CalcTask::Optimize,
+            qcdata::XtbMethod::Gfn2Xtb
+        ));
     }
     let mut single_point = result;
     single_point.task = qcdata::Task::Energy;
@@ -136,7 +250,8 @@ fn reuse_requires_matching_method_electronic_state_task_and_unconstrained_conver
         &single_point,
         &frame,
         &species,
-        CalcTask::Optimize
+        CalcTask::Optimize,
+        qcdata::XtbMethod::Gfn2Xtb
     ));
 }
 
@@ -167,11 +282,23 @@ fn optfreq_reuse_requires_all_thermochemistry_settings_and_known_tight_convergen
         )
         .unwrap();
     let species = species(false, 1);
-    assert!(!matching(&result, &frame, &species, CalcTask::OptFreq));
+    assert!(!matching(
+        &result,
+        &frame,
+        &species,
+        CalcTask::OptFreq,
+        qcdata::XtbMethod::Gfn2Xtb
+    ));
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
         settings.convergence = Some(qcdata::Convergence::Tight);
     }
-    assert!(matching(&result, &frame, &species, CalcTask::OptFreq));
+    assert!(matching(
+        &result,
+        &frame,
+        &species,
+        CalcTask::OptFreq,
+        qcdata::XtbMethod::Gfn2Xtb
+    ));
     for change in 0..6 {
         let mut changed = result.clone();
         let thermo = changed.thermo.as_mut().unwrap();
@@ -184,13 +311,25 @@ fn optfreq_reuse_requires_all_thermochemistry_settings_and_known_tight_convergen
             _ => thermo.symmetry_number = 1,
         }
         assert!(
-            !matching(&changed, &frame, &species, CalcTask::OptFreq),
+            !matching(
+                &changed,
+                &frame,
+                &species,
+                CalcTask::OptFreq,
+                qcdata::XtbMethod::Gfn2Xtb
+            ),
             "thermochemistry override {change} must not be reused"
         );
     }
     let mut unlabelled = result.clone();
     unlabelled.thermo.as_mut().unwrap().point_group = None;
-    assert!(!matching(&unlabelled, &frame, &species, CalcTask::OptFreq));
+    assert!(!matching(
+        &unlabelled,
+        &frame,
+        &species,
+        CalcTask::OptFreq,
+        qcdata::XtbMethod::Gfn2Xtb
+    ));
 
     let mut isotopologue = result.clone();
     let mut labelled_frame = frame.clone();
@@ -201,18 +340,26 @@ fn optfreq_reuse_requires_all_thermochemistry_settings_and_known_tight_convergen
         &isotopologue,
         &labelled_frame,
         &species,
-        CalcTask::OptFreq
+        CalcTask::OptFreq,
+        qcdata::XtbMethod::Gfn2Xtb
     ));
     isotopologue.thermo.as_mut().unwrap().symmetry_number = 1;
     assert!(matching(
         &isotopologue,
         &labelled_frame,
         &species,
-        CalcTask::OptFreq
+        CalcTask::OptFreq,
+        qcdata::XtbMethod::Gfn2Xtb
     ));
 
     result.vibrations = None;
-    assert!(!matching(&result, &frame, &species, CalcTask::OptFreq));
+    assert!(!matching(
+        &result,
+        &frame,
+        &species,
+        CalcTask::OptFreq,
+        qcdata::XtbMethod::Gfn2Xtb
+    ));
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
@@ -222,6 +369,16 @@ mod execution {
     use reshiki::document::{Arrow, Point};
     use reshiki::geometry::Point3;
     use reshiki::reactions::{Participant, Reaction};
+
+    fn optimized_method(method: qcdata::XtbMethod) -> crate::app::xtb::run::Event {
+        let mut answer = optimized(&START, &MOVED);
+        let crate::app::xtb::run::Event::Done(Ok(report)) = &mut answer else {
+            unreachable!()
+        };
+        Arc::get_mut(report).unwrap().computed.method =
+            reshiki_xtb_jobs::run::worker_method(method);
+        answer
+    }
 
     fn reaction(app: &mut App, a: u64, b: u64) -> (u64, Vec<Species>) {
         let arrow = app.tab.doc.next_id();
@@ -299,6 +456,7 @@ mod execution {
             &summary.species,
             &summary.inputs,
             summary.task,
+            summary.method,
         )
     }
 
@@ -355,6 +513,97 @@ mod execution {
         assert!(app.tab.xtb.run.is_none(), "both current results are reused");
         assert_eq!(app.tab.doc.science.results.len(), 2);
         assert_eq!(app.tab.xtb.energy_state.summaries[0].reused, 2);
+    }
+
+    #[test]
+    fn queued_method_is_captured_and_survives_a_settings_change() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("O", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        app.xtb.settings.barrier_method = qcdata::XtbMethod::GXtb;
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        assert_eq!(
+            app.tab.xtb.run.as_ref().unwrap().config.method,
+            qcdata::XtbMethod::GXtb
+        );
+        app.xtb.settings.barrier_method = qcdata::XtbMethod::Gfn2Xtb;
+        model(&mut app);
+        event(&mut app, optimized_method(qcdata::XtbMethod::GXtb));
+        assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [b]);
+        assert_eq!(
+            app.tab.xtb.run.as_ref().unwrap().config.method,
+            qcdata::XtbMethod::GXtb
+        );
+        model(&mut app);
+        event(&mut app, optimized_method(qcdata::XtbMethod::GXtb));
+        assert!(app.tab.xtb.energy_state.batch.is_none(), "{}", app.status);
+        assert_eq!(
+            summary_totals(&app).unwrap().method,
+            qcdata::XtbMethod::GXtb
+        );
+        assert!(app.tab.doc.science.results.iter().all(|stored|
+            matches!(&stored.result.settings, qcdata::Settings::Xtb(settings) if settings.method == qcdata::XtbMethod::GXtb)
+        ));
+    }
+
+    #[test]
+    fn a_gfn2_cached_result_is_not_reused_for_a_gxtb_queue() {
+        let (mut app, a) = crate::app::xtb::tests::water(CalcTask::Optimize);
+        event(&mut app, optimized(&START, &MOVED));
+        let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        assert!(
+            reusable(
+                &app.tab.doc,
+                &species[0],
+                CalcTask::Optimize,
+                qcdata::XtbMethod::Gfn2Xtb
+            )
+            .is_some()
+        );
+        assert!(
+            reusable(
+                &app.tab.doc,
+                &species[0],
+                CalcTask::Optimize,
+                qcdata::XtbMethod::GXtb
+            )
+            .is_none()
+        );
+        app.xtb.settings.barrier_method = qcdata::XtbMethod::GXtb;
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        assert_eq!(app.tab.xtb.energy_state.batch.as_ref().unwrap().reused, 0);
+        assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [a]);
+        assert_eq!(
+            app.tab.xtb.run.as_ref().unwrap().config.method,
+            qcdata::XtbMethod::GXtb
+        );
+        send(&mut app, xtb::Action::Cancel);
+    }
+
+    #[test]
+    fn a_failed_target_method_optimization_stops_without_a_summary() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("O", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        app.xtb.settings.barrier_method = qcdata::XtbMethod::GXtb;
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        model(&mut app);
+        let mut answer = optimized_method(qcdata::XtbMethod::GXtb);
+        let crate::app::xtb::run::Event::Done(Ok(report)) = &mut answer else {
+            unreachable!()
+        };
+        Arc::get_mut(report).unwrap().converged = false;
+        event(&mut app, answer);
+        assert!(app.tab.xtb.run.is_none());
+        assert!(app.tab.xtb.energy_state.batch.is_none());
+        assert!(app.xtb_energy_result(arrow, None).0.is_none());
+        assert!(app.tab.xtb.energy_state.summaries.is_empty());
+        assert!(app.status.contains("did not converge"), "{}", app.status);
     }
 
     #[test]
@@ -570,7 +819,15 @@ mod execution {
         let original = app.tab.doc.science.results[0].result.clone();
         let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
         let (arrow, species) = reaction(&mut app, a, b);
-        assert!(reusable(&app.tab.doc, &species[0], CalcTask::Optimize).is_some());
+        assert!(
+            reusable(
+                &app.tab.doc,
+                &species[0],
+                CalcTask::Optimize,
+                qcdata::XtbMethod::Gfn2Xtb
+            )
+            .is_some()
+        );
         let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
         assert_eq!(app.tab.xtb.energy_state.batch.as_ref().unwrap().reused, 1);
         assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [b]);
@@ -594,9 +851,25 @@ mod execution {
             atoms: vec![a],
             ..species(false, 1)
         };
-        assert!(reusable(&app.tab.doc, &species, CalcTask::Optimize).is_some());
+        assert!(
+            reusable(
+                &app.tab.doc,
+                &species,
+                CalcTask::Optimize,
+                qcdata::XtbMethod::Gfn2Xtb
+            )
+            .is_some()
+        );
         app.tab.doc.atom_mut(a).unwrap().isotope = 18;
-        assert!(reusable(&app.tab.doc, &species, CalcTask::Optimize).is_none());
+        assert!(
+            reusable(
+                &app.tab.doc,
+                &species,
+                CalcTask::Optimize,
+                qcdata::XtbMethod::Gfn2Xtb
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -703,9 +976,14 @@ mod execution {
         event(&mut app, answer);
         assert_eq!(app.tab.doc.science.results.len(), 3, "{}", app.status);
         assert!(Arc::ptr_eq(
-            &reusable(&app.tab.doc, &species[1], CalcTask::Optimize)
-                .unwrap()
-                .result,
+            &reusable(
+                &app.tab.doc,
+                &species[1],
+                CalcTask::Optimize,
+                qcdata::XtbMethod::Gfn2Xtb
+            )
+            .unwrap()
+            .result,
             &app.tab.doc.science.results[2].result,
         ));
         assert_eq!(summary_totals(&app), Some(original_total));
@@ -724,7 +1002,15 @@ mod execution {
             .science
             .results
             .retain(|stored| !Arc::ptr_eq(&stored.result, &original));
-        assert!(reusable(&app.tab.doc, &species[1], CalcTask::Optimize).is_some());
+        assert!(
+            reusable(
+                &app.tab.doc,
+                &species[1],
+                CalcTask::Optimize,
+                qcdata::XtbMethod::Gfn2Xtb
+            )
+            .is_some()
+        );
         assert!(
             summary_totals(&app).is_none(),
             "a newer result cannot replace a missing input"

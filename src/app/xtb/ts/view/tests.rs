@@ -381,6 +381,98 @@ mod presentation_tests {
     }
 
     #[test]
+    fn method_labels_follow_saved_settings_in_status_log_and_copied_path_values() {
+        let mut result = gxtb_result();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut result.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        // Stale descriptive provenance cannot relabel the numerical method.
+        result.provenance.method = Some("GFN2-xTB · optimizer P-RFO".into());
+        let saved = presentation(&result, None);
+        assert_eq!(saved.method, "g-xTB");
+        assert_eq!(
+            saved.status_line(EnergyUnit::KcalPerMol),
+            "Transition state · g-xTB · ΔE‡ 26.5 kcal/mol"
+        );
+        assert!(
+            search_log(&result, None, EnergyUnit::default()).contains("Electronic method: g-xTB")
+        );
+        assert_eq!(
+            path_rows(&result, None, EnergyUnit::default(), None)[0],
+            ("Electronic method".into(), "g-xTB".into())
+        );
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert_eq!(
+            presentation(&result, None).status_line(EnergyUnit::KcalPerMol),
+            "g-xTB · No reliable transition state found."
+        );
+        result.settings = reshiki::qcdata::Settings::Imported { keywords: vec![] };
+        assert_eq!(method_name(&result), "g-xTB");
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
+    async fn linked_barriers_keep_each_methods_checks_and_the_source_on_failed_refine() {
+        let mut source = result();
+        source.energy_hartree = Some(-5. + 25.6 / KCAL_PER_HARTREE);
+        source.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-315.];
+        let source = Arc::new(source);
+        let ui = ViewHarness::new().await.at_width(330.);
+        let both = ui.inspect(crate::app::xtb::ts::card::linked_barriers(
+            [&source, &Arc::new(gxtb_result())],
+            EnergyUnit::KjPerMol,
+        ));
+        for expected in [
+            "GFN2-xTB Barrier ΔE‡",
+            "g-xTB Barrier ΔE‡",
+            "107.1",
+            "110.9",
+        ] {
+            assert!(both.texts.iter().any(|text| text == expected));
+        }
+        for frequency in ["315i", "387i"] {
+            assert!(
+                both.texts.iter().any(|line| line.contains(frequency)
+                    && line.contains("connects reactant and product"))
+            );
+        }
+        let mut refined = result();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut refined.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        refined.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        refined.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-120., -60.];
+        let refined = Arc::new(refined);
+        let view = ui.inspect(crate::app::xtb::ts::card::linked_barriers(
+            [&source, &refined],
+            EnergyUnit::KcalPerMol,
+        ));
+        assert!(view.texts.iter().any(|text| text == "GFN2-xTB Barrier ΔE‡"));
+        assert!(view.texts.iter().any(|text| text == "g-xTB Barrier ΔE‡"));
+        assert!(view.texts.iter().any(|text| text == "25.6"));
+        assert!(!view.texts.iter().any(|text| text == "26.5"));
+        assert_eq!(
+            view.texts
+                .iter()
+                .filter(|text| text.contains("connects reactant and product"))
+                .count(),
+            1
+        );
+        assert!(
+            view.texts
+                .iter()
+                .any(|text| text.contains("g-xTB refinement failed")
+                    && text.contains("two imaginary frequencies"))
+        );
+    }
+
+    #[test]
     fn old_saved_path_keeps_optimized_reaction_energy_even_if_saddle_verification_failed() {
         let mut result = result();
         result.status = Status::NotConverged {
@@ -426,6 +518,8 @@ mod presentation_tests {
             product: frame.hash(),
         });
         let search = TransitionStateRun {
+            method: Default::default(),
+            refined_from: None,
             irc: None,
             arrow: None,
             context: None,
@@ -456,6 +550,292 @@ mod presentation_tests {
         });
         result.validate(&frame).unwrap();
         result
+    }
+
+    /// A light saved g-xTB refinement keeps its own spectrum and observed IRC ends.
+    fn gxtb_result() -> CalcResult {
+        use reshiki::qcdata::{IrcEndpoint, IrcPath, IrcRelaxedEnd};
+        let mut result = result_with_gibbs();
+        let parent = result.transition_state_id().unwrap();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut result.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        let mut frame = frame();
+        frame.masses_amu = vec![7., 35., 4.];
+        result.frame = frame.hash();
+        result.endpoints = Some(Endpoints {
+            reactant: frame.hash(),
+            product: frame.hash(),
+        });
+        let mut trajectory = result.trajectory.take().unwrap();
+        trajectory.masses_amu = frame.masses_amu.clone();
+        trajectory.energies_hartree[1] = result.energy_hartree.unwrap();
+        let ends = [
+            trajectory.energies_hartree[0],
+            trajectory.energies_hartree[2],
+        ];
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.method = XtbMethod::GXtb;
+        search.refined_from = Some(parent);
+        search.irc = Some(IrcPath {
+            trajectory,
+            arc_lengths_sqrt_amu_bohr: vec![-1., 0., 1.],
+            neb_arc_lengths_sqrt_amu_bohr: vec![],
+            ts_index: 1,
+            reached: [IrcEndpoint::Reactant, IrcEndpoint::Product],
+            relaxed_ends: Some(ends.map(|energy_hartree| IrcRelaxedEnd {
+                energy_hartree,
+                positions_angstrom: vec![],
+            })),
+            completed: [true; 2],
+        });
+        result.validate(&frame).unwrap();
+        result
+    }
+
+    fn irc_path_mut(result: &mut CalcResult) -> &mut reshiki::qcdata::IrcPath {
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc
+            .as_mut()
+            .unwrap()
+    }
+
+    fn set_irc_step_counts(result: &mut CalcResult, steps: [usize; 2]) {
+        let saddle_energy = result.energy_hartree.unwrap();
+        let path = irc_path_mut(result);
+        path.ts_index = steps[0];
+        path.trajectory.energies_hartree = vec![-5.; steps[0] + steps[1] + 1];
+        path.trajectory.energies_hartree[path.ts_index] = saddle_energy;
+        path.arc_lengths_sqrt_amu_bohr = (0..path.steps())
+            .map(|index| index as f64 - path.ts_index as f64)
+            .collect();
+        path.validate().unwrap();
+    }
+
+    #[test]
+    fn short_irc_detail_reports_actual_steps_and_the_side_that_stopped() {
+        let mut result = gxtb_result();
+        set_irc_step_counts(&mut result, [4, 2]);
+        let path = irc_path_mut(&mut result);
+        path.completed = [false, true];
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path stopped after 4 steps on the reactant side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        irc_path_mut(&mut result).completed = [true, false];
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path stopped after 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        // The trace counts exclude the saddle and the separately relaxed ends.
+        let card = presentation(&result, None);
+        assert!(card.verification.contains("✓ one imaginary frequency"));
+        assert!(
+            card.verification
+                .contains("✓ path connects reactant and product")
+        );
+        assert!(!card.verification.contains("steps"));
+        assert!(!card.verification.contains("gradient"));
+    }
+
+    #[test]
+    fn two_short_irc_branches_keep_each_actual_step_count() {
+        let mut result = gxtb_result();
+        irc_path_mut(&mut result).completed = [false; 2];
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path was followed for 1 step in each direction. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        set_irc_step_counts(&mut result, [4, 2]);
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path was followed for 4 steps on the reactant side and 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        irc_path_mut(&mut result).completed = [true; 2];
+        assert_eq!(irc_path_detail(&result, None, false), None);
+    }
+
+    #[test]
+    fn short_irc_detail_states_the_observed_endpoint_match() {
+        use reshiki::qcdata::IrcEndpoint::{Other, Product, Reactant};
+        let mut result = gxtb_result();
+        for (reached, expected) in [
+            (
+                [Reactant, Reactant],
+                "Both endpoints match the drawn reactant.",
+            ),
+            (
+                [Product, Product],
+                "Both endpoints match the drawn product.",
+            ),
+            (
+                [Reactant, Other],
+                "One end matches the drawn reactant. The other could not be matched.",
+            ),
+            (
+                [Other, Product],
+                "One end matches the drawn product. The other could not be matched.",
+            ),
+            (
+                [Other, Other],
+                "Neither end could be matched to a drawn endpoint.",
+            ),
+        ] {
+            let path = irc_path_mut(&mut result);
+            path.completed = [false; 2];
+            path.reached = reached;
+            let detail = irc_path_detail(&result, None, false).unwrap();
+            assert!(detail.ends_with(expected), "{detail}");
+            assert!(!detail.contains("The endpoints match the drawn reactant and product"));
+        }
+        let path = irc_path_mut(&mut result);
+        path.completed = [true, false];
+        path.reached = [Reactant, Other];
+        assert!(
+            irc_path_detail(&result, None, false)
+                .unwrap()
+                .contains("1 step in the positive direction")
+        );
+    }
+
+    #[test]
+    fn short_irc_detail_does_not_invent_unsaved_relaxation_or_legacy_counts() {
+        let mut result = gxtb_result();
+        let path = irc_path_mut(&mut result);
+        path.completed = [false, true];
+        path.relaxed_ends = None;
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path stopped after 1 step on the reactant side. The endpoints match the drawn reactant and product."
+            )
+        );
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.irc = None;
+        search.diagnostics.push((
+            "IRC +mode".into(),
+            "reactant · downhill trace not converged · 10 points".into(),
+        ));
+        // A legacy log row supplies its original count but no relaxed geometry.
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some("The path stopped after 10 steps on the reactant side.")
+        );
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics[0]
+            .1 = "reactant · downhill trace not converged · count not saved".into();
+        assert_eq!(irc_path_detail(&result, None, false), None);
+    }
+
+    #[test]
+    fn short_irc_detail_keeps_technical_stop_metadata_in_the_log() {
+        let mut result = gxtb_result();
+        irc_path_mut(&mut result).completed = [false, true];
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics
+            .push((
+                "IRC +mode".into(),
+                "reactant · length cap · accepted steps: 1 · gradient calls: 7 · path length: 2.126540 amu½·bohr".into(),
+            ));
+        let detail = irc_path_detail(&result, None, false).unwrap();
+        let checks = presentation(&result, None).verification;
+        let log = search_log(&result, None, EnergyUnit::default());
+        for technical in ["length cap", "gradient calls", "path length"] {
+            assert!(log.contains(technical));
+            assert!(!detail.contains(technical));
+            assert!(!checks.contains(technical));
+        }
+    }
+
+    #[test]
+    fn gxtb_barriers_require_observed_irc_ends_and_the_actual_worker_spectrum() {
+        use reshiki::qcdata::IrcEndpoint;
+        let mut result = gxtb_result();
+        assert!(presentation(&result, None).reliable());
+        result.vibrations = None;
+        assert!(!presentation(&result, None).reliable());
+        assert!(
+            !presentation(&result, None)
+                .verification
+                .contains("✓ one imaginary")
+        );
+        let mut result = gxtb_result();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc
+            .as_mut()
+            .unwrap()
+            .reached = [IrcEndpoint::Reactant; 2];
+        assert!(!presentation(&result, None).reliable());
+        assert!(
+            !presentation(&result, None)
+                .verification
+                .contains("✓ path connects")
+        );
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc = None;
+        assert!(!presentation(&result, None).reliable());
+    }
+
+    #[test]
+    fn refined_path_copy_keeps_its_own_endpoint_energies_without_a_neb_band() {
+        let result = gxtb_result();
+        assert!(result.trajectory.is_none());
+        let rows = path_rows(&result, None, EnergyUnit::KjPerMol, None);
+        assert!(rows.contains(&("R ΔE".into(), "0.0 kJ/mol".into())));
+        assert!(rows.contains(&("P ΔE".into(), "−34.3 kJ/mol".into())));
+        assert!(rows.contains(&("TS‡ ΔE".into(), "110.9 kJ/mol".into())));
+        assert!(!rows.iter().any(|(label, _)| label.starts_with("Image ")));
     }
 
     #[test]
@@ -811,7 +1191,6 @@ mod presentation_tests {
             };
             let presentation = presentation(&result, None);
             assert_eq!(presentation.refined_kcal, None);
-            assert_eq!(presentation.warning, None);
             assert_eq!(
                 presentation.reason,
                 Some(format!(
@@ -820,7 +1199,7 @@ mod presentation_tests {
             );
             assert_eq!(
                 presentation.status_line(EnergyUnit::KcalPerMol),
-                "xTB · No reliable transition state found."
+                "GFN2-xTB · No reliable transition state found."
             );
         }
     }

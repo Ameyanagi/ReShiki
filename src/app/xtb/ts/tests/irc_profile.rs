@@ -10,7 +10,17 @@ pub(in crate::app::xtb::ts) fn finished() -> (App, u64) {
     finish_model(&mut app);
     let run = app.tab.xtb.run.as_ref().unwrap();
     let serial = run.serial;
-    let mut report = Arc::unwrap_or_clone(example_report(run.launch.as_ref().unwrap()));
+    let report = connected_report(run.launch.as_ref().unwrap());
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
+    );
+    assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
+    (app, arrow)
+}
+
+pub(super) fn connected_report(launch: &Launch) -> job::Report {
+    let mut report = Arc::unwrap_or_clone(example_report(launch));
     for frame in &mut report.frames {
         frame.masses_amu = frame
             .numbers
@@ -60,12 +70,41 @@ pub(in crate::app::xtb::ts) fn finished() -> (App, u64) {
     .unwrap();
     path.neb_arc_lengths_sqrt_amu_bohr = path.arc_lengths_sqrt_amu_bohr.clone();
     report.extras.irc = Some(path);
-    send(
-        &mut app,
-        XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
+    report
+}
+
+#[test]
+fn editing_the_product_keeps_the_endpoint_match_tied_to_the_original_run() {
+    let (mut app, arrow) = finished();
+    let result = Arc::make_mut(&mut app.tab.doc.science.results[0].result);
+    result
+        .run
+        .as_mut()
+        .unwrap()
+        .transition_state
+        .as_mut()
+        .unwrap()
+        .irc
+        .as_mut()
+        .unwrap()
+        .completed[0] = false;
+    let file = app.tab.doc.file_json().unwrap();
+    let mut app = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    send(&mut app, XtbAction::Palette(palette::Action::Show));
+    assert!(!app.xtb_shown().unwrap().stale);
+
+    let before = app.tab.doc.clone();
+    let product = app.tab.doc.reactions[0].products[0].atoms[0];
+    app.tab.doc.atom_mut(product).unwrap().charge += 1;
+    app.changed(before);
+    let shown = app.xtb_shown().unwrap();
+    assert!(shown.stale);
+    let detail = view::irc_path_detail(&shown.stored.result, shown.ts, shown.stale).unwrap();
+    assert!(
+        detail
+            .ends_with("The endpoints matched the reactant and product the run was started from."),
+        "{detail}"
     );
-    assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
-    (app, arrow)
 }
 
 #[test]
@@ -180,7 +219,7 @@ fn reopened_irc_exports_ordered_xyz_in_the_selected_unit_only_from_a_full_save()
                 assert_eq!(
                     lines[1],
                     format!(
-                        "E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {}",
+                        "GFN2-xTB · E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {}",
                         unit.label()
                     )
                 );

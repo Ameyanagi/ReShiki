@@ -72,6 +72,9 @@ impl Thumbnail {
         model.rotation = rotation;
         model.size = 100.;
         model.perspective = 0.;
+        // Small figures need their back atoms to remain distinct from the
+        // backdrop; the full paper model uses a gentler, deeper fade.
+        model.depth_fade = 0.16;
         let projected = models3d::project(&doc, &model, &positions)?;
         let changes = [
             (BondChangeKind::Form, forming),
@@ -191,10 +194,45 @@ fn themed_primitives(doc: &mut Document) -> [Vec<reshiki::scene::Primitive>; 2] 
     let original = doc.canvas_theme;
     let artwork = CanvasTheme::ALL.map(|mode| {
         doc.canvas_theme = mode;
-        models3d::primitives(doc)
+        let mut primitives = models3d::primitives(doc);
+        for primitive in &mut primitives {
+            thumbnail_contrast(primitive, mode);
+        }
+        primitives
     });
     doc.canvas_theme = original;
     artwork
+}
+
+/// Preserve the model renderer's theme colours and projection, with a firmer
+/// rim and deeper sphere edge that survive reduction into a 72 px figure.
+fn thumbnail_contrast(primitive: &mut reshiki::scene::Primitive, mode: CanvasTheme) {
+    use reshiki::scene::Primitive;
+
+    let strengthen = |outline: &mut Option<reshiki::scene::Outline>| {
+        if let Some(outline) = outline {
+            outline.width *= 1.6;
+            outline.alpha = if mode.is_dark() { 0.78 } else { 0.95 };
+        }
+    };
+    match primitive {
+        Primitive::Sphere { stops, outline, .. } => {
+            if let Some((_, color)) = stops.first_mut() {
+                *color = color.map(|channel| {
+                    (f32::from(channel) + (255. - f32::from(channel)) * 0.12).round() as u8
+                });
+            }
+            if let Some((_, color)) = stops.last_mut() {
+                *color = color.map(|channel| (f32::from(channel) * 0.78).round() as u8);
+            }
+            strengthen(outline);
+        }
+        Primitive::ShadedQuad { outline, .. } | Primitive::ShadedPolygon { outline, .. } => {
+            strengthen(outline);
+        }
+        Primitive::Opacity { primitive, .. } => thumbnail_contrast(primitive, mode),
+        _ => {}
+    }
 }
 
 #[cfg(test)]
@@ -240,6 +278,44 @@ mod tests {
         let mut invalid = frame();
         invalid.positions_angstrom[0][0] = f64::NAN;
         assert!(Thumbnail::new(&invalid, &[], &[], &[], [1., 0., 0., 0.]).is_none());
+    }
+
+    #[test]
+    fn thumbnail_contrast_keeps_theme_rims_and_adds_legible_edge_shading() {
+        use reshiki::scene::{Outline, Primitive};
+
+        for (mode, color, alpha) in [
+            (CanvasTheme::Light, [30, 34, 38], 0.85),
+            (CanvasTheme::Dark, [225, 232, 238], 0.55),
+        ] {
+            let mut sphere = Primitive::Sphere {
+                center: World::default(),
+                radius: 4.,
+                focal: World::default(),
+                stops: vec![(0., [200; 3]), (0.6, [120; 3]), (1., [98; 3])],
+                outline: Some(Outline {
+                    color,
+                    alpha,
+                    width: 0.6,
+                }),
+                contact: None,
+            };
+            thumbnail_contrast(&mut sphere, mode);
+            let Primitive::Sphere {
+                stops,
+                outline: Some(outline),
+                ..
+            } = sphere
+            else {
+                unreachable!()
+            };
+            assert_eq!(outline.color, color);
+            assert!(outline.alpha > alpha);
+            assert!(outline.width >= 0.96);
+            assert!(stops[0].1[0] > 200);
+            assert_eq!(stops[1].1, [120; 3]);
+            assert!(stops[2].1[0] < 98);
+        }
     }
 
     #[test]

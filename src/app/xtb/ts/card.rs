@@ -13,7 +13,9 @@ use iced::widget::{
 use iced::{Element, Length, Point, Rectangle, Renderer, Task, Theme, mouse};
 use reshiki::document::Document;
 use reshiki::palette::{Color, Palette};
-use reshiki::qcdata::{CalcResult, MappedAtom, TransitionStateMapping, TransitionStateRun};
+use reshiki::qcdata::{
+    CalcResult, MappedAtom, TransitionStateMapping, TransitionStateRun, XtbMethod,
+};
 use reshiki::reactions::Reaction;
 use reshiki::reactions::ts_plan::{Side, TsPlan, TsPlanError};
 use std::cell::Cell;
@@ -71,6 +73,9 @@ pub(crate) enum Action {
     ReactionEnergy,
     Barrier,
     FreeEnergy,
+    Method(XtbMethod),
+    Result(Arc<CalcResult>),
+    Refine,
     ShowPath,
     Export,
     Animate,
@@ -591,6 +596,18 @@ impl App {
         }
     }
 
+    /// The retained source remains the card's answer after an unsuccessful refine.
+    pub(in crate::app::xtb) fn xtb_ts_card_display_result(&self, arrow: u64) -> ArrowResult<'_> {
+        match self.xtb_ts_card_result(arrow) {
+            ArrowResult::Found(result) => ArrowResult::Found(
+                self.xtb_ts_linked_pair(result)
+                    .filter(|pair| !view::presentation(pair[1], None).reliable())
+                    .map_or(result, |pair| pair[0]),
+            ),
+            other => other,
+        }
+    }
+
     /// Open the saved saddle's imaginary mode without applying its geometry.
     pub(in crate::app::xtb) fn xtb_ts_animate(&mut self, result: Arc<CalcResult>) -> Task<Message> {
         if self.xtb_running() || self.tab.busy || !super::is_ts(&result) {
@@ -616,7 +633,11 @@ impl App {
     }
 
     pub(in crate::app::xtb) fn xtb_ts_card_action(&mut self, action: Action) -> Task<Message> {
-        let Some(arrow) = self.xtb_selected_reaction() else {
+        let arrow = match &action {
+            Action::Result(result) => super::saved_search(result).and_then(|run| run.arrow),
+            _ => self.xtb_selected_reaction(),
+        };
+        let Some(arrow) = arrow else {
             return Task::none();
         };
         match action {
@@ -627,6 +648,35 @@ impl App {
             Action::FreeEnergy => {
                 self.tab.xtb.ts_card.free_energy = !self.tab.xtb.ts_card.free_energy;
             }
+            Action::Method(method) => {
+                if !self.xtb_running() && matches!(method, XtbMethod::Gfn2Xtb | XtbMethod::GXtb) {
+                    self.xtb.settings.barrier_method = method;
+                }
+            }
+            Action::Refine => {
+                let ArrowResult::Found(result) = self.xtb_ts_card_display_result(arrow) else {
+                    return Task::none();
+                };
+                return self.xtb_ts_action(TsAction::RefineGxtb(arrow, Arc::clone(result)));
+            }
+            Action::Result(result) => {
+                let valid = !self.xtb_running()
+                    && self.xtb_shown().is_some_and(|shown| {
+                        self.xtb_ts_linked_pair(&shown.stored.result)
+                            .is_some_and(|pair| {
+                                pair.iter().any(|saved| Arc::ptr_eq(saved, &result))
+                            })
+                    });
+                if valid {
+                    self.xtb_open_saved_path(&result);
+                    let status =
+                        view::presentation(&result, None).status_line(self.appearance.energy_unit);
+                    self.tab.xtb.ts_card.status =
+                        Some((arrow, Status::TransitionState, status.clone()));
+                    self.status = status;
+                    self.error = false;
+                }
+            }
             Action::Export => return self.xtb_ts_export_arrow(arrow),
             Action::ShowPath => {
                 if !self.xtb_show_reaction_path(arrow) {
@@ -634,7 +684,7 @@ impl App {
                 }
             }
             Action::Animate => {
-                let ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
+                let ArrowResult::Found(result) = self.xtb_ts_card_display_result(arrow) else {
                     return Task::none();
                 };
                 return self.xtb_ts_animate(Arc::clone(result));
@@ -647,15 +697,19 @@ impl App {
         if self.xtb_show_live_path(arrow) {
             return true;
         }
-        let ArrowResult::Found(result) = self.xtb_ts_card_result(arrow) else {
+        let ArrowResult::Found(result) = self.xtb_ts_card_display_result(arrow) else {
             return false;
         };
         let result = Arc::clone(result);
-        self.xtb_show_result(&result);
+        self.xtb_open_saved_path(&result);
+        true
+    }
+
+    pub(super) fn xtb_open_saved_path(&mut self, result: &Arc<CalcResult>) {
+        self.xtb_show_result(result);
         self.tab.xtb.palette.view = xtb::results::View::Path;
         self.tab.xtb.palette.collapsed = false;
         self.xtb_vibrations_sync();
-        true
     }
 
     pub(in crate::app::xtb) fn xtb_reaction_card(&self, arrow: u64) -> Element<'_, Message> {
@@ -664,10 +718,16 @@ impl App {
         let state = &self.tab.xtb.ts_card;
         let label = self.xtb_reaction_label(arrow);
         let plan = review::scheme_plan(doc, arrow);
-        let result = match self.xtb_ts_card_result(arrow) {
+        let latest_result = match self.xtb_ts_card_result(arrow) {
             ArrowResult::Found(result) => Some(result),
             _ => None,
         };
+        let linked = latest_result.and_then(|result| self.xtb_ts_linked_pair(result));
+        // A failed g-xTB refine retains the source's verified answer.
+        let result = linked
+            .filter(|pair| !view::presentation(pair[1], None).reliable())
+            .map(|pair| pair[0])
+            .or(latest_result);
         let stale = result.is_some_and(|result| self.xtb_ts_result_stale(result));
         let endpoint_energy = result.and_then(|result| view::reaction_energy_kcal(result));
         let (batch, batch_refusal) =
@@ -692,6 +752,12 @@ impl App {
             }
             _ => None,
         };
+        let refine_failed = failed.filter(|failed| {
+            failed
+                .ts()
+                .is_some_and(|request| request.refined_from().is_some())
+        });
+        let failed = failed.filter(|_| refine_failed.is_none());
         let idle = self.tab.xtb.run.is_none()
             && !self.tab.xtb.energy_state.in_progress()
             && !self.tab.busy
@@ -704,9 +770,9 @@ impl App {
                 search.mapping.automatic && !self.xtb_ts_search_stale(result)
             });
         let subtitle = if matched {
-            "GFN2-xTB · gas phase · atoms matched ✓"
+            "Gas phase · atoms matched ✓"
         } else {
-            "GFN2-xTB · gas phase"
+            "Gas phase"
         };
         let mut subtitle = row![line(subtitle, Tone::Muted)]
             .spacing(4)
@@ -748,15 +814,25 @@ impl App {
         } else {
             result.and_then(|result| self.xtb_ts_reference(result, Some(arrow)))
         };
+        let method = result.map(|result| view::method_name(result));
+        let reaction_method = batch
+            .as_ref()
+            .map(|totals| totals.method.label())
+            .or(method);
         let reaction_number = energy_number(
             unit,
+            reaction_method,
             "Reaction ΔE",
             reaction,
             reference,
             "ΔG",
             reaction_gibbs,
         );
-        content = if unreliable && barrier_refusal.is_none() {
+        content = if let Some(pair) = linked.filter(|_| barrier_refusal.is_none()) {
+            content
+                .push(linked_barriers(pair, unit))
+                .push(reaction_number)
+        } else if unreliable && barrier_refusal.is_none() {
             content.push(reaction_number)
         } else {
             content.push(
@@ -766,6 +842,7 @@ impl App {
                     } else {
                         energy_number(
                             unit,
+                            method,
                             if barrier.is_some() && batch.is_some() {
                                 "Previous barrier ΔE‡"
                             } else {
@@ -783,6 +860,18 @@ impl App {
                 .spacing(12),
             )
         };
+        if let Some(failed) = refine_failed {
+            let (reason, detail) = failed.explain(self.xtb_can_retry(failed));
+            content = content
+                .push(line(
+                    "g-xTB refinement failed; the GFN2-xTB result is kept.",
+                    Tone::Warning,
+                ))
+                .push(line(
+                    if detail.is_empty() { reason } else { detail },
+                    Tone::Muted,
+                ));
+        }
         if let Some(failed) = failed {
             let (reason, detail) = failed.explain(self.xtb_can_retry(failed));
             content = content
@@ -815,7 +904,8 @@ impl App {
             if let Some(highest) = view.highest_path_kcal {
                 content = content.push(line(
                     format!(
-                        "Highest point on the path: about {} above the reactants.",
+                        "{} highest point on the path: about {} above the reactants.",
+                        view.method,
                         unit.format(highest)
                     ),
                     Tone::Muted,
@@ -835,8 +925,11 @@ impl App {
                 .height(82),
             );
         }
-        if let Some(verification) = presentation.as_ref().filter(|_| barrier.is_some()) {
-            let copy = verification.verification.clone();
+        if let Some(verification) = presentation
+            .as_ref()
+            .filter(|_| barrier.is_some() && linked.is_none())
+        {
+            let copy = format!("{} {}", verification.method, verification.verification);
             content = content.push(
                 iced::widget::responsive(move |size| {
                     let preferred = 11.;
@@ -889,6 +982,21 @@ impl App {
                     .wrap()
                     .vertical_spacing(5),
             );
+            if xtb::available()
+                && view::is_gfn2(result)
+                && search.is_some()
+                && presentation.as_ref().is_some_and(|view| view.reliable())
+            {
+                content = content.push(
+                    accessible_command(
+                        "xtb-ts-refine-gxtb",
+                        "Refine with g-xTB",
+                        "Refine with g-xTB",
+                    )
+                    .style(crate::appearance::secondary)
+                    .on_press_maybe((idle && !stale).then(|| send(Action::Refine))),
+                );
+            }
         }
 
         if barrier.is_some()
@@ -927,7 +1035,7 @@ impl App {
         }
 
         if let Some(live) = live {
-            let small = live.small_reaction();
+            let small = live.small_reaction() && live.request.method == XtbMethod::Gfn2Xtb;
             let mut steps = column![stepper(live)].spacing(4);
             if self.xtb_palette_live_ts().is_none() || !self.xtb_palette_body_visible() {
                 steps = steps.push(
@@ -999,15 +1107,40 @@ impl App {
                         state.barrier,
                         Action::Barrier
                     ),
-                    live.is_none().then(|| container(line(
-                        "about 5–10 s for small molecules",
-                        Tone::Muted
-                    ),)
-                    .padding([0, 19])),
+                    (live.is_none() && self.xtb.settings.barrier_method == XtbMethod::Gfn2Xtb)
+                        .then(
+                            || container(line("about 5–10 s for small molecules", Tone::Muted),)
+                                .padding([0, 19])
+                        ),
                 ]
                 .spacing(1),
             );
         }
+        let methods = row([(XtbMethod::Gfn2Xtb, "gfn2"), (XtbMethod::GXtb, "gxtb")]
+            .into_iter()
+            .map(|(method, id)| {
+                xtb::view::segment(
+                    format!("xtb-ts-method-{id}"),
+                    method.label(),
+                    self.xtb.settings.barrier_method == method,
+                    idle.then(|| send(Action::Method(method))),
+                    None,
+                )
+            }))
+        .spacing(4);
+        content = content.push(
+            column![
+                line("Method", Tone::Muted),
+                methods,
+                (self.xtb.settings.barrier_method == XtbMethod::GXtb).then(|| {
+                    line(
+                        "closer to DFT energies; slower for large molecules",
+                        Tone::Muted,
+                    )
+                }),
+            ]
+            .spacing(3),
+        );
         let free_label = if supports_barrier && state.barrier && barrier_refusal.is_none() {
             "Free energies ΔG, ΔG‡ at 298 K"
         } else {
@@ -1055,10 +1188,12 @@ fn stepper(live: &Live) -> Element<'static, Message> {
                     StepState::Done(elapsed) => (toned_text("✓", Tone::Good), text(label), elapsed),
                     StepState::Current(elapsed) => (
                         text("●"),
-                        text(live.line()).font(iced::Font {
-                            weight: iced::font::Weight::Bold,
-                            ..iced::Font::DEFAULT
-                        }),
+                        text(format!("{} · {}", live.request.method.label(), live.line())).font(
+                            iced::Font {
+                                weight: iced::font::Weight::Bold,
+                                ..iced::Font::DEFAULT
+                            },
+                        ),
                         Some(elapsed),
                     ),
                     StepState::Todo => (
@@ -1089,14 +1224,57 @@ fn stepper(live: &Live) -> Element<'static, Message> {
     .into()
 }
 
+/// Each method keeps its own barrier and checks; a candidate never borrows the
+/// source's successful frequency or connectivity check.
+pub(super) fn linked_barriers(
+    pair: [&Arc<CalcResult>; 2],
+    unit: EnergyUnit,
+) -> Element<'static, Message> {
+    row(pair.into_iter().map(|result| {
+        let presentation = view::presentation(result, None);
+        let mut details = column![
+            energy_number(
+                unit,
+                Some(&presentation.method),
+                "Barrier ΔE‡",
+                presentation.refined_kcal,
+                None,
+                "ΔG‡",
+                view::barrier_gibbs_kcal(result)
+            ),
+            line(
+                format!("{} {}", presentation.method, presentation.verification),
+                if presentation.reliable() {
+                    Tone::Good
+                } else {
+                    Tone::Muted
+                },
+            ),
+        ]
+        .spacing(3);
+        if let Some(reason) = presentation.reason {
+            details = details.push(line(
+                format!("g-xTB refinement failed: {reason}"),
+                Tone::Warning,
+            ));
+        }
+        container(details).width(Length::FillPortion(1)).into()
+    }))
+    .spacing(12)
+    .into()
+}
+
 fn energy_number(
     unit: EnergyUnit,
-    label: &'static str,
+    method: Option<&str>,
+    label: &str,
     energy: Option<f64>,
     reference: Option<&'static str>,
     gibbs_label: &'static str,
     gibbs: Option<f64>,
 ) -> Element<'static, Message> {
+    let with_method =
+        |label: &str| method.map_or_else(|| label.to_owned(), |method| format!("{method} {label}"));
     let mut number = row![
         text(energy.map_or_else(|| "—".into(), |value| unit.number(value)))
             .size(22)
@@ -1111,12 +1289,15 @@ fn energy_number(
         number = number.push(text(unit.label()).size(10).style(muted_text));
     }
     column![
-        line(label, Tone::Muted),
+        line(with_method(label), Tone::Muted),
         number,
         reference
             .filter(|_| energy.is_some())
             .map(|reference| line(reference, Tone::Muted)),
-        gibbs.map(|value| line(format!("{gibbs_label} {}", unit.format(value)), Tone::Muted)),
+        gibbs.map(|value| line(
+            format!("{} {}", with_method(gibbs_label), unit.format(value)),
+            Tone::Muted
+        )),
     ]
     .spacing(1)
     .into()
@@ -1220,7 +1401,13 @@ fn failure_actions(
     has_endpoint: bool,
 ) -> Element<'static, Message> {
     row![
-        recovery.button("xtb-ts-rerun", Some(arrow), idle, has_endpoint),
+        recovery.button(
+            "xtb-ts-rerun",
+            Some(arrow),
+            idle,
+            has_endpoint,
+            TsAction::ShowWhere(arrow)
+        ),
         accessible_command(
             "xtb-ts-card-path",
             "Show what was found",

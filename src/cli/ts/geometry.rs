@@ -28,7 +28,7 @@ pub(super) fn load(command: &Ts) -> Result<(Option<Geometry>, Option<Geometry>),
     Ok((reactant, product))
 }
 
-fn endpoint(path: &Path) -> Result<Geometry, String> {
+pub(super) fn endpoint(path: &Path) -> Result<Geometry, String> {
     let geometry = read_xyz(path).map_err(|error| format!("{}: {error}", path.display()))?;
     let atoms = geometry.numbers.len();
     if !(2..=MAX_ATOMS).contains(&atoms) {
@@ -40,7 +40,7 @@ fn endpoint(path: &Path) -> Result<Geometry, String> {
     Ok(geometry)
 }
 
-fn check_sequence(reactant: &[u8], product: &[u8]) -> Result<(), String> {
+pub(super) fn check_sequence(reactant: &[u8], product: &[u8]) -> Result<(), String> {
     if let Some((i, (&r, &p))) = reactant
         .iter()
         .zip(product)

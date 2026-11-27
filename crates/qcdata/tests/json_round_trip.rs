@@ -593,6 +593,8 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
         finished: Some("2026-11-26T05:03:00Z".into()),
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            method: Default::default(),
+            refined_from: None,
             irc: None,
             arrow: Some(123),
             context: None,
@@ -685,6 +687,8 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
 
     let mut old: serde_json::Value = serde_json::from_slice(&json).unwrap();
     let search = old["run"]["transition_state"].as_object_mut().unwrap();
+    search.remove("method");
+    search.remove("refined_from");
     search.remove("context");
     search.remove("free_energy");
     search.remove("endpoint_energies_hartree");
@@ -693,6 +697,8 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
     let decoded: CalcResult = serde_json::from_value(old.clone()).unwrap();
     decoded.validate(&frame).unwrap();
     let search = decoded.run.unwrap().transition_state.unwrap();
+    assert_eq!(search.method, XtbMethod::Gfn2Xtb);
+    assert_eq!(search.refined_from, None);
     assert_eq!(search.arrow, Some(123));
     assert_eq!(search.context, None);
     assert!(!search.free_energy);
@@ -714,6 +720,20 @@ fn transition_state_context_survives_light_save_and_old_metadata_loads() {
     );
     details(&mut unbound).arrow = Some(0);
     assert!(unbound.validate(&frame).is_err());
+
+    let parent = result.transition_state_id().unwrap();
+    let mut repeated = result.clone();
+    repeated.run.as_mut().unwrap().seconds += 1.0;
+    assert_ne!(repeated.transition_state_id(), Some(parent));
+    assert_eq!(result.light(&[]).transition_state_id(), Some(parent));
+    details(&mut result).refined_from = Some(parent);
+    assert!(result.validate(&frame).is_err());
+    details(&mut result).method = XtbMethod::GXtb;
+    let mut reopened: CalcResult =
+        serde_json::from_value(serde_json::to_value(result.light(&[])).unwrap()).unwrap();
+    reopened.validate(&frame).unwrap();
+    assert_eq!(details(&mut reopened).method, XtbMethod::GXtb);
+    assert_eq!(details(&mut reopened).refined_from, Some(parent));
 
     let good_search = details(&mut result).clone();
     for invalid in 0..5 {
