@@ -406,6 +406,12 @@ fn saved_search_stale(doc: &Document, search: &TransitionStateRun) -> bool {
         || context.product_chemistry != endpoint_chemistry(doc, reaction, Role::Product)
 }
 
+pub(super) fn placement_arrow(doc: &Document, result: &CalcResult) -> Option<u64> {
+    let search = saved_search(result)?;
+    let arrow = search.arrow?;
+    (!saved_search_stale(doc, search)).then_some(arrow)
+}
+
 impl App {
     pub(super) fn xtb_ts_search_stale(&self, result: &Arc<CalcResult>) -> bool {
         let Some(search) = saved_search(result) else {
@@ -975,6 +981,9 @@ impl App {
                     notes: vec![],
                     info,
                     attempt: Some(attempt),
+                    generated: run.generated.take(),
+                    energy_serial: None,
+                    reaction_epoch: Some(run.revision.0),
                 };
                 self.tab.xtb.run = None;
                 self.xtb_store_with_session(pending, false, Some(session));

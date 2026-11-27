@@ -337,6 +337,159 @@ fn unlinked_condition_below_the_arrow_counts_without_a_path_model() {
 }
 
 #[test]
+fn centered_catalyst_model_stays_put_and_does_not_shrink_the_ts() {
+    let mut scheme = diels_alder();
+    for atoms in &scheme.species[..3] {
+        model(&mut scheme.doc, atoms);
+    }
+    let catalyst = model(&mut scheme.doc, &scheme.species[3]);
+    scheme.doc.models[catalyst].display = Display::Both;
+    let (lo, hi) = frame(&scheme.doc, &scheme.doc.models[catalyst]).unwrap();
+    let (arrow_lo, arrow_hi) = scheme.doc.arrows[0].bounds();
+    let center = (arrow_lo.x + arrow_hi.x) / 2.;
+    scheme.doc.models[catalyst].offset = Point::new(center - (lo.x + hi.x) / 2., 60. - lo.y);
+    let saved = scheme.doc.models[catalyst].clone();
+    let catalyst_frame = frame_with_panels(&scheme.doc, &saved).unwrap();
+    let path = model(&mut scheme.doc, &scheme.species[2]);
+
+    place_reaction_row(&mut scheme.doc, scheme.arrow, Some(path));
+
+    assert_eq!(scheme.doc.models[catalyst], saved);
+    assert!(scheme.doc.models[path].size > 10.);
+    let path_frame = frame(&scheme.doc, &scheme.doc.models[path]).unwrap();
+    assert!(
+        ((path_frame.0.x + path_frame.1.x) / 2. - center).abs() < 1e-3,
+        "path frame {path_frame:?} should be centered at {center}"
+    );
+    for index in [0, 1, 2, path] {
+        let bounds = frame(&scheme.doc, &scheme.doc.models[index]).unwrap();
+        assert!((bounds.0.y - path_frame.0.y).abs() < 1e-3);
+        assert!(!overlaps(bounds, catalyst_frame));
+    }
+}
+
+#[test]
+fn stale_catalyst_fragment_models_remain_unchanged() {
+    let mut scheme = diels_alder();
+    for atoms in &scheme.species[..3] {
+        model(&mut scheme.doc, atoms);
+    }
+    // These are the old source links left by joining two modeled fragments.
+    let a = model(&mut scheme.doc, &scheme.species[3][..2]);
+    let b = model(&mut scheme.doc, &scheme.species[3][2..]);
+    scheme.doc.models[a].display = Display::Both;
+    scheme.doc.models[a].offset = Point::new(-500., 300.);
+    scheme.doc.models[b].display = Display::ThreeD;
+    scheme.doc.models[b].offset = Point::new(500., 600.);
+    let saved = [scheme.doc.models[a].clone(), scheme.doc.models[b].clone()];
+
+    place_reaction_row(&mut scheme.doc, scheme.arrow, None);
+
+    assert_eq!(scheme.doc.models[a], saved[0]);
+    assert_eq!(scheme.doc.models[b], saved[1]);
+    let top = frame(&scheme.doc, &scheme.doc.models[0]).unwrap().0.y;
+    for index in 0..3 {
+        assert_eq!(scheme.doc.models[index].display, Display::Both);
+        assert!((frame(&scheme.doc, &scheme.doc.models[index]).unwrap().0.y - top).abs() < 1e-3);
+    }
+}
+
+#[test]
+fn a_stale_endpoint_fragment_cannot_replace_the_complete_species_model() {
+    let mut scheme = claisen();
+    let ink = scheme_ink(&scheme);
+    let bottom = ink.iter().map(|(_, hi)| hi.y).reduce(f32::max).unwrap();
+    let stale = model(&mut scheme.doc, &scheme.species[0][..3]);
+    scheme.doc.models[stale].display = Display::ThreeD;
+    scheme.doc.models[stale].offset = Point::new(-500., 500.);
+    let saved = scheme.doc.models[stale].clone();
+    let reactant = model(&mut scheme.doc, &scheme.species[0]);
+    let product = model(&mut scheme.doc, &scheme.species[1]);
+
+    place_reaction_row(&mut scheme.doc, scheme.arrow, None);
+
+    assert_eq!(scheme.doc.models[stale], saved);
+    for (index, &(lo, hi)) in [reactant, product].into_iter().zip(&ink) {
+        let placed = &scheme.doc.models[index];
+        assert_eq!(placed.display, Display::Both);
+        let bounds = frame(&scheme.doc, placed).unwrap();
+        assert!(((bounds.0.x + bounds.1.x - lo.x - hi.x) / 2.).abs() < 1e-3);
+        assert!((bounds.0.y - bottom - scheme.doc.drawing_style.bond_length_world).abs() < 1e-3);
+    }
+}
+
+fn check_connected_reaction_rows(count: usize, inferred: bool) {
+    let mut doc = Document::default();
+    let species: Vec<_> = (0..count)
+        .map(|index| {
+            let x = 200. * index as f32;
+            molecule(&mut doc, &[("C", x, 0.), ("O", x + 30., 0.)], &[(0, 1, 1)])
+        })
+        .collect();
+    let arrows: Vec<_> = (0..count - 1)
+        .map(|index| {
+            let x = 200. * index as f32;
+            let arrow = arrow(&mut doc, Point::new(x + 80., 0.), Point::new(x + 150., 0.));
+            if !inferred {
+                assign(&mut doc, arrow, &species[index], Role::Reactant).unwrap();
+                assign(&mut doc, arrow, &species[index + 1], Role::Product).unwrap();
+            }
+            arrow
+        })
+        .collect();
+    let condition = annotation(
+        &mut doc,
+        "Lowest condition",
+        200. * (count - 2) as f32 + 80.,
+        150.,
+    );
+    doc.arrow_labels.push(crate::arrow_labels::ArrowLabel {
+        arrow: *arrows.last().unwrap(),
+        annotation: condition,
+        side: crate::arrow_labels::Side::Below,
+        gap: None,
+    });
+    let top = scene::selection_bounds(&doc, &[condition]).unwrap().1.y
+        + doc.drawing_style.bond_length_world;
+    let expected: Vec<_> = scene::selections_ink_bounds(&doc, &species)
+        .into_iter()
+        .flatten()
+        .collect();
+    for atoms in &species {
+        model(&mut doc, atoms);
+    }
+    let mut scheme = Scheme {
+        doc,
+        species,
+        arrow: arrows[0],
+        plus: None,
+    };
+
+    place_reaction_row(&mut scheme.doc, arrows[0], None);
+    assert_row(&scheme, &expected, top);
+    let placed = scheme.doc.clone();
+    for arrow in arrows.into_iter().rev() {
+        place_reaction_row(&mut scheme.doc, arrow, None);
+        assert_eq!(scheme.doc, placed);
+    }
+}
+
+#[test]
+fn shared_intermediate_keeps_both_arrows_below_their_combined_annotations() {
+    check_connected_reaction_rows(3, false);
+}
+
+#[test]
+fn shared_species_connect_the_reaction_row_transitively() {
+    check_connected_reaction_rows(4, false);
+}
+
+#[test]
+fn inferred_arrows_share_the_connected_reaction_row() {
+    check_connected_reaction_rows(4, true);
+}
+
+#[test]
 fn standalone_shared_placement_stays_right_when_clear_and_below_when_blocked() {
     let mut doc = Document::default();
     let atoms = molecule(&mut doc, &[("C", 0., 0.), ("O", 30., 0.)], &[(0, 1, 1)]);
@@ -382,4 +535,131 @@ fn active_layout_keeps_the_scheme_in_place_and_the_row_shares_undo() {
     assert!(history.undo(&mut scheme.doc));
     assert_eq!(scheme.doc, before);
     assert!(!history.can_undo());
+}
+
+#[test]
+fn reaction_row_clears_a_zero_order_bond_between_distant_molecules() {
+    let mut scheme = claisen();
+    for atoms in &scheme.species {
+        model(&mut scheme.doc, atoms);
+    }
+    place_reaction_row(&mut scheme.doc, scheme.arrow, None);
+    let (lo, hi) = frame(&scheme.doc, &scheme.doc.models[0]).unwrap();
+    let y = (lo.y + hi.y) / 2.;
+    let a = scheme.doc.add_atom("O", Point::new(-300., y));
+    let b = scheme.doc.add_atom("N", Point::new(700., y));
+    scheme.doc.add_bond(a, b, 0, "dotted");
+    let endpoints = scene::selections_ink_bounds(&scheme.doc, &[vec![a], vec![b]]);
+    let pad = scheme.doc.drawing_style.line_width() / 2.;
+    let ink = (Point::new(-300., y - pad), Point::new(700., y + pad));
+    for model in &scheme.doc.models {
+        let bounds = frame(&scheme.doc, model).unwrap();
+        assert!(overlaps(bounds, ink));
+        assert!(
+            endpoints
+                .iter()
+                .flatten()
+                .all(|endpoint| !overlaps(bounds, *endpoint))
+        );
+    }
+
+    place_reaction_row(&mut scheme.doc, scheme.arrow, None);
+
+    let expected_top = ink.1.y + scheme.doc.drawing_style.bond_length_world;
+    for model in &scheme.doc.models {
+        let bounds = frame(&scheme.doc, model).unwrap();
+        assert!((bounds.0.y - expected_top).abs() < 1e-3);
+        assert!(!overlaps(bounds, ink));
+    }
+}
+
+#[test]
+fn plus_signs_follow_arrow_ownership_and_species_gaps() {
+    let mut doc = Document::default();
+    let left = molecule(&mut doc, &[("C", 0., 0.), ("O", 30., 0.)], &[(0, 1, 1)]);
+    let right = molecule(&mut doc, &[("C", 300., 0.), ("O", 330., 0.)], &[(0, 1, 1)]);
+    let product = molecule(&mut doc, &[("C", 600., 0.), ("O", 630., 0.)], &[(0, 1, 1)]);
+    let target = arrow(&mut doc, Point::new(400., 0.), Point::new(500., 0.));
+    assign(&mut doc, target, &left, Role::Reactant).unwrap();
+    assign(&mut doc, target, &right, Role::Reactant).unwrap();
+    assign(&mut doc, target, &product, Role::Product).unwrap();
+    let other_left = molecule(&mut doc, &[("C", 900., 0.), ("O", 930., 0.)], &[(0, 1, 1)]);
+    let other_right = molecule(
+        &mut doc,
+        &[("C", 1200., 0.), ("O", 1230., 0.)],
+        &[(0, 1, 1)],
+    );
+    let other = arrow(&mut doc, Point::new(1000., 0.), Point::new(1100., 0.));
+    assign(&mut doc, other, &other_left, Role::Reactant).unwrap();
+    assign(&mut doc, other, &other_right, Role::Product).unwrap();
+    for atoms in [&left, &right, &product] {
+        model(&mut doc, atoms);
+    }
+    place_reaction_row(&mut doc, target, None);
+    let baseline = doc.models.clone();
+    let plus = annotation(&mut doc, "+", 150., 24.);
+    let plus_bounds = scene::selection_bounds(&doc, &[plus]).unwrap();
+    assert!(
+        doc.models
+            .iter()
+            .all(|model| !overlaps(frame(&doc, model).unwrap(), plus_bounds))
+    );
+    doc.arrow_labels.push(crate::arrow_labels::ArrowLabel {
+        arrow: other,
+        annotation: plus,
+        side: crate::arrow_labels::Side::Below,
+        gap: None,
+    });
+
+    place_reaction_row(&mut doc, target, None);
+    assert_eq!(doc.models, baseline);
+
+    let reaction = doc
+        .reactions
+        .iter_mut()
+        .find(|r| r.arrow == target)
+        .unwrap();
+    reaction.annotations.push(plus);
+    place_reaction_row(&mut doc, target, None);
+    assert_eq!(doc.models, baseline);
+    doc.reactions
+        .iter_mut()
+        .find(|r| r.arrow == target)
+        .unwrap()
+        .annotations
+        .clear();
+
+    doc.arrow_labels[0].arrow = target;
+    place_reaction_row(&mut doc, target, None);
+    let expected_top = plus_bounds.1.y + doc.drawing_style.bond_length_world;
+    for model in &doc.models {
+        assert!((frame(&doc, model).unwrap().0.y - expected_top).abs() < 1e-3);
+    }
+
+    doc.arrow_labels.clear();
+    place_reaction_row(&mut doc, target, None);
+    for model in &doc.models {
+        assert!((frame(&doc, model).unwrap().0.y - expected_top).abs() < 1e-3);
+    }
+
+    // A loose plus below one species is outside the gap even though it is
+    // inside the reactants' combined bounds. Keep it clear of the model row.
+    let bond = doc.drawing_style.bond_length_world;
+    let baseline_top = frame(&doc, &baseline[0]).unwrap().0.y;
+    let dx = 15. - (plus_bounds.0.x + plus_bounds.1.x) / 2.;
+    let dy = baseline_top - bond / 2. - plus_bounds.1.y;
+    let text = doc.annotations.iter_mut().find(|a| a.id == plus).unwrap();
+    text.position = text.position.offset(dx, dy);
+    let below_species = scene::selection_bounds(&doc, &[plus]).unwrap();
+    assert!(below_species.1.y > baseline_top - bond && below_species.1.y < baseline_top);
+    place_reaction_row(&mut doc, target, None);
+    assert_eq!(doc.models, baseline);
+
+    let text = doc.annotations.iter_mut().find(|a| a.id == plus).unwrap();
+    text.position.x += 150.;
+    place_reaction_row(&mut doc, target, None);
+    let expected_top = below_species.1.y + bond;
+    for model in &doc.models {
+        assert!((frame(&doc, model).unwrap().0.y - expected_top).abs() < 1e-3);
+    }
 }

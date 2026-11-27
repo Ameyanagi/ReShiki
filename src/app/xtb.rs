@@ -11,7 +11,6 @@ use super::{App, Message};
 use crate::appearance::EnergyUnit;
 use iced::Task;
 use reshiki::document::Document;
-use reshiki::models3d;
 use reshiki::qcdata::{self, CalcResult, Frame};
 #[cfg(any(test, not(target_arch = "wasm32")))]
 use reshiki::science::isotope_masses;
@@ -219,6 +218,7 @@ pub(crate) struct Run {
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
     model: Option<super::models3d::Key>,
+    generated: Option<super::models3d::CalculationModel>,
     reaction: Option<u64>,
     started: iced::time::Instant,
     progress: Progress,
@@ -369,6 +369,9 @@ struct Pending {
     notes: Vec<String>,
     info: RunInfo,
     attempt: Option<Attempt>,
+    generated: Option<super::models3d::CalculationModel>,
+    energy_serial: Option<u64>,
+    reaction_epoch: Option<u64>,
 }
 
 struct Attempt {
@@ -814,6 +817,7 @@ impl App {
             start: request.start,
             launch: None,
             model: None,
+            generated: None,
             reaction: request.reaction,
             started: iced::time::Instant::now(),
             progress: Progress::default(),
@@ -837,12 +841,25 @@ impl App {
         let Some(&atom) = run.atoms.first() else {
             return Task::none();
         };
-        match science::launch(
-            &self.tab.doc,
-            atom,
-            run.config.charge,
-            run.config.unpaired.saturating_add(1),
-        ) {
+        let launch = |doc: &Document| {
+            science::launch(
+                doc,
+                atom,
+                run.config.charge,
+                run.config.unpaired.saturating_add(1),
+            )
+        };
+        let launch = if let Some(model) = &run.generated {
+            let mut doc = self.tab.doc.clone();
+            if model.apply(&mut doc) {
+                launch(&doc)
+            } else {
+                Err(science::ScienceError::StaleModel)
+            }
+        } else {
+            launch(&self.tab.doc)
+        };
+        match launch {
             Ok(launch) => self.xtb_start(launch),
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
                 if run.model.is_none() =>
@@ -871,6 +888,18 @@ impl App {
                 self.xtb_fail(state::Failure::Other(error.to_string()));
                 Task::none()
             }
+        }
+    }
+
+    pub(super) fn xtb_stage_model(
+        &mut self,
+        key: super::models3d::Key,
+        model: super::models3d::CalculationModel,
+    ) {
+        if let Some(run) = &mut self.tab.xtb.run
+            && run.model == Some(key)
+        {
+            run.generated = Some(model);
         }
     }
 
@@ -985,18 +1014,21 @@ impl App {
                 positions,
             } => {
                 run.progress.push(first, &energies);
+                let previous = run.preview.take().filter(|_| run.reaction.is_some());
                 run.preview = (run.revision == current)
-                    .then_some(run.launch.as_ref())
-                    .flatten()
-                    .and_then(|launch| launch.atoms.iter().flatten().next().copied())
-                    .and_then(|atom| {
-                        let mut doc = preview(&self.tab.doc, atom, &positions)?;
-                        if let Some(arrow) = run.reaction {
-                            models3d::place_reaction_row(&mut doc, arrow, None);
-                        }
+                    .then(|| {
+                        let atom = *run.launch.as_ref()?.atoms.iter().flatten().next()?;
+                        let mut doc = previous.unwrap_or_else(|| {
+                            let mut doc = Box::new(self.tab.doc.clone());
+                            if let Some(model) = &run.generated {
+                                model.apply(&mut doc);
+                            }
+                            doc
+                        });
+                        preview_geometry(&mut doc, atom, &positions)?;
                         Some(doc)
                     })
-                    .map(Box::new);
+                    .flatten();
                 self.status = run.status();
                 self.error = false;
             }
@@ -1152,9 +1184,12 @@ impl App {
             qcdata::Task::Optimize | qcdata::Task::Conformers
         );
         let mut notes = pending.notes.clone();
-        let moved = pending.accepted.as_ref().map_or_else(
-            || !shows(&self.tab.doc, &pending.launch),
-            |accepted| !model_shows(&self.tab.doc, &pending.launch.atoms, accepted),
+        let same_file = pending.reaction_epoch == Some(self.tab.file_epoch);
+        let moved = pending.generated.as_ref().is_some_and(|model| {
+            !same_file || attached.freshness != Freshness::Current || !model.apply(&mut doc)
+        }) || pending.accepted.as_ref().map_or_else(
+            || !shows(&doc, &pending.launch),
+            |accepted| !model_shows(&doc, &pending.launch.atoms, accepted),
         );
         if attached.freshness == Freshness::Stale {
             notes.push(
@@ -1215,15 +1250,19 @@ impl App {
                     false
                 }
             };
-        let reaction = pending
-            .attempt
-            .as_ref()
-            .filter(|attempt| {
-                !moved
-                    && attached.freshness == Freshness::Current
-                    && attempt.revision == (self.tab.file_epoch, self.tab.revision)
-            })
-            .and_then(|attempt| attempt.request.reaction);
+        let reaction = if same_file && !moved && attached.freshness == Freshness::Current {
+            pending
+                .energy_serial
+                .and_then(|serial| {
+                    self.tab
+                        .xtb
+                        .energy_state
+                        .placement_arrow(&self.tab.doc, serial)
+                })
+                .or_else(|| ts::placement_arrow(&self.tab.doc, &pending.result))
+        } else {
+            None
+        };
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed_with_reaction_row(before, reaction);
         if self.error {
@@ -1424,11 +1463,16 @@ fn model_matches(
 /// The document with the model of `atom`'s molecule at `positions` (Å,
 /// frame order), shown beside the drawing if it was 2D only.
 pub(super) fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document> {
+    let mut doc = doc.clone();
+    preview_geometry(&mut doc, atom, positions)?;
+    Some(doc)
+}
+
+fn preview_geometry(doc: &mut Document, atom: u64, positions: &[[f64; 3]]) -> Option<()> {
     let index = doc
         .models
         .iter()
         .position(|m| m.linked_atoms.contains(&atom))?;
-    let mut doc = doc.clone();
     let model = doc.models.get_mut(index)?;
     if model.atoms.len() + model.hydrogens.len() != positions.len() {
         return None;
@@ -1442,9 +1486,9 @@ pub(super) fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Opti
     }
     // A model shown as 2D only appears beside the drawing while it moves.
     if model.display == reshiki::models3d::Display::TwoD {
-        reshiki::models3d::set_display(&mut doc, index, reshiki::models3d::Display::Both);
+        reshiki::models3d::set_display(doc, index, reshiki::models3d::Display::Both);
     }
-    Some(doc)
+    Some(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1457,7 +1501,7 @@ fn fixed_indices(atoms: &[Option<u64>], fixed: &[u64]) -> impl Iterator<Item = u
 
 /// The result to store from a finished run.
 #[cfg(not(target_arch = "wasm32"))]
-fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
+fn pending(run: &mut Run, report: &run::Report) -> Result<Pending, state::Failure> {
     let launch = run
         .launch
         .clone()
@@ -1563,6 +1607,9 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         line,
         notes,
         attempt: None,
+        generated: run.generated.take(),
+        energy_serial: run.reaction.map(|_| run.serial),
+        reaction_epoch: run.reaction.map(|_| run.revision.0),
     })
 }
 

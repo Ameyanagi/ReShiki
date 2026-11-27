@@ -1,6 +1,9 @@
 //! Exercise the normal app flow with fabricated worker events.
 use super::*;
-use crate::app::xtb::{palette, results, run, tests::model};
+use crate::app::xtb::{
+    palette, results, run,
+    tests::{f32s, model},
+};
 use reshiki::document::Document;
 use reshiki::geometry::Point3;
 use reshiki::qcdata::{Endpoints, Status, Trajectory, Vibrations};
@@ -111,7 +114,7 @@ fn finish_model(app: &mut App) {
 }
 
 #[test]
-fn barrier_generation_places_the_start_model_under_its_species() {
+fn barrier_result_places_the_start_model_under_its_species() {
     let (mut doc, arrow) = card::tests::claisen();
     let product = doc.reactions[0].products[0].atoms[2];
     doc.atom_mut(product).unwrap().position.y = 75.;
@@ -145,21 +148,22 @@ fn barrier_generation_places_the_start_model_under_its_species() {
     let mut app = reaction_app(doc, arrow);
     send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
     finish_model(&mut app);
+    assert!(app.tab.doc.models.is_empty());
+    let start = app.xtb_live_ts().unwrap().request.plan.start_atoms[0];
+    complete(&mut app);
 
     let doc = &app.tab.doc;
     let (lo, hi) = reshiki::models3d::frame(doc, &doc.models[0]).unwrap();
-    let start = &app.xtb_live_ts().unwrap().request.plan.start_atoms;
-    let (a, b) = bounds[objects
-        .iter()
-        .position(|ids| ids.contains(&start[0]))
-        .unwrap()]
-    .unwrap();
+    let (a, b) = bounds[objects.iter().position(|ids| ids.contains(&start)).unwrap()].unwrap();
     assert!(((lo.x + hi.x - a.x - b.x) / 2.).abs() < 0.01);
     assert!(lo.y >= b.y + doc.drawing_style.bond_length_world - 0.01);
     for (a, b) in bounds.into_iter().map(Option::unwrap) {
         let overlaps = lo.x < b.x && hi.x > a.x && lo.y < b.y && hi.y > a.y;
         assert!(!overlaps, "frame {lo:?}–{hi:?} covers {a:?}–{b:?}");
     }
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.models.is_empty());
+    assert!(app.tab.doc.science.results.is_empty());
 }
 
 #[test]
@@ -1073,7 +1077,7 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
         "IRC +mode".into(),
         "reactant · downhill trace not converged · 10 points".into(),
     ));
-    let reactant = model(&app.tab.doc);
+    let reactant = f32s(&run.launch.as_ref().unwrap().frame.positions_angstrom);
     let selected = report.frames[0].positions_angstrom[0].map(|x| x as f32);
     send(
         &mut app,
@@ -2173,10 +2177,10 @@ fn endpoint_previews_perceive_transferred_and_disconnected_hydrogens_without_edi
     image.positions_angstrom[order.len()] = [moved.x, moved.y, moved.z];
     report_data.extras.image_positions[2].clone_from(&image.positions_angstrom);
     report_data.extras.reached_positions_angstrom = image.positions_angstrom.clone();
-    let before = app.tab.doc.models[0].hydrogens[0];
-    let accepted_model = app.tab.doc.models[0].clone();
-    assert_eq!(before.parent, donor as u64);
     let mut document = app.tab.doc.clone();
+    assert!(run.generated.as_ref().unwrap().apply(&mut document));
+    let before = document.models[0].hydrogens[0];
+    assert_eq!(before.parent, donor as u64);
     assert!(matches!(
         reshiki::science::move_model(&mut document, &launch.atoms, &image),
         Err(ScienceError::ModelMismatch)
@@ -2197,6 +2201,7 @@ fn endpoint_previews_perceive_transferred_and_disconnected_hydrogens_without_edi
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(report))),
     );
+    let accepted_model = app.tab.doc.models[0].clone();
     send(&mut app, XtbAction::Ts(Action::Image(2)));
     let preview = app
         .xtb_step_preview()
@@ -2280,7 +2285,7 @@ fn cancel_drops_generation_and_a_late_finish_cannot_attach() {
     let run = app.tab.xtb.run.as_ref().unwrap();
     let serial = run.serial;
     let report = example_report(run.launch.as_ref().unwrap());
-    let model_before = model(&app.tab.doc);
+    assert!(app.tab.doc.models.is_empty());
     send(&mut app, XtbAction::Cancel);
     send(
         &mut app,
@@ -2289,7 +2294,7 @@ fn cancel_drops_generation_and_a_late_finish_cannot_attach() {
     assert_eq!(app.status, "Calculation canceled");
     assert!(!app.xtb_running());
     assert!(app.tab.doc.science.results.is_empty());
-    assert_eq!(model(&app.tab.doc), model_before);
+    assert!(app.tab.doc.models.is_empty());
 }
 
 mod irc_profile;
