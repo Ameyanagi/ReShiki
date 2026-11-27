@@ -18,64 +18,68 @@ impl Graphic {
         let Some(profile) = self.energy_profile.as_deref() else {
             return vec![];
         };
-        let layout = Layout::new(profile, style);
+        let layout = Layout::with_frame(profile, style, Some(self), Some(source));
         let Some(&level) = layout.states.get(state) else {
             return vec![];
         };
         let accent = Color::Palette(Hue::Green, Row::Strong);
-        let line_style = GraphicStyle {
-            stroke: accent,
-            width_pt: (self.style.width_pt * 3.).clamp(1.5, 12.),
-            flat_caps: true,
-            ..GraphicStyle::default()
-        };
         let mut out = vec![Primitive::Path {
             commands: vec![
                 PathCommand::Move(layout.world(self, level.offset(-layout.bar / 2., 0.))),
                 PathCommand::Line(layout.world(self, level.offset(layout.bar / 2., 0.))),
             ],
-            style: line_style.clone(),
+            style: GraphicStyle {
+                stroke: accent,
+                width_pt: layout.bar_width_pt,
+                flat_caps: true,
+                ..GraphicStyle::default()
+            },
             filled: false,
         }];
         let marker = sample
             .and_then(|(step, sample)| layout.sample_point(profile, step, sample.x))
             .unwrap_or(level);
-        let marker = layout.world(self, marker);
-        let radius = (style.text_style().size() * layout.text_scale(self) * 0.32).max(0.5);
-        out.push(Primitive::Path {
-            commands: circle(marker, radius),
-            style: GraphicStyle {
-                stroke: Color::Paper,
-                fill: Some(accent),
-                width_pt: (self.style.width_pt * 1.3).clamp(0.7, 12.),
-                ..GraphicStyle::default()
-            },
-            filled: true,
-        });
+        let radius = layout.marker_radius(self, marker);
+        let width_pt = (self.style.width_pt * 1.3)
+            .clamp(0.7, 12.)
+            .min(layout.bar_width_pt)
+            .min(style::DEFAULT.points_per_world() * radius * 0.5);
+        if width_pt >= 0.1 {
+            out.push(Primitive::Path {
+                commands: circle(layout.world(self, marker), radius),
+                style: GraphicStyle {
+                    stroke: Color::Paper,
+                    fill: Some(accent),
+                    width_pt,
+                    ..GraphicStyle::default()
+                },
+                filled: true,
+            });
+        }
         if let Some(geometry) = geometry {
             let slot = sample
                 .and_then(|(index, _)| profile.steps.get(index))
                 .and_then(|step| step.transition)
                 .unwrap_or(state);
             if let Some(slot) = layout.pictures.iter().find(|picture| picture.state == slot)
-                && let Some(picture) = geometry_picture(
-                    geometry,
-                    profile.rotation,
-                    layout.world(self, slot.centre),
-                    layout.picture_world_side(self),
-                    source,
-                )
+                && let Some(picture) =
+                    geometry_picture(geometry, profile.rotation, layout.picture_side, source)
             {
-                out.extend(picture.into_iter().map(|primitive| {
-                    if let Some(alpha) = self.style.effects.opacity {
-                        Primitive::Opacity {
-                            alpha,
-                            primitive: Box::new(primitive),
-                        }
-                    } else {
-                        primitive
-                    }
-                }));
+                out.extend(
+                    layout
+                        .replacement_picture(self, source, slot, picture)
+                        .into_iter()
+                        .map(|primitive| {
+                            if let Some(alpha) = self.style.effects.opacity {
+                                Primitive::Opacity {
+                                    alpha,
+                                    primitive: Box::new(primitive),
+                                }
+                            } else {
+                                primitive
+                            }
+                        }),
+                );
             }
         }
         out
@@ -83,6 +87,55 @@ impl Graphic {
 }
 
 impl Layout {
+    fn marker_radius(&self, g: &Graphic, marker: Point) -> f32 {
+        let Some([x, y]) = frame_projection(g) else {
+            return 0.;
+        };
+        let edge_distance = |t: f32, row: Point| t.min(1. - t) / row.x.hypot(row.y);
+        let clearance = edge_distance(marker.x / self.width, x)
+            .min(edge_distance((marker.y - self.min_y) / self.height, y));
+        let scale = (g.axis_x.x.hypot(g.axis_x.y) / self.width)
+            .min(g.axis_y.x.hypot(g.axis_y.y) / self.height);
+        // Leave room for an outline whose width is at most half the radius.
+        (self.font.size() * scale * 0.32).min(clearance / 1.25)
+    }
+
+    fn replacement_picture(
+        &self,
+        g: &Graphic,
+        source: &Document,
+        slot: &PictureSlot,
+        mut picture: Vec<Primitive>,
+    ) -> Vec<Primitive> {
+        let (lo, hi) = crate::scene::bounds(&picture);
+        let (slot_lo, slot_hi) = crate::scene::bounds(&slot.artwork);
+        // Keep the moving model inside the space reserved beside the label.
+        let margin = 2. * style::DEFAULT.world(4.);
+        let fit = ((slot_hi.x - slot_lo.x - margin) / (hi.x - lo.x - margin))
+            .min((slot_hi.y - slot_lo.y - margin) / (hi.y - lo.y - margin))
+            .min(1.);
+        let side = self.picture_world_side(g);
+        let scale = side / self.picture_side * fit;
+        if !scale.is_finite() || scale <= 0. {
+            return vec![];
+        }
+        let centre = self.world(g, slot.centre);
+        let ink_centre = lo.lerp(hi, 0.5);
+        let change_bond_width = source.drawing_style.line_width_pt * 0.85;
+        let outline_width = (side / 400.).clamp(0.6, 1.1);
+        for primitive in &mut picture {
+            place_picture_ink(
+                primitive,
+                centre,
+                ink_centre,
+                scale,
+                change_bond_width,
+                outline_width,
+            );
+        }
+        picture
+    }
+
     fn sample_point(&self, profile: &EnergyProfile, index: usize, x: f64) -> Option<Point> {
         if !x.is_finite() {
             return None;
@@ -102,7 +155,9 @@ impl Layout {
             return Some(b);
         }
         // The IRC trace occupies the gap between the level bars.
-        let x = a.x + self.bar / 2. + (b.x - a.x - self.bar) * t as f32;
+        let start = a.x + self.bar / 2.;
+        let end = b.x - self.bar / 2.;
+        let x = start + (end - start) * t as f32;
         point_at_x(self.curves.get(from)?, x)
     }
 }

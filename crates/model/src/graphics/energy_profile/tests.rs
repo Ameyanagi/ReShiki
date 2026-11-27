@@ -829,14 +829,21 @@ fn playback_marker_follows_drawn_irc_blends_and_every_level_after_affine_placeme
         ];
     }
     let mut g = placed(p.clone());
+    g.style.width_pt = 12.;
     g.axis_x = Point::new(g.axis_x.x * 0.8, g.axis_x.x * 0.45);
-    g.axis_y = Point::new(-g.axis_y.y * 0.2, g.axis_y.y * 1.2);
+    g.axis_y = Point::new(-g.axis_y.y * 0.1, g.axis_y.y * 0.5);
     let source = Document::default();
-    let layout = Layout::new(&p, &style::DEFAULT);
-    let (parts, _) = layout.ink(&g);
+    let (parts, labels, _) = g.energy_profile_scene(&style::DEFAULT, &source);
+    assert!(
+        labels
+            .iter()
+            .all(|label| label.text != "Reaction coordinate")
+    );
+    let bars = &parts[parts.len() - p.states.len()..];
     let paths: Vec<_> = parts
         .iter()
-        .skip(layout.lines.len())
+        .rev()
+        .take(p.states.len() + p.steps.len() * 2)
         .flat_map(|part| super::super::flattened(&part.commands))
         .collect();
     for (index, step) in p.steps.iter().enumerate() {
@@ -867,9 +874,20 @@ fn playback_marker_follows_drawn_irc_blends_and_every_level_after_affine_placeme
             assert!(distance < 0.1, "step {index}, x {x}, distance {distance}");
         }
     }
-    for (state, &point) in layout.states.iter().enumerate() {
+    for (state, bar) in bars.iter().enumerate() {
         let overlay = g.energy_profile_overlay(&style::DEFAULT, &source, state, None, None);
-        let expected = layout.world(&g, point);
+        let Primitive::Path {
+            commands, style, ..
+        } = &overlay[0]
+        else {
+            panic!("Missing playback highlight")
+        };
+        assert_eq!(*commands, bar.commands);
+        assert_eq!(style.width_pt, bar.style.width_pt);
+        let [PathCommand::Move(a), PathCommand::Line(b)] = bar.commands.as_slice() else {
+            panic!("Expected one level bar segment")
+        };
+        let expected = a.lerp(*b, 0.5);
         let marker = playback_marker(&overlay);
         assert!((marker.x - expected.x).hypot(marker.y - expected.y) < 0.001);
     }
@@ -883,35 +901,50 @@ fn playback_replaces_only_the_requested_picture_without_changing_the_profile() {
     let (_, _, pictures) = g.energy_profile_scene(&style::DEFAULT, &source);
     let (_, _, without) = g.energy_profile_scene_without_picture(&style::DEFAULT, &source, 1);
     let p = g.energy_profile.as_deref().unwrap();
-    let layout = Layout::new(p, &style::DEFAULT);
-    let slot = layout.pictures.iter().find(|slot| slot.state == 1).unwrap();
-    let replacement = geometry_picture(
-        p.states[1].geometry.as_ref().unwrap(),
-        p.rotation,
-        layout.world(&g, slot.centre),
-        layout.picture_world_side(&g),
-        &source,
-    )
-    .unwrap();
-    assert_eq!(pictures.len(), without.len() + replacement.len());
+    let layout = Layout::with_frame(p, &style::DEFAULT, Some(&g), Some(&source));
+    let [reactant, ts, _] = layout.pictures.as_slice() else {
+        panic!("Expected three model slots")
+    };
+    assert_eq!(pictures.len(), without.len() + ts.artwork.len());
+    let start = reactant.artwork.len();
+    let original = &pictures[start..start + ts.artwork.len()];
     // On the reactant half of the path the moving geometry still replaces the
     // TS picture, leaving the endpoint models at their authored level slots.
-    let overlay = g.energy_profile_overlay(
-        &style::DEFAULT,
-        &source,
-        0,
-        Some((
+    let overlay = |geometry: &EnergyProfileGeometry| {
+        g.energy_profile_overlay(
+            &style::DEFAULT,
+            &source,
             0,
-            EnergyProfileSample {
-                x: 0.2,
-                energy_kcal: 4.,
-            },
-        )),
-        p.states[1].geometry.as_ref(),
+            Some((
+                0,
+                EnergyProfileSample {
+                    x: 0.2,
+                    energy_kcal: 4.,
+                },
+            )),
+            Some(geometry),
+        )
+    };
+    let geometry = p.states[1].geometry.as_ref().unwrap();
+    let original_overlay = overlay(geometry);
+    assert_eq!(original_overlay.len(), 2 + original.len());
+    let (expected_lo, expected_hi) = crate::scene::bounds(original);
+    assert_eq!(
+        crate::scene::bounds(&original_overlay[2..]),
+        (expected_lo, expected_hi)
     );
-    assert_eq!(overlay.len(), 2 + replacement.len());
-    let (actual_lo, actual_hi) = crate::scene::bounds(&overlay[2..]);
-    let (expected_lo, expected_hi) = crate::scene::bounds(&replacement);
-    assert_eq!((actual_lo, actual_hi), (expected_lo, expected_hi));
+
+    let mut taller = geometry.clone();
+    taller.frame.positions_angstrom[1] = [0., 1.4, 0.2];
+    let taller_overlay = overlay(&taller);
+    assert!(taller_overlay.len() > 2);
+    let (lo, hi) = crate::scene::bounds(&taller_overlay[2..]);
+    assert!(hi.x - lo.x <= expected_hi.x - expected_lo.x + 0.001);
+    assert!(hi.y - lo.y <= expected_hi.y - expected_lo.y + 0.001);
+    assert!(
+        lo.lerp(hi, 0.5)
+            .distance(expected_lo.lerp(expected_hi, 0.5))
+            < 0.001
+    );
     assert_eq!(serde_json::to_string(&g).unwrap(), before);
 }
