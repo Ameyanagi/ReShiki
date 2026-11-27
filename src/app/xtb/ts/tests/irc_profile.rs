@@ -74,6 +74,40 @@ pub(super) fn connected_report(launch: &Launch) -> job::Report {
 }
 
 #[test]
+fn editing_the_product_keeps_the_endpoint_match_tied_to_the_original_run() {
+    let (mut app, arrow) = finished();
+    let result = Arc::make_mut(&mut app.tab.doc.science.results[0].result);
+    result
+        .run
+        .as_mut()
+        .unwrap()
+        .transition_state
+        .as_mut()
+        .unwrap()
+        .irc
+        .as_mut()
+        .unwrap()
+        .completed[0] = false;
+    let file = app.tab.doc.file_json().unwrap();
+    let mut app = reaction_app(Document::from_native_file(&file).unwrap(), arrow);
+    send(&mut app, XtbAction::Palette(palette::Action::Show));
+    assert!(!app.xtb_shown().unwrap().stale);
+
+    let before = app.tab.doc.clone();
+    let product = app.tab.doc.reactions[0].products[0].atoms[0];
+    app.tab.doc.atom_mut(product).unwrap().charge += 1;
+    app.changed(before);
+    let shown = app.xtb_shown().unwrap();
+    assert!(shown.stale);
+    let detail = view::irc_path_detail(&shown.stored.result, shown.ts, shown.stale).unwrap();
+    assert!(
+        detail
+            .ends_with("The endpoints matched the reactant and product the run was started from."),
+        "{detail}"
+    );
+}
+
+#[test]
 fn default_profile_uses_a_completed_or_connected_irc_and_keeps_partial_traces_selectable() {
     use IrcEndpoint::{Other, Product, Reactant};
     let (mut app, _) = finished();

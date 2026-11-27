@@ -346,6 +346,112 @@ fn from_command(dir: &std::path::Path) -> Ts {
 }
 
 #[test]
+fn connected_early_stopped_traces_explain_the_separate_endpoint_relaxation() {
+    for (reasons, steps, traced) in [
+        (
+            [IrcReason::LengthCap, IrcReason::Converged],
+            [1, 1],
+            "The path stopped after 1 step on the reactant side.",
+        ),
+        (
+            [IrcReason::Converged, IrcReason::StepSizeExhausted],
+            [1, 2],
+            "The path stopped after 2 steps on the product side.",
+        ),
+        (
+            [IrcReason::StepBudget, IrcReason::LengthCap],
+            [1, 2],
+            "The path was followed for 1 step on the reactant side and 2 steps on the product side.",
+        ),
+        (
+            [IrcReason::LengthCap; 2],
+            [1, 1],
+            "The path was followed for 1 step in each direction.",
+        ),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let mut summary = summary(&command);
+        for ((branch, reason), steps) in summary
+            .report
+            .irc
+            .as_mut()
+            .unwrap()
+            .iter_mut()
+            .zip(reasons)
+            .zip(steps)
+        {
+            branch.reason = reason;
+            branch.path = vec![branch.path[0].clone(); steps];
+        }
+        let (success, table, stderr, json) = finish_report(&summary);
+        assert!(success, "{table}\n{stderr}");
+        assert!(stderr.is_empty(), "{stderr}");
+        let expected = format!(
+            "IRC           connects reactant and product · {traced} Both ends were then relaxed to the nearest minimum."
+        );
+        assert_eq!(
+            table.lines().find(|line| line.starts_with("IRC ")),
+            Some(expected.as_str())
+        );
+        assert_eq!(json["connects"], true);
+        assert_eq!(json["verified"], true);
+        for ((mode, reason), steps) in ["plus", "minus"].into_iter().zip(reasons).zip(steps) {
+            assert_eq!(
+                json["irc"][mode]["completed"],
+                reason == IrcReason::Converged
+            );
+            assert_eq!(json["irc"][mode]["stop_reason"], reason.to_string());
+            assert_eq!(json["irc"][mode]["steps"], steps);
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let command = command(directory.path());
+    let (success, table, _, _) = finish_report(&summary(&command));
+    assert!(success);
+    assert_eq!(
+        table.lines().find(|line| line.starts_with("IRC ")),
+        Some("IRC           connects reactant and product")
+    );
+}
+
+#[test]
+fn disconnected_early_stopped_traces_also_explain_the_endpoint_relaxation() {
+    use Reached::{Other, Product, Reactant};
+
+    for (endpoints, direction) in [
+        ([Reactant, Reactant], "negative"),
+        ([Product, Product], "positive"),
+        ([Other, Other], "negative"),
+        ([Other, Reactant], "positive"),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let mut summary = summary(&command);
+        summary.report.connects = false;
+        let branches = summary.report.irc.as_mut().unwrap();
+        branches[0].reason = IrcReason::LengthCap;
+        for (branch, endpoint) in branches.iter_mut().zip(endpoints) {
+            branch.reached = endpoint;
+        }
+        let (success, table, stderr, json) = finish_report(&summary);
+        assert!(!success, "{table}");
+        assert!(stderr.contains("IRC did not connect the reactant and product"));
+        let irc = table.lines().find(|line| line.starts_with("IRC ")).unwrap();
+        assert!(irc.starts_with("IRC           +mode reaches "), "{irc}");
+        assert!(
+            irc.ends_with(&format!(
+                "The path stopped after 1 step in the {direction} direction. Both ends were then relaxed to the nearest minimum."
+            )),
+            "{irc}"
+        );
+        assert_eq!(json["connects"], false);
+        assert_eq!(json["irc"]["plus"]["completed"], false);
+        assert_eq!(json["irc"]["minus"]["completed"], true);
+    }
+}
+
+#[test]
 fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
     let directory = tempfile::tempdir().unwrap();
     let original = command(directory.path());
@@ -355,7 +461,9 @@ fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
     let (_, table, _, original_json) = finish_report(&original_summary);
     assert_eq!(
         table.lines().find(|line| line.starts_with("IRC ")),
-        Some("IRC           connects reactant and product")
+        Some(
+            "IRC           connects reactant and product · The path stopped after 1 step on the reactant side. Both ends were then relaxed to the nearest minimum."
+        )
     );
     for (mode, reason, calls, length, converged) in [
         ("plus", "length cap", 5, 0.13, false),
@@ -389,6 +497,10 @@ fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
     assert!(!finish(&refined, &mut out, &mut err).unwrap());
     let table = String::from_utf8(out).unwrap();
     assert!(table.starts_with("Retained GFN2-xTB · forward"), "{table}");
+    assert!(
+        table.lines().next().unwrap().ends_with("IRC connects reactant and product · The path stopped after 1 step on the reactant side. Both ends were then relaxed to the nearest minimum."),
+        "{table}"
+    );
     assert!(table.contains("Barrier       unavailable"), "{table}");
     assert_eq!(std::fs::read(dir.join("ts.xyz")).unwrap(), source_ts);
     let retained: serde_json::Value = serde_json::from_slice(
@@ -396,6 +508,16 @@ fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
     )
     .unwrap();
     assert_eq!(retained["source_result"], original_json);
+    let mut older = original_json;
+    for mode in ["plus", "minus"] {
+        older["irc"][mode].as_object_mut().unwrap().remove("steps");
+    }
+    let mut old_line = Vec::new();
+    super::output::write_retained(&older, &mut old_line).unwrap();
+    assert_eq!(
+        String::from_utf8(old_line).unwrap().trim_end(),
+        table.lines().next().unwrap()
+    );
 
     let mut clobber = from_command(directory.path());
     clobber.out_dir = Some(dir.clone());
@@ -691,38 +813,55 @@ pub(in crate::cli) fn worker_count_disagreement_fails_with_diagnostics() {
     assert!(json["failure_reason"].is_null());
 }
 
-pub(in crate::cli) fn irc_failure_preserves_candidate_and_explains_missing_branches() {
-    let directory = tempfile::tempdir().unwrap();
-    let command = command(directory.path());
-    let mut summary = summary(&command);
-    summary.report.connects = false;
-    summary.report.irc = None;
-    summary.report.irc_error = Some("-mode relaxation reached its step limit".into());
-    let (success, table, stderr, json) = finish_report(&summary);
-    assert!(!success);
-    assert!(
-        table.contains("failed: -mode relaxation reached its step limit"),
-        "{table}"
-    );
-    assert!(!table.contains("skipped"), "{table}");
-    assert_eq!(
-        stderr,
-        "reshiki: IRC failed: -mode relaxation reached its step limit\n"
-    );
-    assert_eq!(json["irc_error"], "-mode relaxation reached its step limit");
-    assert_eq!(
-        json["failure_reason"],
-        "IRC failed: -mode relaxation reached its step limit"
-    );
-    assert_eq!(json["energies"]["ts"], -1.);
-    assert_eq!(json["frequencies_cm1"], serde_json::json!([-50.1]));
-    assert!(json["irc"].is_null());
-    let irc = std::fs::read_to_string(command.out_dir.as_ref().unwrap().join("irc.xyz")).unwrap();
-    assert_eq!(irc.lines().count(), 4);
-    assert_eq!(
-        irc.lines().nth(1),
-        Some("TS E=-1.00000000 Eh method=gfn2 verification=unverified-candidate")
-    );
+#[test]
+fn irc_relaxation_failure_preserves_candidate_and_trace_diagnostics() {
+    for (failed_mode, index) in [("+mode", 0), ("-mode", 1)] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let mut summary = summary(&command);
+        let mut traces = summary.report.irc_diagnostics();
+        let failed = traces[index].as_mut().unwrap();
+        failed.reason = IrcReason::LengthCap;
+        failed.reached = None;
+        if index == 0 {
+            traces[1] = None;
+        }
+        let message = format!("{failed_mode} relaxation reached its step limit");
+        summary.report.connects = false;
+        summary.report.irc = None;
+        summary.report.irc_error = Some(reshiki_optimize::ts::IrcFailure {
+            cause: reshiki_optimize::ts::TsError::Failed(message.clone()),
+            traces,
+        });
+        let (success, table, stderr, json) = finish_report(&summary);
+        assert!(!success);
+        assert!(table.contains(&format!("failed: {message}")), "{table}");
+        assert!(!table.contains("skipped"), "{table}");
+        assert_eq!(stderr, format!("reshiki: IRC failed: {message}\n"));
+        assert_eq!(json["irc_error"], message);
+        assert_eq!(json["failure_reason"], format!("IRC failed: {message}"));
+        assert_eq!(json["energies"]["ts"], -1.);
+        assert_eq!(json["frequencies_cm1"], serde_json::json!([-50.1]));
+        for (side, trace) in ["plus", "minus"].into_iter().zip(traces) {
+            let branch = &json["irc"][side];
+            if let Some(trace) = trace {
+                assert_eq!(branch["stop_reason"], trace.reason.to_string());
+                assert_eq!(branch["gradient_calls"], trace.gradient_calls);
+                assert_eq!(branch["steps"], trace.steps);
+                assert_eq!(branch["completed"], trace.reason == IrcReason::Converged);
+                assert_eq!(branch["reached"].is_null(), trace.reached.is_none());
+            } else {
+                assert!(branch.is_null());
+            }
+        }
+        let irc =
+            std::fs::read_to_string(command.out_dir.as_ref().unwrap().join("irc.xyz")).unwrap();
+        assert_eq!(irc.lines().count(), 4);
+        assert_eq!(
+            irc.lines().nth(1),
+            Some("TS E=-1.00000000 Eh method=gfn2 verification=unverified-candidate")
+        );
+    }
 }
 
 pub(in crate::cli) fn worker_hessian_uses_engine_masses_and_explicit_symmetry() {

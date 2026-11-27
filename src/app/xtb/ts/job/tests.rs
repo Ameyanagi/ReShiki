@@ -590,7 +590,7 @@ fn wrong_irc_endpoint_classes_never_present_a_headline_barrier() {
 }
 
 #[test]
-fn worker_disagreement_or_failed_irc_keeps_candidate_with_cli_reason() {
+fn worker_disagreement_keeps_candidate_with_cli_reason() {
     let (launch, mut done) = completion();
     done.checked
         .as_mut()
@@ -607,17 +607,61 @@ fn worker_disagreement_or_failed_irc_keeps_candidate_with_cli_reason() {
         }
     );
     assert_eq!(report.result.hessian_hartree_per_bohr2.len(), 36);
-    let (launch, mut done) = completion();
-    done.report.connects = false;
-    done.report.irc_error = Some("-mode relaxation reached its step limit".into());
-    let report = complete(&launch, done).unwrap();
-    assert_eq!(
-        report.result.status,
-        qcdata::Status::NotConverged {
-            reason: "IRC failed: -mode relaxation reached its step limit".into(),
+}
+
+#[test]
+fn failed_endpoint_relaxation_keeps_all_finished_traces_in_the_log() {
+    for (index, failed_label) in [(0, "IRC +mode"), (1, "IRC −mode")] {
+        let (launch, mut done) = completion();
+        let mut traces = done.report.irc_diagnostics();
+        let failed = traces[index].as_mut().unwrap();
+        failed.reason = ts::IrcReason::LengthCap;
+        failed.steps = 2;
+        failed.gradient_calls = 9;
+        failed.reached = None;
+        if index == 0 {
+            traces[1] = None;
         }
-    );
-    assert!(!report.extras.connects);
+        done.report.connects = false;
+        done.report.irc = None;
+        done.report.irc_error = Some(ts::IrcFailure {
+            cause: ts::TsError::Failed("endpoint minimization reached its step limit".into()),
+            traces,
+        });
+        let report = complete(&launch, done).unwrap();
+        assert_eq!(
+            report.result.status,
+            qcdata::Status::NotConverged {
+                reason: "IRC failed: endpoint minimization reached its step limit".into(),
+            }
+        );
+        assert!(!report.extras.connects);
+        let session = super::super::Session {
+            extras: report.extras,
+            arrow: 1,
+            freshness: Default::default(),
+        };
+        let log = super::super::view::search_log(
+            &report.result,
+            Some(&session),
+            crate::appearance::EnergyUnit::default(),
+        );
+        assert!(log.contains(&format!("{failed_label}: endpoint relaxation failed · length cap · accepted steps: 2 · gradient calls: 9")), "{log}");
+        assert!(
+            log.contains("IRC error: endpoint minimization reached its step limit"),
+            "{log}"
+        );
+        if index == 0 {
+            assert!(!log.contains("IRC −mode:"));
+        } else {
+            assert!(
+                log.contains(
+                    "IRC +mode: reactant · converged · accepted steps: 0 · gradient calls: 0"
+                ),
+                "{log}"
+            );
+        }
+    }
 }
 
 #[test]

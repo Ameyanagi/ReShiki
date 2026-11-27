@@ -632,14 +632,14 @@ mod presentation_tests {
         let path = irc_path_mut(&mut result);
         path.completed = [false, true];
         assert_eq!(
-            irc_path_detail(&result, None).as_deref(),
+            irc_path_detail(&result, None, false).as_deref(),
             Some(
                 "The path stopped after 4 steps on the reactant side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
             )
         );
         irc_path_mut(&mut result).completed = [true, false];
         assert_eq!(
-            irc_path_detail(&result, None).as_deref(),
+            irc_path_detail(&result, None, false).as_deref(),
             Some(
                 "The path stopped after 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
             )
@@ -660,20 +660,20 @@ mod presentation_tests {
         let mut result = gxtb_result();
         irc_path_mut(&mut result).completed = [false; 2];
         assert_eq!(
-            irc_path_detail(&result, None).as_deref(),
+            irc_path_detail(&result, None, false).as_deref(),
             Some(
                 "The path was followed for 1 step in each direction. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
             )
         );
         set_irc_step_counts(&mut result, [4, 2]);
         assert_eq!(
-            irc_path_detail(&result, None).as_deref(),
+            irc_path_detail(&result, None, false).as_deref(),
             Some(
                 "The path was followed for 4 steps on the reactant side and 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
             )
         );
         irc_path_mut(&mut result).completed = [true; 2];
-        assert_eq!(irc_path_detail(&result, None), None);
+        assert_eq!(irc_path_detail(&result, None, false), None);
     }
 
     #[test]
@@ -705,7 +705,7 @@ mod presentation_tests {
             let path = irc_path_mut(&mut result);
             path.completed = [false; 2];
             path.reached = reached;
-            let detail = irc_path_detail(&result, None).unwrap();
+            let detail = irc_path_detail(&result, None, false).unwrap();
             assert!(detail.ends_with(expected), "{detail}");
             assert!(!detail.contains("The endpoints match the drawn reactant and product"));
         }
@@ -713,7 +713,7 @@ mod presentation_tests {
         path.completed = [true, false];
         path.reached = [Reactant, Other];
         assert!(
-            irc_path_detail(&result, None)
+            irc_path_detail(&result, None, false)
                 .unwrap()
                 .contains("1 step in the positive direction")
         );
@@ -726,7 +726,7 @@ mod presentation_tests {
         path.completed = [false, true];
         path.relaxed_ends = None;
         assert_eq!(
-            irc_path_detail(&result, None).as_deref(),
+            irc_path_detail(&result, None, false).as_deref(),
             Some(
                 "The path stopped after 1 step on the reactant side. The endpoints match the drawn reactant and product."
             )
@@ -745,7 +745,7 @@ mod presentation_tests {
         ));
         // A legacy log row supplies its original count but no relaxed geometry.
         assert_eq!(
-            irc_path_detail(&result, None).as_deref(),
+            irc_path_detail(&result, None, false).as_deref(),
             Some("The path stopped after 10 steps on the reactant side.")
         );
         result
@@ -757,7 +757,7 @@ mod presentation_tests {
             .unwrap()
             .diagnostics[0]
             .1 = "reactant · downhill trace not converged · count not saved".into();
-        assert_eq!(irc_path_detail(&result, None), None);
+        assert_eq!(irc_path_detail(&result, None, false), None);
     }
 
     #[test]
@@ -776,7 +776,7 @@ mod presentation_tests {
                 "IRC +mode".into(),
                 "reactant · length cap · accepted steps: 1 · gradient calls: 7 · path length: 2.126540 amu½·bohr".into(),
             ));
-        let detail = irc_path_detail(&result, None).unwrap();
+        let detail = irc_path_detail(&result, None, false).unwrap();
         let checks = presentation(&result, None).verification;
         let log = search_log(&result, None, EnergyUnit::default());
         for technical in ["length cap", "gradient calls", "path length"] {

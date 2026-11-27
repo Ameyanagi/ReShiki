@@ -57,7 +57,14 @@ fn irc_xyz(
             annotation,
         );
     };
-    frame(&left.end, left_mode);
+    // Keep every traced point and the TS within the reader's frame limit.
+    // Relaxed endpoints are separate minima, so omit both together when the
+    // complete trajectory leaves no room for them.
+    let include_relaxed_ends =
+        left.path.len() + right.path.len() + 3 <= reshiki_io::qcdata::MAX_FRAMES;
+    if include_relaxed_ends {
+        frame(&left.end, left_mode);
+    }
     for point in left.path.iter().rev() {
         frame(point, left_mode);
     }
@@ -65,7 +72,9 @@ fn irc_xyz(
     for point in &right.path {
         frame(point, right_mode);
     }
-    frame(&right.end, right_mode);
+    if include_relaxed_ends {
+        frame(&right.end, right_mode);
+    }
     text
 }
 
@@ -222,6 +231,49 @@ mod report {
         }
     }
 
+    fn irc_trace_detail([plus, minus]: [(usize, bool, Reached); 2]) -> Option<String> {
+        use Reached::{Product, Reactant};
+        use reshiki_io::qcdata::IrcEndpoint;
+
+        // Use the same branch order as the saved app path: put the reactant
+        // first when identified, otherwise put an identified product last.
+        let [negative, positive] = match (plus.2, minus.2) {
+            (Reactant, _) => [plus, minus],
+            (_, Reactant) | (Product, _) => [minus, plus],
+            _ => [plus, minus],
+        };
+        crate::irc_summary::trace_detail(
+            [negative.0, positive.0],
+            [negative.1, positive.1],
+            [negative.2, positive.2].map(|endpoint| match endpoint {
+                Reactant => IrcEndpoint::Reactant,
+                Product => IrcEndpoint::Product,
+                Reached::Other => IrcEndpoint::Other,
+            }),
+            true,
+        )
+    }
+
+    fn retained_irc_trace_detail(source: &serde_json::Value) -> Option<String> {
+        let branch = |mode: &str| {
+            let branch = source.get("irc")?.get(mode)?;
+            // Earlier v2 reports saved the TS, accepted points and relaxed end as energies.
+            let steps = match branch.get("steps") {
+                Some(steps) => usize::try_from(steps.as_u64()?).ok()?,
+                None => branch.get("energies")?.as_array()?.len().checked_sub(2)?,
+            };
+            let completed = branch.get("completed")?.as_bool()?;
+            let reached = match branch.get("reached")?.as_str()? {
+                "Reactant" => Reached::Reactant,
+                "Product" => Reached::Product,
+                "another structure" => Reached::Other,
+                _ => return None,
+            };
+            Some((steps, completed, reached))
+        };
+        irc_trace_detail([branch("plus")?, branch("minus")?])
+    }
+
     pub(in crate::cli::ts) fn write_retained(
         source: &serde_json::Value,
         out: &mut dyn Write,
@@ -239,8 +291,10 @@ mod report {
         ) {
             let forward = (ts - reactant) * reshiki_optimize::KCAL_PER_HARTREE;
             let reverse = (ts - product) * reshiki_optimize::KCAL_PER_HARTREE;
+            let trace = retained_irc_trace_detail(source)
+                .map_or_else(String::new, |detail| format!(" · {detail}"));
             writeln!(out,
-                "Retained GFN2-xTB · forward {forward:.2} kcal/mol · reverse {reverse:.2} kcal/mol · one imaginary mode in both checks · IRC connects reactant and product"
+                "Retained GFN2-xTB · forward {forward:.2} kcal/mol · reverse {reverse:.2} kcal/mol · one imaginary mode in both checks · IRC connects reactant and product{trace}"
             ).map_err(CliError::Stdout)?;
         }
         Ok(())
@@ -302,13 +356,24 @@ mod report {
         pub fn write_table(&self, out: &mut dyn Write) -> Result<(), CliError> {
             let report = &self.report;
             let irc = match &report.irc {
-                Some(_) if report.connects => "connects reactant and product".into(),
-                Some([plus, minus]) => {
-                    format!(
-                        "+mode reaches {}, -mode reaches {}",
-                        reached(plus.reached),
-                        reached(minus.reached)
-                    )
+                Some(branches @ [plus, minus]) => {
+                    let mut text = if report.connects {
+                        "connects reactant and product".to_owned()
+                    } else {
+                        format!(
+                            "+mode reaches {}, -mode reaches {}",
+                            reached(plus.reached),
+                            reached(minus.reached)
+                        )
+                    };
+                    if let Some(detail) = irc_trace_detail(
+                        branches
+                            .each_ref()
+                            .map(|branch| (branch.path.len(), branch.completed(), branch.reached)),
+                    ) {
+                        let _ = write!(text, " · {detail}");
+                    }
+                    text
                 }
                 None => match &report.irc_error {
                     Some(reason) => format!("failed: {reason}"),
@@ -497,17 +562,23 @@ Work          {} gradients · {} Hessians · {:.1} s",
         fn json(&self) -> serde_json::Value {
             let report = &self.report;
             let method = self.command.method_key();
-            let branch = |branch: &IrcBranch| {
+            let [plus, minus] = report.irc_diagnostics();
+            let [plus_energies, minus_energies] =
+                report.irc.as_ref().map_or([None; 2], |branches| {
+                    branches.each_ref().map(|b| Some(b.energies.as_slice()))
+                });
+            let branch = |trace: reshiki_optimize::ts::IrcTraceDiagnostics,
+                          energies: Option<&[f64]>| {
                 json!({
                     "method": method,
                     "energy_units": "hartree",
-                    "reached": reached(branch.reached),
-                    "completed": branch.completed(),
-                    "stop_reason": branch.reason.to_string(),
-                    "steps": branch.path.len(),
-                    "path_length_sqrt_amu_bohr": branch.path_length,
-                    "gradient_calls": branch.gradient_calls,
-                    "energies": branch.energies,
+                    "reached": trace.reached.map(reached),
+                    "completed": trace.reason == reshiki_optimize::ts::IrcReason::Converged,
+                    "stop_reason": trace.reason.to_string(),
+                    "steps": trace.steps,
+                    "path_length_sqrt_amu_bohr": trace.path_length,
+                    "gradient_calls": trace.gradient_calls,
+                    "energies": energies,
                 })
             };
             json!({
@@ -578,11 +649,11 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 "hessian_source": if self.worker_check.is_ok() { "worker" } else { "engine" },
                 "imaginary_count": report.imaginary,
                 "failure_reason": self.failure_reason(),
-                "irc_error": report.irc_error,
-                "irc": report.irc.as_ref().map(|[plus, minus]| json!({
+                "irc_error": report.irc_error.as_ref().map(ToString::to_string),
+                "irc": (plus.is_some() || minus.is_some()).then(|| json!({
                     "method": method,
-                    "plus": branch(plus),
-                    "minus": branch(minus),
+                    "plus": plus.map(|trace| branch(trace, plus_energies)),
+                    "minus": minus.map(|trace| branch(trace, minus_energies)),
                 })),
                 "connects": report.connects,
                 "path_energies_eh": report.path.iter().map(|image| image.energy).collect::<Vec<_>>(),
@@ -712,5 +783,68 @@ mod tests {
         assert_eq!(irc.lines().nth(1), Some("-mode E=-2.00000000 Eh"));
         assert_eq!(irc.lines().count(), 20);
         assert_eq!(irc_xyz(&numbers, &ts, None, "").lines().count(), 4);
+    }
+
+    #[test]
+    fn maximum_irc_xyz_reopens_as_a_complete_multiframe_trajectory() {
+        let numbers = [6, 1];
+        let ts = point(-1., 0.);
+        for (plus_steps, minus_steps, include_ends) in
+            [(498, 498, true), (499, 498, true), (499, 499, false)]
+        {
+            let branch = |steps, direction, reached| IrcBranch {
+                energies: Vec::new(),
+                path: (1..=steps)
+                    .map(|i| point(-1. - i as f64 * 0.001, direction * i as f64 * 0.01))
+                    .collect(),
+                reason: IrcReason::StepBudget,
+                path_length: steps as f64 * 0.01,
+                gradient_calls: steps * 4 + 1,
+                end: point(-3., direction * 6.),
+                reached,
+            };
+            let branches = [
+                branch(plus_steps, -1., Reached::Reactant),
+                branch(minus_steps, 1., Reached::Product),
+            ];
+            let text = irc_xyz(&numbers, &ts, Some(&branches), "");
+            let file = reshiki_io::qcread::read("irc.xyz", text.as_bytes()).unwrap();
+            // The neutral/lowest-spin assumption is existing XYZ metadata
+            // behavior. In particular, no frames were dropped by the reader.
+            assert_eq!(
+                file.warnings,
+                [
+                    "Charge and spin are not recorded in XYZ; assumed neutral and the lowest spin state"
+                ]
+            );
+            let [job] = file.jobs.as_slice() else {
+                panic!("expected one XYZ trajectory");
+            };
+            let [plus, minus] = &branches;
+            let expected: Vec<_> = include_ends
+                .then_some(&plus.end)
+                .into_iter()
+                .chain(plus.path.iter().rev())
+                .chain([&ts])
+                .chain(&minus.path)
+                .chain(include_ends.then_some(&minus.end))
+                .collect();
+            assert_eq!(job.steps.len(), expected.len());
+            assert!(job.steps.len() > 1);
+            assert!(job.steps.len() <= reshiki_io::qcdata::MAX_FRAMES);
+            for (step, point) in job.steps.iter().zip(expected) {
+                assert_eq!(step.frame.numbers, numbers);
+                assert_eq!(step.frame.charge, 0);
+                assert_eq!(step.frame.multiplicity, 2);
+                assert!(
+                    step.frame
+                        .positions_angstrom
+                        .iter()
+                        .flatten()
+                        .zip(&point.positions)
+                        .all(|(read, &bohr)| (read - bohr * ANGSTROM_PER_BOHR).abs() < 1e-9)
+                );
+            }
+        }
     }
 }

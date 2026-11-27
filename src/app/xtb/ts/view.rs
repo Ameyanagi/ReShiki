@@ -289,7 +289,11 @@ pub(in crate::app::xtb) fn presentation(
 
 /// Explain a short trace beside its profile, separately from the card's checks.
 /// A saved relaxed end exists only after its minimization has converged.
-pub(super) fn irc_path_detail(result: &CalcResult, session: Option<&Session>) -> Option<String> {
+pub(super) fn irc_path_detail(
+    result: &CalcResult,
+    session: Option<&Session>,
+    stale: bool,
+) -> Option<String> {
     use reshiki::qcdata::IrcEndpoint::{Other, Product, Reactant};
 
     let Some(path) = irc::saved(result) else {
@@ -297,67 +301,41 @@ pub(super) fn irc_path_detail(result: &CalcResult, session: Option<&Session>) ->
     };
     let negative_steps = path.ts_index;
     let positive_steps = path.steps().checked_sub(negative_steps + 1)?;
-    let [negative, positive] = path.reached;
-    let branch = |steps, endpoint, other, direction| {
-        let side = match endpoint {
-            Reactant if other != Reactant => "on the reactant side",
-            Product if other != Product => "on the product side",
-            _ => direction,
-        };
-        format!("{} {side}", step_count(steps))
-    };
-    let negative_branch = || {
-        branch(
-            negative_steps,
-            negative,
-            positive,
-            "in the negative direction",
-        )
-    };
-    let positive_branch = || {
-        branch(
-            positive_steps,
-            positive,
-            negative,
-            "in the positive direction",
-        )
-    };
-    let traced = match path.completed {
-        [true, true] => return None,
-        [false, true] => format!("The path stopped after {}.", negative_branch()),
-        [true, false] => format!("The path stopped after {}.", positive_branch()),
-        [false, false] if negative_steps == positive_steps => {
-            format!(
-                "The path was followed for {} in each direction.",
-                step_count(negative_steps)
-            )
-        }
-        [false, false] => format!(
-            "The path was followed for {} and {}.",
-            negative_branch(),
-            positive_branch()
-        ),
-    };
+    let traced = reshiki::irc_summary::trace_detail(
+        [negative_steps, positive_steps],
+        path.completed,
+        path.reached,
+        path.relaxed_ends.is_some(),
+    )?;
     let matching = match path.reached {
-        [Reactant, Product] | [Product, Reactant] => {
-            "The endpoints match the drawn reactant and product."
+        [Other, Other] if stale => {
+            "Neither end could be matched to an endpoint from the original run.".into()
         }
-        [Reactant, Reactant] => "Both endpoints match the drawn reactant.",
-        [Product, Product] => "Both endpoints match the drawn product.",
-        [Reactant, Other] | [Other, Reactant] => {
-            "One end matches the drawn reactant. The other could not be matched."
+        [Other, Other] => "Neither end could be matched to a drawn endpoint.".into(),
+        reached => {
+            let (subject, endpoints) = match reached {
+                [Reactant, Product] | [Product, Reactant] => {
+                    ("The endpoints", "reactant and product")
+                }
+                [Reactant, Reactant] => ("Both endpoints", "reactant"),
+                [Product, Product] => ("Both endpoints", "product"),
+                [Reactant, _] | [_, Reactant] => ("One end", "reactant"),
+                _ => ("One end", "product"),
+            };
+            let one_end = reached.contains(&Other);
+            let mut text = if stale {
+                format!("{subject} matched the {endpoints} the run was started from.")
+            } else {
+                let verb = if one_end { "matches" } else { "match" };
+                format!("{subject} {verb} the drawn {endpoints}.")
+            };
+            if one_end {
+                text.push_str(" The other could not be matched.");
+            }
+            text
         }
-        [Product, Other] | [Other, Product] => {
-            "One end matches the drawn product. The other could not be matched."
-        }
-        [Other, Other] => "Neither end could be matched to a drawn endpoint.",
     };
-    let relaxation = if path.relaxed_ends.is_some() {
-        " Both ends were then relaxed to the nearest minimum."
-    } else {
-        ""
-    };
-    Some(format!("{traced}{relaxation} {matching}"))
+    Some(format!("{traced} {matching}"))
 }
 
 fn step_count(steps: usize) -> String {
@@ -1056,7 +1034,7 @@ impl App {
         }
         details = details
             .push(reaction_gibbs_unavailable(result).map(|reason| line(reason, Tone::Warning)));
-        if let Some(detail) = irc_path_detail(result, shown.ts) {
+        if let Some(detail) = irc_path_detail(result, shown.ts, shown.stale) {
             details = details.push(line(detail, Tone::Muted));
         }
         if super::card::imaginary_mode(result).is_some() {
