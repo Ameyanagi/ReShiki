@@ -97,6 +97,55 @@ pub(crate) struct Job {
     _handle: iced::task::Handle,
 }
 
+/// A generated model and the models it can replace when its result is stored.
+pub(super) struct CalculationModel {
+    model: models3d::Model3d,
+    previous: Vec<models3d::Model3d>,
+    target: Option<usize>,
+}
+
+impl CalculationModel {
+    fn new(doc: &Document, mut model: models3d::Model3d, target: Option<usize>) -> Self {
+        let mut previous = Vec::new();
+        let mut position = None;
+        for (index, old) in doc.models.iter().enumerate() {
+            if models_overlap(&model, old) {
+                if target == Some(index) {
+                    position = Some(previous.len());
+                }
+                previous.push(old.clone());
+            }
+        }
+        if let Some(index) = target {
+            prepare_replacement(doc, index, &mut model);
+        }
+        Self {
+            model,
+            previous,
+            target: position,
+        }
+    }
+
+    pub(super) fn apply(&self, doc: &mut Document) -> bool {
+        let mut affected = doc
+            .models
+            .iter()
+            .enumerate()
+            .filter(|(_, old)| models_overlap(&self.model, old));
+        if !affected.clone().map(|(_, old)| old).eq(&self.previous) {
+            return false;
+        }
+        let index = self
+            .target
+            .and_then(|target| affected.nth(target).map(|(i, _)| i - target));
+        doc.models.retain(|old| !models_overlap(&self.model, old));
+        let index = index.unwrap_or(doc.models.len());
+        doc.models.insert(index, self.model.clone());
+        models3d::require_version(doc);
+        true
+    }
+}
+
 impl App {
     pub(super) fn models3d_action(&mut self, action: Action) -> Task<Message> {
         match action {
@@ -172,10 +221,13 @@ impl App {
         match model {
             Ok(mut model) => {
                 model.seed = job.seed;
-                if let Some(index) = job.target {
-                    self.replace_model(index, model, job.reaction);
+                if job.reaction.is_some() {
+                    let model = CalculationModel::new(&self.tab.doc, model, job.target);
+                    self.xtb_stage_model(key, model);
+                } else if let Some(index) = job.target {
+                    self.replace_model(index, model);
                 } else {
-                    self.add_model(model, job.display, job.reaction);
+                    self.add_model(model, job.display);
                 }
             }
             Err(error) => {
@@ -689,7 +741,7 @@ impl App {
         (key == self.model_key()).then_some((id, start))
     }
 
-    fn add_model(&mut self, model: models3d::Model3d, display: Display, reaction: Option<u64>) {
+    fn add_model(&mut self, model: models3d::Model3d, display: Display) {
         let before = self.tab.doc.clone();
         let atoms = model.linked_ids(&before);
         let previous = before
@@ -699,11 +751,9 @@ impl App {
             .map_or(Display::TwoD, |m| m.display);
         self.tab.doc.models.push(model);
         models3d::require_version(&mut self.tab.doc);
-        if reaction.is_none() {
-            let index = self.tab.doc.models.len() - 1;
-            models3d::set_display(&mut self.tab.doc, index, display);
-        }
-        self.changed_with_reaction_row(before, reaction);
+        let index = self.tab.doc.models.len() - 1;
+        models3d::set_display(&mut self.tab.doc, index, display);
+        self.changed(before);
         if !self.error {
             self.status = status(display);
             self.start_morph(&atoms, previous, display);
@@ -711,63 +761,25 @@ impl App {
         }
     }
 
-    fn replace_model(&mut self, index: usize, mut model: models3d::Model3d, reaction: Option<u64>) {
+    fn replace_model(&mut self, index: usize, mut model: models3d::Model3d) {
         let before = self.tab.doc.clone();
-        let Some(old) = before.models.get(index) else {
+        if !prepare_replacement(&before, index, &mut model) {
             return;
-        };
-        let origin = models3d::frame_origin(&before, old);
-        align_conformer(&mut model, old, &old.linked_ids(&before));
-        model.display = old.display;
-        model.rotation = old.rotation;
-        model.offset = old.offset;
-        model.size = old.size;
-        model.style = old.style;
-        model.look = old.look;
-        model.show_hydrogens = old.show_hydrogens;
-        model.labels = old.labels;
-        model.depth_fade = old.depth_fade;
-        model.perspective = old.perspective;
-        model.copy_opacity = old.copy_opacity;
-        model.background = old.background;
-        model.layout = old.layout;
-        let atoms = model.linked_ids(&before);
-        let overlaps = |other: &models3d::Model3d| atoms.iter().any(|id| other.contains(*id));
-        model.drawn = models3d::Drawn::combined(
-            &before,
-            &model,
-            std::iter::once(old).chain(
-                before
-                    .models
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, other)| *i != index && overlaps(other))
-                    .map(|(_, other)| other),
-            ),
-        );
+        }
         // Joining sources makes one molecule: replace all its models, keeping
         // the selected view's place among the unaffected models.
         let index = before
             .models
             .iter()
             .take(index)
-            .filter(|other| !overlaps(other))
+            .filter(|other| !models_overlap(&model, other))
             .count();
-        self.tab.doc.models.retain(|other| !overlaps(other));
+        self.tab
+            .doc
+            .models
+            .retain(|other| !models_overlap(&model, other));
         self.tab.doc.models.insert(index, model);
-        if old.linked_ids(&before) != atoms
-            && let Some(origin) = origin
-            && let Some(now) = self
-                .tab
-                .doc
-                .models
-                .get(index)
-                .and_then(|model| models3d::frame_origin(&self.tab.doc, model))
-            && let Some(model) = self.tab.doc.models.get_mut(index)
-        {
-            model.offset = model.offset.offset(origin.x - now.x, origin.y - now.y);
-        }
-        self.changed_with_reaction_row(before, reaction);
+        self.changed(before);
         if !self.error {
             self.status = "3D conformer regenerated".into();
         }
@@ -1437,6 +1449,48 @@ fn crystal_controls(
         .spacing(4),
     )
     .into()
+}
+
+fn models_overlap(model: &models3d::Model3d, old: &models3d::Model3d) -> bool {
+    model.linked_atoms.iter().any(|id| old.contains(*id))
+}
+
+fn prepare_replacement(doc: &Document, index: usize, model: &mut models3d::Model3d) -> bool {
+    let Some(old) = doc.models.get(index) else {
+        return false;
+    };
+    align_conformer(model, old, &old.linked_ids(doc));
+    model.display = old.display;
+    model.rotation = old.rotation;
+    model.offset = old.offset;
+    model.size = old.size;
+    model.style = old.style;
+    model.look = old.look;
+    model.show_hydrogens = old.show_hydrogens;
+    model.labels = old.labels;
+    model.depth_fade = old.depth_fade;
+    model.perspective = old.perspective;
+    model.copy_opacity = old.copy_opacity;
+    model.background = old.background;
+    model.layout = old.layout;
+    model.drawn = models3d::Drawn::combined(
+        doc,
+        model,
+        std::iter::once(old).chain(
+            doc.models
+                .iter()
+                .enumerate()
+                .filter(|(i, other)| *i != index && models_overlap(model, other))
+                .map(|(_, other)| other),
+        ),
+    );
+    if old.linked_ids(doc) != model.linked_ids(doc)
+        && let Some(origin) = models3d::frame_origin(doc, old)
+        && let Some(now) = models3d::frame_origin(doc, model)
+    {
+        model.offset = model.offset.offset(origin.x - now.x, origin.y - now.y);
+    }
+    true
 }
 
 /// Least-squares proper rotation from the new conformer onto the old one.

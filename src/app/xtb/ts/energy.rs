@@ -46,6 +46,12 @@ struct Batch {
     review: bool,
 }
 
+impl Batch {
+    fn is_current(&self, doc: &Document) -> bool {
+        snapshot(doc, self.arrow, &self.species).as_ref() == Some(&self.snapshot)
+    }
+}
+
 struct Summary {
     arrow: u64,
     species: Vec<Species>,
@@ -100,6 +106,9 @@ impl Totals {
 /// 3D models and stored results. Edits never silently carry reviewed settings
 /// over to a different species while the queue runs.
 fn snapshot(doc: &Document, arrow: u64, species: &[Species]) -> Option<String> {
+    if !super::review::reaction_arrow(doc, arrow) {
+        return None;
+    }
     let reaction = doc.reactions.iter().find(|r| r.arrow == arrow)?;
     let mut ids: Vec<_> = species
         .iter()
@@ -355,6 +364,11 @@ fn input_totals(
 }
 
 impl State {
+    pub(in crate::app::xtb) fn placement_arrow(&self, doc: &Document, serial: u64) -> Option<u64> {
+        let batch = self.batch.as_ref().filter(|b| b.active == Some(serial))?;
+        batch.is_current(doc).then_some(batch.arrow)
+    }
+
     /// Follow light or pinned copies while keeping Undo's original identity.
     pub(in crate::app::xtb) fn follow_result(
         &mut self,
@@ -472,9 +486,7 @@ impl App {
             let Some(mut batch) = self.tab.xtb.energy_state.batch.take() else {
                 return Task::none();
             };
-            if snapshot(&self.tab.doc, batch.arrow, &batch.species).as_ref()
-                != Some(&batch.snapshot)
-            {
+            if !batch.is_current(&self.tab.doc) {
                 self.status = "Reaction energy stopped: the reaction changed".into();
                 self.tab.xtb.energy_state.stopped = Some((batch.arrow, self.status.clone()));
                 self.error = false;
@@ -571,7 +583,7 @@ impl App {
         let Some(batch) = &mut self.tab.xtb.energy_state.batch else {
             return Task::none();
         };
-        if snapshot(&self.tab.doc, batch.arrow, &batch.species).as_ref() != Some(&batch.snapshot) {
+        if !batch.is_current(&self.tab.doc) {
             let reason = "Reaction energy stopped: the reaction changed";
             self.tab.xtb.energy_state.stop(reason);
             self.status = reason.into();

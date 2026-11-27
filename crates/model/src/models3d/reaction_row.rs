@@ -6,10 +6,62 @@ use crate::{
     reactions::{self, Role},
     scene,
 };
-use std::{borrow::Cow, collections::HashSet};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
-/// Arrange the models of one reaction. A transient path model can occupy the
-/// arrow's slot alongside the original species models.
+/// Shared intermediates keep their neighboring arrows in the same model row.
+/// Preview each arrow once so inferred schemes use the same roles as a run.
+fn connected_reactions(
+    doc: &Document,
+    reaction: reactions::Reaction,
+    part_of: &HashMap<u64, usize>,
+) -> Vec<reactions::Reaction> {
+    let arrow = reaction.arrow;
+    let candidates: Vec<_> = std::iter::once(reaction)
+        .chain(
+            doc.arrows
+                .iter()
+                .filter(|a| a.id != arrow && a.purpose.is_chemistry())
+                .filter_map(|a| reactions::preview(doc, a.id).ok()),
+        )
+        .collect();
+    let endpoints: Vec<HashSet<_>> = candidates
+        .iter()
+        .map(|reaction| {
+            [Role::Reactant, Role::Product]
+                .into_iter()
+                .flat_map(|role| reaction.participants(role))
+                .flat_map(|p| &p.atoms)
+                .filter_map(|id| part_of.get(id).copied())
+                .collect()
+        })
+        .collect();
+    let mut neighbors = HashMap::<usize, Vec<usize>>::new();
+    for (index, parts) in endpoints.iter().enumerate() {
+        for &part in parts {
+            neighbors.entry(part).or_default().push(index);
+        }
+    }
+    let mut included = HashSet::from([0]);
+    let mut pending: Vec<_> = endpoints.first().into_iter().flatten().copied().collect();
+    while let Some(part) = pending.pop() {
+        for index in neighbors.remove(&part).into_iter().flatten() {
+            if included.insert(index) {
+                pending.extend(endpoints.get(index).into_iter().flatten().copied());
+            }
+        }
+    }
+    candidates
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, reaction)| included.contains(&index).then_some(reaction))
+        .collect()
+}
+
+/// Arrange the endpoint models of a connected reaction scheme. A transient
+/// path model can occupy this arrow's slot alongside the original species.
 pub fn place_reaction_row(doc: &mut Document, arrow: u64, path_model: Option<usize>) {
     let (Some(arrow), Ok(reaction)) = (
         doc.arrows.iter().find(|a| a.id == arrow),
@@ -19,27 +71,54 @@ pub fn place_reaction_row(doc: &mut Document, arrow: u64, path_model: Option<usi
     };
     let path_model = path_model.filter(|&index| index < doc.models.len());
     let bond = doc.drawing_style.bond_length_world;
-    let species: Vec<_> = Role::ALL
-        .into_iter()
-        .flat_map(|role| {
-            let atoms: Vec<_> = reaction
+    let atoms: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let parts = reactions::molecules(doc, &atoms);
+    let part_of: HashMap<_, _> = parts
+        .iter()
+        .enumerate()
+        .flat_map(|(index, atoms)| atoms.iter().map(move |&id| (id, index)))
+        .collect();
+    let reactions = connected_reactions(doc, reaction, &part_of);
+    let arrows: HashSet<_> = reactions.iter().map(|r| r.arrow).collect();
+    let labels: HashMap<_, _> = doc
+        .arrow_labels
+        .iter()
+        .map(|label| (label.annotation, label.arrow))
+        .collect();
+    let mut endpoints = HashSet::new();
+    let mut members = HashSet::new();
+    for reaction in &reactions {
+        for role in Role::ALL {
+            for part in reaction
                 .participants(role)
                 .iter()
-                .flat_map(|p| p.atoms.iter().copied())
-                .collect();
-            reactions::molecules(doc, &atoms)
-                .into_iter()
-                .map(move |atoms| (role, atoms))
-        })
+                .flat_map(|p| &p.atoms)
+                .filter_map(|id| part_of.get(id).copied())
+            {
+                members.insert(part);
+                if role != Role::Agent {
+                    endpoints.insert(part);
+                }
+            }
+        }
+    }
+    // Document order makes the shared row independent of the selected arrow.
+    let species: Vec<_> = parts
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| members.contains(index))
         .collect();
     let mut used = path_model.into_iter().collect::<HashSet<_>>();
     let models: Vec<_> = species
         .iter()
-        .map(|(_, atoms)| {
+        .map(|(part, atoms)| {
+            if !endpoints.contains(part) {
+                return None;
+            }
             let index = doc.models.iter().enumerate().position(|(i, model)| {
                 !used.contains(&i)
-                    && !model.linked_atoms.is_empty()
-                    && model.linked_atoms.iter().all(|id| atoms.contains(id))
+                    && model.linked_atoms.len() == atoms.len()
+                    && atoms.iter().all(|id| model.linked_atoms.contains(id))
             })?;
             used.insert(index);
             Some(index)
@@ -51,30 +130,34 @@ pub fn place_reaction_row(doc: &mut Document, arrow: u64, path_model: Option<usi
 
     // Measure the species as drawings even when a model has been hiding one.
     let mut drawing = Cow::Borrowed(&*doc);
-    for &i in &used {
-        if drawing
-            .models
-            .get(i)
-            .is_some_and(|m| m.display == Display::ThreeD)
+    for (i, model) in doc.models.iter().enumerate() {
+        if model.display == Display::ThreeD
+            && (used.contains(&i)
+                || model
+                    .linked_atoms
+                    .iter()
+                    .any(|id| part_of.get(id).is_some_and(|part| endpoints.contains(part))))
             && let Some(model) = drawing.to_mut().models.get_mut(i)
         {
             model.display = Display::Both;
         }
     }
-    let scheme = crate::molecule_names::include_annotations(&drawing, &reaction.ids());
-    let mut selections: Vec<_> = species.iter().map(|(_, atoms)| atoms.clone()).collect();
+    let scheme: Vec<_> = reactions
+        .iter()
+        .flat_map(|r| r.ids())
+        .filter(|id| labels.get(id).is_none_or(|owner| arrows.contains(owner)))
+        .collect();
+    let scheme = crate::molecule_names::include_annotations(&drawing, &scheme);
+    let mut selections: Vec<_> = species.iter().map(|(_, atoms)| atoms.to_vec()).collect();
     let mut seen: HashSet<_> = selections.iter().flatten().copied().collect();
     selections.push(scheme.into_iter().filter(|id| seen.insert(*id)).collect());
     let outside = selections.len();
-    let atoms: Vec<_> = drawing
-        .atoms
-        .iter()
-        .map(|a| a.id)
-        .filter(|id| !seen.contains(id))
-        .collect();
     selections.extend(
-        reactions::molecules(&drawing, &atoms)
-            .into_iter()
+        parts
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !members.contains(index))
+            .map(|(_, ids)| ids.iter().copied())
             .map(|ids| ids.into_iter().filter(|id| seen.insert(*id)).collect()),
     );
     let objects = selections.len();
@@ -92,68 +175,51 @@ pub fn place_reaction_row(doc: &mut Document, arrow: u64, path_model: Option<usi
         .map(|(_, hi)| hi.y)
         .fold(arrow.bounds().1.y, f32::max);
 
-    // Older schemes may have plain text in the arrow's condition slots and
-    // loose '+' signs between species on the same side.
-    for (ids, measured) in selections.iter().zip(&bounds).skip(objects) {
-        let (&[id], Some((lo, hi))) = (ids.as_slice(), measured) else {
-            continue;
-        };
-        let text = drawing.annotations.iter().find(|a| a.id == id);
-        let plus = text.is_some_and(|a| a.text.trim() == "+")
-            || drawing.graphics.iter().any(|g| {
-                g.id == id
-                    && g.kind
-                        == crate::graphics::GraphicKind::Symbol(crate::scientific::SymbolKind::Plus)
-            });
-        let belongs = if plus {
-            Role::ALL.into_iter().any(|role| {
-                let mut side = species
-                    .iter()
-                    .zip(&bounds)
-                    .filter_map(|((r, _), b)| (*r == role).then_some((*b)?));
-                let Some(first) = side.next() else {
-                    return false;
-                };
-                let last = side.fold(first, |(a, b), (lo, hi)| {
-                    (
-                        Point::new(a.x.min(lo.x), a.y.min(lo.y)),
-                        Point::new(b.x.max(hi.x), b.y.max(hi.y)),
-                    )
-                });
-                let x = (lo.x + hi.x) / 2.;
-                (last.0.x..=last.1.x).contains(&x)
-                    && lo.y <= last.1.y + bond
-                    && hi.y >= last.0.y - bond
-                    && species.iter().filter(|(r, _)| *r == role).count() > 1
-            })
-        } else {
-            text.is_some_and(|text| {
-                !drawing
-                    .arrow_labels
-                    .iter()
-                    .any(|label| label.annotation == id)
-                    && drawing
-                        .arrows
-                        .iter()
-                        .filter(|a| a.purpose.is_chemical())
-                        .filter_map(|a| {
-                            crate::arrow_labels::slot(&drawing, a, text).map(|(_, d)| (a.id, d))
-                        })
-                        .min_by(|a, b| a.1.total_cmp(&b.1))
-                        .is_some_and(|(id, _)| id == arrow.id)
-            })
-        };
-        if belongs {
-            bottom = bottom.max(hi.y);
+    let species_bounds: HashMap<_, _> = species
+        .iter()
+        .zip(&bounds)
+        .filter_map(|((part, _), bounds)| Some((*part, (*bounds)?)))
+        .collect();
+    let mut sides = Vec::new();
+    for reaction in &reactions {
+        for role in Role::ALL {
+            let parts: HashSet<_> = reaction
+                .participants(role)
+                .iter()
+                .flat_map(|p| &p.atoms)
+                .filter_map(|id| part_of.get(id).copied())
+                .collect();
+            sides.push(
+                parts
+                    .into_iter()
+                    .filter_map(|part| species_bounds.get(&part).copied())
+                    .collect(),
+            );
         }
+    }
+    if let Some(legacy_bottom) = legacy_scheme_bottom(
+        &drawing,
+        &arrows,
+        &labels,
+        &sides,
+        selections
+            .iter()
+            .zip(&bounds)
+            .skip(objects)
+            .filter_map(|(ids, bounds)| {
+                let &[id] = ids.as_slice() else { return None };
+                Some((id, (*bounds)?))
+            }),
+    ) {
+        bottom = bottom.max(legacy_bottom);
     }
 
     let mut slots: Vec<_> = species
         .iter()
         .zip(&bounds)
         .zip(models)
-        .filter_map(|(((role, _), bounds), model)| {
-            (*role != Role::Agent || model.is_some()).then_some(slot((*bounds)?, model))
+        .filter_map(|(((part, _), bounds), model)| {
+            endpoints.contains(part).then_some(slot((*bounds)?, model))
         })
         .collect();
     if path_model.is_some() {
@@ -216,13 +282,20 @@ pub fn place_reaction_row(doc: &mut Document, arrow: u64, path_model: Option<usi
         edge = model.x + model.half;
     }
 
-    let obstacles = bounds.iter().skip(outside).copied().flatten().chain(
-        doc.models
-            .iter()
-            .enumerate()
-            .filter(|(i, m)| !used.contains(i) && m.display != Display::TwoD)
-            .filter_map(|(_, m)| frame_with_panels(doc, m)),
-    );
+    let bond_obstacles = zero_order_obstacles(&drawing);
+    let obstacles = bounds
+        .iter()
+        .skip(outside)
+        .copied()
+        .flatten()
+        .chain(bond_obstacles)
+        .chain(
+            doc.models
+                .iter()
+                .enumerate()
+                .filter(|(i, m)| !used.contains(i) && m.display != Display::TwoD)
+                .filter_map(|(_, m)| frame_with_panels(doc, m)),
+        );
     let mut blocked: Vec<_> = obstacles
         .filter_map(|(lo, hi)| {
             let height = row
@@ -249,6 +322,119 @@ pub fn place_reaction_row(doc: &mut Document, arrow: u64, path_model: Option<usi
         model.size = item.model.size;
     }
     require_version(doc);
+}
+
+/// Older schemes may have plain text in condition slots and loose '+' signs
+/// between species on the same side. Explicit arrow ownership takes priority.
+fn legacy_scheme_bottom(
+    doc: &Document,
+    arrows: &HashSet<u64>,
+    labels: &HashMap<u64, u64>,
+    sides: &[Vec<InkBox>],
+    objects: impl Iterator<Item = (u64, InkBox)>,
+) -> Option<f32> {
+    let texts: HashMap<_, _> = doc.annotations.iter().map(|a| (a.id, a)).collect();
+    let plus: HashSet<_> = doc
+        .annotations
+        .iter()
+        .filter(|a| a.text.trim() == "+")
+        .map(|a| a.id)
+        .chain(doc.graphics.iter().filter_map(|g| {
+            (g.kind == crate::graphics::GraphicKind::Symbol(crate::scientific::SymbolKind::Plus))
+                .then_some(g.id)
+        }))
+        .collect();
+    let sides: Vec<_> = sides
+        .iter()
+        .filter(|side| side.len() > 1)
+        .filter_map(|side| {
+            let mut side = side.clone();
+            side.sort_by(|(a, _), (b, _)| a.x.total_cmp(&b.x));
+            let (&(lo, hi), rest) = side.split_first()?;
+            let (mut low, mut high) = (lo.y, hi.y);
+            let mut edge = hi.x;
+            let mut gaps = Vec::new();
+            for &(lo, hi) in rest {
+                low = low.min(lo.y);
+                high = high.max(hi.y);
+                if edge < lo.x {
+                    gaps.push((edge, lo.x));
+                }
+                edge = edge.max(hi.x);
+            }
+            (!gaps.is_empty()).then_some((low, high, gaps))
+        })
+        .collect();
+    let bond = doc.drawing_style.bond_length_world;
+    objects
+        .filter_map(|(id, (lo, hi))| {
+            let belongs = if let Some(owner) = labels.get(&id) {
+                arrows.contains(owner)
+            } else if plus.contains(&id) {
+                let x = (lo.x + hi.x) / 2.;
+                sides.iter().any(|(low, high, gaps)| {
+                    lo.y <= high + bond
+                        && hi.y >= low - bond
+                        && gaps
+                            .partition_point(|&(left, _)| left <= x)
+                            .checked_sub(1)
+                            .and_then(|i| gaps.get(i))
+                            .is_some_and(|&(_, right)| x <= right)
+                })
+            } else {
+                texts.get(&id).is_some_and(|text| {
+                    doc.arrows
+                        .iter()
+                        .filter(|a| a.purpose.is_chemical())
+                        .filter_map(|a| {
+                            crate::arrow_labels::slot(doc, a, text).map(|(_, d)| (a.id, d))
+                        })
+                        .min_by(|a, b| a.1.total_cmp(&b.1))
+                        .is_some_and(|(id, _)| arrows.contains(&id))
+                })
+            };
+            belongs.then_some(hi.y)
+        })
+        .reduce(f32::max)
+}
+
+fn zero_order_obstacles(doc: &Document) -> Vec<InkBox> {
+    if !doc.bonds.iter().any(|bond| bond.order == 0) {
+        return Vec::new();
+    }
+    let drawing = doc.abbreviation_render_copy();
+    let doc = drawing.as_ref();
+    let graph = scene::graph::Graph::new(doc);
+    let hidden: HashSet<_> = doc
+        .models
+        .iter()
+        .filter(|model| model.display == Display::ThreeD)
+        .flat_map(Model3d::ids)
+        .collect();
+    doc.bonds
+        .iter()
+        .enumerate()
+        .filter(|(_, bond)| {
+            bond.order == 0
+                && graph.bond_visible(bond.a, bond.b)
+                && !hidden.contains(&bond.a)
+                && !hidden.contains(&bond.b)
+        })
+        .filter_map(|(index, bond)| {
+            let (a, b) = graph.ends(index)?;
+            let pad = doc.drawing_style.world(if bond.display == "bold" {
+                doc.drawing_style.bold_width_pt
+            } else {
+                doc.drawing_style.line_width_pt
+            }) / 2.;
+            // Label clipping only removes ink inside the endpoint molecules,
+            // whose bounds are already obstacles. Keep the complete span.
+            Some((
+                Point::new(a.x.min(b.x) - pad, a.y.min(b.y) - pad),
+                Point::new(a.x.max(b.x) + pad, a.y.max(b.y) + pad),
+            ))
+        })
+        .collect()
 }
 
 fn slot((lo, hi): InkBox, model: Option<usize>) -> (f32, f32, Option<usize>) {

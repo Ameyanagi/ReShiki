@@ -268,6 +268,30 @@ mod execution {
         );
     }
 
+    fn saved_model(app: &mut App, atom: u64, offset: Point) {
+        use reshiki::models3d::{Display, ForceField, Hydrogen, Model3d, Placed};
+
+        let mut model = Model3d::new(
+            &app.tab.doc,
+            vec![Placed {
+                id: atom,
+                xyz: START[0].map(|v| v as f32),
+            }],
+            START[1..]
+                .iter()
+                .map(|xyz| Hydrogen {
+                    parent: atom,
+                    xyz: xyz.map(|v| v as f32),
+                })
+                .collect(),
+            ForceField::default(),
+        );
+        model.display = Display::Both;
+        model.offset = offset;
+        app.tab.doc.models.push(model);
+        reshiki::models3d::require_version(&mut app.tab.doc);
+    }
+
     fn summary_totals(app: &App) -> Option<Totals> {
         let summary = app.tab.xtb.energy_state.summaries.first()?;
         input_totals(
@@ -293,6 +317,8 @@ mod execution {
         assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
         assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [b]);
         model(&mut app);
+        assert_eq!(app.tab.doc.models.len(), 1, "B is staged until its result");
+        event(&mut app, optimized(&START, &MOVED));
         let doc = &app.tab.doc;
         let frames: Vec<_> = doc
             .models
@@ -309,7 +335,6 @@ mod execution {
         }
         assert!((a_lo.y - b_lo.y).abs() < 0.01);
         assert!(a_hi.x <= b_lo.x + 0.001 && b_lo.x < b_hi.x && a_lo.y < a_hi.y);
-        event(&mut app, optimized(&START, &MOVED));
         assert_eq!(app.tab.doc.science.results.len(), 2, "{}", app.status);
         assert!(
             app.tab
@@ -366,6 +391,19 @@ mod execution {
         let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
         assert!(app.tab.model_job.is_none(), "{}", app.status);
         assert!(!app.tab.history.can_undo());
+        event(
+            &mut app,
+            crate::app::xtb::run::Event::Steps {
+                first: 0,
+                energies: vec![-5.06],
+                positions: MOVED.to_vec(),
+            },
+        );
+        assert_eq!(app.tab.doc.models, original);
+        let preview = app.display_document();
+        assert_eq!(preview.models[0].atoms[0].xyz, MOVED[0].map(|v| v as f32));
+        assert_eq!(preview.models[1], original[1]);
+        assert!(!app.tab.history.can_undo(), "live steps create no history");
         event(&mut app, optimized(&START, &MOVED));
         assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
         let laid_out = app.tab.doc.models.clone();
@@ -385,6 +423,144 @@ mod execution {
         let _ = app.update(Message::Redo);
         assert_eq!(app.tab.doc.science.results.len(), 1);
         assert_eq!(app.tab.doc.models, laid_out);
+    }
+
+    #[test]
+    fn a_missing_model_and_existing_row_moves_commit_with_the_result() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("O", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(100., 50.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        saved_model(&mut app, b, Point::new(70., 40.));
+        let original = app.tab.doc.clone();
+
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        assert!(app.tab.model_job.is_some(), "{}", app.status);
+        model(&mut app);
+        assert_eq!(app.tab.doc, original, "generation leaves the drawing alone");
+        assert!(
+            !app.tab.history.can_undo(),
+            "generation is not a separate edit"
+        );
+
+        event(&mut app, optimized(&START, &MOVED));
+        assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
+        assert_eq!(app.tab.doc.models.len(), 2);
+        assert_ne!(app.tab.doc.models[0].offset, original.models[0].offset);
+        let frames: Vec<_> = app
+            .tab
+            .doc
+            .models
+            .iter()
+            .map(|model| reshiki::models3d::frame(&app.tab.doc, model).unwrap())
+            .collect();
+        assert!((frames[0].0.y - frames[1].0.y).abs() < 0.01);
+        let committed = app.tab.doc.clone();
+
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original, "one Undo removes A and restores B");
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, committed);
+    }
+
+    #[test]
+    fn a_stale_model_replacement_and_existing_row_moves_commit_with_the_result() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("O", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(100., 50.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        saved_model(&mut app, a, Point::new(70., 40.));
+        saved_model(&mut app, b, Point::new(100., 0.));
+        app.tab.doc.atom_mut(a).unwrap().isotope = 18;
+        assert!(app.tab.doc.models[0].is_stale(&app.tab.doc));
+        let original = app.tab.doc.clone();
+
+        let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
+        assert!(app.tab.model_job.is_some(), "{}", app.status);
+        model(&mut app);
+        assert_eq!(app.tab.doc, original, "regeneration is staged in memory");
+        assert!(!app.tab.history.can_undo());
+
+        event(&mut app, optimized(&START, &MOVED));
+        assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
+        assert_eq!(app.tab.doc.models.len(), 2);
+        assert!(!app.tab.doc.models[0].is_stale(&app.tab.doc));
+        assert_ne!(app.tab.doc.models[0].offset, original.models[0].offset);
+        assert_ne!(app.tab.doc.models[1].offset, original.models[1].offset);
+        let committed = app.tab.doc.clone();
+
+        let _ = app.update(Message::Undo);
+        assert_eq!(
+            app.tab.doc, original,
+            "one Undo restores the stale model and B"
+        );
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, committed);
+    }
+
+    #[test]
+    fn an_unrelated_annotation_allows_result_placement_and_survives_its_undo() {
+        let (mut app, a) = crate::app::xtb::tests::water(CalcTask::Optimize);
+        event(&mut app, optimized(&START, &MOVED));
+        let reused = Arc::clone(&app.tab.doc.science.results[0].result);
+        let b = app.tab.doc.add_atom("O", Point::new(100., 50.));
+        let (arrow, species) = reaction(&mut app, a, b);
+        app.tab.doc.models[0].offset = Point::new(70., 40.);
+        saved_model(&mut app, b, Point::new(100., 0.));
+        let reviewed = snapshot(&app.tab.doc, arrow, &species).unwrap();
+
+        let _ = app.xtb_reaction_energy_begin(arrow, species.clone(), CalcTask::Optimize, None);
+        assert_eq!(app.tab.xtb.energy_state.batch.as_ref().unwrap().reused, 1);
+        assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, [b]);
+        let started_revision = app.tab.revision;
+        let before_edit = app.tab.doc.clone();
+        let note = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(reshiki::document::Annotation {
+            id: note,
+            position: Point::new(1000., 1000.),
+            text: "Independent note".into(),
+            format: Default::default(),
+            angle: 0.,
+        });
+        app.changed(before_edit);
+        assert_ne!(app.tab.revision, started_revision);
+        assert_eq!(snapshot(&app.tab.doc, arrow, &species).unwrap(), reviewed);
+        let before_result = app.tab.doc.clone();
+
+        event(&mut app, optimized(&START, &MOVED));
+        assert_eq!(app.tab.doc.science.results.len(), 2, "{}", app.status);
+        assert!(app.tab.xtb.run.is_none());
+        assert!(app.tab.xtb.energy_state.batch.is_none(), "{}", app.status);
+        assert!(summary_totals(&app).is_some());
+        assert!(Arc::ptr_eq(&app.tab.doc.science.results[0].result, &reused));
+        assert_eq!(
+            app.tab.doc.models[1].atoms[0].xyz,
+            MOVED[0].map(|v| v as f32)
+        );
+        assert_ne!(app.tab.doc.models[0].offset, before_result.models[0].offset);
+        assert_ne!(app.tab.doc.models[1].offset, before_result.models[1].offset);
+
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before_result);
+        assert!(
+            app.tab
+                .doc
+                .annotations
+                .iter()
+                .any(|annotation| annotation.id == note)
+        );
+        let _ = app.update(Message::Undo);
+        assert!(
+            !app.tab
+                .doc
+                .annotations
+                .iter()
+                .any(|annotation| annotation.id == note)
+        );
     }
 
     #[test]
@@ -646,11 +822,17 @@ mod execution {
         let a = app.tab.doc.add_atom("O", Point::default());
         let b = app.tab.doc.add_atom("O", Point::new(100., 0.));
         let (arrow, species) = reaction(&mut app, a, b);
+        saved_model(&mut app, b, Point::new(70., 40.));
+        let original_b = app.tab.doc.models[0].clone();
         let _ = app.xtb_reaction_energy_begin(arrow, species, CalcTask::Optimize, None);
         model(&mut app);
         app.tab.doc.reactions[0].products[0].coefficient = 2;
         event(&mut app, optimized(&START, &MOVED));
         assert_eq!(app.tab.doc.science.results.len(), 1);
+        assert_eq!(
+            app.tab.doc.models[0], original_b,
+            "a changed reaction is not placed"
+        );
         assert!(app.tab.xtb.run.is_none());
         assert!(app.tab.xtb.energy_state.batch.is_none());
         assert!(
