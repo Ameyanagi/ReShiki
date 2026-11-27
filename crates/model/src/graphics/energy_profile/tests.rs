@@ -79,6 +79,74 @@ fn contains((a, b): (Point, Point), (c, d): (Point, Point)) -> bool {
     a.x <= c.x && b.x >= d.x && a.y <= c.y && b.y >= d.y
 }
 
+fn assert_frame_contains(g: &Graphic, parts: &[Part], labels: &[Annotation], models: &[Primitive]) {
+    let det = g.frame_determinant();
+    let x = g.axis_y.x.hypot(g.axis_y.y) / det.abs();
+    let y = g.axis_x.x.hypot(g.axis_x.y) / det.abs();
+    let check = |p, radius, kind: &str| {
+        let p = g.world_to_local(p, det);
+        let eps = 1e-5;
+        assert!(
+            (x * radius - eps..=1. - x * radius + eps).contains(&p.x)
+                && (y * radius - eps..=1. - y * radius + eps).contains(&p.y),
+            "{kind} outside the frame at {p:?} with radius {radius}"
+        );
+    };
+    for part in parts {
+        for p in part.commands.iter().flat_map(PathCommand::iter_points) {
+            check(p, part.style.width() / 2., "plot stroke");
+        }
+    }
+    for label in labels {
+        for corner in label.corners() {
+            check(corner, 0., &label.text);
+        }
+    }
+    for model in models {
+        assert_model_inside(model, &check);
+    }
+}
+
+fn assert_model_inside(model: &Primitive, check: &impl Fn(Point, f32, &str)) {
+    match model {
+        Primitive::Opacity { primitive, .. } => assert_model_inside(primitive, check),
+        Primitive::Path {
+            commands, style, ..
+        } => {
+            for p in commands.iter().flat_map(PathCommand::iter_points) {
+                check(p, style.width() / 2., "model path");
+            }
+        }
+        Primitive::Sphere {
+            center,
+            radius,
+            outline,
+            contact,
+            ..
+        } => {
+            let half = outline.map_or(0., |outline| outline.width / 2.);
+            check(*center, *radius + half, "atom");
+            if let Some(contact) = contact {
+                for p in contact.region.iter().flatten() {
+                    check(*p, half, "atom outline");
+                }
+            }
+        }
+        Primitive::ShadedQuad {
+            corners,
+            cap,
+            outline,
+            ..
+        } => {
+            let half = outline.map_or(0., |outline| outline.width / 2.);
+            for p in corners.iter().chain(cap) {
+                check(*p, half, "bond");
+            }
+        }
+        other => panic!("unexpected molecular artwork: {other:?}"),
+    }
+}
+
 fn assert_no_overlaps(g: &Graphic, layout: &Layout, parts: &[Part], labels: &[Annotation]) {
     let frame = g.shape_bounds();
     let half = layout.picture_world_side(g) / 2.;
@@ -216,12 +284,14 @@ fn axis_top_caption_clears_the_rendered_axis() {
         g.style.width_pt = width_pt;
         let origin = g.origin;
         g.map_positions(|point| origin.lerp(point, scale));
-        let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
+        let (parts, labels, models) = g.energy_profile_scene(&style::DEFAULT, &Document::default());
+        assert_frame_contains(&g, &parts, &labels, &models);
         let caption = labels.iter().find(|l| l.text == p.method).unwrap();
         let axis = &parts[0];
         let PathCommand::Move(axis_top) = axis.commands[0] else {
             panic!("expected the energy axis");
         };
+        assert_eq!(axis.style.width_pt, width_pt);
         assert!((caption.centre().y - axis_top.y).abs() < 1e-3);
         assert!(
             caption.bounds().0.x > axis_top.x + axis.style.width() / 2.,
@@ -231,28 +301,71 @@ fn axis_top_caption_clears_the_rendered_axis() {
 }
 
 #[test]
-fn bottom_bar_clears_the_reaction_coordinate_at_ten_percent() {
+fn bottom_bar_clears_the_reaction_coordinate_in_small_frames() {
     let mut p = profile(&[0., 18., -20., 14., -5.]);
-    p.models = EnergyProfileModels::Off;
-    let mut g = placed(p);
-    let origin = g.origin;
-    g.map_positions(|point| origin.lerp(point, 0.1));
-    let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
-    let bar = &parts[parts.len() - 3];
-    let [PathCommand::Move(left), PathCommand::Line(right)] = bar.commands.as_slice() else {
-        panic!("expected the central bar");
-    };
-    let PathCommand::Line(plot_bottom) = parts[0].commands[1] else {
-        panic!("expected the bottom of the energy axis");
-    };
-    assert_eq!(left.y, plot_bottom.y);
-    let (lo, hi) = labels
-        .iter()
-        .find(|label| label.text == "Reaction coordinate")
-        .unwrap()
-        .bounds();
-    assert!(left.x < hi.x && right.x > lo.x);
-    assert!(lo.y > left.y + bar.style.width() / 2.);
+    for mode in EnergyProfileModels::ALL {
+        p.models = mode;
+        for (width_pt, scale) in [(0.6, 0.1), (12., 0.25)] {
+            let mut g = placed(p.clone());
+            g.style.width_pt = width_pt;
+            let origin = g.origin;
+            g.map_positions(|point| origin.lerp(point, scale));
+            let (parts, labels, models) =
+                g.energy_profile_scene(&style::DEFAULT, &Document::default());
+            assert_eq!(models.is_empty(), mode == EnergyProfileModels::Off);
+            assert_frame_contains(&g, &parts, &labels, &models);
+            let bar = &parts[parts.len() - 3];
+            let [PathCommand::Move(left), PathCommand::Line(right)] = bar.commands.as_slice()
+            else {
+                panic!("expected the central bar");
+            };
+            let PathCommand::Line(plot_bottom) = parts[0].commands[1] else {
+                panic!("expected the bottom of the energy axis");
+            };
+            assert_eq!(left.y, plot_bottom.y);
+            if mode == EnergyProfileModels::Off {
+                let natural = Layout::new(&p, &style::DEFAULT);
+                let PathCommand::Move(axis_top) = parts[0].commands[0] else {
+                    panic!("expected the top of the energy axis");
+                };
+                assert!(plot_bottom.y - axis_top.y < scale * (natural.bottom - natural.top));
+            }
+            let (lo, hi) = labels
+                .iter()
+                .find(|label| label.text == "Reaction coordinate")
+                .unwrap()
+                .bounds();
+            assert!(left.x < hi.x && right.x > lo.x);
+            assert!(lo.y > left.y + bar.style.width() / 2.);
+        }
+    }
+}
+
+#[test]
+fn compressed_affine_frame_reduces_effective_strokes() {
+    let mut p = profile(&[0., 18., -20., 14., -5.]);
+    let geometry = p.states[1].geometry.as_mut().unwrap();
+    geometry.forming = vec![[0, 1]];
+    geometry.breaking = vec![[0, 1]];
+    for mode in EnergyProfileModels::ALL {
+        p.models = mode;
+        let mut g = placed(p.clone());
+        g.style.width_pt = 12.;
+        let origin = g.origin;
+        g.map_positions(|p| {
+            let p = origin.lerp(p, 0.1).turned(origin, 45.);
+            Point::new(p.x, origin.y + (p.y - origin.y) * 0.05)
+        });
+        g.validate().unwrap();
+        let (parts, labels, models) = g.energy_profile_scene(&style::DEFAULT, &Document::default());
+        assert_eq!(models.is_empty(), mode == EnergyProfileModels::Off);
+        assert_frame_contains(&g, &parts, &labels, &models);
+        assert!(
+            parts
+                .iter()
+                .all(|p| (0. ..g.style.width_pt).contains(&p.style.width_pt))
+        );
+    }
 }
 
 #[test]

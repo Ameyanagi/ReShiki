@@ -454,6 +454,8 @@ struct Layout {
     lines: Vec<Vec<Point>>,
     curves: Vec<Vec<PathCommand>>,
     bar: f32,
+    line_width_pt: f32,
+    bar_width_pt: f32,
     picture_side: f32,
     low: f64,
     high: f64,
@@ -525,11 +527,14 @@ impl Layout {
             .iter()
             .map(|(value, name)| width_of(value, value_size).max(width_of(name.unwrap_or(""), em)))
             .fold(0., f32::max);
+        let coordinate_title = "Reaction coordinate";
+        let slots = profile.states.len().max(1) as f32;
         let slot = (slot + em * 1.2)
             .max(em * 9.)
-            .max(style.bond_length_world * 6.);
+            .max(style.bond_length_world * 6.)
+            .max(width_of(coordinate_title, tick_size) / slots);
         let plot_left = axis + em * 0.3;
-        let plot_width = slot * profile.states.len().max(1) as f32;
+        let plot_width = slot * slots;
         // Keep a gap even in long, multistep profiles.
         let bar = (plot_width * 0.11).min(slot * 0.55);
         let picture_side = bar * 1.5;
@@ -543,6 +548,7 @@ impl Layout {
             };
         let bottom = (em * 9.).max(width_of(&axis_title, tick_size));
         let factor = profile.unit.convert_kcal(1.);
+        let line_width_pt = g.map_or(style.line_width_pt, |g| g.style.width_pt).min(12.);
         let mut layout = Self {
             width: plot_right + em * 0.4,
             height: 0.,
@@ -554,6 +560,8 @@ impl Layout {
             lines: vec![],
             curves: vec![vec![]; profile.states.len().saturating_sub(1)],
             bar,
+            line_width_pt,
+            bar_width_pt: (2. * line_width_pt).min(12.),
             picture_side,
             low: low / factor,
             high: high / factor,
@@ -637,48 +645,23 @@ impl Layout {
                     .push(Label::new(name.into(), Point::new(x, cy), em));
             }
         }
-        let gap = em * 0.3;
-        let mut coordinate = Label::new(
-            "Reaction coordinate".into(),
+        let coordinate = Label::new(
+            coordinate_title.into(),
             Point::new(plot_left + plot_width / 2., bottom),
             tick_size,
         );
-        let mut caption = (!profile.method.is_empty())
+        let caption = (!profile.method.is_empty())
             .then(|| Label::new(profile.method.clone(), Point::default(), em * 0.72));
-        layout.place_titles(
-            &mut coordinate,
-            caption.as_mut(),
+        let leftmost_tick = axis - em * 0.25;
+        let rightmost_bar = plot_left + plot_width - (slot - bar) / 2.;
+        layout.fit_frame(
+            g,
             plot_right,
-            style.line_width_pt,
-            None,
+            leftmost_tick,
+            rightmost_bar,
+            coordinate,
+            caption,
         );
-        if let Some(caption) = &caption {
-            layout.width = layout.width.max(caption.bounds(&layout.font).1.x + gap);
-        }
-        // Fit the frame to the artwork above and below the plot.
-        let title_bounds = std::iter::once(&coordinate)
-            .chain(caption.iter())
-            .map(|label| label.bounds(&layout.font));
-        let (top, bottom) = layout
-            .label_and_model_bounds()
-            .chain(title_bounds)
-            .fold((layout.top, layout.bottom), |(top, bottom), (a, b)| {
-                (top.min(a.y), bottom.max(b.y))
-            });
-        layout.min_y = top - gap;
-        layout.height = bottom + gap - layout.min_y;
-        if let Some(g) = g {
-            // Strokes keep their world widths when the frame is resized.
-            layout.place_titles(
-                &mut coordinate,
-                caption.as_mut(),
-                plot_right,
-                g.style.width_pt,
-                Some(g),
-            );
-        }
-        layout.labels.push(coordinate);
-        layout.labels.extend(caption);
         layout
     }
     fn label_and_model_bounds(&self) -> impl Iterator<Item = (Point, Point)> {
@@ -689,89 +672,113 @@ impl Layout {
                 .map(move |m| (m.centre.offset(-half, -half), m.centre.offset(half, half))),
         )
     }
-    fn place_titles(
-        &self,
-        coordinate: &mut Label,
-        caption: Option<&mut Label>,
-        plot_right: f32,
-        width_pt: f32,
+    fn fit_frame(
+        &mut self,
         g: Option<&Graphic>,
+        plot_right: f32,
+        leftmost_tick: f32,
+        rightmost_bar: f32,
+        mut coordinate: Label,
+        mut caption: Option<Label>,
     ) {
-        let (stroke_scale, text_x, text_y) = g.filter(|g| g.frame_determinant().abs() > 0.).map_or(
-            (Point::new(1., 1.), Point::new(1., 0.), Point::new(0., 1.)),
-            |g| {
-                // Rows of the inverse frame map project world distances onto the plot axes.
-                let det = g.frame_determinant();
-                let x = Point::new(g.axis_y.y, -g.axis_y.x);
-                let y = Point::new(-g.axis_x.y, g.axis_x.x);
-                let (sx, sy) = (self.width / det, self.height / det);
-                let turn = -text_angle(g.axis_x, g.axis_y);
-                let text_scale = self.text_scale(g);
-                let text_x = x.turned(Point::default(), turn);
-                let text_y = y.turned(Point::default(), turn);
-                (
-                    Point::new(x.x.hypot(x.y) * sx.abs(), y.x.hypot(y.y) * sy.abs()),
-                    Point::new(text_x.x * sx * text_scale, text_x.y * sx * text_scale),
-                    Point::new(text_y.x * sy * text_scale, text_y.y * sy * text_scale),
-                )
+        let gap = self.font.size() * 0.3;
+        if let Some(caption) = &caption {
+            let axis = self.lines[0][0].x;
+            self.width = self
+                .width
+                .max(axis + 2. * caption.half_size(&self.font).0 + 2. * gap);
+        }
+        let projection = g
+            .and_then(frame_projection)
+            .map(|[x, y]| Point::new(x.x.hypot(x.y), y.x.hypot(y.y)));
+        if let Some(projection) = projection {
+            // Preserve horizontal room for the axis and bars. In height, leave
+            // at least half the frame for the plot, text, and model slots.
+            let horizontal = (leftmost_tick.min(self.width - rightmost_bar) - gap) / self.width;
+            let max_half = (horizontal / projection.x).min(0.25 / projection.y);
+            let scale = (2. * max_half / style::DEFAULT.world(self.bar_width_pt)).min(1.);
+            self.line_width_pt *= scale;
+            self.bar_width_pt *= scale;
+        }
+        let (w, h) = coordinate.half_size(&self.font);
+        let (top, bottom, title_top) = self.label_and_model_bounds().fold(
+            (self.top, self.bottom, self.bottom),
+            |(top, bottom, title_top), (a, b)| {
+                let title_top =
+                    if a.x < coordinate.centre.x + w + gap && b.x > coordinate.centre.x - w - gap {
+                        title_top.max(b.y)
+                    } else {
+                        title_top
+                    };
+                (top.min(a.y), bottom.max(b.y), title_top)
             },
         );
-        let stroke_half = |weight| {
-            let half = style::DEFAULT.world(profile_stroke_width_pt(width_pt, weight)) / 2.;
-            Point::new(half * stroke_scale.x, half * stroke_scale.y)
-        };
-        let half_size = |label: &Label| {
-            let (w, h) = label.half_size(&self.font);
+        let bar_half = style::DEFAULT.world(self.bar_width_pt) / 2.;
+        let title_room = gap + 2. * h;
+        let fit = |caption_room: f32| {
+            let fixed_edges = (
+                top - gap - caption_room,
+                bottom.max(title_top + title_room) + gap,
+            );
+            let stroked_edges = (
+                self.top - gap - caption_room,
+                self.bottom + title_room + gap,
+            );
+            let half = projection.map_or(bar_half, |p| {
+                let fraction = p.y * bar_half;
+                // The local stroke inset grows with the height of the fitted
+                // layout. Solve for each possible pair of limiting edges.
+                let height = (fixed_edges.1 - fixed_edges.0)
+                    .max(
+                        (stroked_edges.1 - fixed_edges.0).max(fixed_edges.1 - stroked_edges.0)
+                            / (1. - fraction),
+                    )
+                    .max((stroked_edges.1 - stroked_edges.0) / (1. - 2. * fraction));
+                fraction * height
+            });
+            let min_y = fixed_edges.0.min(stroked_edges.0 - half);
             (
-                w * text_x.x.abs() + h * text_x.y.abs(),
-                w * text_y.x.abs() + h * text_y.y.abs(),
+                min_y,
+                fixed_edges.1.max(stroked_edges.1 + half) - min_y,
+                half,
             )
         };
-        let bar_half = stroke_half(2.);
-        let gap = self.font.size() * 0.3;
-        let (w, h) = half_size(coordinate);
-        let occupied_bottom = self
-            .label_and_model_bounds()
-            .filter(|(a, b)| {
-                a.x < coordinate.centre.x + w + gap && b.x > coordinate.centre.x - w - gap
-            })
-            .map(|(_, b)| b.y)
-            .fold(self.bottom + bar_half.y, f32::max);
-        coordinate.centre.y = occupied_bottom + gap + h;
-        if let Some(caption) = caption {
-            let coordinate_bounds = (
-                coordinate.centre.offset(-w, -h),
-                coordinate.centre.offset(w, h),
+        let (mut min_y, mut height, mut bar_half_y) = fit(0.);
+        if let Some(caption) = &mut caption {
+            let bar_half = Point::new(
+                bar_half * projection.map_or(1., |p| self.width * p.x),
+                bar_half_y,
             );
-            let caption_half = half_size(caption);
-            self.place_method(
-                caption,
-                caption_half,
-                plot_right,
-                coordinate_bounds,
-                stroke_half(1.),
-                bar_half,
-            );
+            let ratio = self.line_width_pt / self.bar_width_pt;
+            let line_half = Point::new(bar_half.x * ratio, bar_half.y * ratio);
+            if !self.place_method(caption, plot_right, line_half, bar_half) {
+                let (w, h) = caption.half_size(&self.font);
+                (min_y, height, bar_half_y) = fit(2. * h + gap);
+                caption.centre = Point::new(self.lines[0][0].x + gap + w, min_y + gap + h);
+            }
         }
+        coordinate.centre.y = title_top.max(self.bottom + bar_half_y) + gap + h;
+        self.min_y = min_y;
+        self.height = height;
+        self.labels.push(coordinate);
+        self.labels.extend(caption);
     }
     fn place_method(
         &self,
         caption: &mut Label,
-        (w, h): (f32, f32),
         plot_right: f32,
-        coordinate: (Point, Point),
         line_half: Point,
         bar_half: Point,
-    ) {
+    ) -> bool {
         use crate::atom_labels::segment_hits_rect;
 
         let Some(&axis_top) = self.lines.first().and_then(|line| line.first()) else {
-            return;
+            return false;
         };
+        let (w, h) = caption.half_size(&self.font);
         let em = self.font.size();
         let inset = em * 0.3;
         let clearance = em * 0.12;
-        let occupied = || self.label_and_model_bounds().chain([coordinate]);
         let is_clear = |centre: Point| {
             let (lo, hi) = (
                 centre.offset(-w - clearance, -h - clearance),
@@ -784,7 +791,8 @@ impl Layout {
                 path.windows(2)
                     .any(|p| matches!(p, [a, b] if hits(*a, *b, line_half)))
             };
-            occupied().all(|(a, b)| a.x >= hi.x || b.x <= lo.x || a.y >= hi.y || b.y <= lo.y)
+            self.label_and_model_bounds()
+                .all(|(a, b)| a.x >= hi.x || b.x <= lo.x || a.y >= hi.y || b.y <= lo.y)
                 && !self.lines.iter().any(|p| hits_path(p))
                 && !self
                     .curves
@@ -800,17 +808,12 @@ impl Layout {
                 })
         };
         caption.centre = Point::new(plot_right - inset - w, self.bottom - inset - h);
-        if caption.centre.x - w < axis_top.x || !is_clear(caption.centre) {
-            let left = axis_top.x + inset.max(line_half.x + 2. * clearance);
-            caption.centre = Point::new(left + w, axis_top.y);
-            if !is_clear(caption.centre) {
-                let top = occupied()
-                    .filter(|(a, b)| a.x < left + 2. * w + clearance && b.x > left - clearance)
-                    .map(|(a, _)| a.y)
-                    .fold(self.top - line_half.y.max(bar_half.y), f32::min);
-                caption.centre.y = top - inset - h;
-            }
+        if caption.centre.x - w >= axis_top.x && is_clear(caption.centre) {
+            return true;
         }
+        let left = axis_top.x + inset.max(line_half.x + 2. * clearance);
+        caption.centre = Point::new(left + w, axis_top.y);
+        left + 2. * w <= self.width - inset && is_clear(caption.centre)
     }
     fn energy_y(&self, energy: f64) -> f32 {
         self.top + (self.bottom - self.top) * ((self.high - energy) / (self.high - self.low)) as f32
@@ -874,8 +877,21 @@ impl Layout {
             x * g.axis_x.y + y * g.axis_y.y,
         )
     }
-    fn text_scale(&self, g: &Graphic) -> f32 {
-        (g.axis_x.x.hypot(g.axis_x.y) / self.width).min(g.axis_y.x.hypot(g.axis_y.y) / self.height)
+    fn text_scale(&self, g: &Graphic, label: &Label, angle: f32) -> f32 {
+        let scale = (g.axis_x.x.hypot(g.axis_x.y) / self.width)
+            .min(g.axis_y.x.hypot(g.axis_y.y) / self.height);
+        // Text stays upright relative to one frame axis. In a skewed frame,
+        // fit its rotated rectangle within the label's local slot.
+        frame_projection(g).map_or(scale, |[x, y]| {
+            let (w, h) = label.half_size(&self.font);
+            let project = |row: Point| {
+                let row = row.turned(Point::default(), -angle);
+                w * row.x.abs() + h * row.y.abs()
+            };
+            scale
+                .min(w / (self.width * project(x)))
+                .min(h / (self.height * project(y)))
+        })
     }
     fn picture_world_side(&self, g: &Graphic) -> f32 {
         let span = |a: Point| f64::from(a.x.abs()) + f64::from(a.y.abs());
@@ -884,19 +900,22 @@ impl Layout {
         (f64::from(self.picture_side) * f64::from(g.frame_determinant().abs()) / den) as f32
     }
     fn annotation(&self, g: &Graphic, label: &Label) -> Annotation {
+        let angle = text_angle(g.axis_x, g.axis_y);
         let mut a = Annotation {
             id: g.id,
             position: Point::default(),
             text: label.text.clone(),
             format: TextFormat {
                 style: TextStyle {
-                    size_pt: label.size * style::DEFAULT.points_per_world() * self.text_scale(g),
+                    size_pt: label.size
+                        * style::DEFAULT.points_per_world()
+                        * self.text_scale(g, label, angle),
                     color: g.style.stroke,
                     ..self.font.clone()
                 },
                 ..TextFormat::default()
             },
-            angle: (text_angle(g.axis_x, g.axis_y) + label.angle).rem_euclid(360.),
+            angle: (angle + label.angle).rem_euclid(360.),
         };
         let centre = self.world(g, label.centre);
         let (w, h) = a.size();
@@ -920,7 +939,7 @@ impl Layout {
                             }
                         })
                         .collect(),
-                    1.,
+                    self.line_width_pt,
                 )
             })
             .collect();
@@ -928,7 +947,7 @@ impl Layout {
             line_part(
                 g,
                 p.iter().map(|p| p.map(|p| self.world(g, p))).collect(),
-                1.,
+                self.line_width_pt,
             )
         }));
         parts.extend(self.states.iter().map(|s| {
@@ -938,7 +957,7 @@ impl Layout {
                     PathCommand::Move(self.world(g, s.offset(-self.bar / 2., 0.))),
                     PathCommand::Line(self.world(g, s.offset(self.bar / 2., 0.))),
                 ],
-                2.,
+                self.bar_width_pt,
             );
             part.style.flat_caps = true;
             part
@@ -993,15 +1012,22 @@ fn blend_irc_ends(
         }
     }
 }
-fn profile_stroke_width_pt(width_pt: f32, weight: f32) -> f32 {
-    (width_pt * weight).min(12.)
+/// Rows of the inverse frame map for world-space offsets.
+fn frame_projection(g: &Graphic) -> Option<[Point; 2]> {
+    let det = g.frame_determinant();
+    (det.is_finite() && det != 0.).then(|| {
+        [
+            Point::new(g.axis_y.y / det, -g.axis_y.x / det),
+            Point::new(-g.axis_x.y / det, g.axis_x.x / det),
+        ]
+    })
 }
-fn line_part(g: &Graphic, commands: Vec<PathCommand>, weight: f32) -> Part {
+fn line_part(g: &Graphic, commands: Vec<PathCommand>, width_pt: f32) -> Part {
     Part {
         commands,
         style: GraphicStyle {
             stroke: g.style.stroke,
-            width_pt: profile_stroke_width_pt(g.style.width_pt, weight),
+            width_pt,
             pattern: g.style.pattern,
             flat_caps: g.style.flat_caps,
             ..GraphicStyle::default()
@@ -1124,7 +1150,10 @@ fn geometry_picture(
             let (a, b) = (*projected.get(a)?, *projected.get(b)?);
             let style = GraphicStyle {
                 stroke: Color::Palette(hue, Row::Strong),
-                width_pt: source.drawing_style.line_width_pt * 0.85,
+                // The model fits inside 88% of the slot. The cross extends
+                // another 3.5% on each side, leaving room for its stroke.
+                width_pt: (source.drawing_style.line_width_pt * 0.85)
+                    .min(side * 0.05 * style::DEFAULT.points_per_world()),
                 pattern: LinePattern::Dashed,
                 ..GraphicStyle::default()
             };
@@ -1153,7 +1182,22 @@ fn geometry_picture(
         }
     }
     doc.models.push(model);
-    out.extend(models3d::primitives(&doc));
+    out.extend(models3d::primitives(&doc).into_iter().map(|mut primitive| {
+        // The shared model renderer uses a minimum outline width. Keep that
+        // outline within the slot even when the profile is compressed.
+        if let Primitive::Sphere {
+            outline: Some(outline),
+            ..
+        }
+        | Primitive::ShadedQuad {
+            outline: Some(outline),
+            ..
+        } = &mut primitive
+        {
+            outline.width = outline.width.min(side * 0.12);
+        }
+        primitive
+    }));
     Some(out)
 }
 
