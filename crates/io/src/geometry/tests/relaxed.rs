@@ -54,7 +54,7 @@ fn strict_is_the_default_and_legacy_chemistry_rejections_keep_their_messages() {
         ),
         (
             pair("N", "Fe", 1),
-            "3D geometry does not support elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I",
+            "Can't build a starting 3D structure for Fe2: MMFF has no parameters for it",
         ),
     ] {
         assert_eq!(
@@ -185,7 +185,49 @@ fn relaxed_radicals_and_hydrogen_policy_are_taken_exactly_as_drawn() {
     assert_eq!(request.atoms[0].explicit_h, 3);
     assert!(request.atoms[0].no_implicit);
     assert_eq!(prepared.skipped_checks(), ["Radicals taken as drawn"]);
+    assert!(prepared.radicals().is_empty());
     assert!(prepared.mmff_available());
+}
+
+#[test]
+fn relaxed_uff_shape_refusal_identifies_cef3_before_starting_a_worker() {
+    let mut document = Document::default();
+    document.add_atom("C", Point::new(300., 0.));
+    let cerium = document.add_atom("Ce", Point::default());
+    for point in [
+        Point::new(42., 0.),
+        Point::new(-21., 36.),
+        Point::new(-21., -36.),
+    ] {
+        let fluorine = document.add_atom("F", point);
+        document.add_bond(cerium, fluorine, 1, "plain");
+    }
+    let before = document.clone();
+    // Preparation succeeds, so existing coordinates stay usable; only a new
+    // geometry is refused.
+    let prepared = Prepared::relaxed(&document, &[cerium]).unwrap();
+    let error = prepared.check_generation().unwrap_err();
+    assert_eq!(
+        prepared
+            .generation_request(ForceField::Uff, DEFAULT_SEED)
+            .unwrap_err()
+            .to_string(),
+        error.to_string()
+    );
+    assert_eq!(
+        error.to_string(),
+        "Can't build a starting 3D structure for Ce1: the force field gives it the wrong shape with 3 bonds"
+    );
+    assert!(matches!(
+        error,
+        Error::Atom {
+            atom,
+            ref symbol,
+            ref label,
+            problem: AtomProblem::WrongShape { bonds: 3 },
+        } if atom == cerium && symbol == "Ce" && label == "Ce1"
+    ));
+    assert_eq!(document, before);
 }
 
 #[test]
@@ -468,7 +510,8 @@ fn relaxed_retains_bounds_structural_guards_and_machine_capacity() {
             &carbon_chain(limits.capacity().atoms + 1),
             &[],
             limits,
-            Mode::Relaxed
+            Mode::Relaxed,
+            false
         ),
         Err(Error::Capacity {
             kind: "original atoms",
@@ -572,11 +615,11 @@ fn reported_crown_and_cisplatin_drawings_keep_legacy_errors_and_exact_relaxed_no
             crown.add_bond(i + 1, potassium, 1, "plain");
         }
     }
-    // Current strict preparation cleans the O--K contacts to dative before
-    // the geometry element gate rejects K. Preserve that existing error.
+    // Strict preparation cleans the O--K contacts to dative before the
+    // geometry element gate identifies the unsupported K atom.
     assert_eq!(
         Prepared::new(&crown, &[]).unwrap_err().to_string(),
-        "3D geometry does not support elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I"
+        "Can't build a starting 3D structure for K19: MMFF has no parameters for it"
     );
     let prepared = Prepared::relaxed(&crown, &[]).unwrap();
     assert!(!prepared.mmff_available());

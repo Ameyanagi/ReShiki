@@ -27,6 +27,15 @@ pub enum Error {
     Selection(&'static str),
     #[error("3D geometry does not support {0}")]
     Unsupported(&'static str),
+    /// A known admission failure tied to a stable drawing atom. The label is
+    /// its element symbol followed by its one-based selected-molecule index.
+    #[error("Can't build a starting 3D structure for {label}: {problem}")]
+    Atom {
+        atom: u64,
+        symbol: String,
+        label: String,
+        problem: AtomProblem,
+    },
     #[error(
         "3D geometry supports at most {limit} {kind} for this machine budget (requested {count}); larger structures remain editable"
     )]
@@ -54,6 +63,33 @@ pub enum Error {
         code: Option<i32>,
         diagnostic: String,
     },
+}
+
+/// Atom-specific reasons a starting geometry cannot be prepared.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum AtomProblem {
+    #[error("MMFF has no parameters for it")]
+    NoMmffParameters,
+    #[error("the force field has no parameters for it")]
+    NoParameters,
+    #[error(
+        "the force field gives it the wrong shape with {bonds} bond{}",
+        if *bonds == 1 { "" } else { "s" }
+    )]
+    WrongShape { bonds: usize },
+    #[error("it is a wildcard or query atom")]
+    Query,
+    #[error("its charge, isotope or hydrogen count is out of range")]
+    OutOfRange,
+}
+
+fn atom_error(atom: u64, symbol: &str, index: usize, problem: AtomProblem) -> Error {
+    Error::Atom {
+        atom,
+        symbol: symbol.into(),
+        label: format!("{symbol}{}", index + 1),
+        problem,
+    }
 }
 
 /// Chemistry admission policy. Strict retains the ordinary molecular checks;
@@ -156,6 +192,15 @@ pub struct Optimized {
     pub approximations: Vec<String>,
 }
 
+/// A drawing radical saturated only in the detached force-field input.
+#[derive(Clone, Debug)]
+pub struct Radical {
+    pub atom: u64,
+    pub label: String,
+    pub electrons: u8,
+    added: u8,
+}
+
 #[derive(Clone, Debug)]
 pub struct Prepared {
     source: Document,
@@ -167,6 +212,7 @@ pub struct Prepared {
     mode: Mode,
     skipped_checks: Vec<String>,
     has_metal: bool,
+    radicals: Vec<Radical>,
 }
 impl Prepared {
     /// Select one full molecular component. An empty selection is accepted only
@@ -178,7 +224,7 @@ impl Prepared {
     /// Prepare the same complete component while allowing approximate chemistry.
     /// Structural, identity and machine-budget checks remain mandatory.
     pub fn relaxed(source: &Document, selection: &[u64]) -> Result<Self, Error> {
-        Self::with_mode(source, selection, Limits::default(), Mode::Relaxed)
+        Self::with_mode(source, selection, Limits::default(), Mode::Relaxed, false)
     }
 
     /// Explicit budgets support reproducible checks and advanced callers.
@@ -187,7 +233,16 @@ impl Prepared {
         selection: &[u64],
         limits: Limits,
     ) -> Result<Self, Error> {
-        Self::with_mode(source, selection, limits, Mode::Strict)
+        Self::with_mode(source, selection, limits, Mode::Strict, false)
+    }
+
+    /// Prepare a new starting geometry. Each drawn radical centre gets the
+    /// hydrogens of its closed-shell parent (propane for a propyl radical),
+    /// so ordinary chemistry and MMFF accept it; [`Self::model`] leaves those
+    /// hydrogens out again. Existing coordinates are relaxed or evaluated
+    /// with [`Self::new`] or [`Self::relaxed`], which keep radicals as drawn.
+    pub fn starting(source: &Document, selection: &[u64], mode: Mode) -> Result<Self, Error> {
+        Self::with_mode(source, selection, Limits::default(), mode, true)
     }
 
     fn with_mode(
@@ -195,6 +250,7 @@ impl Prepared {
         selection: &[u64],
         limits: Limits,
         mode: Mode,
+        closed_shell: bool,
     ) -> Result<Self, Error> {
         limits.validate()?;
         let capacity = limits.capacity();
@@ -245,7 +301,7 @@ impl Prepared {
         part.models.clear();
         part.abbreviations
             .retain(|a| a.members.iter().all(|id| selected.contains(id)));
-        for atom in &part.atoms {
+        for (index, atom) in part.atoms.iter().enumerate() {
             if atom.stereo_group.is_some() {
                 return Err(Error::Unsupported("enhanced stereo groups"));
             }
@@ -253,9 +309,14 @@ impl Prepared {
                 return Err(Error::Unsupported("multi-centre or variable attachments"));
             }
             if atom.element == "*" || atom.display.variable.is_some() {
-                return Err(Error::Unsupported("wildcard or query atoms"));
+                return Err(atom_error(
+                    atom.id,
+                    &atom.element,
+                    index,
+                    AtomProblem::Query,
+                ));
             }
-            if mode == Mode::Strict && atom.radical_electrons != 0 {
+            if mode == Mode::Strict && !closed_shell && atom.radical_electrons != 0 {
                 return Err(Error::Unsupported("radicals"));
             }
         }
@@ -277,6 +338,34 @@ impl Prepared {
                 true,
             ),
         };
+        // Cap each drawn radical centre: its own hydrogen count plus one per
+        // radical electron, fixed, on the detached graph only.
+        let mut radicals = Vec::new();
+        if closed_shell && !fallback {
+            let state = &mut molecule.state;
+            for (index, atom) in state.graph.atoms.iter_mut().enumerate() {
+                let drawn = &part.atoms[index];
+                if drawn.radical_electrons == 0 || atom.radical_electrons == 0 {
+                    continue;
+                }
+                let hydrogens = u32::from(atom.explicit_hydrogens)
+                    + state
+                        .valences
+                        .get(index)
+                        .map_or(0, |v| v.implicit_hydrogens);
+                let added = atom.radical_electrons;
+                atom.explicit_hydrogens =
+                    u8::try_from(hydrogens + u32::from(added)).unwrap_or(u8::MAX);
+                atom.no_implicit = true;
+                atom.radical_electrons = 0;
+                radicals.push(Radical {
+                    atom: drawn.id,
+                    label: format!("{}{}", drawn.element, index + 1),
+                    electrons: added,
+                    added,
+                });
+            }
+        }
         if molecule.state.graph.bonds.len() > capacity.bonds {
             return Err(Error::Capacity {
                 kind: "bonds",
@@ -284,20 +373,26 @@ impl Prepared {
                 limit: capacity.bonds,
             });
         }
-        for atom in &molecule.state.graph.atoms {
+        for (index, atom) in molecule.state.graph.atoms.iter().enumerate() {
+            let problem = |problem| {
+                atom_error(
+                    molecule.ids[index],
+                    &part.atoms[index].element,
+                    index,
+                    problem,
+                )
+            };
             if mode == Mode::Strict
                 && ![1, 5, 6, 7, 8, 9, 14, 15, 16, 17, 33, 34, 35, 53].contains(&atom.atomic_number)
             {
-                return Err(Error::Unsupported(
-                    "elements outside H/B/C/N/O/F/Si/P/S/Cl/As/Se/Br/I",
-                ));
+                return Err(problem(AtomProblem::NoMmffParameters));
             }
             if mode == Mode::Strict && atom.radical_electrons != 0 {
                 return Err(Error::Unsupported("radicals or incomplete valence"));
             }
             if !(-8..=8).contains(&atom.charge) || atom.isotope > 500 || atom.explicit_hydrogens > 8
             {
-                return Err(Error::Unsupported("this charge, isotope or hydrogen count"));
+                return Err(problem(AtomProblem::OutOfRange));
             }
         }
         let enhanced = !molecule.state.metadata.groups.is_empty();
@@ -336,7 +431,14 @@ impl Prepared {
             materialize_stereo(&molecule, &mut materialized, mode)?;
         }
         let skipped_checks = if mode == Mode::Relaxed {
-            relaxed_skipped_checks(&part, &molecule, fallback, non_tetrahedral, enhanced)
+            relaxed_skipped_checks(
+                &part,
+                &molecule,
+                fallback,
+                radicals.is_empty(),
+                non_tetrahedral,
+                enhanced,
+            )
         } else {
             Vec::new()
         };
@@ -372,17 +474,15 @@ impl Prepared {
             mode,
             skipped_checks,
             has_metal,
+            radicals,
         };
-        prepared
-            .native_request(
-                ForceField::default(),
-                reshiki_geometry::Operation::Generate,
-                None,
-                &[],
-                500,
-            )?
-            .validate()
-            .map_err(Error::Invalid)?;
+        prepared.native_request(
+            ForceField::default(),
+            reshiki_geometry::Operation::Generate,
+            None,
+            &[],
+            500,
+        )?;
         Ok(prepared)
     }
     pub fn mode(&self) -> Mode {
@@ -398,6 +498,11 @@ impl Prepared {
     }
     pub fn ids(&self) -> &[u64] {
         &self.ids
+    }
+    /// Original drawing radicals whose geometry input was prepared without
+    /// their drawn radical electrons. Drawing chemistry is retained exactly.
+    pub fn radicals(&self) -> &[Radical] {
+        &self.radicals
     }
     /// The same molecule without the drawing's retained depth, so ordinary
     /// generation embeds fresh conformers. Relaxed metal coordination can still
@@ -425,20 +530,33 @@ impl Prepared {
                 xyz: xyz(p),
             })
             .collect();
-        let hydrogens = conformer
+        let mut remaining: HashMap<_, _> = self
+            .radicals
+            .iter()
+            .map(|radical| (radical.atom, radical.added))
+            .collect();
+        // Hydrogens arrive in worker order. Visiting them from the end drops
+        // only the last saturation caps belonging to each radical parent.
+        let mut hydrogens: Vec<_> = conformer
             .hydrogen_parents
             .iter()
             .zip(conformer.positions.iter().skip(self.ids.len()))
-            .map(|(parent, p)| {
-                Ok(crate::models3d::Hydrogen {
-                    parent: *self
-                        .ids
-                        .get(*parent)
-                        .ok_or(Error::Coordinates("Missing hydrogen parent"))?,
+            .rev()
+            .filter_map(|(&parent, p)| {
+                let parent = self.ids[parent];
+                if let Some(added) = remaining.get_mut(&parent)
+                    && *added > 0
+                {
+                    *added -= 1;
+                    return None;
+                }
+                Some(crate::models3d::Hydrogen {
+                    parent,
                     xyz: xyz(p),
                 })
             })
-            .collect::<Result<_, Error>>()?;
+            .collect();
+        hydrogens.reverse();
         Ok(crate::models3d::Model3d::new(
             &self.source,
             atoms,
@@ -640,11 +758,43 @@ impl Prepared {
         Ok(request)
     }
 
+    /// Refuse, before any worker starts, drawings whose shape the UFF
+    /// fallback gets wrong (3- or 4-coordinate f block, bonded noble gas),
+    /// naming the atom. Only new geometry: existing coordinates stay usable.
+    pub fn check_generation(&self) -> Result<(), Error> {
+        let request = self.native_request(
+            ForceField::default(),
+            reshiki_geometry::Operation::Generate,
+            None,
+            &[],
+            500,
+        )?;
+        // UFF, the fallback for everything MMFF cannot type, ends at Lr.
+        let refusal = request
+            .atoms
+            .iter()
+            .position(|atom| atom.atomic_number > 103)
+            .map(|index| (index, AtomProblem::NoParameters))
+            .or_else(|| {
+                reshiki_geometry::uff_shape_refusal(&request.atoms, &request.bonds)
+                    .map(|(index, bonds)| (index, AtomProblem::WrongShape { bonds }))
+            });
+        match refusal {
+            Some((index, problem)) => {
+                let atom = self.ids[index];
+                let symbol = self.source.atom(atom).map_or("?", |a| a.element.as_str());
+                Err(atom_error(atom, symbol, index, problem))
+            }
+            None => Ok(()),
+        }
+    }
+
     pub(crate) fn generation_request(
         &self,
         field: ForceField,
         seed: i32,
     ) -> Result<reshiki_geometry::Request, Error> {
+        self.check_generation()?;
         if !(0..=GENERATION_SEED_MAX).contains(&seed) {
             return Err(Error::Invalid(format!(
                 "Generation seed must be between 0 and {GENERATION_SEED_MAX}"
@@ -705,6 +855,7 @@ fn relaxed_skipped_checks(
     document: &Document,
     molecule: &Molecule,
     fallback: bool,
+    uncapped_radicals: bool,
     non_tetrahedral: bool,
     enhanced: bool,
 ) -> Vec<String> {
@@ -723,10 +874,11 @@ fn relaxed_skipped_checks(
     {
         checks.push("Coordination bonds do not count toward ligand valence".into());
     }
-    if document
-        .atoms
-        .iter()
-        .any(|atom| atom.radical_electrons != 0)
+    if uncapped_radicals
+        && document
+            .atoms
+            .iter()
+            .any(|atom| atom.radical_electrons != 0)
     {
         checks.push("Radicals taken as drawn".into());
     }

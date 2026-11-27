@@ -5,14 +5,15 @@
 //! Each switch, including the one that adds the model, is one Undo step, and
 //! so is each turn or resize of a model on the canvas.
 use super::icons::{Glyph, Icon};
-use super::workspace::{accessible_command, control, muted_text};
+use super::workspace::{accessible_command, control, error_text, muted_text};
 use super::{App, Message, document_tab::TabId, inspector::Section};
 use crate::canvas::Edit;
 use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::geometry::{
-    Client, DEFAULT_SEED, ForceField, GENERATION_SEED_MAX, Optimized, Prepared,
+    self, AtomProblem, Client, DEFAULT_SEED, ForceField, GENERATION_SEED_MAX, Optimized, Prepared,
+    Radical,
 };
 use reshiki::models3d::{
     self, Background, Display, Hydrogens, Labels, Layout, Look, Probability, Style,
@@ -47,6 +48,8 @@ pub(crate) enum Action {
     /// The 2D layout that the Structure section's 2D button uses.
     Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
+    /// The closed-shell parent's name for the radical model `serial` built.
+    ParentNamed(u64, String),
     /// Change the selected model; each change is one Undo step, and a slider
     /// drag is one step until [`Action::SlideEnd`].
     Set(Setting),
@@ -93,9 +96,31 @@ pub(crate) struct Job {
     force_field: ForceField,
     prepared: Arc<Prepared>,
     /// Why strict chemistry checks refused a model built in relaxed mode.
-    strict_error: Option<String>,
+    strict_error: Option<geometry::Error>,
     started: iced::time::Instant,
     _handle: iced::task::Handle,
+}
+
+pub(super) struct ModelFailure {
+    epoch: u64,
+    revision: u64,
+    molecule: Vec<u64>,
+    message: String,
+    atom: Option<u64>,
+}
+
+struct Failure {
+    message: String,
+    atom: Option<u64>,
+}
+
+impl Failure {
+    fn other(error: impl std::fmt::Display) -> Self {
+        Self {
+            message: format!("Can't build a starting 3D structure: {error}"),
+            atom: None,
+        }
+    }
 }
 
 impl App {
@@ -141,6 +166,13 @@ impl App {
                 }
                 Task::none()
             }
+            Action::ParentNamed(serial, name) => {
+                // Only while the status still describes that model.
+                if serial == self.tab.model_serial && self.tab.model_job.is_none() {
+                    self.status = self.status.replacen(UNNAMED_PARENT, &name, 1);
+                }
+                Task::none()
+            }
             Action::Generated(key, result) => {
                 let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
                     return Task::none();
@@ -157,14 +189,18 @@ impl App {
                     self.error = false;
                     return Task::none();
                 }
-                let model = result.and_then(|optimized| {
+                let model = result.map_err(Failure::other).and_then(|optimized| {
                     job.prepared
                         .model(&optimized)
                         .map(|model| (model, optimized.force_field))
-                        .map_err(|error| error.to_string())
+                        .map_err(|error| build_failure(&error))
                 });
                 match model {
                     Ok((mut model, field)) => {
+                        let ids = job.prepared.ids();
+                        self.tab
+                            .model_failure
+                            .take_if(|failure| failure.molecule.iter().any(|id| ids.contains(id)));
                         model.seed = job.seed;
                         if let Some(index) = job.target {
                             self.replace_model(index, model);
@@ -172,9 +208,15 @@ impl App {
                             self.add_model(model, job.display);
                         }
                         let caution = match &job.strict_error {
-                            Some(reason) => Some(format!(
-                                "Approximate {field} geometry with relaxed checks (strict: {reason})"
+                            Some(geometry::Error::Atom {
+                                symbol,
+                                problem: AtomProblem::NoMmffParameters,
+                                ..
+                            }) => Some(format!(
+                                "Approximate {field} model · MMFF has no parameters for {symbol} ({})",
+                                element_name(symbol)
                             )),
+                            Some(_) => Some(format!("Approximate {field} model · relaxed checks")),
                             None if field != job.force_field => Some(format!(
                                 "{field} used: no {} parameters for this molecule",
                                 job.force_field
@@ -184,10 +226,18 @@ impl App {
                         if let Some(caution) = caution.filter(|_| !self.error) {
                             self.status = format!("{} · {caution}", self.status);
                         }
+                        if !self.error
+                            && let Some(who) = radical_subject(job.prepared.radicals())
+                        {
+                            self.status = format!(
+                                "{} · {who}: start built from {UNNAMED_PARENT}, added H removed",
+                                self.status
+                            );
+                            return self.name_parent(&job.prepared);
+                        }
                     }
-                    Err(error) => {
-                        self.status = format!("3D model not generated: {error}");
-                        self.error = true;
+                    Err(failure) => {
+                        self.record_model_failure(job.prepared.ids().to_vec(), failure);
                     }
                 }
                 Task::none()
@@ -202,6 +252,69 @@ impl App {
             revision: self.tab.revision,
             serial: self.tab.model_serial,
         }
+    }
+
+    fn record_model_failure(&mut self, molecule: Vec<u64>, failure: Failure) {
+        let failure = ModelFailure {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            molecule,
+            message: failure.message,
+            atom: failure.atom,
+        };
+        // The selection stays, so the Structure section and its next step
+        // stay in view; the atom flashes, then keeps a ring while current.
+        if let Some(atom) = failure.atom {
+            if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &[atom]) {
+                self.reveal_if_clipped(lo, hi);
+            }
+            self.tab.pulse = Some((vec![atom], iced::time::Instant::now()));
+        }
+        self.status = failure.message.clone();
+        self.error = true;
+        self.tab.model_failure = Some(failure);
+    }
+
+    /// The current failure, if the drawing has not changed since.
+    fn current_failure(&self) -> Option<&ModelFailure> {
+        self.tab.model_failure.as_ref().filter(|failure| {
+            failure.epoch == self.tab.file_epoch && failure.revision == self.tab.revision
+        })
+    }
+
+    /// The atom a current 3D build failure names, ringed on the canvas.
+    pub(super) fn model_failure_atom(&self) -> Option<&[u64]> {
+        self.current_failure()?
+            .atom
+            .as_ref()
+            .map(std::slice::from_ref)
+    }
+
+    /// Name the closed-shell parent of a radical model off the UI thread;
+    /// the model itself is already shown.
+    fn name_parent(&self, prepared: &Prepared) -> Task<Message> {
+        let mut parent = self.tab.doc.clone();
+        for radical in prepared.radicals() {
+            if let Some(atom) = parent.atom_mut(radical.atom) {
+                atom.radical_electrons = 0;
+                atom.singlet = false;
+                // A fixed count, as in imported [CH2]CC, needs the caps too.
+                if atom.no_implicit {
+                    atom.explicit_h = atom.explicit_h.saturating_add(u32::from(radical.electrons));
+                }
+            }
+        }
+        let Ok(identity) = reshiki::naming::selected_identity(&parent, prepared.ids()) else {
+            return Task::none();
+        };
+        let serial = self.tab.model_serial;
+        Task::future(async move {
+            reshiki::naming::generate_name(&identity, reshiki::naming::Cancel::default())
+                .await
+                .ok()
+                .and_then(|record| record.systematic_name)
+        })
+        .and_then(move |name| Task::done(Message::Models3d(Action::ParentNamed(serial, name))))
     }
 
     /// The display a still-current generation for these atoms will show.
@@ -427,16 +540,21 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        let (prepared, strict_error) = match prepare(&self.tab.doc, &atoms) {
+        self.tab.model_failure = None;
+        let prepared = prepare(&self.tab.doc, &atoms).and_then(|(prepared, strict_error)| {
+            prepared.check_generation()?;
+            Ok((prepared, strict_error))
+        });
+        let (prepared, strict_error) = match prepared {
             Ok((prepared, strict_error)) => {
                 (Arc::new(prepared.without_retained_depth()), strict_error)
             }
             Err(error) => {
-                self.status = format!("3D model not generated: {error}");
-                self.error = true;
+                self.record_model_failure(atoms, build_failure(&error));
                 return Task::none();
             }
         };
+        let who = radical_subject(prepared.radicals());
         self.tab.model_serial = self.tab.model_serial.wrapping_add(1);
         let key = self.model_key();
         let request = prepared.clone();
@@ -451,6 +569,13 @@ impl App {
             move |result| Message::Models3d(Action::Generated(key, result)),
         )
         .abortable();
+        self.status = if let Some(who) = who {
+            format!("{who} · Building the 3D start from its closed-shell parent…")
+        } else if strict_error.is_some() {
+            "Generating an approximate 3D model · relaxed checks".into()
+        } else {
+            format!("Generating 3D model · {}", force_field.name())
+        };
         self.tab.model_job = Some(Job {
             key,
             current: key,
@@ -463,16 +588,6 @@ impl App {
             started: iced::time::Instant::now(),
             _handle: handle.abort_on_drop(),
         });
-        self.status = if self
-            .tab
-            .model_job
-            .as_ref()
-            .is_some_and(|job| job.strict_error.is_some())
-        {
-            "Generating an approximate 3D model · relaxed checks".into()
-        } else {
-            format!("Generating 3D model · {}", force_field.name())
-        };
         self.error = false;
         task
     }
@@ -935,24 +1050,40 @@ impl App {
                     .into()
             }),)
             .spacing(4),
-            text(
-                if let Some(job) = self.tab.model_job.as_ref().filter(|_| pending.is_some()) {
-                    if job.strict_error.is_some() {
-                        "Generating an approximate conformer · relaxed checks".into()
-                    } else {
-                        format!(
-                            "Generating the conformer · ETKDG, then {}",
-                            job.force_field.name()
-                        )
-                    }
-                } else {
-                    subtitle(pending, model)
-                }
-            )
+            text(subtitle(
+                self.tab.model_job.as_ref().filter(|_| pending.is_some()),
+                model
+            ))
             .size(11)
             .style(muted_text),
         ]
         .spacing(6);
+        if let Some(failure) = &self.tab.model_failure
+            && failure.epoch == self.tab.file_epoch
+            && failure.revision == self.tab.revision
+            && atoms
+                .first()
+                .is_some_and(|id| failure.molecule.contains(id))
+        {
+            body = body
+                .push(
+                    text(failure.message.as_str())
+                        .size(11)
+                        .width(Length::Fill)
+                        .style(error_text),
+                )
+                .push(
+                    row![
+                        accessible_command(
+                            "structure-open-3d-file",
+                            "Open a 3D file",
+                            "Open a 3D file…",
+                        )
+                        .on_press(Message::Open)
+                    ]
+                    .spacing(4),
+                );
+        }
         if self.stale_model().is_some() {
             body = body.push(
                 row![
@@ -1546,9 +1677,16 @@ fn align_conformer(model: &mut models3d::Model3d, old: &models3d::Model3d, live:
 /// The Structure section's note: the generation in flight, the 2D drawing
 /// while a model is kept but not shown, or the model's style (ball & stick
 /// before there is a model).
-fn subtitle(pending: Option<Display>, model: Option<&models3d::Model3d>) -> String {
-    if pending.is_some() {
-        return "Generating the conformer · ETKDG, then MMFF94s".into();
+fn subtitle(job: Option<&Job>, model: Option<&models3d::Model3d>) -> String {
+    if let Some(job) = job {
+        let field = job.force_field;
+        return if !job.prepared.radicals().is_empty() {
+            format!("Generating the conformer · closed-shell parent, then {field}")
+        } else if job.strict_error.is_some() {
+            "Generating an approximate conformer · relaxed checks".into()
+        } else {
+            format!("Generating the conformer · ETKDG, then {field}")
+        };
     }
     if model.is_some_and(|m| m.display == Display::TwoD) {
         return "2D drawing · Chemistry and atom IDs stay the same".into();
@@ -1621,19 +1759,71 @@ impl App {
     }
 }
 
-/// Strict preparation, or relaxed preparation with the strict refusal when
-/// only chemistry checks refused the molecule (radicals; elements such as U
-/// in UF6): the 3D view shows an approximate model with a note instead. The
-/// worker still refuses shapes UFF gets wrong, such as CeF3 or XeF2.
+/// Keep the reason for showing an approximate model when relaxed preparation succeeds.
 fn prepare(
     doc: &Document,
     atoms: &[u64],
-) -> Result<(Prepared, Option<String>), reshiki::geometry::Error> {
-    match Prepared::new(doc, atoms) {
+) -> Result<(Prepared, Option<geometry::Error>), geometry::Error> {
+    match Prepared::starting(doc, atoms, geometry::Mode::Strict) {
         Ok(prepared) => Ok((prepared, None)),
-        Err(strict) => Prepared::relaxed(doc, atoms)
-            .map(|prepared| (prepared, Some(strict.to_string())))
-            .map_err(|_| strict),
+        Err(strict) => Prepared::starting(doc, atoms, geometry::Mode::Relaxed)
+            .map(|prepared| (prepared, Some(strict))),
+    }
+}
+
+fn element_name(symbol: &str) -> String {
+    super::command_palette::catalog::element_name(symbol)
+        .unwrap_or_else(|| if symbol == "*" { "wildcard" } else { symbol }.into())
+        .to_lowercase()
+}
+
+fn build_failure(error: &geometry::Error) -> Failure {
+    let geometry::Error::Atom {
+        atom,
+        symbol,
+        problem,
+        ..
+    } = error
+    else {
+        return Failure::other(error);
+    };
+    let name = element_name(symbol);
+    let sentence = match problem {
+        AtomProblem::NoMmffParameters | AtomProblem::NoParameters => {
+            "The force field has no parameters for it".into()
+        }
+        AtomProblem::WrongShape { bonds } => {
+            let noun = if *bonds == 1 { "bond" } else { "bonds" };
+            format!("The force field gives {name} with {bonds} {noun} the wrong shape")
+        }
+        AtomProblem::Query => "It is a query atom; give it an element".into(),
+        AtomProblem::OutOfRange => "Its charge, isotope or hydrogen count is out of range".into(),
+    };
+    Failure {
+        message: format!("Can't build a starting 3D structure for {symbol} ({name}). {sentence}."),
+        atom: Some(*atom),
+    }
+}
+
+/// Replaced by the parent's IUPAC name once naming answers.
+const UNNAMED_PARENT: &str = "its closed-shell parent";
+
+fn radical_subject(radicals: &[Radical]) -> Option<String> {
+    match radicals {
+        [] => None,
+        [radical] if radical.electrons == 1 => Some(format!("{} is a radical", radical.label)),
+        // Two electrons on one atom may be a singlet or a triplet.
+        [radical] => Some(format!(
+            "{} has {} nonbonding electrons",
+            radical.label, radical.electrons
+        )),
+        _ => {
+            let labels: Vec<_> = radicals
+                .iter()
+                .map(|radical| radical.label.as_str())
+                .collect();
+            Some(format!("{} are radicals", labels.join(", ")))
+        }
     }
 }
 

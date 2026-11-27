@@ -29,6 +29,17 @@ first appears (2D → 3D or 2D → Both), a 0.75 s morph moves the atoms from th
 drawing into 3D while the hydrogens grow out of their atoms. It only redraws
 the canvas and never delays input; ReShiki has no reduced-motion setting yet.
 
+A radical is built from its closed-shell parent: each radical centre gets one
+hydrogen per unpaired electron for the conformer search (a propyl radical
+starts as propane), and the model leaves those hydrogens out again. The status
+bar says so and names the parent, for example "C1 is a radical: start built
+from propane, added H removed". The drawing keeps its radicals. When a model
+cannot be built, the message names the atom, for example "Can't build a
+starting 3D structure for Ce (cerium). The force field gives cerium with 3
+bonds the wrong shape.", that atom flashes and keeps a ring until the drawing
+changes, and **Properties → Structure** repeats the message with **Open a 3D
+file…** to use geometry from a file instead.
+
 The model links to the molecule by atom ID. It never changes chemistry, atom IDs
 or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it
@@ -216,7 +227,7 @@ controls if the panel is hidden or showing another tab.
    relaxing or evaluating never changes the chosen field. ReShiki refuses to
    build shapes UFF gets wrong: a lanthanide or actinide drawn with three or
    four bonds (CeF₃, ThCl₄) and any noble-gas compound (XeF₂), with a message
-   that says so.
+   that names the atom.
 4. Use **Start relaxation** to enable live local relaxation. Drag an unpinned atom to move
    it while the rest of the molecule relaxes around the target. Dragging retains
    that atom's current displayed depth. **Stop relaxation** stops calculation and keeps the

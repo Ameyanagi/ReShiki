@@ -396,7 +396,7 @@ fn ambiguous_disconnected_query_and_coordination_fail_without_mutation() {
     source.atom_mut(other).unwrap().element = "*".into();
     assert!(matches!(
         Prepared::new(&source, &[other]),
-        Err(Error::Unsupported(_))
+        Err(Error::Atom { atom, problem: AtomProblem::Query, .. }) if atom == other
     ));
     source = before;
     source.add_bond(89, other, 5, "plain");
@@ -406,6 +406,174 @@ fn ambiguous_disconnected_query_and_coordination_fail_without_mutation() {
         Err(Error::Unsupported(_))
     ));
     assert_eq!(source, before);
+}
+
+#[test]
+fn atom_errors_identify_the_selected_drawing_atom_and_molecule_position() {
+    let mut source = ethanol();
+    source.atom_mut(89).unwrap().element = "Fe".into();
+    source.add_atom("*", Point::new(400., 400.));
+    let before = source.clone();
+    let error = Prepared::new(&source, &[3]).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Can't build a starting 3D structure for Fe3: MMFF has no parameters for it"
+    );
+    assert!(matches!(
+        error,
+        Error::Atom {
+            atom: 89,
+            ref symbol,
+            ref label,
+            problem: AtomProblem::NoMmffParameters,
+        } if symbol == "Fe" && label == "Fe3"
+    ));
+    assert_eq!(source, before);
+}
+
+#[test]
+fn atom_range_and_parameter_errors_are_typed() {
+    // Strict chemistry refuses these first; the relaxed retry names the atom.
+    for change in [
+        |atom: &mut crate::document::Atom| atom.charge = 9,
+        |atom: &mut crate::document::Atom| atom.charge = -9,
+        |atom: &mut crate::document::Atom| atom.isotope = 501,
+        |atom: &mut crate::document::Atom| atom.explicit_h = 9,
+    ] {
+        let mut source = ethanol();
+        change(source.atom_mut(89).unwrap());
+        assert!(matches!(
+            Prepared::relaxed(&source, &[3]),
+            Err(Error::Atom { atom: 89, label, problem: AtomProblem::OutOfRange, .. })
+                if label == "O3"
+        ));
+    }
+    // No force field has Rf; only new geometry is refused, so a file's
+    // coordinates can still be flattened.
+    let mut source = Document::default();
+    let atom = source.add_atom("Rf", Point::default());
+    assert!(matches!(
+        Prepared::relaxed(&source, &[]).unwrap().check_generation(),
+        Err(Error::Atom { atom: id, label, problem: AtomProblem::NoParameters, .. })
+            if id == atom && label == "Rf1"
+    ));
+    assert_eq!(
+        AtomProblem::WrongShape { bonds: 1 }.to_string(),
+        "the force field gives it the wrong shape with 1 bond"
+    );
+    assert_eq!(
+        AtomProblem::WrongShape { bonds: 3 }.to_string(),
+        "the force field gives it the wrong shape with 3 bonds"
+    );
+}
+
+#[test]
+fn radical_saturation_is_detached_and_models_drop_only_the_last_caps_for_each_parent() {
+    let mut source = ethanol();
+    source.atom_mut(41).unwrap().radical_electrons = 2;
+    source.atom_mut(41).unwrap().singlet = true;
+    source.atom_mut(89).unwrap().radical_electrons = 1;
+    let before = source.clone();
+    for mode in [Mode::Strict, Mode::Relaxed] {
+        let prepared = Prepared::starting(&source, &[3], mode).unwrap();
+        assert_eq!(prepared.radicals().len(), 2);
+        assert_eq!(prepared.radicals()[0].atom, 41);
+        assert_eq!(prepared.radicals()[0].label, "C1");
+        assert_eq!(prepared.radicals()[0].electrons, 2);
+        assert_eq!(prepared.radicals()[0].added, 2);
+        assert_eq!(prepared.radicals()[1].atom, 89);
+        assert_eq!(prepared.radicals()[1].label, "O3");
+        assert_eq!(prepared.radicals()[1].electrons, 1);
+        assert_eq!(prepared.radicals()[1].added, 1);
+        assert!(
+            prepared
+                .molecule()
+                .state
+                .graph
+                .atoms
+                .iter()
+                .all(|atom| atom.radical_electrons == 0)
+        );
+        let request = prepared
+            .generation_request(ForceField::Mmff94s, DEFAULT_SEED)
+            .unwrap();
+        assert!(request.atoms.iter().all(|atom| atom.radical == 0));
+        let solved = optimized(&prepared, vec![0, 1, 0, 2, 1, 0, 2]);
+        let model = prepared.model(&solved).unwrap();
+        assert_eq!(
+            model
+                .hydrogens
+                .iter()
+                .map(|hydrogen| hydrogen.parent)
+                .collect::<Vec<_>>(),
+            [0, 1, 2, 1]
+        );
+        assert_eq!(
+            model
+                .hydrogens
+                .iter()
+                .map(|hydrogen| hydrogen.xyz[0])
+                .collect::<Vec<_>>(),
+            [4.5, 6., 9., 10.5]
+        );
+        let frame = prepared.view_frame(&solved.conformer).unwrap();
+        let projected = prepared.document(&solved.conformer, &frame).unwrap();
+        let flattened = prepared.flattened(&model).unwrap();
+        for document in [
+            prepared.source(),
+            &prepared.materialized,
+            &projected,
+            &flattened,
+        ] {
+            assert_eq!(document.atom(41).unwrap().radical_electrons, 2);
+            assert!(document.atom(41).unwrap().singlet);
+            assert_eq!(document.atom(89).unwrap().radical_electrons, 1);
+            assert_eq!(document.atoms.len(), source.atoms.len());
+            assert_eq!(document.bonds, source.bonds);
+        }
+    }
+    assert_eq!(source, before);
+}
+
+#[test]
+fn a_radical_with_a_fixed_hydrogen_count_is_capped_from_that_count() {
+    // An imported [CH2]CC-style centre: its hydrogens are fixed, not implicit.
+    let mut source = Document::default();
+    let id = source.add_atom("C", Point::default());
+    let atom = source.atom_mut(id).unwrap();
+    atom.radical_electrons = 1;
+    atom.explicit_h = 3;
+    atom.no_implicit = true;
+    assert!(matches!(
+        Prepared::new(&source, &[]),
+        Err(Error::Unsupported("radicals"))
+    ));
+    let prepared = Prepared::starting(&source, &[], Mode::Strict).unwrap();
+    assert_eq!(prepared.radicals()[0].added, 1);
+    let request = prepared
+        .generation_request(ForceField::Mmff94s, DEFAULT_SEED)
+        .unwrap();
+    assert_eq!(
+        (request.atoms[0].explicit_h, request.atoms[0].radical),
+        (4, 0)
+    );
+    let model = prepared
+        .model(&optimized(&prepared, vec![0, 0, 0, 0]))
+        .unwrap();
+    assert_eq!(model.hydrogens.len(), 3);
+    assert_eq!(prepared.source(), &source);
+}
+
+#[test]
+fn relaxing_existing_coordinates_keeps_radicals_as_drawn() {
+    let mut source = ethanol();
+    source.atom_mut(89).unwrap().radical_electrons = 1;
+    let prepared = Prepared::relaxed(&source, &[3]).unwrap();
+    assert!(prepared.radicals().is_empty());
+    let request = prepared
+        .generation_request(ForceField::Uff, DEFAULT_SEED)
+        .unwrap();
+    assert_eq!(request.atoms.iter().map(|a| a.radical).sum::<u32>(), 1);
 }
 
 #[test]
