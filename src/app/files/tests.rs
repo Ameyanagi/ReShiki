@@ -1000,8 +1000,8 @@ fn program_inputs_and_charge_notices_open_without_a_chooser() {
     else {
         panic!("a .molden.input file opens as a drawing");
     };
-    // H      3  1    -0.272880     0.951649     0.000000
-    assert_eq!(batch.drawings[0].atoms.len(), 3);
+    assert_eq!(batch.drawings[0].atoms.len(), 1);
+    assert_eq!(batch.drawings[0].models[0].hydrogens.len(), 2);
     assert!(batch.warnings[0].contains("results in the palette"));
 
     // The anion radical's "-1 2" line: the drawing cannot say which atom carries them.
@@ -1108,7 +1108,11 @@ async fn orca_molden_and_fchk_open_directly_with_their_results() {
         ("molden5.7_dvb_ir.molden", 54, true),
         ("g09_dvb_ir.fchk", 0, true),
     ] {
-        let opened = read(std::path::Path::new(fixtures).join(name)).await;
+        let path = std::path::Path::new(fixtures).join(name);
+        let file = reshiki::qcread::read(name, &std::fs::read(&path).unwrap()).unwrap();
+        let job = &file.jobs[file.default_job().unwrap()];
+        let source = crate::app::frames_import::job_step(job).unwrap();
+        let opened = read(path).await;
         let _ = app.update(Message::FilePrepared(opened));
         assert!(!app.error, "{name}: {}", app.status);
         let doc = &app.tab.doc;
@@ -1146,14 +1150,110 @@ async fn orca_molden_and_fchk_open_directly_with_their_results() {
             "{name}"
         );
         let attachment = doc.science.attachment(stored.attachment).unwrap();
-        assert_eq!(attachment.atoms, doc.models[0].geometry_sources());
+        let frame = doc.science.frame(&stored.result.frame).unwrap();
+        let model = &doc.models[0];
+        assert_eq!(doc.atoms.len(), 10, "{name}");
+        assert!(
+            doc.atoms
+                .iter()
+                .all(|atom| atom.element == "C" && atom.depth == 0.)
+        );
+        assert_eq!(doc.atoms.iter().map(|atom| atom.label_h).sum::<u32>(), 10);
+        assert_eq!(model.hydrogens.len(), 10, "{name}");
+        assert_eq!(
+            model.frame_positions(),
+            source
+                .frame
+                .positions_angstrom
+                .iter()
+                .map(|p| p.map(|x| x as f32))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(frame.as_ref(), &source.frame);
+        assert_eq!(attachment.atoms, model.frame_sources());
+        for (&number, atom) in frame.numbers.iter().zip(&attachment.atoms) {
+            assert_eq!(atom.is_some(), number == 6, "{name}");
+        }
+        if name == "orca60_dvb_ir.out" {
+            assert_eq!(stored.result.energy_hartree, Some(-382.055107107616));
+            assert!(!model.frame_atom_order.is_empty());
+            let reopened: reshiki::document::Document =
+                serde_json::from_str(&serde_json::to_string(doc).unwrap()).unwrap();
+            reopened.validate().unwrap();
+            assert_eq!(
+                reopened.models[0].frame_positions(),
+                model.frame_positions()
+            );
+            let launch = reshiki::science::launch(doc, doc.atoms[0].id, 0, 1).unwrap();
+            assert_eq!(launch.frame.hash(), frame.hash());
+            let parents = reshiki::science::hydrogen_parents(doc, &launch).unwrap();
+            for (i, parent) in parents.iter().enumerate() {
+                assert_eq!(parent.is_some(), frame.numbers[i] == 1);
+                if let Some(parent) = parent {
+                    let hydrogen = &model.hydrogens[model.frame_atom_order[i] - model.atoms.len()];
+                    assert_eq!(hydrogen.parent, *parent);
+                }
+            }
+        }
         assert_eq!(
             attachment.freshness(doc),
             reshiki::science::Freshness::Current
         );
         assert_eq!(app.tab.name(), name);
         assert!(app.xtb_bottom_palette().is_some());
+        if name == "orca60_dvb_ir.out" {
+            let _ = app.update(Message::Xtb(crate::app::xtb::Action::Palette(
+                crate::app::xtb::palette::Action::View(crate::app::xtb::View::Vibrations),
+            )));
+            let _ = app.update(Message::Xtb(crate::app::xtb::Action::Vibrations(
+                crate::app::xtb::VibrationsAction::Play(true),
+            )));
+            assert!(app.tab.xtb.vibrations.playing);
+            assert!(app.xtb_preview().is_some(), "vibration preview for {name}");
+        } else {
+            let _ = app.update(Message::Xtb(crate::app::xtb::Action::Palette(
+                crate::app::xtb::palette::Action::View(crate::app::xtb::View::Orbitals),
+            )));
+            let shown = app.display_document();
+            assert!(
+                reshiki::models3d::surface::draw::figure_ready(shown, &shown.models[0]),
+                "orbital preview for {name}"
+            );
+        }
     }
+}
+
+#[tokio::test]
+async fn opened_calculation_draws_hydroxyl_as_an_atom_label() {
+    use reshiki::scene::{Primitive, primitives};
+    let (mut app, _) = App::new();
+    let molden = b"[Molden Format]\n[Atoms] Angs\n\
+        H 1 1 1.75 0.90 0\nC 2 6 0 0 0\nO 3 8 1.42 0 0\n\
+        H 4 1 -0.36 1.03 0\nH 5 1 -0.36 -0.51 0.89\nH 6 1 -0.36 -0.51 -0.89\n";
+    let opened = prepare_contents("methanol.molden".into(), Ok(molden.to_vec())).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert!(!app.error, "{}", app.status);
+    let doc = &app.tab.doc;
+    assert_eq!(
+        doc.atoms
+            .iter()
+            .map(|a| a.element.as_str())
+            .collect::<Vec<_>>(),
+        ["C", "O"]
+    );
+    assert_eq!(doc.atoms[1].label_h, 1);
+    let labels: Vec<_> = primitives(doc)
+        .into_iter()
+        .filter_map(|p| {
+            if let Primitive::Text { text, .. } = p {
+                Some(text)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(labels, ["O", "H"]);
+    assert_eq!(doc.models[0].hydrogens[0].parent, doc.atoms[1].id);
 }
 
 #[tokio::test]

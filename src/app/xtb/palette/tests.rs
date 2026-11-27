@@ -189,9 +189,17 @@ fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
                 .any(|item| matches!(item, Primitive::Text { text, .. } if text == expected))
         );
     }
+    let placed = app.tab.doc.atoms.clone();
     let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "Undo Place charges");
+    assert!(app.status.chars().count() <= 60);
     assert_eq!(app.tab.doc.atoms, before.atoms);
     assert!(app.xtb_shown().is_some_and(|shown| !shown.stale));
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "Redo Place charges");
+    assert!(app.status.chars().count() <= 60);
+    assert_eq!(app.tab.doc.atoms, placed);
+    let _ = app.update(Message::Undo);
     edit(&mut app, before.atoms[0].id);
     palette(&mut app, Action::PlaceCharges);
     assert!(
@@ -235,6 +243,12 @@ fn placing_charges_preserves_other_labels() {
             "Placed 3 CM5 charges as atom labels · ⌘Z undoes · 1 atom kept its own label"
         );
         assert_eq!(app.tab.doc.atom(carbon).unwrap().display.number, Some(own));
+        let placed = app.tab.doc.atoms.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.status, "Undo Place charges");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.status, "Redo Place charges");
+        assert_eq!(app.tab.doc.atoms, placed);
     }
 }
 
@@ -271,8 +285,31 @@ fn placing_charges_refreshes_previous_charges() {
             })
         );
     }
+    let placed = app.tab.doc.atoms.clone();
     let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "Undo Place charges");
     assert_eq!(app.tab.doc.atoms, before.atoms);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "Redo Place charges");
+    assert_eq!(app.tab.doc.atoms, placed);
+}
+
+#[test]
+fn unrelated_atom_labels_with_xtb_results_keep_generic_history_feedback() {
+    for text in ["custom label", "+0.21"] {
+        let (mut app, carbon) = charged_halocarbon();
+        let before = app.tab.doc.clone();
+        app.tab.doc.atom_mut(carbon).unwrap().display.number = Some(Number {
+            text: text.into(),
+            style: shift_label_style(&before),
+            offset: None,
+        });
+        app.changed(before);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.status, "History restored");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.status, "History restored");
+    }
 }
 
 #[test]

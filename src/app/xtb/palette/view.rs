@@ -920,16 +920,22 @@ fn summary<'a>(shown: &Shown<'a>, inspector: bool, previous: bool) -> Element<'a
 /// Bond orders and orbital levels as small two-column tables.
 fn tables<'a>(shown: &Shown<'a>) -> Option<Element<'a, Message>> {
     let result = &shown.stored.result;
-    let table = |title: &'static str, rows: Vec<(String, String)>| -> Element<'a, Message> {
+    let table = |title: &'static str,
+                 rows: Vec<(String, String)>,
+                 bonds: Vec<[u32; 2]>|
+     -> Element<'a, Message> {
         let mut table = column![text(title).size(12).style(muted_text)].spacing(4);
-        for (name, value) in rows {
-            table = table.push(
-                row![
-                    text(name).size(12).width(72).style(greyed(shown.stale)),
-                    text(value).size(12).style(greyed(shown.stale)),
-                ]
-                .spacing(8),
-            );
+        for (index, (name, value)) in rows.into_iter().enumerate() {
+            let line = row![
+                text(name).size(12).width(72).style(greyed(shown.stale)),
+                text(value).size(12).style(greyed(shown.stale)),
+            ]
+            .spacing(8);
+            let line: Element<'a, Message> = match bonds.get(index) {
+                Some(&pair) => super::hover::row(line, super::BondHover::new(shown, pair)),
+                None => line.into(),
+            };
+            table = table.push(line);
         }
         table.width(Length::Shrink).into()
     };
@@ -943,10 +949,13 @@ fn tables<'a>(shown: &Shown<'a>) -> Option<Element<'a, Message>> {
     }
     let mut both = row![].spacing(24);
     if !bonds.is_empty() {
-        both = both.push(table("Bond orders (≥ 0.1)", bonds));
+        let pairs = results::displayed_bond_orders(result)
+            .map(|bond| [bond.a, bond.b])
+            .collect();
+        both = both.push(table("Bond orders (≥ 0.1)", bonds, pairs));
     }
     if !levels.is_empty() {
-        both = both.push(table("Orbital levels", levels));
+        both = both.push(table("Orbital levels", levels, vec![]));
     }
     Some(both.into())
 }

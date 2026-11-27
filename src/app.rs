@@ -1208,6 +1208,12 @@ impl App {
             self.xtb_hover_bond((arrow, kind, pair), entered);
             return Task::none();
         }
+        if let Message::Xtb(xtb::Action::Palette(xtb::palette::Action::HoverBond(bond, entered))) =
+            message
+        {
+            self.xtb_hover_result_bond(bond, entered);
+            return Task::none();
+        }
         // Modifier releases must reach buttons even when a widget or modal captures input.
         if let Message::ModifiersChanged(modifiers) = message {
             self.shift_held = modifiers.shift();
@@ -1272,6 +1278,7 @@ impl App {
                     self.xtb_selected_reaction(),
                 ),
         );
+        self.xtb_invalidate_bond_hover();
         let shown = self
             .xtb_vibration_entry()
             .map(|stored| (stored.attachment, Arc::as_ptr(&stored.result)));

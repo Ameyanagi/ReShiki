@@ -150,7 +150,7 @@ pub struct Placed {
     pub xyz: [f32; 3],
 }
 
-/// A force-field hydrogen that is not a drawing atom, bonded to `parent`.
+/// A 3D hydrogen that is not a drawing atom, bonded to `parent`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Hydrogen {
     pub parent: u64,
@@ -166,6 +166,10 @@ pub struct Model3d {
     pub atoms: Vec<Placed>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hydrogens: Vec<Hydrogen>,
+    /// File atom order, as indices into atoms followed by hydrogens.
+    /// Empty when calculation frames already use that order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frame_atom_order: Vec<usize>,
     /// Chemistry when this conformer was generated, as a stable 64-bit digest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fingerprint: Option<String>,
@@ -261,7 +265,7 @@ pub struct Model3d {
     pub turning: bool,
     /// Other geometries of the same atoms drawn faint behind the model, such as
     /// the kept conformers of a conformer search: each holds one position per
-    /// atom, then per added hydrogen, in the model's order. Set only on the
+    /// atom, in calculation frame order. Set only on the
     /// canvas's preview copy; never saved.
     #[serde(skip)]
     pub overlay: Vec<Vec<[f32; 3]>>,
@@ -629,6 +633,7 @@ impl Model3d {
             display: Display::TwoD,
             atoms,
             hydrogens,
+            frame_atom_order: vec![],
             fingerprint: None,
             generated: None,
             linked_atoms,
@@ -889,6 +894,57 @@ impl Model3d {
             .collect::<Option<Vec<_>>>()?;
         points.extend(self.hydrogens.iter().map(|h| ("H", h.xyz)));
         Some(points)
+    }
+
+    /// Read values indexed by model atoms and hydrogens in calculation frame order.
+    pub fn in_frame_order<T: Copy>(&self, values: Vec<T>) -> Vec<T> {
+        if self.frame_atom_order.is_empty() {
+            values
+        } else {
+            self.frame_atom_order
+                .iter()
+                .filter_map(|&i| values.get(i).copied())
+                .collect()
+        }
+    }
+
+    pub fn frame_positions(&self) -> Vec<[f32; 3]> {
+        self.in_frame_order(
+            self.atoms
+                .iter()
+                .map(|a| a.xyz)
+                .chain(self.hydrogens.iter().map(|h| h.xyz))
+                .collect(),
+        )
+    }
+
+    /// Drawing IDs in frame order, with no drawing ID for a model hydrogen.
+    pub fn frame_sources(&self) -> Vec<Option<u64>> {
+        let mut sources = self.geometry_sources();
+        sources.resize(self.atoms.len() + self.hydrogens.len(), None);
+        self.in_frame_order(sources)
+    }
+
+    /// Set coordinates in calculation frame order, keeping each hydrogen's parent.
+    pub fn set_frame_positions(&mut self, positions: &[[f64; 3]]) -> bool {
+        let count = self.atoms.len() + self.hydrogens.len();
+        if positions.len() != count {
+            return false;
+        }
+        let mut slots = self
+            .atoms
+            .iter_mut()
+            .map(|a| &mut a.xyz)
+            .chain(self.hydrogens.iter_mut().map(|h| &mut h.xyz))
+            .collect::<Vec<_>>();
+        for (i, xyz) in positions.iter().enumerate() {
+            let index = self.frame_atom_order.get(i).copied().unwrap_or(i);
+            let Some(slot) = slots.get_mut(index) else {
+                return false;
+            };
+            **slot = xyz.map(|x| x as f32);
+        }
+        true
     }
 
     /// Whether each of [`Self::points`] is drawn with these hydrogens shown.
@@ -1268,11 +1324,11 @@ impl View<'_> {
             self.symbols.extend_from_within(..originals);
             self.shown.extend_from_within(..originals);
             self.ellipsoids.resize(start + originals, None);
-            self.rotated.extend(
-                geometry
-                    .iter()
-                    .map(|&p| rotate(model.rotation, sub(p, self.center))),
-            );
+            self.rotated.resize(start + originals, [0.; 3]);
+            for (i, &p) in geometry.iter().enumerate() {
+                let index = model.frame_atom_order.get(i).copied().unwrap_or(i);
+                *self.rotated.get_mut(start + index)? = rotate(model.rotation, sub(p, self.center));
+            }
             bonds.extend(sticks.iter().map(|&(a, b)| (start + a, start + b)));
         }
         Some(())
@@ -1923,9 +1979,15 @@ pub fn validate(doc: &Document) -> Result<(), String> {
         let ids: HashSet<_> = m.atoms.iter().map(|a| a.id).collect();
         let linked = m.source_ids();
         let norm = m.rotation.iter().map(|v| v * v).sum::<f32>();
+        let count = m.atoms.len() + m.hydrogens.len();
         if m.atoms.is_empty()
             || m.atoms.len() > MAX_ATOMS
             || m.hydrogens.len() > m.atoms.len().saturating_mul(4)
+            || !m.frame_atom_order.is_empty()
+                && (!m.is_file_derived()
+                    || m.frame_atom_order.len() != count
+                    || m.frame_atom_order.iter().any(|&i| i >= count)
+                    || m.frame_atom_order.iter().collect::<HashSet<_>>().len() != count)
             || ids.len() != m.atoms.len()
             || m.atoms.iter().any(|a| !finite(&a.xyz))
             || linked.is_empty()

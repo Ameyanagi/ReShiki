@@ -337,19 +337,18 @@ impl App {
         let model = atom.and_then(|atom| self.xtb_model(atom));
         let doc = &self.tab.doc;
         let shows = model.is_some_and(|m| {
-            doc.models[m].points(doc).is_some_and(|points| {
-                points.len() == shown.frame.positions_angstrom.len()
-                    && points
-                        .iter()
-                        .zip(&shown.frame.positions_angstrom)
-                        // The renderer's own test (`figure_ready`).
-                        .all(|((_, p), q)| {
-                            (0..3)
-                                .map(|k| (f64::from(p[k]) - q[k]).powi(2))
-                                .sum::<f64>()
-                                <= 1e-6
-                        })
-            })
+            let points = doc.models[m].frame_positions();
+            points.len() == shown.frame.positions_angstrom.len()
+                && points
+                    .iter()
+                    .zip(&shown.frame.positions_angstrom)
+                    // The renderer's own test (`figure_ready`).
+                    .all(|(p, q)| {
+                        (0..3)
+                            .map(|k| (f64::from(p[k]) - q[k]).powi(2))
+                            .sum::<f64>()
+                            <= 1e-6
+                    })
         });
         let placed = model
             .and_then(|m| doc.models[m].surface.clone())
@@ -624,12 +623,7 @@ impl App {
             let index = figure.orbital.index as usize;
             match self.xtb_orbital_row(stored, figure.orbital.spin, index) {
                 Some((basis, row)) if build.is_none() && state.building.is_none() => {
-                    let points: Vec<[f32; 3]> = model
-                        .points(doc)
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|(_, p)| p)
-                        .collect();
+                    let points = model.frame_positions();
                     build = Some((key, basis.clone(), row.to_vec(), points, figure.iso));
                 }
                 Some(_) => {}

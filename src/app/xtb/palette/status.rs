@@ -5,6 +5,8 @@ use std::path::PathBuf;
 pub(in crate::app) enum StatusKind {
     Palette,
     Mode,
+    /// Applied geometry belongs to this molecule's drawn atom.
+    Geometry(u64),
 }
 
 impl App {
@@ -67,6 +69,31 @@ impl App {
             self.tab.xtb.palette.status = None;
         } else {
             self.xtb_set_palette_status(StatusKind::Palette, text, error);
+        }
+    }
+
+    pub(in crate::app::xtb) fn xtb_set_geometry_status(
+        &mut self,
+        text: impl Into<String>,
+        atoms: &[Option<u64>],
+    ) {
+        self.xtb_set_result_status(text, false);
+        if let Some(atom) = atoms.iter().flatten().next()
+            && let Some((kind, _)) = &mut self.tab.xtb.palette.status
+        {
+            *kind = StatusKind::Geometry(*atom);
+        }
+    }
+
+    /// A different molecule retires only the geometry feedback we still own.
+    pub(in crate::app::xtb) fn xtb_clear_other_geometry_status(&mut self) {
+        let Some((StatusKind::Geometry(atom), text)) = &self.tab.xtb.palette.status else {
+            return;
+        };
+        if self.status != *text {
+            self.tab.xtb.palette.status = None;
+        } else if self.xtb_target().is_some_and(|atoms| !atoms.contains(atom)) {
+            self.xtb_clear_palette_status(None);
         }
     }
 

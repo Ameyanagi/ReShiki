@@ -632,14 +632,15 @@ impl App {
     }
 
     /// The model preview while a run is current, else a previewed step,
-    /// else an animated IRC, vibration or orbital preview.
+    /// else an animated IRC, vibration or orbital preview, or row feedback.
     pub(super) fn xtb_preview(&self) -> Option<&Document> {
         let Some(run) = self.tab.xtb.run.as_ref() else {
             return self
                 .xtb_step_preview()
                 .or_else(|| self.xtb_irc_preview())
                 .or_else(|| self.xtb_vibration_preview())
-                .or_else(|| self.xtb_orbital_preview());
+                .or_else(|| self.xtb_orbital_preview())
+                .or_else(|| self.xtb_bond_hover_preview());
         };
         (run.revision == (self.tab.file_epoch, self.tab.revision))
             .then_some(run.preview.as_deref())
@@ -1342,16 +1343,20 @@ impl App {
                 self.tab.xtb.palette.view = results::View::Vibrations;
             }
         }
-        self.status = if applied {
-            format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
+        if applied {
+            let energy = pending.line.split(" · ").next().unwrap_or_default();
+            self.xtb_set_geometry_status(
+                format!("Applied xTB geometry · {energy} · ⌘Z undoes"),
+                &pending.launch.atoms,
+            );
         } else if let Some(arrow) = reaction_arrow {
             let status = pending.line.clone();
             self.tab.xtb.ts_card.status =
                 Some((arrow, ts::card::Status::TransitionState, status.clone()));
-            status
+            self.status = status;
         } else {
-            format!("xTB · {}", pending.line)
-        };
+            self.status = format!("xTB · {}", pending.line);
+        }
         self.tab.xtb.outcome = Some(Outcome::Done {
             atoms: pending.launch.atoms.into_iter().flatten().collect(),
             line: pending.line,
@@ -1497,13 +1502,12 @@ fn model_matches(
     atoms: &[Option<u64>],
     positions: &[[f64; 3]],
 ) -> bool {
-    let mut sources = model.geometry_sources();
-    sources.resize(model.atoms.len() + model.hydrogens.len(), None);
-    let now = model.atoms.iter().map(|a| a.xyz);
-    let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
     atoms.len() == positions.len()
-        && sources == atoms
-        && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
+        && model.frame_sources() == atoms
+        && model
+            .frame_positions()
+            .into_iter()
+            .eq(positions.iter().map(|p| p.map(|x| x as f32)))
 }
 
 /// The document with the model of `atom`'s molecule at `positions` (Å,
@@ -1520,15 +1524,8 @@ fn preview_geometry(doc: &mut Document, atom: u64, positions: &[[f64; 3]]) -> Op
         .iter()
         .position(|m| m.linked_atoms.contains(&atom))?;
     let model = doc.models.get_mut(index)?;
-    if model.atoms.len() + model.hydrogens.len() != positions.len() {
+    if !model.set_frame_positions(positions) {
         return None;
-    }
-    let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
-    for (atom, p) in model.atoms.iter_mut().zip(xyz.by_ref()) {
-        atom.xyz = p;
-    }
-    for (hydrogen, p) in model.hydrogens.iter_mut().zip(xyz) {
-        hydrogen.xyz = p;
     }
     // A model shown as 2D only appears beside the drawing while it moves.
     if model.display == reshiki::models3d::Display::TwoD {

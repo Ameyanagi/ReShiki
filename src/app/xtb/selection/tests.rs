@@ -1,7 +1,86 @@
 use super::*;
 use crate::app::{Message, xtb};
 use crate::canvas::Edit;
-use reshiki::document::{Annotation, Point};
+use reshiki::document::{Annotation, Arrow, Point};
+
+fn reaction(app: &mut App, reactant: u64, product: u64) {
+    use reshiki::reactions::{self, Role};
+
+    let before = app.tab.doc.clone();
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(70., 0.),
+        Point::new(150., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    reactions::assign(&mut app.tab.doc, arrow, &[reactant], Role::Reactant).unwrap();
+    reactions::assign(&mut app.tab.doc, arrow, &[product], Role::Product).unwrap();
+    app.changed(before);
+}
+
+#[test]
+fn finished_geometry_feedback_clears_when_selecting_the_product() {
+    use xtb::tests::{MOVED, START, optimized, water};
+
+    let (mut app, reactant) = water(xtb::CalcTask::Optimize);
+    let product = app.tab.doc.add_atom("O", Point::new(220., 0.));
+    reaction(&mut app, reactant, product);
+    let serial = app.tab.xtb.run.as_ref().unwrap().serial;
+    let _ = app.update(Message::Xtb(xtb::Action::Event(
+        serial,
+        optimized(&START, &MOVED),
+    )));
+    assert!(app.status.starts_with("Applied xTB geometry ·"));
+    let applied = app.status.clone();
+
+    let _ = app.update(Message::Canvas(Edit::Select(vec![reactant])));
+    assert_eq!(app.status, applied, "the same molecule keeps its feedback");
+    let _ = app.update(Message::Canvas(Edit::SelectAt(
+        vec![product],
+        Point::new(220., 0.),
+    )));
+    assert!(app.status.is_empty(), "{}", app.status);
+    assert!(!app.error);
+}
+
+#[test]
+fn applied_step_feedback_follows_the_molecule_and_preserves_newer_status() {
+    use xtb::palette::Action as PaletteAction;
+    use xtb::tests::{MOVED, START, duplicate_molecule, event, optimized, water};
+
+    for unrelated in [false, true] {
+        let (mut app, reactant) = water(xtb::CalcTask::Optimize);
+        event(&mut app, optimized(&START, &MOVED));
+        let copied = duplicate_molecule(&mut app);
+        let product = copied[0];
+        reaction(&mut app, reactant, product);
+        let _ = app.update(Message::Canvas(Edit::Select(vec![reactant])));
+        for action in [
+            PaletteAction::View(xtb::results::View::Steps),
+            PaletteAction::Step(0),
+            PaletteAction::UseStep,
+        ] {
+            let _ = app.update(Message::Xtb(xtb::Action::Palette(action)));
+        }
+        assert!(app.status.starts_with("Applied xTB geometry of step 0"));
+        if unrelated {
+            app.status = "Could not save the drawing".into();
+            app.error = true;
+        }
+
+        let _ = app.update(Message::Canvas(Edit::Select(vec![product])));
+        assert_eq!(app.xtb_shown().unwrap().atoms[0], Some(product));
+        if unrelated {
+            assert_eq!(app.status, "Could not save the drawing");
+            assert!(app.error);
+        } else {
+            assert!(app.status.is_empty(), "{}", app.status);
+            assert!(!app.error);
+        }
+    }
+}
 
 #[test]
 fn selection_hint_says_what_to_click() {

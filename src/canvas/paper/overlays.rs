@@ -324,49 +324,19 @@ impl MoleculeCanvas<'_> {
         let Some(label) = &self.result_label else {
             return;
         };
-        if !label.text.is_empty()
-            && let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms)
-        {
-            let lo = self.camera.screen(lo, bounds);
-            let hi = self.camera.screen(hi, bounds);
-            badge(
-                frame,
-                bounds,
-                Point::new(lo.x - 14., hi.y),
-                label.text.clone(),
-                true,
-            );
-        }
         let drawn = self.doc.abbreviation_render_copy();
-        let distance = 0.55 * self.doc.drawing_style.bond_length_world * self.camera.zoom;
+        let mut charge_bounds = Vec::with_capacity(label.atom_labels.len());
         for (id, text) in &label.atom_labels {
             let Some(atom) = drawn.atom(*id).filter(|_| drawn.atom_visible(*id)) else {
                 continue;
             };
-            let direction = result_label_direction(&drawn, atom);
             let width = crate::app::text_width(text, 11.) + 6.;
-            let half = Vector::new(width / 2., 7.5);
-            let center = self.camera.screen(atom.position, bounds);
-            // Give the badge enough room to clear the element symbol at any zoom.
-            let mut offset = distance;
-            if let Some((lo, hi)) = reshiki::scene::atom_label_ink_bounds(atom, &drawn) {
-                let corner = World::new(
-                    if direction.x < 0. { lo.x } else { hi.x },
-                    if direction.y < 0. { lo.y } else { hi.y },
-                );
-                let edge = self.camera.screen(corner, bounds) - center;
-                let clearance = edge.x * direction.x
-                    + edge.y * direction.y
-                    + half.x * direction.x.abs()
-                    + half.y * direction.y.abs()
-                    + 2.;
-                offset = offset.max(clearance);
-            }
-            let at = center + direction * offset;
-            frame.fill_rectangle(at - half, iced::Size::new(width, 15.), ACCENT_TINT);
+            let badge = result_charge_bounds(&drawn, atom, self.camera, bounds, width);
+            charge_bounds.push(badge);
+            frame.fill_rectangle(Point::new(badge.x, badge.y), badge.size(), ACCENT_TINT);
             frame.fill_text(canvas::Text {
                 content: text.clone(),
-                position: at,
+                position: badge.center(),
                 color: rgb([30, 100, 85]),
                 size: 11.into(),
                 font: iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -374,6 +344,18 @@ impl MoleculeCanvas<'_> {
                 align_y: iced::alignment::Vertical::Center,
                 ..Default::default()
             });
+        }
+        if !label.text.is_empty()
+            && let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms)
+        {
+            let badge = result_energy_bounds(
+                bounds,
+                self.camera.screen(lo, bounds),
+                self.camera.screen(hi, bounds),
+                crate::app::text_width(&label.text, 12.) + 10.,
+                &charge_bounds,
+            );
+            draw_badge(frame, badge, label.text.clone(), true);
         }
     }
 
@@ -1475,6 +1457,97 @@ impl MoleculeCanvas<'_> {
     }
 }
 
+fn result_charge_bounds(
+    doc: &Document,
+    atom: &Atom,
+    camera: Camera,
+    bounds: Rectangle,
+    width: f32,
+) -> Rectangle {
+    let direction = result_label_direction(doc, atom);
+    let half = Vector::new(width / 2., 7.5);
+    let center = camera.screen(atom.position, bounds);
+    let mut offset = 0.55 * doc.drawing_style.bond_length_world * camera.zoom;
+    // Give the badge enough room to clear the element symbol at any zoom.
+    if let Some((lo, hi)) = reshiki::scene::atom_label_ink_bounds(atom, doc) {
+        let corner = World::new(
+            if direction.x < 0. { lo.x } else { hi.x },
+            if direction.y < 0. { lo.y } else { hi.y },
+        );
+        let edge = camera.screen(corner, bounds) - center;
+        let clearance = edge.x * direction.x
+            + edge.y * direction.y
+            + half.x * direction.x.abs()
+            + half.y * direction.y.abs()
+            + 2.;
+        offset = offset.max(clearance);
+    }
+    Rectangle::new(
+        center + direction * offset - half,
+        iced::Size::new(width, 15.),
+    )
+}
+
+/// Keep energy below every charge badge. At the canvas edge, find a free
+/// position beside or above the badges without covering the molecule.
+fn result_energy_bounds(
+    bounds: Rectangle,
+    lo: Point,
+    hi: Point,
+    width: f32,
+    charges: &[Rectangle],
+) -> Rectangle {
+    const GAP: f32 = 4.;
+    let size = iced::Size::new(width, 24.);
+    let preferred = Point::new(
+        lo.x - 5.,
+        charges
+            .iter()
+            .map(|badge| badge.y + badge.height + GAP)
+            .fold(hi.y + 14., f32::max),
+    );
+    let fit = |position: Point| {
+        Rectangle::new(
+            Point::new(
+                position.x.clamp(GAP, (bounds.width - width - GAP).max(GAP)),
+                position
+                    .y
+                    .clamp(GAP, (bounds.height - size.height - GAP).max(GAP)),
+            ),
+            size,
+        )
+    };
+    let molecule = Rectangle::new(lo, iced::Size::new(hi.x - lo.x, hi.y - lo.y));
+    let obstacles = || std::iter::once(molecule).chain(charges.iter().copied());
+    let collides = |candidate: Rectangle| {
+        obstacles().any(|obstacle| {
+            candidate.x < obstacle.x + obstacle.width + GAP
+                && candidate.x + candidate.width + GAP > obstacle.x
+                && candidate.y < obstacle.y + obstacle.height + GAP
+                && candidate.y + candidate.height + GAP > obstacle.y
+        })
+    };
+    let initial = fit(preferred);
+    if !collides(initial) {
+        return initial;
+    }
+    let distance = |candidate: &Rectangle| {
+        let delta = Point::new(candidate.x, candidate.y) - preferred;
+        delta.x * delta.x + delta.y * delta.y
+    };
+    let occupied = charges.iter().fold(molecule, |a, b| a.union(b));
+    [
+        Point::new(occupied.x - width - GAP, initial.y),
+        Point::new(occupied.x + occupied.width + GAP, initial.y),
+        Point::new(initial.x, occupied.y - size.height - GAP),
+    ]
+    .into_iter()
+    .map(fit)
+    .filter(|candidate| !collides(*candidate))
+    .min_by(|a, b| distance(a).total_cmp(&distance(b)))
+    .unwrap_or_else(|| Rectangle::new(preferred, size))
+}
+
 /// Put badges in the middle of the largest angular gap between visible
 /// bonds. Bond lengths and cancelling directions do not shrink that gap.
 fn result_label_direction(doc: &Document, atom: &Atom) -> Vector {
@@ -1587,6 +1660,41 @@ mod result_label_tests {
     }
 
     #[test]
+    fn energy_clears_the_bottom_atoms_downward_charge_badge() {
+        let mut doc = Document::default();
+        let top = doc.add_atom("C", World::new(0., -42.));
+        let bottom = doc.add_atom("O", World::new(0., 42.));
+        doc.add_bond(top, bottom, 1, "plain");
+        let bounds = Rectangle::with_size(iced::Size::new(500., 400.));
+        for camera in [
+            Camera::default(),
+            Camera {
+                center: World::new(0., -100.),
+                ..Camera::default()
+            },
+        ] {
+            let charges = [top, bottom]
+                .map(|id| result_charge_bounds(&doc, doc.atom(id).unwrap(), camera, bounds, 44.));
+            let charge = charges[1];
+            let atom = doc.atom(bottom).unwrap();
+            assert!(charge.y > camera.screen(atom.position, bounds).y);
+            let (lo, hi) = reshiki::scene::selection_bounds(&doc, &[top, bottom]).unwrap();
+            let lo = camera.screen(lo, bounds);
+            let hi = camera.screen(hi, bounds);
+            let energy = result_energy_bounds(bounds, lo, hi, 120., &charges);
+            assert!(charges.iter().all(|charge| !energy.intersects(charge)));
+            assert!(!energy.intersects(&Rectangle::new(
+                lo,
+                iced::Size::new(hi.x - lo.x, hi.y - lo.y),
+            )));
+            assert!(energy.y + energy.height <= bounds.height - 4.);
+            if camera.center.y == 0. {
+                assert!(energy.y >= charge.y + charge.height + 4.);
+            }
+        }
+    }
+
+    #[test]
     fn hidden_abbreviation_bonds_do_not_steer_charge_badges() {
         let mut doc = Document::default();
         let anchor = doc.add_atom("C", World::default());
@@ -1615,9 +1723,18 @@ fn badge(
         (p.x + 14.).clamp(4., (bounds.width - width - 4.).max(4.)),
         (p.y + 18.).clamp(20., (bounds.height - 30.).max(20.)),
     );
+    draw_badge(
+        frame,
+        Rectangle::new(position - Vector::new(5., 4.), iced::Size::new(width, 24.)),
+        content,
+        valid,
+    );
+}
+
+fn draw_badge(frame: &mut layered::Frame<'_>, bounds: Rectangle, content: String, valid: bool) {
     frame.fill_rectangle(
-        position - Vector::new(5., 4.),
-        iced::Size::new(width, 24.),
+        Point::new(bounds.x, bounds.y),
+        bounds.size(),
         if valid {
             ACCENT_TINT
         } else {
@@ -1626,7 +1743,7 @@ fn badge(
     );
     frame.fill_text(canvas::Text {
         content,
-        position,
+        position: Point::new(bounds.x + 5., bounds.y + 4.),
         color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
         size: 12.into(),
         font: iced::Font::with_name(reshiki::style::ui_font_family()),

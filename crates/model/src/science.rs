@@ -704,20 +704,6 @@ fn model_of(doc: &Document, atom: u64) -> Option<usize> {
         .position(|m| m.linked_atoms.contains(&atom))
 }
 
-/// Element symbol of a model's geometry atom.
-fn model_element<'a>(
-    doc: &'a Document,
-    model: &'a crate::models3d::Model3d,
-    index: usize,
-) -> Option<&'a str> {
-    match &model.generated {
-        Some(generated) => generated.elements.get(index).map(String::as_str),
-        None => doc
-            .atom(model.atoms.get(index)?.id)
-            .map(|a| a.element.as_str()),
-    }
-}
-
 fn atomic_number(symbol: &str) -> Option<u8> {
     crate::editing::ELEMENTS
         .iter()
@@ -823,7 +809,7 @@ pub fn hydrogen_parents(doc: &Document, launch: &Launch) -> Option<Vec<Option<u6
         };
         parents.push(Some(parent?));
     }
-    (parents.len() == launch.atoms.len()).then_some(parents)
+    (parents.len() == launch.atoms.len()).then(|| model.in_frame_order(parents))
 }
 
 /// Drawing bonds in frame order, with each model hydrogen joined to its nearest linked atom.
@@ -893,16 +879,11 @@ pub fn launch(
     if model.is_stale(doc) {
         return Err(ScienceError::StaleModel);
     }
-    let mut atoms = model.geometry_sources();
-    atoms.resize(model.atoms.len() + model.hydrogens.len(), None);
+    let atoms = model.frame_sources();
     let mut numbers = Vec::with_capacity(atoms.len());
     let mut isotopes = Vec::with_capacity(atoms.len());
-    for (index, source) in atoms.iter().enumerate() {
-        let element = if index < model.atoms.len() {
-            model_element(doc, model, index).ok_or(ScienceError::StaleModel)?
-        } else {
-            "H"
-        };
+    let points = model.in_frame_order(model.points(doc).ok_or(ScienceError::StaleModel)?);
+    for (&(element, _), source) in points.iter().zip(&atoms) {
         numbers.push(atomic_number(element).ok_or(ScienceError::StaleModel)?);
         let isotope = source
             .and_then(|id| doc.atom(id))
@@ -912,11 +893,9 @@ pub fn launch(
     if isotopes.iter().all(|i| *i == 0) {
         isotopes.clear();
     }
-    let positions = model
-        .atoms
-        .iter()
-        .map(|a| a.xyz)
-        .chain(model.hydrogens.iter().map(|h| h.xyz))
+    let positions = points
+        .into_iter()
+        .map(|(_, xyz)| xyz)
         .map(|xyz| xyz.map(f64::from))
         .collect();
     let frame = Frame {
@@ -1053,30 +1032,22 @@ pub fn import(
     if frame.hash() != result.frame {
         return Err(ScienceError::Unknown);
     }
-    let mut atoms = model.geometry_sources();
-    atoms.resize(model.atoms.len() + model.hydrogens.len(), None);
-    let matches = frame.numbers.len() == atoms.len()
-        && frame.numbers.iter().enumerate().all(|(i, &number)| {
-            let element = if i < model.atoms.len() {
-                model_element(doc, model, i)
-            } else {
-                Some("H")
-            };
-            element.and_then(atomic_number) == Some(number)
-        })
-        && model
-            .atoms
+    let atoms = model.frame_sources();
+    let points = model.in_frame_order(model.points(doc).ok_or(ScienceError::ModelMismatch)?);
+    let matches = frame.numbers.len() == points.len()
+        && frame.positions_angstrom.len() == points.len()
+        && points
             .iter()
-            .map(|a| a.xyz)
-            .chain(model.hydrogens.iter().map(|h| h.xyz))
+            .zip(&frame.numbers)
             .zip(&frame.positions_angstrom)
-            .all(|(shown, exact)| {
-                shown
-                    .into_iter()
-                    .zip(exact)
-                    .map(|(a, b)| (f64::from(a) - b).powi(2))
-                    .sum::<f64>()
-                    <= 1e-6
+            .all(|((&(element, shown), &number), exact)| {
+                atomic_number(element) == Some(number)
+                    && shown
+                        .into_iter()
+                        .zip(exact)
+                        .map(|(a, b)| (f64::from(a) - b).powi(2))
+                        .sum::<f64>()
+                        <= 1e-6
             });
     if !matches {
         return Err(ScienceError::ModelMismatch);
@@ -1427,8 +1398,8 @@ pub fn apply_geometry(
 
 /// Move the 3D model linked to `atoms` (the drawing atom of each frame
 /// atom, as an attachment records them) to `frame`'s geometry, when the
-/// model still has those atoms in that order and each added hydrogen still
-/// sits nearest its own parent; otherwise [`ScienceError::ModelMismatch`].
+/// model still has those atoms and each generated hydrogen still sits
+/// nearest its own parent; otherwise [`ScienceError::ModelMismatch`].
 /// For geometries no result stores, such as an optimization step; the
 /// caller checks freshness. Nothing changes on error.
 pub fn move_model(
@@ -1460,28 +1431,18 @@ pub fn move_model(
             model.atoms.iter().position(|a| a.id == h.parent)
         }
     };
+    let points = model.in_frame_order(model.points(doc).ok_or(ScienceError::ModelMismatch)?);
     let matches = model.cell.is_none()
-        && heavy + model.hydrogens.len() == frame.numbers.len()
-        && model
-            .geometry_sources()
-            .iter()
-            .chain(std::iter::repeat(&None))
-            .zip(atoms)
-            .all(|(model, link)| model == link)
-        && frame.numbers.iter().enumerate().all(|(i, z)| {
-            let element = if i < heavy {
-                model_element(doc, model, i)
-            } else {
-                Some("H")
-            };
-            element.and_then(atomic_number) == Some(*z)
+        && model.frame_sources() == atoms
+        && points.iter().zip(&frame.numbers).all(|(&(element, _), &number)| {
+            atomic_number(element) == Some(number)
         })
         && positions.iter().flatten().all(|v| {
             v.is_finite() && v.abs() <= crate::models3d::MAX_COORDINATE
         })
         // Each added hydrogen sits nearest its own parent in the frame, so
         // the model's hydrogen order still matches the frame's.
-        && model.hydrogens.iter().enumerate().all(|(i, h)| {
+        && (model.is_file_derived() || model.hydrogens.iter().enumerate().all(|(i, h)| {
             let at = frame.positions_angstrom.get(heavy + i);
             let nearest = at.and_then(|at| {
                 (0..heavy).min_by(|&a, &b| {
@@ -1494,18 +1455,12 @@ pub fn move_model(
                 })
             });
             nearest.is_some() && nearest == parent_of(h)
-        });
+        }));
     if !matches {
         return Err(ScienceError::ModelMismatch);
     }
     let model = doc.models.get_mut(index).ok_or(ScienceError::NoModel)?;
-    let mut positions = positions.into_iter();
-    for (atom, xyz) in model.atoms.iter_mut().zip(positions.by_ref()) {
-        atom.xyz = xyz;
-    }
-    for (hydrogen, xyz) in model.hydrogens.iter_mut().zip(positions) {
-        hydrogen.xyz = xyz;
-    }
+    model.set_frame_positions(&frame.positions_angstrom);
     Ok(())
 }
 

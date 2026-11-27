@@ -1681,6 +1681,7 @@ fn frame_bytes(doc: &Document) -> usize {
         .map(|m| {
             bytes(&m.atoms[..])
                 + bytes(&m.hydrogens[..])
+                + bytes(&m.frame_atom_order[..])
                 + bytes(&m.sites[..])
                 + bytes(&m.linked_atoms[..])
                 + m.fingerprint.as_ref().map_or(0, String::len)

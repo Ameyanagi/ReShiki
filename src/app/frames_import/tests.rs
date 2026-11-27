@@ -20,13 +20,7 @@ fn send(app: &mut App, action: Action) {
 }
 
 fn model(app: &App) -> Vec<[f32; 3]> {
-    let model = &app.tab.doc.models[0];
-    model
-        .atoms
-        .iter()
-        .map(|a| a.xyz)
-        .chain(model.hydrogens.iter().map(|h| h.xyz))
-        .collect()
+    app.tab.doc.models[0].frame_positions()
 }
 
 async fn open_calculation(app: &mut App, fixture: &str) {
@@ -101,8 +95,9 @@ async fn gaussian_job_rows_choose_the_molecule_and_its_results() {
     import_calculation(&mut app).await;
     let doc = &app.tab.doc;
     assert_eq!(doc.models[0].display, Display::Both);
-    assert_eq!(doc.atoms.len(), 4);
-    assert_eq!(doc.bonds.len(), 3);
+    assert_eq!(doc.atoms.len(), 2);
+    assert_eq!(doc.bonds.len(), 1);
+    assert_eq!(doc.models[0].hydrogens.len(), 2);
     assert!(doc.atoms.iter().all(|atom| atom.depth.abs() < 1e-5));
     let [stored] = doc.science.results.as_slice() else {
         panic!("{}", app.status);
@@ -346,6 +341,36 @@ fn the_lowest_frame_opens_with_the_ensemble_kept() {
         "{}",
         app.status
     );
+}
+
+#[test]
+fn ensemble_uses_file_order_with_folded_hydrogens() {
+    let text = "3\n -5.100000\nH 0.97 0 0\nO 0 0 0\nH -0.30 0.90 0\n\
+                3\n -5.000000\nH 0.96 0 0\nO 0 0 0\nH -0.24 0.93 0\n";
+    let file = detect(Path::new("water.xyz"), text.as_bytes()).unwrap();
+    let chosen = &file.steps()[1].frame;
+    let (mut doc, _) = drawing(chosen).unwrap();
+    fold_calculation_hydrogens(&mut doc, chosen);
+    let oxygen = doc.atoms[0].id;
+    assert_eq!(doc.models[0].frame_sources(), [None, Some(oxygen), None]);
+
+    assert_eq!(ensemble(&mut doc, &file, 1).unwrap(), 2);
+    let stored = &doc.science.results[0];
+    let attachment = doc.science.attachment(stored.attachment).unwrap();
+    let lowest = &file.steps()[0].frame;
+    assert_eq!(attachment.atoms, [None, Some(oxygen), None]);
+    assert_eq!(attachment.frame, chosen.hash());
+    assert_eq!(stored.result.frame, lowest.hash());
+    let trajectory = stored.result.trajectory.as_ref().unwrap();
+    assert_eq!(trajectory.numbers, [1, 8, 1]);
+    assert_eq!(
+        &trajectory.positions_angstrom[..9],
+        lowest.positions_angstrom.as_flattened()
+    );
+    let (attachment, frame) = (stored.attachment, stored.result.frame);
+    reshiki::science::apply_geometry(&mut doc, attachment, &frame).unwrap();
+    assert_eq!(doc.models[0].atoms[0].xyz, [0., 0., 0.]);
+    assert_eq!(doc.models[0].hydrogens[0].xyz, [0.97, 0., 0.]);
 }
 
 #[test]

@@ -1093,6 +1093,106 @@ pub(super) fn drawing(frame: &Frame) -> Result<(reshiki::document::Document, Vec
     reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())
 }
 
+/// Keep the XYZ reader's perceived bonds, but fold ordinary bonded hydrogens
+/// into atom labels and keep their original 3D positions.
+pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, frame: &Frame) {
+    use reshiki::chemistry::{document::drawing_graph, hydrogens, kekulize::Direction, ranking};
+    use reshiki::models3d::{Display, Hydrogen, Model3d};
+    use std::collections::{HashMap, HashSet};
+
+    let [model] = doc.models.as_slice() else {
+        return;
+    };
+    if doc.atoms.len() != frame.numbers.len() {
+        // The XYZ reader can leave overlapping sites out.
+        return;
+    }
+    for (atom, &isotope) in doc.atoms.iter_mut().zip(&frame.isotopes) {
+        atom.isotope = u32::from(isotope);
+    }
+    let Ok(graph) = drawing_graph(doc) else {
+        return;
+    };
+    let protected_atoms =
+        graph
+            .bonds
+            .iter()
+            .filter(|bond| bond.order != 1)
+            .flat_map(|bond| [bond.a, bond.b])
+            .chain(
+                graph.atoms.iter().enumerate().filter_map(|(i, atom)| {
+                    (atom.atomic_number == 1 && atom.charge != 0).then_some(i)
+                }),
+            )
+            .collect();
+    let Ok(folded) = hydrogens::remove(&hydrogens::Input {
+        metadata: ranking::Metadata::unspecified(&graph),
+        directions: vec![Direction::None; graph.bonds.len()],
+        unknown_atoms: vec![false; graph.atoms.len()],
+        graph,
+        annotations: hydrogens::Annotations {
+            protected_atoms,
+            ..Default::default()
+        },
+    }) else {
+        return;
+    };
+    let kept = folded.kept_atoms.len();
+    let removed = doc.atoms.len() - kept;
+    if removed == 0 || removed > kept * 4 {
+        return;
+    }
+    let kept_ids: HashSet<_> = folded
+        .kept_atoms
+        .iter()
+        .filter_map(|&i| doc.atoms.get(i).map(|atom| atom.id))
+        .collect();
+    let parents: HashMap<_, _> = doc
+        .bonds
+        .iter()
+        .filter_map(
+            |bond| match (kept_ids.contains(&bond.a), kept_ids.contains(&bond.b)) {
+                (true, false) => Some((bond.b, bond.a)),
+                (false, true) => Some((bond.a, bond.b)),
+                _ => None,
+            },
+        )
+        .collect();
+    let mut atoms = Vec::with_capacity(kept);
+    let mut hydrogens = Vec::with_capacity(removed);
+    let mut order = Vec::with_capacity(model.atoms.len());
+    for &atom in &model.atoms {
+        if let Some(&parent) = parents.get(&atom.id) {
+            order.push(kept + hydrogens.len());
+            hydrogens.push(Hydrogen {
+                parent,
+                xyz: atom.xyz,
+            });
+        } else {
+            order.push(atoms.len());
+            atoms.push(atom);
+        }
+    }
+    doc.atoms.retain(|atom| kept_ids.contains(&atom.id));
+    for (atom, folded) in doc.atoms.iter_mut().zip(folded.graph.atoms) {
+        atom.explicit_h = u32::from(folded.explicit_hydrogens);
+        atom.label_h = atom.explicit_h;
+    }
+    doc.bonds
+        .retain(|b| kept_ids.contains(&b.a) && kept_ids.contains(&b.b));
+    let mut compact = Model3d::new(doc, atoms, hydrogens, model.force_field).with_cell(
+        doc,
+        None,
+        model.sites.clone(),
+    );
+    compact.notes.clone_from(&model.notes);
+    if !order.iter().copied().eq(0..order.len()) {
+        compact.frame_atom_order = order;
+    }
+    doc.models = vec![compact];
+    reshiki::models3d::set_display(doc, 0, Display::ThreeD);
+}
+
 /// Keep up to 32 frames of `file`, the lowest in energy first, as an
 /// imported conformer result of the molecule just opened from frame
 /// `index`. Returns how many were kept.
@@ -1107,7 +1207,7 @@ fn ensemble(
         .ok_or("the file gives no energy for some frames")?;
     let chosen = &steps.get(index).ok_or("no such frame")?.frame;
     let first = doc.atoms.first().ok_or("the file has no atoms")?.id;
-    let launch = reshiki::science::launch(doc, first, chosen.charge, chosen.multiplicity)
+    let mut launch = reshiki::science::launch(doc, first, chosen.charge, chosen.multiplicity)
         .map_err(|e| e.to_string().to_lowercase())?;
     let same = launch.frame.numbers == chosen.numbers
         && launch.frame.isotopes == chosen.isotopes
@@ -1118,8 +1218,9 @@ fn ensemble(
             .zip(&chosen.positions_angstrom)
             .all(|(a, b)| a.map(|x| x as f32) == b.map(|x| x as f32));
     if !same {
-        return Err("the 3D model's atoms are not in the file's order".into());
+        return Err("the 3D model does not match the chosen frame".into());
     }
+    launch.frame = std::sync::Arc::new(chosen.clone());
     // (energy, frame number, step), the lowest first.
     let mut kept: Vec<_> = energies
         .iter()
@@ -1131,10 +1232,7 @@ fn ensemble(
     kept.sort_by(|a, b| a.0.total_cmp(&b.0));
     kept.truncate(MAX_SAVED_CONFORMERS);
     let &(lowest_energy, _, lowest_step) = kept.first().ok_or("the file has no frames")?;
-    let lowest = Frame {
-        positions_angstrom: lowest_step.frame.positions_angstrom.clone(),
-        ..(*launch.frame).clone()
-    };
+    let lowest = lowest_step.frame.clone();
     let label = |i: usize, step: &qcread::Step| {
         step.label
             .clone()

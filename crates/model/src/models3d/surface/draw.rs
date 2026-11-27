@@ -296,7 +296,7 @@ pub(crate) fn ready_result<'a>(
         return None;
     }
     let frame = doc.science.frame(&stored.result.frame)?;
-    let points = model.points(doc)?;
+    let points = model.in_frame_order(model.points(doc)?);
     (points.len() == frame.numbers.len()
         && points.len() == frame.positions_angstrom.len()
         && points
