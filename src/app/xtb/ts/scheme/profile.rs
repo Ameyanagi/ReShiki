@@ -3,7 +3,7 @@
 use super::plan::preview;
 use super::{
     plan::{Level, Plan, Term, sum_energy},
-    run::Report,
+    run::{Report, StepValue},
 };
 use crate::app::{
     App,
@@ -145,28 +145,49 @@ pub(super) fn build(
 }
 
 fn profile_levels(plan: &Plan, report: &Report, gibbs: bool) -> Option<Vec<(Level, f64)>> {
-    for (index, step) in plan.steps.iter().enumerate() {
-        if report.steps.get(index)?.as_ref()?.arrow != step.arrow {
-            return None;
-        }
-    }
     let mut reference = None;
+    energy_levels(plan, report, |level, _| {
+        let energy = sum_energy(level.terms(), |index| {
+            super::run::species_energy(report.species(index)?, gibbs)
+        })?;
+        Some((energy - *reference.get_or_insert(energy)) * KCAL_PER_HARTREE)
+    })
+}
+
+fn energy_levels(
+    plan: &Plan,
+    report: &Report,
+    mut energy: impl FnMut(&Level, Option<&StepValue>) -> Option<f64>,
+) -> Option<Vec<(Level, f64)>> {
     plan.levels()?
         .into_iter()
-        .map(|level| {
-            let energy = sum_energy(level.terms(), |index| {
-                super::run::species_energy(report.species(index)?, gibbs)
-            })?;
-            let energy = (energy - *reference.get_or_insert(energy)) * KCAL_PER_HARTREE;
+        .enumerate()
+        .map(|(index, level)| {
+            let incoming = if let Some(index) = index.checked_sub(1) {
+                let value = report.steps.get(index)?.as_ref()?;
+                if value.arrow != plan.steps.get(index)?.arrow {
+                    return None;
+                }
+                Some(value)
+            } else {
+                None
+            };
+            let energy = energy(&level, incoming)?;
             energy.is_finite().then_some((level, energy))
         })
         .collect()
 }
 
 pub(super) fn overall(plan: &Plan, report: &Report, gibbs: bool) -> Option<f64> {
-    profile_levels(plan, report, gibbs)?
-        .last()
-        .map(|(_, energy)| *energy)
+    let mut energy = 0.;
+    energy_levels(plan, report, |_, incoming| {
+        if let Some(step) = incoming {
+            energy += if gibbs { step.gibbs } else { step.energy }?;
+        }
+        Some(energy)
+    })?
+    .last()
+    .map(|(_, energy)| *energy)
 }
 
 fn default_gibbs(

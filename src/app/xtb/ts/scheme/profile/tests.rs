@@ -281,6 +281,7 @@ fn free_barriers_choose_available_electronic_levels_and_saddles() {
         .find(|value| value.species == product)
         .unwrap();
     Arc::make_mut(&mut value.result).thermo = None;
+    assert!(overall(&state.plan, &state.work.report, false).is_none());
     assert!(overall(&state.plan, &state.work.report, true).is_none());
     let figure = app.xtb_scheme_profile().unwrap();
     assert_eq!(figure.energy_kind, EnergyProfileKind::Electronic);
@@ -314,7 +315,7 @@ fn free_barriers_choose_available_electronic_levels_and_saddles() {
 }
 
 #[test]
-fn missing_species_energy_does_not_use_a_retained_step_delta() {
+fn missing_species_energy_prevents_building_the_profile() {
     let (doc, plan) = Plan::example();
     let mut report = report(&plan);
     let product = plan.steps.last().unwrap().products[0].species;
@@ -325,14 +326,32 @@ fn missing_species_energy_does_not_use_a_retained_step_delta() {
         .unwrap();
     Arc::make_mut(&mut value.result).energy_hartree = None;
     assert!(build(&doc, &plan, &report, false, EnergyUnit::KcalPerMol).is_none());
+    assert_eq!(overall(&plan, &report, false), Some(-8.));
+}
+
+#[test]
+fn overall_uses_available_step_deltas_after_a_barrier_failure() {
+    let (_, plan) = Plan::example();
+    let mut report = report(&plan);
+    report.species.clear();
+    let first = report.steps[0].as_mut().unwrap();
+    first.energy = Some(4.2);
+    first.gibbs = Some(-1.3);
+    let second = report.steps[1].as_mut().unwrap();
+    second.energy = Some(-1.4);
+    second.gibbs = None;
+    second.barrier = None;
+    second.free_barrier = None;
+    second.error = Some("No saddle found".into());
+
+    assert!((overall(&plan, &report, false).unwrap() - 2.8).abs() < 1e-9);
+    assert_eq!(overall(&plan, &report, true), None);
+
+    let second = report.steps[1].as_mut().unwrap();
+    second.gibbs = Some(0.5);
+    second.energy = None;
+    assert!((overall(&plan, &report, true).unwrap() + 0.8).abs() < 1e-9);
     assert_eq!(overall(&plan, &report, false), None);
-    assert!(
-        report
-            .steps
-            .iter()
-            .flatten()
-            .all(|value| value.energy.is_some())
-    );
 }
 
 #[test]
