@@ -1,4 +1,5 @@
 use super::{CANCELED, FPS, Options, PATH_FRAME_SECONDS, PlaybackMode, RENDERING, SAVING, Work};
+use std::cmp::Ordering;
 use std::path::Path;
 use std::sync::atomic::Ordering::Relaxed;
 
@@ -18,7 +19,12 @@ pub(super) fn file_name(stem: &str) -> String {
     format!("{}.gif", if name.is_empty() { "animation" } else { name })
 }
 
-pub(super) fn irc_frames(len: usize, mode: PlaybackMode, speed: f32) -> Vec<usize> {
+pub(super) fn irc_frames(
+    len: usize,
+    ts_index: usize,
+    mode: PlaybackMode,
+    speed: f32,
+) -> Vec<usize> {
     if len == 0 {
         return Vec::new();
     }
@@ -35,9 +41,23 @@ pub(super) fn irc_frames(len: usize, mode: PlaybackMode, speed: f32) -> Vec<usiz
         (seconds * fps).round().clamp(3.0 * fps, 6.0 * fps) as usize
     };
     let last = count - 1;
-    let mut frames: Vec<_> = (0..count).map(|i| (i * steps + last / 2) / last).collect();
+    // Reserve the nearest slot for the saddle, keeping both endpoints in the pass.
+    let ts_frame = match ts_index {
+        0 => 0,
+        i if i == steps => last,
+        i => ((i * last + steps / 2) / steps).clamp(1, last - 1),
+    };
+    let sample = |i: usize| {
+        let index = (i * steps + last / 2) / last;
+        match i.cmp(&ts_frame) {
+            Ordering::Less => index.min(ts_index - 1),
+            Ordering::Equal => ts_index,
+            Ordering::Greater => index.max(ts_index + 1),
+        }
+    };
+    let mut frames: Vec<_> = (0..count).map(sample).collect();
     if reverse {
-        frames.extend((1..last).rev().map(|i| (i * steps + last / 2) / last));
+        frames.extend((1..last).rev().map(sample));
     }
     frames
 }
@@ -152,11 +172,11 @@ mod tests {
 
     #[test]
     fn sequences_span_the_path_and_fit_three_to_six_seconds() {
-        assert!(irc_frames(0, PlaybackMode::Loop, 1.).is_empty());
-        assert_eq!(irc_frames(1, PlaybackMode::BackAndForth, 1.), [0; 60]);
+        assert!(irc_frames(0, 0, PlaybackMode::Loop, 1.).is_empty());
+        assert_eq!(irc_frames(1, 0, PlaybackMode::BackAndForth, 1.), [0; 60]);
         for mode in PlaybackMode::ALL {
             for (len, speed, count) in [(3, 2., 60), (51, 1., 80), (300, 0.5, 120)] {
-                let sequence = irc_frames(len, mode, speed);
+                let sequence = irc_frames(len, len / 2, mode, speed);
                 assert_eq!(
                     sequence.len(),
                     if mode == PlaybackMode::BackAndForth && len == 51 {
@@ -182,6 +202,29 @@ mod tests {
                             .eq(sequence[1..end].iter().rev().copied())
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn sequences_include_the_transition_state_once_per_pass() {
+        for mode in PlaybackMode::ALL {
+            for (len, ts_index, count) in [(121, 60, 120), (3, 1, 60), (300, 1, 120)] {
+                let sequence = irc_frames(len, ts_index, mode, 1.);
+                assert_eq!(sequence.len(), count);
+                assert_eq!(sequence[0], 0);
+                let reverse = mode == PlaybackMode::BackAndForth;
+                let end = if reverse { count / 2 } else { count - 1 };
+                assert_eq!(sequence[end], len - 1);
+                let (forward, backward) = sequence.split_at(end + 1);
+                assert_eq!(
+                    forward.iter().filter(|&&index| index == ts_index).count(),
+                    1
+                );
+                assert_eq!(
+                    backward.iter().filter(|&&index| index == ts_index).count(),
+                    usize::from(reverse)
+                );
             }
         }
     }
@@ -220,7 +263,7 @@ mod tests {
 
     #[test]
     fn a_single_saved_geometry_is_rendered_once_and_held_for_three_seconds() {
-        let sequence = irc_frames(1, PlaybackMode::Once, 1.);
+        let sequence = irc_frames(1, 0, PlaybackMode::Once, 1.);
         let mut rendered = 0;
         let bytes = encode(
             SMALL,
