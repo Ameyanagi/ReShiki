@@ -1,10 +1,11 @@
-//! Desktop export for the IRC and normal-mode previews.
+//! Desktop export for molecular previews and placed energy profiles.
 use super::{
     App, Message,
     animation::{PATH_FRAME_SECONDS, PathSample, PlaybackMode},
     gates::Gate,
     help::{Placement, modal},
     models3d::thumbnail::{AnimationPlot, AnimationRenderer},
+    profile_animation::{self, FrameRenderer, Timeline},
     workspace::muted_text,
 };
 use crate::appearance::EnergyUnit;
@@ -20,6 +21,8 @@ use std::sync::atomic::{AtomicU8, AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::time::Duration;
 
 mod encode;
+#[cfg(target_os = "macos")]
+mod mp4;
 
 const ACTION_ID: &str = "gif-export-save";
 const CANCEL_ID: &str = "gif-export-cancel";
@@ -42,6 +45,11 @@ pub(super) struct Source {
 }
 
 pub(super) enum Motion {
+    Profile {
+        id: u64,
+        timeline: Timeline,
+        motion: profile_animation::Motion,
+    },
     Mode(Vec<Vec<[f32; 3]>>),
     Irc {
         trajectory: Box<Trajectory>,
@@ -54,6 +62,7 @@ pub(super) enum Motion {
 impl Source {
     fn sequence(&self) -> Vec<usize> {
         match &self.motion {
+            Motion::Profile { timeline, .. } => timeline.sequence(FPS, self.mode, self.speed),
             Motion::Irc {
                 samples, ts_index, ..
             } => encode::irc_frames(samples.len(), *ts_index, self.mode, self.speed),
@@ -83,10 +92,46 @@ impl Default for Options {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Format {
+    #[default]
+    Gif,
+    #[cfg(target_os = "macos")]
+    Mp4,
+}
+
+impl Format {
+    fn available(_profile: bool) -> &'static [Self] {
+        #[cfg(target_os = "macos")]
+        if _profile {
+            return &[Self::Gif, Self::Mp4];
+        }
+        &[Self::Gif]
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::Gif => "GIF",
+            #[cfg(target_os = "macos")]
+            Self::Mp4 => "MP4",
+        }
+    }
+
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Gif => "gif",
+            #[cfg(target_os = "macos")]
+            Self::Mp4 => "mp4",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Action {
     OpenIrc,
     OpenMode,
+    OpenProfile,
+    Format(Format),
     Size(u16),
     Transparent(bool),
     Plot(bool),
@@ -107,6 +152,7 @@ pub(super) struct Dialog {
     id: u64,
     source: Arc<Source>,
     options: Options,
+    format: Format,
     stage: Stage,
 }
 
@@ -177,12 +223,16 @@ impl App {
     }
 
     pub(super) fn gif_export_action(&mut self, action: Action) -> Task<Message> {
-        if matches!(action, Action::OpenIrc | Action::OpenMode) {
+        if matches!(
+            action,
+            Action::OpenIrc | Action::OpenMode | Action::OpenProfile
+        ) {
             if self.gif_export.is_some() {
                 return Task::none();
             }
             let source = match action {
                 Action::OpenIrc => self.xtb_irc_gif_source(),
+                Action::OpenProfile => self.profile_export_source(),
                 _ => self.xtb_vibration_gif_source(),
             };
             if let Some(source) = source {
@@ -191,11 +241,17 @@ impl App {
                     id: NEXT_DIALOG.fetch_add(1, Relaxed),
                     source: Arc::new(source),
                     options: Options::default(),
+                    format: Format::default(),
                     stage: Stage::Options,
                 });
                 return iced::widget::operation::focus(ACTION_ID);
             }
-            self.status = "GIF export requires saved frames and a matching 3D model.".into();
+            self.status = if matches!(action, Action::OpenProfile) {
+                "Select an energy profile to export."
+            } else {
+                "GIF export requires saved frames and a matching 3D model."
+            }
+            .into();
             self.error = true;
             return Task::none();
         }
@@ -217,7 +273,17 @@ impl App {
                     dialog.options.size = size;
                 }
             }
-            Action::Transparent(value) if matches!(dialog.stage, Stage::Options) => {
+            Action::Format(format) if matches!(dialog.stage, Stage::Options) => {
+                if Format::available(matches!(dialog.source.motion, Motion::Profile { .. }))
+                    .contains(&format)
+                {
+                    dialog.format = format;
+                    dialog.options.transparent &= format == Format::Gif;
+                }
+            }
+            Action::Transparent(value)
+                if matches!(dialog.stage, Stage::Options) && dialog.format == Format::Gif =>
+            {
                 dialog.options.transparent = value;
             }
             Action::Plot(value) if matches!(dialog.stage, Stage::Options) => {
@@ -226,9 +292,15 @@ impl App {
             Action::Save if matches!(dialog.stage, Stage::Options) => {
                 dialog.stage = Stage::Picking;
                 let id = dialog.id;
-                let name = encode::file_name(&dialog.source.name);
+                let format = dialog.format;
+                let name = encode::file_name(&dialog.source.name, format.extension());
+                let title = if matches!(dialog.source.motion, Motion::Profile { .. }) {
+                    "Export animation"
+                } else {
+                    "Export animated GIF"
+                };
                 return Task::perform(
-                    async move { super::files::save_path("Export animated GIF", &name, "gif").await },
+                    async move { super::files::save_path(title, &name, format.extension()).await },
                     move |path| Message::GifExport(Action::Picked(id, path)),
                 );
             }
@@ -243,17 +315,18 @@ impl App {
                 let source = Arc::clone(&dialog.source);
                 let options = dialog.options;
                 let sequence = source.sequence();
+                let format = dialog.format;
                 dialog.stage = Stage::Rendering(Arc::clone(&work), sequence.len());
                 return Task::batch([
                     iced::widget::operation::focus(CANCEL_ID),
                     Task::perform(
                         async move {
                             tokio::task::spawn_blocking(move || {
-                                render(&source, options, &sequence, &work, &path)
+                                render(&source, options, format, &sequence, &work, &path)
                                     .map(|saved| saved.then_some(path))
                             })
                             .await
-                            .map_err(|e| format!("The GIF render stopped. {e}"))?
+                            .map_err(|e| format!("The animation render stopped. {e}"))?
                         },
                         move |result| Message::GifExport(Action::Finished(id, result)),
                     ),
@@ -287,7 +360,15 @@ impl App {
             return base;
         };
         let cancel = Message::GifExport(Action::Cancel);
-        let mut content = column![text("Export animated GIF").size(16)].spacing(12);
+        let profile = matches!(dialog.source.motion, Motion::Profile { .. });
+        let formats = Format::available(profile);
+        let format = dialog.format.title();
+        let title = if profile {
+            "Export animation"
+        } else {
+            "Export animated GIF"
+        };
+        let mut content = column![text(title).size(16)].spacing(12);
         let cancel_available = match &dialog.stage {
             Stage::Options => {
                 let options = dialog.options;
@@ -310,17 +391,31 @@ impl App {
                         ],
                     ));
                 }
-                content = content
-                    .push(choice(
-                        "Size",
-                        &[
-                            (480, "480 px", "gif-480"),
-                            (720, "720 px", "gif-720"),
-                            (1080, "1080 px", "gif-1080"),
-                        ]
-                        .map(|(n, label, id)| (id, label, n == options.size, Action::Size(n))),
-                    ))
-                    .push(choice(
+                if formats.len() > 1 {
+                    let choices: Vec<_> = formats
+                        .iter()
+                        .map(|&item| {
+                            (
+                                item.extension(),
+                                item.title(),
+                                dialog.format == item,
+                                Action::Format(item),
+                            )
+                        })
+                        .collect();
+                    content = content.push(choice("Format", &choices));
+                }
+                content = content.push(choice(
+                    "Size",
+                    &[
+                        (480, "480 px", "gif-480"),
+                        (720, "720 px", "gif-720"),
+                        (1080, "1080 px", "gif-1080"),
+                    ]
+                    .map(|(n, label, id)| (id, label, n == options.size, Action::Size(n))),
+                ));
+                if dialog.format == Format::Gif {
+                    content = content.push(choice(
                         "Background",
                         &[
                             (
@@ -336,16 +431,25 @@ impl App {
                                 Action::Transparent(true),
                             ),
                         ],
-                    ))
-                    .push(
-                        text(format!("{} · {FPS} fps", dialog.source.mode))
-                            .size(12)
-                            .style(muted_text),
-                    );
+                    ));
+                } else {
+                    content = content.push(row![
+                        text("Background").size(12).width(90),
+                        text("White").size(12)
+                    ]);
+                }
+                let summary = match &dialog.source.motion {
+                    Motion::Profile { motion, .. } => {
+                        format!("{motion} · {} · {FPS} fps", dialog.source.mode)
+                    }
+                    _ => format!("{} · {FPS} fps", dialog.source.mode),
+                };
+                content = content.push(text(summary).size(12).style(muted_text));
                 true
             }
             Stage::Picking => {
-                content = content.push(text("Choose where to save the GIF.").size(12));
+                content =
+                    content.push(text(format!("Choose where to save the {format}.")).size(12));
                 false
             }
             Stage::Rendering(work, total) => {
@@ -354,7 +458,7 @@ impl App {
                 content = content
                     .push(
                         text(if saving {
-                            "Saving GIF…".into()
+                            format!("Saving {format}…")
                         } else {
                             format!("Rendering frames · {done} / {total}")
                         })
@@ -370,14 +474,22 @@ impl App {
                 .style(crate::appearance::secondary)
                 .on_press_maybe(cancel_available.then(|| cancel.clone()));
         let save = matches!(dialog.stage, Stage::Options).then(|| {
-            reshiki::accessibility::button(ACTION_ID, "Save GIF…", text("Save GIF…").size(12))
+            let label = format!("Save {format}…");
+            reshiki::accessibility::button(ACTION_ID, label.clone(), text(label).size(12))
                 .padding([6, 12])
                 .style(crate::appearance::primary)
                 .on_press(Message::GifExport(Action::Save))
         });
         content =
             content.push(row![iced::widget::space::horizontal(), cancel_button, save].spacing(6));
-        modal(base, content.into(), 420., 315., Placement::Fit, cancel)
+        modal(
+            base,
+            content.into(),
+            420.,
+            if profile { 345. } else { 315. },
+            Placement::Fit,
+            cancel,
+        )
     }
 }
 
@@ -403,6 +515,7 @@ fn choice(
 fn render(
     source: &Source,
     options: Options,
+    format: Format,
     sequence: &[usize],
     work: &Work,
     path: &Path,
@@ -410,14 +523,33 @@ fn render(
     if work.state.load(Relaxed) == CANCELED {
         return Ok(false);
     }
-    let mut renderer = AnimationRenderer::new(
-        &source.doc,
-        source.model,
-        u32::from(options.size),
-        options.transparent,
-    )?;
+    let model_renderer = || {
+        AnimationRenderer::new(
+            &source.doc,
+            source.model,
+            u32::from(options.size),
+            options.transparent,
+        )
+    };
     match &source.motion {
+        Motion::Profile { id, timeline, .. } => {
+            let mut renderer =
+                FrameRenderer::new(&source.doc, *id, options.size, options.transparent)?;
+            let render = |_, index| {
+                let frame = timeline
+                    .frame(index)
+                    .ok_or("Missing energy profile frame")?;
+                let geometry = timeline.geometry(frame);
+                renderer.render(frame.state, frame.sample(), geometry.as_ref(), true)
+            };
+            match format {
+                Format::Gif => encode::save(path, options, source.mode, sequence, work, render),
+                #[cfg(target_os = "macos")]
+                Format::Mp4 => mp4::save(path, options, sequence, work, render),
+            }
+        }
         Motion::Mode(frames) => {
+            let mut renderer = model_renderer()?;
             renderer.fit(frames)?;
             encode::save(path, options, source.mode, sequence, work, |_, index| {
                 let positions = frames.get(index).ok_or("Missing normal-mode frame")?;
@@ -445,6 +577,7 @@ fn render(
                         .collect()
                 })
                 .collect();
+            let mut renderer = model_renderer()?;
             let first = geometries.first().ok_or("The animation has no frames")?;
             renderer.set_irc_topology(&trajectory.numbers, first)?;
             renderer.fit(&frames)?;
@@ -483,3 +616,6 @@ fn render(
         }
     }
 }
+
+#[cfg(test)]
+mod profile_tests;

@@ -2960,7 +2960,8 @@ impl App {
                 section("Energy profile"),
                 link,
                 text("3D models").size(11),
-                models
+                models,
+                self.profile_animation_controls(figure)
             ]
             .spacing(8)
             .into(),

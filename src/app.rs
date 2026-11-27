@@ -105,6 +105,7 @@ mod pictures;
 mod piece_libraries;
 mod popover;
 mod printing;
+mod profile_animation;
 mod prompt;
 mod qc_export;
 mod reaction_mapping;
@@ -278,6 +279,7 @@ pub enum Message {
     QcExport(qc_export::Action),
     #[cfg(not(target_arch = "wasm32"))]
     GifExport(gif_export::Action),
+    ProfileAnimation(profile_animation::Action),
     /// The "Choose what to import" sheet for a file of several frames.
     FramesImport(frames_import::Action),
     /// Predict → xTB: the Calculate card and its runs.
@@ -569,6 +571,7 @@ pub struct App {
     qc_export: Option<qc_export::Dialog>,
     #[cfg(not(target_arch = "wasm32"))]
     gif_export: Option<gif_export::Dialog>,
+    profile_animation: Option<profile_animation::Session>,
     frames_import: Option<frames_import::Dialog>,
     /// Files of several frames opened together, asked about in turn.
     frames_queue: std::collections::VecDeque<(std::path::PathBuf, frames_import::File)>,
@@ -722,6 +725,7 @@ impl App {
             qc_export: None,
             #[cfg(not(target_arch = "wasm32"))]
             gif_export: None,
+            profile_animation: None,
             frames_import: None,
             frames_queue: Default::default(),
             xtb: xtb::Window::default(),
@@ -824,6 +828,7 @@ impl App {
             self.xtb_subscription(),
             #[cfg(not(target_arch = "wasm32"))]
             self.gif_export_subscription(),
+            self.profile_animation_subscription(),
             self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
@@ -1204,6 +1209,13 @@ impl App {
         self.update(message)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if matches!(
+            message,
+            Message::ProfileAnimation(profile_animation::Action::Tick)
+        ) {
+            self.tick_profile_animation();
+            return Task::none();
+        }
         if let Message::ReactionBondHover(arrow, kind, pair, entered) = message {
             self.xtb_hover_bond((arrow, kind, pair), entered);
             return Task::none();
@@ -1263,6 +1275,7 @@ impl App {
             .map(|stored| (stored.attachment, Arc::downgrade(&stored.result)));
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
+        self.sync_profile_animation();
         self.xtb_sync_conformer_inversion();
         self.xtb_clear_selection_hint();
         let document_changed = document != (self.tab.id, self.tab.file_epoch);

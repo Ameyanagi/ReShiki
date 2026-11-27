@@ -1182,6 +1182,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
             bracket_sides: BracketSides::Both,
             superscript: None,
             revision: 0,
+            profile_animation: None,
         },
         bond_drawing: Default::default(),
         chain_drawing: Default::default(),

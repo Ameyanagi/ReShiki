@@ -10,6 +10,7 @@
 
 pub mod accessibility;
 pub mod clipboard;
+pub mod mp4;
 pub mod printing;
 pub mod workers;
 

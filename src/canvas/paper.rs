@@ -346,7 +346,19 @@ impl MoleculeCanvas<'_> {
                 draw_primitives(frame, &fragment.scene, self.camera, bounds, 0.);
             }
         } else if let Some(camera) = cached_camera {
-            let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
+            let animation = self
+                .graphics
+                .profile_animation
+                .filter(|_| translation.is_none() && state.gesture.is_none());
+            let (markers, scene) = {
+                let mut cache = state.scene.borrow_mut();
+                match animation.and_then(|view| view.hidden_picture) {
+                    Some(hidden) => {
+                        cache.render_without_profile_picture(self.doc, selected, hidden)
+                    }
+                    None => cache.render(self.doc, selected),
+                }
+            };
             self.reserve_result_label_ink(frame, &scene, camera, bounds);
             if rotating {
                 rotation_ink = reshiki::scene::label_ink_boxes(&scene);
@@ -359,6 +371,9 @@ impl MoleculeCanvas<'_> {
                 &nmr_ids,
                 self.reviewing_pair,
             );
+            if let Some(animation) = animation {
+                draw_primitives(frame, animation.ink, camera, bounds, 0.);
+            }
         } else if let Some(record) = &memo
             && reuse
         {

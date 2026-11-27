@@ -2409,7 +2409,7 @@ fn find_ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> 
 /// apply the canvas conversion once.
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
     if doc.graphics.iter().any(|g| g.table.is_some()) {
-        return table::primitives(doc);
+        return table::primitives_with_lines(doc, false);
     }
     let flat = crate::models3d::drawn(doc);
     let opacity = crate::rear_opacity::Paint::new(&flat);
@@ -2429,7 +2429,7 @@ pub fn vector_primitives(doc: &Document) -> Vec<Primitive> {
         doc,
         &flat,
         &opacity,
-        &Default::default(),
+        SceneGraphics::default(),
         Resolve::Scene,
         true,
     )
@@ -2443,15 +2443,34 @@ pub fn primitives_with_opacity(
     flat: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Primitive> {
+    primitives_with_profile_view(raw, flat, opacity, None)
+}
+
+/// The still scene with one molecular picture left to the animation overlay.
+pub fn primitives_without_profile_picture(raw: &Document, id: u64, state: usize) -> Vec<Primitive> {
+    let flat = crate::models3d::drawn(raw);
+    let opacity = crate::rear_opacity::Paint::new(&flat);
+    primitives_with_profile_view(raw, &flat, &opacity, Some((id, state)))
+}
+
+fn primitives_with_profile_view(
+    raw: &Document,
+    flat: &Document,
+    opacity: &crate::rear_opacity::Paint,
+    hidden_picture: Option<(u64, usize)>,
+) -> Vec<Primitive> {
     if raw.graphics.iter().any(|g| g.table.is_some()) {
-        return table::primitives(raw);
+        return table::primitives_with_profile_view(raw, false, hidden_picture);
     }
     primitives_with_tables(
         raw,
         raw,
         flat,
         opacity,
-        &Default::default(),
+        SceneGraphics {
+            hidden_picture,
+            ..Default::default()
+        },
         Resolve::Scene,
         false,
     )
@@ -2462,6 +2481,7 @@ fn primitives_in_cell(
     doc: &Document,
     backdrop: crate::canvas_theme::FillBackdrop<'_>,
     lines: bool,
+    hidden_picture: Option<(u64, usize)>,
 ) -> Vec<Primitive> {
     let flat = crate::models3d::drawn(doc);
     let opacity = crate::rear_opacity::Paint::new(&flat);
@@ -2470,10 +2490,19 @@ fn primitives_in_cell(
         doc,
         &flat,
         &opacity,
-        &Default::default(),
+        SceneGraphics {
+            hidden_picture,
+            ..Default::default()
+        },
         Resolve::SceneOn(backdrop),
         lines,
     )
+}
+
+#[derive(Clone, Copy, Default)]
+struct SceneGraphics<'a> {
+    tables: Option<&'a std::collections::HashMap<u64, Vec<Primitive>>>,
+    hidden_picture: Option<(u64, usize)>,
 }
 
 fn primitives_with_tables(
@@ -2481,7 +2510,7 @@ fn primitives_with_tables(
     raw: &Document,
     flat: &Document,
     opacity: &crate::rear_opacity::Paint,
-    tables: &std::collections::HashMap<u64, Vec<Primitive>>,
+    options: SceneGraphics<'_>,
     resolve: Resolve<'_>,
     lines: bool,
 ) -> Vec<Primitive> {
@@ -2511,7 +2540,7 @@ fn primitives_with_tables(
             halos.atoms.push((id, None));
         }
     }
-    push_underlays(&mut out, doc, source, &graphics, shaded, opacity, tables);
+    push_underlays(&mut out, doc, source, &graphics, shaded, opacity, options);
     out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
@@ -2562,7 +2591,7 @@ fn primitives_with_tables(
         .collect();
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
         out.extend(table_graphic_primitive(
-            graphic, doc, source, shaded, tables,
+            graphic, doc, source, shaded, options,
         ));
         if let Some(text) = graphic.text.and_then(|t| held.get(&t)) {
             push_annotation(&mut out, text, cell_text);
@@ -2579,12 +2608,16 @@ fn table_graphic_primitive(
     doc: &Document,
     source: &Document,
     shaded: usize,
-    tables: &std::collections::HashMap<u64, Vec<Primitive>>,
+    options: SceneGraphics<'_>,
 ) -> Vec<Primitive> {
-    tables
-        .get(&g.id)
+    options
+        .tables
+        .and_then(|tables| tables.get(&g.id))
         .cloned()
-        .unwrap_or_else(|| graphic_primitive(g, doc, source, shaded))
+        .unwrap_or_else(|| {
+            let hidden = options.hidden_picture.filter(|&(id, _)| id == g.id);
+            graphic_primitive(g, doc, source, shaded, hidden.map(|(_, state)| state))
+        })
 }
 
 /// Orbitals keep complete lobes. The labels they reach are drawn above the
@@ -2676,11 +2709,17 @@ fn graphic_primitive(
     doc: &Document,
     source: &Document,
     shaded: usize,
+    hide_picture: Option<usize>,
 ) -> Vec<Primitive> {
     let diagram = if let Some(mo) = &g.mo {
         Some(mo.draw(g, &doc.drawing_style, source))
-    } else if let Some(profile) = &g.energy_profile {
-        Some(profile.draw(g, &doc.drawing_style, source))
+    } else if g.energy_profile.is_some() {
+        Some(match hide_picture {
+            Some(state) => {
+                g.energy_profile_scene_without_picture(&doc.drawing_style, source, state)
+            }
+            None => g.energy_profile_scene(&doc.drawing_style, source),
+        })
     } else if g.kind == crate::graphics::GraphicKind::TlcPlate {
         Some((g.parts(), g.tlc_labels(), vec![]))
     } else {
@@ -3003,13 +3042,13 @@ fn push_underlays(
     graphics: &[&crate::graphics::Graphic],
     shaded: usize,
     opacity: &crate::rear_opacity::Paint,
-    tables: &std::collections::HashMap<u64, Vec<Primitive>>,
+    options: SceneGraphics<'_>,
 ) {
     out.extend(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|g| table_graphic_primitive(g, doc, source, shaded, tables)),
+            .flat_map(|g| table_graphic_primitive(g, doc, source, shaded, options)),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -3390,7 +3429,7 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document, cell_te
             if let Some(gradient) = &mut p.style.effects.gradient {
                 gradient.from = drawn_paper(doc, a.id);
                 let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
-                out.extend(graphic_primitive(&&shape, doc, doc, 1));
+                out.extend(graphic_primitive(&&shape, doc, doc, 1, None));
             } else {
                 out.push(Primitive::Path {
                     commands: p.commands,

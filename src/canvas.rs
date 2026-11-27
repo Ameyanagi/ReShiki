@@ -675,6 +675,13 @@ pub struct GraphicOptions<'a> {
     pub superscript: Option<&'a str>,
     /// The document revision, which invalidates per-drag caches.
     pub revision: u64,
+    pub(crate) profile_animation: Option<ProfileAnimation<'a>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ProfileAnimation<'a> {
+    pub hidden_picture: Option<(u64, usize)>,
+    pub ink: &'a [reshiki::scene::Primitive],
 }
 
 impl Default for GraphicOptions<'_> {
@@ -693,6 +700,7 @@ impl Default for GraphicOptions<'_> {
             bracket_sides: Default::default(),
             superscript: None,
             revision: 0,
+            profile_animation: None,
         }
     }
 }

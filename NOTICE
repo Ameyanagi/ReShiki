@@ -36,6 +36,8 @@ of adaptations, copyright notices, and license texts are recorded in:
   vendor/svg2pdf/         Variable-font PDF instances and upstream notices
   gif 0.14.2              Animated GIF encoding (MIT OR Apache-2.0)
                           https://github.com/image-rs/image-gif
+  objc2 / block2          Native macOS H.264/MP4 export bindings (MIT)
+                          https://github.com/madsmtm/objc2
 
   tests/fixtures/crystal/  COD ferrocene data (CC0; source notice retained)
   tests/fixtures/qc/       Quantum chemistry test files, not distributed:

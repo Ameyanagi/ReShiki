@@ -93,8 +93,9 @@ explains how the crates and modules fit together.
 - `src/app/frames_import/calculation_stereo.rs`: Perceive stereo in the explicit geometry of an opened calculation output.
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
-- `src/app/gif_export.rs`: Desktop export for the IRC and normal-mode previews.
+- `src/app/gif_export.rs`: Desktop export for molecular previews and placed energy profiles.
 - `src/app/gif_export/encode.rs`
+- `src/app/gif_export/mp4.rs`: Safe, cancellable MP4 export with atomic destination replacement.
 - `src/app/github.rs`: GitHub in the editor
 - `src/app/github/account.rs`: The sign-in dialog
 - `src/app/github/compare.rs`: Two versions of a drawing side by side, with what changed marked by kind
@@ -177,6 +178,9 @@ explains how the crates and modules fit together.
 - `src/app/piece_libraries/reader.rs`: Detached native readers for equipment library folders.
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
+- `src/app/profile_animation.rs`: Playback of a placed energy profile, owned by the active drawing view.
+- `src/app/profile_animation/artwork.rs`: One view-only overlay for the drawing and exported animation frames.
+- `src/app/profile_animation/timeline.rs`: Ordered state holds and sampled movement through the saved IRC.
 - `src/app/prompt.rs`: Questions the app asks in its own dialog
 - `src/app/qc_export.rs`: Export input for Gaussian, ORCA and GAMESS
 - `src/app/reaction_mapping.rs`: The reaction inspector edits chemical map numbers and reviews detached fits.
@@ -893,6 +897,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
 - `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
 - `crates/model/src/graphics/energy_profile.rs`: A placed reaction energy profile, with owned geometries and vector artwork.
+- `crates/model/src/graphics/energy_profile/animation.rs`: Playback artwork shares the placed figure's layout without editing it.
 - `crates/model/src/graphics/heads.rs`
 - `crates/model/src/graphics/ir_figure.rs`: Stored parameters for a placed, editable infrared spectrum figure.
 - `crates/model/src/graphics/mo_diagram.rs`: A placed molecular orbital diagram and its vector layout.
@@ -1147,6 +1152,7 @@ explains how the crates and modules fit together.
 - `native/macos/src/accessibility.rs`: Owner-thread AccessKit lifecycle.
 - `native/macos/src/clipboard.rs`: Explicit, bounded access to one pasteboard item.
 - `native/macos/src/lib.rs`: macOS document-open events, isolated from the safe editor and chemistry code.
+- `native/macos/src/mp4.rs`: H.264 export through the system AVFoundation encoder.
 - `native/macos/src/printing.rs`: Snapshot printing through AppKit/PDFKit, on the worker's main thread.
 - `native/macos/src/workers.rs`: Standard-I/O entry points used by the application's isolated worker modes.
 

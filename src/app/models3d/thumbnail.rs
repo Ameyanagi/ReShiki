@@ -12,7 +12,7 @@ use reshiki::qcdata::Frame;
 #[cfg(not(target_arch = "wasm32"))]
 mod animation;
 #[cfg(not(target_arch = "wasm32"))]
-pub(in crate::app) use animation::{AnimationPlot, AnimationRenderer};
+pub(in crate::app) use animation::{AnimationPlot, AnimationRenderer, raster_animation_frame};
 
 #[derive(Clone, Copy, Debug)]
 struct Change {

@@ -13,6 +13,8 @@ use crate::{
     typography::{TextFormat, TextStyle},
 };
 
+mod animation;
+
 /// The same display unit used by result plots and placed figures.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -346,6 +348,15 @@ impl EnergyProfile {
         style: &DrawingStyle,
         source: &Document,
     ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
+        self.draw_without_picture(g, style, source, None)
+    }
+    fn draw_without_picture(
+        &self,
+        g: &Graphic,
+        style: &DrawingStyle,
+        source: &Document,
+        skip: Option<usize>,
+    ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
         let mut layout = Layout::with_frame(self, style, Some(g), Some(source));
         let (parts, labels) = layout.ink(g);
         let side = layout.picture_world_side(g);
@@ -357,6 +368,7 @@ impl EnergyProfile {
         let outline_width = (side / 400.).clamp(0.6, 1.1);
         let pictures = std::mem::take(&mut layout.pictures)
             .into_iter()
+            .filter(|slot| Some(slot.state) != skip)
             .flat_map(|slot| {
                 let centre = layout.world(g, slot.centre);
                 slot.artwork.into_iter().map(move |mut primitive| {
@@ -420,6 +432,19 @@ impl Graphic {
             .as_deref()
             .map_or_else(Default::default, |p| p.draw(self, style, source))
     }
+    /// View-only playback leaves this model slot for the animated overlay.
+    pub fn energy_profile_scene_without_picture(
+        &self,
+        style: &DrawingStyle,
+        source: &Document,
+        state: usize,
+    ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
+        self.energy_profile
+            .as_deref()
+            .map_or_else(Default::default, |p| {
+                p.draw_without_picture(self, style, source, Some(state))
+            })
+    }
 }
 
 struct Label {
@@ -448,6 +473,7 @@ impl Label {
     }
 }
 struct PictureSlot {
+    state: usize,
     centre: Point,
     half_size: Point,
     ink_centre: Point,
@@ -701,6 +727,7 @@ impl Layout {
                     label.centre.y + h + gap + half.y
                 };
                 layout.pictures.push(PictureSlot {
+                    state: i,
                     centre: Point::new(x, model_y),
                     half_size: half,
                     ink_centre,

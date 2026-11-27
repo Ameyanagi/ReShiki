@@ -14,6 +14,7 @@ use std::{
 pub(super) struct SceneCache {
     document: Option<Document>,
     scene: Option<Rc<[Primitive]>>,
+    profile_scene: Option<ProfileScene>,
     stretch: Option<Rc<reshiki::editing::reference::Stretch>>,
     stretch_key: Option<(u64, u64)>,
     opacity: Option<Rc<Paint>>,
@@ -46,6 +47,11 @@ pub(super) struct SceneCache {
     pub cycle_hit_layouts: usize,
     #[cfg(test)]
     pub moved_part_builds: usize,
+}
+
+struct ProfileScene {
+    hidden: (u64, usize),
+    ink: Rc<[Primitive]>,
 }
 
 /// One draw of the canvas. It compares the drawing with the cached one as it
@@ -132,6 +138,7 @@ impl SceneCache {
             self.meshes = meshes;
             self.document = Some(doc.clone());
             self.scene = None;
+            self.profile_scene = None;
             self.stretch = None;
             self.stretch_key = None;
             self.opacity = None;
@@ -274,6 +281,31 @@ impl SceneCache {
             .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
             .clone();
         (markers, self.scene(doc))
+    }
+
+    pub fn render_without_profile_picture(
+        &mut self,
+        doc: &Document,
+        ids: &[u64],
+        hidden: (u64, usize),
+    ) -> (Rc<super::markers::Markers>, Rc<[Primitive]>) {
+        self.selected(doc, ids);
+        let markers = self
+            .markers
+            .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
+            .clone();
+        if let Some(scene) = &self.profile_scene
+            && scene.hidden == hidden
+        {
+            return (markers, scene.ink.clone());
+        }
+        let ink: Rc<[_]> =
+            scene::primitives_without_profile_picture(doc, hidden.0, hidden.1).into();
+        self.profile_scene = Some(ProfileScene {
+            hidden,
+            ink: ink.clone(),
+        });
+        (markers, ink)
     }
 
     fn scene(&mut self, doc: &Document) -> Rc<[Primitive]> {
