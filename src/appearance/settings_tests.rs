@@ -2,6 +2,24 @@ use super::*;
 use reshiki::style::units::Unit;
 
 #[test]
+fn animation_playback_defaults_and_survives_reload() {
+    use crate::app::animation::{PlaybackMode, PlaybackSpeed};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    std::fs::write(&path, r#"{"energy_unit":"kj_per_mol"}"#).unwrap();
+    let mut settings = Settings::load_from(&path);
+    assert_eq!(settings.playback_mode, PlaybackMode::Loop);
+    assert_eq!(settings.playback_speed, PlaybackSpeed::Normal);
+    settings.playback_mode = PlaybackMode::BackAndForth;
+    settings.playback_speed = PlaybackSpeed::Half;
+    settings.save_to(&path).unwrap();
+    let saved = Settings::load_from(&path);
+    assert_eq!(saved.playback_mode, PlaybackMode::BackAndForth);
+    assert_eq!(saved.playback_speed, PlaybackSpeed::Half);
+    assert_eq!(saved.energy_unit, EnergyUnit::KjPerMol);
+}
+
+#[test]
 fn drawing_units_preserve_legacy_and_unrelated_preferences() {
     for json in [
         r#"{"mode":"dark","arrange_controls":false}"#,

@@ -36,6 +36,8 @@ impl App {
             return Break(task);
         }
         let message = self.file_prepared_gate(message)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let message = self.gif_export_gate(message)?;
         if let Some(task) = self.cycle_proposal_gate(&message) {
             return Break(task);
         }
@@ -98,6 +100,10 @@ impl App {
     }
 
     fn early_results_gate(&mut self, message: Message) -> Gate {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Message::GifExport(action @ super::gif_export::Action::Finished(..)) = message {
+            return Break(self.gif_export_action(action));
+        }
         if let Message::Stereo(action @ super::stereo::Action::Pulse) = message {
             self.stereo_action(action);
             return Break(Task::none());

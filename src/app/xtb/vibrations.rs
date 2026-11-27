@@ -425,6 +425,45 @@ impl App {
             })
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(in crate::app) fn xtb_vibration_gif_source(
+        &self,
+    ) -> Option<crate::app::gif_export::Source> {
+        use crate::app::gif_export::{Motion, Source};
+        let animation = self.xtb_current_animation()?;
+        let shown = self.xtb_shown()?;
+        let atoms: Vec<_> = shown.atoms.iter().flatten().copied().collect();
+        let name = reshiki::molecule_names::label(&self.tab.doc, &atoms)
+            .map(|label| label.text.clone())
+            .or_else(|| self.xtb_existing_molecule_name(&atoms).map(str::to_owned))
+            .or_else(|| {
+                self.export_stem()
+                    .filter(|_| self.tab.doc.models.len() == 1)
+            })
+            .filter(|name| !name.trim().is_empty() && name.len() <= 64)
+            .unwrap_or_else(|| state::formula(&shown.frame.numbers));
+        let frames = animation
+            .frames
+            .iter()
+            .map(|(model, _)| {
+                model
+                    .atoms
+                    .iter()
+                    .map(|atom| atom.xyz)
+                    .chain(model.hydrogens.iter().map(|atom| atom.xyz))
+                    .collect()
+            })
+            .collect();
+        Some(Source {
+            name: format!("{name}-mode-{}", animation.key.mode + 1),
+            doc: animation.doc.clone(),
+            model: animation.model,
+            motion: Motion::Mode(frames),
+            mode: crate::app::animation::PlaybackMode::Loop,
+            speed: self.tab.xtb.vibrations.speed.clamp(0.25, 2.),
+        })
+    }
+
     pub(in crate::app) fn xtb_vibration_entry(&self) -> Option<&Stored> {
         if !self.xtb_vibrations_visible() || self.tab.xtb.run.is_some() {
             return None;
@@ -438,8 +477,10 @@ impl App {
         let vibrations = &self.tab.xtb.vibrations;
         if vibrations.playing && self.xtb_vibration_preview().is_some() {
             iced::time::every(TICK).map(|_| Message::Xtb(super::Action::Vibrations(Action::Tick)))
-        } else if self.xtb_irc_preview().is_some() {
-            iced::time::every(std::time::Duration::from_millis(80))
+        } else if self.xtb_irc_playing() {
+            let seconds =
+                crate::app::animation::PATH_FRAME_SECONDS / self.appearance.playback_speed.factor();
+            iced::time::every(Duration::from_secs_f32(seconds))
                 .map(|_| Message::Xtb(super::Action::Ts(super::ts::Action::IrcTick)))
         } else if self.xtb_live_ts().is_some() {
             iced::time::every(std::time::Duration::from_millis(100))

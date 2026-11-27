@@ -184,7 +184,7 @@ fn irc_chart_ts_label_matches_the_card_barrier_and_relaxed_r_is_off_zero() {
 }
 
 #[test]
-fn irc_clicks_do_not_publish_neb_image_selection() {
+fn irc_clicks_seek_the_nearest_frame_without_selecting_a_neb_image() {
     let chart = PathChart {
         deltas: vec![0., 10., -2.],
         coordinates: vec![-1., 0., 1.],
@@ -194,21 +194,44 @@ fn irc_clicks_do_not_publish_neb_image_selection() {
         ..PathChart::live(&[], EnergyUnit::KcalPerMol)
     };
     let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(330., 146.));
-    let cursor = mouse::Cursor::Available(Point::new(150., 80.));
-    assert!(
-        canvas::Program::update(
-            &chart,
-            &mut (),
-            &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-            bounds,
-            cursor
-        )
-        .is_none()
-    );
+    let profile = chart.profile();
+    let cursor = mouse::Cursor::Available(profile.layout(bounds).point(profile.samples[1]));
+    let (message, _, status) = canvas::Program::update(
+        &chart,
+        &mut (),
+        &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        bounds,
+        cursor,
+    )
+    .unwrap()
+    .into_inner();
+    assert!(matches!(
+        message,
+        Some(Message::Xtb(XtbAction::Ts(Action::IrcSeek(1))))
+    ));
+    assert_eq!(status, iced::event::Status::Captured);
     assert_eq!(
         canvas::Program::mouse_interaction(&chart, &(), bounds, cursor),
-        mouse::Interaction::default()
+        mouse::Interaction::Pointer
     );
+}
+
+#[test]
+fn irc_curve_clicks_use_screen_distance_on_steep_sections_and_neb_keeps_x_picking() {
+    let chart = PathChart {
+        deltas: vec![0., 100., 0.],
+        coordinates: vec![0., 0.05, 1.],
+        irc: true,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(420., 210.));
+    let profile = chart.profile();
+    let layout = profile.layout(bounds);
+    let low = layout.point(profile.samples[0]);
+    let high = layout.point(profile.samples[1]);
+    let click = Point::new(high.x, low.y);
+    assert_eq!(profile.nearest_point(click, bounds), Some(0));
+    assert_eq!(chart.nearest(click.x, bounds), Some(1));
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -155,6 +155,7 @@ miniz_oxide = "0.8"
 
 # The CLI, MCP server, assistant, updater and helper processes are desktop-only.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+gif = "0.14.2"
 reshiki-process = { path = "native/process" }
 reshiki-agent = { path = "crates/agent" }
 reshiki-mcp = { path = "crates/mcp" }

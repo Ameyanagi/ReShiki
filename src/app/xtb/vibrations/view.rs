@@ -236,14 +236,23 @@ impl App {
             format!("{:.2}×", settings.speed),
             slider(0.25..=2., settings.speed, |v| send(Action::Speed(v))).step(0.25_f32),
         ));
-        controls.push(
+        controls = controls.push(
             accessible_command(
                 "xtb-vibration-export-xyz",
                 "Export the selected mode as a multi-frame XYZ movie",
                 "Export mode as XYZ movie…",
             )
             .on_press_maybe(modes.then(|| send(Action::ExportXyz))),
-        )
+        );
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            controls = controls.push(crate::app::gif_export::button(
+                "xtb-vibration-export-gif",
+                crate::app::gif_export::Action::OpenMode,
+                live && self.xtb_current_animation().is_some(),
+            ));
+        }
+        controls
     }
 }
 

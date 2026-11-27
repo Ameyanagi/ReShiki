@@ -22,6 +22,7 @@ explains how the crates and modules fit together.
 - `src/app/abbreviations.rs`
 - `src/app/accessibility.rs`: Window lifecycle and a bounded, generation-checked native action queue.
 - `src/app/add_panel.rs`: Shared search for templates, chemical names and SMILES in the Add tab.
+- `src/app/animation.rs`: Frame-by-frame playback and reaction-coordinate readouts.
 - `src/app/arcs.rs`
 - `src/app/arrow_labels.rs`: Contextual controls for attached reaction-condition clearances.
 - `src/app/arrows.rs`
@@ -72,6 +73,7 @@ explains how the crates and modules fit together.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
 - `src/app/energy_plot.rs`: A small energy diagram shared by the import sheet and the Conformers tab
 - `src/app/energy_plot/profile.rs`: Labelled reaction-energy figures.
+- `src/app/energy_plot/scale.rs`: Round axis intervals shared by the Path plot and GIF export.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.
@@ -90,6 +92,8 @@ explains how the crates and modules fit together.
 - `src/app/frames_import.rs`: Choose the job or geometry to open from a calculation or a multi-frame file.
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
+- `src/app/gif_export.rs`: Desktop export for the IRC and normal-mode previews.
+- `src/app/gif_export/encode.rs`
 - `src/app/github.rs`: GitHub in the editor
 - `src/app/github/account.rs`: The sign-in dialog
 - `src/app/github/compare.rs`: Two versions of a drawing side by side, with what changed marked by kind
@@ -133,6 +137,7 @@ explains how the crates and modules fit together.
 - `src/app/macos_files.rs`: Finder and Dock requests to open drawings, which open as tabs.
 - `src/app/models3d.rs`: Show a selected molecule as its 2D drawing, a 3D model or both (#386).
 - `src/app/models3d/thumbnail.rs`: Prepared ball-and-stick thumbnails using the paper's model renderer.
+- `src/app/models3d/thumbnail/animation.rs`: Worker-owned movie frames through the model thumbnail/export SVG renderer.
 - `src/app/molecule_shortcuts.rs`: Molecule shortcuts and edit context.
 - `src/app/naming.rs`: Per-document local name parsing, editable previews and rule-based name generation.
 - `src/app/naming/aliases.rs`: Source-labelled aliases share the Import dock and normal linked captions.
@@ -242,6 +247,8 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/energy.rs`: Reaction energies are ordinary, sequential molecule calculations.
 - `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
 - `src/app/xtb/ts/irc.rs`: Select the saved reaction path, preview its geometries, and export its XYZ trajectory.
+- `src/app/xtb/ts/irc/controls.rs`: Reusable transport controls for reaction-path animations.
+- `src/app/xtb/ts/irc/focus.rs`: Arrow-key stepping belongs to the focused path, never a document shortcut.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
 - `src/app/xtb/ts/refine.rs`: Resolve a saved saddle and its endpoint frames on the originating reaction.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.

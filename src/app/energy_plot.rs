@@ -8,6 +8,7 @@ use iced::widget::canvas::{self, Frame, Path, Stroke, Text};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 
 pub(crate) mod profile;
+pub(super) mod scale;
 
 /// How the items are laid out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
