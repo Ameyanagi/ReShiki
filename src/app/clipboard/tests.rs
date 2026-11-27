@@ -36,6 +36,255 @@ fn drawing_points(document: &Document) -> Vec<Point> {
     points
 }
 
+fn energy_profile_scheme() -> Document {
+    use reshiki::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+        graphics::{
+            EnergyProfile, EnergyProfileState, EnergyProfileStateKind as Kind, EnergyProfileStep,
+            Graphic,
+        },
+        reactions::{Participant, Reaction},
+    };
+    let mut doc = Document::default();
+    let r = doc.add_atom("C", Point::new(-100., 0.));
+    let p = doc.add_atom("C", Point::new(220., 0.));
+    doc.atoms.iter_mut().for_each(|atom| atom.map_num = 1);
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::default(),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    let mut reaction = Reaction::new(arrow);
+    reaction.reactants.push(Participant {
+        atoms: vec![r],
+        coefficient: 1,
+    });
+    reaction.products.push(Participant {
+        atoms: vec![p],
+        coefficient: 1,
+    });
+    let key = crate::app::xtb::ts::profile::source_key(&doc, &reaction);
+    doc.reactions.push(reaction);
+    let profile = EnergyProfile::new(
+        arrow,
+        key,
+        "GFN2-xTB".into(),
+        [Kind::Reactant, Kind::Product]
+            .into_iter()
+            .enumerate()
+            .map(|(i, kind)| EnergyProfileState {
+                kind,
+                label: if i == 0 { "R" } else { "P" }.into(),
+                energy_kcal: -(i as f64),
+                geometry: None,
+            })
+            .collect(),
+        vec![EnergyProfileStep {
+            from: 0,
+            to: 1,
+            transition: None,
+            irc: vec![],
+        }],
+    );
+    let id = doc.next_id();
+    doc.graphics.push(Graphic::energy_profile(
+        id,
+        Point::new(0., 80.),
+        Point::new(240., 140.),
+        profile,
+        Default::default(),
+    ));
+    doc.validate().unwrap();
+    doc
+}
+
+fn native_clipboard_snapshot(app: &App) -> Vec<u8> {
+    reshiki::clipboard::native_json(
+        &app.native_copy_snapshot().current(),
+        Some(CopyOrigin::local(app.tab.file_epoch)),
+    )
+    .unwrap()
+}
+
+#[test]
+fn same_document_scheme_copy_and_cut_keep_remapped_profiles_current() {
+    use reshiki::graphics::EnergyUnit;
+    for cut in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.doc = energy_profile_scheme();
+        app.tab.selected = app.tab.doc.all_ids();
+        let old_arrow = app.tab.doc.arrows[0].id;
+        let extra = app.tab.doc.add_atom("N", Point::new(600., 0.));
+        let bytes = native_clipboard_snapshot(&app);
+        if cut {
+            app.clipboard_written(
+                app.tab.file_epoch,
+                app.tab.revision,
+                app.tab.selected.clone(),
+                success(),
+            );
+            assert!(app.tab.doc.arrows.is_empty());
+        }
+        app.clipboard_read(
+            app.tab.file_epoch,
+            app.tab.revision,
+            PasteOutcome::from_native_json(&bytes),
+        );
+        assert!(!app.error, "{}", app.status);
+        assert!(app.tab.doc.atom(extra).is_some());
+        let arrow = app.tab.doc.arrows.last().unwrap().id;
+        assert_ne!(arrow, old_arrow);
+        let profile = app
+            .tab
+            .doc
+            .graphics
+            .last()
+            .unwrap()
+            .energy_profile
+            .as_deref()
+            .unwrap();
+        assert!(profile.linked);
+        assert_eq!(profile.source, Some(arrow));
+        assert!(crate::app::xtb::ts::profile::source_current(
+            &app.tab.doc,
+            profile
+        ));
+        app.update_energy_profile_units(EnergyUnit::KjPerMol);
+        assert_eq!(
+            app.tab
+                .doc
+                .graphics
+                .last()
+                .unwrap()
+                .energy_profile
+                .as_deref()
+                .unwrap()
+                .unit,
+            EnergyUnit::KjPerMol
+        );
+    }
+}
+
+#[test]
+fn same_document_profile_only_paste_keeps_its_existing_arrow() {
+    for plain_text in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.doc = energy_profile_scheme();
+        app.tab.selected = vec![app.tab.doc.graphics[0].id];
+        let arrow = app.tab.doc.arrows[0].id;
+        let bytes = native_clipboard_snapshot(&app);
+        if plain_text {
+            let _ = app.pasted(Some(format!(
+                "{}{}",
+                editing::CLIPBOARD_PREFIX,
+                String::from_utf8(bytes).unwrap()
+            )));
+        } else {
+            app.clipboard_read(
+                app.tab.file_epoch,
+                app.tab.revision,
+                PasteOutcome::from_native_json(&bytes),
+            );
+        }
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.arrows.len(), 1);
+        assert_eq!(app.tab.doc.graphics.len(), 2);
+        let profile = app
+            .tab
+            .doc
+            .graphics
+            .last()
+            .unwrap()
+            .energy_profile
+            .as_deref()
+            .unwrap();
+        assert!(profile.linked);
+        assert_eq!(profile.source, Some(arrow));
+        assert!(crate::app::xtb::ts::profile::source_current(
+            &app.tab.doc,
+            profile
+        ));
+    }
+}
+
+#[test]
+fn clipboard_profiles_unlink_in_other_documents_and_after_file_replacement() {
+    for replace in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.doc = energy_profile_scheme();
+        app.tab.selected = app.tab.doc.all_ids();
+        let bytes = native_clipboard_snapshot(&app);
+        if replace {
+            app.begin_file_epoch();
+        } else {
+            app.add_tab();
+        }
+        app.tab.doc = energy_profile_scheme();
+        app.clipboard_read(
+            app.tab.file_epoch,
+            app.tab.revision,
+            PasteOutcome::from_native_json(&bytes),
+        );
+        assert!(!app.error, "{}", app.status);
+        let profile = app
+            .tab
+            .doc
+            .graphics
+            .last()
+            .unwrap()
+            .energy_profile
+            .as_deref()
+            .unwrap();
+        assert!(!profile.linked);
+        assert_eq!(profile.source, None);
+    }
+}
+
+#[test]
+fn missing_clipboard_source_cannot_bind_to_an_arrow_created_with_the_same_id() {
+    use reshiki::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+    };
+    let (mut app, _) = App::new();
+    app.tab.doc = energy_profile_scheme();
+    let source = app.tab.doc.arrows[0].id;
+    let profile = app.tab.doc.graphics[0].id;
+    let unrelated = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(Arrow::new(
+        unrelated,
+        Point::new(500., 0.),
+        Point::new(620., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    app.tab.selected = vec![profile, unrelated];
+    let bytes = native_clipboard_snapshot(&app);
+    app.tab.doc.clear_content();
+    let filler = app.tab.doc.add_atom("N", Point::default());
+    app.tab
+        .doc
+        .atoms
+        .iter_mut()
+        .find(|atom| atom.id == filler)
+        .unwrap()
+        .id = source - 1;
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        PasteOutcome::from_native_json(&bytes),
+    );
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.arrows[0].id, source);
+    let profile = app.tab.doc.graphics[0].energy_profile.as_deref().unwrap();
+    assert!(!profile.linked);
+    assert_eq!(profile.source, None);
+}
+
 #[tokio::test]
 async fn chemdraw_paste_keeps_all_authored_vectors_through_labels_undo_and_redo() {
     let engine = reshiki::engine::LocalEngine::in_process();
@@ -89,6 +338,7 @@ async fn chemdraw_paste_keeps_all_authored_vectors_through_labels_undo_and_redo(
                 document: part,
                 warnings,
                 native,
+                origin: None,
             }),
         );
         assert!(!app.error, "{name}: {}", app.status);
@@ -845,6 +1095,7 @@ fn external_metadata_warnings_remain_visible_after_paste_and_file_import() {
             document: doc.clone(),
             warnings: vec![warning.into()],
             native: false,
+            origin: None,
         }),
     );
     assert!(app.status.starts_with("Editable drawing pasted"));

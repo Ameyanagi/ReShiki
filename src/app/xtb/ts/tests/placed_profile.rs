@@ -128,6 +128,125 @@ fn rerun_updates_the_profile_with_one_undo_and_keeps_its_frame_and_style() {
 }
 
 #[test]
+fn reassigned_reactant_keeps_the_finished_rerun_off_the_card_and_profile() {
+    let (mut app, arrow) = irc_profile::finished();
+    let id = place(&mut app, arrow);
+    let placed = app.tab.doc.graphics.last().unwrap().clone();
+    select(&mut app, arrow);
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
+    if app.tab.model_job.is_some() {
+        finish_model(&mut app);
+    }
+
+    let before = app.tab.doc.clone();
+    let original = &before.reactions[0].reactants[0].atoms;
+    let mut copy = reshiki::editing::selection(&before, original);
+    copy.models.clear();
+    copy.science = Default::default();
+    let copies: Vec<_> =
+        reshiki::editing::append_preserving_layout(&mut app.tab.doc, &copy, Point::new(0., -200.))
+            .into_iter()
+            .filter(|id| app.tab.doc.atom(*id).is_some())
+            .collect();
+    assert_eq!(copies.len(), original.len());
+    app.tab.doc.reactions[0].reactants[0].atoms = copies;
+    app.changed(before);
+    complete(&mut app);
+
+    let doc = &app.tab.doc;
+    assert_eq!(doc.science.results.len(), 2);
+    let stored = doc.science.results.last().unwrap();
+    let attached = doc.science.attachment(stored.attachment).unwrap();
+    assert_eq!(
+        attached.freshness(doc),
+        reshiki::science::Freshness::Current
+    );
+    assert_eq!(placement_arrow(doc, &stored.result), Some(arrow));
+    assert!(app.xtb_resolve_reaction(doc, arrow, None).result.is_none());
+    assert_eq!(doc.graphics.iter().find(|g| g.id == id), Some(&placed));
+}
+
+#[test]
+fn equivalent_map_relabeling_keeps_the_link_but_changed_pairs_do_not() {
+    let (mut app, arrow) = irc_profile::finished();
+    let id = place(&mut app, arrow);
+    let original = app.tab.doc.graphics.last().unwrap().clone();
+    let before = app.tab.doc.clone();
+    for atom in &mut app.tab.doc.atoms {
+        if atom.map_num == 1 {
+            atom.map_num = 17;
+        }
+    }
+    app.changed(before);
+
+    assert!(profile::source_current(
+        &app.tab.doc,
+        original.energy_profile.as_ref().unwrap()
+    ));
+    assert_eq!(place(&mut app, arrow), id);
+    select(&mut app, arrow);
+    send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let mut report = Arc::unwrap_or_clone(example_report(run.launch.as_ref().unwrap()));
+    report.result.energy_hartree = Some(-4.93);
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
+    );
+    let current = app.tab.doc.graphics.last().unwrap().clone();
+    assert_eq!(current.id, id);
+    assert_ne!(current, original);
+    assert_eq!(place(&mut app, arrow), id);
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+
+    let products = app.tab.doc.reactions[0].products[0].atoms.clone();
+    for atom in &mut app.tab.doc.atoms {
+        if products.contains(&atom.id) {
+            atom.map_num = match atom.map_num {
+                17 => 2,
+                2 => 17,
+                number => number,
+            };
+        }
+    }
+    assert!(!profile::source_current(
+        &app.tab.doc,
+        current.energy_profile.as_ref().unwrap()
+    ));
+}
+
+#[test]
+fn placed_profile_clears_a_zero_order_bond_from_the_scheme() {
+    let (mut app, arrow) = irc_profile::finished();
+    let id = place(&mut app, arrow);
+    let (lo, hi) = scene::selection_bounds(&app.tab.doc, &[id]).unwrap();
+    let _ = app.update(Message::Undo);
+    let doc = &mut app.tab.doc;
+    let product = *doc.reactions[0].products[0].atoms.last().unwrap();
+    // Contacts on a calculated endpoint make the saved search stale.
+    let a = doc.atom(product).unwrap().position.offset(0., -30.);
+    let agent = doc.add_atom("N", a);
+    doc.reactions[0]
+        .agents
+        .push(reshiki::reactions::Participant {
+            atoms: vec![agent],
+            coefficient: 1,
+        });
+    let y = (lo.y + hi.y) / 2.;
+    let x = (lo.x + hi.x) / 2.;
+    let rise = 3. * (hi.y - a.y);
+    let b = Point::new(a.x + (x - a.x) * rise / (y - a.y), a.y + rise);
+    assert!(b.x < lo.x || b.x > hi.x);
+    let outside = doc.add_atom("O", b);
+    doc.add_bond(agent, outside, 0, "dotted");
+
+    let id = place(&mut app, arrow);
+    let (placed, _) = scene::selection_bounds(&app.tab.doc, &[id]).unwrap();
+    assert!(placed.y > b.y);
+}
+
+#[test]
 fn units_follow_the_live_link_and_source_changes_leave_the_snapshot() {
     let (mut app, arrow) = irc_profile::finished();
     app.appearance.energy_unit = EnergyUnit::KcalPerMol;

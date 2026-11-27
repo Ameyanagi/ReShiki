@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     arrows::{ArrowStyle, Preset},
-    document::{Arrow, CALCULATIONS},
+    document::{Arrow, ENERGY_PROFILES},
 };
 use std::collections::HashMap;
 
@@ -314,7 +314,7 @@ fn native_roundtrip_budget_and_validation_cover_profile_payloads() {
         graphics: vec![g.clone()],
         ..Document::default()
     };
-    assert_eq!(doc.file_version(), CALCULATIONS);
+    assert_eq!(doc.file_version(), ENERGY_PROFILES);
     doc.validate().unwrap();
     let opened = Document::from_json(&serde_json::to_vec(&doc.current()).unwrap()).unwrap();
     assert_eq!(opened.graphics[0], g);

@@ -441,13 +441,19 @@ pub(super) fn placement_arrow(doc: &Document, result: &CalcResult) -> Option<u64
 
 impl App {
     pub(super) fn xtb_ts_search_stale(&self, result: &Arc<CalcResult>) -> bool {
+        self.xtb_ts_search_stale_in(&self.tab.doc, result)
+    }
+
+    fn xtb_ts_search_stale_in(&self, doc: &Document, result: &Arc<CalcResult>) -> bool {
         let Some(search) = saved_search(result) else {
             return true;
         };
-        let doc = &self.tab.doc;
-        match self.tab.xtb.ts_sessions.get(result) {
-            Some(session) => session.stale(doc, search, (self.tab.file_epoch, self.tab.revision)),
-            None => saved_search_stale(doc, search),
+        if std::ptr::eq(doc, &self.tab.doc)
+            && let Some(session) = self.tab.xtb.ts_sessions.get(result)
+        {
+            session.stale(doc, search, (self.tab.file_epoch, self.tab.revision))
+        } else {
+            saved_search_stale(doc, search)
         }
     }
 
@@ -708,14 +714,17 @@ impl App {
     }
 
     fn xtb_ts_result_stale(&self, result: &Arc<CalcResult>) -> bool {
-        let doc = &self.tab.doc;
+        self.xtb_ts_result_stale_in(&self.tab.doc, result)
+    }
+
+    fn xtb_ts_result_stale_in(&self, doc: &Document, result: &Arc<CalcResult>) -> bool {
         doc.science
             .results
             .iter()
             .find(|stored| Arc::ptr_eq(result, &stored.result))
             .and_then(|stored| doc.science.attachment(stored.attachment))
             .is_none_or(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
-            || self.xtb_ts_search_stale(result)
+            || self.xtb_ts_search_stale_in(doc, result)
     }
 
     fn xtb_ts_refinement_available(&self, arrow: u64) -> bool {

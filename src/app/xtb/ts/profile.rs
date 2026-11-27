@@ -1,15 +1,16 @@
 //! Place a reaction result on the drawing and keep its linked figure current.
-use super::{card::ArrowResult, energy::Totals, irc, optimized_reactant_energy, view};
+use super::{card::ReactionAnswer, energy::EndpointResult, irc, optimized_reactant_energy, view};
 use crate::app::{App, Message};
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{
     EnergyProfile, EnergyProfileModels, EnergyProfileSample, EnergyProfileState,
     EnergyProfileStateKind as Kind, EnergyProfileStep, EnergyUnit, Graphic, GraphicStyle,
 };
-use reshiki::qcdata::{CalcResult, Frame, IrcEndpoint, KCAL_PER_HARTREE};
+use reshiki::qcdata::{CalcResult, IrcEndpoint, KCAL_PER_HARTREE};
 use reshiki::reactions::{self, Reaction, Role};
 use reshiki::scene;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Edit {
@@ -23,35 +24,54 @@ pub(in crate::app) fn edit_message(id: u64, edit: Edit) -> Message {
     )))
 }
 
-/// Fingerprint the arrow's chemical roles in drawing order, independent of
-/// drawing IDs, coordinates, compound labels, and calculated models.
-fn source_key(doc: &Document, reaction: &Reaction) -> String {
+/// Hash the role chemistry and correspondence in drawing order. Atom
+/// positions within each side survive insertion ID remaps and map relabeling.
+pub(in crate::app) fn source_key(doc: &Document, reaction: &Reaction) -> String {
+    let mut mapped = [HashMap::<u32, Vec<usize>>::new(), HashMap::new()];
     let roles = Role::ALL.map(|role| {
         let mut participants: Vec<_> = reaction
             .participants(role)
             .iter()
             .map(|participant| {
-                let mut atoms: Vec<_> = doc
+                let atoms: Vec<_> = doc
                     .atoms
                     .iter()
-                    .filter(|atom| participant.atoms.contains(&atom.id))
+                    .enumerate()
+                    .filter(|(_, atom)| participant.atoms.contains(&atom.id))
                     .collect();
-                atoms.sort_by_key(|atom| atom.map_num);
-                let maps: Vec<_> = atoms.iter().map(|atom| atom.map_num).collect();
-                let ids: Vec<_> = atoms.iter().map(|atom| atom.id).collect();
-                (
-                    participant.coefficient,
-                    maps,
-                    reshiki::science::baseline(doc, &ids),
-                )
+                (atoms, participant.coefficient)
             })
             .collect();
-        participants.sort_unstable();
+        participants.sort_by_key(|(atoms, _)| atoms.first().map(|(i, _)| *i));
+        let side = match role {
+            Role::Reactant => Some(&mut mapped[0]),
+            Role::Product => Some(&mut mapped[1]),
+            Role::Agent => None,
+        };
+        if let Some(side) = side {
+            for (i, (_, atom)) in participants.iter().flat_map(|(atoms, _)| atoms).enumerate() {
+                if atom.map_num != 0 {
+                    side.entry(atom.map_num).or_default().push(i);
+                }
+            }
+        }
         participants
+            .into_iter()
+            .map(|(atoms, coefficient)| {
+                let ids: Vec<_> = atoms.iter().map(|(_, atom)| atom.id).collect();
+                (coefficient, reshiki::science::baseline(doc, &ids))
+            })
+            .collect::<Vec<_>>()
     });
+    let [reactants, mut products] = mapped;
+    let mut pairs: Vec<_> = reactants
+        .into_iter()
+        .filter_map(|(map, atoms)| Some((atoms, products.remove(&map)?)))
+        .collect();
+    pairs.sort_unstable();
     format!(
         "{:x}",
-        Sha256::digest(serde_json::to_vec(&roles).unwrap_or_default())
+        Sha256::digest(serde_json::to_vec(&(roles, pairs)).unwrap_or_default())
     )
 }
 
@@ -117,17 +137,8 @@ impl App {
             self.select_energy_profile(id);
             return;
         }
-        let result = match self.xtb_ts_card_display_result(reaction.arrow) {
-            ArrowResult::Found(result) => Some(result),
-            _ => None,
-        };
-        let endpoint = result.and_then(|result| view::reaction_energy_kcal(result));
-        let fresh = self
-            .xtb_energy_profile_batch(reaction.arrow, result.filter(|_| endpoint.is_some()))
-            .or_else(|| {
-                let result = result.filter(|r| !self.xtb_ts_result_stale(r))?;
-                self.xtb_saved_energy_profile(doc, result, self.xtb_ts_refinement_session(result))
-            });
+        let answer = self.xtb_resolve_reaction(doc, reaction.arrow, None);
+        let fresh = self.xtb_resolved_profile(doc, &reaction, answer);
         let Some(fresh) = fresh else {
             self.status = "Calculate a reaction energy first".into();
             self.error = false;
@@ -222,36 +233,15 @@ impl App {
         });
     }
 
-    pub(in crate::app::xtb) fn xtb_refresh_ts_profile(
-        &self,
-        doc: &mut Document,
-        result: &CalcResult,
-        session: Option<&super::Session>,
-    ) {
-        if super::saved_search(result)
-            .and_then(|search| search.arrow)
-            .is_some_and(|arrow| has_link(doc, arrow))
-            && let Some(fresh) = self.xtb_saved_energy_profile(doc, result, session)
-        {
-            refresh(doc, fresh);
-        }
-    }
-
     fn xtb_saved_energy_profile(
         &self,
         doc: &Document,
+        reaction: &Reaction,
         result: &CalcResult,
-        session: Option<&super::Session>,
+        presentation: view::Presentation,
+        energy: f64,
     ) -> Option<EnergyProfile> {
-        let arrow = super::placement_arrow(doc, result)?;
-        let presentation = view::presentation(result, session);
-        // The card keeps the verified source when g-xTB refinement fails.
-        if super::saved_search(result)?.refined_from.is_some() && !presentation.reliable() {
-            return None;
-        }
-        let reaction = reactions::preview(doc, arrow).ok()?;
-        let [reactant, product] = self.xtb_reaction_label(arrow).endpoint_names();
-        let energy = view::reaction_energy_kcal(result)?;
+        let [reactant, product] = self.xtb_reaction_label(reaction.arrow).endpoint_names();
         let mut states = vec![state(Kind::Reactant, reactant, 0.)];
         let mut samples = vec![];
         if let Some(barrier) = presentation.refined_kcal.filter(|e| e.is_finite()) {
@@ -264,7 +254,7 @@ impl App {
         }
         states.push(state(Kind::Product, product, energy));
         let mut profile =
-            self.make_energy_profile(doc, &reaction, presentation.method, states, samples);
+            self.make_energy_profile(doc, reaction, presentation.method, states, samples);
         if let Some((models, rotation)) = super::thumbnails::profile_geometry(doc, result) {
             profile.rotation = rotation;
             let [r, ts, p] = models;
@@ -280,15 +270,13 @@ impl App {
         Some(profile)
     }
 
-    pub(super) fn xtb_endpoint_energy_profile(
+    fn xtb_endpoint_energy_profile(
         &self,
         doc: &Document,
-        arrow: u64,
-        totals: &Totals,
-        frames: [Vec<&Frame>; 2],
-    ) -> Option<EnergyProfile> {
-        let reaction = reactions::preview(doc, arrow).ok()?;
-        let [reactant, product] = self.xtb_reaction_label(arrow).endpoint_names();
+        reaction: &Reaction,
+        EndpointResult { totals, frames }: EndpointResult<'_>,
+    ) -> EnergyProfile {
+        let [reactant, product] = self.xtb_reaction_label(reaction.arrow).endpoint_names();
         let mut states = vec![
             state(Kind::Reactant, reactant, 0.),
             state(Kind::Product, product, totals.energy),
@@ -296,7 +284,7 @@ impl App {
         for (state, frames) in states.iter_mut().zip(frames) {
             state.geometry = super::thumbnails::profile_side(&frames);
         }
-        Some(self.make_energy_profile(doc, &reaction, totals.method.label().into(), states, vec![]))
+        self.make_energy_profile(doc, reaction, totals.method.label().into(), states, vec![])
     }
 
     fn make_energy_profile(
@@ -325,25 +313,55 @@ impl App {
         profile
     }
 
-    pub(in crate::app::xtb) fn xtb_refresh_energy_batch(
+    fn xtb_resolved_profile(
+        &self,
+        doc: &Document,
+        reaction: &Reaction,
+        answer: ReactionAnswer<'_>,
+    ) -> Option<EnergyProfile> {
+        if let Some(batch) = answer.batch {
+            return Some(self.xtb_endpoint_energy_profile(doc, reaction, batch));
+        }
+        let result = answer.result.filter(|_| !answer.stale)?;
+        self.xtb_saved_energy_profile(
+            doc,
+            reaction,
+            result,
+            answer.presentation?,
+            answer.endpoint_energy?,
+        )
+    }
+
+    fn xtb_linked_profile_update(
+        &self,
+        doc: &Document,
+        arrow: u64,
+        finishing_serial: Option<u64>,
+    ) -> Option<EnergyProfile> {
+        if !has_link(doc, arrow) {
+            return None;
+        }
+        let reaction = reactions::preview(doc, arrow).ok()?;
+        let answer = self.xtb_resolve_reaction(doc, arrow, finishing_serial);
+        if finishing_serial.is_some() && answer.batch.is_none() {
+            return None;
+        }
+        self.xtb_resolved_profile(doc, &reaction, answer)
+    }
+
+    pub(in crate::app::xtb) fn xtb_refresh_reaction_profile(
         &self,
         doc: &mut Document,
         arrow: u64,
-        serial: u64,
+        finishing_serial: Option<u64>,
     ) {
-        if has_link(doc, arrow)
-            && let Some((totals, frames)) = self.tab.xtb.energy_state.finishing_profile(doc, serial)
-            && let Some(fresh) = self.xtb_endpoint_energy_profile(doc, arrow, &totals, frames)
-        {
+        if let Some(fresh) = self.xtb_linked_profile_update(doc, arrow, finishing_serial) {
             refresh(doc, fresh);
         }
     }
 
     pub(super) fn xtb_follow_energy_batch_profile(&mut self, arrow: u64) {
-        if !has_link(&self.tab.doc, arrow) {
-            return;
-        }
-        if let Some(fresh) = self.xtb_energy_profile_batch(arrow, None) {
+        if let Some(fresh) = self.xtb_linked_profile_update(&self.tab.doc, arrow, None) {
             let before = self.tab.doc.clone();
             refresh(&mut self.tab.doc, fresh);
             if self.tab.doc != before {
@@ -440,6 +458,7 @@ fn profile_origin(doc: &Document, reaction: &Reaction, size: Point) -> Option<Po
         .iter()
         .flatten()
         .copied()
+        .chain(reshiki::models3d::zero_order_obstacles(doc))
         .filter(|(lo, hi)| lo.x < x + size.x + gap && hi.x > x - gap)
         .collect();
     obstacles.sort_by(|a, b| a.0.y.total_cmp(&b.0.y));

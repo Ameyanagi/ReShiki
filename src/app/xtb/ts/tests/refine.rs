@@ -196,6 +196,12 @@ async fn running_gxtb_search_and_refine_keep_saved_gfn2_rows_labeled() {
 #[test]
 fn show_where_previews_the_failed_gxtb_endpoint_with_a_verified_parent() {
     let (mut app, arrow) = irc_profile::finished();
+    send(
+        &mut app,
+        XtbAction::Ts(Action::PlaceEnergyProfile(Some(arrow))),
+    );
+    let original_profile = app.tab.doc.graphics.last().unwrap().clone();
+    select(&mut app, arrow);
     let parent = app.tab.doc.science.results[0].result.clone();
     send(
         &mut app,
@@ -224,6 +230,7 @@ fn show_where_previews_the_failed_gxtb_endpoint_with_a_verified_parent() {
     );
 
     let child = app.tab.doc.science.results[1].result.clone();
+    assert_eq!(app.tab.doc.graphics.last(), Some(&original_profile));
     assert_eq!(
         view::presentation(&child, None).recovery,
         view::Recovery::ShowWhere

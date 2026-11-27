@@ -1309,12 +1309,8 @@ impl App {
         } else {
             None
         };
-        if let Some(arrow) = reaction {
-            if let Some(serial) = pending.energy_serial {
-                self.xtb_refresh_energy_batch(&mut doc, arrow, serial);
-            } else {
-                self.xtb_refresh_ts_profile(&mut doc, &pending.result, ts.as_deref());
-            }
+        if same_file && let Some(arrow) = reaction_arrow.or(reaction) {
+            self.xtb_refresh_reaction_profile(&mut doc, arrow, pending.energy_serial);
         }
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed_with_reaction_row(before, reaction.filter(|_| !moved));

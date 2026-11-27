@@ -99,6 +99,11 @@ pub(super) struct Totals {
     pub gibbs: Option<f64>,
 }
 
+pub(super) struct EndpointResult<'a> {
+    pub(super) totals: Totals,
+    pub(super) frames: [Vec<&'a Frame>; 2],
+}
+
 impl Totals {
     fn line(&self, unit: EnergyUnit) -> String {
         format!(
@@ -419,7 +424,7 @@ fn profile_data<'a, 'b>(
     inputs: impl Iterator<Item = &'b Input> + Clone,
     task: CalcTask,
     method: qcdata::XtbMethod,
-) -> Option<(Totals, [Vec<&'a Frame>; 2])> {
+) -> Option<EndpointResult<'a>> {
     let totals = current_totals(doc, species, inputs.clone(), task, method)?;
     let mut frames = [vec![], vec![]];
     for (species, input) in species.iter().zip(inputs) {
@@ -427,7 +432,7 @@ fn profile_data<'a, 'b>(
             .get_mut(usize::from(species.product))?
             .push(doc.science.frame(&input.result.frame)?.as_ref());
     }
-    Some((totals, frames))
+    Some(EndpointResult { totals, frames })
 }
 
 impl State {
@@ -438,15 +443,16 @@ impl State {
 
     /// The last stored result can finish the batch along with cached terms.
     /// Build the picture before committing so Undo restores the previous one.
-    pub(super) fn finishing_profile<'a>(
+    fn finishing_result<'a>(
         &self,
         doc: &'a Document,
+        arrow: u64,
         serial: u64,
-    ) -> Option<(Totals, [Vec<&'a Frame>; 2])> {
+    ) -> Option<EndpointResult<'a>> {
         let batch = self
             .batch
             .as_ref()
-            .filter(|b| b.active == Some(serial) && b.is_current(doc))?;
+            .filter(|b| b.arrow == arrow && b.active == Some(serial) && b.is_current(doc))?;
         let (current, remaining) = batch.species.get(batch.next..)?.split_first()?;
         let mut tail = vec![completed(doc, current, batch.task, batch.method)?];
         for species in remaining {
@@ -721,30 +727,19 @@ impl App {
         arrow: u64,
         newer_ts: Option<&Arc<CalcResult>>,
     ) -> (Option<Totals>, Option<&str>) {
-        let state = &self.tab.xtb.energy_state;
-        let summary = self.xtb_energy_summary(arrow, newer_ts);
-        let totals = summary.and_then(|summary| {
-            input_totals(
-                &self.tab.doc,
-                &summary.species,
-                &summary.inputs,
-                summary.task,
-                summary.method,
-            )
-        });
-        let refusal = match state.batch.as_ref().filter(|batch| batch.arrow == arrow) {
-            Some(batch) => batch.barrier_refusal.as_deref(),
-            None => summary.and_then(|summary| summary.barrier_refusal.as_deref()),
-        };
-        (totals, refusal)
+        let (result, refusal) = self.xtb_endpoint_result(&self.tab.doc, arrow, newer_ts, None);
+        (result.map(|result| result.totals), refusal)
     }
 
-    fn xtb_energy_summary(
-        &self,
+    pub(super) fn xtb_endpoint_result<'a>(
+        &'a self,
+        doc: &'a Document,
         arrow: u64,
         newer_ts: Option<&Arc<CalcResult>>,
-    ) -> Option<&Summary> {
-        self.tab.xtb.energy_state.summaries.iter().find(|summary| {
+        finishing_serial: Option<u64>,
+    ) -> (Option<EndpointResult<'a>>, Option<&'a str>) {
+        let state = &self.tab.xtb.energy_state;
+        let summary = state.summaries.iter().find(|summary| {
             summary.arrow == arrow
                 && newer_ts.is_none_or(|result| {
                     summary
@@ -752,26 +747,26 @@ impl App {
                         .iter()
                         .any(|previous| xtb::is(previous, result))
                 })
-                && snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
-                    == Some(&summary.snapshot)
-        })
-    }
-
-    pub(super) fn xtb_energy_profile_batch(
-        &self,
-        arrow: u64,
-        newer_ts: Option<&Arc<CalcResult>>,
-    ) -> Option<reshiki::graphics::EnergyProfile> {
-        let summary = self.xtb_energy_summary(arrow, newer_ts)?;
-        let doc = &self.tab.doc;
-        let (totals, frames) = profile_data(
-            doc,
-            &summary.species,
-            summary.inputs.iter(),
-            summary.task,
-            summary.method,
-        )?;
-        self.xtb_endpoint_energy_profile(doc, arrow, &totals, frames)
+                && snapshot(doc, arrow, &summary.species).as_ref() == Some(&summary.snapshot)
+        });
+        let result = if let Some(serial) = finishing_serial {
+            state.finishing_result(doc, arrow, serial)
+        } else {
+            summary.and_then(|summary| {
+                profile_data(
+                    doc,
+                    &summary.species,
+                    summary.inputs.iter(),
+                    summary.task,
+                    summary.method,
+                )
+            })
+        };
+        let refusal = match state.batch.as_ref().filter(|batch| batch.arrow == arrow) {
+            Some(batch) => batch.barrier_refusal.as_deref(),
+            None => summary.and_then(|summary| summary.barrier_refusal.as_deref()),
+        };
+        (result, refusal)
     }
 
     pub(super) fn xtb_energy_has_summary(&self, arrow: u64) -> bool {

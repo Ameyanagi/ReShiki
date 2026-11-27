@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     arrows::{ArrowStyle, Preset},
-    document::Arrow,
+    document::{Arrow, CALCULATIONS, ENERGY_PROFILES, VERSION},
     export::{self, Background},
     graphics::{EnergyProfile, Graphic},
 };
@@ -195,6 +195,12 @@ async fn energy_profile_native_files_and_figure_payloads_keep_the_complete_linke
     let saved = crate::formats::write_with_engine(doc.clone(), "rsk", &engine)
         .await
         .unwrap();
+    let saved_version = serde_json::from_slice::<serde_json::Value>(&saved).unwrap()["version"]
+        .as_u64()
+        .unwrap();
+    assert_eq!(saved_version, u64::from(ENERGY_PROFILES));
+    // Format-42 readers probe this before parsing the unknown graphic kind.
+    assert!(saved_version > u64::from(CALCULATIONS));
     let reopened = crate::formats::read_with_engine(saved, "rsk", &engine)
         .await
         .unwrap();
@@ -217,6 +223,40 @@ async fn energy_profile_native_files_and_figure_payloads_keep_the_complete_linke
     assert_eq!(snapshot.steps[0].irc.len(), 3);
     assert_eq!(snapshot.source_key, profile.source_key);
     assert!(doc.graphics[0].energy_profile.as_ref().unwrap().linked);
+}
+
+#[tokio::test]
+async fn energy_profile_format_floor_keeps_older_files_readable_and_probes_newer_files() {
+    let engine = crate::engine::LocalEngine::in_process();
+    let mut older = serde_json::to_value(profile()).unwrap();
+    older["version"] = CALCULATIONS.into();
+    older["graphics"][0]["kind"] = "rectangle".into();
+    older["graphics"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("energy_profile");
+    let reopened =
+        crate::formats::read_with_engine(serde_json::to_vec(&older).unwrap(), "rsk", &engine)
+            .await
+            .unwrap();
+    assert_eq!(reopened.version, CALCULATIONS);
+    assert!(reopened.graphics[0].energy_profile.is_none());
+    assert!(reopened.file_version() <= CALCULATIONS);
+
+    let mut newer = serde_json::to_value(profile()).unwrap();
+    newer["version"] = (VERSION + 1).into();
+    newer["graphics"][0]["kind"] = "future_energy_profile".into();
+    let error =
+        crate::formats::read_with_engine(serde_json::to_vec(&newer).unwrap(), "rsk", &engine)
+            .await
+            .unwrap_err();
+    assert_eq!(
+        error,
+        format!(
+            "This drawing was made with a newer version of ReShiki (document version {}). Update ReShiki to open it.",
+            VERSION + 1
+        )
+    );
 }
 
 fn assert_figure(format: &str, bytes: &[u8]) {
