@@ -198,6 +198,146 @@ fn changing_the_look_reuses_the_mesh() {
 }
 
 #[test]
+fn cached_surface_matches_fresh_surface_translated_to_a_new_origin() {
+    use crate::models3d::{ModelPaint, float};
+    demo_on_this_thread(Some("pi,look=shaded+mesh,opacity=60")).unwrap();
+    let mut doc = tilted(ethylene(), 55.);
+    let model = &doc.models[0];
+    let view = View::new(&doc, model).unwrap();
+    let paint = ModelPaint::new(&doc, model);
+    let (warm, _) = view.live_surface(&doc, model, &paint).unwrap();
+    let (same, _) = view.live_surface(&doc, model, &paint).unwrap();
+    assert!(Rc::ptr_eq(&warm, &same));
+
+    let inputs = SurfacePaint {
+        colors: phase_colors(model, paint.dark),
+        backdrop: float(paint.backdrop),
+        fade: paint.fade(view.reach, 0.),
+        painted: paint.line,
+        outline: paint.outline(paint.line),
+        line_width: paint.line,
+    };
+    let meshes = view.orbital_meshes.clone().unwrap();
+    let look = switch().unwrap().2;
+    let (fresh, primitive) = prepare(&meshes, model, &view, look, &inputs);
+    let origin = view.origin;
+    doc.translate(&doc.all_ids(), 24., -16.);
+    let model = &doc.models[0];
+    let view = View::new(&doc, model).unwrap();
+    let (moved, painted) = view.live_surface(&doc, model, &paint).unwrap();
+    demo_on_this_thread(None).unwrap();
+
+    let dx = view.origin.x - origin.x;
+    let dy = view.origin.y - origin.y;
+    assert_ne!(view.origin, origin);
+    assert!(Rc::ptr_eq(&warm.visible, &moved.visible));
+    let Some(Primitive::Surface { groups: expected }) = primitive else {
+        panic!("expected an orbital surface");
+    };
+    let Some(Primitive::Surface { groups }) = painted else {
+        panic!("expected a retained orbital surface");
+    };
+    assert_eq!(groups.len(), expected.len());
+    let assert_path = |actual: &[PathCommand], before: &[PathCommand]| {
+        let shifted: Vec<_> = before
+            .iter()
+            .map(|command| command.map(|p| p.offset(dx, dy)))
+            .collect();
+        assert_eq!(actual, shifted);
+    };
+    for (actual, before) in groups.iter().zip(&expected) {
+        assert_eq!(actual.alpha, before.alpha);
+        assert_eq!(actual.fills.len(), before.fills.len());
+        assert_eq!(actual.strokes.len(), before.strokes.len());
+        for (actual, before) in actual.fills.iter().zip(&before.fills) {
+            assert_eq!(actual.color, before.color);
+            assert_eq!(actual.tones.len(), before.tones.len());
+            assert_path(&actual.region, &before.region);
+            for ((actual, color), (before, expected_color)) in
+                actual.tones.iter().zip(&before.tones)
+            {
+                assert_eq!(color, expected_color);
+                assert_path(actual, before);
+            }
+        }
+        for (actual, before) in actual.strokes.iter().zip(&before.strokes) {
+            assert_eq!(actual.outline, before.outline);
+            assert_path(&actual.paths, &before.paths);
+        }
+    }
+    assert!(
+        groups
+            .iter()
+            .any(|g| g.fills.iter().any(|f| !f.tones.is_empty()))
+    );
+    assert!(groups.iter().any(|g| !g.strokes.is_empty()));
+    for (&[x, y, z], &point) in fresh.positions.iter().zip(&moved.positions) {
+        assert_eq!(point, [x + dx, y + dy, z]);
+    }
+    let (fresh_moved, _) = prepare(&meshes, model, &view, look, &inputs);
+    for (&q, &symbol) in view.rotated.iter().zip(&view.symbols) {
+        let radius = model.style.atom_radius(symbol);
+        assert_eq!(
+            moved.clear(&view, q, radius),
+            fresh_moved.clear(&view, q, radius)
+        );
+    }
+}
+
+#[test]
+fn cached_surface_misses_when_rotation_look_theme_or_turning_changes() {
+    use crate::canvas_theme::CanvasTheme;
+    use crate::models3d::{Background, ModelPaint};
+    let resting = |doc: &Document| {
+        let model = &doc.models[0];
+        View::new(doc, model)
+            .unwrap()
+            .live_surface(doc, model, &ModelPaint::new(doc, model))
+            .unwrap()
+            .0
+    };
+    demo_on_this_thread(Some("pi")).unwrap();
+    let base = tilted(ethylene(), 55.);
+    let warm = resting(&base);
+    let mut rotated = tilted(base.clone(), 61.);
+    let turned = resting(&rotated);
+    assert!(!Rc::ptr_eq(&warm, &turned));
+    rotated.models[0].turning = true;
+    let turning = resting(&rotated);
+    assert!(!Rc::ptr_eq(&turned, &turning));
+    assert!(turning.triangles.len() < turned.triangles.len());
+    let held_turn = resting(&rotated);
+    assert!(!Rc::ptr_eq(&turned, &held_turn));
+    assert_eq!(held_turn.triangles, turning.triangles);
+    assert_eq!(held_turn.positions, turning.positions);
+    assert!(Rc::ptr_eq(&held_turn, &resting(&rotated)));
+
+    let mut theme = base.clone();
+    theme.canvas_theme = CanvasTheme::Dark;
+    let dark = resting(&theme);
+    assert!(!Rc::ptr_eq(&warm, &dark));
+    theme.models[0].background = Background::Card;
+    assert!(!Rc::ptr_eq(&dark, &resting(&theme)));
+
+    let warm = resting(&base);
+    demo_on_this_thread(Some("pi,look=mesh,opacity=30")).unwrap();
+    let changed_look = resting(&base);
+    assert!(!Rc::ptr_eq(&warm, &changed_look));
+    assert_ne!(warm.look, changed_look.look);
+
+    let mut morph = base.clone();
+    let model = &mut morph.models[0];
+    model.morph = Some(0.5);
+    let model = &morph.models[0];
+    let view = View::new(&morph, model).unwrap();
+    assert!(
+        view.live_surface(&morph, model, &ModelPaint::new(&morph, model))
+            .is_none()
+    );
+    demo_on_this_thread(None).unwrap();
+}
+
+#[test]
 fn the_surface_is_drawn_after_the_molecule_and_holds_both_phases() {
     demo_on_this_thread(Some("pi")).unwrap();
     let doc = tilted(ethylene(), 60.);
@@ -494,13 +634,13 @@ fn mesh_strokes_keep_subunit_runs() {
     let short = vec![vec![[0., 0.], [0.3, 0.]], vec![[0., 1.], [0.2, 1.]]];
     let prepared = Prepared {
         positions: Vec::new(),
-        triangles: Vec::new(),
-        front: Vec::new(),
-        visible: Visible {
+        triangles: Rc::from([]),
+        front: Rc::from([]),
+        visible: Rc::new(Visible {
             lines: vec![[short.clone(), Vec::new()]],
             rims: vec![short],
             ..Visible::default()
-        },
+        }),
         look: Look::new(Fill::None, true, 100).unwrap(),
         tones: vec![0],
     };
