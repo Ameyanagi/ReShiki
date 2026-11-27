@@ -497,6 +497,16 @@ fn readout_uses_an_unnumbered_label_for_a_single_ts_and_the_physical_irc_coordin
 }
 
 #[test]
+fn readout_uses_the_authored_name_for_a_single_ts() {
+    let mut data = profile(&[Kind::Reactant, Kind::TransitionState, Kind::Product]);
+    data.states[1].label = "Transition-state conformer".into();
+    assert_eq!(
+        timeline::readout(&data, 1, None, None),
+        "Transition-state conformer · 27.3 kcal/mol"
+    );
+}
+
+#[test]
 fn readout_numbers_multiple_ts_with_unnumbered_authored_labels() {
     use Kind::{Intermediate as I, Product as P, Reactant as R, TransitionState as Ts};
     let mut data = profile(&[R, Ts, I, Ts, P]);
