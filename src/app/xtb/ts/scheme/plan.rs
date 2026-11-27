@@ -29,6 +29,7 @@ pub(in crate::app::xtb::ts) struct Species {
     /// Molecular identity and electronic state, independent of atom maps.
     pub key: String,
     composition: Composition,
+    balance_label: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -149,6 +150,20 @@ impl Step {
 }
 
 #[derive(Clone, Debug)]
+struct BalanceCandidate {
+    species: Option<usize>,
+    builtin: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct BalanceNote {
+    step: usize,
+    added: bool,
+    candidates: Vec<BalanceCandidate>,
+    text: String,
+}
+
+#[derive(Clone, Debug)]
 pub(in crate::app::xtb::ts) struct Plan {
     pub arrows: Vec<u64>,
     pub species: Vec<Species>,
@@ -156,6 +171,7 @@ pub(in crate::app::xtb::ts) struct Plan {
     pub notes: Vec<String>,
     pub snapshot: String,
     pub cyclic: bool,
+    balance_notes: Vec<BalanceNote>,
 }
 
 impl Plan {
@@ -173,6 +189,7 @@ impl Plan {
             notes: Vec::new(),
             snapshot: String::new(),
             cyclic: false,
+            balance_notes: Vec::new(),
         };
         let mut excluded = HashSet::new();
         for arrow in doc
@@ -246,7 +263,7 @@ impl Plan {
         snapshot(doc, &self.arrows).as_ref() == Ok(&self.snapshot)
     }
 
-    /// Resolve names already cached by the reaction card once at opening.
+    /// Resolve names shared with the reaction card as its naming queue runs.
     /// Instance numbers and authored names keep their established precedence;
     /// cached labels are presentation only and never enter the source snapshot.
     pub fn resolve_names(
@@ -255,15 +272,16 @@ impl Plan {
         mut name: impl FnMut(&[u64]) -> Option<String>,
     ) {
         for species in &mut self.species {
-            if !species.atoms.is_empty()
-                && super::super::card::molecule_name(doc, &species.atoms).is_none()
-                && let Some(cached) = name(&species.atoms)
-            {
-                species.name = cached.clone();
-                if super::super::card::compound_label(doc, &species.atoms).is_none() {
-                    species.label = cached;
-                }
+            if species.atoms.is_empty() {
+                continue;
             }
+            species.name = super::super::card::molecule_name(doc, &species.atoms)
+                .map(str::to_owned)
+                .or_else(|| name(&species.atoms))
+                .unwrap_or_else(|| species.formula.clone());
+            species.label = super::super::card::compound_label(doc, &species.atoms)
+                .unwrap_or(&species.name)
+                .to_owned();
         }
         for step in &mut self.steps {
             for term in step
@@ -271,13 +289,77 @@ impl Plan {
                 .iter_mut()
                 .chain(&mut step.drawn_products)
             {
-                if super::super::card::compound_label(doc, &term.atoms).is_none()
-                    && super::super::card::molecule_name(doc, &term.atoms).is_none()
-                    && let Some(cached) = name(&term.atoms)
-                {
-                    term.label = cached;
-                }
+                term.label = super::super::card::compound_label(doc, &term.atoms)
+                    .or_else(|| super::super::card::molecule_name(doc, &term.atoms))
+                    .map(str::to_owned)
+                    .or_else(|| name(&term.atoms))
+                    .or_else(|| {
+                        self.species
+                            .get(term.species)
+                            .map(|species| species.formula.clone())
+                    })
+                    .unwrap_or_else(|| "Unnamed molecule".into());
             }
+        }
+        let updates: Vec<_> = self
+            .balance_notes
+            .iter()
+            .map(|balance| self.balance_note(doc, balance))
+            .collect();
+        for (balance, text) in self.balance_notes.iter_mut().zip(updates) {
+            if text != balance.text {
+                if let Some(step) = self.steps.get_mut(balance.step) {
+                    for note in step.notes.iter_mut().chain(&mut self.notes) {
+                        if *note == balance.text {
+                            *note = text.clone();
+                        }
+                    }
+                }
+                balance.text = text;
+            }
+        }
+    }
+
+    fn balance_note(&self, doc: &Document, note: &BalanceNote) -> String {
+        let label = |candidate: &BalanceCandidate| {
+            let species = candidate.species.and_then(|index| self.species.get(index));
+            if note.added {
+                if let Some(number) = species
+                    .and_then(|species| super::super::card::compound_label(doc, &species.atoms))
+                {
+                    return format!("another copy of compound {number}");
+                }
+                if let Some(builtin) = &candidate.builtin {
+                    return builtin.clone();
+                }
+                return format!(
+                    "another copy of {}",
+                    species.map_or("molecule", |species| species.label.as_str())
+                );
+            }
+            species.map_or_else(
+                || {
+                    candidate
+                        .builtin
+                        .clone()
+                        .unwrap_or_else(|| "molecule".into())
+                },
+                |species| species.label.clone(),
+            )
+        };
+        let names = note
+            .candidates
+            .iter()
+            .map(label)
+            .collect::<Vec<_>>()
+            .join(", ");
+        if note.added {
+            format!("Balanced by adding {names} to step {}.", note.step + 1)
+        } else {
+            format!(
+                "More than one molecule balances step {} ({names}); continuing as drawn.",
+                note.step + 1
+            )
         }
     }
 
@@ -504,7 +586,7 @@ impl Plan {
                 }
             }
         }
-        let note = if candidates.len() == 1 {
+        let balance = if candidates.len() == 1 {
             let (candidate, product) = candidates
                 .into_values()
                 .next()
@@ -524,29 +606,49 @@ impl Plan {
                 &mut step.reactants
             };
             add_term(side, species, 1)?;
-            let label = if let Some(number) =
-                super::super::card::compound_label(doc, &candidate.atoms)
-            {
-                format!("another copy of compound {number}")
-            } else if let Some(builtin) = builtins.iter().find(|item| item.key == candidate.key) {
-                builtin.label.clone()
-            } else {
-                format!("another copy of {}", candidate.label)
-            };
-            format!("Balanced by adding {label} to step {}.", index + 1)
+            Some(BalanceNote {
+                step: index,
+                added: true,
+                candidates: vec![BalanceCandidate {
+                    species: Some(species),
+                    builtin: builtins
+                        .iter()
+                        .find(|item| item.key == candidate.key)
+                        .and_then(|item| item.balance_label.clone()),
+                }],
+                text: String::new(),
+            })
         } else if candidates.is_empty() {
+            None
+        } else {
+            let candidates = candidates
+                .values()
+                .map(|(candidate, _)| BalanceCandidate {
+                    species: self
+                        .species
+                        .iter()
+                        .position(|item| item.key == candidate.key),
+                    builtin: builtins
+                        .iter()
+                        .find(|item| item.key == candidate.key)
+                        .and_then(|item| item.balance_label.clone()),
+                })
+                .collect();
+            Some(BalanceNote {
+                step: index,
+                added: false,
+                candidates,
+                text: String::new(),
+            })
+        };
+        let note = if let Some(mut balance) = balance {
+            balance.text = self.balance_note(doc, &balance);
+            let note = balance.text.clone();
+            self.balance_notes.push(balance);
+            note
+        } else {
             format!(
                 "No single molecule balances step {}; continuing as drawn.",
-                index + 1
-            )
-        } else {
-            let names = candidates
-                .values()
-                .map(|(candidate, _)| candidate.label.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!(
-                "More than one molecule balances step {} ({names}); continuing as drawn.",
                 index + 1
             )
         };
@@ -1001,7 +1103,12 @@ fn snapshot(doc: &Document, arrows: &[u64]) -> Result<String, String> {
             .collect();
         let labels: Vec<_> = reactions::molecules(doc, &atoms)
             .into_iter()
-            .map(|atoms| chemistry::labels(doc, &atoms, ""))
+            .map(|atoms| {
+                (
+                    super::super::card::compound_label(doc, &atoms),
+                    super::super::card::authored_molecule_name(doc, &atoms),
+                )
+            })
             .collect();
         let conditions: Vec<_> = reaction
             .annotations

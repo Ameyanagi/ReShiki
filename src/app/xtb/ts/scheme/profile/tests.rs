@@ -131,6 +131,8 @@ fn app() -> App {
         epoch: app.tab.file_epoch,
         revision: app.tab.revision,
         checked: Cell::new(None),
+        name_requests: Vec::new(),
+        refresh_names: false,
         #[cfg(feature = "xtb")]
         pending_save: None,
     });
@@ -185,7 +187,7 @@ fn legacy_profile(doc: &Document, arrows: &[u64]) -> EnergyProfile {
 
 #[test]
 fn two_steps_use_one_inventory_for_energies_labels_and_models() {
-    let (doc, plan) = Plan::example();
+    let (doc, mut plan) = Plan::example();
     let report = report(&plan);
     let figure = build(&doc, &plan, &report, false, EnergyUnit::KcalPerMol).unwrap();
     assert_eq!(energies(&figure), [0., 10., -5., 15., -8.]);
@@ -205,9 +207,9 @@ fn two_steps_use_one_inventory_for_energies_labels_and_models() {
     );
     assert_eq!(figure.states[1].label, "TS1‡");
     assert_eq!(figure.states[3].label, "TS2‡");
-    assert_eq!(figure.states[0].label, "C2H6O + H₂");
-    assert_eq!(figure.states[2].label, "C2H4 + H₂O + H₂");
-    assert_eq!(figure.states[4].label, "C2H6 + H₂O");
+    assert_eq!(figure.states[0].label, "C2H6O + hydrogen");
+    assert_eq!(figure.states[2].label, "C2H4 + water + hydrogen");
+    assert_eq!(figure.states[4].label, "C2H6 + water");
     for (state, inventory) in figure
         .states
         .iter()
@@ -236,9 +238,23 @@ fn two_steps_use_one_inventory_for_energies_labels_and_models() {
         (2, Some(3), 4)
     );
     assert!(profile::source_current(&doc, &figure));
+    let named = [
+        (&doc.reactions[0].reactants[0].atoms, "ethanol"),
+        (&doc.reactions[0].products[0].atoms, "ethene"),
+        (&doc.reactions[1].products[0].atoms, "ethane"),
+    ];
+    plan.resolve_names(&doc, |atoms| {
+        named
+            .iter()
+            .find(|(selection, _)| selection.as_slice() == atoms)
+            .map(|(_, name)| (*name).to_owned())
+    });
     let gibbs = build(&doc, &plan, &report, true, EnergyUnit::KjPerMol).unwrap();
     assert_eq!(gibbs.energy_kind, EnergyProfileKind::Gibbs);
     assert_eq!(energies(&gibbs), [0., 11., -4., 17., -6.]);
+    assert_eq!(gibbs.states[0].label, "ethanol + hydrogen");
+    assert_eq!(gibbs.states[2].label, "ethene + water + hydrogen");
+    assert_eq!(gibbs.states[4].label, "ethane + water");
 }
 
 #[test]

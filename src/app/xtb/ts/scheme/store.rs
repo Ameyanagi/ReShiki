@@ -277,6 +277,8 @@ mod tests {
         app.tab.xtb.scheme = Some(super::super::State {
             options: vec![super::super::run::StepOptions::default(); 2],
             plan,
+            name_requests: Vec::new(),
+            refresh_names: false,
             method: qcdata::XtbMethod::Gfn2Xtb,
             sheet: false,
             original: None,

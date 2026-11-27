@@ -49,38 +49,43 @@ impl Artwork {
         for (index, (step, current)) in profile.steps.iter().zip(reactions).enumerate() {
             artwork.matched_steps.insert(index);
             artwork.selection.extend(current.ids());
+            // Implicit atoms can leave some or all of the saddle's changes off the drawing.
+            let boxed_transition = step.transition.filter(|&state| {
+                let (Some(transition), Some(changes)) =
+                    (profile.states.get(state), artwork.changes.get_mut(state))
+                else {
+                    return false;
+                };
+                let Some(geometry) = transition.geometry.as_ref() else {
+                    return true;
+                };
+                *changes = scheme_changes(doc, &current, geometry);
+                for pairs in [&mut changes.forming, &mut changes.breaking] {
+                    pairs.retain(|&[a, b]| doc.atom_drawn(a) && doc.atom_drawn(b));
+                }
+                let drawn = changes.forming.len() + changes.breaking.len();
+                drawn == 0 || drawn < geometry.forming.len() + geometry.breaking.len()
+            });
             for (state, participants) in [
                 (step.from, &current.reactants),
                 (step.to, &current.products),
             ] {
-                if let Some(species) = artwork.species.get_mut(state) {
-                    let atoms: Vec<_> = participants.iter().map(|p| p.atoms.clone()).collect();
-                    let boxes = scene::selections_ink_bounds(doc, &atoms)
-                        .into_iter()
-                        .zip(atoms)
-                        .filter_map(|(bounds, atoms)| {
-                            let (lo, hi) = bounds?;
-                            let &owner = atoms.first()?;
-                            atoms
-                                .iter()
-                                .any(|&id| doc.atom_drawn(id))
-                                .then_some(SpeciesBox { owner, lo, hi })
-                        })
-                        .collect::<Vec<_>>();
-                    for item in boxes {
-                        if !species.iter().any(|other| other.owner == item.owner) {
-                            species.push(item);
+                let atoms: Vec<_> = participants.iter().map(|p| p.atoms.clone()).collect();
+                let boxes = scene::selections_ink_bounds(doc, &atoms);
+                for (bounds, atoms) in boxes.into_iter().zip(atoms) {
+                    let (Some((lo, hi)), Some(&owner)) = (bounds, atoms.first()) else {
+                        continue;
+                    };
+                    if !atoms.iter().any(|&id| doc.atom_drawn(id)) {
+                        continue;
+                    }
+                    for state in std::iter::once(state).chain(boxed_transition) {
+                        if let Some(species) = artwork.species.get_mut(state)
+                            && !species.iter().any(|other| other.owner == owner)
+                        {
+                            species.push(SpeciesBox { owner, lo, hi });
                         }
                     }
-                }
-            }
-            if let Some(state) = step.transition
-                && let Some(changes) = artwork.changes.get_mut(state)
-                && let Some(geometry) = profile.states.get(state).and_then(|s| s.geometry.as_ref())
-            {
-                *changes = scheme_changes(doc, &current, geometry);
-                for pairs in [&mut changes.forming, &mut changes.breaking] {
-                    pairs.retain(|&[a, b]| doc.atom_drawn(a) && doc.atom_drawn(b));
                 }
             }
         }

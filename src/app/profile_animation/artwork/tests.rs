@@ -168,8 +168,31 @@ fn mapped_attachments_take_priority_over_creation_ids_after_paste() {
 }
 
 #[test]
-fn five_states_check_the_saved_chemistry_of_each_arrow() {
-    let (mut doc, id, _, intermediate) = fixture();
+fn partly_drawn_bond_changes_keep_the_visible_marks_with_both_boxes() {
+    let (mut doc, _, reactants, products) = fixture();
+    Arc::make_mut(&mut doc.science.frames[0]).drawing_atoms[0] = None;
+    let graphic = &doc.graphics[0];
+    let artwork = Artwork::new(&doc, graphic);
+    assert_eq!(artwork.species[1][0].owner, reactants[0]);
+    assert_eq!(artwork.species[1][1].owner, products[0]);
+    let overlay = artwork.overlay(&doc, graphic, 1, None, None, true);
+    let [
+        ..,
+        Primitive::Path { style: dashed, .. },
+        Primitive::Path { style: cross, .. },
+    ] = overlay.as_slice()
+    else {
+        panic!("Missing breaking bond marks")
+    };
+    assert_eq!(overlay.len(), 6);
+    assert_eq!(dashed.stroke, Color::Palette(Hue::Red, Row::Strong));
+    assert_eq!(dashed.pattern, LinePattern::Dashed);
+    assert_eq!(cross.stroke, dashed.stroke);
+    assert_eq!(cross.pattern, LinePattern::Solid);
+}
+
+fn five_state_fixture() -> (Document, u64, [Vec<u64>; 3]) {
+    let (mut doc, id, reactants, intermediate) = fixture();
     let final_atoms: Vec<_> = (0..3)
         .map(|i| doc.add_atom("C", Point::new(320. + i as f32 * 25., 0.)))
         .collect();
@@ -223,10 +246,17 @@ fn five_states_check_the_saved_chemistry_of_each_arrow() {
         source_key: Some(key),
         irc: vec![],
     });
+    (doc, id, [reactants, intermediate, final_atoms])
+}
+
+#[test]
+fn five_states_check_the_saved_chemistry_of_each_arrow() {
+    let (mut doc, _, [_, intermediate, final_atoms]) = five_state_fixture();
     let g = &doc.graphics[0];
     let artwork = Artwork::new(&doc, g);
     assert_eq!(artwork.species[2][0].owner, intermediate[0]);
     assert_eq!(artwork.species[4][0].owner, final_atoms[0]);
+    let arrow = doc.reactions[1].arrow;
     assert!(artwork.selection.contains(&arrow));
     let count = |doc: &Document, artwork: &Artwork, state| {
         artwork
@@ -257,6 +287,57 @@ fn five_states_check_the_saved_chemistry_of_each_arrow() {
         artwork.overlay(&doc, g, 2, sample, None, true).len(),
         artwork.overlay(&doc, g, 2, sample, None, false).len(),
     );
+}
+
+#[test]
+fn implicit_hydrogen_transfer_boxes_the_active_steps_endpoints() {
+    let (mut doc, _, [_, intermediate, products]) = five_state_fixture();
+    let profile = doc.graphics[0].energy_profile.as_deref_mut().unwrap();
+    for (state, atoms, hydrogen_x) in [(1, intermediate, 0.5), (3, products, 1.5)] {
+        let geometry = profile.states[state].geometry.as_mut().unwrap();
+        geometry.frame.numbers.push(1);
+        geometry.frame.positions_angstrom.push([hydrogen_x, 1., 0.]);
+        geometry.bonds = vec![[0, 1], [1, 2], [1, 3]];
+        geometry.forming = vec![[0, 3]];
+        geometry.breaking = vec![[1, 3]];
+        let mut saved = geometry.frame.clone();
+        saved.drawing_atoms = vec![Some(atoms[2]), Some(atoms[0]), Some(atoms[1]), None];
+        doc.science.frames.push(Arc::new(saved));
+    }
+
+    let graphic = &doc.graphics[0];
+    let artwork = Artwork::new(&doc, graphic);
+    let scheme_paths = |state| {
+        let profile_ink = artwork.overlay(&doc, graphic, state, None, None, false);
+        artwork
+            .overlay(&doc, graphic, state, None, None, true)
+            .into_iter()
+            .skip(profile_ink.len())
+            .map(|primitive| match primitive {
+                Primitive::Path {
+                    commands, style, ..
+                } => (commands, style),
+                other => panic!("Expected a scheme box, got {other:?}"),
+            })
+            .collect::<Vec<_>>()
+    };
+    let [reactant, intermediate, product] = [0, 2, 4].map(scheme_paths);
+    assert_eq!(reactant.len(), 1);
+    assert_eq!(intermediate.len(), 1);
+    assert_eq!(product.len(), 1);
+    assert_eq!(scheme_paths(1), [reactant, intermediate.clone()].concat());
+    assert_eq!(scheme_paths(3), [intermediate, product].concat());
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut renderer = FrameRenderer::new(&doc, graphic.id, 480, false).unwrap();
+        for state in [1, 3] {
+            assert_ne!(
+                renderer.render(state, None, None, true).unwrap(),
+                renderer.render(state, None, None, false).unwrap(),
+            );
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -300,7 +381,7 @@ fn linked_models_do_not_contribute_to_scheme_highlights() {
         (&renderer.artwork, &renderer.doc, &renderer.graphic),
     ] {
         assert_eq!(artwork.overlay(doc, graphic, 0, None, None, true).len(), 2);
-        assert_eq!(artwork.overlay(doc, graphic, 1, None, None, true).len(), 2);
+        assert_eq!(artwork.overlay(doc, graphic, 1, None, None, true).len(), 3);
         assert_eq!(artwork.overlay(doc, graphic, 2, None, None, true).len(), 3);
     }
 }

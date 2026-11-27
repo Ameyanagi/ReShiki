@@ -2,6 +2,9 @@ use super::*;
 use reshiki::arrows::{ArrowStyle, Preset};
 use reshiki::document::Arrow;
 
+#[path = "naming_tests.rs"]
+mod naming_tests;
+
 fn molecule_at(
     doc: &mut Document,
     elements: &[&str],
@@ -152,7 +155,11 @@ fn a_three_step_chain_reuses_hydrogen_chloride_on_opposite_sides() {
     let plan = Plan::read(&doc, &[third, first, second]).unwrap();
     assert_eq!(plan.arrows, [first, second, third]);
     assert!(!plan.cyclic);
-    let hcl = plan.species.iter().position(|s| s.label == "HCl").unwrap();
+    let hcl = plan
+        .species
+        .iter()
+        .position(|s| s.label == "hydrogen chloride")
+        .unwrap();
     for side in [&plan.steps[1].reactants, &plan.steps[2].products] {
         assert!(
             side.iter()
@@ -649,7 +656,16 @@ fn every_supported_builtin_is_a_single_ready_molecule() {
             .iter()
             .map(|species| species.label.as_str())
             .collect::<Vec<_>>(),
-        ["H₂O", "HCl", "NH₃", "MeOH", "HBr", "N₂", "CO₂", "H₂"]
+        [
+            "water",
+            "hydrogen chloride",
+            "ammonia",
+            "methanol",
+            "hydrogen bromide",
+            "nitrogen",
+            "carbon dioxide",
+            "hydrogen",
+        ]
     );
     assert_eq!(
         candidates
@@ -748,7 +764,11 @@ fn whole_scheme_inventory_carries_later_reactants_and_earlier_coproducts() {
     let levels = plan.levels().unwrap();
     assert_eq!(
         levels.iter().map(Level::label).collect::<Vec<_>>(),
-        ["C2H6O + H₂", "C2H4 + H₂O + H₂", "C2H6 + H₂O"]
+        [
+            "C2H6O + hydrogen",
+            "C2H4 + water + hydrogen",
+            "C2H6 + water",
+        ]
     );
     for (level, formulas) in levels.iter().zip([
         vec!["C2H6O", "H2"],
@@ -783,7 +803,11 @@ fn inventory_keeps_unused_copies_and_coefficient_weighted_energy() {
     let levels = plan.levels().unwrap();
     assert_eq!(
         levels.iter().map(Level::label).collect::<Vec<_>>(),
-        ["2 C2H6O + H₂", "2 C2H4 + 2 H2O + H₂", "C2H6 + C2H4 + 2 H2O"]
+        [
+            "2 C2H6O + hydrogen",
+            "2 C2H4 + 2 H2O + hydrogen",
+            "C2H6 + C2H4 + 2 H2O",
+        ]
     );
     let energy = |index: usize| {
         Some(match plan.species[index].formula.as_str() {
@@ -825,7 +849,7 @@ fn cached_card_names_keep_drawn_number_precedence_and_do_not_change_the_snapshot
         }
     });
     assert_eq!(plan.endpoint_label(0, false), "ethanol");
-    assert_eq!(plan.endpoint_label(0, true), "1 + H₂O");
+    assert_eq!(plan.endpoint_label(0, true), "1 + water");
     assert_eq!(plan.endpoint_label(1, true), "ethane");
     assert_eq!(plan.snapshot, snapshot);
     assert!(plan.current(&doc));

@@ -183,17 +183,20 @@ pub(super) fn compound_label<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a
         .and_then(|label| nonempty(&label.text))
 }
 
-pub(super) fn molecule_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
+pub(super) fn authored_molecule_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
     reshiki::linked_properties::caption(doc, atoms)
         .and_then(|link| nonempty(&link.custom_name))
         .or_else(|| {
             reshiki::molecule_names::label(doc, atoms).and_then(|name| nonempty(&name.text))
         })
-        .or_else(|| {
-            reshiki::linked_properties::caption(doc, atoms)
-                .filter(|link| !link.needs_name())
-                .and_then(|link| nonempty(&link.name))
-        })
+}
+
+pub(super) fn molecule_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
+    authored_molecule_name(doc, atoms).or_else(|| {
+        reshiki::linked_properties::caption(doc, atoms)
+            .filter(|link| !link.needs_name())
+            .and_then(|link| nonempty(&link.name))
+    })
 }
 
 fn drawn_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
@@ -478,6 +481,21 @@ impl App {
         drawn_name(&self.tab.doc, atoms).or_else(|| self.xtb_existing_molecule_name(atoms))
     }
 
+    pub(in crate::app::xtb::ts) fn xtb_species_name_request(
+        &self,
+        atoms: &[u64],
+    ) -> Option<(String, Vec<u64>)> {
+        if self.xtb_reaction_species_name(atoms).is_some() {
+            return None;
+        }
+        let smiles = reshiki::naming::selected_identity(&self.tab.doc, atoms)
+            .ok()?
+            .smiles;
+        let state = &self.tab.naming;
+        (!state.caption_failed.contains_key(&smiles) && !state.caption_names.contains_key(&smiles))
+            .then(|| (smiles, atoms.to_vec()))
+    }
+
     /// Share Properties' naming queue; only the visible card asks for names.
     pub(in crate::app) fn xtb_reaction_name_request(&self) -> Option<(String, Vec<u64>)> {
         if self.ts_review_visible() {
@@ -492,18 +510,7 @@ impl App {
             .flat_map(|participant| {
                 reshiki::reactions::molecules(&self.tab.doc, &participant.atoms)
             })
-            .find_map(|atoms| {
-                if self.xtb_reaction_species_name(&atoms).is_some() {
-                    return None;
-                }
-                let smiles = reshiki::naming::selected_identity(&self.tab.doc, &atoms)
-                    .ok()?
-                    .smiles;
-                let state = &self.tab.naming;
-                (!state.caption_failed.contains_key(&smiles)
-                    && !state.caption_names.contains_key(&smiles))
-                .then_some((smiles, atoms))
-            })
+            .find_map(|atoms| self.xtb_species_name_request(&atoms))
     }
 
     pub(in crate::app::xtb) fn xtb_reaction_label(&self, arrow: u64) -> ReactionLabel {

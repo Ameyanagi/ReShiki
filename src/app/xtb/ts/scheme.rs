@@ -77,6 +77,8 @@ struct MapReviews {
 
 pub(in crate::app::xtb) struct State {
     plan: Plan,
+    name_requests: Vec<(String, Vec<u64>)>,
+    refresh_names: bool,
     options: Vec<StepOptions>,
     method: XtbMethod,
     sheet: bool,
@@ -224,9 +226,149 @@ impl App {
         self.tab.xtb.scheme.as_ref().is_some_and(State::busy)
     }
 
+    /// Scheme labels share the card's local naming queue without adding
+    /// captions or a drawing revision. Built-in balancing species already
+    /// have names and never request one.
+    pub(in crate::app) fn xtb_scheme_name_request(&self) -> Option<(String, Vec<u64>)> {
+        let state = self.tab.xtb.scheme.as_ref()?;
+        if self.ts_review_visible()
+            || !self.xtb_scheme_current()
+            || !(state.sheet
+                || self.xtb_scheme_palette_visible()
+                || (self.tabs.temporary_depth == 0
+                    && self.inspector_open
+                    && self.inspector_tab == InspectorTab::Predict
+                    && self.xtb.page == Page::Xtb
+                    && !self.tube_bend_active()
+                    && self.tab.equipment_authoring.is_none()
+                    && self.xtb_scheme_selected()))
+        {
+            return None;
+        }
+        state
+            .name_requests
+            .iter()
+            .find(|(smiles, _)| {
+                !self.tab.naming.caption_names.contains_key(smiles)
+                    && !self.tab.naming.caption_failed.contains_key(smiles)
+            })
+            .cloned()
+    }
+
+    pub(in crate::app) fn xtb_schedule_scheme_name_refresh(&mut self) {
+        if let Some(state) = &mut self.tab.xtb.scheme {
+            state.refresh_names = true;
+        }
+    }
+
+    pub(in crate::app) fn xtb_refresh_scheme_names(&mut self) {
+        let Some(state) = self
+            .tab
+            .xtb
+            .scheme
+            .as_ref()
+            .filter(|state| state.refresh_names)
+        else {
+            return;
+        };
+        if !self.xtb_scheme_current() {
+            return;
+        }
+        let labels = |plan: &Plan| {
+            plan.levels().map(|levels| {
+                levels
+                    .into_iter()
+                    .map(|level| {
+                        super::profile::state(
+                            reshiki::graphics::EnergyProfileStateKind::Reactant,
+                            level.label(),
+                            0.,
+                        )
+                        .label
+                    })
+                    .collect::<Vec<_>>()
+            })
+        };
+        let previous = labels(&state.plan);
+        let names: std::collections::BTreeMap<_, _> = state
+            .plan
+            .species
+            .iter()
+            .flat_map(|species| &species.instances)
+            .filter_map(|atoms| {
+                Some((
+                    atoms.clone(),
+                    self.xtb_existing_molecule_name(atoms)?.to_owned(),
+                ))
+            })
+            .collect();
+        if let Some(state) = self.tab.xtb.scheme.as_mut() {
+            state
+                .plan
+                .resolve_names(&self.tab.doc, |atoms| names.get(atoms).cloned());
+            state.refresh_names = false;
+        }
+        let Some(state) = self.tab.xtb.scheme.as_ref() else {
+            return;
+        };
+        let (Some(previous), Some(labels)) = (previous, labels(&state.plan)) else {
+            return;
+        };
+        if previous == labels {
+            return;
+        }
+        let linked: Vec<_> = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .enumerate()
+            .filter_map(|(index, graphic)| {
+                let figure = graphic.energy_profile.as_deref()?;
+                state.follows(&self.tab.doc, figure).then_some(index)
+            })
+            .collect();
+        // Like automatic property captions, a late presentation name belongs
+        // to the existing figure's edit. Keep its geometry, energies and style.
+        let mut changed = false;
+        for index in linked {
+            let Some(figure) = self
+                .tab
+                .doc
+                .graphics
+                .get_mut(index)
+                .and_then(|graphic| graphic.energy_profile.as_deref_mut())
+            else {
+                continue;
+            };
+            let minima: Vec<_> = figure
+                .steps
+                .first()
+                .map(|step| step.from)
+                .into_iter()
+                .chain(figure.steps.iter().map(|step| step.to))
+                .collect();
+            for ((index, old), new) in minima.into_iter().zip(&previous).zip(&labels) {
+                if let Some(state) = figure.states.get_mut(index)
+                    && state.label == *old
+                    && old != new
+                {
+                    state.label = new.clone();
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
+        }
+    }
+
     fn xtb_open_scheme(&mut self) -> Task<Message> {
         if self.scheme_sheet_visible() || !self.xtb_can_open_scheme() {
             return Task::none();
+        }
+        if self.naming_can_edit() {
+            self.xtb_refresh_scheme_names();
         }
         let selected = self
             .tab
@@ -255,10 +397,18 @@ impl App {
         plan.resolve_names(&self.tab.doc, |atoms| {
             self.xtb_existing_molecule_name(atoms).map(str::to_owned)
         });
+        let name_requests = plan
+            .species
+            .iter()
+            .flat_map(|species| &species.instances)
+            .filter_map(|atoms| self.xtb_species_name_request(atoms))
+            .collect();
         let state = &mut self.tab.xtb.scheme;
         if let Some(existing) = state.as_mut().filter(|_| current) {
             existing.original = Some((existing.options.clone(), existing.method));
             existing.plan = plan;
+            existing.name_requests = name_requests;
+            existing.refresh_names = false;
             existing.sheet = true;
             existing.revision = self.tab.revision;
             existing.checked.set(None);
@@ -268,6 +418,8 @@ impl App {
                 original: Some((options.clone(), self.xtb.settings.barrier_method)),
                 options,
                 plan,
+                name_requests,
+                refresh_names: false,
                 method: self.xtb.settings.barrier_method,
                 sheet: true,
                 reviews: None,
@@ -580,5 +732,7 @@ impl App {
     }
 }
 
+#[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+mod naming_tests;
 #[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 mod tests;

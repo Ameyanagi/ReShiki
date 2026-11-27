@@ -151,6 +151,7 @@ pub(super) fn molecule(doc: &Document, atoms: &[u64]) -> Result<Species, String>
         multiplicity,
         key,
         composition,
+        balance_label: None,
     })
 }
 
@@ -194,8 +195,9 @@ pub(super) fn candidates() -> Result<Vec<Species>, String> {
         let mut species = molecule(&doc, &ids)?;
         species.atoms.clear();
         species.instances.clear();
-        species.label = label.into();
+        species.label = name.into();
         species.name = name.into();
+        species.balance_label = Some(label.into());
         candidates.push(species);
     }
     Ok(candidates)
