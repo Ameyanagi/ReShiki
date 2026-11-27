@@ -425,7 +425,12 @@ mod presentation_tests {
             [&source, &Arc::new(gxtb_result())],
             EnergyUnit::KjPerMol,
         ));
-        for expected in ["GFN2-xTB", "g-xTB", "107.1", "110.9"] {
+        for expected in [
+            "GFN2-xTB Barrier ΔE‡",
+            "g-xTB Barrier ΔE‡",
+            "107.1",
+            "110.9",
+        ] {
             assert!(both.texts.iter().any(|text| text == expected));
         }
         for frequency in ["315i", "387i"] {
@@ -448,8 +453,8 @@ mod presentation_tests {
             [&source, &refined],
             EnergyUnit::KcalPerMol,
         ));
-        assert!(view.texts.iter().any(|text| text == "GFN2-xTB"));
-        assert!(view.texts.iter().any(|text| text == "g-xTB"));
+        assert!(view.texts.iter().any(|text| text == "GFN2-xTB Barrier ΔE‡"));
+        assert!(view.texts.iter().any(|text| text == "g-xTB Barrier ΔE‡"));
         assert!(view.texts.iter().any(|text| text == "25.6"));
         assert!(!view.texts.iter().any(|text| text == "26.5"));
         assert_eq!(
@@ -547,10 +552,11 @@ mod presentation_tests {
         result
     }
 
-    /// A light saved g-xTB result keeps its own spectrum and observed IRC ends.
+    /// A light saved g-xTB refinement keeps its own spectrum and observed IRC ends.
     fn gxtb_result() -> CalcResult {
         use reshiki::qcdata::{IrcEndpoint, IrcPath, IrcRelaxedEnd};
         let mut result = result_with_gibbs();
+        let parent = result.transition_state_id().unwrap();
         let reshiki::qcdata::Settings::Xtb(settings) = &mut result.settings else {
             panic!("calculated fixture must have xTB settings");
         };
@@ -577,6 +583,7 @@ mod presentation_tests {
             .as_mut()
             .unwrap();
         search.method = XtbMethod::GXtb;
+        search.refined_from = Some(parent);
         search.irc = Some(IrcPath {
             trajectory,
             arc_lengths_sqrt_amu_bohr: vec![-1., 0., 1.],
@@ -822,15 +829,7 @@ mod presentation_tests {
 
     #[test]
     fn refined_path_copy_keeps_its_own_endpoint_energies_without_a_neb_band() {
-        let mut result = gxtb_result();
-        result
-            .run
-            .as_mut()
-            .unwrap()
-            .transition_state
-            .as_mut()
-            .unwrap()
-            .refined_from = result_with_gibbs().transition_state_id();
+        let result = gxtb_result();
         assert!(result.trajectory.is_none());
         let rows = path_rows(&result, None, EnergyUnit::KjPerMol, None);
         assert!(rows.contains(&("R ΔE".into(), "0.0 kJ/mol".into())));
