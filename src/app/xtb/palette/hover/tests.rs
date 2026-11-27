@@ -222,6 +222,37 @@ fn summary_bond_hover_ends_when_the_row_is_hidden_or_its_attachment_changes() {
         app.xtb_bond_hover_preview().is_none(),
         "edits retire the preview"
     );
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(
+        app.tab.selected.clone(),
+    )));
+    assert!(
+        app.tab.xtb.palette.hovered_bond.is_none(),
+        "an edit can move the row away without an exit"
+    );
+}
+
+#[test]
+fn summary_bond_hover_shows_labels_refreshed_while_hovering() {
+    let (mut app, pairs) = summary();
+    let bond = token(&app, pairs[1]);
+    hover(&mut app, &bond, true);
+    let revision = app.tab.revision;
+    // A label refresh edits the drawing without a new revision.
+    app.tab.doc.atoms[0].cip_label = Some("R".into());
+    app.tab.label_generation += 1;
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(
+        app.tab.selected.clone(),
+    )));
+    assert_eq!(app.tab.revision, revision);
+    let preview = app
+        .xtb_bond_hover_preview()
+        .expect("the row is still hovered");
+    assert_eq!(preview.atoms[0].cip_label.as_deref(), Some("R"));
+    let [a, b] = pairs[1].map(|index| app.xtb_shown().unwrap().atoms[index as usize].unwrap());
+    assert_eq!(
+        preview.bond_between(a, b).unwrap().1.highlight,
+        Some(Color::Palette(Hue::Teal, Row::Tint)),
+    );
 }
 
 #[test]

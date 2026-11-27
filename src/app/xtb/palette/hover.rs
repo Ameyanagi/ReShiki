@@ -32,7 +32,7 @@ impl BondHover {
 
 pub(super) struct Preview {
     bond: BondHover,
-    revision: (u64, u64),
+    stamp: (u64, u64, u64),
     document: Box<Document>,
 }
 
@@ -107,16 +107,35 @@ impl App {
         document.bonds.get_mut(index)?.highlight = Some(Color::Palette(Hue::Teal, Row::Tint));
         Some(Preview {
             bond,
-            revision: (self.tab.file_epoch, self.tab.revision),
+            stamp: self.xtb_bond_hover_stamp(),
             document,
         })
     }
 
+    /// Label refreshes change the drawing without a new revision.
+    fn xtb_bond_hover_stamp(&self) -> (u64, u64, u64) {
+        (
+            self.tab.file_epoch,
+            self.tab.revision,
+            self.tab.label_generation,
+        )
+    }
+
     /// A removed row cannot send an exit; its preview ends with its context.
+    /// Only a label refresh of the same drawing redraws a hovered row: an
+    /// edit or replacement can move the row away without an exit.
     pub(in crate::app) fn xtb_invalidate_bond_hover(&mut self) {
-        if self.tab.xtb.palette.hovered_bond.is_some() && self.xtb_bond_hover_preview().is_none() {
-            self.tab.xtb.palette.hovered_bond = None;
-        }
+        let Some(hover) = self.tab.xtb.palette.hovered_bond.take() else {
+            return;
+        };
+        let (epoch, revision, _) = self.xtb_bond_hover_stamp();
+        self.tab.xtb.palette.hovered_bond = if self.xtb_bond_hover_preview_of(&hover).is_some() {
+            Some(hover)
+        } else if hover.stamp.0 == epoch && hover.stamp.1 == revision {
+            self.xtb_make_bond_hover(hover.bond)
+        } else {
+            None
+        };
     }
 
     pub(in crate::app) fn xtb_clear_bond_hover(&mut self) {
@@ -124,10 +143,12 @@ impl App {
     }
 
     pub(in crate::app::xtb) fn xtb_bond_hover_preview(&self) -> Option<&Document> {
-        let hover = self.tab.xtb.palette.hovered_bond.as_ref()?;
-        (hover.revision == (self.tab.file_epoch, self.tab.revision)
-            && self.xtb_bond_row_visible(&hover.bond))
-        .then_some(hover.document.as_ref())
+        self.xtb_bond_hover_preview_of(self.tab.xtb.palette.hovered_bond.as_ref()?)
+    }
+
+    fn xtb_bond_hover_preview_of<'a>(&self, hover: &'a Preview) -> Option<&'a Document> {
+        (hover.stamp == self.xtb_bond_hover_stamp() && self.xtb_bond_row_visible(&hover.bond))
+            .then_some(hover.document.as_ref())
     }
 }
 
