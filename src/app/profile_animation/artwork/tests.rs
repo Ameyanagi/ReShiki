@@ -304,6 +304,55 @@ fn linked_models_do_not_contribute_to_scheme_highlights() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn movie_scheme_omits_2d_ink_hidden_by_a_3d_only_participant() {
+    use reshiki::models3d::{Display, ForceField, Model3d, Placed};
+
+    for extra_link in [false, true] {
+        let (mut doc, id, reactants, products) = fixture();
+        let mut linked = reactants.clone();
+        if extra_link {
+            // Selection drops models with links outside the selected scheme.
+            linked.push(doc.add_atom("C", Point::new(0., 25.)));
+        }
+        let mut model = Model3d::new(
+            &doc,
+            linked
+                .into_iter()
+                .enumerate()
+                .map(|(i, id)| Placed {
+                    id,
+                    xyz: [i as f32, 0., 0.],
+                })
+                .collect(),
+            vec![],
+            ForceField::default(),
+        );
+        model.display = Display::Both;
+        doc.models.push(model);
+        let renderer = FrameRenderer::new(&doc, id, 480, true).unwrap();
+        assert!(renderer.doc.bond_drawn(reactants[0], reactants[1]));
+        assert!(renderer.doc.models.is_empty());
+
+        doc.models[0].display = Display::ThreeD;
+        assert!(!doc.bond_drawn(reactants[0], reactants[1]));
+        let renderer = FrameRenderer::new(&doc, id, 480, true).unwrap();
+        assert_eq!(
+            renderer
+                .doc
+                .atoms
+                .iter()
+                .map(|atom| atom.id)
+                .collect::<Vec<_>>(),
+            products
+        );
+        assert_eq!(renderer.doc.bonds.len(), 1);
+        assert!(renderer.doc.bond_drawn(products[0], products[2]));
+        assert!(renderer.doc.models.is_empty());
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn offscreen_frames_include_the_scheme_and_preserve_background_and_document() {
     let (doc, id, _, _) = fixture();
     let before = serde_json::to_string(&doc).unwrap();

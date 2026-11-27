@@ -356,6 +356,8 @@ impl FrameRenderer {
         size: u16,
         transparent: bool,
     ) -> Result<Self, String> {
+        use reshiki::models3d::{self, Display};
+
         if ![480, 720, 1080].contains(&size) {
             return Err("Choose a movie size of 480, 720 or 1080 pixels".into());
         }
@@ -375,6 +377,25 @@ impl FrameRenderer {
             .ok_or("The energy profile is no longer available")?;
         let artwork = Artwork::new(&doc, &graphic);
         let mut selected = reshiki::editing::selection(&doc, &artwork.selection);
+        // Selection may omit a model with links outside the movie. Use the
+        // source's 3D-only models to remove the ink they hide before rendering.
+        let selected_atoms: BTreeSet<_> = selected.atoms.iter().map(|atom| atom.id).collect();
+        let hiding_models: Vec<_> = doc
+            .models
+            .iter()
+            .filter(|model| {
+                model.display == Display::ThreeD
+                    && model
+                        .linked_atoms
+                        .iter()
+                        .any(|id| selected_atoms.contains(id))
+            })
+            .cloned()
+            .collect();
+        if !hiding_models.is_empty() {
+            selected.models = hiding_models;
+            selected = models3d::drawn(&selected).into_owned();
+        }
         // Use the drawn scheme and the 3D pictures owned by the profile.
         selected.models.clear();
         // A copied child normally leaves its table behind. Movies retain only
