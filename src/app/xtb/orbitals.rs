@@ -151,8 +151,6 @@ pub(crate) struct Orbitals {
     /// computed: applied when they arrive.
     pending: Option<Choice>,
     pending_pictures: Vec<PendingPicture>,
-    /// The result and drawing revision whose Undo step can absorb relinked rows.
-    pub(super) mo_relink: Option<(String, (u64, u64))>,
     /// Orbitals the worker recomputed, by result key.
     computed: Vec<(String, Arc<qcdata::Orbitals>)>,
     computing: Option<Computing>,
@@ -179,7 +177,6 @@ impl Default for Orbitals {
             keys: None,
             pending: None,
             pending_pictures: vec![],
-            mo_relink: None,
             computed: vec![],
             computing: None,
             building: None,
@@ -189,6 +186,51 @@ impl Default for Orbitals {
             synced: None,
         }
     }
+}
+
+impl Orbitals {
+    fn cached_row(
+        &self,
+        key: &str,
+        spin: Spin,
+        index: usize,
+    ) -> Option<(&qcdata::BasisSet, &[f64])> {
+        let (_, orbitals) = self.computed.iter().find(|(k, _)| k == key)?;
+        compute::row(orbitals, spin, index)
+    }
+
+    /// Keep session rows with placed figures in the copy being written.
+    pub(in crate::app) fn save_snapshot(&self, mut doc: Document) -> Document {
+        if self.computed.is_empty() {
+            return doc;
+        }
+        // Resolve all figures before pinning, while they still select the
+        // same results as the drawing in this session.
+        let pins: Vec<_> = doc
+            .orbital_pins_by_result()
+            .filter_map(|(stored_index, orbital)| {
+                let index = orbital.index as usize;
+                let stored = &doc.science.results[stored_index];
+                if stored_row(stored, orbital.spin, index).is_some() {
+                    return None;
+                }
+                let (basis, row) = self.cached_row(&orbital.result, orbital.spin, index)?;
+                Some((stored_index, orbital.spin, orbital.index, basis, row))
+            })
+            .collect();
+        for (stored_index, spin, index, basis, row) in pins {
+            let _ = science::pin_orbital(&mut doc, stored_index, spin, index, basis, row);
+        }
+        doc
+    }
+}
+
+fn stored_row(stored: &Stored, spin: Spin, index: usize) -> Option<(&qcdata::BasisSet, &[f64])> {
+    stored
+        .result
+        .orbitals
+        .as_ref()
+        .and_then(|o| compute::row(o, spin, index))
 }
 
 /// The chosen orbital: a result, a spin column and a level.
@@ -670,17 +712,12 @@ impl App {
         spin: Spin,
         index: usize,
     ) -> Option<(&'a qcdata::BasisSet, &'a [f64])> {
-        let key = science::result_key(&stored.result);
-        stored
-            .result
-            .orbitals
-            .as_ref()
-            .and_then(|o| compute::row(o, spin, index))
-            .or_else(|| {
-                let state = &self.tab.xtb.orbitals;
-                let (_, orbitals) = state.computed.iter().find(|(k, _)| *k == key)?;
-                compute::row(orbitals, spin, index)
-            })
+        stored_row(stored, spin, index).or_else(|| {
+            self.tab
+                .xtb
+                .orbitals
+                .cached_row(&science::result_key(&stored.result), spin, index)
+        })
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -749,12 +786,13 @@ impl App {
                 match outcome {
                     Ok(orbitals) => {
                         state.computed.retain(|(k, _)| *k != key);
-                        state.computed.push((key.clone(), Arc::clone(&orbitals)));
+                        state.computed.push((key.clone(), orbitals));
                         if state.computed.len() > COMPUTED {
                             state.computed.remove(0);
                         }
                         let pending = state.pending.take_if(|p| p.result == key);
-                        self.xtb_mo_pin_pictures(&key, &orbitals);
+                        // Linked pictures use these cached rows for drawing. Save-time
+                        // snapshots keep their appearance without another history edit.
                         self.xtb_mo_finish_pictures(&key);
                         // A level chosen for this result while it ran.
                         if let Some(pending) = pending

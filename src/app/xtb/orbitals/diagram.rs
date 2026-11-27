@@ -1,8 +1,7 @@
 //! Placed MO diagram edits and the orbital rows a picture is waiting for.
-use super::{App, Choice, Figure, OrbitalRef, Settings, Stored, View, compute, levels, science};
+use super::{App, Choice, Figure, OrbitalRef, Settings, Stored, View, levels, science};
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{Graphic, GraphicStyle, MoDiagram, MoPicture};
-use reshiki::qcdata::Orbitals;
 use reshiki::scene;
 use std::sync::Arc;
 
@@ -440,82 +439,6 @@ impl App {
                 self.tab.xtb.orbitals.pending_pictures.push(request);
             }
         }
-    }
-
-    /// Keep rows for linked pictures so they can be rebuilt after reopening.
-    pub(super) fn xtb_mo_pin_pictures(&mut self, key: &str, orbitals: &Orbitals) {
-        let doc = &self.tab.doc;
-        let diagrams = doc
-            .graphics
-            .iter()
-            .filter_map(|g| g.mo.as_deref())
-            .filter(|mo| mo.linked);
-        let mut pinned = None;
-        for mo in diagrams {
-            for picture in &mo.pictures {
-                let figure = &picture.figure;
-                let orbital = &figure.orbital;
-                if orbital.result != key {
-                    continue;
-                }
-                let index = orbital.index as usize;
-                let Some((basis, row)) = compute::row(orbitals, orbital.spin, index) else {
-                    continue;
-                };
-                let Some((stored_index, stored)) = mo
-                    .orbital_model(doc, figure)
-                    .and_then(|model| science::figure_result(doc, &model))
-                else {
-                    continue;
-                };
-                let current = doc
-                    .science
-                    .attachment(stored.attachment)
-                    .is_some_and(|a| a.freshness(doc) == science::Freshness::Current);
-                let kept = stored
-                    .result
-                    .orbitals
-                    .as_ref()
-                    .and_then(|o| compute::row(o, orbital.spin, index))
-                    .is_some();
-                if current && !kept {
-                    let candidate = pinned.get_or_insert_with(|| doc.clone());
-                    let _ = science::pin_orbital(
-                        candidate,
-                        stored_index,
-                        orbital.spin,
-                        orbital.index,
-                        basis,
-                        row,
-                    );
-                }
-            }
-        }
-        let Some(pinned) = pinned.filter(|candidate| candidate != doc) else {
-            return;
-        };
-        let revision = (self.tab.file_epoch, self.tab.revision);
-        let continuing = self
-            .tab
-            .xtb
-            .orbitals
-            .mo_relink
-            .as_ref()
-            .is_some_and(|(result, relinked)| result == key && *relinked == revision);
-        self.xtb_follow_results(&pinned);
-        let before = std::mem::replace(&mut self.tab.doc, pinned);
-        let status = self.status.clone();
-        let error = self.error;
-        if continuing {
-            self.changed_continuing(before, true);
-            // A partial reply can be followed by more rows for the same relink.
-            self.tab.xtb.orbitals.mo_relink =
-                Some((key.to_owned(), (self.tab.file_epoch, self.tab.revision)));
-        } else {
-            self.changed(before);
-        }
-        self.status = status;
-        self.error = error;
     }
 
     pub(super) fn xtb_mo_retire_invalid_pictures(&mut self) {

@@ -1389,7 +1389,9 @@ impl super::App {
             self.error = false;
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
-        let save_snapshot = std::sync::Arc::clone(&snapshot);
+        let save_snapshot = self.tab.xtb.orbitals.save_snapshot((*snapshot).clone());
+        #[cfg(not(target_arch = "wasm32"))]
+        let export_snapshot = std::sync::Arc::clone(&snapshot);
         #[cfg(not(target_arch = "wasm32"))]
         let github_root = self.github.root.clone();
         let view = Some(reshiki::document::View {
@@ -1470,7 +1472,7 @@ impl super::App {
                     let exported = match kept_format(&path) {
                         Some(format) => Some(
                             reshiki::formats::write_with_engine(
-                                (*save_snapshot).clone(),
+                                std::sync::Arc::unwrap_or_clone(export_snapshot),
                                 format,
                                 &engine,
                             )
