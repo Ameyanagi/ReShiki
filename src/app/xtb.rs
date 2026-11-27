@@ -1210,6 +1210,7 @@ impl App {
             && let Some(orbitals) = &pending.result.orbitals
         {
             let columns = reshiki::orbital_levels::columns(orbitals);
+            let xtb68 = results::xtb68(&pending.result);
             if !columns.is_empty() {
                 let key = science::result_key(&pending.result);
                 for mo in doc.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
@@ -1218,6 +1219,7 @@ impl App {
                         && pending.launch.atoms.contains(&mo.molecule)
                     {
                         mo.relink(key.clone(), columns.clone());
+                        mo.alpha_gap = xtb68;
                     }
                 }
             }

@@ -100,6 +100,9 @@ impl App {
         let template = self.xtb_orbital_figure(&target, &choice);
         let label = target.columns[choice.column].label.clone();
         let mut mo = MoDiagram::new(molecule, target.key, target.columns);
+        mo.alpha_gap = self
+            .xtb_orbital_stored()
+            .is_some_and(|(_, stored)| super::super::results::xtb68(&stored.result));
         let Some(column) = mo.columns.iter().position(|c| c.label == label) else {
             return;
         };
