@@ -126,7 +126,15 @@ impl Fragment {
             excluded.sort_unstable();
             (part, excluded)
         };
-        let rigid = move_delta.and_then(|delta| rigid_part(base, &part, &excluded, delta));
+        // Rebuilding a 2D part is cheap and exact; only a part showing a 3D
+        // model reuses its retained scene and tiles while it moves.
+        let rigid = move_delta
+            .filter(|_| {
+                part.models
+                    .iter()
+                    .any(|m| m.display != reshiki::models3d::Display::TwoD)
+            })
+            .and_then(|delta| rigid_part(base, &part, &excluded, delta));
         if !base.models.is_empty() {
             // A model must be kept whole on one side of the split.
             rigid.as_ref()?;
