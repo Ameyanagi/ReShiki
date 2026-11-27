@@ -13,7 +13,7 @@ pub mod visible;
 pub use draw::demo_on_this_thread;
 pub use figure::{Figure, OrbitalRef, Panel, Snapshot};
 pub use look::{Fill, Look};
-pub(crate) use signing::{keep_mo_signed, keep_signed};
+pub(crate) use signing::keep_signed;
 
 /// Export size above which the export dialog warns (owner: 5 MB).
 pub const EXPORT_WARNING_BYTES: usize = 5 * 1024 * 1024;

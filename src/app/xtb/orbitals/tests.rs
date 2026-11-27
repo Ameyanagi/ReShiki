@@ -815,8 +815,7 @@ fn an_empty_mo_diagram_waits_for_multiple_requested_rows_and_pins_each_on_arriva
     );
 }
 
-#[test]
-fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
+fn tab_with_mo_diagram() -> App {
     let mut app = tab();
     computed(&mut app);
     act(
@@ -825,8 +824,47 @@ fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
             for_selection: false,
         },
     );
+    app
+}
+
+fn rerun_diagram(app: &mut App) -> qcdata::Orbitals {
     let atom = app.tab.doc.atoms[0].id;
     app.set_selection(vec![atom]);
+    app.xtb.settings.method = qcdata::XtbMethod::GXtb;
+    let _ = app.update(Message::Xtb(XtbAction::Run));
+    let mut new_levels = levels();
+    new_levels.alpha.energies_hartree[4] += 0.05;
+    finish_energy(app, Method::Gxtb, -5.07, new_levels.clone());
+    assert!(!app.error, "{}", app.status);
+    new_levels
+}
+
+fn reply_with_rerun_rows(app: &mut App, levels: &qcdata::Orbitals, rows: &[u32]) {
+    let key = science::result_key(&app.tab.doc.science.results.last().unwrap().result);
+    let mut reply = worker_rows(rows);
+    reply
+        .alpha
+        .energies_hartree
+        .clone_from(&levels.alpha.energies_hartree);
+    act(app, Action::Computed(key, Ok(Arc::new(reply))));
+}
+
+fn rerun_rows(doc: &Document) -> &[u32] {
+    &doc.science
+        .results
+        .last()
+        .unwrap()
+        .result
+        .orbitals
+        .as_ref()
+        .unwrap()
+        .alpha
+        .rows
+}
+
+#[test]
+fn rerunning_relinks_and_pins_linked_pictures_in_one_undo_step() {
+    let mut app = tab_with_mo_diagram();
     let before_copy = app.tab.doc.clone();
     let mut unlinked = before_copy.graphics[0].clone();
     unlinked.id = before_copy.next_id();
@@ -836,12 +874,7 @@ fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
     let before = app.tab.doc.clone();
     let frames = app.tab.history.frames();
     let old_key = key(&app);
-    app.xtb.settings.method = qcdata::XtbMethod::GXtb;
-    let _ = app.update(Message::Xtb(XtbAction::Run));
-    let mut new_levels = levels();
-    new_levels.alpha.energies_hartree[4] += 0.05;
-    finish_energy(&mut app, Method::Gxtb, -5.07, new_levels.clone());
-    assert!(!app.error, "{}", app.status);
+    let new_levels = rerun_diagram(&mut app);
     let linked = app.tab.doc.graphics[0].mo.as_ref().unwrap();
     assert_ne!(linked.result, old_key);
     assert_eq!(
@@ -857,13 +890,67 @@ fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
     );
     assert_eq!(app.tab.doc.graphics[1], unlinked);
     assert_eq!(app.tab.history.frames(), frames + 1);
-    let key = linked.result.clone();
-    let mut reply = worker_orbitals();
-    reply.alpha.energies_hartree = new_levels.alpha.energies_hartree.clone();
-    act(&mut app, Action::Computed(key, Ok(Arc::new(reply))));
+    assert!(rerun_rows(&app.tab.doc).is_empty());
+    let status = app.status.clone();
+    reply_with_rerun_rows(&mut app, &new_levels, &[0, 3]);
+    assert_eq!(rerun_rows(&app.tab.doc), [3]);
+    reply_with_rerun_rows(&mut app, &new_levels, &[1, 4]);
+    assert_eq!(rerun_rows(&app.tab.doc), [3, 4]);
+    assert_eq!(app.status, status);
     assert_eq!(app.tab.history.frames(), frames + 1);
+    let after = app.tab.doc.clone();
+    let reopened = Document::from_json(&after.file_json().unwrap()).unwrap();
+    assert_eq!(rerun_rows(&reopened), [3, 4]);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
+fn rerun_picture_rows_are_a_separate_undo_step_after_an_edit() {
+    let mut app = tab_with_mo_diagram();
+    let new_levels = rerun_diagram(&mut app);
+    let relinked = app.tab.doc.clone();
+    let id = relinked.graphics[0].id;
+    act(&mut app, Action::EditDiagram(id, DiagramEdit::Below(3)));
+    let edited = app.tab.doc.clone();
+    let frames = app.tab.history.frames();
+    let status = "Edited the MO diagram range";
+    app.status = status.into();
+    reply_with_rerun_rows(&mut app, &new_levels, &[3, 4]);
+    assert_eq!(rerun_rows(&app.tab.doc), [3, 4]);
+    assert_eq!(app.status, status);
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, edited);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, relinked);
+}
+
+#[test]
+fn rerun_picture_rows_are_skipped_for_unlinked_diagrams_and_stale_results() {
+    for unlink in [true, false] {
+        let mut app = tab_with_mo_diagram();
+        let new_levels = rerun_diagram(&mut app);
+        if unlink {
+            let id = app.tab.doc.graphics[0].id;
+            act(&mut app, Action::EditDiagram(id, DiagramEdit::Unlink));
+        } else {
+            let before = app.tab.doc.clone();
+            app.tab.doc.atoms[0].charge = 1;
+            app.changed(before);
+            let doc = &app.tab.doc;
+            let stored = doc.science.results.last().unwrap();
+            let attachment = doc.science.attachment(stored.attachment).unwrap();
+            assert_eq!(attachment.freshness(doc), science::Freshness::Stale);
+        }
+        let before = app.tab.doc.clone();
+        let frames = app.tab.history.frames();
+        reply_with_rerun_rows(&mut app, &new_levels, &[3, 4]);
+        assert_eq!(app.tab.doc, before, "unlink = {unlink}");
+        assert_eq!(app.tab.history.frames(), frames);
+    }
 }
 
 #[test]
@@ -1271,6 +1358,12 @@ fn mo_diagram_range_and_unlink_are_undoable_and_keep_the_frame_scale() {
 
 #[test]
 fn native_clipboard_paste_remaps_the_molecule_and_delete_removes_the_mo_diagram() {
+    for cross_theme in [false, true] {
+        native_mo_paste_and_delete(cross_theme);
+    }
+}
+
+fn native_mo_paste_and_delete(cross_theme: bool) {
     let mut app = tab();
     computed(&mut app);
     act(&mut app, Action::Preset(0.061_234_5));
@@ -1299,7 +1392,9 @@ fn native_clipboard_paste_remaps_the_molecule_and_delete_removes_the_mo_diagram(
     let original = doc.graphics[0].mo.as_ref().unwrap();
     let original_atom = original.molecule;
     let pictures = original.pictures.clone();
-    app.tab.doc.canvas_theme = app.tab.doc.canvas_theme.toggled();
+    if cross_theme {
+        app.tab.doc.canvas_theme = app.tab.doc.canvas_theme.toggled();
+    }
     app.clipboard_read(
         app.tab.file_epoch,
         app.tab.revision,
@@ -1314,11 +1409,11 @@ fn native_clipboard_paste_remaps_the_molecule_and_delete_removes_the_mo_diagram(
     let saved = mo.pictures[0].figure.snapshot.as_ref().unwrap();
     let source = pictures[0].figure.snapshot.as_ref().unwrap();
     assert_eq!(saved.shapes, source.shapes);
-    assert_ne!(saved.view, source.view);
     let small = pasted.mo_picture_models(&app.tab.doc).next().unwrap();
     assert_eq!(
-        saved.view,
-        surface::draw::view_signature(&app.tab.doc, &small)
+        saved.view == surface::draw::view_signature(&app.tab.doc, &small),
+        !cross_theme,
+        "cross_theme = {cross_theme}"
     );
     assert_ne!(mo.molecule, original_atom);
     assert!(app.tab.selected.contains(&mo.molecule.unwrap()));
