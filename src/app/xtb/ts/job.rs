@@ -1077,29 +1077,28 @@ fn diagnostics(
             )
         },
     ));
-    if let Some(branches) = &report.irc {
-        for (label, branch) in ["IRC +mode", "IRC −mode"].into_iter().zip(branches) {
-            let endpoint = match branch.reached {
-                ts::Reached::Reactant => "reactant",
-                ts::Reached::Product => "product",
-                ts::Reached::Other => "different minimum",
-            };
-            rows.push((
-                label.into(),
-                format!(
-                    "{endpoint} · {} · accepted steps: {} · gradient calls: {} · path length: {:.6} amu½·bohr",
-                    branch.reason,
-                    branch.path.len(),
-                    branch.gradient_calls,
-                    branch.path_length
-                ),
-            ));
-        }
-    } else {
+    let traces = report.irc_diagnostics();
+    if traces == [None; 2] {
         rows.push(("IRC".into(), "not completed".into()));
     }
+    for (label, trace) in ["IRC +mode", "IRC −mode"].into_iter().zip(traces) {
+        let Some(trace) = trace else { continue };
+        let endpoint = match trace.reached {
+            Some(ts::Reached::Reactant) => "reactant",
+            Some(ts::Reached::Product) => "product",
+            Some(ts::Reached::Other) => "different minimum",
+            None => "endpoint relaxation failed",
+        };
+        rows.push((
+            label.into(),
+            format!(
+                "{endpoint} · {} · accepted steps: {} · gradient calls: {} · path length: {:.6} amu½·bohr",
+                trace.reason, trace.steps, trace.gradient_calls, trace.path_length
+            ),
+        ));
+    }
     if let Some(error) = &report.irc_error {
-        rows.push(("IRC error".into(), error.clone()));
+        rows.push(("IRC error".into(), error.to_string()));
     }
     rows.push(("Evaluations".into(), report.evaluations.to_string()));
     rows.push(("Hessians".into(), report.hessians.to_string()));

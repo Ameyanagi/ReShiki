@@ -215,6 +215,25 @@ pub struct IrcBranch {
     pub reached: Reached,
 }
 
+/// Downhill trace measurements, available even if the subsequent relaxation fails.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IrcTraceDiagnostics {
+    pub reason: IrcReason,
+    pub steps: usize,
+    pub gradient_calls: usize,
+    pub path_length: f64,
+    /// Only a relaxed end can be classified.
+    pub reached: Option<Reached>,
+}
+
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[error("{cause}")]
+pub struct IrcFailure {
+    pub cause: TsError,
+    /// Finished traces in +mode, −mode order. A missing entry never finished tracing.
+    pub traces: [Option<IrcTraceDiagnostics>; 2],
+}
+
 /// Why an IRC branch stopped. Endpoint relaxation does not alter this reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IrcReason {
@@ -236,9 +255,19 @@ impl std::fmt::Display for IrcReason {
 }
 
 impl IrcBranch {
-    /// Whether the IRC itself reached its gradient tolerance before relaxation.
+    /// Whether the downhill trace converged before endpoint relaxation.
     pub fn completed(&self) -> bool {
         self.reason == IrcReason::Converged
+    }
+
+    fn diagnostics(&self) -> IrcTraceDiagnostics {
+        IrcTraceDiagnostics {
+            reason: self.reason,
+            steps: self.path.len(),
+            gradient_calls: self.gradient_calls,
+            path_length: self.path_length,
+            reached: Some(self.reached),
+        }
     }
 }
 
@@ -275,7 +304,7 @@ pub struct TsReport {
     pub irc: Option<[IrcBranch; 2]>,
     /// Failure during IRC verification after characterization. Cancellation is
     /// returned as [`TsError::Cancelled`] instead of being recorded here.
-    pub irc_error: Option<String>,
+    pub irc_error: Option<IrcFailure>,
     /// Whether the two relaxed IRC ends classify as the two requested endpoints.
     pub connects: bool,
     /// All energy/gradient calls, including central differences and minimizations.
@@ -285,6 +314,14 @@ pub struct TsReport {
 }
 
 impl TsReport {
+    pub fn irc_diagnostics(&self) -> [Option<IrcTraceDiagnostics>; 2] {
+        match (&self.irc, &self.irc_error) {
+            (Some(branches), _) => branches.each_ref().map(|b| Some(b.diagnostics())),
+            (_, Some(failure)) => failure.traces,
+            _ => [None; 2],
+        }
+    }
+
     pub fn forward_barrier_kcal(&self) -> f64 {
         (self.ts.energy - self.reactant.energy) * KCAL_PER_HARTREE
     }
@@ -694,8 +731,8 @@ fn characterize<P: Potential, T>(
             on_event,
         ) {
             Ok(branches) => (Some(branches), None),
-            Err(TsError::Cancelled) => return Err(TsError::Cancelled),
-            Err(error) => (None, Some(error.to_string())),
+            Err(failure) if failure.cause == TsError::Cancelled => return Err(TsError::Cancelled),
+            Err(failure) => (None, Some(failure)),
         }
     } else {
         (None, None)

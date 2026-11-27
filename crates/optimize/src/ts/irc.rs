@@ -7,16 +7,23 @@
 //! regrow towards the configured maximum; actual accepted arcs set the cap.
 
 use super::{
-    Event, IrcBranch, IrcReason, Minimum, Potential, Reached, Search, TsError, TsOptions, emit,
-    endpoint::bonds_prevalidated as bonds, evaluate, mapping, minimize, modes, saddle,
+    Event, IrcBranch, IrcFailure, IrcReason, IrcTraceDiagnostics, Minimum, Potential, Reached,
+    Search, TsError, TsOptions, emit, endpoint::bonds_prevalidated as bonds, evaluate, mapping,
+    minimize, modes, saddle,
 };
 use crate::linalg::{dot, norm, symmetric_eigen};
 use std::ops::ControlFlow;
 
 /// Stop at a mass-weighted force norm of 10⁻⁴ Eh/(bohr √amu).
 const GRADIENT_TOLERANCE: f64 = 1e-4;
+/// Shorter requested arcs cannot be evaluated by the retry loop.
+const MINIMUM_STEP_LENGTH: f64 = 1e-10;
 /// A shared bond graph needs agreement with an endpoint in mapped geometry.
 const ENDPOINT_RMSD_ANGSTROM: f64 = 0.5;
+
+fn energy_noise(energy: f64) -> f64 {
+    (16. * f64::EPSILON * energy.abs().max(1.)).max(1e-9)
+}
 
 /// Adaptive Simpson quadrature of the smooth, nonnegative modal speeds.
 fn integral(f: &impl Fn(f64) -> f64, a: f64, b: f64, tolerance: f64) -> f64 {
@@ -175,6 +182,24 @@ fn quadratic_proposal(
     (step, actual_arc)
 }
 
+/// The sum of remaining modal displacements bounds the arc to a quadratic
+/// minimum. Negative curvature, or force along zero curvature, rejects it.
+fn quadratic_minimum_arc_bound(values: &[f64], vectors: &[f64], gradient: &[f64]) -> Option<f64> {
+    values
+        .iter()
+        .zip(vectors.chunks_exact(gradient.len()))
+        .try_fold(0., |arc, (&value, vector)| {
+            let slope = dot(gradient, vector);
+            if value > 0. {
+                Some(arc + (slope / value).abs())
+            } else if value == 0. && slope == 0. {
+                Some(arc)
+            } else {
+                None
+            }
+        })
+}
+
 pub(super) struct Descent<'a> {
     pub(super) ts: &'a Minimum,
     pub(super) mode: &'a [f64],
@@ -228,20 +253,33 @@ impl Descent<'_> {
         stats.gradient_calls += 1;
         let (energy, gradient) = evaluate(p, &point.positions)?;
         point.energy = energy;
+        let ts_energy = energy;
+        let departure_energy = 10. * energy_noise(energy);
         let mut gradient = weight_gradient(gradient);
         let inverse_sqrt: Vec<_> = scale.iter().map(|w| w.recip()).collect();
         let mut h = modes::mass_weight(self.hessian, &inverse_sqrt);
         let mut requested = self.options.irc_step;
+        let spectrum_at = |point: &Minimum, h: &[f64]| {
+            if self.masses.is_empty() {
+                symmetric_eigen(h.to_vec(), n).map_err(TsError::Failed)
+            } else {
+                modes::spectrum(&point.positions, h, self.masses)
+            }
+        };
+        let mut cached_spectrum = None;
 
         for step in 1..=self.options.irc_max_steps {
             let remaining = self.options.irc_max_length - stats.path_length;
+            if remaining < MINIMUM_STEP_LENGTH {
+                stats.reason = IrcReason::LengthCap;
+                break;
+            }
             let spectrum = if step == 1 {
                 None
             } else {
-                Some(if self.masses.is_empty() {
-                    symmetric_eigen(h.clone(), n).map_err(TsError::Failed)?
-                } else {
-                    modes::spectrum(&point.positions, &h, self.masses)?
+                Some(match cached_spectrum.take() {
+                    Some(spectrum) => spectrum,
+                    None => spectrum_at(&point, &h)?,
                 })
             };
             let mut accepted = None;
@@ -250,7 +288,7 @@ impl Descent<'_> {
             // both proposal endpoints descend. Keep a successful shorter arc
             // for the next step, then regrow it after clean acceptances.
             for retry in 0..=24 {
-                if length < 1e-10 {
+                if length < MINIMUM_STEP_LENGTH {
                     break;
                 }
                 let displacement = if let Some((values, vectors)) = &spectrum {
@@ -272,7 +310,7 @@ impl Descent<'_> {
                 // Resolve SCF energy noise with an independent directional
                 // derivative check. The initial mode displacement must point
                 // downhill at every sampled geometry.
-                let energy_noise = (16. * f64::EPSILON * point.energy.abs().max(1.)).max(1e-9);
+                let energy_tolerance = energy_noise(point.energy);
                 let slope_limit = if step == 1 {
                     0.
                 } else {
@@ -294,7 +332,7 @@ impl Descent<'_> {
                     let (energy, g) = evaluate(p, &x)?;
                     let g = weight_gradient(g);
                     let force = norm(&g);
-                    if energy > previous_energy + energy_noise
+                    if energy > previous_energy + energy_tolerance
                         || dot(&g, &displacement) > slope_limit
                     {
                         trial = None;
@@ -353,11 +391,32 @@ impl Descent<'_> {
                     energy: point.energy,
                 },
             )?;
-            if approaching && norm(&gradient) <= GRADIENT_TOLERANCE {
-                stats.reason = IrcReason::Converged;
-                break;
+            // A falling transverse force near the TS is insufficient. Require
+            // departure by one configured arc or an energy drop above SCF
+            // noise, and a nearby minimum of the accepted point's quadratic
+            // model. A soft curved valley can have a small force long before
+            // its minimum, even when the estimated curvature is positive.
+            if approaching
+                && norm(&gradient) <= GRADIENT_TOLERANCE
+                && (stats.path_length >= self.options.irc_step
+                    || ts_energy - point.energy > departure_energy)
+            {
+                let spectrum = spectrum_at(&point, &h)?;
+                // Require the model minimum within the spacing that the
+                // interior guards just accepted.
+                let remaining_arc =
+                    quadratic_minimum_arc_bound(&spectrum.0, &spectrum.1, &gradient);
+                if remaining_arc.is_some_and(|arc| arc <= length) {
+                    stats.reason = IrcReason::Converged;
+                    break;
+                }
+                // Reuse the updated spectrum for the next proposal if the
+                // low-force point has not yet reached a nearby model minimum.
+                cached_spectrum = Some(spectrum);
             }
-            if stats.path_length >= self.options.irc_max_length * (1. - 32. * f64::EPSILON) {
+            if self.options.irc_max_length - stats.path_length < MINIMUM_STEP_LENGTH
+                || stats.path_length >= self.options.irc_max_length * (1. - 32. * f64::EPSILON)
+            {
                 stats.reason = IrcReason::LengthCap;
                 break;
             }
@@ -416,7 +475,7 @@ pub(super) fn branches(
     hessian: &[f64],
     mode: &[f64],
     on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
-) -> Result<[IrcBranch; 2], TsError> {
+) -> Result<[IrcBranch; 2], IrcFailure> {
     let descent = Descent {
         ts,
         mode,
@@ -425,43 +484,57 @@ pub(super) fn branches(
         options: search.options,
     };
     let graphs = endpoints.map(|m| bonds(search.numbers, &m.positions));
-    let mut branch = |forward| -> Result<IrcBranch, TsError> {
-        let (last, path, stats) = descent.trace(p, forward, on_event)?;
-        let mut end = minimize(p, search.numbers, &last.positions, |i, energy| {
-            if i == 0 {
-                ControlFlow::Continue(())
+    let [mut plus, mut minus] = [None; 2];
+    let mut branch =
+        |forward, trace: &mut Option<IrcTraceDiagnostics>| -> Result<IrcBranch, TsError> {
+            let (last, path, stats) = descent.trace(p, forward, on_event)?;
+            let diagnostics = trace.insert(IrcTraceDiagnostics {
+                reason: stats.reason,
+                steps: path.len(),
+                gradient_calls: stats.gradient_calls,
+                path_length: stats.path_length,
+                reached: None,
+            });
+            let mut end = minimize(p, search.numbers, &last.positions, |i, energy| {
+                if i == 0 {
+                    ControlFlow::Continue(())
+                } else {
+                    on_event(Event::Irc {
+                        forward,
+                        step: path.len() + i,
+                        energy,
+                    })
+                }
+            })?;
+            // Fit the separately relaxed end to the last descent point in the TS frame.
+            end.positions = mapping::superpose(&last.positions, &end.positions, search.masses_amu);
+            let energies = std::iter::once(ts.energy)
+                .chain(path.iter().map(|point| point.energy))
+                .chain(std::iter::once(end.energy))
+                .collect();
+            let reached = if path.is_empty() {
+                // A failed or disabled launch supplies no branch evidence, even
+                // if the subsequent unrestricted minimizer finds an endpoint.
+                Reached::Other
             } else {
-                on_event(Event::Irc {
-                    forward,
-                    step: path.len() + i,
-                    energy,
-                })
-            }
-        })?;
-        // Fit the separately relaxed end to the last descent point in the TS frame.
-        end.positions = mapping::superpose(&last.positions, &end.positions, search.masses_amu);
-        let energies = std::iter::once(ts.energy)
-            .chain(path.iter().map(|point| point.energy))
-            .chain(std::iter::once(end.energy))
-            .collect();
-        let reached = if path.is_empty() {
-            // A failed or disabled launch supplies no branch evidence, even
-            // if the subsequent unrestricted minimizer finds an endpoint.
-            Reached::Other
-        } else {
-            classify(&end.positions, search.numbers, endpoints, &graphs)
+                classify(&end.positions, search.numbers, endpoints, &graphs)
+            };
+            diagnostics.reached = Some(reached);
+            Ok(IrcBranch {
+                energies,
+                path,
+                end,
+                reached,
+                reason: stats.reason,
+                gradient_calls: stats.gradient_calls,
+                path_length: stats.path_length,
+            })
         };
-        Ok(IrcBranch {
-            energies,
-            path,
-            end,
-            reached,
-            reason: stats.reason,
-            gradient_calls: stats.gradient_calls,
-            path_length: stats.path_length,
-        })
-    };
-    Ok([branch(true)?, branch(false)?])
+    let result = branch(true, &mut plus).and_then(|first| Ok([first, branch(false, &mut minus)?]));
+    result.map_err(|cause| IrcFailure {
+        cause,
+        traces: [plus, minus],
+    })
 }
 
 #[cfg(test)]
@@ -942,6 +1015,38 @@ mod tests {
     }
 
     #[test]
+    fn a_length_cap_remainder_below_the_retry_floor_is_not_step_exhaustion() {
+        let ts = Minimum {
+            positions: vec![0.],
+            energy: 0.,
+        };
+        // Two clean 0.15 arcs leave 5e-11: below the proposal floor but
+        // above the old relative roundoff-only length-cap tolerance.
+        for steps in [2, 499] {
+            let options = TsOptions {
+                irc_max_length: 0.300_000_000_05,
+                irc_max_steps: steps,
+                ..Default::default()
+            };
+            let (end, path, stats) = Descent {
+                ts: &ts,
+                mode: &[1.],
+                hessian: &[0.],
+                masses: &[],
+                options: &options,
+            }
+            .trace(&mut LinearDescent, true, &mut proceed)
+            .unwrap();
+            assert_eq!(stats.reason, IrcReason::LengthCap);
+            assert_eq!(path.len(), 2);
+            assert!((end.positions[0] - 0.3).abs() < 1e-12);
+            assert!((stats.path_length - 0.3).abs() < 1e-12);
+            assert!(stats.path_length < options.irc_max_length);
+            assert_eq!(stats.gradient_calls, 9);
+        }
+    }
+
+    #[test]
     fn accepted_step_budget_is_distinct_from_the_arc_cap() {
         let ts = Minimum {
             positions: vec![0.],
@@ -974,6 +1079,66 @@ mod tests {
     struct CurvedValley {
         calls: usize,
         jitter: bool,
+    }
+
+    struct SoftCurvedSaddle;
+
+    impl Potential for SoftCurvedSaddle {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            let q = x[0] * x[0] - 1.;
+            let transverse = x[1] - 20. * x[0] * x[0];
+            g[0] = 0.002 * (x[0] * q - 80_000. * x[0] * transverse);
+            g[1] = 4. * transverse;
+            Ok(0.002 * (q * q / 4. + 1000. * transverse * transverse))
+        }
+    }
+
+    #[test]
+    fn a_falling_transverse_force_in_the_saddle_neighborhood_is_not_convergence() {
+        // The minima are (+/-1, 20). Previously both branches converged
+        // after five accepted points, at arc 0.003645 and negative curvature.
+        let ts = Minimum {
+            positions: vec![0., 0.],
+            energy: 0.0005,
+        };
+        for steps in [5, TsOptions::default().irc_max_steps] {
+            let options = TsOptions {
+                irc_max_steps: steps,
+                ..Default::default()
+            };
+            for forward in [true, false] {
+                let mut potential = SoftCurvedSaddle;
+                let (end, path, stats) = Descent {
+                    ts: &ts,
+                    mode: &[1., 0.],
+                    hessian: &[-0.002, 0., 0., 4.],
+                    masses: &[],
+                    options: &options,
+                }
+                .trace(&mut potential, forward, &mut proceed)
+                .unwrap();
+                if steps == 5 {
+                    assert_eq!(stats.reason, IrcReason::StepBudget, "{end:?}");
+                    assert_eq!(path.len(), steps);
+                    let gradient = evaluate(&mut potential, &end.positions).unwrap().1;
+                    assert!(norm(&gradient) < GRADIENT_TOLERANCE, "{end:?}");
+                    let [x, y] = [end.positions[0], end.positions[1]];
+                    let hxx = 0.002
+                        * (3. * x * x - 1. - 80_000. * (y - 20. * x * x) + 3_200_000. * x * x);
+                    let values = symmetric_eigen(vec![hxx, -160. * x, -160. * x, 4.], 2)
+                        .unwrap()
+                        .0;
+                    assert!(values[0] < 0., "{end:?}: exact spectrum {values:?}");
+                } else if stats.reason == IrcReason::Converged {
+                    let expected_x = if forward { 1. } else { -1. };
+                    assert!((end.positions[0] - expected_x).abs() < 0.01, "{end:?}");
+                    assert!((end.positions[1] - 20.).abs() < 0.01, "{end:?}");
+                } else {
+                    assert_eq!(stats.reason, IrcReason::StepBudget, "{end:?}");
+                    assert_eq!(path.len(), steps);
+                }
+            }
+        }
     }
 
     impl Potential for CurvedValley {

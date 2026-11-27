@@ -1066,7 +1066,8 @@ stopping reason in `saddle.reason` and optional SCF failures in
 `saddle.diagnostics`.
 
 `path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
-from the reactant side through the TS to the product side. When refinement
+from the reactant side through the TS to the product side. The two relaxed
+ends are included when they fit within the 1,000-frame import limit. When refinement
 is unconverged or the engine imaginary count differs from one, IRC is skipped.
 If IRC is skipped or fails, `irc.xyz` contains the TS frame. `ts.hess` can be
 read with ORCA's `InHess Read`. It uses the worker's Cartesian Hessian when
@@ -1074,7 +1075,10 @@ available and the engine's Cartesian Hessian if the worker computation fails.
 The version 2 JSON report includes spectra, IRC branch labels and energies, convergence,
 work counts and the hydrogen mapping review. `irc_error` and `worker_check_error`
 record verification failures when present. For each of `irc.plus` and `irc.minus`,
-`completed` records gradient convergence before endpoint relaxation. The
+`completed` records whether the downhill trace converged near a minimum
+after leaving the saddle region. If endpoint relaxation fails, each finished
+trace retains its diagnostics. Its `reached` field is null if relaxation failed,
+and an untraced branch is null. The
 `stop_reason` gives `converged`, `length cap`, `step budget`, or `step size exhausted`
 if a downhill step could no longer be resolved. `steps` counts accepted steps,
 `path_length_sqrt_amu_bohr` sums their mass-weighted arcs, and `gradient_calls`

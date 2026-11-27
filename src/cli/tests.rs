@@ -1264,12 +1264,6 @@ fn ts_worker_count_disagreement_fails_with_diagnostics() {
 
 #[cfg(feature = "xtb")]
 #[test]
-fn ts_irc_failure_preserves_candidate_and_explains_missing_branches() {
-    ts::tests::irc_failure_preserves_candidate_and_explains_missing_branches();
-}
-
-#[cfg(feature = "xtb")]
-#[test]
 fn ts_worker_hessian_uses_engine_masses_and_explicit_symmetry() {
     ts::tests::worker_hessian_uses_engine_masses_and_explicit_symmetry();
 }

@@ -1036,13 +1036,13 @@ fn callbacks_cancel_every_stage() {
 }
 
 #[derive(Clone, Copy)]
-enum SecondBranchFault {
+enum IrcFault {
     Scf,
     StepLimit,
     Cancelled,
 }
 
-fn second_branch_failure(fault: SecondBranchFault) -> Result<TsReport, TsError> {
+fn branch_failure(fault: IrcFault, fail_forward: bool) -> Result<TsReport, TsError> {
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -1050,21 +1050,19 @@ fn second_branch_failure(fault: SecondBranchFault) -> Result<TsReport, TsError> 
 
     struct FailingIrc {
         triangle: Triangle,
-        second_branch: Arc<AtomicBool>,
-        fault: SecondBranchFault,
+        fault_active: Arc<AtomicBool>,
+        fault: IrcFault,
     }
 
     impl Potential for FailingIrc {
         fn evaluate(&mut self, x: &[f64], g: &mut [f64], a: Accuracy) -> Result<f64, EvalError> {
-            if !self.second_branch.load(Ordering::Relaxed) {
+            if !self.fault_active.load(Ordering::Relaxed) {
                 return self.triangle.evaluate(x, g, a);
             }
             match self.fault {
-                SecondBranchFault::Scf => {
-                    Err(EvalError::Scf("injected second-branch SCF failure".into()))
-                }
-                SecondBranchFault::Cancelled => Err(EvalError::Cancelled),
-                SecondBranchFault::StepLimit => {
+                IrcFault::Scf => Err(EvalError::Scf("injected second-branch SCF failure".into())),
+                IrcFault::Cancelled => Err(EvalError::Cancelled),
+                IrcFault::StepLimit => {
                     // An unbounded internal stretch cannot meet the minimizer's
                     // gradient criterion and exhausts its accepted-step budget.
                     let axis: [f64; 3] = std::array::from_fn(|k| x[3 + k] - x[k]);
@@ -1084,20 +1082,20 @@ fn second_branch_failure(fault: SecondBranchFault) -> Result<TsReport, TsError> 
         }
     }
 
-    let second_branch = Arc::new(AtomicBool::new(false));
+    let fault_active = Arc::new(AtomicBool::new(false));
     let mut pool = [FailingIrc {
         triangle: Triangle {
             analytic: true,
             ..Default::default()
         },
-        second_branch: Arc::clone(&second_branch),
+        fault_active: Arc::clone(&fault_active),
         fault,
     }];
     let options = TsOptions {
-        irc_max_steps: if matches!(fault, SecondBranchFault::StepLimit) {
-            0
+        irc_max_length: if matches!(fault, IrcFault::StepLimit) {
+            0.05
         } else {
-            TsOptions::default().irc_max_steps
+            TsOptions::default().irc_max_length
         },
         ..TsOptions::default()
     };
@@ -1114,12 +1112,12 @@ fn second_branch_failure(fault: SecondBranchFault) -> Result<TsReport, TsError> 
             if matches!(
                 event,
                 Event::Irc {
-                    forward: false,
-                    step: 0,
+                    forward,
+                    step,
                     ..
-                }
+                } if forward == fail_forward && step == usize::from(matches!(fault, IrcFault::StepLimit))
             ) {
-                second_branch.store(true, Ordering::Relaxed);
+                fault_active.store(true, Ordering::Relaxed);
             }
             ControlFlow::Continue(())
         },
@@ -1128,7 +1126,7 @@ fn second_branch_failure(fault: SecondBranchFault) -> Result<TsReport, TsError> 
 
 #[test]
 fn second_irc_branch_scf_failure_keeps_characterized_report() {
-    let report = second_branch_failure(SecondBranchFault::Scf)
+    let report = branch_failure(IrcFault::Scf, false)
         .expect("an IRC SCF failure discarded the characterized candidate");
     assert!(report.saddle_converged);
     assert_eq!(report.imaginary, 1);
@@ -1139,27 +1137,38 @@ fn second_irc_branch_scf_failure_keeps_characterized_report() {
     assert_eq!(report.hessian.len(), report.ts.positions.len().pow(2));
     assert!(report.hessian.iter().all(|v| v.is_finite()));
     assert_eq!(
-        report.irc_error.as_deref(),
-        Some("SCF failure: injected second-branch SCF failure")
+        report.irc_error.unwrap().cause,
+        TsError::Scf("injected second-branch SCF failure".into())
     );
     assert_eq!(
-        second_branch_failure(SecondBranchFault::Cancelled).unwrap_err(),
+        branch_failure(IrcFault::Cancelled, false).unwrap_err(),
         TsError::Cancelled
     );
 }
 
 #[test]
-fn irc_final_minimizer_step_limit_keeps_characterized_report() {
-    let report = second_branch_failure(SecondBranchFault::StepLimit)
-        .expect("an IRC minimizer step limit discarded the characterized candidate");
-    assert!(report.saddle_converged);
-    assert_eq!(report.imaginary, 1);
-    assert!((report.ts.energy - 0.0324).abs() < 1e-4);
-    assert!(report.irc.is_none() && !report.connects);
-    assert_eq!(
-        report.irc_error.as_deref(),
-        Some("endpoint minimization reached its step limit")
-    );
+fn irc_minimizer_step_limit_keeps_every_finished_trace() {
+    for fail_forward in [true, false] {
+        let report = branch_failure(IrcFault::StepLimit, fail_forward).unwrap();
+        assert!(report.saddle_converged);
+        assert_eq!(report.imaginary, 1);
+        assert!((report.ts.energy - 0.0324).abs() < 1e-4);
+        assert!(report.irc.is_none() && !report.connects);
+        let [plus, minus] = report.irc_diagnostics();
+        assert_eq!(plus.unwrap().reached.is_none(), fail_forward);
+        assert_eq!(minus.is_none(), fail_forward);
+        for trace in [plus, minus].into_iter().flatten() {
+            assert_eq!(trace.reason, IrcReason::LengthCap);
+            assert_eq!(trace.steps, 1);
+            assert_eq!(trace.gradient_calls, 5);
+            assert_eq!(trace.path_length, 0.05);
+        }
+        assert!(minus.is_none_or(|trace| trace.reached.is_none()));
+        assert_eq!(
+            report.irc_error.unwrap().cause,
+            TsError::Failed("endpoint minimization reached its step limit".into())
+        );
+    }
 }
 
 #[test]
