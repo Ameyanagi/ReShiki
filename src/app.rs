@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 mod abbreviations;
 mod accessibility;
+pub(crate) mod animation;
 mod arcs;
 mod arrow_labels;
 mod arrows;
@@ -58,6 +59,8 @@ mod compound_numbers;
 mod desktop;
 mod gates;
 mod generic;
+#[cfg(not(target_arch = "wasm32"))]
+mod gif_export;
 #[cfg(not(target_arch = "wasm32"))]
 mod github;
 mod graphics;
@@ -273,6 +276,8 @@ pub enum Message {
     Settings(settings_page::Action),
     /// Export input for Gaussian, ORCA or GAMESS.
     QcExport(qc_export::Action),
+    #[cfg(not(target_arch = "wasm32"))]
+    GifExport(gif_export::Action),
     /// The "Choose what to import" sheet for a file of several frames.
     FramesImport(frames_import::Action),
     /// Predict → xTB: the Calculate card and its runs.
@@ -562,6 +567,8 @@ pub struct App {
     help_open: bool,
     settings: settings_page::State,
     qc_export: Option<qc_export::Dialog>,
+    #[cfg(not(target_arch = "wasm32"))]
+    gif_export: Option<gif_export::Dialog>,
     frames_import: Option<frames_import::Dialog>,
     /// Files of several frames opened together, asked about in turn.
     frames_queue: std::collections::VecDeque<(std::path::PathBuf, frames_import::File)>,
@@ -713,6 +720,8 @@ impl App {
             help_open: false,
             settings: settings_page::State::default(),
             qc_export: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            gif_export: None,
             frames_import: None,
             frames_queue: Default::default(),
             xtb: xtb::Window::default(),
@@ -813,6 +822,8 @@ impl App {
             self.properties_subscription(),
             self.engine_subscription(),
             self.xtb_subscription(),
+            #[cfg(not(target_arch = "wasm32"))]
+            self.gif_export_subscription(),
             self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
@@ -1633,6 +1644,10 @@ impl App {
         let github = self.github.dialog_open();
         #[cfg(target_arch = "wasm32")]
         let github = false;
+        #[cfg(not(target_arch = "wasm32"))]
+        let gif_open = self.gif_export.is_some();
+        #[cfg(target_arch = "wasm32")]
+        let gif_open = false;
         let dialog = self.prompt.is_some()
             || github
             || self.recovery_manager.open()
@@ -1641,6 +1656,7 @@ impl App {
             || self.help_open
             || self.settings.open
             || self.qc_export.is_some()
+            || gif_open
             || self.ts_review_visible()
             || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
@@ -1651,18 +1667,21 @@ impl App {
             && (!(self.commands.open || self.help_open)
                 || self.updates.open
                 || self.assistant.viewed_image.is_some());
+        let workspace = self.with_ts_review(self.with_frames_import(self.with_commands(
+            self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+        )));
+        #[cfg(not(target_arch = "wasm32"))]
+        let workspace = self.with_gif_export(workspace);
         reshiki::accessibility::focus_scope_with(
             file_shortcuts::wrap(
                 // The command palette and Settings sit above the floating NMR
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
-                    self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_qc_export(self.with_ts_review(self.with_frames_import(
-                            self.with_commands(self.with_nmr(
-                                self.with_atom_text(self.with_palette(self.workspace())),
-                            )),
-                        ))),
-                    ))),
+                    self.with_updates(
+                        self.with_assistant_image(
+                            self.with_settings(self.with_qc_export(workspace)),
+                        ),
+                    ),
                 ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
@@ -1679,6 +1698,13 @@ impl App {
                     Some(settings_page::modal_key)
                 } else if self.qc_export.is_some() {
                     Some(qc_export::modal_key)
+                } else if gif_open {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        Some(gif_export::modal_key)
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    None
                 } else if self.ts_review_visible() {
                     Some(xtb::ts::review::modal_key)
                 } else if self.frames_import.is_some() {

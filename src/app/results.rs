@@ -27,6 +27,9 @@ enum Completion {
     Export,
     /// FigureExported.
     FigureExport,
+    /// GifExport(Picked | Finished), handled by the export dialog.
+    #[cfg(not(target_arch = "wasm32"))]
+    GifExport,
     /// Printing(Prepared | Finished).
     Printing,
     /// DrawingStyle(Loaded | Saved).
@@ -125,6 +128,8 @@ impl Completion {
             | Self::Accessibility
             | Self::Recovery
             | Self::PngPreview => Owner::App,
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::GifExport => Owner::App,
             #[cfg(any(windows, target_os = "linux"))]
             Self::Desktop => Owner::App,
             #[cfg(target_os = "macos")]
@@ -237,6 +242,8 @@ fn admission(completion: Completion) -> Admission {
         | Completion::Accessibility
         | Completion::Recovery
         | Completion::PngPreview => NOWHERE,
+        #[cfg(not(target_arch = "wasm32"))]
+        Completion::GifExport => NOWHERE,
         #[cfg(any(windows, target_os = "linux"))]
         Completion::Desktop => NOWHERE,
         #[cfg(target_os = "macos")]
@@ -736,6 +743,21 @@ fn completion(message: &Message) -> Option<Completion> {
             Some(Completion::Export)
         }
         Message::QcExport(_) | Message::FramesImport(_) => None,
+        #[cfg(not(target_arch = "wasm32"))]
+        Message::GifExport(action) => {
+            use super::gif_export::Action;
+            match action {
+                Action::Picked(..) | Action::Finished(..) => Some(Completion::GifExport),
+                Action::OpenIrc
+                | Action::OpenMode
+                | Action::Size(_)
+                | Action::Transparent(_)
+                | Action::Plot(_)
+                | Action::Save
+                | Action::Progress
+                | Action::Cancel => None,
+            }
+        }
         Message::Xtb(action) => {
             use super::xtb::Action;
             match action {

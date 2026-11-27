@@ -179,6 +179,8 @@ impl App {
             }
             Message::Settings(action) => return Some(self.settings_action(action)),
             Message::QcExport(action) => return Some(self.qc_export_action(action)),
+            #[cfg(not(target_arch = "wasm32"))]
+            Message::GifExport(action) => return Some(self.gif_export_action(action)),
             Message::FramesImport(action) => return Some(self.frames_import_action(action)),
             Message::Xtb(action) => return Some(self.xtb_action(action)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),

@@ -1,5 +1,6 @@
 //! Labelled reaction-energy figures. Layout is independent of rendering so a
 //! Path tab and a multistep diagram can share scales, annotations and selection.
+use super::scale::nice_scale;
 use crate::appearance::EnergyUnit;
 use iced::widget::canvas::{self, Frame, Path, Stroke, Text};
 use iced::{Color, Point, Rectangle, Size, Theme};
@@ -131,31 +132,6 @@ fn finite_range(values: impl Iterator<Item = f64>, include_zero: bool) -> (f64, 
     if lo == hi { (lo, lo + 1.) } else { (lo, hi) }
 }
 
-/// Round a scale in the displayed unit, rather than making kJ or eV ticks
-/// inherit awkward converted kcal intervals.
-fn nice_scale(lo: f64, hi: f64) -> (f64, f64, Vec<f64>) {
-    let raw = (hi - lo).max(0.000_001) / 4.;
-    let magnitude = 10_f64.powf(raw.log10().floor());
-    let fraction = raw / magnitude;
-    let step = magnitude
-        * if fraction <= 1. {
-            1.
-        } else if fraction <= 2. {
-            2.
-        } else if fraction <= 5. {
-            5.
-        } else {
-            10.
-        };
-    let bottom = (lo / step).floor() * step;
-    let top = (hi / step).ceil() * step;
-    let count = ((top - bottom) / step).round() as usize;
-    let ticks = (0..=count.min(12))
-        .map(|index| bottom + index as f64 * step)
-        .collect();
-    (bottom, top, ticks)
-}
-
 fn text_width(text: &str) -> f32 {
     // Conservative for the UI font, including the widest digits and TS glyphs.
     text.chars().count() as f32 * FONT * 0.66 + 6.
@@ -274,6 +250,23 @@ impl Profile {
                     .abs()
                     .total_cmp(&(self.x(b.x, bounds) - x).abs())
             })
+            .map(|(index, _)| index)
+    }
+
+    /// Curve picking uses visual distance, so steep sections do not select a
+    /// distant energy merely because its path coordinate is a little closer.
+    pub(crate) fn nearest_point(&self, point: Point, bounds: Rectangle) -> Option<usize> {
+        let layout = self.layout(bounds);
+        let distance = |sample: Sample| {
+            let sample = layout.point(sample);
+            (sample.x - point.x).powi(2) + (sample.y - point.y).powi(2)
+        };
+        self.samples
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, sample)| finite(*sample))
+            .min_by(|(_, a), (_, b)| distance(*a).total_cmp(&distance(*b)))
             .map(|(index, _)| index)
     }
 
@@ -860,6 +853,23 @@ impl Profile {
                     Stroke::default().with_color(ink).with_width(1.4),
                 );
             }
+        }
+        // Playback must stay legible when its frame coincides with a saddle,
+        // endpoint or gray NEB comparison dot. Paint it above those fixed marks.
+        if self.highlight_curve
+            && let Some(sample) = self
+                .selected
+                .and_then(|index| self.samples.get(index))
+                .copied()
+                .filter(|sample| finite(*sample))
+        {
+            let point = layout.point(sample);
+            frame.fill(&Path::circle(point, 6.), theme.palette().background);
+            frame.stroke(
+                &Path::circle(point, 6.),
+                Stroke::default().with_color(accent).with_width(2.),
+            );
+            frame.fill(&Path::circle(point, 2.6), accent);
         }
         for annotation in &layout.labels {
             let color = annotation
