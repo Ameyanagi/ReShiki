@@ -6,7 +6,7 @@ description: Find a transition state with GFN2-xTB or g-xTB from a drawn reactio
 import Screenshot from "../../../components/Screenshot.astro";
 
 :::caution[Not released yet]
-The transition-state search is on the `xtb/next` branch and not in a released version of ReShiki yet. It runs from a reaction drawn in the app and from the command line, `reshiki --cli ts`, in macOS and Linux builds with xTB.
+The transition-state search is in nightly builds and not in a released version of ReShiki yet. It runs from a reaction drawn in the app and from the command line, `reshiki --cli ts`, in macOS and Linux builds with xTB.
 :::
 
 The main use: get a good transition-state guess and its Hessian cheaply with xTB, then refine them with DFT in Gaussian or ORCA. Barriers from GFN2-xTB are rough (it underestimates many of them); trust the geometry more than the number.

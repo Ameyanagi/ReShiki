@@ -937,17 +937,23 @@ jobs:
   python_wheels:
     if: github.event_name == 'push' || inputs.pypi_only
     uses: ./.github/workflows/python-wheels.yml
-  # The owner deferred publishing reshiki-xtb. Keep the base reshiki wheel's
-  # xtb extra off PyPI until reshiki-xtb is published (see docs/releasing.md).
-  xtb_wheels_check:
+  # The LGPL reshiki-xtb engine wheels publish only from a version tag, after
+  # the GitHub release carries their corresponding source, which each wheel's
+  # notices link to. The base reshiki wheels wait for them, so
+  # `pip install "reshiki[xtb]"` resolves once both are up. See docs/releasing.md.
+  pypi_xtb:
     needs: [publish, python_wheels]
     if: >-
       ${{ !cancelled() && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
           && needs.publish.result == 'success' && needs.python_wheels.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # Its own environment, so PyPI tells this upload apart from the base
+    # wheels' and never matches the reshiki-xtb publisher on a pypi_only run.
+    environment: pypi-xtb
     permissions:
       contents: read
+      id-token: write
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -968,15 +974,20 @@ jobs:
           version: "0.13.5"
           python-version: "3.12.15"
           enable-cache: false
-      - name: Check engine wheels for publishing
-        run: |
-          uvx twine@6.1.0 check dist/reshiki_xtb-*.whl
-          uv publish --dry-run --trusted-publishing never --publish-url https://test.pypi.org/legacy/ dist/reshiki_xtb-*.whl
+      - name: Check engine wheel metadata
+        run: uvx twine@6.1.0 check dist/reshiki_xtb-*.whl
+      # Trusted publishing (OIDC) for the reshiki-xtb project; a version already
+      # on PyPI is skipped, so rerunning a release is safe.
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://upload.pypi.org/legacy/
+          skip-existing: true
   pypi:
-    needs: [publish, python_wheels]
+    needs: [publish, python_wheels, pypi_xtb]
     if: >-
       ${{ !cancelled() && needs.python_wheels.result == 'success'
-          && ((github.event_name == 'push' && needs.publish.result == 'success')
+          && ((github.event_name == 'push' && needs.publish.result == 'success'
+               && needs.pypi_xtb.result == 'success')
               || (github.event_name == 'workflow_dispatch' && inputs.pypi_only)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15

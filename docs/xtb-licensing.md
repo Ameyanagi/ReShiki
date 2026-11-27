@@ -203,9 +203,10 @@ require the matching `reshiki-xtb` wheel.
 - The `xtb` extra pins `reshiki-xtb==<same version>`.
 - Wheels support macOS 14 or later on Apple Silicon and Intel, and manylinux
   x86_64 and aarch64. CI checks that the installed worker is executable.
-- Publishing `reshiki-xtb` to TestPyPI and PyPI is deferred. CI tests the wheel
-  pair from a local wheelhouse (`--no-index --find-links`), and tagged releases
-  run a publish dry run only. See the [release checklist](releasing.md#publish-a-version).
+- Version tags publish `reshiki-xtb` to PyPI after the tag's GitHub release
+  carries the corresponding source, and before the base `reshiki` wheels. CI
+  tests the wheel pair from a local wheelhouse (`--no-index --find-links`). See
+  the [release checklist](releasing.md#publish-a-version).
 - To use a modified axtb, edit `axtb-source/` in that archive and follow the
   Python wheel section of `BUILD-WITH-XTB.md`. Maturin forwards the same
   Cargo patch overrides used by the desktop rebuild.
