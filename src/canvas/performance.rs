@@ -677,3 +677,272 @@ async fn manual_equipment_preview_workloads() {
         draw(&canvas, &state);
     });
 }
+
+/// A planar molecule with its 3D model shown beside it: heavy atoms in the xy
+/// plane at 1.39 Å spacing, hydrogens on `hydrogens`' parents.
+fn planar_model(
+    heavy: &[[f32; 3]],
+    bonds: &[(usize, usize, u8)],
+    hydrogens: &[(usize, [f32; 3])],
+) -> Document {
+    use reshiki::models3d::{Display, ForceField, Hydrogen, Model3d, Placed};
+    let mut doc = Document::default();
+    let ids: Vec<u64> = heavy
+        .iter()
+        .map(|p| doc.add_atom("C", World::new(p[0] * 30., -p[1] * 30.)))
+        .collect();
+    for &(a, b, order) in bonds {
+        doc.add_bond(ids[a], ids[b], order, "plain");
+    }
+    let atoms = heavy
+        .iter()
+        .zip(&ids)
+        .map(|(xyz, &id)| Placed { id, xyz: *xyz })
+        .collect();
+    let hydrogens = hydrogens
+        .iter()
+        .map(|&(parent, xyz)| Hydrogen {
+            parent: ids[parent],
+            xyz,
+        })
+        .collect();
+    doc.models
+        .push(Model3d::new(&doc, atoms, hydrogens, ForceField::Mmff94s));
+    reshiki::models3d::require_version(&mut doc);
+    assert!(reshiki::models3d::set_display(&mut doc, 0, Display::Both));
+    // Tilt the plane 55° so the surface has front and back lobes.
+    let half = 55f32.to_radians() / 2.;
+    doc.models[0].rotation = [half.cos(), half.sin(), 0., 0.];
+    doc
+}
+
+/// A linear acene of `rings` fused rings: 4n + 2 carbons, 2n + 4 hydrogens.
+fn acene(rings: usize) -> Document {
+    let r = 1.39f32;
+    let h = r * 3f32.sqrt() / 2.;
+    // Two rows of zigzag carbons; ring k spans columns k and k + 1.
+    let mut heavy = Vec::new();
+    for k in 0..=rings {
+        let x = k as f32 * 2. * h;
+        heavy.push([x, r, 0.]);
+        heavy.push([x, -r, 0.]);
+    }
+    for k in 0..rings {
+        let x = (2 * k + 1) as f32 * h;
+        heavy.push([x, r * 1.5 + 0.5 * r, 0.]);
+        heavy.push([x, -(r * 1.5 + 0.5 * r), 0.]);
+    }
+    let cols = rings + 1;
+    let mut bonds = Vec::new();
+    for k in 0..cols {
+        bonds.push((2 * k, 2 * k + 1, 1));
+    }
+    for k in 0..rings {
+        let (top, bottom) = (2 * cols + 2 * k, 2 * cols + 2 * k + 1);
+        bonds.push((2 * k, top, 2));
+        bonds.push((top, 2 * k + 2, 1));
+        bonds.push((2 * k + 1, bottom, 1));
+        bonds.push((bottom, 2 * k + 3, 2));
+    }
+    let mut hydrogens = Vec::new();
+    for k in 0..rings {
+        let x = (2 * k + 1) as f32 * h;
+        hydrogens.push((2 * cols + 2 * k, [x, 2. * r + 1.08, 0.]));
+        hydrogens.push((2 * cols + 2 * k + 1, [x, -(2. * r + 1.08), 0.]));
+    }
+    for (end, x) in [(0, -1.08f32), (2 * rings, 2. * rings as f32 * h + 1.08)] {
+        hydrogens.push((end, [x, r + 0.5, 0.]));
+        hydrogens.push((end + 1, [x, -(r + 0.5), 0.]));
+    }
+    planar_model(&heavy, &bonds, &hydrogens)
+}
+
+/// Drag frames of a molecule whose 3D model shows an orbital, beside another
+/// object so the move is partial. `RESHIKI_PERF_ITERATIONS` sets the frames.
+#[tokio::test]
+#[ignore = "Release-mode orbital drag profiling; requires a headless renderer"]
+async fn manual_orbital_drag() {
+    use reshiki::models3d::surface::draw::demo_on_this_thread;
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    println!("Renderer: {}", renderer.name());
+    let iterations = std::env::var("RESHIKI_PERF_ITERATIONS")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(30)
+        .max(1);
+    let bounds = Rectangle::with_size(iced::Size::new(1500., 950.));
+    println!("PERF,workload,iterations,median_ms,p95_ms,mean_ms");
+    for (name, mut doc) in [("benzene", acene(1)), ("heptacene", acene(7))] {
+        let atoms: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
+        // A second object far away keeps the move partial.
+        let (lo, hi) = doc.bounds();
+        doc.add_atom("N", World::new(hi.x + 600., lo.y));
+        let (lo, hi) = doc.bounds();
+        let center = World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        let zoom = (bounds.width / (hi.x - lo.x)).min(bounds.height / (hi.y - lo.y)) * 0.8;
+        let start = doc.atoms[0].position;
+        for opacity in [100, 50] {
+            demo_on_this_thread(Some(&format!("pi,look=shaded,opacity={opacity}"))).unwrap();
+            let label = |what: &str| {
+                format!(
+                    "{name}_{}atoms_opacity{opacity}_{what}",
+                    doc.atoms.len() + doc.models[0].hydrogens.len() - 1
+                )
+            };
+            // The scene of the moved molecule alone, translated each frame.
+            let part = reshiki::editing::preserved_expansion_selection(&doc, &atoms).unwrap();
+            measure(&label("scene_build"), iterations, |i| {
+                let mut moved = part.clone();
+                moved.translate(&atoms, 1. + i as f32, 0.5);
+                black_box(reshiki::scene::primitives(&moved));
+            });
+            let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+            canvas.camera = Camera { center, zoom };
+            canvas.tool = Tool::Select;
+            canvas.selected = &atoms;
+            let origin = canvas.camera.screen(start, bounds);
+            let mut state = State {
+                cursor: Some(origin),
+                gesture: Some(Gesture::Move {
+                    start,
+                    ids: atoms.clone(),
+                    clicked: atoms.clone(),
+                }),
+                ..Default::default()
+            };
+            measure(&label("canvas_drag_frame"), iterations, |i| {
+                state.cursor = Some(origin + Vector::new(12. + 3. * i as f32, 4.));
+                let cursor = mouse::Cursor::Available(state.cursor.unwrap());
+                black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
+            });
+        }
+        demo_on_this_thread(None).unwrap();
+    }
+}
+
+#[tokio::test]
+#[ignore = "Orbital drag pixel regression check; requires a headless renderer"]
+async fn rigid_partial_orbital_drag_matches_whole_preview_and_reuses_tiles() {
+    use iced::advanced::{Renderer as _, graphics::geometry::Renderer as _};
+    use reshiki::models3d::surface::draw::demo_on_this_thread;
+
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let size = iced::Size::new(800, 500);
+    let bounds = Rectangle::with_size(iced::Size::new(size.width as f32, size.height as f32));
+    let mut doc = acene(1);
+    let ids = doc.all_ids();
+    doc.translate(&ids, -76.34, 0.);
+    doc.add_atom("N", World::new(doc.bounds().1.x + 250., 0.));
+    let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+    canvas.camera = Camera {
+        center: World::new(60., 0.),
+        zoom: 1.25,
+    };
+    canvas.selected = &ids;
+    canvas.tool = Tool::Select;
+    canvas.smart_guides = false;
+    // Drag from a different atom so the first atom's rounding can lose part of the delta.
+    let origin = canvas.camera.screen(doc.atoms[2].position, bounds);
+    let drag = |state: &mut State, dx| {
+        state.cursor = Some(origin + Vector::new(dx, 0.));
+        state.gesture = Some(Gesture::Move {
+            start: canvas.camera.world(origin, bounds),
+            ids: ids.clone(),
+            clicked: ids.clone(),
+        });
+    };
+    let mut shot = |state: &State, split| {
+        paper::SPLIT.set(split);
+        renderer.reset(bounds);
+        let layers = canvas.draw(
+            state,
+            &renderer,
+            &Theme::Light,
+            bounds,
+            mouse::Cursor::Available(state.cursor.unwrap()),
+        );
+        let shifts = state.shifts();
+        for (i, layer) in layers.into_iter().enumerate() {
+            let shift = shifts
+                .iter()
+                .find(|(range, _)| range.contains(&i))
+                .map_or(Vector::ZERO, |(_, shift)| *shift);
+            renderer.with_layer(bounds, |renderer| {
+                renderer.with_translation(shift, |renderer| renderer.draw_geometry(layer));
+            });
+        }
+        paper::SPLIT.set(true);
+        Headless::screenshot(&mut renderer, size, 1., Color::WHITE)
+    };
+    for opacity in [100, 50] {
+        demo_on_this_thread(Some(&format!("pi,look=shaded,opacity={opacity}"))).unwrap();
+        let mut state = State::default();
+        let mut reference = State::default();
+        for (frame, dx) in [12., 24., 48.].into_iter().enumerate() {
+            drag(&mut state, dx);
+            drag(&mut reference, dx);
+            models3d::TILE_RENDERS.set(0);
+            render::DRAWN_PRIMITIVES.set(0);
+            let retained = shot(&state, true);
+            {
+                let cache = state.scene.borrow();
+                let scene = cache
+                    .retained_moved_scene()
+                    .expect("fractional drag must retain the moved scene");
+                let alpha = opacity as f32 / 100.;
+                assert!(
+                    scene.iter().any(|p| matches!(
+                        p,
+                        Primitive::Surface { groups } if groups.iter().any(|group| {
+                            group.alpha == alpha
+                                && group.fills.iter().any(|fill| !fill.region.is_empty())
+                        })
+                    )),
+                    "expected a painted orbital at {opacity}% opacity"
+                );
+                assert!(
+                    cache.moved_geometry.is_some(),
+                    "must draw the shifted fragment"
+                );
+                assert_eq!(cache.moved_part_builds, 1);
+            }
+            if frame == 0 {
+                assert!(models3d::TILE_RENDERS.get() > 0, "orbital tiles must draw");
+            } else {
+                assert_eq!(models3d::TILE_RENDERS.get(), 0);
+                assert_eq!(render::DRAWN_PRIMITIVES.get(), 0);
+            }
+
+            let whole = shot(&reference, false);
+            let changed = retained
+                .chunks_exact(4)
+                .zip(whole.chunks_exact(4))
+                .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 8))
+                .count();
+            let error: usize = retained
+                .iter()
+                .zip(&whole)
+                .map(|(a, b)| usize::from(a.abs_diff(*b)))
+                .sum();
+            assert!(
+                changed < 400 && (error as f64 / retained.len() as f64) < 0.1,
+                "opacity={opacity}, dx={dx}, changed={changed}, error={error}"
+            );
+        }
+    }
+    demo_on_this_thread(None).unwrap();
+}

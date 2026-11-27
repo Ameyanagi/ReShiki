@@ -68,6 +68,9 @@ impl MoleculeCanvas<'_> {
         let last_transform_click = state.last_transform_click.take();
         state.pull_out = false;
         let point = point?;
+        if matches!(state.gesture, Some(Gesture::Move { .. })) {
+            state.end_gesture();
+        }
         let p = self.camera.world(point, bounds);
         if let Some(context) = self.equipment_authoring {
             state.end_gesture();
