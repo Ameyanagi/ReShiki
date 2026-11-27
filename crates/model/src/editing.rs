@@ -90,6 +90,20 @@ pub enum Arrange {
 /// The selected part as its own document: [`crate::attachments::selection`],
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
+    selection_with_diagrams(doc, ids, &[])
+}
+
+pub(crate) fn selection_with_diagrams(
+    doc: &Document,
+    ids: &[u64],
+    stationary: &[&crate::graphics::MoDiagram],
+) -> Document {
+    let mut part = selection_part(doc, ids);
+    part.science = crate::science::for_figures_from(&part, &doc.science, stationary);
+    part
+}
+
+fn selection_part(doc: &Document, ids: &[u64]) -> Document {
     let ids = crate::graphics::table::with_contents(doc, ids);
     let ids = crate::generic::selection(doc, &ids);
     let ids = crate::attachments::selection(doc, &ids);
@@ -104,6 +118,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     crate::arrow_labels::include_labels(doc, &mut ids);
     crate::shape_text::include_texts(doc, &mut ids);
     let mut part = doc.clone();
+    // Calculation data is restored below only for retained orbital figures.
+    part.science = Default::default();
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
     });
@@ -236,6 +252,12 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
     part.annotations.retain(|a| ids.contains(&a.id));
     part.arrows.retain(|a| ids.contains(&a.id));
     part.graphics.retain(|g| ids.contains(&g.id));
+    for mo in part.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
+        if mo.molecule.is_some_and(|id| !ids.contains(&id)) {
+            mo.molecule = None;
+            mo.linked = false;
+        }
+    }
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
     part.abbreviations
@@ -257,6 +279,7 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.models
         .retain(|m| m.linked_ids(doc).iter().all(|id| ids.contains(id)));
+    crate::science::prune(&mut part);
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {
@@ -289,7 +312,7 @@ pub fn analysis_atoms(doc: &Document, selected: &[u64]) -> Vec<u64> {
 /// count, such as an imported ChemDraw label, get explicit ones, so the open
 /// valences do not read as radicals while intended radicals stay.
 pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
-    let mut part = selection(doc, atoms);
+    let mut part = selection_part(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
     let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
     // Twice the valence `b` gives `atom`, as in the chemistry graph: a
@@ -543,6 +566,10 @@ fn mapped_append_part(
 /// when one has no entry in `mapping`. The destructure names every field, so
 /// a new collection does not compile until its IDs are handled here.
 pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
+    crate::models3d::surface::keep_signed(doc, |doc| rename_ids(doc, mapping))
+}
+
+fn rename_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
     let Document {
         generic,
         canvas_theme: _,
@@ -572,6 +599,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         piece_definitions: _,
         on_other_canvas: _,
         seats,
+        science,
     } = doc;
     let map = |id: &mut u64| {
         *id = *mapping.get(id)?;
@@ -618,6 +646,12 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         crate::leaders::remap(g, mapping);
         crate::cycles::remap(g, mapping);
         crate::graphics::table::remap(g, mapping)?;
+        if let Some(mo) = &mut g.mo {
+            mo.molecule = mo.molecule.and_then(|id| mapping.get(&id).copied());
+            if mo.molecule.is_none() {
+                mo.linked = false;
+            }
+        }
         if let Some(text) = &mut g.text {
             map(text)?;
         }
@@ -655,6 +689,29 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     for model in models {
         model.remap(mapping)?;
     }
+    // An atom outside the mapping is gone, as after a delete.
+    for attachment in &mut science.attachments {
+        for atom in &mut attachment.atoms {
+            *atom = atom.and_then(|id| mapping.get(&id).copied());
+        }
+    }
+    for stored in &mut science.results {
+        let arrow = stored
+            .result
+            .run
+            .as_ref()
+            .and_then(|run| run.transition_state.as_ref())
+            .and_then(|search| search.arrow);
+        if let Some(arrow) = arrow
+            && mapping.get(&arrow).copied() != Some(arrow)
+            && let Some(search) = std::sync::Arc::make_mut(&mut stored.result)
+                .run
+                .as_mut()
+                .and_then(|run| run.transition_state.as_mut())
+        {
+            search.arrow = mapping.get(&arrow).copied();
+        }
+    }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
     Some(())
 }
@@ -678,6 +735,13 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
     doc.generic.extend(part.generic);
+    // An insertion that would pass the calculation budget comes without
+    // its calculation data.
+    let mut science = doc.science.clone();
+    science.extend(part.science);
+    if science.check_budget().is_ok() {
+        doc.science = science;
+    }
     if !part.models.is_empty() {
         doc.models.extend(part.models);
         crate::models3d::require_version(doc);

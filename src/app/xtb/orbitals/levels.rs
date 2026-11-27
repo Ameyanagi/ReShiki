@@ -1,0 +1,445 @@
+//! The Orbitals tab's visible range and level diagram.
+// Level indices come from windows and groups bounded by the spectrum.
+#![allow(clippy::indexing_slicing)]
+use super::{Action, send};
+use crate::app::Message;
+use iced::widget::canvas;
+use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
+pub(super) use reshiki::orbital_levels::{Column, columns};
+
+/// Levels shown on each side of the frontier.
+const AROUND: usize = 4;
+
+/// The levels the list and diagram show: HOMO−4 … LUMO+4, widened to
+/// hold `selected`.
+pub(super) fn window(column: &Column, selected: Option<usize>) -> std::ops::RangeInclusive<usize> {
+    let last = column.energies_ev.len().saturating_sub(1);
+    let frontier = column.occupied.unwrap_or(0);
+    let mut lo = frontier.saturating_sub(AROUND + 1);
+    let mut hi = (frontier + AROUND).min(last);
+    if let Some(index) = selected {
+        lo = lo.min(index);
+        hi = hi.max(index.min(last));
+    }
+    lo..=hi
+}
+
+/// The level diagram: an energy axis, one column per spin, occupied levels
+/// with electron arrows, HOMO and LUMO named, the gap marked. Clicking a
+/// level chooses it.
+pub(crate) struct Diagram {
+    pub columns: Vec<Column>,
+    /// Chosen column and level.
+    pub selected: Option<(usize, usize)>,
+    pub live: bool,
+}
+
+/// One drawn level: column, index, and its line from `x0` to `x1` at `y`.
+struct Placed {
+    column: usize,
+    index: usize,
+    x0: f32,
+    x1: f32,
+    y: f32,
+}
+
+impl Diagram {
+    const AXIS: f32 = 30.;
+    const TOP: f32 = 18.;
+    const BOTTOM: f32 = 8.;
+    const LINE: f32 = 48.;
+    const COLUMN: f32 = 62.;
+
+    /// The diagram's width for `columns` spin columns.
+    pub(crate) fn width(columns: usize) -> f32 {
+        Self::AXIS + 12. + columns as f32 * Self::COLUMN + 76.
+    }
+
+    /// The energy range shown: around the first column's gap, wide enough
+    /// to read the frontier levels apart (distant levels such as diffuse
+    /// virtuals stay off the axis), and holding the chosen level.
+    fn range(&self) -> (f64, f64) {
+        let Some(column) = self.columns.first() else {
+            return (-1., 1.);
+        };
+        let e = &column.energies_ev;
+        let at = |i: Option<usize>| i.and_then(|i| e.get(i)).copied();
+        let (homo, lumo) = match (at(column.homo()), at(column.lumo())) {
+            (Some(h), Some(l)) => (h, l),
+            (Some(h), None) => (h, h),
+            (None, Some(l)) => (l, l),
+            (None, None) => (e[0], e[e.len() - 1]),
+        };
+        let span = ((lumo - homo) * 1.2).clamp(4., 10.);
+        let (mut lo, mut hi) = (homo - span, lumo + span);
+        if let Some((c, i)) = self.selected
+            && let Some(&chosen) = self.columns.get(c).and_then(|c| c.energies_ev.get(i))
+        {
+            lo = lo.min(chosen - 1.);
+            hi = hi.max(chosen + 1.);
+        }
+        (lo, hi)
+    }
+
+    fn y(&self, bounds: Rectangle) -> impl Fn(f64) -> f32 + use<> {
+        let (lo, hi) = self.range();
+        let height = (bounds.height - Self::TOP - Self::BOTTOM).max(1.);
+        move |e: f64| Self::TOP + ((hi - e) / (hi - lo).max(1e-9)) as f32 * height
+    }
+
+    /// Each level on the axis. A degenerate group sits side by side on one
+    /// line; groups closer than a line's spacing are moved apart upward, so
+    /// every level and its electron arrows stay readable.
+    fn place(&self, bounds: Rectangle) -> Vec<Placed> {
+        const SPACING: f32 = 12.;
+        const GAP: f32 = 6.;
+        let (lo, hi) = self.range();
+        let y = self.y(bounds);
+        let mut placed = Vec::new();
+        for (c, column) in self.columns.iter().enumerate() {
+            let left = Self::AXIS + 12. + c as f32 * Self::COLUMN;
+            let selected = self.selected.filter(|s| s.0 == c).map(|s| s.1);
+            let window = window(column, selected);
+            // The list's levels as far as the axis reaches, lowest first,
+            // in degenerate groups.
+            let mut groups: Vec<Vec<usize>> = vec![];
+            for (index, energy) in column.energies_ev.iter().enumerate() {
+                if !window.contains(&index) || !(lo..=hi).contains(energy) {
+                    continue;
+                }
+                match groups.last_mut() {
+                    Some(group) if column.group(index).contains(&group[0]) => group.push(index),
+                    _ => groups.push(vec![index]),
+                }
+            }
+            let mut below = f32::INFINITY;
+            for group in groups {
+                // Pushed up from the level below, but never off the axis.
+                let at = y(column.energies_ev[group[0]])
+                    .min(below - SPACING)
+                    .max(Self::TOP);
+                below = at;
+                let count = group.len() as f32;
+                let gap = GAP.min(Self::LINE / (2. * count));
+                let width = (Self::LINE - gap * (count - 1.)) / count;
+                for (k, index) in group.into_iter().enumerate() {
+                    let x0 = left + k as f32 * (width + gap);
+                    placed.push(Placed {
+                        column: c,
+                        index,
+                        x0,
+                        x1: x0 + width,
+                        y: at,
+                    });
+                }
+            }
+        }
+        placed
+    }
+
+    /// The level under `point`, within a few pixels.
+    fn hit(&self, bounds: Rectangle, point: Point) -> Option<(usize, usize)> {
+        // A segment under the pointer wins over a neighbour within reach.
+        self.place(bounds)
+            .iter()
+            .filter(|p| point.x >= p.x0 - 3. && point.x <= p.x1 + 3.)
+            .map(|p| {
+                let outside = point.x < p.x0 || point.x > p.x1;
+                ((outside, (p.y - point.y).abs()), (p.column, p.index))
+            })
+            .filter(|((_, distance), _)| *distance <= 6.)
+            .min_by(|a, b| a.0.0.cmp(&b.0.0).then(a.0.1.total_cmp(&b.0.1)))
+            .map(|(_, hit)| hit)
+    }
+}
+
+impl canvas::Program<Message> for Diagram {
+    type State = ();
+
+    fn update(
+        &self,
+        _: &mut (),
+        event: &iced::Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<Message>> {
+        let iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event else {
+            return None;
+        };
+        let point = cursor.position_in(bounds).filter(|_| self.live)?;
+        let (column, index) = self.hit(bounds, point)?;
+        Some(canvas::Action::publish(send(Action::Choose(column, index))).and_capture())
+    }
+
+    fn mouse_interaction(
+        &self,
+        _: &(),
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        let over = cursor
+            .position_in(bounds)
+            .filter(|_| self.live)
+            .and_then(|point| self.hit(bounds, point));
+        if over.is_some() {
+            mouse::Interaction::Pointer
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let muted = crate::appearance::muted(theme);
+        let ink = if self.live {
+            theme.palette().text
+        } else {
+            muted
+        };
+        let accent = theme.palette().primary;
+        let (lo, hi) = self.range();
+        let y = self.y(bounds);
+        let label = |frame: &mut canvas::Frame, content: String, at: Point, color, right: bool| {
+            frame.fill_text(canvas::Text {
+                content,
+                position: at,
+                color,
+                size: 10.into(),
+                align_x: if right {
+                    iced::alignment::Horizontal::Right.into()
+                } else {
+                    iced::alignment::Horizontal::Left.into()
+                },
+                align_y: iced::alignment::Vertical::Center,
+                ..Default::default()
+            });
+        };
+        // The axis with round ticks, at most about six.
+        let axis = canvas::Stroke::default()
+            .with_color(Color { a: 0.5, ..muted })
+            .with_width(1.);
+        frame.stroke(
+            &canvas::Path::line(Point::new(Self::AXIS, y(hi)), Point::new(Self::AXIS, y(lo))),
+            axis,
+        );
+        let step = [0.5, 1., 2., 5., 10., 20., 50.]
+            .into_iter()
+            .find(|step| (hi - lo) / step <= 6.)
+            .unwrap_or(100.);
+        let first = (lo / step).ceil() as i64;
+        for tick in (first..).take_while(|t| *t as f64 * step <= hi).take(12) {
+            let tick = tick as f64 * step;
+            let at = y(tick);
+            frame.stroke(
+                &canvas::Path::line(Point::new(Self::AXIS - 4., at), Point::new(Self::AXIS, at)),
+                axis,
+            );
+            let places = usize::from(step < 1.);
+            label(
+                &mut frame,
+                super::super::state::signed(tick, places),
+                Point::new(Self::AXIS - 6., at),
+                muted,
+                true,
+            );
+        }
+        label(
+            &mut frame,
+            "eV".into(),
+            Point::new(Self::AXIS - 6., 6.),
+            muted,
+            true,
+        );
+        for (c, column) in self.columns.iter().enumerate() {
+            if !column.label.is_empty() {
+                label(
+                    &mut frame,
+                    column.label.clone(),
+                    Point::new(
+                        Self::AXIS + 12. + c as f32 * Self::COLUMN + Self::LINE / 2. - 3.,
+                        6.,
+                    ),
+                    muted,
+                    false,
+                );
+            }
+        }
+        let placed = self.place(bounds);
+        // Labels follow the lines, which may sit above their energies.
+        let line_y = |index: usize| {
+            placed
+                .iter()
+                .find(|p| p.column == 0 && p.index == index)
+                .map(|p| p.y)
+        };
+        for level in &placed {
+            let column = &self.columns[level.column];
+            let chosen = self.selected == Some((level.column, level.index));
+            let occupation = column.occupations.get(level.index).copied().unwrap_or(0.);
+            let color = if chosen && self.live {
+                accent
+            } else if occupation > 0.05 {
+                ink
+            } else {
+                muted
+            };
+            frame.stroke(
+                &canvas::Path::line(Point::new(level.x0, level.y), Point::new(level.x1, level.y)),
+                canvas::Stroke::default()
+                    .with_color(color)
+                    .with_width(if chosen { 3. } else { 1.8 }),
+            );
+            // Electron arrows: up for alpha, down for beta; a closed shell's
+            // doubly occupied level gets both.
+            let arrows: &[bool] = if column.label.is_empty() && occupation > 1.5 {
+                &[true, false]
+            } else if occupation > 0.5 {
+                if column.label == "β" {
+                    &[false]
+                } else {
+                    &[true]
+                }
+            } else {
+                &[]
+            };
+            let middle = (level.x0 + level.x1) / 2.;
+            // Arrows shrink to fit levels drawn side by side.
+            let apart = ((level.x1 - level.x0) / 3.).min(7.);
+            let wing = (apart / 3.).min(2.);
+            for (k, &up) in arrows.iter().enumerate() {
+                let x = middle + (k as f32 - (arrows.len() - 1) as f32 / 2.) * apart;
+                let (tip, tail, head) = if up {
+                    (level.y - 5., level.y + 4., 2.5)
+                } else {
+                    (level.y + 5., level.y - 4., -2.5)
+                };
+                frame.stroke(
+                    &canvas::Path::new(|path| {
+                        path.move_to(Point::new(x, tail));
+                        path.line_to(Point::new(x, tip));
+                        path.move_to(Point::new(x - wing, tip + head));
+                        path.line_to(Point::new(x, tip));
+                        path.line_to(Point::new(x + wing, tip + head));
+                    }),
+                    canvas::Stroke::default().with_color(color).with_width(1.),
+                );
+            }
+        }
+        // HOMO and LUMO named right of the last column; the gap beside them.
+        let right = Self::AXIS + 12. + self.columns.len() as f32 * Self::COLUMN;
+        if let Some(column) = self.columns.first() {
+            let frontier = [(column.homo(), "HOMO"), (column.lumo(), "LUMO")];
+            for (index, name) in frontier {
+                if let Some(index) = index {
+                    label(
+                        &mut frame,
+                        name.into(),
+                        Point::new(
+                            right - 8.,
+                            line_y(index).unwrap_or_else(|| y(column.energies_ev[index])),
+                        ),
+                        ink,
+                        false,
+                    );
+                }
+            }
+            // The gap of the first column, as drawn (an open shell's α).
+            if let (Some(homo), Some(lumo)) = (column.homo(), column.lumo()) {
+                let gap = column.energies_ev[lumo] - column.energies_ev[homo];
+                let at = |i: usize| line_y(i).unwrap_or_else(|| y(column.energies_ev[i]));
+                let (top, bottom) = (at(lumo), at(homo));
+                let x = right + 30.;
+                frame.stroke(
+                    &canvas::Path::line(Point::new(x, top + 2.), Point::new(x, bottom - 2.)),
+                    canvas::Stroke::default().with_color(accent).with_width(1.2),
+                );
+                label(
+                    &mut frame,
+                    "gap".into(),
+                    Point::new(x + 4., (top + bottom) / 2. - 6.),
+                    accent,
+                    false,
+                );
+                label(
+                    &mut frame,
+                    format!("{gap:.2}"),
+                    Point::new(x + 4., (top + bottom) / 2. + 6.),
+                    accent,
+                    false,
+                );
+            }
+        }
+        vec![frame.into_geometry()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reshiki::qcdata::{Beta, OrbitalSet, Orbitals};
+
+    fn set(energies: &[f64], occupations: &[f64]) -> OrbitalSet {
+        OrbitalSet {
+            energies_hartree: energies.to_vec(),
+            occupations: occupations.to_vec(),
+            symmetries: vec![],
+            rows: vec![],
+            coefficients: vec![],
+        }
+    }
+
+    fn closed(energies: &[f64], occupations: &[f64]) -> Orbitals {
+        Orbitals {
+            basis: None,
+            core_electrons: vec![],
+            alpha: set(energies, occupations),
+            beta: Beta::Restricted,
+        }
+    }
+
+    #[test]
+    fn the_window_widens_to_the_chosen_level() {
+        let energies: Vec<f64> = (0..30).map(|i| -1. + f64::from(i) * 0.05).collect();
+        let mut occupations = vec![2.; 15];
+        occupations.resize(30, 0.);
+        let column = &columns(&closed(&energies, &occupations))[0];
+        assert_eq!(window(column, None), 10..=19);
+        assert_eq!(window(column, Some(2)), 2..=19);
+        assert_eq!(window(column, Some(29)), 10..=29);
+    }
+
+    #[test]
+    fn the_diagram_spreads_close_levels_and_leaves_far_virtuals_off_the_axis() {
+        // Crowded occupied levels with a degenerate pair, a virtual at 98 eV.
+        let energies = [-0.70, -0.66, -0.65, -0.441, -0.441, 0.113, 1.47, 3.61];
+        let occupations = [2., 2., 2., 2., 2., 0., 0., 0.];
+        let diagram = Diagram {
+            columns: columns(&closed(&energies, &occupations)),
+            selected: Some((0, 4)),
+            live: true,
+        };
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(200., 228.));
+        let placed = diagram.place(bounds);
+        let at = |i: usize| placed.iter().find(|p| p.index == i).unwrap();
+        assert!(placed.iter().all(|p| p.index != 7), "98 eV is off the axis");
+        // Levels 0.27 eV apart get lines of their own, a spacing apart.
+        assert!((at(1).y - at(2).y).abs() >= 12.);
+        assert!(at(2).y < at(1).y, "the higher level stays above");
+        // The degenerate HOMO pair shares one line, side by side, with room
+        // for arrows on each.
+        let (a, b) = (at(3), at(4));
+        assert_eq!(a.y, b.y);
+        assert!(b.x0 - a.x1 >= 6. && a.x1 - a.x0 >= 20.);
+        assert_eq!(
+            diagram.hit(bounds, Point::new((b.x0 + b.x1) / 2., b.y)),
+            Some((0, 4))
+        );
+    }
+}

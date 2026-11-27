@@ -1,7 +1,7 @@
 //! Bounded adapter to the Rust COSMolKit molecular mechanics implementation.
 use super::{
-    ForceField, MAX_COORDINATES, Operation, Request, Response, cage::Cage, uff_shape_refusal,
-    valid_coordinate,
+    Ensemble, EnsembleMember, ForceField, MAX_COORDINATES, Operation, Request, Response,
+    cage::Cage, uff_shape_refusal, valid_coordinate,
 };
 use cosmolkit::{
     AddHsParams, AtomId, AtomSpec, BondOrder, BondSpec, BondStereo, ChiralTag, Element,
@@ -528,14 +528,19 @@ fn existing_coordinates(
     Ok(coordinates)
 }
 
-fn embedding_parameters(request: &Request) -> EmbedParams {
+fn embedding_parameters(request: &Request, threads: usize) -> EmbedParams {
     let mut parameters = EmbedParams::etkdg_v3();
     parameters.random_seed = request.seed;
-    parameters.num_threads = 1;
+    parameters.num_threads = threads.min(request.conformers as usize) as i32;
     parameters.max_iterations = 100;
     parameters.timeout = 10;
     parameters.enforce_chirality = true;
-    parameters.prune_rms_thresh = 0.1;
+    parameters.use_random_coords = request.ensemble.is_some();
+    parameters.prune_rms_thresh = if request.ensemble.is_some() {
+        -1.0
+    } else {
+        0.1
+    };
     // Symmetry-aware pruning first enumerates the molecule's automorphisms,
     // with no deadline; for a symmetric C96H24 flake that search alone
     // outlasts the worker. Compare heavy atoms in atom order instead. Most
@@ -545,6 +550,7 @@ fn embedding_parameters(request: &Request) -> EmbedParams {
     // count toward the RMS.
     parameters.use_symmetry_for_pruning = false;
     parameters.clear_conformers = true;
+    // Validation leaves room for each one-based conformer index in signed i32.
     parameters.enable_sequential_random_seeds = true;
     parameters.track_failures = true;
     parameters
@@ -616,17 +622,26 @@ fn embed(
     mol: &Molecule,
     request: &Request,
     cage: Option<&Cage>,
+    threads: usize,
     diagnostics: &mut Vec<String>,
 ) -> Result<(EmbedMultipleConfsResult, &'static str)> {
-    let mut parameters = embedding_parameters(request);
-    let mut method = "Rust ETKDGv3";
+    let mut parameters = embedding_parameters(request, threads);
+    let mut method = if parameters.use_random_coords {
+        "Rust random-start ETKDGv3"
+    } else {
+        "Rust ETKDGv3"
+    };
     let mut calls = 0;
     let mut conformers = request.conformers;
     if cage.is_some() {
         // One seeded attempt diagnoses the known planarity incompatibility.
         // With clear_confs and one candidate, RMS pruning cannot reject it.
         let mut trial = parameters.clone();
+        // Diagnose the eigenvector-start planarity failure even when the
+        // production ensemble uses random starting coordinates.
+        trial.use_random_coords = false;
         trial.max_iterations = 1;
+        trial.num_threads = 1;
         trial.prune_rms_thresh = -1.;
         // The embedder returns its failure counters in the run parameters.
         let trial = mol
@@ -685,6 +700,7 @@ fn embed(
                     request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 conformers = 1;
+                parameters.num_threads = 1;
                 // With no existing conformers, this has no pruning effect.
                 parameters.prune_rms_thresh = -1.;
             }
@@ -698,6 +714,31 @@ struct Candidate {
     initial_energy: f64,
     energy: f64,
     converged: bool,
+}
+
+fn embedded_candidate(
+    mol: &Molecule,
+    coordinates: &[[f64; 3]],
+    expected: &StereoExpectation,
+    cage: Option<&Cage>,
+    request: &Request,
+) -> Result<Candidate> {
+    validate_geometry(mol, coordinates)?;
+    expected.validate(mol, coordinates)?;
+    if let Some(cage) = cage {
+        cage.validate(mol, coordinates)?;
+    }
+    let positioned = mol
+        .with_only_3d_conformer(rows(coordinates))
+        .map_err(|error| error.to_string())?;
+    let field = request_force_field(&positioned, request)?;
+    let energy = energy(&field)?;
+    Ok(Candidate {
+        coordinates: coordinates.to_vec(),
+        initial_energy: energy,
+        energy,
+        converged: false,
+    })
 }
 
 fn minimized(
@@ -786,9 +827,39 @@ fn minimized(
     })
 }
 
-pub(super) fn solve(request: &Request) -> Result<Response> {
+fn ensemble_threads(threads: usize, atoms: usize, heap_bytes: usize) -> usize {
+    // Allow two dense (4n)^2 f64 matrices for each concurrent embedding or
+    // minimization, using at most half the configured worker heap.
+    // Saturation keeps even oversized arithmetic conservative; one worker is
+    // still necessary when a single minimization exceeds this allowance.
+    let dimension = atoms.max(1).saturating_mul(4);
+    let bytes_per_thread = dimension
+        .saturating_mul(dimension)
+        .saturating_mul(2 * std::mem::size_of::<f64>());
+    threads.min((heap_bytes / 2) / bytes_per_thread).max(1)
+}
+
+pub(super) fn solve(request: &Request, heap_bytes: usize) -> Result<Response> {
+    let threads = if request.ensemble.is_some() {
+        std::thread::available_parallelism().map_or(1, |count| count.get().min(8))
+    } else {
+        1
+    };
+    solve_with_threads(request, threads, heap_bytes)
+}
+
+pub(super) fn solve_with_threads(
+    request: &Request,
+    threads: usize,
+    heap_bytes: usize,
+) -> Result<Response> {
     let original = molecule(request)?;
     let mol = with_hydrogens(&original, request.atoms.len(), false)?;
+    let threads = if request.ensemble.is_some() {
+        ensemble_threads(threads, mol.num_atoms(), heap_bytes)
+    } else {
+        1
+    };
     let expected = StereoExpectation::new(&mol)?;
     // MMFF types none of these elements, so this is the UFF that generation
     // would fall back to; refuse before typing, which may fail for Og first.
@@ -838,6 +909,7 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         converged: false,
         field: request.field,
         diagnostics: Vec::new(),
+        ensemble: Vec::new(),
         approximations: field_note
             .into_iter()
             .chain(if request.relaxed {
@@ -938,14 +1010,20 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
                 .into(),
             );
         }
-        let (embedded, method) = embed(&mol, request, cage.as_ref(), &mut response.diagnostics)
-            .map_err(|error| {
-                if request.relaxed {
-                    format!("{error}; {}", response.diagnostics.join("; "))
-                } else {
-                    error
-                }
-            })?;
+        let (embedded, method) = embed(
+            &mol,
+            request,
+            cage.as_ref(),
+            threads,
+            &mut response.diagnostics,
+        )
+        .map_err(|error| {
+            if request.relaxed {
+                format!("{error}; {}", response.diagnostics.join("; "))
+            } else {
+                error
+            }
+        })?;
         let failures = embedding_failures(&embedded.params);
         let embedded_count = valid_conformer_ids(&embedded.conf_ids).count();
         let failed_embedding_ids = embedded.conf_ids.len() - embedded_count;
@@ -967,43 +1045,117 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         let mut valid = 0;
         let mut rejected = 0;
         let mut last_failure = String::new();
-        for id in valid_conformer_ids(&embedded.conf_ids) {
-            let conformer = embedded
-                .molecule
-                .conformers_3d()
-                .iter()
-                .find(|conformer| conformer.id() == id as usize)
-                .ok_or("embedding lost a conformer")?;
-            match minimized(
-                &embedded.molecule,
-                conformer.coordinates(),
-                &expected,
-                cage.as_ref(),
-                request,
-                None,
-            ) {
-                Ok(candidate) => {
-                    valid += 1;
-                    if candidate.energy < best {
-                        best = candidate.energy;
-                        response.coordinates = candidate.coordinates;
-                        response.initial_energy = candidate.initial_energy;
-                        response.energy = candidate.energy;
-                        response.converged = candidate.converged;
-                    }
+        let mut ids: Vec<_> = valid_conformer_ids(&embedded.conf_ids).collect();
+        if request.ensemble.is_some() {
+            ids.sort_unstable();
+        }
+        let conformers = ids
+            .into_iter()
+            .map(|id| {
+                embedded
+                    .molecule
+                    .conformers_3d()
+                    .iter()
+                    .find(|conformer| conformer.id() == id as usize)
+                    .map(|conformer| conformer.coordinates())
+                    .ok_or("embedding lost a conformer")
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let evaluate_candidate = |coordinates: &[[f64; 3]]| {
+            if request.ensemble == Some(Ensemble::Embedded) {
+                embedded_candidate(
+                    &embedded.molecule,
+                    coordinates,
+                    &expected,
+                    cage.as_ref(),
+                    request,
+                )
+            } else {
+                minimized(
+                    &embedded.molecule,
+                    coordinates,
+                    &expected,
+                    cage.as_ref(),
+                    request,
+                    None,
+                )
+            }
+        };
+        let mut record_candidate = |candidate: Result<Candidate>| match candidate {
+            Ok(candidate) => {
+                valid += 1;
+                if request.ensemble.is_some() {
+                    response.ensemble.push(EnsembleMember {
+                        coordinates: candidate.coordinates.clone(),
+                        energy: candidate.energy,
+                        converged: candidate.converged,
+                    });
                 }
-                Err(error) => {
-                    rejected += 1;
-                    last_failure = error.chars().take(512).collect();
+                if candidate.energy < best {
+                    best = candidate.energy;
+                    response.coordinates = candidate.coordinates;
+                    response.initial_energy = candidate.initial_energy;
+                    response.energy = candidate.energy;
+                    response.converged = candidate.converged;
                 }
             }
+            Err(error) => {
+                rejected += 1;
+                last_failure = error.chars().take(512).collect();
+            }
+        };
+        if request.ensemble == Some(Ensemble::Minimized) && threads > 1 && conformers.len() > 1 {
+            let worker_count = threads.min(conformers.len());
+            let evaluate_candidate = &evaluate_candidate;
+            std::thread::scope(|scope| {
+                let workers: Vec<_> = (0..worker_count)
+                    .map(|index| {
+                        let start = index * conformers.len() / worker_count;
+                        let end = (index + 1) * conformers.len() / worker_count;
+                        let chunk = &conformers[start..end];
+                        scope.spawn(move || {
+                            chunk
+                                .iter()
+                                .copied()
+                                .map(evaluate_candidate)
+                                .collect::<Vec<_>>()
+                        })
+                    })
+                    .collect();
+                // Join contiguous ranges in ID order to preserve tie and rejection handling.
+                for worker in workers {
+                    let candidates = worker
+                        .join()
+                        .expect("conformer minimization worker panicked");
+                    candidates.into_iter().for_each(&mut record_candidate);
+                }
+            });
+        } else {
+            conformers
+                .into_iter()
+                .map(evaluate_candidate)
+                .for_each(record_candidate);
         }
         require(
             valid > 0,
             format!("all generated conformers failed validation: {last_failure}"),
         )
         .map_err(generation_error)?;
-        response.diagnostics.push(format!("{method}; requested={}; actual_count={}; embedded={embedded_count}; failed_embedding_ids={failed_embedding_ids}; valid={valid}; rejected={rejected}; seed={}; selection=lowest energy among valid generated conformers; iteration_limit={}; converged={}; embedding_failure_counters={failures}", request.conformers, embedded.requested_num_confs, request.seed, request.max_iterations, response.converged));
+        let mut sampling = format!(
+            "{method}; requested={}; actual_count={}; embedded={embedded_count}; failed_embedding_ids={failed_embedding_ids}; valid={valid}; rejected={rejected}; seed={}; selection=lowest energy among valid generated conformers; iteration_limit={}; converged={}; embedding_failure_counters={failures}",
+            request.conformers,
+            embedded.requested_num_confs,
+            request.seed,
+            request.max_iterations,
+            response.converged
+        );
+        if let Some(mode) = request.ensemble {
+            sampling.push_str(&format!(
+                "; ensemble={mode:?}; ensemble_count={}",
+                response.ensemble.len()
+            ));
+        }
+        response.diagnostics.push(sampling);
         if !last_failure.is_empty() {
             response
                 .diagnostics

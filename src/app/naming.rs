@@ -689,6 +689,31 @@ impl App {
             .then_some(record)
     }
 
+    /// Reuse Properties' automatic name, or the exact generated identity,
+    /// without adding a caption to the drawing.
+    pub(super) fn xtb_existing_molecule_name(&self, atoms: &[u64]) -> Option<&str> {
+        let state = &self.tab.naming;
+        if state.caption_names.is_empty() && state.structure_atoms != atoms {
+            return None;
+        }
+        let mut identity = naming::selected_identity(&self.tab.doc, atoms).ok()?;
+        identity.write_unknown_stereo = self.appearance.write_unknown_stereo;
+        self.named_identity(atoms, &identity)
+            .and_then(|record| {
+                record
+                    .synonyms
+                    .first()
+                    .map(|alias| alias.name.as_str())
+                    .or(record.systematic_name.as_deref())
+            })
+            .or_else(|| {
+                state
+                    .caption_names
+                    .get(&identity.smiles)
+                    .map(String::as_str)
+            })
+    }
+
     pub(super) fn named_identity_warnings(
         &self,
         atoms: &[u64],

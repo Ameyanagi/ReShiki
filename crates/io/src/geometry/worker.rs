@@ -18,7 +18,8 @@ fn operation() -> Result<reshiki_geometry::Response, String> {
 fn solve(request: wire::Request) -> Result<reshiki_geometry::Response, String> {
     let capacity = resolved_capacity(request.heap_bytes, request.capacity)?;
     request.operation.validate_capacity(capacity)?;
-    let response = reshiki_geometry::solve(&request.operation)?;
+    let response =
+        reshiki_geometry::solve_with_heap_budget(&request.operation, request.heap_bytes)?;
     if response.coordinates.len() > capacity.coordinates {
         return Err("Geometry result exceeds its machine-budget coordinate capacity".into());
     }
@@ -47,8 +48,8 @@ fn resolved_capacity(
     Ok(capacity)
 }
 
-/// Answer one framed request in-process, where no worker can run (the browser).
-#[cfg(target_arch = "wasm32")]
+/// Answer one framed request in-process for browsers and framing tests.
+#[cfg(any(target_arch = "wasm32", test))]
 pub(super) fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let response = wire::Response {
         version: reshiki_geometry::RDKIT_VERSION.into(),

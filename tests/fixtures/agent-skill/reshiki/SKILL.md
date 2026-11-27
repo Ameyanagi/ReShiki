@@ -46,23 +46,28 @@ label_atoms     Label atoms
 convert         Convert structure
 name            Name structure
 schema          Input schema
+export_input    Export calculation input
+read_output     Read calculation output
+calculate       Run xTB calculation
 ```
 
 Commands after `--cli`:
 
 ```text
-convert      Convert a structure or drawing to another file format
-render       Render a preview image of a structure or drawing
-compose      Lay out an assistant Proposal (JSON) and write it as a file
-analyze      Print molecular properties as one JSON line
-predict-nmr  Print predicted NMR shifts as one JSON line
-name         Print the systematic name of a structure
-pieces       Check or render equipment piece files
-info         Print versions, limits and formats as one JSON line
-tools        Print the agent tool catalog as one JSON line
-schema       Print a JSON Schema: reshiki --cli schema proposal
-skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
-help         Show this help, or a command's help: reshiki --cli help <command>
+convert       Convert a structure or drawing to another file format
+render        Render a preview image of a structure or drawing
+compose       Lay out an assistant Proposal (JSON) and write it as a file
+analyze       Print molecular properties as one JSON line
+predict-nmr   Print predicted NMR shifts as one JSON line
+read-output   Print quantum chemistry job summaries and calculated values as one JSON line
+export-input  Write a quantum-chemistry input from an XYZ structure
+name          Print the systematic name of a structure
+pieces        Check or render equipment piece files
+info          Print versions, limits and formats as one JSON line
+tools         Print the agent tool catalog as one JSON line
+schema        Print a JSON Schema: reshiki --cli schema proposal
+skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
+help          Show this help, or a command's help: reshiki --cli help <command>
 ```
 
 ## Command-line recipes
@@ -135,7 +140,7 @@ A Proposal is the JSON that `compose` lays out. [assets/proposal-schema.json](as
 | 2 | usage error |
 | 75 | the memory ceiling was reached (see RESHIKI_AGENT_HEAP_MB) |
 
-- stdout carries only the result: the file, one JSON line, or one receipt line with --receipt. With -o FILE and no --receipt it stays empty. Every JSON line except the raw schema carries `"experimental": true`.
+- stdout carries only the result: a file, a text report, one JSON line, or one receipt line with --receipt. With -o FILE and no --receipt it stays empty. Every JSON line except the raw schema carries `"experimental": true`.
 - Errors go to stderr as `reshiki: error: MESSAGE`, or `reshiki: error[CODE]: MESSAGE` when an operation failed, with its error code; usage errors as `reshiki: MESSAGE` and warnings as `reshiki: warning: MESSAGE`. A warning, such as an export's PNG size, does not mean the command failed.
 - After exit 2, fix the command line: `'/opt/reshiki/reshiki' --cli help COMMAND` shows each command's options. After exit 1, read the error line before you change the input or retry.
 - After exit 75, try a smaller input. `RESHIKI_AGENT_HEAP_MB` sets the ceiling in MiB, 256 to 16384 (default 2048); raise it only when the user agrees.

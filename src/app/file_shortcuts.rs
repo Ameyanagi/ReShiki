@@ -1,4 +1,5 @@
 use super::Message;
+use super::xtb::ts::irc::focus::{Timelines, pointer_press, step_direction};
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
     widget::{
@@ -116,6 +117,22 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     ) {
         let shortcut = crate::platform::shortcut_event(event);
         let event = shortcut.as_ref().unwrap_or(event);
+        // Do this before dispatch: a sibling or overlay can consume the press
+        // before the timeline sees it. An inside press focuses it again.
+        if pointer_press(event) || step_direction(event).is_some() {
+            let widget = self.content.as_widget_mut();
+            let mut timelines = Timelines::default();
+            widget.operate(tree, layout, renderer, &mut timelines);
+            if pointer_press(event) {
+                timelines.clear(shell);
+            } else {
+                let mut fields = Fields::default();
+                widget.operate(tree, layout, renderer, &mut fields);
+                if fields.focused {
+                    timelines.clear(shell);
+                }
+            }
+        }
         if let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
             modifiers,
@@ -269,16 +286,20 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         if self.updates_open {
             return None;
         }
+        let mut timelines = Timelines::default();
+        self.content
+            .as_widget_mut()
+            .operate(tree, layout, renderer, &mut timelines);
         self.content
             .as_widget_mut()
             .overlay(tree, layout, renderer, viewport, translation)
-            .map(|overlay| overlay::Element::new(Box::new(FieldKeys(overlay))))
+            .map(|overlay| overlay::Element::new(Box::new(FieldKeys(overlay, timelines))))
     }
 }
 
 /// Overlays, such as the color popover, get key presses before the drawing,
 /// so their fields follow the same rule here.
-struct FieldKeys<'a>(overlay::Element<'a, Message, Theme, Renderer>);
+struct FieldKeys<'a>(overlay::Element<'a, Message, Theme, Renderer>, Timelines);
 
 impl overlay::Overlay<Message, Theme, Renderer> for FieldKeys<'_> {
     fn layout(&mut self, renderer: &Renderer, bounds: Size) -> layout::Node {
@@ -308,6 +329,9 @@ impl overlay::Overlay<Message, Theme, Renderer> for FieldKeys<'_> {
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) {
+        if pointer_press(event) {
+            self.1.clear(shell);
+        }
         let shortcut = crate::platform::shortcut_event(event);
         let event = shortcut.as_ref().unwrap_or(event);
         let untyped = without_command_text(event);
@@ -337,7 +361,10 @@ impl overlay::Overlay<Message, Theme, Renderer> for FieldKeys<'_> {
         layout: Layout<'a>,
         renderer: &Renderer,
     ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-        self.0.as_overlay_mut().overlay(layout, renderer)
+        self.0
+            .as_overlay_mut()
+            .overlay(layout, renderer)
+            .map(|overlay| overlay::Element::new(Box::new(FieldKeys(overlay, self.1.clone()))))
     }
     fn index(&self) -> f32 {
         self.0.as_overlay().index()
@@ -427,6 +454,7 @@ impl Fields {
                         | Message::Redo
                         | Message::Optimization(super::optimization::Action::Begin)
                         | Message::Shortcut(super::shortcuts::Action::Join)
+                        | Message::Xtb(super::xtb::Action::Entry(_))
                         | Message::Zoom(_)
                 )
             ))

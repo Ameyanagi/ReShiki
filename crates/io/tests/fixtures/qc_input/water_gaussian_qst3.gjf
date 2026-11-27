@@ -1,0 +1,27 @@
+! TS guess from GFN2-xTB (ReShiki 0.17.1), imaginary frequency -412 cm-1
+%nprocshared=8
+%mem=16GB
+%chk=water.chk
+#p B3LYP/Def2SVP EmpiricalDispersion=GD3BJ Opt=QST3 Freq
+
+water reactant
+
+0 1
+ O      0.00000000     0.00000000     0.00000000
+ H      1.00720000     0.00000000     0.00000000
+ H     -0.18998720     0.92662720     0.00000000
+
+water product
+
+0 1
+ O      0.00000000     0.00000000     0.00000000
+ H      0.90720000     0.00000000     0.00000000
+ H     -0.28998720     0.92662720     0.00000000
+
+water TS guess
+
+0 1
+ O      0.00000000     0.00000000     0.00000000
+ H      0.95720000     0.00000000     0.00000000
+ H     -0.23998720     0.92662720     0.00000000
+

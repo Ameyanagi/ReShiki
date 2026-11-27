@@ -6,9 +6,10 @@ use super::super::{
     equipment_authoring, figure_panels, generic, graphics, import, inspector, keyboard_drawing,
     models3d, naming, nmr, numeric_transforms,
     numeric_transforms::Field,
-    object_toolbar, optimization, pages, palettes, printing, reaction_mapping, reactions,
+    object_toolbar, optimization, pages, palettes, printing, qc_export, reaction_mapping,
+    reactions,
     shortcuts::{self, TabKey, keys, tab_keys},
-    tabs, template_library, view_settings,
+    tabs, template_library, view_settings, xtb,
 };
 use crate::canvas::Tool;
 use iced::keyboard::Modifiers;
@@ -86,6 +87,7 @@ pub(crate) enum Need {
     RingFill,
     Purpose,
     ReactionPreview,
+    XtbReaction,
     ReactionReady,
     ReactionColors,
     Arrow,
@@ -166,6 +168,8 @@ pub(crate) struct Command {
     pub keys: String,
     pub category: Category,
     pub synonyms: String,
+    /// An alternate outcome title for searching commands that act on a selection.
+    pub search_title: Option<&'static str>,
     pub detail: String,
     /// Vim-style ex commands; an exact alias ranks first.
     pub aliases: &'static [&'static str],
@@ -196,6 +200,7 @@ impl Command {
             keys,
             category,
             synonyms: synonyms.into(),
+            search_title: None,
             detail: detail.into(),
             aliases: &[],
             need: Need::Nothing,
@@ -208,6 +213,10 @@ impl Command {
     }
     fn need(mut self, need: Need) -> Self {
         self.need = need;
+        self
+    }
+    fn search_title(mut self, title: &'static str) -> Self {
+        self.search_title = Some(title);
         self
     }
     fn alias(mut self, aliases: &'static [&'static str]) -> Self {
@@ -985,9 +994,17 @@ fn edits(app: &App) -> Vec<Command> {
         )
         .need(Need::OneAtom),
         selection(
-            "3D optimize…",
+            if xtb::available() {
+                "Force-field 3D model (MMFF94s)…"
+            } else {
+                "3D optimize…"
+            },
             "Generate an optimized 3D conformer",
-            "conformer mmff uff geometry optimize",
+            if xtb::available() {
+                "conformer mmff uff geometry optimize 3d optimize"
+            } else {
+                "conformer mmff uff geometry optimize"
+            },
             Message::Optimization(optimization::Action::Begin),
         ),
         selection(
@@ -1609,6 +1626,114 @@ fn analysis(app: &App) -> Vec<Command> {
             Message::Assistant(assistant::Action::Open),
         ),
     ];
+    // Like the molecule commands, the reaction ones need the engine.
+    for (name, detail, synonyms, mode) in xtb::available()
+        .then_some([
+            (
+                "Find transition state (xTB)",
+                "Review the reaction before finding its transition state with GFN2-xTB",
+                "xtb gfn2 reaction scheme transition state ts saddle neb barrier activation",
+                xtb::ts::review::Mode::TransitionState,
+            ),
+            (
+                "Reaction energy (xTB)",
+                "Review the reaction before calculating its endpoint energies with GFN2-xTB",
+                "xtb gfn2 reaction scheme reaction energy thermochemistry enthalpy delta",
+                xtb::ts::review::Mode::Energy,
+            ),
+        ])
+        .into_iter()
+        .flatten()
+    {
+        list.push(
+            send(
+                name,
+                Analyze,
+                detail,
+                synonyms,
+                Message::Xtb(xtb::Action::Ts(xtb::ts::Action::Review(mode, None))),
+            )
+            .need(Need::XtbReaction),
+        );
+    }
+    list.push(send(
+        "Place MO diagram",
+        Analyze,
+        "Place the calculated energy levels and frontier orbital pictures",
+        "mo diagram energy levels orbital levels homo lumo gap",
+        Message::Xtb(xtb::Action::Orbitals(xtb::orbitals::Action::PlaceDiagram {
+            for_selection: true,
+        })),
+    ));
+    // Builds that cannot calculate hide it, as they hide Run.
+    if xtb::available() {
+        list.push(Command::new(
+            "Calculate (xTB)…",
+            Analyze,
+            "Energy, geometry optimization or conformer search with GFN2-xTB, g-xTB or GFN-FF",
+            "xtb gfn2 gfn-ff gfnff g-xtb gxtb semiempirical quantum chemistry energy optimize calculate conformer conformers search ensemble dft homo lumo orbital frequencies ir",
+            Run::Send(xtb::settings_messages().into()),
+        ));
+        for (name, detail, synonyms, entry, search_title) in [
+            (
+                "Optimize geometry (xTB quantum)",
+                "Optimize the selected molecule's geometry with GFN2-xTB",
+                "optimize optimise optimization geometry minimize minimise minimum relax structure quantum qm semiempirical dft xtb gfn2 energy",
+                xtb::Entry::OptimizeGfn2,
+                None,
+            ),
+            (
+                "Optimize and calculate frequencies (xTB Opt + freq)",
+                "Optimize the selected molecule and calculate its vibrational frequencies",
+                "frequencies frequency freq vibrations vibrational ir infrared spectrum hessian zpve thermochemistry enthalpy gibbs free energy minimum opt+freq",
+                xtb::Entry::Task(xtb::CalcTask::OptFreq),
+                Some("IR spectrum and vibrational frequencies"),
+            ),
+            (
+                "Frequencies at the current geometry (xTB)",
+                "Calculate vibrational frequencies without optimizing the current geometry",
+                "frequencies hessian vibrations ir normal modes",
+                xtb::Entry::Task(xtb::CalcTask::Frequencies),
+                None,
+            ),
+            (
+                "Single-point energy, HOMO and LUMO (xTB)",
+                "Calculate the selected molecule's energy and frontier molecular orbitals",
+                "energy single point sp homo lumo gap orbital orbitals frontier dipole charges quantum",
+                xtb::Entry::Orbitals,
+                Some("Molecular orbitals"),
+            ),
+            (
+                "Find low-energy conformers (xTB)",
+                "Search for low-energy conformers of the selected molecule",
+                "conformer conformers conformation conformational search ensemble rotamer crest boltzmann",
+                xtb::Entry::Task(xtb::CalcTask::Conformers),
+                None,
+            ),
+        ] {
+            let mut command = molecule(
+                name,
+                detail,
+                synonyms,
+                vec![Message::Xtb(xtb::Action::Entry(entry))],
+            );
+            if let Some(title) = search_title {
+                command = command.search_title(title);
+            }
+            list.push(command);
+        }
+        list.push(
+            Command::new(
+                "Run the last xTB calculation",
+                Analyze,
+                "Calculate the selected molecule again with the card's last settings",
+                "xtb rerun repeat again calculate",
+                Run::Send(vec![Message::Xtb(xtb::Action::Entry(xtb::Entry::Rerun))]),
+            )
+            .keys(xtb::rerun_keys())
+            .need(Need::Molecule),
+        );
+    }
     use reshiki::purpose::Purpose;
     for (purpose, detail, synonyms) in [
         (
@@ -1874,6 +1999,13 @@ fn files() -> Vec<Command> {
             Message::Inspector(InspectorTab::Export),
         )
         .keys(keys(command | shift, "E")),
+        send(
+            "Export input for Gaussian / ORCA / GAMESS…",
+            File,
+            "Write a calculation input from the 3D model",
+            "quantum chemistry gjf com inp xyz dft orca gamess gaussian",
+            Message::QcExport(qc_export::Action::Open),
+        ),
         send(
             "Print…",
             File,

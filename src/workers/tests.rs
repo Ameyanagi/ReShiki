@@ -12,6 +12,7 @@ fn every_available_flag_maps_to_its_worker() {
         (NAMING_WORKER, Worker::Naming),
         (GEOMETRY_WORKER, Worker::Geometry),
         (INCHI_WORKER, Worker::Inchi),
+        (XTB_WORKER, Worker::Xtb),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         (CLIPBOARD_WORKER, Worker::Clipboard),
         #[cfg(target_os = "macos")]

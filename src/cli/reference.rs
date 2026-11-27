@@ -1,5 +1,10 @@
 //! Deterministic agent documentation from the live CLI and operation contracts.
-use super::{MCP_USAGE, commands::COMMANDS, help};
+use super::{
+    MCP_USAGE,
+    commands::{self, COMMANDS, CommandSpec, DOCUMENTED_COMMANDS},
+    help,
+};
+use reshiki_agent::stability::NOTICE;
 use reshiki_agent::{
     access::{AccessError, extensions::FILE_FORMATS},
     envelope::Versions,
@@ -15,13 +20,23 @@ use serde_json::Value;
 /// The agent reference, with no application version or host-specific values.
 #[doc(hidden)]
 pub fn agent_reference() -> String {
+    render_reference(COMMANDS)
+}
+
+/// Canonical documentation includes optional commands, regardless of this build.
+#[doc(hidden)]
+pub fn canonical_agent_reference() -> String {
+    render_reference(DOCUMENTED_COMMANDS)
+}
+
+fn render_reference(commands: &'static [CommandSpec]) -> String {
     let mut text = String::from(
         "# Agent reference\n\n\
 <!-- Generated: cargo run --example agent_reference -- docs/agent-reference.md -->\n\n\
 Generated from ReShiki's command help, tool catalog and schemas.\n\n\
 ## Command line\n\n",
     );
-    command_sections(&mut text, "###");
+    command_sections_for(&mut text, "###", commands);
     text.push_str("## MCP\n\n");
     fence(&mut text, "text", &MCP_USAGE);
     text.push_str(&format!("## Tools\n\n{RESULT_CONVENTIONS}\n\n"));
@@ -57,15 +72,19 @@ under `$defs`, and with `sketch` as a plain object whose fields the `schema` too
 
 /// The overview and command help, with headings local to each reference.
 pub(in crate::cli) fn command_sections(text: &mut String, heading: &str) {
+    command_sections_for(text, heading, COMMANDS);
+}
+
+fn command_sections_for(text: &mut String, heading: &str, commands: &'static [CommandSpec]) {
     text.push_str(&format!("{heading} Overview\n\n"));
-    let overview = help(None);
+    let overview = format!("{NOTICE}\n{}", commands::overview_for(commands));
     fence(text, "text", &overview);
-    for spec in COMMANDS {
+    for spec in commands {
         text.push_str(&format!("{heading} reshiki --cli {}\n\n", spec.name));
-        let body = help(Some(spec));
-        if body == overview {
+        if spec.name == "help" {
             text.push_str("Prints the [overview](#overview).\n\n");
         } else {
+            let body = help(Some(spec));
             fence(text, "text", &body);
         }
     }
@@ -171,8 +190,9 @@ fn parameters(text: &mut String, schema: &Value) {
             .and_then(Value::as_array)
             .is_some_and(|names| names.iter().any(|value| value.as_str() == Some(name)));
         let nullable = branches(property)
-            .iter()
-            .any(|branch| string(branch, "type") == "null");
+            .into_iter()
+            .flat_map(types)
+            .any(|kind| kind == "null");
         let mut kind = code(&schema_type(property));
         if name == "proposal" {
             kind.push_str(" ([Proposal](#proposal))");
@@ -203,15 +223,24 @@ fn branches(schema: &Value) -> Vec<&Value> {
 fn schema_type(schema: &Value) -> String {
     branches(schema)
         .into_iter()
-        .map(|branch| {
-            let kind = string(branch, "type");
-            match branch.get("items") {
+        .flat_map(|branch| {
+            types(branch).map(move |kind| match branch.get("items") {
                 Some(items) if kind == "array" => format!("array<{}>", schema_type(items)),
                 _ => kind.to_owned(),
-            }
+            })
         })
         .collect::<Vec<_>>()
         .join(" or ")
+}
+
+fn types(schema: &Value) -> impl Iterator<Item = &str> {
+    let kind = schema.get("type");
+    kind.and_then(Value::as_str).into_iter().chain(
+        kind.and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str),
+    )
 }
 
 fn constraints(schema: &Value, prefix: &str) -> Vec<String> {

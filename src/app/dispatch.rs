@@ -28,6 +28,8 @@ impl App {
             // Autosaved: handled before editor/modal guards.
             Message::Accessibility(_)
             | Message::ModifiersChanged(_)
+            | Message::ReactionBondHover(..)
+            | Message::WindowSize(_)
             | Message::CopyFrame(_)
             | Message::Assistant(_)
             | Message::Updates(_)
@@ -101,6 +103,7 @@ impl App {
             Message::Arc(action) => self.update_arc(action),
             Message::Graphics(action) => self.graphic_action(action),
             Message::Tlc(action) => self.tlc_action(action),
+            Message::IrFigure(action) => return Some(self.ir_figure_action(action)),
             Message::Figure(action) => {
                 let wrap = matches!(action, super::figure_panels::Action::Wrap);
                 self.figure_action(action);
@@ -116,7 +119,9 @@ impl App {
             Message::AtomSinglet(value) => self.set_singlet(value),
             Message::ToggleInspector => return Some(self.toggle_inspector()),
             Message::Inspector(tab) => {
-                if tab == InspectorTab::Predict {
+                if tab == InspectorTab::Predict
+                    && !(super::xtb::available() && self.xtb.page == super::xtb::Page::Xtb)
+                {
                     return Some(self.nmr_action(super::nmr::Action::Dock));
                 }
                 if let Some(task) = self.show_inspector_tab(tab) {
@@ -173,6 +178,11 @@ impl App {
                 return Some(self.copy_native(false, true, Some((background, editable))));
             }
             Message::Settings(action) => return Some(self.settings_action(action)),
+            Message::QcExport(action) => return Some(self.qc_export_action(action)),
+            #[cfg(not(target_arch = "wasm32"))]
+            Message::GifExport(action) => return Some(self.gif_export_action(action)),
+            Message::FramesImport(action) => return Some(self.frames_import_action(action)),
+            Message::Xtb(action) => return Some(self.xtb_action(action)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),
@@ -322,6 +332,8 @@ impl App {
             Message::Optimization(action) => return self.optimization_action(action),
             Message::Models3d(action) => return self.models3d_action(action),
             Message::Nmr(action) => return self.nmr_action(action),
+            Message::Xtb(action) => return self.xtb_action(action),
+            Message::IrFigure(action) => return self.ir_figure_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::Mapping(action) => return self.mapping_action(action),
             Message::FigureExported(result) => self.figure_exported(result),
@@ -358,6 +370,7 @@ impl App {
             } => return self.engine_done(revision, kind, *result),
             Message::EngineFinished { key, result } => return self.engine_finished(key, *result),
             Message::Exported(result) => self.structure_exported(result),
+            Message::QcExport(action) => return self.qc_export_action(action),
             _ => {}
         }
         Task::none()

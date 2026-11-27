@@ -306,8 +306,13 @@ fn errors(text: &mut String, exe: &Executable) {
         .get("output")
         .map(|output| string(output, "stdout"))
         .unwrap_or_default();
+    let json_exceptions = if cfg!(feature = "xtb") {
+        "the raw schema and the `calc` worker result"
+    } else {
+        "the raw schema"
+    };
     text.push_str(&format!(
-        "\n- {stdout} Every JSON line except the raw schema carries `\"experimental\": true`.\n\
+        "\n- {stdout} Every JSON line except {json_exceptions} carries `\"experimental\": true`.\n\
 - Errors go to stderr as `{ERROR_PREFIX}MESSAGE`, or `reshiki: error[CODE]: MESSAGE` when an \
 operation failed, with its error code; usage errors as `{USAGE_PREFIX}MESSAGE` and \
 warnings as `{WARNING_PREFIX}MESSAGE`. A warning, such as an export's PNG size, does not mean the \

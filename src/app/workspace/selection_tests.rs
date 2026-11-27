@@ -171,8 +171,13 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
     // Keyboard drawing has no target atom or mark yet: nothing to mark or connect.
+    let model = if super::super::xtb::available() {
+        "3D model ▾"
+    } else {
+        "3D optimize…"
+    };
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(labels, ["3D optimize…"]);
+    assert_eq!(labels, [model]);
     assert!(app.context_commands().iter().all(|command| !matches!(
         command.message,
         Message::Copy(_) | Message::CopyImage | Message::CopyAs(_) | Message::Paste
@@ -182,37 +187,35 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     ));
     assert!(!app.keyboard_drawing_active());
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(labels, ["Keyboard drawing", "3D optimize…"]);
+    assert_eq!(labels, ["Keyboard drawing", model]);
     // Selection commands first, global ones last, so these fold first.
     app.tab.selected = app.tab.doc.all_ids();
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(
-        labels,
-        [
-            "Join",
-            "Merge atoms",
-            "Move & attach…",
-            "Coordinate in place…",
-            "Group",
-            "Keyboard drawing",
-            "3D optimize…"
-        ]
-    );
+    let expected: Vec<_> = [
+        "Join",
+        "Merge atoms",
+        "Move & attach…",
+        "Coordinate in place…",
+        "Group",
+    ]
+    .into_iter()
+    .chain(["Keyboard drawing", model])
+    .collect();
+    assert_eq!(labels, expected);
     let _ = app.update(Message::Group);
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(
-        labels,
-        [
-            "Join",
-            "Merge atoms",
-            "Move & attach…",
-            "Coordinate in place…",
-            "Group",
-            "Ungroup",
-            "Keyboard drawing",
-            "3D optimize…"
-        ]
-    );
+    let expected: Vec<_> = [
+        "Join",
+        "Merge atoms",
+        "Move & attach…",
+        "Coordinate in place…",
+        "Group",
+        "Ungroup",
+    ]
+    .into_iter()
+    .chain(["Keyboard drawing", model])
+    .collect();
+    assert_eq!(labels, expected);
     assert!(
         !app.context_commands()
             .iter()
@@ -220,6 +223,74 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
             .expect("Group command remains in the row")
             .enabled
     );
+}
+
+#[test]
+fn reaction_calculation_row_command_uses_one_selected_arrow_when_xtb_is_available() {
+    use crate::app::xtb::{self, ts};
+    use reshiki::{arrows::Preset, document::Arrow, purpose::Purpose};
+
+    let (mut app, _) = App::new();
+    app.tab.doc = Default::default();
+    app.tab.busy = false;
+    app.tool = Tool::Select;
+    let arrows = [0., 100.].map(|y| {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
+            id,
+            Point::new(0., y),
+            Point::new(100., y),
+            Default::default(),
+            Default::default(),
+        ));
+        id
+    });
+    let review_commands = |app: &App| {
+        app.context_commands()
+            .into_iter()
+            .filter(|command| {
+                matches!(
+                    command.message,
+                    Message::Xtb(xtb::Action::Ts(ts::Action::Calculate(_)))
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    assert!(review_commands(&app).is_empty());
+    app.tab.selected = vec![arrows[1]];
+    let commands = review_commands(&app);
+    if xtb::available() {
+        assert_eq!(
+            commands
+                .iter()
+                .map(|command| command.label)
+                .collect::<Vec<_>>(),
+            ["Calculate (xTB)"]
+        );
+        assert!(commands.iter().all(|command| command.enabled));
+        assert!(matches!(
+            commands[0].message,
+            Message::Xtb(xtb::Action::Ts(ts::Action::Calculate(id))) if id == arrows[1]
+        ));
+    } else {
+        assert!(
+            commands.is_empty(),
+            "builds without xTB hide row entry points"
+        );
+    }
+
+    app.tab.busy = true;
+    assert!(review_commands(&app).iter().all(|command| !command.enabled));
+    app.tab.busy = false;
+    app.tab.selected = arrows.into();
+    assert!(review_commands(&app).is_empty());
+    app.tab.selected = vec![arrows[1]];
+    app.tab.doc.arrows[1].purpose = Purpose::Reference;
+    assert!(review_commands(&app).is_empty());
+    app.tab.doc.arrows[1].purpose = Purpose::Chemistry;
+    app.tab.doc.arrows[1].kind = Preset::Curved.kind().into();
+    assert!(review_commands(&app).is_empty());
 }
 
 #[test]

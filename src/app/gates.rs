@@ -12,15 +12,32 @@ pub(super) type Gate = ControlFlow<Task<Message>, Message>;
 
 impl App {
     pub(super) fn gate(&mut self, message: Message) -> Gate {
+        // A stale Properties action cannot commit the current inline text draft.
+        if let Message::IrFigure(
+            super::ir_figure::Action::Apply(target) | super::ir_figure::Action::Edit(target, _),
+        ) = &message
+            && self.current_ir_figure(*target).is_none()
+        {
+            return Break(Task::none());
+        }
         let message = self.early_results_gate(message)?;
         let message = self.exit_gate(message)?;
         #[cfg(any(windows, target_os = "linux"))]
         let message = self.desktop_opening_gate(message)?;
         let message = self.background_results_gate(message)?;
+        if let Message::Xtb(action @ super::xtb::Action::Cancel) = message {
+            return Break(self.xtb_action(action));
+        }
+        // The import sheet sits above every modal tool; it only opens a tab.
+        if let Message::FramesImport(action) = message {
+            return Break(self.frames_import_action(action));
+        }
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);
         }
         let message = self.file_prepared_gate(message)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let message = self.gif_export_gate(message)?;
         if let Some(task) = self.cycle_proposal_gate(&message) {
             return Break(task);
         }
@@ -83,6 +100,10 @@ impl App {
     }
 
     fn early_results_gate(&mut self, message: Message) -> Gate {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Message::GifExport(action @ super::gif_export::Action::Finished(..)) = message {
+            return Break(self.gif_export_action(action));
+        }
         if let Message::Stereo(action @ super::stereo::Action::Pulse) = message {
             self.stereo_action(action);
             return Break(Task::none());
@@ -149,6 +170,14 @@ impl App {
     fn background_results_gate(&mut self, message: Message) -> Gate {
         if let Message::Mapping(action @ super::reaction_mapping::Action::Ready(..)) = message {
             return Break(self.mapping_action(action));
+        }
+        if let Message::Xtb(
+            action @ super::xtb::Action::Ts(super::xtb::ts::Action::ReviewSheet(
+                super::xtb::ts::review::Action::Ready(..),
+            )),
+        ) = message
+        {
+            return Break(self.xtb_action(action));
         }
         if let Message::LabelsReady(key, result) = message {
             self.labels_ready(key, result);
@@ -273,8 +302,7 @@ impl App {
             return Break(self.context_action(action));
         }
         if self.context_menu.is_some() && matches!(message, Message::Escape) {
-            self.context_menu = None;
-            return Break(Task::none());
+            return Break(self.context_action(super::context_menu::Action::Close));
         }
         if self.templates.add_menu_open && matches!(message, Message::Escape) {
             self.templates.add_menu_open = false;
@@ -329,7 +357,8 @@ impl App {
                 | Message::Updates(_)
                 | Message::Imports(import::Action::Loaded(..))
                 | Message::Naming(super::naming::Action::CaptionNamed(..))
-        ) {
+        ) && !super::xtb::is_progress(message)
+        {
             self.context_menu = None;
             self.tab.inspector_ui.close_menu();
             if !matches!(
@@ -406,6 +435,11 @@ impl App {
                 Task::none()
             } else if self.tab.engine_job.is_some() {
                 self.cancel_engine_job();
+                Task::none()
+            } else if self.xtb_running() {
+                self.xtb_cancel()
+            } else if self.xtb_end_preview() {
+                self.status = "Showing the xTB result geometry".into();
                 Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()

@@ -287,7 +287,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                             .iter()
                             .chain(g.panel_parts(&text_style).iter())
                             .any(|part| {
-                                if g.kind == crate::graphics::GraphicKind::Picture {
+                                if g.kind.frame_hit() {
                                     clip::path_hit(
                                         frame,
                                         &part.commands,

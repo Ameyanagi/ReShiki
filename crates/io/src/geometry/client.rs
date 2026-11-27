@@ -1,8 +1,13 @@
 //! One immutable native request per disposable process. Drop requests child killing;
 //! Tokio does not await termination when the request future is dropped.
-use super::{Conformer, Error, ForceField, Optimized, Pin, Point3, Prepared, wire};
+use super::{
+    Conformer, Ensemble, EnsembleConformer, Error, ForceField, GENERATION_SEED_MAX,
+    MAX_CONFORMER_STARTS, Optimized, Pin, Point3, Prepared, Starts, wire,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Stdio;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant as BatchInstant;
 use std::{path::PathBuf, time::Duration};
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::{
@@ -10,6 +15,8 @@ use tokio::{
     process::Command,
     time::Instant,
 };
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant as BatchInstant;
 
 #[cfg(not(target_arch = "wasm32"))]
 const MAX_STDERR_BYTES: usize = 64 * 1024;
@@ -113,9 +120,119 @@ impl Client {
             prepared.generation_request(field, seed)?,
             prepared.ids().len(),
             None,
+            None,
         )
         .await
     }
+    /// Return every valid conformer from one fresh, seeded embedding batch.
+    pub async fn ensemble(
+        &self,
+        prepared: &Prepared,
+        field: ForceField,
+        seed: i32,
+        count: u32,
+        mode: Ensemble,
+    ) -> Result<Optimized, Error> {
+        self.execute(
+            prepared.ensemble_request(field, seed, count, mode)?,
+            prepared.ids().len(),
+            None,
+            None,
+        )
+        .await
+    }
+
+    /// Sample sequential seeded batches up to the caller's deadline. Any error
+    /// after a successful batch returns the conformers already collected, with
+    /// the reason in [`Starts::stopped`]. First-batch errors propagate.
+    /// In a browser, the deadline is checked between in-process batches.
+    pub async fn conformer_starts(
+        &self,
+        prepared: &Prepared,
+        field: ForceField,
+        starts: u32,
+        base_seed: i32,
+        mode: Ensemble,
+        deadline: BatchInstant,
+    ) -> Result<Starts, Error> {
+        self.conformer_starts_with(prepared, field, starts, base_seed, mode, deadline, |_| {})
+            .await
+    }
+
+    /// Like [`Self::conformer_starts`], with the cumulative count of valid
+    /// conformers reported after each accepted batch.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn conformer_starts_with(
+        &self,
+        prepared: &Prepared,
+        field: ForceField,
+        starts: u32,
+        base_seed: i32,
+        mode: Ensemble,
+        deadline: BatchInstant,
+        mut progress: impl FnMut(usize),
+    ) -> Result<Starts, Error> {
+        if !(1..=MAX_CONFORMER_STARTS).contains(&starts) {
+            return Err(Error::Invalid(format!(
+                "Conformer search needs 1–{MAX_CONFORMER_STARTS} starts"
+            )));
+        }
+        let originals = prepared.ids().len();
+        let batch_size = reshiki_geometry::MAX_CONFORMERS
+            .min((reshiki_geometry::ENSEMBLE_ATOM_BUDGET / originals) as u32);
+        // Validate the caller's base seed using a one-member template before
+        // assigning the actual batch sizes and wrapped seeds below.
+        let mut operation = prepared.ensemble_request(field, base_seed, 1, mode)?;
+        let seed_range =
+            i64::from(GENERATION_SEED_MAX) - i64::from(reshiki_geometry::MAX_CONFORMERS) + 1;
+        let mut remaining = starts;
+        let mut result = Starts {
+            conformers: Vec::new(),
+            field,
+            batches: 0,
+            stopped: None,
+        };
+        let mut hydrogen_parents = None;
+        while remaining > 0 {
+            if BatchInstant::now() >= deadline {
+                result.stopped = Some("Conformer search deadline reached".into());
+                break;
+            }
+            operation.conformers = batch_size.min(remaining);
+            operation.seed = (i64::from(base_seed) + i64::from(result.batches) * 7919)
+                .rem_euclid(seed_range) as i32;
+            let batch = match self
+                .execute(operation.clone(), originals, None, Some(deadline))
+                .await
+            {
+                Ok(batch) => batch,
+                Err(error) if result.batches > 0 => {
+                    result.stopped = Some(
+                        if matches!(error, Error::Timeout) && BatchInstant::now() >= deadline {
+                            "Conformer search deadline reached".into()
+                        } else {
+                            error.to_string()
+                        },
+                    );
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
+            let parents = &batch.conformer.hydrogen_parents;
+            if hydrogen_parents.get_or_insert_with(|| parents.clone()) != parents {
+                result.stopped =
+                    Some("Temporary hydrogen identities changed between batches".into());
+                break;
+            }
+            result.field = batch.force_field;
+            result.conformers.extend(batch.ensemble);
+            result.batches += 1;
+            remaining -= operation.conformers;
+            progress(result.conformers.len());
+        }
+        Ok(result)
+    }
+
     pub async fn relax(
         &self,
         prepared: &Prepared,
@@ -134,6 +251,7 @@ impl Client {
             )?,
             prepared.ids().len(),
             Some(conformer),
+            None,
         )
         .await
     }
@@ -156,6 +274,7 @@ impl Client {
             )?,
             prepared.ids().len(),
             Some(conformer),
+            None,
         )
         .await
     }
@@ -164,6 +283,7 @@ impl Client {
         operation: reshiki_geometry::Request,
         originals: usize,
         previous: Option<&Conformer>,
+        overall_deadline: Option<BatchInstant>,
     ) -> Result<Optimized, Error> {
         self.limits.validate()?;
         let capacity = self.limits.capacity();
@@ -175,6 +295,9 @@ impl Client {
         let generating = operation.operation == reshiki_geometry::Operation::Generate;
         let iterations = operation.max_iterations;
         let evaluating = matches!(operation.operation, reshiki_geometry::Operation::Evaluate);
+        let ensemble_limit = operation
+            .ensemble
+            .map_or(0, |_| operation.conformers as usize);
         let fixed = operation
             .fixed_atoms
             .iter()
@@ -215,7 +338,10 @@ impl Client {
                     "Insufficient available memory for this geometry budget".into(),
                 ));
             }
-            let deadline = Instant::now() + self.limits.timeout;
+            let worker_deadline = Instant::now() + self.limits.timeout;
+            let deadline = overall_deadline.map_or(worker_deadline, |overall| {
+                worker_deadline.min(Instant::from_std(overall))
+            });
             let reservation =
                 reserve_until(deadline, || budget.try_reserve(reserved_bytes)).await?;
             (reservation, exchange(executable, &request, deadline).await?)
@@ -223,7 +349,12 @@ impl Client {
         // The browser has no worker processes, so the request is solved in-process
         // through the same framing; the timeout and heap budget do not apply.
         #[cfg(target_arch = "wasm32")]
-        let bytes = super::worker::respond(&request).map_err(Error::Protocol)?;
+        let bytes = {
+            if overall_deadline.is_some_and(|deadline| BatchInstant::now() >= deadline) {
+                return Err(Error::Timeout);
+            }
+            super::worker::respond(&request).map_err(Error::Protocol)?
+        };
         let response: wire::Response =
             wire::decode(&bytes, wire::MAX_RESPONSE_BYTES).map_err(Error::Protocol)?;
         if response.version != reshiki_geometry::RDKIT_VERSION {
@@ -245,21 +376,13 @@ impl Client {
                 "Invalid force field, energy or diagnostics in response".into(),
             ));
         }
-        let conformer = Conformer {
-            positions: response
-                .coordinates
-                .iter()
-                .map(|&[x, y, z]| Point3 { x, y, z })
-                .collect(),
-            original_atom_count: response.original_count,
-            hydrogen_parents: response.hydrogen_parents,
-        };
-        conformer.validate(originals)?;
-        if conformer.positions.len() > capacity.coordinates {
-            return Err(Error::Coordinates(
-                "Conformer exceeds its machine-budget coordinate capacity",
-            ));
-        }
+        let conformer = checked_conformer(
+            response.coordinates,
+            response.original_count,
+            response.hydrogen_parents,
+            originals,
+            capacity.coordinates,
+        )?;
         for (index, [x, y, z]) in fixed {
             let actual = conformer
                 .positions
@@ -300,8 +423,38 @@ impl Client {
         }) {
             return Err(Error::Protocol("Invalid analytic gradient".into()));
         }
+        if response.ensemble.len() > ensemble_limit {
+            return Err(Error::Protocol(
+                "Response contains more ensemble members than requested".into(),
+            ));
+        }
+        if ensemble_limit > 0 && response.ensemble.is_empty() {
+            return Err(Error::Protocol(
+                "Response omitted the requested ensemble".into(),
+            ));
+        }
+        let mut ensemble = Vec::with_capacity(response.ensemble.len());
+        for member in response.ensemble {
+            if !member.energy.is_finite() {
+                return Err(Error::Protocol("Invalid ensemble member energy".into()));
+            }
+            let conformer = checked_conformer(
+                member.coordinates,
+                conformer.original_atom_count,
+                conformer.hydrogen_parents.clone(),
+                originals,
+                capacity.coordinates,
+            )
+            .map_err(|error| Error::Protocol(format!("Invalid ensemble member: {error}")))?;
+            ensemble.push(EnsembleConformer {
+                conformer,
+                energy: member.energy,
+                converged: member.converged,
+            });
+        }
         Ok(Optimized {
             conformer,
+            ensemble,
             initial_energy: response.initial_energy,
             energy: response.energy,
             gradient,
@@ -312,6 +465,30 @@ impl Client {
             approximations: response.approximations,
         })
     }
+}
+
+fn checked_conformer(
+    coordinates: Vec<[f64; 3]>,
+    original_atom_count: usize,
+    hydrogen_parents: Vec<usize>,
+    originals: usize,
+    coordinate_capacity: usize,
+) -> Result<Conformer, Error> {
+    let conformer = Conformer {
+        positions: coordinates
+            .into_iter()
+            .map(|[x, y, z]| Point3 { x, y, z })
+            .collect(),
+        original_atom_count,
+        hydrogen_parents,
+    };
+    conformer.validate(originals)?;
+    if conformer.positions.len() > coordinate_capacity {
+        return Err(Error::Coordinates(
+            "Conformer exceeds its machine-budget coordinate capacity",
+        ));
+    }
+    Ok(conformer)
 }
 
 // Return ownership to execute so admission remains charged through response

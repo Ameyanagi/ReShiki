@@ -306,6 +306,49 @@ impl App {
                 )
                 .padding([6, 6])
             };
+        let mut line = row![
+            text("Line (pt)").size(11),
+            reshiki::accessibility::text_input(
+                "graphic-line-width",
+                "Graphic line width (pt)",
+                "0.6",
+                &self.tab.graphic_width_input,
+            )
+            .style(crate::appearance::input_style)
+            .on_input(|width| Message::Graphics(Action::Width(width)))
+            .on_submit(Message::Graphics(Action::ApplyWidth))
+            .size(12)
+            .padding(5)
+            .width(48),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center);
+        let pattern = selected
+            .iter()
+            .find(|g| g.kind != GraphicKind::MoDiagram)
+            .map(|g| (g.kind, g.style.pattern))
+            .or_else(|| selected.is_empty().then_some((kind, style.pattern)));
+        if let Some((kind, pattern)) = pattern
+            && kind != GraphicKind::MoDiagram
+        {
+            line = line.push(
+                crate::appearance::pick_list(
+                    // Symbols and orbitals draw no waves.
+                    if matches!(
+                        kind,
+                        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+                    ) {
+                        LinePattern::PLAIN.as_slice()
+                    } else {
+                        LinePattern::ALL.as_slice()
+                    },
+                    Some(pattern),
+                    |p| Message::Graphics(Action::Style(GraphicChange::Pattern(p))),
+                )
+                .text_size(12)
+                .padding(5),
+            );
+        }
         let mut panel = column![
             section(if selected.is_empty() {
                 "Graphic defaults"
@@ -322,38 +365,7 @@ impl App {
                 kind.to_string()
             })
             .size(14),
-            row![
-                text("Line (pt)").size(11),
-                reshiki::accessibility::text_input(
-                    "graphic-line-width",
-                    "Graphic line width (pt)",
-                    "0.6",
-                    &self.tab.graphic_width_input,
-                )
-                .style(crate::appearance::input_style)
-                .on_input(|width| Message::Graphics(Action::Width(width)))
-                .on_submit(Message::Graphics(Action::ApplyWidth))
-                .size(12)
-                .padding(5)
-                .width(48),
-                crate::appearance::pick_list(
-                    // Symbols and orbitals draw no waves.
-                    if matches!(
-                        kind,
-                        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
-                    ) {
-                        LinePattern::PLAIN.as_slice()
-                    } else {
-                        LinePattern::ALL.as_slice()
-                    },
-                    Some(self.tab.graphic_style.pattern),
-                    |p| Message::Graphics(Action::Style(GraphicChange::Pattern(p)))
-                )
-                .text_size(12)
-                .padding(5)
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center),
+            line,
             text("Stroke color").size(11).style(muted_text),
             swatches(
                 Row::Strong,
@@ -713,6 +725,7 @@ impl App {
         self.sync_pictures();
         self.sync_arc();
         self.sync_tlc();
+        self.sync_ir_figure();
         // Read generic inputs from the first graphic those inputs can edit.
         // Keep dedicated selection synchronization when no ordinary graphic is selected.
         let style_source = self.selected_styled_graphics().next().map(|g| g.id);
@@ -815,6 +828,9 @@ impl App {
             .selected_graphics_mut()
             .filter(|g| g.picture.is_none() && g.table.is_none() && g.tlc.is_none())
         {
+            if matches!(change, GraphicChange::Pattern(_)) && g.kind == GraphicKind::MoDiagram {
+                continue;
+            }
             // Symbols and orbitals draw no waves.
             if matches!(
                 change,

@@ -31,6 +31,72 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
 }
 
 #[test]
+fn reaction_calculate_command_uses_the_clicked_arrow_and_respects_xtb_availability() {
+    use crate::app::xtb::{self, ts};
+    use reshiki::purpose::Purpose;
+
+    let (mut app, _) = App::new();
+    app.tab.doc = Default::default();
+    app.tab.busy = false;
+    let arrows = [0., 100.].map(|y| {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
+            id,
+            World::new(0., y),
+            World::new(100., y),
+            Default::default(),
+            Default::default(),
+        ));
+        id
+    });
+    app.edit(Edit::ContextMenu {
+        at: Default::default(),
+        position: Point::new(30., 40.),
+        selected: arrows.into(),
+        hit: vec![arrows[1]],
+    });
+    let commands: Vec<_> = app
+        .context_entries(Page::Main)
+        .into_iter()
+        .filter_map(|entry| match entry {
+            Entry::Item {
+                label: "Calculate (xTB)",
+                action: Action::Run(message),
+                enabled,
+                ..
+            } => Some((message, enabled)),
+            _ => None,
+        })
+        .collect();
+    if xtb::available() {
+        assert_eq!(commands.len(), 1);
+        let (message, enabled) = &commands[0];
+        assert!(*enabled);
+        assert!(matches!(
+            message.as_ref(),
+            Message::Xtb(xtb::Action::Ts(ts::Action::Calculate(id))) if *id == arrows[1]
+        ));
+        assert_eq!(
+            crate::app::shortcuts::label(message),
+            Some(xtb::rerun_keys()),
+        );
+    } else {
+        assert!(
+            commands.is_empty(),
+            "builds without xTB hide reaction calculation"
+        );
+    }
+    app.tab.busy = true;
+    assert_eq!(
+        enabled(&app, Page::Main, "Calculate (xTB)"),
+        xtb::available().then_some(false)
+    );
+    app.tab.busy = false;
+    app.tab.doc.arrows[1].purpose = Purpose::Illustration;
+    assert!(!labels(&app, Page::Main).contains(&"Calculate (xTB)"));
+}
+
+#[test]
 fn defining_equipment_is_offered_for_supported_groups_with_the_shared_action() {
     use reshiki::graphics::{Graphic, GraphicKind};
 
@@ -357,6 +423,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Join selected atoms or bonds",
             "Merge selected atoms",
             "Show as",
+            "Calculate (xTB)",
             "Arrange & transform",
             "Add callout",
             "—",
@@ -374,6 +441,8 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
         .into_iter()
         // Copy image on needs a native clipboard, as Copy image does.
         .filter(|label| *label != "Copy image on" || reshiki::clipboard::available())
+        // Calculate needs a build with xTB, as Run does.
+        .filter(|label| *label != "Calculate (xTB)" || super::super::xtb::available())
         .collect::<Vec<_>>()
     );
     // Join and Merge both stay, unavailable below their minimum selection.
@@ -1191,19 +1260,25 @@ fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), Str
         ]
     );
     assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
+    let model = if super::super::xtb::available() {
+        vec![
+            "Optimize with xTB (quantum, GFN2)",
+            "Opt + freq (xTB)",
+            "Force-field 3D model (MMFF94s)…",
+            "More xTB settings…",
+        ]
+    } else {
+        vec!["3D optimize…"]
+    };
+    let folded = |labels: &[&'static str]| -> Vec<&'static str> { [labels, &model].concat() };
     assert_eq!(
         labels(&app, Page::More(2)),
-        ["Group", "3D optimize…"],
+        folded(&["Group"]),
         "Default keyboard drawing folds the global commands first"
     );
     assert_eq!(
         labels(&app, Page::More(4)),
-        [
-            "Move & attach…",
-            "Coordinate in place…",
-            "Group",
-            "3D optimize…"
-        ],
+        folded(&["Move & attach…", "Coordinate in place…", "Group",]),
         "⋯ keeps the folded commands in row order"
     );
     let _ = app.update(Message::KeyboardDrawing(
@@ -1211,7 +1286,7 @@ fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), Str
     ));
     assert_eq!(
         labels(&app, Page::More(2)),
-        ["Keyboard drawing", "3D optimize…"],
+        folded(&["Keyboard drawing"]),
         "⋯ lists the folded commands in row order"
     );
     let _ = app.update(Message::ContextMenu(Action::Open(Page::Arrange, 300.)));

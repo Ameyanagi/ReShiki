@@ -20,10 +20,16 @@ enum Completion {
     Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
+    /// Xtb(Event | Palette(Exported)): a calculation's progress and finish,
+    /// and the results table's export.
+    Xtb,
     /// Exported.
     Export,
     /// FigureExported.
     FigureExport,
+    /// GifExport(Picked | Finished), handled by the export dialog.
+    #[cfg(not(target_arch = "wasm32"))]
+    GifExport,
     /// Printing(Prepared | Finished).
     Printing,
     /// DrawingStyle(Loaded | Saved).
@@ -94,6 +100,7 @@ impl Completion {
             | Self::Optimization
             | Self::Models3d
             | Self::Nmr
+            | Self::Xtb
             | Self::Export
             | Self::FigureExport
             | Self::Printing
@@ -121,6 +128,8 @@ impl Completion {
             | Self::Accessibility
             | Self::Recovery
             | Self::PngPreview => Owner::App,
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::GifExport => Owner::App,
             #[cfg(any(windows, target_os = "linux"))]
             Self::Desktop => Owner::App,
             #[cfg(target_os = "macos")]
@@ -164,6 +173,7 @@ fn admission(completion: Completion) -> Admission {
         Completion::Engine
         | Completion::Models3d
         | Completion::Nmr
+        | Completion::Xtb
         | Completion::Export
         | Completion::FigureExport
         | Completion::Naming
@@ -232,6 +242,8 @@ fn admission(completion: Completion) -> Admission {
         | Completion::Accessibility
         | Completion::Recovery
         | Completion::PngPreview => NOWHERE,
+        #[cfg(not(target_arch = "wasm32"))]
+        Completion::GifExport => NOWHERE,
         #[cfg(any(windows, target_os = "linux"))]
         Completion::Desktop => NOWHERE,
         #[cfg(target_os = "macos")]
@@ -289,6 +301,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Query(..)
                 | Action::NewCanvas(..)
                 | Action::DrawingUnit(..)
+                | Action::EnergyUnit(..)
                 | Action::CopyBackground(..)
                 | Action::ExportBackground(..)
                 | Action::Custom(..)
@@ -701,6 +714,7 @@ fn completion(message: &Message) -> Option<Completion> {
         }
         Message::CopyAsPrepared(..)
         | Message::CopyAsWritten(..)
+        | Message::IrFigure(super::ir_figure::Action::CaptionCopied(..))
         | Message::ClipboardWritten { .. }
         | Message::ClipboardRead { .. } => Some(Completion::Clipboard),
         Message::Pasted(..) => Some(Completion::Pasted),
@@ -727,12 +741,87 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         Message::Saved(..) => Some(Completion::Save),
-        Message::Exported(..) => Some(Completion::Export),
+        Message::Exported(..) | Message::QcExport(super::qc_export::Action::Saved(..)) => {
+            Some(Completion::Export)
+        }
+        Message::QcExport(_) | Message::FramesImport(_) => None,
+        #[cfg(not(target_arch = "wasm32"))]
+        Message::GifExport(action) => {
+            use super::gif_export::Action;
+            match action {
+                Action::Picked(..) | Action::Finished(..) => Some(Completion::GifExport),
+                Action::OpenIrc
+                | Action::OpenMode
+                | Action::Size(_)
+                | Action::Transparent(_)
+                | Action::Plot(_)
+                | Action::Save
+                | Action::Progress
+                | Action::Cancel => None,
+            }
+        }
+        Message::Xtb(action) => {
+            use super::xtb::Action;
+            match action {
+                #[cfg(not(target_arch = "wasm32"))]
+                Action::Event(..) | Action::Search(..) => Some(Completion::Xtb),
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                Action::TsEvent(..) => Some(Completion::Xtb),
+                Action::Ts(super::xtb::ts::Action::ReviewSheet(
+                    super::xtb::ts::review::Action::Ready(..),
+                )) => Some(Completion::Mapping),
+                Action::Page(..)
+                | Action::Task(..)
+                | Action::Charge(..)
+                | Action::Unpaired(..)
+                | Action::Solvent(..)
+                | Action::HoldFixed(..)
+                | Action::Tight(..)
+                | Action::Threads(..)
+                | Action::Advanced
+                | Action::Method(..)
+                | Action::Accuracy(..)
+                | Action::Temperature(..)
+                | Action::Iterations(..)
+                | Action::Xtb68(..)
+                | Action::Run
+                | Action::Entry(..)
+                | Action::Retry
+                | Action::RunAgain
+                | Action::ResetRetry
+                | Action::CopyDetails
+                | Action::Cancel
+                | Action::ApplyAnyway
+                | Action::Discard => None,
+                Action::Palette(
+                    super::xtb::palette::Action::Exported(..)
+                    | super::xtb::palette::Action::IrcExported(..)
+                    | super::xtb::palette::Action::IrExported(..),
+                ) => Some(Completion::Xtb),
+                Action::Conformers(..) | Action::Palette(..) | Action::Ts(..) => None,
+                Action::Vibrations(super::xtb::VibrationsAction::CaptionCopied(..)) => {
+                    Some(Completion::Clipboard)
+                }
+                Action::Orbitals(
+                    super::xtb::orbitals::Action::Computed(..)
+                    | super::xtb::orbitals::Action::Built(..),
+                ) => Some(Completion::Xtb),
+                Action::Orbitals(..) => None,
+                #[cfg(not(target_arch = "wasm32"))]
+                Action::Vibrations(super::xtb::VibrationsAction::Recomputed(..)) => {
+                    Some(Completion::Xtb)
+                }
+                Action::Vibrations(..) => None,
+            }
+        }
         Message::FigureExported(..) => Some(Completion::FigureExport),
         Message::ExportReady(export) | Message::SaveExport(_, export) => Some(match export.kind {
             super::figure_export::Kind::Figure => Completion::FigureExport,
             super::figure_export::Kind::Structure => Completion::Export,
             super::figure_export::Kind::Nmr => Completion::Nmr,
+            super::figure_export::Kind::Xtb
+            | super::figure_export::Kind::Irc
+            | super::figure_export::Kind::Ir => Completion::Xtb,
         }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,
@@ -744,6 +833,7 @@ fn completion(message: &Message) -> Option<Completion> {
         // Controls, view/window lifecycle and sub-enums without completion variants.
         Message::ContextMenu(..)
         | Message::ModifiersChanged(..)
+        | Message::WindowSize(..)
         | Message::Star(..)
         | Message::CopyFrame(..)
         | Message::StyleMenu(..)
@@ -783,6 +873,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Arc(..)
         | Message::Graphics(..)
         | Message::Tlc(..)
+        | Message::IrFigure(..)
         | Message::Figure(..)
         | Message::Cycle(..)
         | Message::Table(..)
@@ -792,6 +883,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::AtomSinglet(..)
         | Message::ToggleInspector
         | Message::Inspector(..)
+        | Message::ReactionBondHover(..)
         | Message::InsertInput
         | Message::ToggleHelp
         | Message::Help(..)

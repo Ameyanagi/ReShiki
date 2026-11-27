@@ -157,6 +157,11 @@ pub enum Primitive {
         spread: f32,
         blur: f32,
     },
+    /// A 3D model's orbital surface as seen in its view, composited by
+    /// depth group from deepest to nearest in exact colours.
+    Surface {
+        groups: Vec<SurfaceGroup>,
+    },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {
         lo: Point,
@@ -208,6 +213,28 @@ pub struct Outline {
     pub color: [u8; 3],
     pub alpha: f32,
     pub width: f32,
+}
+/// A surface depth layer, composited as a whole at `alpha`. Opaque fills
+/// and their clipped shading tones precede mesh lines and outline runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceGroup {
+    pub alpha: f32,
+    pub fills: Vec<SurfaceFill>,
+    pub strokes: Vec<SurfaceStroke>,
+}
+/// A surface phase's nonzero-filled region and nested shading tones. Each
+/// tone is clipped to `region`, so its fitted curve cannot spill past it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceFill {
+    pub region: Vec<crate::graphics::PathCommand>,
+    pub color: [u8; 3],
+    pub tones: Vec<(Vec<crate::graphics::PathCommand>, [u8; 3])>,
+}
+/// Surface mesh lines or silhouette runs with an exact stroke paint.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceStroke {
+    pub paths: Vec<crate::graphics::PathCommand>,
+    pub outline: Outline,
 }
 fn visible(a: &Atom, doc: &Document) -> bool {
     crate::atom_labels::visible(a, doc)
@@ -1497,6 +1524,14 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
     selections_bounds_in_axes(doc, selections, None)
 }
 
+/// Visible selected ink, with 3D model frames measured separately by the caller.
+pub(crate) fn selections_ink_bounds(
+    doc: &Document,
+    selections: &[Vec<u64>],
+) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_with_indicators(doc, selections, None, true, false)
+}
+
 /// The live drawing's extents in axes turned clockwise about `pivot`.
 /// Upright text boxes contribute all four corners; the caller rotates the
 /// resulting display frame back, without changing its gesture or document.
@@ -1516,14 +1551,14 @@ pub(crate) fn selections_bounds_in_axes(
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,
 ) -> Vec<Option<(Point, Point)>> {
-    selections_bounds_with_indicators(doc, selections, axes, true)
+    selections_bounds_with_indicators(doc, selections, axes, true, true)
 }
 
 pub(crate) fn primary_selections_bounds(
     doc: &Document,
     selections: &[Vec<u64>],
 ) -> Vec<Option<(Point, Point)>> {
-    selections_bounds_with_indicators(doc, selections, None, false)
+    selections_bounds_with_indicators(doc, selections, None, false, true)
 }
 
 fn selections_bounds_with_indicators(
@@ -1531,6 +1566,7 @@ fn selections_bounds_with_indicators(
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,
     indicators: bool,
+    model_frames: bool,
 ) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
     let drawn = doc.abbreviation_render_copy();
@@ -1597,8 +1633,14 @@ fn selections_bounds_with_indicators(
     }
     // Only selected objects are measured, so one small selection stays cheap.
     for g in doc.graphics.iter().filter(|g| owners.contains_key(&g.id)) {
-        let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
-        grow(g.id, &mut [lo, hi].into_iter());
+        if g.kind == crate::graphics::GraphicKind::MoDiagram {
+            for corner in g.frame_corners() {
+                grow(g.id, &mut std::iter::once(corner));
+            }
+        } else {
+            let (lo, hi) = g.bounds_with_text_style(&doc.drawing_style.text_style());
+            grow(g.id, &mut [lo, hi].into_iter());
+        }
     }
     // A moved repeat label counts with its bracket. Automatic labels keep the
     // measurement older drawings were laid out with.
@@ -1617,7 +1659,7 @@ fn selections_bounds_with_indicators(
     for model in doc
         .models
         .iter()
-        .filter(|m| m.display != crate::models3d::Display::TwoD)
+        .filter(|m| model_frames && m.display != crate::models3d::Display::TwoD)
     {
         if let Some(id) = model
             .linked_ids(doc)
@@ -1626,6 +1668,14 @@ fn selections_bounds_with_indicators(
             && let Some(corners) = crate::models3d::frame_corners(doc, model)
         {
             grow(id, &mut corners.into_iter());
+            // The model's panels and their captions count with it.
+            for (small, caption) in crate::models3d::panels(doc, model) {
+                if let Some(corners) = crate::models3d::frame_corners(doc, &small) {
+                    grow(id, &mut corners.into_iter());
+                }
+                let (lo, hi) = self::bounds(std::slice::from_ref(&caption));
+                grow(id, &mut [lo, hi].into_iter());
+            }
         }
     }
     // A crystal drawn in 2D and wholly in one selection holds its cell box
@@ -2373,10 +2423,10 @@ pub fn vector_primitives(doc: &Document) -> Vec<Primitive> {
     let opacity = crate::rear_opacity::Paint::new(&flat);
     primitives_with_tables(
         doc,
+        doc,
         &flat,
         &opacity,
         &Default::default(),
-        false,
         Resolve::Scene,
         true,
     )
@@ -2395,16 +2445,17 @@ pub fn primitives_with_opacity(
     }
     primitives_with_tables(
         raw,
+        raw,
         flat,
         opacity,
         &Default::default(),
-        false,
         Resolve::Scene,
         false,
     )
 }
 
 fn primitives_in_cell(
+    source: &Document,
     doc: &Document,
     backdrop: crate::canvas_theme::FillBackdrop<'_>,
     lines: bool,
@@ -2412,25 +2463,26 @@ fn primitives_in_cell(
     let flat = crate::models3d::drawn(doc);
     let opacity = crate::rear_opacity::Paint::new(&flat);
     primitives_with_tables(
+        source,
         doc,
         &flat,
         &opacity,
         &Default::default(),
-        true,
         Resolve::SceneOn(backdrop),
         lines,
     )
 }
 
 fn primitives_with_tables(
+    source: &Document,
     raw: &Document,
     flat: &Document,
     opacity: &crate::rear_opacity::Paint,
     tables: &std::collections::HashMap<u64, Vec<Primitive>>,
-    cell_text: bool,
     resolve: Resolve<'_>,
     lines: bool,
 ) -> Vec<Primitive> {
+    let cell_text = matches!(&resolve, Resolve::SceneOn(_));
     let inputs = BondInputs::prepare(flat, opacity, resolve);
     let doc = inputs.doc();
     let style = &doc.drawing_style;
@@ -2456,7 +2508,7 @@ fn primitives_with_tables(
             halos.atoms.push((id, None));
         }
     }
-    push_underlays(&mut out, doc, &graphics, shaded, opacity, tables);
+    push_underlays(&mut out, doc, source, &graphics, shaded, opacity, tables);
     out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
@@ -2506,7 +2558,9 @@ fn primitives_with_tables(
         })
         .collect();
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
-        out.extend(table_graphic_primitive(graphic, doc, shaded, tables));
+        out.extend(table_graphic_primitive(
+            graphic, doc, source, shaded, tables,
+        ));
         if let Some(text) = graphic.text.and_then(|t| held.get(&t)) {
             push_annotation(&mut out, text, cell_text);
         }
@@ -2520,13 +2574,14 @@ fn primitives_with_tables(
 fn table_graphic_primitive(
     g: &&crate::graphics::Graphic,
     doc: &Document,
+    source: &Document,
     shaded: usize,
     tables: &std::collections::HashMap<u64, Vec<Primitive>>,
 ) -> Vec<Primitive> {
     tables
         .get(&g.id)
         .cloned()
-        .unwrap_or_else(|| graphic_primitive(g, doc, shaded))
+        .unwrap_or_else(|| graphic_primitive(g, doc, source, shaded))
 }
 
 /// Orbitals keep complete lobes. The labels they reach are drawn above the
@@ -2616,11 +2671,18 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
 fn graphic_primitive(
     g: &&crate::graphics::Graphic,
     doc: &Document,
+    source: &Document,
     shaded: usize,
 ) -> Vec<Primitive> {
-    if g.kind == crate::graphics::GraphicKind::TlcPlate {
-        let mut out: Vec<_> = g
-            .parts()
+    let diagram = if let Some(mo) = &g.mo {
+        Some(mo.draw(g, &doc.drawing_style, source))
+    } else if g.kind == crate::graphics::GraphicKind::TlcPlate {
+        Some((g.parts(), g.tlc_labels(), vec![]))
+    } else {
+        None
+    };
+    if let Some((parts, labels, pictures)) = diagram {
+        let mut out: Vec<_> = parts
             .into_iter()
             .map(|p| Primitive::Path {
                 commands: p.commands,
@@ -2628,9 +2690,10 @@ fn graphic_primitive(
                 filled: p.filled,
             })
             .collect();
-        for label in g.tlc_labels() {
+        for label in labels {
             push_annotation(&mut out, &label, false);
         }
+        out.extend(pictures);
         return out
             .into_iter()
             .map(|p| see_through(p, g.style.effects.opacity))
@@ -2931,6 +2994,7 @@ fn cycle_primitives(g: &crate::graphics::Graphic, doc: &Document) -> Vec<Primiti
 fn push_underlays(
     out: &mut Vec<Primitive>,
     doc: &Document,
+    source: &Document,
     graphics: &[&crate::graphics::Graphic],
     shaded: usize,
     opacity: &crate::rear_opacity::Paint,
@@ -2940,7 +3004,7 @@ fn push_underlays(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|g| table_graphic_primitive(g, doc, shaded, tables)),
+            .flat_map(|g| table_graphic_primitive(g, doc, source, shaded, tables)),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -3321,7 +3385,7 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document, cell_te
             if let Some(gradient) = &mut p.style.effects.gradient {
                 gradient.from = drawn_paper(doc, a.id);
                 let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
-                out.extend(graphic_primitive(&&shape, doc, 1));
+                out.extend(graphic_primitive(&&shape, doc, doc, 1));
             } else {
                 out.push(Primitive::Path {
                     commands: p.commands,
@@ -4386,6 +4450,28 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 let r = width / 2.;
                 for p in [from, to] {
                     points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
+            Primitive::Surface { groups } => {
+                for group in groups {
+                    for fill in &group.fills {
+                        points.extend(
+                            fill.region
+                                .iter()
+                                .chain(fill.tones.iter().flat_map(|(commands, _)| commands))
+                                .flat_map(crate::graphics::PathCommand::iter_points),
+                        );
+                    }
+                    for stroke in &group.strokes {
+                        let r = stroke.outline.width / 2.;
+                        for p in stroke
+                            .paths
+                            .iter()
+                            .flat_map(crate::graphics::PathCommand::iter_points)
+                        {
+                            points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                        }
+                    }
                 }
             }
             Primitive::Card {

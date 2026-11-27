@@ -3,7 +3,7 @@ use crate::{
     typography::{TextFormat, TextStyle},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct Point {
@@ -345,6 +345,8 @@ pub const CAPTION_PLACES: u32 = 40;
 pub const DRAWING_ELEMENTS: u32 = 40;
 /// Editable circular bends on placed compression tubing.
 pub const TUBE_BENDS: u32 = 41;
+/// Calculation frames and results stored with molecules (xTB).
+pub const CALCULATIONS: u32 = 42;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
@@ -359,7 +361,7 @@ pub const TUBE_BENDS: u32 = 41;
 /// Reference or Illustration molecule or arrow, color by origin settings, figure panels,
 /// lasting layouts, arrow bodies, arcs, callout leaders, condition icons, catalytic
 /// cycles or equipment pieces require version 40. Custom compression-tube
-/// routes require version 41.
+/// routes require version 41. Calculation frames and results require version 42.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 /// Optional per-highlight style overrides belong to version 40's highlight
@@ -402,7 +404,8 @@ pub const TUBE_BENDS: u32 = 41;
 /// | 39 | Names in property captions: a name line and custom names. |
 /// | 40 | Property-caption decimal places and compound-number metadata; drawing styles, object purpose, color by origin, panels and lasting layouts, arrow bodies, callout leaders, condition icons, cycles and equipment. |
 /// | 41 | Custom compression-tube routes with editable circular bends. |
-pub const VERSION: u32 = TUBE_BENDS;
+/// | 42 | Calculation frames and results linked to molecules; orbital surfaces placed on 3D models. |
+pub const VERSION: u32 = CALCULATIONS;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
@@ -528,6 +531,9 @@ pub struct Document {
     /// Which joints of placed equipment pieces are seated in each other.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub seats: Vec<crate::equipment::solve::Seat>,
+    /// Calculation frames and results, linked to molecules by atom ID.
+    #[serde(default, skip_serializing_if = "crate::science::Science::is_empty")]
+    pub science: crate::science::Science,
 }
 /// Every drawing writes the definitions its pieces use, and every drawing read
 /// links its pieces to them, wherever it is written or read: files, the
@@ -593,6 +599,7 @@ impl Default for Document {
             piece_definitions: vec![],
             on_other_canvas: Default::default(),
             seats: vec![],
+            science: Default::default(),
         }
     }
 }
@@ -621,6 +628,7 @@ impl Document {
         doc.migrate();
         crate::purpose::repair(&mut doc);
         crate::models3d::retain_whole(&mut doc);
+        crate::science::prune(&mut doc);
         doc.validate()?;
         Ok(doc)
     }
@@ -670,16 +678,99 @@ impl Document {
     }
     /// A copy marked with its required native version, for files, clipboard
     /// data and recovery drafts, so reading them back never migrates again.
+    /// Calculation results take their saved form here, so every stored
+    /// copy saves only what the file policy keeps.
     pub fn current(&self) -> Self {
-        Self {
+        let mut saved = Self {
             version: self.file_version(),
+            science: self.science.saved_with_pins(&self.orbital_pins()),
             ..self.clone()
+        };
+        for model in &mut saved.models {
+            crate::models3d::refresh_surface_snapshot(self, model);
         }
+        for mo in saved
+            .graphics
+            .iter_mut()
+            .filter_map(|g| g.mo.as_deref_mut())
+        {
+            mo.refresh_snapshots(self);
+        }
+        saved
+    }
+
+    fn orbital_figures(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            Option<&crate::models3d::Model3d>,
+            &crate::models3d::surface::Figure,
+        ),
+    > {
+        self.models
+            .iter()
+            .flat_map(|model| model.figures().map(move |figure| (Some(model), figure)))
+            .chain(
+                self.graphics
+                    .iter()
+                    .filter_map(|g| g.mo.as_deref())
+                    .flat_map(|mo| {
+                        let model = mo.model(self);
+                        mo.pictures.iter().map(move |p| (model, &p.figure))
+                    }),
+            )
+    }
+
+    /// Orbital rows needed by the drawing, grouped by result key.
+    pub fn orbital_pins(&self) -> HashMap<String, Vec<(reshiki_qcdata::Spin, u32)>> {
+        let mut pins: HashMap<_, Vec<_>> = HashMap::new();
+        for (_, figure) in self.orbital_figures() {
+            let orbital = &figure.orbital;
+            pins.entry(orbital.result.clone())
+                .or_default()
+                .push((orbital.spin, orbital.index));
+        }
+        pins
+    }
+
+    /// Orbital pins paired with the stored result each ready figure uses.
+    pub fn orbital_pins_by_result(
+        &self,
+    ) -> impl Iterator<Item = (usize, &crate::models3d::surface::OrbitalRef)> {
+        use crate::models3d::surface::draw::ready_result;
+
+        self.models
+            .iter()
+            .flat_map(move |model| {
+                model.figures().filter_map(move |figure| {
+                    let orbital = &figure.orbital;
+                    let (index, _) = ready_result(self, model, orbital)?;
+                    Some((index, orbital))
+                })
+            })
+            .chain(
+                self.graphics
+                    .iter()
+                    .filter_map(|g| g.mo.as_deref())
+                    .flat_map(move |mo| {
+                        mo.pictures.iter().filter_map(move |picture| {
+                            let model = mo.orbital_model(self, &picture.figure)?;
+                            let orbital = &picture.figure.orbital;
+                            let (index, _) = ready_result(self, &model, orbital)?;
+                            Some((index, orbital))
+                        })
+                    }),
+            )
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
         use crate::graphics::{GraphicKind, LinePattern};
-        if self.graphics.iter().any(|g| {
+        if !self.science.is_empty()
+            || self.orbital_figures().next().is_some()
+            || self.graphics.iter().any(|g| g.mo.is_some())
+        {
+            CALCULATIONS
+        } else if self.graphics.iter().any(|g| {
             g.piece
                 .as_ref()
                 .is_some_and(|piece| piece.tube_route.is_some())
@@ -938,6 +1029,12 @@ impl Document {
         crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
+        for mo in self.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
+            if mo.molecule.is_some_and(|id| ids.contains(&id)) {
+                mo.molecule = None;
+                mo.linked = false;
+            }
+        }
         crate::equipment::solve::prune(self);
         crate::arrow_labels::prune(self);
         crate::shape_text::prune(self);
@@ -1086,9 +1183,11 @@ impl Document {
             piece_definitions,
             on_other_canvas: _,
             seats,
+            science,
         } = self;
         atoms.clear();
         models.clear();
+        *science = Default::default();
         arrow_labels.clear();
         bonds.clear();
         annotations.clear();
@@ -1137,6 +1236,7 @@ impl Document {
             piece_definitions: _,
             on_other_canvas: _,
             seats: _,
+            science: _,
         } = self;
         !atoms.is_empty()
             || !models.is_empty()
@@ -1156,6 +1256,7 @@ impl Document {
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
+        self.science.check_budget()?;
         let pieces = crate::equipment::placed::used(self).len();
         if pieces > crate::equipment::placed::MAX_DEFINITIONS {
             return Err(format!(
@@ -1372,24 +1473,67 @@ struct HistoryFrames {
     frames: VecDeque<HistoryFrame>,
     bytes: usize,
 }
+/// Calculation payloads that history snapshots share by `Arc`: each distinct
+/// payload counts once while any snapshot holds it.
+#[derive(Default)]
+struct SharedPayloads {
+    /// Holders and heap bytes by payload address.
+    held: std::collections::HashMap<usize, (usize, usize)>,
+    bytes: usize,
+    /// Calculation lists and attachments each snapshot owns itself.
+    containers: usize,
+}
+impl SharedPayloads {
+    fn hold(&mut self, doc: &Document) {
+        if !doc.science.is_empty() {
+            self.containers += doc.science.container_bytes();
+        }
+        for (address, bytes) in doc.science.payloads() {
+            let entry = self.held.entry(address).or_insert((0, bytes));
+            if entry.0 == 0 {
+                self.bytes += bytes;
+            }
+            entry.0 += 1;
+        }
+    }
+    fn release(&mut self, doc: &Document) {
+        if !doc.science.is_empty() {
+            self.containers -= doc.science.container_bytes();
+        }
+        for (address, _) in doc.science.payloads() {
+            if let std::collections::hash_map::Entry::Occupied(mut entry) = self.held.entry(address)
+            {
+                entry.get_mut().0 -= 1;
+                if entry.get().0 == 0 {
+                    self.bytes -= entry.remove().1;
+                }
+            }
+        }
+    }
+}
 impl HistoryFrames {
-    fn push_back(&mut self, document: Document) {
+    fn push_back(&mut self, document: Document, shared: &mut SharedPayloads) {
         let bytes = frame_bytes(&document);
+        shared.hold(&document);
         self.bytes += bytes;
         self.frames.push_back(HistoryFrame { document, bytes });
     }
-    fn pop_back(&mut self) -> Option<HistoryFrame> {
+    fn pop_back(&mut self, shared: &mut SharedPayloads) -> Option<HistoryFrame> {
         let frame = self.frames.pop_back()?;
+        shared.release(&frame.document);
         self.bytes -= frame.bytes;
         Some(frame)
     }
-    fn pop_front(&mut self) -> Option<HistoryFrame> {
+    fn pop_front(&mut self, shared: &mut SharedPayloads) -> Option<HistoryFrame> {
         let frame = self.frames.pop_front()?;
+        shared.release(&frame.document);
         self.bytes -= frame.bytes;
         Some(frame)
     }
-    fn clear(&mut self) {
-        self.frames.clear();
+    fn clear(&mut self, shared: &mut SharedPayloads) {
+        for frame in self.frames.drain(..) {
+            shared.release(&frame.document);
+        }
         self.bytes = 0;
     }
     fn len(&self) -> usize {
@@ -1409,6 +1553,7 @@ impl HistoryFrames {
 pub struct History {
     undo: HistoryFrames,
     redo: HistoryFrames,
+    shared: SharedPayloads,
     limit: usize,
     /// Estimated bytes of all frames ([`frame_bytes`]) above which the oldest
     /// undo frames, then the furthest redo frames, are dropped, down to
@@ -1481,6 +1626,41 @@ fn frame_bytes(doc: &Document) -> usize {
         })
         .sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let mos: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.mo.as_deref())
+        .map(|mo| {
+            size_of::<crate::graphics::MoDiagram>()
+                + mo.result.len()
+                + bytes(mo.columns.as_slice())
+                + mo.columns
+                    .iter()
+                    .map(|c| {
+                        c.label.len()
+                            + bytes(c.energies_ev.as_slice())
+                            + bytes(c.occupations.as_slice())
+                    })
+                    .sum::<usize>()
+                + bytes(mo.pictures.as_slice())
+                + mo.pictures
+                    .iter()
+                    .map(|p| figure_bytes(&p.figure))
+                    .sum::<usize>()
+        })
+        .sum();
+    let ir: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.ir.as_deref())
+        .map(|figure| {
+            size_of::<crate::graphics::IrFigure>()
+                + figure.name.len()
+                + figure.method.len()
+                + bytes(&figure.bands[..])
+                + bytes(&figure.hidden_labels[..])
+        })
+        .sum();
     let tables: usize = doc
         .graphics
         .iter()
@@ -1510,6 +1690,8 @@ fn frame_bytes(doc: &Document) -> usize {
                         + bytes(&g.bonds[..])
                         + bytes(&g.sources[..])
                 })
+                + m.panels.iter().map(|p| p.caption.len()).sum::<usize>()
+                + m.figures().map(figure_bytes).sum::<usize>()
         })
         .sum();
     size_of::<Document>()
@@ -1534,10 +1716,21 @@ fn frame_bytes(doc: &Document) -> usize {
         + objects * OWNED
         + text
         + paths
+        + ir
+        + mos
         + tables
         + tlc
         + nodes
         + models
+        + doc.science.container_bytes()
+}
+
+fn figure_bytes(figure: &crate::models3d::surface::Figure) -> usize {
+    figure.orbital.result.len()
+        + figure
+            .snapshot
+            .as_ref()
+            .map_or(0, |s| s.view.len() + s.shapes.len())
 }
 impl History {
     /// Undo steps kept however large the drawing.
@@ -1548,6 +1741,7 @@ impl History {
         Self {
             undo: HistoryFrames::default(),
             redo: HistoryFrames::default(),
+            shared: SharedPayloads::default(),
             limit: limit.max(1),
             max_bytes: usize::MAX,
         }
@@ -1593,13 +1787,14 @@ impl History {
             return false;
         }
         if !continuing || self.undo.is_empty() {
-            self.undo.push_back(before);
+            self.undo.push_back(before, &mut self.shared);
         }
-        self.redo.clear();
+        self.redo.clear(&mut self.shared);
         if self.undo.len() > self.limit {
-            let _ = self.undo.pop_front();
+            let _ = self.undo.pop_front(&mut self.shared);
         }
         self.cap();
+        self.fit_science(after);
         true
     }
     /// Keeps this history within its own byte limit.
@@ -1610,24 +1805,58 @@ impl History {
         }
     }
     /// Estimated bytes of the undo and redo frames, as the byte limit counts
-    /// them.
+    /// them: each frame's own bytes, plus every calculation payload the
+    /// frames share counted once.
     pub fn bytes(&self) -> usize {
-        self.undo.bytes + self.redo.bytes
+        self.undo.bytes + self.redo.bytes + self.shared.bytes
     }
     /// Drops frames until at least `bytes` estimated bytes are released or
     /// `keep` frames remain: the oldest undo steps first, then the redo steps
     /// furthest ahead. Returns the bytes released.
     pub fn release(&mut self, bytes: usize, keep: usize) -> usize {
-        let mut released = 0;
-        while released < bytes && self.frames() > keep {
-            let frame = self.undo.pop_front().or_else(|| self.redo.pop_front());
-            released += frame.as_ref().map_or(0, |frame| frame.bytes);
+        let start = self.bytes();
+        while start - self.bytes() < bytes && self.frames() > keep {
+            let _ = self
+                .undo
+                .pop_front(&mut self.shared)
+                .or_else(|| self.redo.pop_front(&mut self.shared));
         }
-        released
+        start - self.bytes()
+    }
+    /// Calculation heap bytes of `live` and every snapshot together, each
+    /// payload once.
+    pub fn science_bytes(&self, live: &Document) -> usize {
+        self.shared.bytes
+            + self.shared.containers
+            + if live.science.is_empty() {
+                0
+            } else {
+                live.science.container_bytes()
+            }
+            + live
+                .science
+                .payloads()
+                .filter(|(address, _)| !self.shared.held.contains_key(address))
+                .map(|(_, bytes)| bytes)
+                .sum::<usize>()
+    }
+    /// Keep calculation data of `live` and its history within
+    /// [`crate::science::MAX_SCIENCE_BYTES`] after a result is attached:
+    /// the oldest steps go first, below [`History::MIN_STEPS`] if needed.
+    /// False when `live` alone exceeds it.
+    pub fn fit_science(&mut self, live: &Document) -> bool {
+        while self.science_bytes(live) > crate::science::MAX_SCIENCE_BYTES && self.frames() > 0 {
+            let _ = self
+                .undo
+                .pop_front(&mut self.shared)
+                .or_else(|| self.redo.pop_front(&mut self.shared));
+        }
+        self.science_bytes(live) <= crate::science::MAX_SCIENCE_BYTES
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
-        if let Some(prev) = self.undo.pop_back() {
-            self.redo.push_back(std::mem::replace(doc, prev.document));
+        if let Some(prev) = self.undo.pop_back(&mut self.shared) {
+            self.redo
+                .push_back(std::mem::replace(doc, prev.document), &mut self.shared);
             self.cap();
             true
         } else {
@@ -1635,8 +1864,9 @@ impl History {
         }
     }
     pub fn redo(&mut self, doc: &mut Document) -> bool {
-        if let Some(next) = self.redo.pop_back() {
-            self.undo.push_back(std::mem::replace(doc, next.document));
+        if let Some(next) = self.redo.pop_back(&mut self.shared) {
+            self.undo
+                .push_back(std::mem::replace(doc, next.document), &mut self.shared);
             self.cap();
             true
         } else {

@@ -10,6 +10,7 @@ use crate::{
     document::{AtomStereo, Document},
 };
 pub use client::{Client, Limits};
+pub use reshiki_geometry::Ensemble;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 pub use view::{Rotation, ViewFrame};
@@ -17,9 +18,13 @@ pub use view::{Rotation, ViewFrame};
 /// Reproducible conformer sampling for ordinary generation. Regeneration may
 /// supply a different nonnegative seed through [`Client::generate_seeded`].
 pub const DEFAULT_SEED: i32 = 0x52534b;
-/// ETKDG adds 1–8 to the base seed while sampling. Reserve that headroom so
-/// every per-conformer seed remains a nonnegative signed integer.
+/// Ordinary generation needs room for ETKDG to add eight per-conformer
+/// offsets to the base seed.
 pub const GENERATION_SEED_MAX: i32 = i32::MAX - 8;
+/// Maximum number of embeddings requested across one conformer search.
+pub const MAX_CONFORMER_STARTS: u32 = 300;
+// Let MMFF94s finish flexible starts: ritonavir went from 99/100 at 1000 iterations to 100/100 at 2000.
+const ENSEMBLE_ITERATION_LIMIT: u32 = 2000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -147,6 +152,73 @@ impl std::fmt::Display for ForceField {
     }
 }
 
+/// Whether a calculation needs a new model or an Update, and the parameters
+/// that preserve the saved model's reproducible generation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModelGeneration {
+    /// The saved model to replace, or `None` for a molecule without one.
+    pub target: Option<usize>,
+    pub force_field: ForceField,
+    pub seed: i32,
+}
+
+impl Default for ModelGeneration {
+    fn default() -> Self {
+        Self {
+            target: None,
+            force_field: ForceField::Mmff94s,
+            seed: DEFAULT_SEED,
+        }
+    }
+}
+
+impl ModelGeneration {
+    /// Use a current saved model as is; otherwise generate a new model or
+    /// Update the model linked to the molecule's first atom.
+    pub fn for_calculation(source: &Document, atoms: &[u64]) -> Option<Self> {
+        let first = atoms.first();
+        match source
+            .models
+            .iter()
+            .position(|model| first.is_some_and(|id| model.linked_atoms.contains(id)))
+        {
+            Some(index) => Self::for_model(source, index, false),
+            None => Some(Self::default()),
+        }
+    }
+
+    /// Update stale generated geometry with its saved settings. A requested
+    /// fresh regeneration also works for a current model and advances its
+    /// seed, while imported geometry keeps its file-derived lifecycle.
+    pub fn for_model(source: &Document, index: usize, fresh: bool) -> Option<Self> {
+        let model = source.models.get(index)?;
+        if model.is_file_derived() || !fresh && !model.is_stale(source) {
+            return None;
+        }
+        let force_field = match model.force_field {
+            crate::models3d::ForceField::Mmff94 => ForceField::Mmff94,
+            crate::models3d::ForceField::Mmff94s => ForceField::Mmff94s,
+            crate::models3d::ForceField::Uff => ForceField::Uff,
+        };
+        let seed = if model.seed == 0 {
+            DEFAULT_SEED
+        } else {
+            model.seed
+        };
+        // ETKDG samples consecutive seeds; a wide stride avoids overlapping batches.
+        let seed = if fresh {
+            ((i64::from(seed) + 1_000_003) % i64::from(GENERATION_SEED_MAX)) as i32
+        } else {
+            seed
+        };
+        Some(Self {
+            target: Some(index),
+            force_field,
+            seed,
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Conformer {
     /// Physical angstrom XYZ. Original drawing atoms precede temporary H atoms.
@@ -179,8 +251,16 @@ pub struct Pin {
 }
 
 #[derive(Clone, Debug)]
+pub struct EnsembleConformer {
+    pub conformer: Conformer,
+    pub energy: f64,
+    pub converged: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct Optimized {
     pub conformer: Conformer,
+    pub ensemble: Vec<EnsembleConformer>,
     pub initial_energy: f64,
     pub energy: f64,
     pub gradient: Option<Vec<Point3>>,
@@ -200,6 +280,26 @@ pub struct Radical {
     /// Element and 1-based position in the molecule, such as "C1".
     pub label: String,
     pub electrons: u8,
+}
+
+#[derive(Clone, Debug)]
+pub struct Starts {
+    pub conformers: Vec<EnsembleConformer>,
+    /// The field the worker minimized with: the requested one, or UFF when
+    /// the requested field has no parameters for this molecule.
+    pub field: ForceField,
+    /// Completed worker batches.
+    pub batches: u32,
+    /// Why sampling stopped before every requested batch ran: the deadline or a
+    /// later batch's error, with earlier batches kept. `None` when all ran;
+    /// completed sampling can still yield fewer valid conformers than requested.
+    pub stopped: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct StereoPinning {
+    pub pinned: Vec<u64>,
+    pub unpinned: Vec<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -509,6 +609,132 @@ impl Prepared {
     pub fn ids(&self) -> &[u64] {
         &self.ids
     }
+    /// Preserve the model's tetrahedral configuration at centres the drawing
+    /// leaves undefined. Wavy single bonds leave both endpoints undefined.
+    /// The inferred tags use this prepared graph's native neighbour order;
+    /// neither the drawing nor already defined configurations are changed.
+    /// Centres with no readable winding remain undefined. Inversion applies
+    /// only to newly pinned centres. Errors leave the prepared molecule unchanged.
+    pub fn pin_undefined_stereo(
+        &mut self,
+        positions: &HashMap<u64, Point3>,
+        invert: bool,
+    ) -> Result<StereoPinning, Error> {
+        use crate::chemistry::{
+            kekulize::Direction,
+            stereo::{self, SpatialAnnotations, SpatialOptions, perception},
+        };
+
+        let mut inference = self.molecule.state.clone();
+        let wavy: HashSet<_> = inference
+            .graph
+            .bonds
+            .iter()
+            .zip(&inference.directions)
+            .zip(&inference.metadata.bonds)
+            .filter(|((bond, direction), meta)| {
+                bond.order == 1 && (**direction == Direction::Unknown || meta.unknown_stereo)
+            })
+            .flat_map(|((bond, _), _)| [bond.a, bond.b])
+            .collect();
+        for meta in &mut inference.metadata.atoms {
+            meta.map_number = 0;
+            meta.map_present = false;
+        }
+        for properties in &mut inference.properties.atoms {
+            properties.cip_code = None;
+            properties.cip_rank = None;
+            properties.possible = None;
+        }
+        // This graph's bond annotations were already prepared. Retain them
+        // while finding potential centres, including authoritative absence.
+        let possible = perception::perceive_preserving_bonds(
+            &inference,
+            perception::Options {
+                clean: false,
+                force: true,
+                flag_possible: true,
+            },
+            &vec![true; inference.graph.bonds.len()],
+        )
+        .map_err(Error::Invalid)?;
+        let (centres, _) = perception::stereogenic_units(&possible).map_err(Error::Invalid)?;
+        let undefined = centres
+            .into_iter()
+            .filter(|&i| {
+                inference
+                    .metadata
+                    .atoms
+                    .get(i)
+                    .is_some_and(|meta| meta.chiral_tag == 0 || wavy.contains(&i))
+            })
+            .collect::<HashSet<_>>();
+        if undefined.is_empty() {
+            return Ok(StereoPinning::default());
+        }
+        // Unknown markers describe the drawing, while this pass explicitly
+        // reads the current model. Clear them only in the detached input.
+        inference.directions.fill(Direction::None);
+        for meta in &mut inference.metadata.bonds {
+            meta.unknown_stereo = false;
+        }
+        let conformer = stereo::wedging::Conformer {
+            positions: self
+                .ids
+                .iter()
+                .map(|id| {
+                    positions
+                        .get(id)
+                        .copied()
+                        .filter(|&point| valid_point(point))
+                        .ok_or(Error::Coordinates("Missing or invalid model atom"))
+                })
+                .collect::<Result<_, _>>()?,
+            is_3d: true,
+        };
+        let spatial = stereo::from_3d(
+            &inference.graph,
+            &inference.metadata,
+            &inference.directions,
+            Some(&conformer),
+            &SpatialAnnotations {
+                non_explicit: vec![None; self.ids.len()],
+                done: None,
+            },
+            SpatialOptions {
+                replace_existing: true,
+                allow_nontetrahedral: false,
+            },
+        )
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+        let mut metadata = self.molecule.state.metadata.clone();
+        let mut pinning = StereoPinning::default();
+        for (i, (meta, spatial)) in metadata
+            .atoms
+            .iter_mut()
+            .zip(&spatial.metadata.atoms)
+            .enumerate()
+        {
+            if !undefined.contains(&i) {
+                continue;
+            }
+            let id = *self
+                .ids
+                .get(i)
+                .ok_or(Error::Coordinates("Missing stereocenter atom"))?;
+            let tag = spatial.chiral_tag;
+            if matches!(tag, 1 | 2) {
+                meta.chiral_tag = if invert { tag ^ 3 } else { tag };
+                pinning.pinned.push(id);
+            } else {
+                meta.chiral_tag = 0;
+                pinning.unpinned.push(id);
+            }
+            meta.chiral_permutation = None;
+        }
+        self.molecule.state.metadata = metadata;
+        Ok(pinning)
+    }
     /// Original drawing radicals whose geometry input was prepared without
     /// their drawn radical electrons. Drawing chemistry is retained exactly.
     pub fn radicals(&self) -> &[Radical] {
@@ -759,6 +985,7 @@ impl Prepared {
             bonds,
             field: field.native(),
             operation,
+            ensemble: None,
             coordinates,
             fixed_atoms,
             conformers: 8,
@@ -817,6 +1044,34 @@ impl Prepared {
         let mut request =
             self.native_request(field, reshiki_geometry::Operation::Generate, None, &[], 500)?;
         request.seed = seed;
+        request.validate().map_err(Error::Invalid)?;
+        Ok(request)
+    }
+
+    /// Prepare a fresh embedding batch from the drawing's molecular graph.
+    pub fn ensemble_request(
+        &self,
+        field: ForceField,
+        seed: i32,
+        count: u32,
+        mode: Ensemble,
+    ) -> Result<reshiki_geometry::Request, Error> {
+        if self.mode == Mode::Relaxed {
+            return Err(Error::Invalid(
+                "Conformer search needs an ordinary organic structure".into(),
+            ));
+        }
+        if !(1..=reshiki_geometry::MAX_CONFORMERS).contains(&count) {
+            return Err(Error::Invalid(format!(
+                "An ensemble batch needs 1–{} conformers",
+                reshiki_geometry::MAX_CONFORMERS
+            )));
+        }
+        let mut request = self.generation_request(field, seed)?;
+        request.coordinates.clear();
+        request.conformers = count;
+        request.ensemble = Some(mode);
+        request.max_iterations = ENSEMBLE_ITERATION_LIMIT;
         request.validate().map_err(Error::Invalid)?;
         Ok(request)
     }

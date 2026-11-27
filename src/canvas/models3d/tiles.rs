@@ -66,7 +66,81 @@ impl Cache {
 
 thread_local! {
     static TILES: RefCell<Cache> = RefCell::default();
+    // Paper frames release TILES when no model is present on the drawing.
+    // Result-panel thumbnails keep their small cache independently.
+    static MODEL_IMAGES: RefCell<Cache> = RefCell::default();
     static SAMPLES: std::cell::Cell<f32> = const { std::cell::Cell::new(OVERSAMPLE) };
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(in crate::canvas) static TILE_RENDERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A small prepared model image outside the paper, rasterized and cached by
+/// the same SVG path as its canvas tiles and figure exports.
+#[derive(Clone, Debug)]
+pub(crate) struct ModelImage {
+    run: std::rc::Rc<[Primitive]>,
+    lo: World,
+    hi: World,
+    key: u64,
+}
+
+impl ModelImage {
+    pub(crate) fn new(run: Vec<Primitive>, lo: World, hi: World) -> Self {
+        let mut hasher = DefaultHasher::new();
+        // Keep thumbnails in a separate cache-key domain from paper tiles.
+        "model thumbnail".hash(&mut hasher);
+        for primitive in &run {
+            key(primitive, &mut hasher);
+        }
+        for value in [lo.x, lo.y, hi.x, hi.y] {
+            value.to_bits().hash(&mut hasher);
+        }
+        Self {
+            run: run.into(),
+            lo,
+            hi,
+            key: hasher.finish(),
+        }
+    }
+
+    /// Draw at `origin`, with `scale` logical pixels per drawing unit.
+    pub(crate) fn draw(
+        &self,
+        frame: &mut canvas::Frame,
+        origin: Point,
+        scale: f32,
+        theme: reshiki::canvas_theme::CanvasTheme,
+    ) {
+        let raster_scale = scale * OVERSAMPLE;
+        let width = ((self.hi.x - self.lo.x) * raster_scale).ceil();
+        let height = ((self.hi.y - self.lo.y) * raster_scale).ceil();
+        if !raster_scale.is_finite()
+            || raster_scale <= 0.
+            || !(1. ..=4096.).contains(&width)
+            || !(1. ..=4096.).contains(&height)
+        {
+            return;
+        }
+        let size = [width as u32, height as u32];
+        let mut hasher = DefaultHasher::new();
+        self.key.hash(&mut hasher);
+        raster_scale.to_bits().hash(&mut hasher);
+        size.hash(&mut hasher);
+        theme.is_dark().hash(&mut hasher);
+        let render = || pixels_on(&self.run, self.lo, raster_scale, size[0], size[1], theme);
+        let Some(handle) =
+            MODEL_IMAGES.with_borrow_mut(|cache| cache.get(hasher.finish(), size, render))
+        else {
+            return;
+        };
+        frame.draw_image(
+            Rectangle::new(origin, Size::new(width / OVERSAMPLE, height / OVERSAMPLE)),
+            canvas::Image::new(handle),
+        );
+    }
 }
 
 /// Set up the paper's next frame of `doc`: models render coarser while one
@@ -105,6 +179,7 @@ pub(in crate::canvas) fn is_model(primitive: &Primitive) -> bool {
                 | Primitive::Contour { .. }
                 | Primitive::Wire { .. }
                 | Primitive::Card { .. }
+                | Primitive::Surface { .. }
                 | Primitive::Gradient { .. }
                 | Primitive::Glow { .. }
         ),
@@ -167,13 +242,66 @@ fn primitives(run: &[Primitive], parts: &[Part]) -> Vec<Primitive> {
         .collect()
 }
 
+/// A fitted path's structure and every coordinate bit, including controls.
+fn path_key(commands: &[reshiki::graphics::PathCommand], hasher: &mut DefaultHasher) {
+    use reshiki::graphics::PathCommand;
+    let point = |p: World, hasher: &mut DefaultHasher| {
+        p.x.to_bits().hash(hasher);
+        p.y.to_bits().hash(hasher);
+    };
+    commands.len().hash(hasher);
+    for command in commands {
+        match command {
+            PathCommand::Move(p) => {
+                0_u8.hash(hasher);
+                point(*p, hasher);
+            }
+            PathCommand::Line(p) => {
+                1_u8.hash(hasher);
+                point(*p, hasher);
+            }
+            PathCommand::Cubic(a, b, c) => {
+                2_u8.hash(hasher);
+                point(*a, hasher);
+                point(*b, hasher);
+                point(*c, hasher);
+            }
+            PathCommand::Close => 3_u8.hash(hasher),
+        }
+    }
+}
+
 /// Hash every coordinate and colour of `primitive` exactly: its `Debug`
-/// output, but a ball's contact by its bits, as that output would be long.
+/// output, but a ball's contact and a surface by their bits, as that output
+/// would be long.
 fn key(primitive: &Primitive, hasher: &mut DefaultHasher) {
     match primitive {
         Primitive::Opacity { alpha, primitive } => {
             alpha.to_bits().hash(hasher);
             key(primitive, hasher);
+        }
+        Primitive::Surface { groups } => {
+            groups.len().hash(hasher);
+            for group in groups {
+                group.alpha.to_bits().hash(hasher);
+                group.fills.len().hash(hasher);
+                for fill in &group.fills {
+                    fill.color.hash(hasher);
+                    path_key(&fill.region, hasher);
+                    fill.tones.len().hash(hasher);
+                    for (commands, color) in &fill.tones {
+                        color.hash(hasher);
+                        path_key(commands, hasher);
+                    }
+                }
+                group.strokes.len().hash(hasher);
+                for stroke in &group.strokes {
+                    stroke.outline.color.hash(hasher);
+                    stroke.outline.alpha.to_bits().hash(hasher);
+                    stroke.outline.width.to_bits().hash(hasher);
+                    path_key(&stroke.paths, hasher);
+                }
+            }
         }
         Primitive::Sphere {
             center,
@@ -416,6 +544,8 @@ fn draw_tiles(
         let [x0, y0, x1, y1] = tile.rect;
         let size = [(x1 - x0) as u32, (y1 - y0) as u32];
         let render = || {
+            #[cfg(test)]
+            TILE_RENDERS.with(|n| n.set(n.get() + 1));
             pixels_on(
                 &primitives(run, &tile.parts),
                 world(x0, y0),

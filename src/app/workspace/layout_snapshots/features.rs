@@ -987,6 +987,203 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 45] = [
     ("palette-atoms", palette_atoms),
 ];
 
+/// CHFClBr with F wedged and its 3D model, in Predict → xTB, optimizing.
+pub(super) fn xtb_halocarbon(app: &mut App) -> Vec<[f64; 3]> {
+    use crate::app::xtb::{Action, Page};
+    let doc = &mut app.tab.doc;
+    let c = doc.add_atom("C", World::default());
+    let f = doc.add_atom("F", World::new(0., -28.));
+    let cl = doc.add_atom("Cl", World::new(-28., 14.));
+    let br = doc.add_atom("Br", World::new(28., 14.));
+    doc.add_bond(c, f, 1, "wedge");
+    doc.add_bond(c, cl, 1, "plain");
+    doc.add_bond(c, br, 1, "plain");
+    app.tab.camera.zoom = 2.5;
+    app.tab.camera.center = World::new(60., 0.);
+    select(app, vec![c]);
+    let _ = app.update(Message::Inspector(InspectorTab::Predict));
+    let _ = app.update(Message::Xtb(Action::Page(Page::Xtb)));
+    let _ = app.update(Message::Xtb(Action::Run));
+    let order = app.model_atoms();
+    let mut start: Vec<[f64; 3]> = order
+        .iter()
+        .map(|id| match *id {
+            id if id == f => [0., 1., 0.8],
+            id if id == cl => [-1., -0.5, 0.],
+            id if id == br => [1., -0.5, 0.],
+            _ => [0., 0., 0.],
+        })
+        .collect();
+    start.push([0., 0., -1.]);
+    let parent = order.iter().position(|id| *id == c).unwrap_or(0);
+    let points = start
+        .iter()
+        .map(|&[x, y, z]| reshiki::geometry::Point3 { x, y, z })
+        .collect();
+    let _ = app.finish_model(points, vec![parent]);
+    start
+}
+
+/// A run in flight: step 6 with its |ΔE| curve (example energies).
+fn xtb_running(app: &mut App, _: &Driver<'_>) {
+    let start = xtb_halocarbon(app);
+    let energies: Vec<f64> = (0..7)
+        .map(|k| -20.0 - 0.01 * (1. - 0.25_f64.powi(k)))
+        .collect();
+    app.xtb_answer(crate::app::xtb::RunEvent::Steps {
+        first: 0,
+        energies,
+        positions: start,
+    });
+}
+
+/// The finished optimization mirrored the centre: the stereo warning card.
+fn xtb_stereo(app: &mut App, _: &Driver<'_>) {
+    let start = xtb_halocarbon(app);
+    let mirrored: Vec<[f64; 3]> = start.iter().map(|&[x, y, z]| [-x, y, z]).collect();
+    app.xtb_answer(crate::app::xtb::RunEvent::Done(Ok(std::sync::Arc::new(
+        crate::app::xtb::RunReport {
+            engine: crate::app::xtb::example_engine(),
+            computed: crate::app::xtb::example_computed(-20.012345, 6.2),
+            energy: -20.012345,
+            converged: true,
+            positions: mirrored.clone(),
+            steps: 1,
+            optimizers: vec![],
+            energies: vec![-20.0, -20.012345],
+            path: [start.as_flattened(), mirrored.as_flattened()].concat(),
+            evaluations: vec![],
+        },
+    ))));
+}
+
+/// A finished three-step optimization (example energies): the results palette.
+pub(super) fn xtb_results(app: &mut App, _: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    let start = xtb_halocarbon(app);
+    let middle: Vec<[f64; 3]> = start.iter().map(|&[x, y, z]| [x * 1.02, y, z]).collect();
+    let end: Vec<[f64; 3]> = start
+        .iter()
+        .map(|&[x, y, z]| [x * 1.03, y * 1.01, z])
+        .collect();
+    let energies = vec![-20.0, -20.011, -20.012345];
+    app.xtb_answer(crate::app::xtb::RunEvent::Done(Ok(std::sync::Arc::new(
+        crate::app::xtb::RunReport {
+            engine: crate::app::xtb::example_engine(),
+            computed: crate::app::xtb::example_computed(-20.012345, 6.2),
+            energy: -20.012345,
+            converged: true,
+            positions: end.clone(),
+            steps: 2,
+            optimizers: vec![],
+            evaluations: energies
+                .iter()
+                .map(|&energy| crate::app::xtb::Evaluation {
+                    energy,
+                    scf_iterations: 7,
+                    seconds: 0.004,
+                })
+                .collect(),
+            energies,
+            path: [
+                start.as_flattened(),
+                middle.as_flattened(),
+                end.as_flattened(),
+            ]
+            .concat(),
+        },
+    ))));
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Labels(true))));
+}
+
+fn xtb_results_steps(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results(app, driver);
+    let send = |app: &mut App, action| {
+        let _ = app.update(Message::Xtb(Action::Palette(action)));
+    };
+    send(app, palette::Action::View(crate::app::xtb::View::Steps));
+    send(app, palette::Action::Step(1));
+}
+
+fn xtb_results_log(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results(app, driver);
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::View(
+        crate::app::xtb::View::Log,
+    ))));
+}
+
+/// An atom added after the run: the stale banner.
+fn xtb_results_stale(app: &mut App, driver: &Driver<'_>) {
+    xtb_results(app, driver);
+    let before = app.tab.doc.clone();
+    let c = app.tab.doc.atoms[0].id;
+    let added = app.tab.doc.add_atom("C", World::new(0., 40.));
+    app.tab.doc.add_bond(c, added, 1, "plain");
+    app.changed(before);
+}
+
+fn xtb_results_inspector(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results(app, driver);
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Dock)));
+}
+
+fn xtb_results_inspector_steps(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results_steps(app, driver);
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Dock)));
+}
+
+/// Save with more than 5 MB of kept results.
+fn xtb_size_prompt(app: &mut App, _: &Driver<'_>) {
+    *app = crate::app::xtb::palette::tests::large_results();
+    app.appearance.mode = crate::appearance::Mode::Light;
+    let _ = app.update(Message::Save);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in xTB card captures with a test double for the worker; set RESHIKI_XTB_QA_DIR"]
+async fn manual_xtb_layout_snapshots() {
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let directory = std::path::PathBuf::from(std::env::var_os("RESHIKI_XTB_QA_DIR").unwrap());
+    std::fs::create_dir_all(&directory).unwrap();
+    for (name, scene) in [
+        ("xtb-running", xtb_running as Scene),
+        ("xtb-stereo", xtb_stereo as Scene),
+        ("xtb-results", xtb_results as Scene),
+        ("xtb-results-steps", xtb_results_steps as Scene),
+        ("xtb-results-log", xtb_results_log as Scene),
+        ("xtb-results-stale", xtb_results_stale as Scene),
+        ("xtb-results-inspector", xtb_results_inspector as Scene),
+        (
+            "xtb-results-inspector-steps",
+            xtb_results_inspector_steps as Scene,
+        ),
+        ("xtb-size-prompt", xtb_size_prompt as Scene),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.appearance.mode = crate::appearance::Mode::Light;
+        let output = directory.join(format!("{name}-1280.png"));
+        capture(
+            &mut app,
+            &mut renderer,
+            Size::new(1280., 820.),
+            scene,
+            &output,
+        );
+        eprintln!("{}", output.display());
+    }
+}
+
 pub(in crate::app::workspace) fn needs_naming(name: &str) -> bool {
     name.starts_with("name-import-") || name.starts_with("names-") || name == "molecule-caption"
 }

@@ -1,0 +1,26 @@
+[package]
+name = "reshiki-xtb-worker"
+version.workspace = true
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "reshiki-xtb-worker"
+path = "src/bin/reshiki-xtb-worker.rs"
+required-features = ["engine"]
+
+[features]
+engine = ["dep:axtb-driver", "dep:reshiki-io"]
+
+[dependencies]
+axtb-driver = { workspace = true, optional = true }
+reshiki-io = { path = "../io", optional = true }
+reshiki-process-heap = { path = "../process-heap" }
+reshiki-qcdata = { path = "../qcdata" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+thiserror = "2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reshiki-process = { path = "../../native/process" }

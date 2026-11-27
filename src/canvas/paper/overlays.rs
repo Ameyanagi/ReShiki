@@ -5,19 +5,137 @@ use crate::canvas::hit::{
 };
 use crate::canvas::overlay::{ACCENT, ACCENT_STRONG, ACCENT_TINT};
 use crate::canvas::{
-    Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers, pick, rgb,
-    selection,
+    Camera, Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers,
+    pick, rgb, selection,
 };
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
 use reshiki::arrows::{ArrowHandle, NodePart};
 use reshiki::document::{Atom, Bond, Document};
 use reshiki::graphics::{Graphic, GraphicKind, PathCommand, PathHandle, PathNodeType};
+use reshiki::palette::{self, Hue, Palette, Row};
 use reshiki::scientific::{AtomMark, MarkKind};
 use reshiki::style::DrawingStyle;
 use std::cell::RefCell;
 use std::ops::ControlFlow;
 use std::rc::Rc;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BondChangeKind {
+    Form,
+    Break,
+}
+
+impl BondChangeKind {
+    /// Shared document swatches for scheme overlays and reaction-path models.
+    pub(crate) fn color(self) -> palette::Color {
+        palette::Color::Palette(
+            match self {
+                Self::Form => Hue::Green,
+                Self::Break => Hue::Red,
+            },
+            Row::Strong,
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct BondChangeMark {
+    pub kind: BondChangeKind,
+    pub atoms: [u64; 2],
+    pub highlighted: bool,
+}
+
+const MAX_FORMING_ARC_HEIGHT: f32 = 24.;
+const HIGHLIGHTED_MARK_WIDTH: f32 = 3.5;
+
+impl BondChangeMark {
+    pub(in crate::canvas) const FORMING_ARC_MARGIN: f32 =
+        MAX_FORMING_ARC_HEIGHT + HIGHLIGHTED_MARK_WIDTH * 0.5;
+
+    pub(in crate::canvas) fn forming_arc_height(distance: f32) -> f32 {
+        (distance * 0.18).clamp(6., MAX_FORMING_ARC_HEIGHT)
+    }
+}
+
+pub(crate) fn draw_bond_changes(
+    frame: &mut layered::Frame<'_>,
+    doc: &Document,
+    marks: &[BondChangeMark],
+    camera: Camera,
+    bounds: Rectangle,
+) {
+    if marks.is_empty() {
+        return;
+    }
+    let palette = Palette::in_mode(doc, frame.canvas_theme());
+    for mark in marks {
+        let [a, b] = mark.atoms;
+        let (Some(from), Some(to)) = (doc.atom(a), doc.atom(b)) else {
+            continue;
+        };
+        let from = camera.screen(from.position, bounds);
+        let to = camera.screen(to.position, bounds);
+        let delta = to - from;
+        let mid = from + delta * 0.5;
+        let mut stroke = Stroke::default()
+            .with_color(rgb(palette.canonical(mark.kind.color())))
+            .with_width(if mark.highlighted {
+                HIGHLIGHTED_MARK_WIDTH
+            } else {
+                2.
+            })
+            .with_line_cap(canvas::LineCap::Round);
+        let path = match mark.kind {
+            BondChangeKind::Form => {
+                let distance = delta.x.hypot(delta.y);
+                if distance < 1. {
+                    continue;
+                }
+                let normal = Vector::new(-delta.y, delta.x) / distance;
+                // Bulge away from the bonds attached to these two atoms.
+                let toward_drawing: f32 = doc
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.order != 0)
+                    .filter_map(|bond| {
+                        match (mark.atoms.contains(&bond.a), mark.atoms.contains(&bond.b)) {
+                            (true, false) => doc.atom(bond.b),
+                            (false, true) => doc.atom(bond.a),
+                            _ => None,
+                        }
+                    })
+                    .map(|atom| {
+                        let offset = camera.screen(atom.position, bounds) - mid;
+                        offset.x * normal.x + offset.y * normal.y
+                    })
+                    .sum();
+                let flip = toward_drawing > 0.01
+                    || (toward_drawing.abs() <= 0.01
+                        && (normal.y > 0. || (normal.y == 0. && normal.x > 0.)));
+                // A quadratic arc peaks halfway from its chord to the control point.
+                let bend = BondChangeMark::forming_arc_height(distance) * 2.;
+                let control = mid + normal * if flip { -bend } else { bend };
+                stroke.line_dash.segments = &[4., 4.];
+                Path::new(|path| {
+                    path.move_to(from);
+                    path.quadratic_curve_to(control, to);
+                })
+            }
+            BondChangeKind::Break => {
+                let down = Vector::new(4.5, 4.5);
+                let up = Vector::new(4.5, -4.5);
+                Path::new(|path| {
+                    path.move_to(mid - down);
+                    path.line_to(mid + down);
+                    path.move_to(mid - up);
+                    path.line_to(mid + up);
+                })
+            }
+        };
+        frame.stroke(&path, stroke);
+    }
+}
 
 enum HandleShape {
     Circle(f32),
@@ -68,6 +186,45 @@ fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
 }
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn outdated_frames<'a>(
+        &'a self,
+        preview: &'a Document,
+    ) -> impl Iterator<Item = (World, World)> + 'a {
+        self.outdated_models.iter().filter_map(move |atoms| {
+            let model = preview.models.iter().find(|model| {
+                model.display != reshiki::models3d::Display::TwoD
+                    && model.linked_atoms.as_slice() == *atoms
+            })?;
+            reshiki::models3d::frame(preview, model)
+        })
+    }
+
+    pub(super) fn draw_outdated_models(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        preview: &Document,
+        bounds: Rectangle,
+    ) {
+        for (lo, hi) in self.outdated_frames(preview) {
+            let lo = self.camera.screen(lo, bounds);
+            let hi = self.camera.screen(hi, bounds);
+            let size = iced::Size::new(hi.x - lo.x, hi.y - lo.y);
+            if !Rectangle::new(lo, size).intersects(&Rectangle::with_size(bounds.size())) {
+                continue;
+            }
+            // White follows the canvas theme in the layered frame, so the
+            // veil always has the paper's color, including on dark paper.
+            frame.fill_rectangle(lo, size, Color::WHITE.scale_alpha(0.55));
+            badge(
+                frame,
+                bounds,
+                lo - Vector::new(4., 9.),
+                "Outdated · drawing changed".into(),
+                false,
+            );
+        }
+    }
+
     pub(super) fn draw_tube_bend_handle(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -154,9 +311,70 @@ impl MoleculeCanvas<'_> {
             frame,
             bounds,
             lo - Vector::new(14., 48.),
-            format!("Generating 3D… {} s · Esc cancels", elapsed.as_secs()),
+            format!(
+                "{}… {} s · Esc cancels",
+                generation.label,
+                elapsed.as_secs()
+            ),
             true,
         );
+    }
+
+    pub(super) fn draw_result_label(&self, frame: &mut layered::Frame<'_>, bounds: Rectangle) {
+        let Some(label) = &self.result_label else {
+            return;
+        };
+        if !label.text.is_empty()
+            && let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms)
+        {
+            let lo = self.camera.screen(lo, bounds);
+            let hi = self.camera.screen(hi, bounds);
+            badge(
+                frame,
+                bounds,
+                Point::new(lo.x - 14., hi.y),
+                label.text.clone(),
+                true,
+            );
+        }
+        let drawn = self.doc.abbreviation_render_copy();
+        let distance = 0.55 * self.doc.drawing_style.bond_length_world * self.camera.zoom;
+        for (id, text) in &label.atom_labels {
+            let Some(atom) = drawn.atom(*id).filter(|_| drawn.atom_visible(*id)) else {
+                continue;
+            };
+            let direction = result_label_direction(&drawn, atom);
+            let width = crate::app::text_width(text, 11.) + 6.;
+            let half = Vector::new(width / 2., 7.5);
+            let center = self.camera.screen(atom.position, bounds);
+            // Give the badge enough room to clear the element symbol at any zoom.
+            let mut offset = distance;
+            if let Some((lo, hi)) = reshiki::scene::atom_label_ink_bounds(atom, &drawn) {
+                let corner = World::new(
+                    if direction.x < 0. { lo.x } else { hi.x },
+                    if direction.y < 0. { lo.y } else { hi.y },
+                );
+                let edge = self.camera.screen(corner, bounds) - center;
+                let clearance = edge.x * direction.x
+                    + edge.y * direction.y
+                    + half.x * direction.x.abs()
+                    + half.y * direction.y.abs()
+                    + 2.;
+                offset = offset.max(clearance);
+            }
+            let at = center + direction * offset;
+            frame.fill_rectangle(at - half, iced::Size::new(width, 15.), ACCENT_TINT);
+            frame.fill_text(canvas::Text {
+                content: text.clone(),
+                position: at,
+                color: rgb([30, 100, 85]),
+                size: 11.into(),
+                font: iced::Font::with_name(reshiki::style::ui_font_family()),
+                align_x: iced::widget::text::Alignment::Center,
+                align_y: iced::alignment::Vertical::Center,
+                ..Default::default()
+            });
+        }
     }
 
     pub(super) fn scientific_drawing(
@@ -1254,6 +1472,133 @@ impl MoleculeCanvas<'_> {
                     .with_color(rgb([65, 136, 119])),
             );
         }
+    }
+}
+
+/// Put badges in the middle of the largest angular gap between visible
+/// bonds. Bond lengths and cancelling directions do not shrink that gap.
+fn result_label_direction(doc: &Document, atom: &Atom) -> Vector {
+    let mut angles = Vec::new();
+    for bond in doc
+        .bonds
+        .iter()
+        .filter(|bond| doc.bond_visible(bond.a, bond.b))
+    {
+        let neighbor = if bond.a == atom.id {
+            bond.b
+        } else if bond.b == atom.id {
+            bond.a
+        } else {
+            continue;
+        };
+        if let Some(neighbor) = doc.atom(neighbor) {
+            let vector = Vector::new(
+                neighbor.position.x - atom.position.x,
+                neighbor.position.y - atom.position.y,
+            );
+            let length = vector.x.hypot(vector.y);
+            if length > 1e-4 {
+                angles.push(vector.y.atan2(vector.x).rem_euclid(std::f32::consts::TAU));
+            }
+        }
+    }
+    angles.sort_by(f32::total_cmp);
+    let (Some(&first), Some(&last)) = (angles.first(), angles.last()) else {
+        return Vector::new(0., -1.);
+    };
+    let mut start = last;
+    let mut widest = first + std::f32::consts::TAU - last;
+    for (&before, &after) in angles.iter().zip(angles.iter().skip(1)) {
+        if after - before > widest {
+            start = before;
+            widest = after - before;
+        }
+    }
+    let (sin, cos) = (start + widest / 2.).sin_cos();
+    Vector::new(cos, sin)
+}
+
+#[cfg(test)]
+mod result_label_tests {
+    use super::*;
+
+    #[test]
+    fn cancelling_bonds_put_charge_badges_perpendicular_to_the_bond() {
+        for axis in [
+            World::new(0., 42.),
+            World::new(42., 0.),
+            World::new(30., 40.),
+        ] {
+            let mut doc = Document::default();
+            let c = doc.add_atom("C", World::default());
+            for position in [axis, World::new(-axis.x, -axis.y)] {
+                let o = doc.add_atom("O", position);
+                doc.add_bond(c, o, 2, "plain");
+            }
+            let direction = result_label_direction(&doc, doc.atom(c).unwrap());
+            assert!((direction.x * axis.x + direction.y * axis.y).abs() < 1e-4);
+            assert!((direction.x.hypot(direction.y) - 1.).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn cross_bonds_put_charge_badges_between_bonds() {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", World::default());
+        for position in [
+            World::new(42., 0.),
+            World::new(0., 42.),
+            World::new(-42., 0.),
+            World::new(0., -42.),
+        ] {
+            let neighbor = doc.add_atom("F", position);
+            doc.add_bond(c, neighbor, 1, "plain");
+        }
+        let direction = result_label_direction(&doc, doc.atom(c).unwrap());
+        let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+        assert!((direction.x.abs() - diagonal).abs() < 1e-4);
+        assert!((direction.y.abs() - diagonal).abs() < 1e-4);
+    }
+
+    #[test]
+    fn charge_badges_use_the_middle_of_the_largest_angular_gap() {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", World::default());
+        // Unequal bond lengths must not move the lower-left midpoint of
+        // the 270-degree empty arc between the right and upward bonds.
+        for position in [World::new(84., 0.), World::new(0., -21.)] {
+            let neighbor = doc.add_atom("O", position);
+            doc.add_bond(c, neighbor, 1, "plain");
+        }
+        let direction = result_label_direction(&doc, doc.atom(c).unwrap());
+        let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+        assert!((direction.x + diagonal).abs() < 1e-4);
+        assert!((direction.y - diagonal).abs() < 1e-4);
+    }
+
+    #[test]
+    fn unbonded_atoms_put_charge_badges_straight_up() {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", World::default());
+        assert_eq!(
+            result_label_direction(&doc, doc.atom(c).unwrap()),
+            Vector::new(0., -1.)
+        );
+    }
+
+    #[test]
+    fn hidden_abbreviation_bonds_do_not_steer_charge_badges() {
+        let mut doc = Document::default();
+        let anchor = doc.add_atom("C", World::default());
+        let hidden = doc.add_atom("C", World::new(0., -42.));
+        let outside = doc.add_atom("O", World::new(42., 0.));
+        doc.add_bond(anchor, hidden, 1, "plain");
+        doc.add_bond(anchor, outside, 1, "plain");
+        doc.contract(&[anchor, hidden], "Et", "Et").unwrap();
+        let drawn = doc.abbreviation_render_copy();
+        let direction = result_label_direction(&drawn, drawn.atom(anchor).unwrap());
+        assert!((direction.x + 1.).abs() < 1e-4);
+        assert!(direction.y.abs() < 1e-4);
     }
 }
 

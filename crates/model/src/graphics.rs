@@ -2,6 +2,8 @@
 mod arc;
 mod effects;
 mod heads;
+mod ir_figure;
+pub mod mo_diagram;
 pub mod panel;
 mod path;
 mod superscript;
@@ -15,6 +17,8 @@ pub use effects::{
     lobe_shading, shade, tiled, wave_radius, wavy,
 };
 pub use heads::PathHeads;
+pub use ir_figure::{BandShape, Columns, Frame, IrFigure, Journal, YAxis};
+pub use mo_diagram::{MoDiagram, MoPicture};
 pub use panel::{Divider, Panel, TitlePlace};
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
@@ -27,6 +31,7 @@ pub enum GraphicKind {
     Picture,
     /// An editable thin-layer chromatography plate with owned lanes and spots.
     TlcPlate,
+    MoDiagram,
     /// Lab equipment drawn from a piece definition; see [`crate::equipment`].
     Piece,
     Symbol(crate::scientific::SymbolKind),
@@ -68,6 +73,9 @@ impl GraphicKind {
     pub fn brackets(self) -> bool {
         matches!(self, Self::Brackets | Self::Parentheses | Self::Braces)
     }
+    pub(crate) fn frame_hit(self) -> bool {
+        matches!(self, Self::Picture | Self::MoDiagram)
+    }
 }
 impl std::fmt::Display for GraphicKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -86,6 +94,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Path => "Pen path",
             Self::Picture => "Picture",
             Self::TlcPlate => "TLC plate",
+            Self::MoDiagram => "MO diagram",
             Self::Piece => "Equipment piece",
             Self::Icon => "Icon",
             Self::Table => "Table",
@@ -141,7 +150,7 @@ pub struct GraphicStyle {
     pub fill: Option<crate::palette::Color>,
     pub width_pt: f32,
     pub pattern: LinePattern,
-    /// Flat ends for derived native grid strokes; ordinary graphics stay round.
+    /// Flat ends for derived strokes; ordinary graphics stay round.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub flat_caps: bool,
     #[serde(skip_serializing_if = "Effects::is_plain")]
@@ -363,6 +372,11 @@ pub struct Graphic {
     /// TLC lanes, spot dimensions and Rf labels, in the graphic frame.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tlc: Option<Box<TlcPlate>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mo: Option<Box<MoDiagram>>,
+    /// Original IR bands and presentation parameters for a spectrum pen path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ir: Option<Box<IrFigure>>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
@@ -410,6 +424,12 @@ fn back_layer() -> i32 {
     -1
 }
 impl Graphic {
+    pub(crate) fn frame_corners(&self) -> [Point; 4] {
+        let x = self.origin.offset(self.axis_x.x, self.axis_x.y);
+        let y = self.origin.offset(self.axis_y.x, self.axis_y.y);
+        [self.origin, x, x.offset(self.axis_y.x, self.axis_y.y), y]
+    }
+
     /// Determinant of the drawing frame; callers choose their own singularity threshold.
     pub(crate) fn frame_determinant(&self) -> f32 {
         self.axis_x.x * self.axis_y.y - self.axis_x.y * self.axis_y.x
@@ -504,6 +524,8 @@ impl Graphic {
                 piece: None,
                 icon: None,
                 tlc: None,
+                mo: None,
+                ir: None,
                 id,
                 kind,
                 origin: start,
@@ -560,6 +582,8 @@ impl Graphic {
             piece: None,
             icon: None,
             tlc: None,
+            mo: None,
+            ir: None,
             id,
             kind,
             origin,
@@ -618,7 +642,7 @@ impl Graphic {
         let p = Point::new;
         let k = 0.552_284_8;
         let local = match self.kind {
-            GraphicKind::Rectangle | GraphicKind::Picture => vec![
+            GraphicKind::Rectangle | GraphicKind::Picture | GraphicKind::MoDiagram => vec![
                 Move(p(0., 0.)),
                 Line(p(1., 0.)),
                 Line(p(1., 1.)),
@@ -758,9 +782,13 @@ impl Graphic {
         // A cycle keeps Ellipse as its stored host kind. Measure the same
         // effective perimeter that paints its chosen shape, including the
         // legacy mean-radius circle, rather than that storage placeholder.
-        let commands = crate::cycles::outline(self)
-            .and_then(|outline| outline.subpath(0., outline.length()))
-            .unwrap_or_else(|| self.parts().into_iter().flat_map(|p| p.commands).collect());
+        let commands = if self.kind == GraphicKind::MoDiagram {
+            self.commands()
+        } else {
+            crate::cycles::outline(self)
+                .and_then(|outline| outline.subpath(0., outline.length()))
+                .unwrap_or_else(|| self.parts().into_iter().flat_map(|p| p.commands).collect())
+        };
         let mut points = commands
             .iter()
             .flat_map(PathCommand::iter_points)
@@ -779,7 +807,7 @@ impl Graphic {
                 .iter()
                 .map(|p| p.style.width() * 0.5)
                 .fold(0., f32::max),
-            GraphicKind::Picture => 0.,
+            GraphicKind::Picture | GraphicKind::MoDiagram => 0.,
             // A piece's outline is painted twice as wide as its style says.
             GraphicKind::Piece => self.style.width(),
             _ => self.style.width() * 0.5,
@@ -841,7 +869,7 @@ impl Graphic {
         {
             return true;
         }
-        if self.kind == GraphicKind::Picture {
+        if self.kind.frame_hit() {
             return flattened(&self.commands()).iter().any(|path| {
                 inside_polygon(p, path)
                     || path
@@ -873,7 +901,7 @@ impl Graphic {
         if self.table.is_some() {
             return Err("Resize table cells with their table controls".into());
         }
-        if self.kind == GraphicKind::TlcPlate {
+        if matches!(self.kind, GraphicKind::TlcPlate | GraphicKind::MoDiagram) {
             return Ok(());
         }
         // Dragging a callout leader's end releases it from its target, and
@@ -946,6 +974,15 @@ impl Graphic {
         }
         if let Some(tlc) = &self.tlc {
             tlc.validate(self)?;
+        }
+        if (self.kind == GraphicKind::MoDiagram) != self.mo.is_some() {
+            return Err("MO diagram data does not match the graphic kind".into());
+        }
+        if let Some(mo) = &self.mo {
+            mo.validate(self)?;
+        }
+        if self.ir.is_some() && self.kind != GraphicKind::Path {
+            return Err("IR figure parameters require a pen path".into());
         }
         if self.superscript.is_some() && !self.kind.brackets() {
             return Err("A superscript requires a bracket graphic".into());
@@ -1225,6 +1262,48 @@ mod path_tests;
 mod tests {
     use super::*;
     use crate::scientific::SymbolKind;
+
+    #[test]
+    fn ir_parameters_belong_to_pen_paths_and_round_trip_as_optional_metadata() {
+        let mut graphic = Graphic::dragged(
+            1,
+            GraphicKind::Path,
+            Point::default(),
+            Point::new(100., 50.),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        assert!(serde_json::to_value(&graphic).unwrap().get("ir").is_none());
+        graphic.ir = Some(Box::new(IrFigure::with_defaults(
+            "acetic acid".into(),
+            "GFN2-xTB".into(),
+            vec![[1700., 120.]],
+            Journal::Acs,
+        )));
+        graphic.validate().unwrap();
+        let value = serde_json::to_value(&graphic).unwrap();
+        assert_eq!(value["ir"]["bands"], serde_json::json!([[1700., 120.]]));
+        assert_eq!(serde_json::from_value::<Graphic>(value).unwrap(), graphic);
+        for kind in [
+            GraphicKind::Rectangle,
+            GraphicKind::Curve,
+            GraphicKind::Line,
+        ] {
+            graphic.kind = kind;
+            assert_eq!(
+                graphic.validate().unwrap_err(),
+                "IR figure parameters require a pen path"
+            );
+        }
+        graphic.kind = GraphicKind::Path;
+        // In-memory edits do not repeat the stored-parameter boundary validation.
+        graphic.ir.as_mut().unwrap().scale = 0.;
+        graphic.validate().unwrap();
+        assert!(
+            serde_json::from_value::<Graphic>(serde_json::to_value(&graphic).unwrap()).is_err()
+        );
+    }
 
     #[test]
     fn a_condition_icon_keeps_its_shape_when_a_point_edit_is_attempted() {

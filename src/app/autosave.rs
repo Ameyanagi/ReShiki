@@ -320,7 +320,12 @@ impl App {
                 return None;
             }
             Work::Save {
-                document: Box::new(self.recovery_document()),
+                document: Box::new(
+                    self.tab
+                        .xtb
+                        .orbitals
+                        .save_snapshot(self.recovery_document()),
+                ),
                 source: self.tab.path.clone(),
                 retire_candidate: self.tab.autosave.retire_candidate.clone(),
             }

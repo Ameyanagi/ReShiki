@@ -37,7 +37,7 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 /// Paths longer than this many bytes are refused, as the grants refuse them.
-const MAX_PATH_BYTES: usize = 4096;
+pub(crate) const MAX_PATH_BYTES: usize = 4096;
 
 pub const FILE_OPEN: ToolSpec = ToolSpec {
     name: "file_open",
@@ -213,7 +213,7 @@ pub(crate) struct Save {
     svg_text: SvgText,
 }
 
-fn check_length(path: &str) -> Result<(), OpError> {
+pub(crate) fn check_length(path: &str) -> Result<(), OpError> {
     if path.len() > MAX_PATH_BYTES {
         return Err(OpError {
             reason: Some("path_invalid"),

@@ -10,6 +10,8 @@ of adaptations, copyright notices, and license texts are recorded in:
   nazuchem dependency     Naming engines and their molecular perception kernel
                           https://github.com/Ameyanagi/nazuchem
   licenses/rdkit/          Molecular algorithms, data, and reference fixtures
+  licenses/cclib/          Quantum chemistry input fixtures (BSD-3-Clause)
+  licenses/pymatgen-test-files/  Gaussian input fixture (MIT)
   licenses/centres/        Extended-tetrahedral CIP configuration (BSD-2-Clause)
   licenses/openclatura/    Structure-to-name port, rule tables, and fixtures (MIT)
   licenses/cdxml-native/   Molecular interchange parser adaptations
@@ -23,6 +25,7 @@ of adaptations, copyright notices, and license texts are recorded in:
   licenses/tabler-icons/   Tabler Icons outline library (MIT)
   licenses/liberation-fonts/ Liberation Sans, the bundled Arial fallback (OFL-1.1)
   licenses/dejavu-fonts/   Interface symbols from DejaVu Sans in the browser build (Bitstream Vera)
+  licenses/axtb/           xTB engine in builds with the `xtb` feature (LGPL-3.0-or-later)
   licenses/nmrshiftdb2/    Observed-shift derivative database (separate data license)
   data/nmr/               Offline index, provenance and held-out validation
   licenses/name-aliases/   Offline retained-name catalog (OPSIN MIT; ChEBI CC BY 4.0)
@@ -31,8 +34,15 @@ of adaptations, copyright notices, and license texts are recorded in:
   vendor/zune-jpeg/        Modified JPEG dependency and its upstream notices
   vendor/usvg/            Variable-font weight support in the SVG dependency
   vendor/svg2pdf/         Variable-font PDF instances and upstream notices
+  gif 0.14.2              Animated GIF encoding (MIT OR Apache-2.0)
+                          https://github.com/image-rs/image-gif
 
   tests/fixtures/crystal/  COD ferrocene data (CC0; source notice retained)
+  tests/fixtures/qc/       Quantum chemistry test files, not distributed:
+                          licenses/cclib/ (BSD-3-Clause),
+                          licenses/pymatgen-test-files/ (MIT),
+                          licenses/vibeview/ (ORCA Molden exports, MIT), and
+                          licenses/nosphera2/ (ORCA Molden export, BSD-2-Clause)
 
 Individual files and fixture directories may contain additional notices.
 Dependencies retain the licenses declared by their respective projects;
@@ -54,6 +64,15 @@ fixtures. Historical crates/opsin/ and crates/nazuchem* paths in retained
 attribution records identify source locations before the split; current
 naming sources and provenance live in the external nazuchem repository at the
 pin above.
+
+Desktop builds with the Cargo feature `xtb` (the macOS and Linux releases)
+and the `reshiki-xtb` Python package link axtb, an LGPL-3.0-or-later
+implementation of the xTB methods, from the
+fork https://github.com/Ameyanagi/axtb at the revision in licenses/axtb/SOURCE.
+axtb's NOTICE there records the upstream projects it reproduces, including
+the g-xTB authors' permission for its g-xTB parts. Each such release also
+publishes reshiki-<version>-source.tar.gz with the complete corresponding
+source and rebuild steps. Other builds and packages do not contain axtb.
 
 On Linux, the MIT crates wayland-protocols-plasma and wayland-protocols-misc
 generate Wayland bindings from KDE protocol descriptions licensed

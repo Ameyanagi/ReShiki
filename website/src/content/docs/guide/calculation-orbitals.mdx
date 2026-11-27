@@ -1,0 +1,112 @@
+---
+title: Molecular orbitals
+description: Show orbital levels and orbital surfaces from xTB, Molden and Gaussian fchk results, and place them in the drawing as vector figures.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+:::caution[Not released yet]
+Orbitals are on the `xtb/next` branch and not in a released version of ReShiki yet.
+:::
+
+xTB orbitals come from a minimal basis. Use them to see the shape and node structure of frontier orbitals, not for quantitative orbital energies.
+
+## Show an orbital
+
+Every GFN2-xTB and g-xTB run has orbitals (GFN-FF has none). After a [calculation](/guide/calculations/), open the **Orbitals** tab of the results palette.
+
+<Screenshot
+  src="/manual/xtb-orbitals.webp"
+  alt="Benzene after a GFN2-xTB optimization. The Orbitals tab of the xTB results palette shows a level diagram with HOMO, LUMO and a 4.93 eV gap and degenerate pairs side by side, the list of levels with the HOMO chosen, the buttons Place HOMO + LUMO figure and Place this orbital, the line HOMO is 2 of 2 (degenerate) with Show partner, and the folded Appearance settings. The HOMO is drawn as blue and orange lobes on the 3D model."
+/>
+
+- The **level diagram** shows occupied levels with ↑↓, marks HOMO, LUMO and the gap, and puts degenerate levels side by side.
+- The **list** shows the levels around the gap with their energies in eV. Degenerate levels are marked, for example `HOMO · 2-fold`. **HOMO** and **LUMO** jump to the frontier orbitals.
+- For a degenerate level the tab reads, for example, `HOMO is 2 of 2 (degenerate)`; **Show partner** shows the other orbital of the set.
+- Click a level to show that orbital on the molecule's 3D model. After you click one, ↑ and ↓ move through the levels while nothing on the canvas is selected.
+- Open shells show α and β columns, and a switch between them.
+
+<Screenshot
+  src="/manual/xtb-orbitals-open-shell.webp"
+  alt="Triplet O2 (unpaired electrons 2, multiplicity 3). The Orbitals tab shows α and β columns in the level diagram and the α/β switch set to β. The β HOMO is drawn on the model, and the HOMO + LUMO figure under it is captioned β HOMO (−17.37 eV) and β LUMO (−12.05 eV)."
+/>
+
+For xTB results, ReShiki recomputes the orbital when you show it (about 0.1 s for small molecules), so files stay small. A surface usually appears within a second.
+
+## Adjust the surface
+
+The surface settings are folded under **Appearance**; click it to show them.
+
+- **Isovalue**: 0.01 to 0.10 a.u. on the slider, with presets 0.02, 0.05 (default) and 0.10. If no surface is found, the tab says `No surface at this isovalue: lower it.`
+- **Look**: **Solid**, **Shaded**, **Outline** or **Mesh**, plus **Mesh lines**.
+- **Opacity**: 20 to 100 %.
+- **Phases**: the two lobe colors follow the canvas theme.
+
+## Place it in the drawing
+
+A shown orbital is a preview: it is not saved and adds no Undo step. **Place this orbital** puts it in the drawing as a figure attached to the 3D model, in one Undo step. Changes to a placed figure, including moving to another level, are Undo steps too, and **Remove** takes it out.
+
+<Screenshot
+  src="/manual/xtb-orbital-placed.webp"
+  alt="The benzene LUMO placed on the 3D model, above the HOMO + LUMO figure. The status bar reads Placed LUMO on the canvas · ⌘Z removes it, and the tab shows Placed on the model and Remove."
+/>
+
+### HOMO and LUMO side by side
+
+**Place HOMO + LUMO figure** puts two small copies of the 3D model under it, the HOMO on the left and the LUMO on the right, each captioned with its energy, for example `HOMO (−10.95 eV)`. For an open shell it uses the α or β column you chose, and the captions say which. The figure is one Undo step; **Remove HOMO + LUMO figure** takes it out. It moves with the model and is saved, printed and exported like a placed orbital.
+
+<Screenshot
+  src="/manual/xtb-orbitals-frontier.webp"
+  alt="Benzene after a GFN2-xTB optimization with Place HOMO + LUMO figure used. Under the 3D model two small copies show the HOMO and the LUMO, captioned HOMO (−10.95 eV) and LUMO (−6.02 eV). The status bar reads Placed HOMO and LUMO under the molecule · ⌘Z removes them, and the tab offers Remove HOMO + LUMO figure."
+/>
+
+A placed orbital is a vector figure. It turns with the model, hides correctly behind atoms and bonds, and exports sharp to SVG and PDF without raster images.
+
+<Screenshot
+  src="/manual/xtb-orbital-pdf.webp"
+  alt="A PDF exported from ReShiki with the benzene LUMO placed on its 3D model, next to the 2D structure."
+/>
+
+The file keeps what the figure needs, so it reopens with the same orbital and the same signs, even in builds without xTB and in `reshiki --cli convert`. A figure is drawn only while its result belongs to the molecule and the model shows that result's geometry; after an edit or on an earlier optimization step it is hidden.
+
+## MO diagram
+
+**Place MO diagram** (in the Orbitals tab, or ⌘K) puts the molecule's orbital energy diagram in the drawing as one object, beside the molecule and clear of other objects. It shows:
+
+- an energy axis in eV;
+- the levels from HOMO−2 to LUMO+2 as bars, with degenerate levels side by side;
+- electrons as ↑↓ on occupied levels;
+- each level's name and energy, and the HOMO–LUMO gap;
+- small orbital pictures of the HOMO and LUMO beside their levels.
+
+An open shell gets α and β columns.
+
+<Screenshot
+  src="/manual/xtb-mo-diagram.webp"
+  alt="Benzene after a GFN2-xTB optimization with its MO diagram placed beside the molecule and selected. The diagram shows an eV axis, the levels LUMO+2 −2.45 eV, LUMO −6.02 eV · 2-fold, HOMO −10.95 eV · 2-fold and HOMO−2 −11.47 eV · 2-fold with electron arrows, a gap 4.93 eV bracket, and small orbital pictures beside LUMO+2, LUMO and HOMO. The inspector shows the MO diagram card with Levels below HOMO, Levels above LUMO, Linked to the calculation with Unlink, and Remove pictures."
+/>
+
+- **Pictures:** select the diagram, then click a level to add or remove its picture. With a level chosen in the Orbitals tab, **Add to MO diagram** and **Remove from MO diagram** do the same.
+- **Range:** with the diagram selected, the inspector's MO diagram card sets how many levels show below the HOMO and above the LUMO.
+- **Linked:** a new calculation of the same molecule updates the levels and pictures in place, and Undo takes back the calculation and the update together. The diagram's size and the pictures you chose are kept. **Unlink** keeps the diagram as it is.
+
+Placing, every change and removing are each one Undo step. The diagram is saved with the file. It is printed and exported to PDF, SVG and PNG with the drawing. Copied together with its molecule, it keeps its pictures. Copied alone, it keeps its levels but not its pictures, and is no longer linked. ChemDraw files get its lines and labels, without the pictures.
+
+## Orbitals from other programs
+
+Opening a Molden or Gaussian fchk file attaches its results to the molecule and opens the palette, titled **Calculation results** with the file's program and method. The Orbitals tab then works as above. Orbitals from these files cannot be recomputed, so the file's coefficients are used directly. When a file's basis uses conventions ReShiki does not support yet (for example Cartesian d shells in fchk), it brings the levels without shapes and the import warnings say why. Gaussian logs and ORCA outputs bring orbital energies but no shapes.
+
+<Screenshot
+  src="/manual/qc-open-molden.webp"
+  alt="A PySCF formaldehyde Molden file opened in ReShiki. The Calculation results palette shows PySCF · imported · charge 0 · multiplicity 1, the Orbitals tab with the HOMO at −12.00 eV and the LUMO at 3.08 eV, and the HOMO drawn on the model. The note reads Orbitals from the opened file; a placed orbital is saved with the file."
+/>
+
+## File size
+
+By default, orbital coefficients and surfaces are not saved with xTB results; ReShiki recomputes them. A placed orbital saves its own coefficients and a drawing of its surface (up to about 300 KB). Imported results keep their orbitals while the imported data take no more than 2 MB per molecule. **Keep full results in this file** keeps everything.
+
+## Limits
+
+- A very thin lobe in a large molecule can fall between grid points and vanish; lower the isovalue.
+- The editable copy of the drawing inside an exported PNG, SVG or PDF leaves calculation data out, so a placed orbital does not come back when you re-import the picture. The picture itself shows it.
+- Still to come: a floating orbital viewer, nodal planes and your own phase colors.

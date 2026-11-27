@@ -12,13 +12,14 @@ use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::geometry::{
-    self, AtomProblem, Client, DEFAULT_SEED, ForceField, GENERATION_SEED_MAX, Optimized, Prepared,
-    Radical,
+    self, AtomProblem, Client, ForceField, ModelGeneration, Optimized, Prepared, Radical,
 };
 use reshiki::models3d::{
     self, Background, Display, Hydrogens, Labels, Layout, Look, Probability, Style,
 };
 use std::sync::Arc;
+
+pub(in crate::app) mod thumbnail;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Key {
@@ -86,20 +87,70 @@ pub(crate) enum Setting {
 /// The generation in flight; dropping it aborts the worker.
 pub(crate) struct Job {
     /// The key the worker answers with; it never changes.
-    key: Key,
+    pub(super) key: Key,
     /// The drawing state the result still applies to: `key` until switching
     /// another molecule's display moves it on.
     current: Key,
     display: Display,
+    reaction: Option<u64>,
     /// An existing model to replace, keeping its view at completion.
     target: Option<usize>,
     seed: i32,
-    force_field: ForceField,
-    prepared: Arc<Prepared>,
+    pub(super) force_field: ForceField,
+    pub(super) prepared: Arc<Prepared>,
     /// Why strict chemistry checks refused a model built in relaxed mode.
     strict_error: Option<geometry::Error>,
     started: iced::time::Instant,
     _handle: iced::task::Handle,
+}
+
+/// A generated model and the models it can replace when its result is stored.
+pub(super) struct CalculationModel {
+    model: models3d::Model3d,
+    previous: Vec<models3d::Model3d>,
+    target: Option<usize>,
+}
+
+impl CalculationModel {
+    fn new(doc: &Document, mut model: models3d::Model3d, target: Option<usize>) -> Self {
+        let mut previous = Vec::new();
+        let mut position = None;
+        for (index, old) in doc.models.iter().enumerate() {
+            if models_overlap(&model, old) {
+                if target == Some(index) {
+                    position = Some(previous.len());
+                }
+                previous.push(old.clone());
+            }
+        }
+        if let Some(index) = target {
+            prepare_replacement(doc, index, &mut model);
+        }
+        Self {
+            model,
+            previous,
+            target: position,
+        }
+    }
+
+    pub(super) fn apply(&self, doc: &mut Document) -> bool {
+        let mut affected = doc
+            .models
+            .iter()
+            .enumerate()
+            .filter(|(_, old)| models_overlap(&self.model, old));
+        if !affected.clone().map(|(_, old)| old).eq(&self.previous) {
+            return false;
+        }
+        let index = self
+            .target
+            .and_then(|target| affected.nth(target).map(|(i, _)| i - target));
+        doc.models.retain(|old| !models_overlap(&self.model, old));
+        let index = index.unwrap_or(doc.models.len());
+        doc.models.insert(index, self.model.clone());
+        models3d::require_version(doc);
+        true
+    }
 }
 
 pub(super) struct ModelFailure {
@@ -177,75 +228,89 @@ impl App {
                 Task::none()
             }
             Action::Generated(key, result) => {
-                let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
-                    return Task::none();
-                };
-                if job.current != self.model_key() {
-                    self.status = "Drawing changed · 3D model not applied".into();
-                    self.error = false;
-                    return Task::none();
-                }
-                // A preview or label editor owns the drawing; adding a model
-                // under it would cancel or outdate it.
-                if self.tab.drawing_edit_active() {
-                    self.status = "3D model not applied · Choose 3D again after this edit".into();
-                    self.error = false;
-                    return Task::none();
-                }
-                let model = result.map_err(Failure::other).and_then(|optimized| {
-                    job.prepared
-                        .model(&optimized)
-                        .map(|model| (model, optimized.force_field))
-                        .map_err(|error| build_failure(&error))
-                });
-                match model {
-                    Ok((mut model, field)) => {
-                        let ids = job.prepared.ids();
-                        self.tab
-                            .model_failure
-                            .take_if(|failure| failure.molecule.iter().any(|id| ids.contains(id)));
-                        model.seed = job.seed;
-                        if let Some(index) = job.target {
-                            self.replace_model(index, model);
-                        } else {
-                            self.add_model(model, job.display);
-                        }
-                        let caution = match &job.strict_error {
-                            Some(geometry::Error::Atom {
-                                symbol,
-                                problem: AtomProblem::NoMmffParameters,
-                                ..
-                            }) => Some(format!(
-                                "Approximate {field} model · MMFF has no parameters for {symbol} ({})",
-                                element_name(symbol)
-                            )),
-                            Some(_) => Some(format!("Approximate {field} model · relaxed checks")),
-                            None if field != job.force_field => Some(format!(
-                                "{field} used: no {} parameters for this molecule",
-                                job.force_field
-                            )),
-                            None => None,
-                        };
-                        if let Some(caution) = caution.filter(|_| !self.error) {
-                            self.status = format!("{} · {caution}", self.status);
-                        }
-                        if !self.error
-                            && let Some(who) = radical_subject(job.prepared.radicals())
-                        {
-                            self.status = format!(
-                                "{} · {who}: start built from {UNNAMED_PARENT}, added H removed",
-                                self.status
-                            );
-                            return self.name_parent(&job.prepared);
-                        }
-                    }
-                    Err(failure) => {
-                        self.record_model_failure(job.prepared.ids().to_vec(), failure);
-                    }
-                }
-                Task::none()
+                let named = self.model_generated(key, result);
+                // A calculation waiting for this model goes on, or stops.
+                Task::batch([named, self.xtb_model_finished(key)])
             }
         }
+    }
+
+    /// Apply a finished generation; a radical model's parent is named after.
+    fn model_generated(
+        &mut self,
+        key: Key,
+        result: Result<Arc<Optimized>, String>,
+    ) -> Task<Message> {
+        let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
+            return Task::none();
+        };
+        if job.current != self.model_key() {
+            self.status = "Drawing changed · 3D model not applied".into();
+            self.error = false;
+            return Task::none();
+        }
+        // A preview or label editor owns the drawing; adding a model
+        // under it would cancel or outdate it.
+        if self.tab.drawing_edit_active() {
+            self.status = "3D model not applied · Choose 3D again after this edit".into();
+            self.error = false;
+            return Task::none();
+        }
+        let model = result.map_err(Failure::other).and_then(|optimized| {
+            job.prepared
+                .model(&optimized)
+                .map(|model| (model, optimized.force_field))
+                .map_err(|error| build_failure(&error))
+        });
+        match model {
+            Ok((mut model, field)) => {
+                let ids = job.prepared.ids();
+                self.tab
+                    .model_failure
+                    .take_if(|failure| failure.molecule.iter().any(|id| ids.contains(id)));
+                model.seed = job.seed;
+                if job.reaction.is_some() {
+                    let model = CalculationModel::new(&self.tab.doc, model, job.target);
+                    self.xtb_stage_model(key, model);
+                } else if let Some(index) = job.target {
+                    self.replace_model(index, model);
+                } else {
+                    self.add_model(model, job.display);
+                }
+                let caution = match &job.strict_error {
+                    Some(geometry::Error::Atom {
+                        symbol,
+                        problem: AtomProblem::NoMmffParameters,
+                        ..
+                    }) => Some(format!(
+                        "Approximate {field} model · MMFF has no parameters for {symbol} ({})",
+                        element_name(symbol)
+                    )),
+                    Some(_) => Some(format!("Approximate {field} model · relaxed checks")),
+                    None if field != job.force_field => Some(format!(
+                        "{field} used: no {} parameters for this molecule",
+                        job.force_field
+                    )),
+                    None => None,
+                };
+                if let Some(caution) = caution.filter(|_| !self.error) {
+                    self.status = format!("{} · {caution}", self.status);
+                }
+                if !self.error
+                    && let Some(who) = radical_subject(job.prepared.radicals())
+                {
+                    self.status = format!(
+                        "{} · {who}: start built from {UNNAMED_PARENT}, added H removed",
+                        self.status
+                    );
+                    return self.name_parent(&job.prepared);
+                }
+            }
+            Err(failure) => {
+                self.record_model_failure(job.prepared.ids().to_vec(), failure);
+            }
+        }
+        Task::none()
     }
 
     fn model_key(&self) -> Key {
@@ -345,21 +410,27 @@ impl App {
             })
     }
 
-    /// The current generation's own target, independent of later selection.
+    /// The current generation's own target, independent of later selection,
+    /// or the molecule an xTB calculation runs on.
     pub(super) fn model_generation(&self) -> Option<crate::canvas::ModelGeneration<'_>> {
-        let job = self.tab.model_job.as_ref()?;
+        let Some(job) = self.tab.model_job.as_ref() else {
+            return self.xtb_outline();
+        };
         (job.current == self.model_key()).then_some(crate::canvas::ModelGeneration {
             atoms: job.prepared.ids(),
             started: job.started,
+            label: "Generating 3D",
         })
     }
 
     pub(super) fn cancel_model_generation(&mut self) -> bool {
-        if self.tab.model_job.take().is_none() {
+        let Some(job) = self.tab.model_job.take() else {
             return false;
-        }
+        };
         self.status = "3D model canceled · Drawing unchanged".into();
         self.error = false;
+        // A calculation waiting for this model stops too.
+        let _ = self.xtb_model_finished(job.key);
         true
     }
 
@@ -483,7 +554,7 @@ impl App {
             }
             return Task::none();
         }
-        self.generate_model(atoms, display, None, ForceField::Mmff94s, DEFAULT_SEED)
+        self.generate_model(atoms, display, ModelGeneration::default(), None)
     }
 
     fn regenerate_model(&mut self, fresh: bool) -> Task<Message> {
@@ -493,27 +564,39 @@ impl App {
         let Some((_, Some(index))) = self.selected_model() else {
             return Task::none();
         };
+        let Some(generation) = ModelGeneration::for_model(&self.tab.doc, index, fresh) else {
+            return Task::none();
+        };
+        self.regenerate_saved_model(generation, None)
+    }
+
+    /// A model for a calculation on `atoms`: a new one shown with the
+    /// drawing, or an Update of an out-of-date one. Starts nothing on error;
+    /// the status says why.
+    pub(super) fn model_for_calculation(
+        &mut self,
+        atoms: Vec<u64>,
+        reaction: Option<u64>,
+    ) -> Task<Message> {
+        let Some(generation) = ModelGeneration::for_calculation(&self.tab.doc, &atoms) else {
+            return Task::none();
+        };
+        match generation.target {
+            Some(_) => self.regenerate_saved_model(generation, reaction),
+            None => self.generate_model(atoms, Display::Both, generation, reaction),
+        }
+    }
+
+    fn regenerate_saved_model(
+        &mut self,
+        generation: ModelGeneration,
+        reaction: Option<u64>,
+    ) -> Task<Message> {
+        let Some(index) = generation.target else {
+            return Task::none();
+        };
         let Some(model) = self.tab.doc.models.get(index) else {
             return Task::none();
-        };
-        if model.is_file_derived() || !fresh && !model.is_stale(&self.tab.doc) {
-            return Task::none();
-        }
-        let force_field = match model.force_field {
-            models3d::ForceField::Mmff94 => ForceField::Mmff94,
-            models3d::ForceField::Mmff94s => ForceField::Mmff94s,
-            models3d::ForceField::Uff => ForceField::Uff,
-        };
-        let seed = if model.seed == 0 {
-            DEFAULT_SEED
-        } else {
-            model.seed
-        };
-        // ETKDG samples consecutive seeds; a wide stride avoids overlapping batches.
-        let seed = if fresh {
-            ((i64::from(seed) + 1_000_003) % i64::from(GENERATION_SEED_MAX)) as i32
-        } else {
-            seed
         };
         let atoms = model.chemistry_ids(&self.tab.doc);
         if atoms.first().is_some_and(|id| {
@@ -526,17 +609,21 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        self.generate_model(atoms, model.display, Some(index), force_field, seed)
+        self.generate_model(atoms, model.display, generation, reaction)
     }
 
     fn generate_model(
         &mut self,
         atoms: Vec<u64>,
         display: Display,
-        target: Option<usize>,
-        force_field: ForceField,
-        seed: i32,
+        generation: ModelGeneration,
+        reaction: Option<u64>,
     ) -> Task<Message> {
+        let ModelGeneration {
+            target,
+            force_field,
+            seed,
+        } = generation;
         if target.is_some()
             && self
                 .tab
@@ -589,6 +676,10 @@ impl App {
             move |result| Message::Models3d(Action::Generated(key, result)),
         )
         .abortable();
+        // A calculation waiting for a replaced generation stops.
+        if let Some(old) = self.tab.model_job.take() {
+            let _ = self.xtb_model_finished(old.key);
+        }
         self.status = if let Some(who) = who {
             format!("{who} · Building the 3D start from its closed-shell parent…")
         } else if strict_error.is_some() {
@@ -600,6 +691,7 @@ impl App {
             key,
             current: key,
             display,
+            reaction,
             target,
             seed,
             force_field,
@@ -843,60 +935,22 @@ impl App {
 
     fn replace_model(&mut self, index: usize, mut model: models3d::Model3d) {
         let before = self.tab.doc.clone();
-        let Some(old) = before.models.get(index) else {
+        if !prepare_replacement(&before, index, &mut model) {
             return;
-        };
-        let origin = models3d::frame_origin(&before, old);
-        align_conformer(&mut model, old, &old.linked_ids(&before));
-        model.display = old.display;
-        model.rotation = old.rotation;
-        model.offset = old.offset;
-        model.size = old.size;
-        model.style = old.style;
-        model.look = old.look;
-        model.show_hydrogens = old.show_hydrogens;
-        model.labels = old.labels;
-        model.depth_fade = old.depth_fade;
-        model.perspective = old.perspective;
-        model.copy_opacity = old.copy_opacity;
-        model.background = old.background;
-        model.layout = old.layout;
-        let atoms = model.linked_ids(&before);
-        let overlaps = |other: &models3d::Model3d| atoms.iter().any(|id| other.contains(*id));
-        model.drawn = models3d::Drawn::combined(
-            &before,
-            &model,
-            std::iter::once(old).chain(
-                before
-                    .models
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, other)| *i != index && overlaps(other))
-                    .map(|(_, other)| other),
-            ),
-        );
+        }
         // Joining sources makes one molecule: replace all its models, keeping
         // the selected view's place among the unaffected models.
         let index = before
             .models
             .iter()
             .take(index)
-            .filter(|other| !overlaps(other))
+            .filter(|other| !models_overlap(&model, other))
             .count();
-        self.tab.doc.models.retain(|other| !overlaps(other));
+        self.tab
+            .doc
+            .models
+            .retain(|other| !models_overlap(&model, other));
         self.tab.doc.models.insert(index, model);
-        if old.linked_ids(&before) != atoms
-            && let Some(origin) = origin
-            && let Some(now) = self
-                .tab
-                .doc
-                .models
-                .get(index)
-                .and_then(|model| models3d::frame_origin(&self.tab.doc, model))
-            && let Some(model) = self.tab.doc.models.get_mut(index)
-        {
-            model.offset = model.offset.offset(origin.x - now.x, origin.y - now.y);
-        }
         self.changed(before);
         if !self.error {
             self.status = "3D conformer regenerated".into();
@@ -911,7 +965,7 @@ impl App {
             .flatten()
     }
 
-    fn model_stale(&self, index: usize) -> bool {
+    pub(super) fn model_stale(&self, index: usize) -> bool {
         let key = (self.tab.id, self.tab.file_epoch, self.tab.revision);
         let mut cache = self.tab.model_stale.borrow_mut();
         if cache.key != Some(key) || cache.values.len() != self.tab.doc.models.len() {
@@ -940,17 +994,37 @@ impl App {
         stale
     }
 
-    fn update_model_button(&self, id: &'static str) -> Element<'_, Message> {
-        accessible_command(
-            id,
-            "Update the model from the current structure",
-            "Update model",
-        )
-        .on_press_maybe(
-            (self.idle() && self.tab.model_job.is_none())
-                .then_some(Message::Models3d(Action::Update)),
-        )
-        .into()
+    /// Linked atom IDs identify the shown outdated models in canvas previews.
+    pub(super) fn outdated_models(&self) -> Vec<&[u64]> {
+        self.tab
+            .doc
+            .models
+            .iter()
+            .enumerate()
+            .filter(|(index, model)| model.display != Display::TwoD && self.model_stale(*index))
+            .map(|(_, model)| model.linked_atoms.as_slice())
+            .collect()
+    }
+
+    fn update_model_button(&self, id: &'static str, recalculate: bool) -> Element<'_, Message> {
+        let (name, label, message) = if recalculate {
+            (
+                "Recalculate xTB, rebuilding the 3D model first",
+                "Recalculate (rebuilds the 3D model)",
+                Message::Xtb(super::xtb::Action::Palette(
+                    super::xtb::palette::Action::RecalculateMolecule,
+                )),
+            )
+        } else {
+            (
+                "Update the model from the current structure",
+                "Update model",
+                Message::Models3d(Action::Update),
+            )
+        };
+        accessible_command(id, name, label)
+            .on_press_maybe((self.idle() && self.tab.model_job.is_none()).then_some(message))
+            .into()
     }
 
     /// The old Show-as chooser is gone; only a stale model needs a floating action.
@@ -959,29 +1033,57 @@ impl App {
         base: Element<'a, Message>,
     ) -> Element<'a, Message> {
         use iced::widget::{container, pin, stack};
-        let notice: Option<Element<'_, Message>> = self.stale_model().and_then(|model| {
-            self.pending(&model.linked_ids(&self.tab.doc))
-                .is_none()
-                .then(|| {
-                    container(
-                        row![
-                            text("Structure changed ·").size(12),
-                            self.update_model_button("model-floating-update")
-                        ]
-                        .spacing(6)
-                        .align_y(Alignment::Center),
-                    )
-                    .padding([4, 8])
-                    .style(super::workspace::panel)
-                    .into()
-                })
-        });
+        let base = stack![base];
+        let Some(model) = self.stale_model() else {
+            return base.into();
+        };
+        let atoms = model.linked_ids(&self.tab.doc);
+        if self.pending(&atoms).is_some()
+            || (super::xtb::available() && self.xtb_palette_can_repeat_stale(&atoms))
+        {
+            return base.into();
+        }
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        let at = self
-            .stale_model()
-            .and_then(|model| {
-                reshiki::scene::selection_bounds(&self.tab.doc, &model.linked_ids(&self.tab.doc))
-            })
+        let recalculate = self.xtb_can_recalculate_molecule();
+        let prefix = if recalculate {
+            "Outdated ·"
+        } else {
+            "Structure changed ·"
+        };
+        let label = if recalculate {
+            "Recalculate (rebuilds the 3D model)"
+        } else {
+            "Update model"
+        };
+        let width = (super::text_width(prefix, 12.) + super::text_width(label, 12.) + 40.)
+            .min((paper.width - 12.).max(0.));
+        let id = if !recalculate {
+            "model-floating-update"
+        } else if self.inspector_open
+            && self.inspector_tab == super::InspectorTab::Properties
+            && self
+                .tab
+                .inspector_ui
+                .expanded(Section::Structure)
+                .unwrap_or(true)
+        {
+            // The Structure section can show the same action at the same time.
+            "model-floating-recalculate"
+        } else {
+            "model-recalculate"
+        };
+        let notice = container(
+            row![
+                text(prefix).size(12),
+                self.update_model_button(id, recalculate)
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        )
+        .width(width)
+        .padding([4, 8])
+        .style(super::workspace::panel);
+        let at = reshiki::scene::selection_bounds(&self.tab.doc, &atoms)
             .map(|(lo, hi)| {
                 self.tab.camera.screen(
                     reshiki::document::Point::new((lo.x + hi.x) / 2., lo.y),
@@ -989,15 +1091,15 @@ impl App {
                 )
             })
             .unwrap_or_default();
-        let x = (paper.x + at.x - 135.).clamp(
+        let x = (paper.x + at.x - width / 2.).clamp(
             paper.x + 6.,
-            (paper.x + paper.width - 276.).max(paper.x + 6.),
+            (paper.x + paper.width - width - 6.).max(paper.x + 6.),
         );
         let y = (paper.y + at.y - 48.).clamp(
             paper.y + 6.,
             (paper.y + paper.height - 40.).max(paper.y + 6.),
         );
-        stack![base, pin(column(notice)).x(x).y(y)].into()
+        base.push(pin(notice).x(x).y(y)).into()
     }
 
     fn reveal_model(&mut self, atoms: &[u64], display: Display) {
@@ -1106,11 +1208,25 @@ impl App {
                     .spacing(4),
                 );
         }
-        if self.stale_model().is_some() {
+        if stale {
+            let recalculate = self.xtb_can_recalculate_molecule();
             body = body.push(
                 row![
-                    text("Structure changed ·").size(11).style(muted_text),
-                    self.update_model_button("structure-update-model"),
+                    text(if recalculate {
+                        "Outdated ·"
+                    } else {
+                        "Structure changed ·"
+                    })
+                    .size(11)
+                    .style(muted_text),
+                    self.update_model_button(
+                        if recalculate {
+                            "model-recalculate"
+                        } else {
+                            "structure-update-model"
+                        },
+                        recalculate,
+                    ),
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
@@ -1417,11 +1533,11 @@ impl App {
                 .on_press_maybe(set(Setting::ResetView))
                 .into(),
         ]);
-        if stale {
+        if stale && !self.xtb_can_recalculate_molecule() {
             body = column![
                 row![
                     text("Structure changed ·").size(11).style(muted_text),
-                    self.update_model_button("model-update")
+                    self.update_model_button("model-update", false)
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
@@ -1525,6 +1641,48 @@ fn crystal_controls(
         .spacing(4),
     )
     .into()
+}
+
+fn models_overlap(model: &models3d::Model3d, old: &models3d::Model3d) -> bool {
+    model.linked_atoms.iter().any(|id| old.contains(*id))
+}
+
+fn prepare_replacement(doc: &Document, index: usize, model: &mut models3d::Model3d) -> bool {
+    let Some(old) = doc.models.get(index) else {
+        return false;
+    };
+    align_conformer(model, old, &old.linked_ids(doc));
+    model.display = old.display;
+    model.rotation = old.rotation;
+    model.offset = old.offset;
+    model.size = old.size;
+    model.style = old.style;
+    model.look = old.look;
+    model.show_hydrogens = old.show_hydrogens;
+    model.labels = old.labels;
+    model.depth_fade = old.depth_fade;
+    model.perspective = old.perspective;
+    model.copy_opacity = old.copy_opacity;
+    model.background = old.background;
+    model.layout = old.layout;
+    model.drawn = models3d::Drawn::combined(
+        doc,
+        model,
+        std::iter::once(old).chain(
+            doc.models
+                .iter()
+                .enumerate()
+                .filter(|(i, other)| *i != index && models_overlap(model, other))
+                .map(|(_, other)| other),
+        ),
+    );
+    if old.linked_ids(doc) != model.linked_ids(doc)
+        && let Some(origin) = models3d::frame_origin(doc, old)
+        && let Some(now) = models3d::frame_origin(doc, model)
+    {
+        model.offset = model.offset.offset(origin.x - now.x, origin.y - now.y);
+    }
+    true
 }
 
 /// Least-squares proper rotation from the new conformer onto the old one.
@@ -1763,6 +1921,7 @@ impl App {
             force_field: job.force_field,
             diagnostics: vec![],
             approximations: vec![],
+            ensemble: vec![],
         };
         let key = job.key;
         self.update(Message::Models3d(Action::Generated(

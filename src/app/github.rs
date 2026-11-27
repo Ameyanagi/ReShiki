@@ -1682,7 +1682,7 @@ impl App {
     pub(super) fn github_saved(
         &mut self,
         saved: bool,
-        written: Option<(PathBuf, reshiki::document::Document)>,
+        written: Option<(PathBuf, Result<Vec<u8>, String>)>,
     ) -> Task<Message> {
         let restored = self.github.restored.take();
         if !saved {
@@ -1694,7 +1694,7 @@ impl App {
             Some(_) => Task::done(Message::GitHub(Action::SaveNext)),
             None => Task::none(),
         };
-        let Some((path, doc)) = written else {
+        let Some((path, bytes)) = written else {
             return next;
         };
         let resolve = self.github_resolve_saved(&path);
@@ -1723,10 +1723,7 @@ impl App {
         let record = perform(
             {
                 let key = key.clone();
-                async move {
-                    let bytes = doc.file_json()?;
-                    workcopy::snapshot(&root, &key, &repo_path, bytes, base).await
-                }
+                async move { workcopy::snapshot(&root, &key, &repo_path, bytes?, base).await }
             },
             Action::Recorded,
         );

@@ -180,6 +180,474 @@ fn explicit_generation_seeds_preserve_field_and_reject_values_outside_sampling_r
     }
 }
 
+#[test]
+fn model_generation_updates_stale_uff_with_its_saved_seed() {
+    let mut source = ethanol();
+    let ids: Vec<_> = source.atoms.iter().map(|atom| atom.id).collect();
+    let prepared = Prepared::new(&source, &ids).unwrap();
+    let mut result = optimized(&prepared, vec![]);
+    result.force_field = ForceField::Uff;
+    let mut model = prepared.model(&result).unwrap();
+    model.seed = 91_337;
+    source.models.push(model);
+    crate::models3d::require_version(&mut source);
+    assert!(ModelGeneration::for_calculation(&source, &ids).is_none());
+
+    source.atom_mut(89).unwrap().element = "N".into();
+    assert!(source.models[0].is_stale(&source));
+    let generation = ModelGeneration::for_calculation(&source, &ids).unwrap();
+    assert_eq!(
+        generation,
+        ModelGeneration {
+            target: Some(0),
+            force_field: ForceField::Uff,
+            seed: 91_337,
+        }
+    );
+    assert_eq!(
+        ModelGeneration::for_model(&source, 0, false),
+        Some(generation)
+    );
+    let request = Prepared::new(&source, &ids)
+        .unwrap()
+        .without_retained_depth()
+        .generation_request(generation.force_field, generation.seed)
+        .unwrap();
+    assert_eq!(request.field, reshiki_geometry::ForceField::UFF);
+    assert_eq!(request.seed, 91_337);
+}
+
+#[test]
+fn model_generation_keeps_new_models_and_regeneration_on_the_existing_seed_policy() {
+    let mut source = ethanol();
+    let ids: Vec<_> = source.atoms.iter().map(|atom| atom.id).collect();
+    assert_eq!(
+        ModelGeneration::for_calculation(&source, &ids),
+        Some(ModelGeneration::default())
+    );
+    let prepared = Prepared::new(&source, &ids).unwrap();
+    let mut model = prepared.model(&optimized(&prepared, vec![])).unwrap();
+    model.seed = GENERATION_SEED_MAX - 2;
+    source.models.push(model);
+    let generation = ModelGeneration::for_model(&source, 0, true).unwrap();
+    assert_eq!(generation.seed, 1_000_001);
+
+    source.models[0].seed = 0;
+    source.atom_mut(89).unwrap().element = "N".into();
+    assert_eq!(
+        ModelGeneration::for_calculation(&source, &ids)
+            .unwrap()
+            .seed,
+        DEFAULT_SEED
+    );
+    source.models[0].file_geometry = true;
+    assert!(ModelGeneration::for_calculation(&source, &ids).is_none());
+    assert!(ModelGeneration::for_model(&source, 0, true).is_none());
+}
+
+#[test]
+fn ensemble_request_encodes_fresh_generation_and_validates_limits() {
+    let mut source = carbon_chain(4);
+    source.atoms[0].depth = 17.;
+    let prepared = Prepared::new(&source, &[]).unwrap();
+    let field = ForceField::Mmff94s;
+    let generation = prepared.generation_request(field, 42).unwrap();
+    assert!(!generation.coordinates.is_empty());
+    assert_eq!(generation.max_iterations, 500);
+    for (mode, name) in [
+        (Ensemble::Minimized, "Minimized"),
+        (Ensemble::Embedded, "Embedded"),
+    ] {
+        let request = prepared.ensemble_request(field, 42, 16, mode).unwrap();
+        let value = serde_json::to_value(&request).unwrap();
+        assert_eq!(value["ensemble"], name);
+        assert_eq!(request.operation, reshiki_geometry::Operation::Generate);
+        assert_eq!(request.field, field.native());
+        assert_eq!(request.seed, 42);
+        assert_eq!(request.conformers, 16);
+        assert_eq!(request.max_iterations, 2000);
+        assert!(request.coordinates.is_empty());
+    }
+    for count in [0, reshiki_geometry::MAX_CONFORMERS + 1] {
+        assert!(matches!(
+            prepared.ensemble_request(field, 42, count, Ensemble::Minimized),
+            Err(Error::Invalid(_))
+        ));
+    }
+    let relaxed = Prepared::relaxed(&source, &[]).unwrap();
+    assert!(matches!(
+        relaxed.ensemble_request(field, 42, 16, Ensemble::Minimized),
+        Err(Error::Invalid(_))
+    ));
+    let large = Prepared::with_limits(
+        &carbon_chain(201),
+        &[],
+        Limits {
+            heap_bytes: 256 * 1024 * 1024,
+            timeout: std::time::Duration::from_secs(60),
+        },
+    )
+    .unwrap();
+    assert!(
+        large
+            .ensemble_request(field, 42, 31, Ensemble::Embedded)
+            .is_ok()
+    );
+    assert!(matches!(
+        large.ensemble_request(field, 42, 32, Ensemble::Embedded),
+        Err(Error::Invalid(_))
+    ));
+}
+
+fn undefined_tetrahedron(display: &str, reversed: bool) -> (Document, u64, HashMap<u64, Point3>) {
+    let mut doc = Document::default();
+    let centre = doc.add_atom("C", Point::default());
+    doc.atom_mut(centre).unwrap().id = 41;
+    let centre = 41;
+    let mut positions = HashMap::from([(centre, Point3::default())]);
+    for (index, (element, xyz)) in [
+        ("F", [1., 1., 1.]),
+        ("Cl", [1., -1., -1.]),
+        ("Br", [-1., 1., -1.]),
+        ("H", [-1., -1., 1.]),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let atom = doc.add_atom(element, Point::new(index as f32 * 42., 42.));
+        let id = [3, 89, 17, 66][index];
+        doc.atom_mut(atom).unwrap().id = id;
+        let display = if index == 0 { display } else { "plain" };
+        let (a, b) = if reversed { (id, centre) } else { (centre, id) };
+        doc.add_bond(a, b, 1, display);
+        positions.insert(
+            id,
+            Point3 {
+                x: xyz[0],
+                y: xyz[1],
+                z: xyz[2],
+            },
+        );
+    }
+    // Native neighbour order is bond insertion order, not atom or drawing ID order.
+    doc.bonds.swap(0, 1);
+    (doc, centre, positions)
+}
+
+#[test]
+fn undefined_stereo_pinning_uses_model_ids_and_native_neighbor_order() {
+    for display in ["plain", "wavy"] {
+        for reversed in [false, true] {
+            let (source, centre, positions) = undefined_tetrahedron(display, reversed);
+            let original = source.clone();
+            let prepared = Prepared::new(&source, &[centre]).unwrap();
+            let graph = &prepared.molecule.state.graph;
+            let mut metadata = prepared.molecule.state.metadata.clone();
+            for bond in &mut metadata.bonds {
+                bond.unknown_stereo = false;
+            }
+            let expected = crate::chemistry::stereo::from_3d(
+                graph,
+                &metadata,
+                &vec![crate::chemistry::kekulize::Direction::None; graph.bonds.len()],
+                Some(&crate::chemistry::stereo::wedging::Conformer {
+                    positions: prepared.ids.iter().map(|id| positions[id]).collect(),
+                    is_3d: true,
+                }),
+                &crate::chemistry::stereo::SpatialAnnotations {
+                    non_explicit: vec![None; prepared.ids.len()],
+                    done: None,
+                },
+                crate::chemistry::stereo::SpatialOptions {
+                    replace_existing: true,
+                    allow_nontetrahedral: false,
+                },
+            )
+            .unwrap()
+            .metadata
+            .atoms[prepared.index(centre).unwrap()]
+            .chiral_tag;
+            assert!(matches!(expected, 1 | 2));
+            for invert in [false, true] {
+                let mut pinned = prepared.clone();
+                let materialized = pinned.materialized.clone();
+                assert_eq!(
+                    pinned.pin_undefined_stereo(&positions, invert).unwrap(),
+                    StereoPinning {
+                        pinned: vec![centre],
+                        unpinned: vec![],
+                    }
+                );
+                let request = pinned
+                    .ensemble_request(ForceField::Uff, DEFAULT_SEED, 4, Ensemble::Embedded)
+                    .unwrap();
+                assert_eq!(
+                    request.atoms[pinned.index(centre).unwrap()].chiral_tag,
+                    u32::from(if invert { expected ^ 3 } else { expected })
+                );
+                assert_eq!(pinned.source, original);
+                assert_eq!(pinned.materialized, materialized);
+            }
+            assert_eq!(source, original);
+        }
+    }
+}
+
+#[test]
+fn undefined_stereo_pinning_preserves_defined_centers_and_is_transactional() {
+    let (mut source, centre, mut positions) = undefined_tetrahedron("plain", false);
+    let mut prepared = Prepared::new(&source, &[]).unwrap();
+    let before = serde_json::to_value(&prepared.molecule.state.metadata).unwrap();
+    let mut missing = positions.clone();
+    missing.remove(&3);
+    assert!(prepared.pin_undefined_stereo(&missing, false).is_err());
+    for position in positions.values_mut() {
+        position.z = 0.;
+    }
+    assert_eq!(
+        prepared.pin_undefined_stereo(&positions, false).unwrap(),
+        StereoPinning {
+            pinned: vec![],
+            unpinned: vec![centre],
+        }
+    );
+    assert_eq!(
+        serde_json::to_value(&prepared.molecule.state.metadata).unwrap(),
+        before
+    );
+
+    source.atom_mut(centre).unwrap().stereo = Some(AtomStereo {
+        winding: "cw".into(),
+        neighbors: vec![3, 89, 17, 66],
+    });
+    let mut defined = Prepared::new(&source, &[]).unwrap();
+    let before = serde_json::to_value(&defined.molecule.state.metadata).unwrap();
+    assert_eq!(
+        defined.pin_undefined_stereo(&positions, true).unwrap(),
+        StereoPinning::default()
+    );
+    assert_eq!(
+        serde_json::to_value(&defined.molecule.state.metadata).unwrap(),
+        before
+    );
+}
+
+#[test]
+fn undefined_stereo_pinning_keeps_the_readable_centre_when_another_is_planar() {
+    let (mut source, centre, mut positions) = undefined_tetrahedron("plain", false);
+    let planar = 66;
+    source.atom_mut(planar).unwrap().element = "C".into();
+    positions.get_mut(&planar).unwrap().z = 0.;
+    for (element, [x, y]) in [("F", [-2., -1.]), ("Cl", [-1., -2.]), ("Br", [-2., -2.])] {
+        let atom = source.add_atom(element, Point::new(x as f32 * 42., y as f32 * 42.));
+        source.add_bond(planar, atom, 1, "plain");
+        positions.insert(atom, Point3 { x, y, z: 0. });
+    }
+    let mut tags = Vec::new();
+    for invert in [false, true] {
+        let mut prepared = Prepared::new(&source, &[]).unwrap();
+        assert_eq!(
+            prepared.pin_undefined_stereo(&positions, invert).unwrap(),
+            StereoPinning {
+                pinned: vec![centre],
+                unpinned: vec![planar],
+            }
+        );
+        let request = prepared
+            .ensemble_request(ForceField::Uff, DEFAULT_SEED, 4, Ensemble::Embedded)
+            .unwrap();
+        tags.push(request.atoms[prepared.index(centre).unwrap()].chiral_tag);
+        assert_eq!(request.atoms[prepared.index(planar).unwrap()].chiral_tag, 0);
+    }
+    assert!(matches!(tags.as_slice(), [1, 2] | [2, 1]), "{tags:?}");
+}
+
+#[test]
+fn undefined_stereo_pinning_skips_equivalent_ligands() {
+    let (mut source, centre, positions) = undefined_tetrahedron("plain", false);
+    source.atom_mut(3).unwrap().element = "Cl".into();
+    source.atom_mut(3).unwrap().map_num = 7;
+    source.atom_mut(89).unwrap().map_num = 9;
+    let mut prepared = Prepared::new(&source, &[]).unwrap();
+    assert_eq!(
+        prepared.pin_undefined_stereo(&positions, false).unwrap(),
+        StereoPinning::default()
+    );
+    assert_eq!(
+        prepared.molecule.state.metadata.atoms[prepared.index(centre).unwrap()].chiral_tag,
+        0
+    );
+}
+
+#[tokio::test]
+async fn undefined_stereo_pinning_retains_coupled_ring_metadata() {
+    use crate::engine::{LocalEngine, Request};
+
+    let doc = LocalEngine::in_process()
+        .request(Request::import_smiles("C[C@H]1CC[C@H](C)CC1"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let mut prepared = Prepared::new(&doc, &[]).unwrap();
+    prepared.molecule.state = crate::chemistry::stereo::perception::perceive(
+        &prepared.molecule.state,
+        crate::chemistry::stereo::perception::Options {
+            clean: true,
+            force: true,
+            flag_possible: true,
+        },
+    )
+    .unwrap();
+    assert!(
+        prepared
+            .molecule
+            .state
+            .metadata
+            .atoms
+            .iter()
+            .any(|atom| atom.ring_stereo)
+    );
+    // These ring centres are already defined, so no model coordinates are
+    // needed. Their paired ring-membership annotations must survive inference.
+    assert_eq!(
+        prepared
+            .pin_undefined_stereo(&HashMap::new(), false)
+            .unwrap(),
+        StereoPinning::default()
+    );
+}
+
+#[test]
+fn undefined_stereo_pinning_keeps_every_sample_in_the_model_or_inverted_configuration() {
+    use crate::chemistry::{kekulize::Direction, stereo};
+
+    let (source, centre, positions) = undefined_tetrahedron("wavy", true);
+    for invert in [false, true] {
+        let mut prepared = Prepared::new(&source, &[]).unwrap();
+        prepared.pin_undefined_stereo(&positions, invert).unwrap();
+        let request = prepared
+            .ensemble_request(ForceField::Uff, DEFAULT_SEED, 8, Ensemble::Minimized)
+            .unwrap();
+        let expected =
+            prepared.molecule.state.metadata.atoms[prepared.index(centre).unwrap()].chiral_tag;
+        let sampled = reshiki_geometry::solve(&request).unwrap();
+        assert_eq!(sampled.ensemble.len(), 8, "{:?}", sampled.diagnostics);
+        for member in sampled.ensemble {
+            let state = &prepared.molecule.state;
+            let conformer = stereo::wedging::Conformer {
+                positions: member.coordinates[..prepared.ids.len()]
+                    .iter()
+                    .map(|&[x, y, z]| Point3 { x, y, z })
+                    .collect(),
+                is_3d: true,
+            };
+            let mut metadata = state.metadata.clone();
+            for bond in &mut metadata.bonds {
+                bond.unknown_stereo = false;
+            }
+            let spatial = stereo::from_3d(
+                &state.graph,
+                &metadata,
+                &vec![Direction::None; state.graph.bonds.len()],
+                Some(&conformer),
+                &stereo::SpatialAnnotations {
+                    non_explicit: vec![None; prepared.ids.len()],
+                    done: None,
+                },
+                stereo::SpatialOptions {
+                    replace_existing: true,
+                    allow_nontetrahedral: false,
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                spatial.metadata.atoms[prepared.index(centre).unwrap()].chiral_tag,
+                expected
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn ritonavir_ensemble_embeds_and_converges_all_starts() {
+    use crate::engine::{LocalEngine, Request};
+
+    let smiles = "CC(C)c1nc(CN(C)C(=O)N[C@@H](C(C)C)C(=O)N[C@@H](Cc2ccccc2)C[C@H](O)[C@H](Cc2ccccc2)NC(=O)OCc2cncs2)cs1";
+    let doc = LocalEngine::in_process()
+        .request(Request::import_smiles(smiles))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let prepared = Prepared::new(&doc, &[]).unwrap();
+    let starts = 12;
+    let request = prepared
+        .ensemble_request(
+            ForceField::Mmff94s,
+            DEFAULT_SEED,
+            starts,
+            Ensemble::Minimized,
+        )
+        .unwrap();
+    let result = reshiki_geometry::solve(&request).unwrap();
+    let converged = result
+        .ensemble
+        .iter()
+        .filter(|member| member.converged)
+        .count();
+    assert_eq!(
+        (result.ensemble.len(), converged),
+        (starts as usize, starts as usize),
+        "{:?}",
+        result.diagnostics
+    );
+}
+
+#[test]
+fn butane_ensemble_round_trips_through_the_worker_frame() {
+    let prepared = Prepared::new(&carbon_chain(4), &[]).unwrap();
+    let operation = prepared
+        .ensemble_request(ForceField::Mmff94s, DEFAULT_SEED, 16, Ensemble::Minimized)
+        .unwrap();
+    let request = wire::encode(
+        &wire::Request {
+            heap_bytes: 64 * 1024 * 1024,
+            capacity: None,
+            operation,
+        },
+        wire::MAX_REQUEST_BYTES,
+    )
+    .unwrap();
+    let bytes = worker::respond(&request).unwrap();
+    let response: wire::Response = wire::decode(&bytes, wire::MAX_RESPONSE_BYTES).unwrap();
+    assert_eq!(response.version, reshiki_geometry::RDKIT_VERSION);
+    let response = response.result.unwrap();
+    assert!(response.ensemble.len() > 1);
+    assert!(
+        response
+            .diagnostics
+            .iter()
+            .any(|line| line.contains("iteration_limit=2000"))
+    );
+    assert_eq!(response.original_count, 4);
+    assert_eq!(response.hydrogen_parents.len(), 10);
+    assert!(response.hydrogen_parents.iter().all(|&parent| parent < 4));
+    assert_eq!(response.coordinates.len(), 14);
+    for member in &response.ensemble {
+        assert_eq!(member.coordinates.len(), response.coordinates.len());
+        assert!(member.energy.is_finite());
+    }
+    assert_eq!(
+        response.energy,
+        response
+            .ensemble
+            .iter()
+            .map(|member| member.energy)
+            .fold(f64::INFINITY, f64::min)
+    );
+}
+
 fn identity(doc: &Document) -> String {
     let molecule = molecular::prepare(doc).unwrap();
     crate::chemistry::smiles::write::write(&molecule.state, Default::default())
@@ -802,6 +1270,7 @@ fn optimized(prepared: &Prepared, parents: Vec<usize>) -> Optimized {
             original_atom_count: n,
             hydrogen_parents: parents,
         },
+        ensemble: Vec::new(),
         initial_energy: 1.,
         energy: 1.,
         gradient: None,

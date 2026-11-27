@@ -118,6 +118,7 @@ fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
             return (f64::from(mid.x), f64::from(mid.y));
         }
         GraphicKind::Picture
+        | GraphicKind::MoDiagram
         | GraphicKind::Table
         | GraphicKind::Rectangle
         | GraphicKind::RoundedRectangle

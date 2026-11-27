@@ -1486,6 +1486,162 @@
       }
     ]
   },
+  "equator-macro@0.2.1": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/equator",
+    "revision": "c9061f3da9a7cc53b0d388f26ab6bb95422823c3",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/equator-macro-LICENSE-97d3424e347e.txt",
+        "sha256": "97d3424e347e8fa236806725ce9837bb453d4dfc9ce1d4733fd6023a8038000a",
+        "source": "https://raw.githubusercontent.com/sarah-ek/equator/c9061f3da9a7cc53b0d388f26ab6bb95422823c3/LICENSE"
+      }
+    ]
+  },
+  "equator@0.2.2": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/equator",
+    "revision": "9d4107bdd6a75598aed4a60fe46200c9e9f4e653",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/equator-LICENSE-97d3424e347e.txt",
+        "sha256": "97d3424e347e8fa236806725ce9837bb453d4dfc9ce1d4733fd6023a8038000a",
+        "source": "https://raw.githubusercontent.com/sarah-ek/equator/9d4107bdd6a75598aed4a60fe46200c9e9f4e653/LICENSE"
+      }
+    ]
+  },
+  "faer-macros@0.21.0": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-quinones/faer-rs",
+    "revision": "83e30d21d61e846a330dac2eea3b04807100938c",
+    "authors": ["sarah quiñones <sarah@veganb.tw>"],
+    "files": [
+      {
+        "path": "texts/faer-macros-LICENSE-4263a9907c8e.txt",
+        "sha256": "4263a9907c8e8d799f714d5cf2ec18663772f09e7eef3eeaaab074ea29ee1358",
+        "source": "https://raw.githubusercontent.com/sarah-quinones/faer-rs/83e30d21d61e846a330dac2eea3b04807100938c/LICENSE"
+      }
+    ]
+  },
+  "faer-traits@0.22.1": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-quinones/faer-rs",
+    "revision": "ef237e85390cc1ea1e2ce87144278b31650e3bc1",
+    "authors": ["sarah quiñones <sarah@veganb.tw>"],
+    "files": [
+      {
+        "path": "texts/faer-traits-LICENSE-4263a9907c8e.txt",
+        "sha256": "4263a9907c8e8d799f714d5cf2ec18663772f09e7eef3eeaaab074ea29ee1358",
+        "source": "https://raw.githubusercontent.com/sarah-quinones/faer-rs/ef237e85390cc1ea1e2ce87144278b31650e3bc1/LICENSE"
+      }
+    ]
+  },
+  "faer@0.22.6": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-quinones/faer-rs",
+    "revision": "325fbbea7e5a85dd8146fd719b6b7e73dccf4996",
+    "authors": ["sarah quiñones <sarah@veganb.tw>"],
+    "files": [
+      {
+        "path": "texts/faer-LICENSE-4263a9907c8e.txt",
+        "sha256": "4263a9907c8e8d799f714d5cf2ec18663772f09e7eef3eeaaab074ea29ee1358",
+        "source": "https://raw.githubusercontent.com/sarah-quinones/faer-rs/325fbbea7e5a85dd8146fd719b6b7e73dccf4996/LICENSE"
+      }
+    ]
+  },
+  "nano-gemm-c32@0.1.0": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/nano-gemm",
+    "revision": "3fd0899bcc450daccd9441c93d16213a753bccc2",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/nano-gemm-c32-LICENSE-310b7323adcc.txt",
+        "sha256": "310b7323adcc27fc94c45d1155b6c89c17986576d790f766a04c855662428a7c",
+        "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/3fd0899bcc450daccd9441c93d16213a753bccc2/LICENSE"
+      }
+    ]
+  },
+  "nano-gemm-c64@0.1.0": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/nano-gemm",
+    "revision": "3fd0899bcc450daccd9441c93d16213a753bccc2",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/nano-gemm-c64-LICENSE-310b7323adcc.txt",
+        "sha256": "310b7323adcc27fc94c45d1155b6c89c17986576d790f766a04c855662428a7c",
+        "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/3fd0899bcc450daccd9441c93d16213a753bccc2/LICENSE"
+      }
+    ]
+  },
+  "nano-gemm-codegen@0.1.0": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/nano-gemm",
+    "revision": "d891c53a839db924309765a7c91e6bb6abec0123",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/nano-gemm-codegen-LICENSE-310b7323adcc.txt",
+        "sha256": "310b7323adcc27fc94c45d1155b6c89c17986576d790f766a04c855662428a7c",
+        "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/d891c53a839db924309765a7c91e6bb6abec0123/LICENSE"
+      }
+    ]
+  },
+  "nano-gemm-core@0.1.0": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/nano-gemm",
+    "revision": "94fdd65f108a9459654b113d6723ad6c64bc9e50",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/nano-gemm-core-LICENSE-310b7323adcc.txt",
+        "sha256": "310b7323adcc27fc94c45d1155b6c89c17986576d790f766a04c855662428a7c",
+        "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/94fdd65f108a9459654b113d6723ad6c64bc9e50/LICENSE"
+      }
+    ]
+  },
+  "nano-gemm-f32@0.1.0": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/nano-gemm",
+    "revision": "d891c53a839db924309765a7c91e6bb6abec0123",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/nano-gemm-f32-LICENSE-310b7323adcc.txt",
+        "sha256": "310b7323adcc27fc94c45d1155b6c89c17986576d790f766a04c855662428a7c",
+        "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/d891c53a839db924309765a7c91e6bb6abec0123/LICENSE"
+      }
+    ]
+  },
+  "nano-gemm-f64@0.1.0": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/nano-gemm",
+    "revision": "d891c53a839db924309765a7c91e6bb6abec0123",
+    "authors": ["sarah <>"],
+    "files": [
+      {
+        "path": "texts/nano-gemm-f64-LICENSE-310b7323adcc.txt",
+        "sha256": "310b7323adcc27fc94c45d1155b6c89c17986576d790f766a04c855662428a7c",
+        "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/d891c53a839db924309765a7c91e6bb6abec0123/LICENSE"
+      }
+    ]
+  },
+  "nano-gemm@0.1.3": {
+    "license": "MIT",
+    "repository": "https://github.com/sarah-ek/nano-gemm",
+    "revision": "0beb2d01293b8a9be5f94d65fd86cc6239cc163b",
+    "authors": [],
+    "files": [
+      {
+        "path": "texts/nano-gemm-LICENSE-310b7323adcc.txt",
+        "sha256": "310b7323adcc27fc94c45d1155b6c89c17986576d790f766a04c855662428a7c",
+        "source": "https://raw.githubusercontent.com/sarah-ek/nano-gemm/0beb2d01293b8a9be5f94d65fd86cc6239cc163b/LICENSE"
+      }
+    ]
+  },
   "wayland-protocols-misc@0.3.12": {
     "license": "MIT",
     "repository": "https://github.com/KDE/plasma-wayland-protocols",

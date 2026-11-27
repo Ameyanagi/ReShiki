@@ -22,6 +22,58 @@ from license_notices import (
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_axtb_notice_names_the_desktop_and_python_engine_packages(self):
+        root = Path(__file__).resolve().parents[1]
+        notice = " ".join((root / "NOTICE").read_text(encoding="utf-8").split())
+        self.assertIn("Desktop builds with the Cargo feature `xtb`", notice)
+        self.assertIn("and the `reshiki-xtb` Python package link axtb", notice)
+        self.assertIn("licenses/axtb/SOURCE", notice)
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "notices"
+            # No dependency resolution is needed to verify the copied shared notice.
+            write_notices(root, destination, {"packages": []})
+            self.assertEqual((destination / "NOTICE").read_bytes(), (root / "NOTICE").read_bytes())
+
+    def test_axtb_attributions_follow_the_fork_in_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            notices = root / "licenses"
+            (notices / "rust").mkdir(parents=True)
+            (notices / "rust/manifest.json").write_text("{}", encoding="utf-8")
+            (notices / "axtb").mkdir()
+            filenames = ("COPYING", "COPYING.LESSER", "NOTICE", "CHANGES-reshiki.md", "SOURCE")
+            for name in filenames:
+                (notices / "axtb" / name).write_text(f"Fork {name}\n", encoding="utf-8")
+
+            package_dir = root / "dependency"
+            package_dir.mkdir()
+            manifest = package_dir / "Cargo.toml"
+            manifest.write_text('[package]\nname = "fixture"\n', encoding="utf-8")
+            (package_dir / "LICENSE").write_text("Fixture license\n", encoding="utf-8")
+            package = {"version": "0.2.0", "manifest_path": str(manifest)}
+            fork = "git+https://github.com/Ameyanagi/axtb?rev=123#123"
+            for packages, expected in (
+                ([], False),
+                ([{**package, "name": "axtb", "source": fork}], True),
+                ([{**package, "name": "axtb-driver", "source": fork}], True),
+                ([{**package, "name": "axtb-x", "source": "git+https://example.test/axtb"}], False),
+                (
+                    [
+                        {
+                            **package,
+                            "name": "axtb-driver",
+                            "source": "git+https://github.com/Ameyanagi/axtb-repack?rev=1#1",
+                        }
+                    ],
+                    False,
+                ),
+            ):
+                with self.subTest(packages=packages):
+                    content = consolidated_notices(root, {"packages": packages})
+                    for name in filenames:
+                        self.assertEqual(f"  licenses/axtb/{name}\n".encode() in content, expected)
+                    self.assertIn(b"  licenses/rust/manifest.json\n", content)
+
     def test_package_scope_keeps_transitive_normal_and_build_dependencies(self):
         def dependency(package, *kinds):
             return {"pkg": package, "dep_kinds": [{"kind": kind} for kind in kinds]}
@@ -94,6 +146,40 @@ class LicenseNoticeTests(unittest.TestCase):
                     source = Path(package["manifest_path"]).parent
                     self.assertIn((source / relative).read_bytes(), notices)
 
+    def test_native_xtb_scope_excludes_python_and_unrelated_workspace_packages(self):
+        repository = Path(__file__).resolve().parents[1]
+        metadata = json.loads(
+            subprocess.check_output(
+                [
+                    "cargo",
+                    "metadata",
+                    "--locked",
+                    "--format-version",
+                    "1",
+                    "--features",
+                    "xtb",
+                    "--filter-platform",
+                    "x86_64-unknown-linux-gnu",
+                ],
+                cwd=repository,
+                text=True,
+            )
+        )
+        scoped = dependency_metadata(metadata)
+        names = {package["name"] for package in scoped["packages"]}
+        excluded = {"reshiki", "reshiki-python", "reshiki-web", "pyo3", "pyo3-ffi"}
+        self.assertTrue(excluded <= {package["name"] for package in metadata["packages"]})
+        self.assertTrue(names.isdisjoint(excluded))
+        self.assertIn("axtb-driver", names)
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            write_notices(repository, destination, scoped)
+            notices = (destination / THIRD_PARTY_FILE).read_bytes()
+        self.assertIn(b"DEPENDENCY: axtb-driver@", notices)
+        for name in excluded:
+            with self.subTest(package=name):
+                self.assertNotIn(f"DEPENDENCY: {name}@".encode(), notices)
+
     def test_git_naming_components_collect_complete_crate_local_terms(self):
         repository = Path(__file__).resolve().parents[1]
         metadata = json.loads(
@@ -145,6 +231,8 @@ class LicenseNoticeTests(unittest.TestCase):
             opsin_source = sources["nazuchem-n2s"]
             root_terms = {name: repository / name for name in ("LICENSE-MIT", "LICENSE-APACHE")}
             # License grants remain identical to the retained root copies.
+            # Both naming crates retain the project license from their extraction.
+            naming_license = sources["nazuchem-kernel"] / "LICENSE"
             # Attribution notices also describe the extracted source layout,
             # so their canonical bytes come from the corresponding git crate.
             openclatura_terms = {
@@ -182,14 +270,14 @@ class LicenseNoticeTests(unittest.TestCase):
             copies = {
                 "nazuchem-ir": root_terms,
                 "nazuchem-s2n": {
-                    "LICENSE": repository / "LICENSE",
+                    "LICENSE": naming_license,
                     **root_terms,
                     **openclatura_terms,
                     **opsin_terms,
                     **cpython_terms,
                 },
                 "nazuchem-kernel": {
-                    "LICENSE": repository / "LICENSE",
+                    "LICENSE": naming_license,
                     **root_terms,
                     **kernel_terms,
                 },

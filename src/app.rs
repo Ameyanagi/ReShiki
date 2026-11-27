@@ -10,8 +10,10 @@ use reshiki::{
 };
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::sync::{Arc, Weak};
 mod abbreviations;
 mod accessibility;
+pub(crate) mod animation;
 mod arcs;
 mod arrow_labels;
 mod arrows;
@@ -58,6 +60,8 @@ mod desktop;
 mod gates;
 mod generic;
 #[cfg(not(target_arch = "wasm32"))]
+mod gif_export;
+#[cfg(not(target_arch = "wasm32"))]
 mod github;
 mod graphics;
 mod help;
@@ -69,6 +73,7 @@ mod import;
 mod inline_text;
 mod inspector;
 mod inspector_pages;
+mod ir_figure;
 mod joining;
 mod keyboard_drawing;
 mod label_refresh;
@@ -84,6 +89,8 @@ mod tlc;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 mod add_panel;
+mod energy_plot;
+mod frames_import;
 #[cfg(test)]
 mod hover_qa;
 mod models3d;
@@ -99,6 +106,7 @@ mod piece_libraries;
 mod popover;
 mod printing;
 mod prompt;
+mod qc_export;
 mod reaction_mapping;
 mod reactions;
 #[cfg(test)]
@@ -135,6 +143,7 @@ mod wayland_qa;
 #[cfg(windows)]
 mod windows_libreoffice_save;
 mod workspace;
+mod xtb;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use files::Picked;
 #[cfg(target_arch = "wasm32")]
@@ -188,6 +197,7 @@ pub enum InspectorTab {
 #[derive(Debug, Clone)]
 pub enum Message {
     ModifiersChanged(iced::keyboard::Modifiers),
+    WindowSize(iced::Size),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
     Accessibility(accessibility::Action),
@@ -246,6 +256,7 @@ pub enum Message {
     Arc(arcs::Action),
     Graphics(graphics::Action),
     Tlc(tlc::Action),
+    IrFigure(ir_figure::Action),
     /// Figure panels and lasting layouts.
     Figure(figure_panels::Action),
     /// Catalytic cycles.
@@ -257,11 +268,20 @@ pub enum Message {
     AtomSinglet(bool),
     ToggleInspector,
     Inspector(InspectorTab),
+    ReactionBondHover(u64, canvas::BondChangeKind, [u32; 2], bool),
     Imports(import::Action),
     Naming(naming::Action),
     InsertInput,
     ToggleHelp,
     Settings(settings_page::Action),
+    /// Export input for Gaussian, ORCA or GAMESS.
+    QcExport(qc_export::Action),
+    #[cfg(not(target_arch = "wasm32"))]
+    GifExport(gif_export::Action),
+    /// The "Choose what to import" sheet for a file of several frames.
+    FramesImport(frames_import::Action),
+    /// Predict → xTB: the Calculate card and its runs.
+    Xtb(xtb::Action),
     Help(help::Action),
     Commands(command_palette::Action),
     OpenShortcutExamples,
@@ -546,8 +566,17 @@ pub struct App {
     export_tab_background: Option<crate::appearance::Background>,
     help_open: bool,
     settings: settings_page::State,
+    qc_export: Option<qc_export::Dialog>,
+    #[cfg(not(target_arch = "wasm32"))]
+    gif_export: Option<gif_export::Dialog>,
+    frames_import: Option<frames_import::Dialog>,
+    /// Files of several frames opened together, asked about in turn.
+    frames_queue: std::collections::VecDeque<(std::path::PathBuf, frames_import::File)>,
+    xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
+    /// The complete window in logical points, independent of the drawing viewport.
+    window_size: iced::Size,
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
@@ -572,6 +601,16 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
 /// Leaves the focused field or control, so the next key reaches the drawing.
 fn focus_drawing() -> Task<Message> {
     iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
+}
+
+/// Logical window dimensions share the always-on input path on every platform.
+fn window_size_event(event: &iced::window::Event) -> Option<Message> {
+    match event {
+        iced::window::Event::Opened { size, .. } | iced::window::Event::Resized(size) => {
+            Some(Message::WindowSize(*size))
+        }
+        _ => None,
+    }
 }
 
 impl App {
@@ -680,8 +719,15 @@ impl App {
             export_tab_background: None,
             help_open: false,
             settings: settings_page::State::default(),
+            qc_export: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            gif_export: None,
+            frames_import: None,
+            frames_queue: Default::default(),
+            xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
+            window_size: iced::Size::new(1280.0, 820.0),
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
@@ -775,6 +821,9 @@ impl App {
             self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
+            self.xtb_subscription(),
+            #[cfg(not(target_arch = "wasm32"))]
+            self.gif_export_subscription(),
             self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
@@ -797,6 +846,9 @@ impl App {
                     return Some(Message::ModifiersChanged(modifiers));
                 }
                 if let iced::Event::Window(event) = &event {
+                    if let Some(message) = window_size_event(event) {
+                        return Some(message);
+                    }
                     // Back in the window: may read-only repositories be sent to now?
                     #[cfg(not(target_arch = "wasm32"))]
                     if matches!(event, iced::window::Event::Focused) {
@@ -843,10 +895,13 @@ impl App {
         })
     }
     fn changed(&mut self, before: Document) {
+        self.changed_with_reaction_row(before, None);
+    }
+    fn changed_with_reaction_row(&mut self, before: Document, reaction: Option<u64>) {
         if self.tab.doc != before {
             self.tab.erase_stroke = false;
         }
-        self.changed_continuing(before, false);
+        self.reconcile_edit(before, false, None, reaction);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
         self.changed_continuing_anchored(before, continuing, None);
@@ -857,15 +912,27 @@ impl App {
         continuing: bool,
         anchor: Option<u64>,
     ) {
+        self.reconcile_edit(before, continuing, anchor, None);
+    }
+    fn reconcile_edit(
+        &mut self,
+        before: Document,
+        continuing: bool,
+        anchor: Option<u64>,
+        reaction: Option<u64>,
+    ) {
         self.prepare_document_change(self.tab.doc != before);
         // Label the edited molecules before reconciling, so the edit's first
         // frame and the layout around it already have their hydrogens.
         reshiki::atom_labels::refresh::refresh_edited(&before, &mut self.tab.doc);
-        let result = match anchor {
-            Some(id) => {
+        let result = match (anchor, reaction) {
+            (Some(id), _) => {
                 reshiki::transaction::reconcile_with_layout_anchor(&mut self.tab.doc, before, id)
             }
-            None => reshiki::transaction::reconcile(&mut self.tab.doc, before),
+            (None, Some(arrow)) => {
+                reshiki::transaction::reconcile_with_reaction_row(&mut self.tab.doc, before, arrow)
+            }
+            (None, None) => reshiki::transaction::reconcile(&mut self.tab.doc, before),
         };
         let reconciled = match result {
             Ok(reconciled) => reconciled,
@@ -1004,6 +1071,7 @@ impl App {
         self.sync_figure();
         self.sync_cycle();
         self.sync_tlc();
+        self.sync_ir_figure();
     }
     /// What every recorded change of the drawing needs, whether an edit made
     /// it or Undo or Redo restored it. Results for the previous revision are
@@ -1122,7 +1190,9 @@ impl App {
         {
             return session.preview_document();
         }
-        self.cycle_proposal_document().unwrap_or(&self.tab.doc)
+        self.cycle_proposal_document()
+            .or_else(|| self.xtb_preview())
+            .unwrap_or(&self.tab.doc)
     }
     /// The runtime's entry point. A finished export or copy counts
     /// toward the GitHub star prompt here, once, even when its drawing has
@@ -1134,6 +1204,10 @@ impl App {
         self.update(message)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::ReactionBondHover(arrow, kind, pair, entered) = message {
+            self.xtb_hover_bond((arrow, kind, pair), entered);
+            return Task::none();
+        }
         // Modifier releases must reach buttons even when a widget or modal captures input.
         if let Message::ModifiersChanged(modifiers) = message {
             self.shift_held = modifiers.shift();
@@ -1174,10 +1248,47 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
+        let reaction = (document, self.xtb_selected_reaction());
+        let xtb_page_was_shown = self.nmr_xtb_page_shown();
+        let revision = self.tab.revision;
+        let vibrations_were_running = self.xtb_running() && self.xtb_vibrations_visible();
+        let vibration_result = self
+            .xtb_vibration_entry()
+            .map(|stored| (stored.attachment, Arc::downgrade(&stored.result)));
         let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
+        self.xtb_sync_conformer_inversion();
+        self.xtb_clear_selection_hint();
+        let document_changed = document != (self.tab.id, self.tab.file_epoch);
+        if !xtb_page_was_shown || document_changed {
+            self.nmr_clear_status_if_xtb();
+        }
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
+        let reaction_result_changed = self.xtb_sync_reaction_palette(
+            reaction
+                != (
+                    (self.tab.id, self.tab.file_epoch),
+                    self.xtb_selected_reaction(),
+                ),
+        );
+        let shown = self
+            .xtb_vibration_entry()
+            .map(|stored| (stored.attachment, Arc::as_ptr(&stored.result)));
+        let result_changed = vibration_result
+            .as_ref()
+            .map(|(attachment, result)| (*attachment, Weak::as_ptr(result)))
+            != shown;
+        if reaction_result_changed
+            || result_changed
+            || (shown.is_some() && (document_changed || revision != self.tab.revision))
+        {
+            let reveal = document_changed || (result_changed && !vibrations_were_running);
+            task = Task::batch([
+                task,
+                tagged(self.xtb_vibrations_resume(reveal), self.tab.id),
+            ]);
+        }
         // The canvas forgets the pointer when a context menu closes
         // (canvas::reset_menu_pointer), so the hovered atom or bond goes too:
         // a key pressed later acts on what the pointer touches next, never on
@@ -1187,14 +1298,14 @@ impl App {
             self.tab.hover = None;
         }
         self.sync_drawing_panel_context();
-        task = Task::batch([task, self.render_png_preview()]);
+        task = Task::batch([task, self.render_png_preview(), self.xtb_orbitals_sync()]);
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
         // All Properties pages share one scrollable, which keeps its offset
         // even while a short page hides it. Another tab or a newly opened
         // drawing starts from the top, whichever path brought it forward.
-        if document != (self.tab.id, self.tab.file_epoch) {
+        if document_changed {
             task = Task::batch([
                 task,
                 iced::widget::operation::snap_to(
@@ -1260,6 +1371,11 @@ impl App {
     /// tasks must not acquire a document tag.
     fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
         let message = match message {
+            Message::WindowSize(size) => {
+                self.xtb_palette_resized(size);
+                self.window_size = size;
+                return ControlFlow::Break(Task::none());
+            }
             Message::Recovery(action) if recovery_manager::completion(&action) => {
                 let task = self.recovery_action(action);
                 return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
@@ -1317,7 +1433,10 @@ impl App {
         // The answer goes on as the system dialog's would have.
         if let Message::Prompt(answer) = message {
             return ControlFlow::Break(match self.prompt.take() {
-                Some(prompt) => self.update(prompt.answer(answer)),
+                Some(prompt) => match self.xtb_size_answer(prompt, answer) {
+                    Some(message) => self.update(message),
+                    None => Task::none(),
+                },
                 None => Task::none(),
             });
         }
@@ -1409,6 +1528,9 @@ impl App {
             &message,
             Message::Canvas(Edit::BeginTransform(_))
                 | Message::Mapping(reaction_mapping::Action::Open)
+                | Message::Xtb(xtb::Action::Ts(xtb::ts::Action::ReviewSheet(
+                    xtb::ts::review::Action::EditMap
+                )))
         ) || matches!(
             &message,
             Message::Commands(action) if self.commands.reveals_section(action)
@@ -1522,6 +1644,10 @@ impl App {
         let github = self.github.dialog_open();
         #[cfg(target_arch = "wasm32")]
         let github = false;
+        #[cfg(not(target_arch = "wasm32"))]
+        let gif_open = self.gif_export.is_some();
+        #[cfg(target_arch = "wasm32")]
+        let gif_open = false;
         let dialog = self.prompt.is_some()
             || github
             || self.recovery_manager.open()
@@ -1529,6 +1655,10 @@ impl App {
             || self.assistant.viewed_image.is_some()
             || self.help_open
             || self.settings.open
+            || self.qc_export.is_some()
+            || gif_open
+            || self.ts_review_visible()
+            || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
@@ -1537,16 +1667,21 @@ impl App {
             && (!(self.commands.open || self.help_open)
                 || self.updates.open
                 || self.assistant.viewed_image.is_some());
+        let workspace = self.with_ts_review(self.with_frames_import(self.with_commands(
+            self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+        )));
+        #[cfg(not(target_arch = "wasm32"))]
+        let workspace = self.with_gif_export(workspace);
         reshiki::accessibility::focus_scope_with(
             file_shortcuts::wrap(
                 // The command palette and Settings sit above the floating NMR
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
-                    self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_commands(
-                            self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+                    self.with_updates(
+                        self.with_assistant_image(
+                            self.with_settings(self.with_qc_export(workspace)),
                         ),
-                    ))),
+                    ),
                 ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
@@ -1561,6 +1696,19 @@ impl App {
                     Some(recovery_manager::modal_key)
                 } else if self.settings.open {
                     Some(settings_page::modal_key)
+                } else if self.qc_export.is_some() {
+                    Some(qc_export::modal_key)
+                } else if gif_open {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        Some(gif_export::modal_key)
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    None
+                } else if self.ts_review_visible() {
+                    Some(xtb::ts::review::modal_key)
+                } else if self.frames_import.is_some() {
+                    Some(frames_import::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {

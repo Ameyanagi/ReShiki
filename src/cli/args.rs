@@ -2,11 +2,16 @@
 //! `reshiki --cli help`.
 //!
 //! Tokens stay [`OsString`]s, so paths need not be UTF-8. `--` ends the
-//! options, each option is allowed at most once, and every problem is a
-//! usage error (exit 2) found before anything is read or run.
+//! options, and syntax errors are usage errors (exit 2) found before anything
+//! is read or run.
 use super::{
     commands::{self, CommandSpec},
     input_format, input_formats, output_formats, render_formats,
+};
+use reshiki_io::qc_input::{Job, Program, builtin_templates, nearest_gamess_basis};
+use reshiki_xtb_worker::protocol::{
+    Conventions, Method, ScfRetry, ScfSettings, SolvationState, Solvent, SolventCorrection,
+    SolventModel,
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -14,7 +19,7 @@ use std::{
 };
 
 /// A parsed command line.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum Command {
     Help {
         topic: Option<&'static CommandSpec>,
@@ -22,6 +27,10 @@ pub(crate) enum Command {
     },
     Info,
     Version,
+    Calc(Calc),
+    Ts(Ts),
+    Calculate(Calculate),
+    ReadOutput(ReadOutput),
     Tools,
     Schema(Schema),
     Skill(Skill),
@@ -30,9 +39,106 @@ pub(crate) enum Command {
     Compose(Compose),
     Analyze(Input),
     PredictNmr(PredictNmr),
+    ExportInput(ExportInput),
     Name(Name),
     PiecesCheck(Vec<PathBuf>),
     PiecesRender(PieceRender),
+}
+
+/// `calc`: the first XYZ frame and one xTB calculation.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Calc {
+    pub(crate) file: PathBuf,
+    pub(crate) task: CalcTask,
+    pub(crate) method: Method,
+    pub(crate) gradient: bool,
+    pub(crate) bond_orders: bool,
+    pub(crate) charge: i32,
+    pub(crate) uhf: Option<u32>,
+    pub(crate) conventions: Conventions,
+    pub(crate) solvent: Option<Solvent>,
+    pub(crate) scf: Option<ScfSettings>,
+    pub(crate) thermo_temperature_k: Option<f64>,
+    pub(crate) threads: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CalcTask {
+    Energy,
+    Gradient,
+    Hessian,
+    Orbitals,
+}
+
+/// `ts`: mapped XYZ endpoints, or one XYZ with directed bond changes.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Ts {
+    pub(crate) method: Method,
+    pub(crate) refine: Option<Method>,
+    pub(crate) ts: Option<PathBuf>,
+    pub(crate) from: Option<PathBuf>,
+    pub(crate) reactant: Option<PathBuf>,
+    pub(crate) product: Option<PathBuf>,
+    /// Pairs are canonicalized and use one-based XYZ atom numbers.
+    pub(crate) form: Vec<(usize, usize)>,
+    pub(crate) break_: Vec<(usize, usize)>,
+    pub(crate) charge: i32,
+    pub(crate) charge_explicit: bool,
+    pub(crate) uhf: Option<u32>,
+    pub(crate) images: usize,
+    pub(crate) workers: usize,
+    pub(crate) remap_hydrogens: bool,
+    pub(crate) keep_endpoints: bool,
+    pub(crate) out_dir: Option<PathBuf>,
+    pub(crate) json: Option<PathBuf>,
+}
+
+impl Ts {
+    #[cfg(any(feature = "xtb", test))]
+    pub(crate) fn target_method(&self) -> Method {
+        self.refine.unwrap_or(self.method)
+    }
+
+    #[cfg(feature = "xtb")]
+    pub(crate) fn method_key(&self) -> &'static str {
+        match self.target_method() {
+            Method::Gxtb => "gxtb",
+            _ => "gfn2",
+        }
+    }
+
+    #[cfg(feature = "xtb")]
+    pub(crate) fn method_label(&self) -> &'static str {
+        match self.target_method() {
+            Method::Gxtb => "g-xTB",
+            _ => "GFN2-xTB",
+        }
+    }
+}
+
+/// `calculate`: one XYZ file and the compact calculation tool's settings.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Calculate {
+    pub(crate) file: PathBuf,
+    pub(crate) task: &'static str,
+    pub(crate) method: &'static str,
+    pub(crate) charge: i32,
+    pub(crate) uhf: u32,
+    pub(crate) solvent: Option<String>,
+    pub(crate) conventions: &'static str,
+    pub(crate) electronic_temperature_k: Option<f64>,
+    pub(crate) accuracy: Option<f64>,
+    pub(crate) max_iterations: Option<u32>,
+    pub(crate) threads: Option<u32>,
+    pub(crate) convergence: Option<&'static str>,
+    pub(crate) fixed_atoms: Option<Vec<u32>>,
+}
+
+/// `read-output`: a quantum chemistry file and an optional zero-based job.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ReadOutput {
+    pub(crate) file: PathBuf,
+    pub(crate) job: Option<usize>,
 }
 
 /// A schema the CLI can print without a tool host.
@@ -61,6 +167,26 @@ pub(crate) struct Input {
 pub(crate) struct PredictNmr {
     pub(crate) input: Input,
     pub(crate) nucleus: &'static str,
+}
+
+/// `export-input`: the first Cartesian XYZ frame and calculation settings.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ExportInput {
+    pub(crate) input: PathBuf,
+    pub(crate) program: Program,
+    pub(crate) job: Job,
+    pub(crate) reactant: Option<PathBuf>,
+    pub(crate) product: Option<PathBuf>,
+    pub(crate) hessian: Option<PathBuf>,
+    pub(crate) method: String,
+    pub(crate) basis: String,
+    pub(crate) charge: i32,
+    pub(crate) multiplicity: u32,
+    pub(crate) cores: u32,
+    pub(crate) memory_gb: u32,
+    pub(crate) title: Option<String>,
+    pub(crate) extra: String,
+    pub(crate) output: Output,
 }
 
 /// `name`: one structure, with optional preference status in JSON.
@@ -181,6 +307,10 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "schema" => schema(&options(spec, rest)?),
         "skill" => skill(&options(spec, rest)?),
         "pieces" => pieces(spec, rest),
+        "calc" => calc(&options(spec, rest)?),
+        "ts" => ts(&options(spec, rest)?),
+        "calculate" => calculate(&options(spec, rest)?),
+        "read-output" => read_output(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -197,6 +327,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
                 nucleus: nucleus_code(nucleus)?,
             }))
         }
+        "export-input" => export_input(&options(spec, rest)?),
         "name" => {
             let options = options(spec, rest)?;
             Ok(Command::Name(Name {
@@ -212,6 +343,472 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         }
         _ => Err(unknown_command(&lossy)),
     }
+}
+
+fn calc(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .ok_or("calc needs an XYZ file: FILE.xyz")?;
+    if !file
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("xyz"))
+    {
+        return Err("calc needs an XYZ file: FILE.xyz".into());
+    }
+    let charge = charge(options.charge.as_deref())?;
+    let uhf = uhf(options.uhf.as_deref())?;
+    let conventions = match options.conventions.as_deref().map(OsStr::to_str) {
+        None | Some(Some("axtb")) => Conventions::Axtb,
+        Some(Some("xtb-6.8")) => Conventions::Xtb68,
+        _ => return Err("--conventions must be axtb or xtb-6.8".into()),
+    };
+    let task = match options.task.as_deref().map(OsStr::to_str) {
+        None | Some(Some("energy")) => CalcTask::Energy,
+        Some(Some("gradient")) => CalcTask::Gradient,
+        Some(Some("hessian")) => CalcTask::Hessian,
+        Some(Some("orbitals")) => CalcTask::Orbitals,
+        _ => return Err("--task must be energy, gradient, hessian or orbitals".into()),
+    };
+    if task != CalcTask::Hessian && options.thermo_temperature.is_some() {
+        return Err("--thermo-temperature needs --task hessian".into());
+    }
+    let method = match options.method.as_deref().map(OsStr::to_str) {
+        None | Some(Some("gfn2")) => Method::Gfn2,
+        Some(Some("gfnff")) => Method::Gfnff,
+        Some(Some("gxtb")) => Method::Gxtb,
+        _ => return Err("--method must be gfn2, gfnff or gxtb".into()),
+    };
+    let correction = match options.solvent_correction.as_deref().map(OsStr::to_str) {
+        None => None,
+        Some(Some("gfn2")) => Some(SolventCorrection::Gfn2),
+        _ => return Err("--solvent-correction must be gfn2".into()),
+    };
+    let solvent = match (&options.alpb, &options.gbsa) {
+        (Some(_), Some(_)) => return Err("--alpb and --gbsa cannot be combined".into()),
+        (None, None) => {
+            if correction.is_some() {
+                return Err("--solvent-correction needs --alpb or --gbsa".into());
+            }
+            None
+        }
+        (alpb, gbsa) => {
+            let (model, name) = match (alpb, gbsa) {
+                (Some(name), _) => (SolventModel::Alpb, name),
+                (_, Some(name)) => (SolventModel::Gbsa, name),
+                _ => return Err("a solvent name is required".into()),
+            };
+            let name = name
+                .to_str()
+                .filter(|name| !name.trim().is_empty())
+                .ok_or("the solvent name must be nonempty UTF-8 text")?;
+            Some(Solvent {
+                model,
+                name: name.into(),
+                state: SolvationState::Gsolv,
+                correction,
+            })
+        }
+    };
+    let temperature = |name, value: &OsStr| {
+        value
+            .to_str()
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite() && *value >= 0.0)
+            .ok_or_else(|| format!("{name} must be finite and at least 0 K"))
+    };
+    let iterations = |name, value: &OsStr| {
+        value
+            .to_str()
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|value| *value > 0)
+            .ok_or_else(|| format!("{name} must be a whole number from 1 to 4294967295"))
+    };
+    let electronic_temperature_k = options
+        .etemp
+        .as_deref()
+        .map(|value| temperature("--etemp", value))
+        .transpose()?;
+    let thermo_temperature_k = options
+        .thermo_temperature
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| *value > 0.0 && *value <= 10_000.0)
+                .ok_or("--thermo-temperature must be greater than 0 K and at most 10000 K")
+        })
+        .transpose()?;
+    let accuracy = options
+        .accuracy
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .ok_or("--accuracy must be finite and positive")
+        })
+        .transpose()?;
+    let max_iterations = options
+        .max_iter
+        .as_deref()
+        .map(|value| iterations("--max-iter", value))
+        .transpose()?;
+    let mut retries = Vec::with_capacity(options.scf_retry.len());
+    for retry in &options.scf_retry {
+        let text = retry.to_str().ok_or("--scf-retry must be K or K:N")?;
+        let (kelvin, count) = text
+            .split_once(':')
+            .map_or((text, None), |(kelvin, count)| (kelvin, Some(count)));
+        let kelvin = temperature("--scf-retry temperature", OsStr::new(kelvin))?;
+        if electronic_temperature_k.is_some_and(|initial| kelvin < initial) {
+            return Err("--scf-retry temperature must be at least the explicit --etemp".into());
+        }
+        retries.push(ScfRetry {
+            electronic_temperature_k: Some(kelvin),
+            max_iterations: count
+                .map(|value| iterations("--scf-retry iterations", OsStr::new(value)))
+                .transpose()?,
+        });
+    }
+    let scf = if electronic_temperature_k.is_some()
+        || accuracy.is_some()
+        || max_iterations.is_some()
+        || !retries.is_empty()
+    {
+        Some(ScfSettings {
+            accuracy,
+            electronic_temperature_k,
+            max_iterations,
+            retries,
+        })
+    } else {
+        None
+    };
+    let threads = options
+        .threads
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<u32>().ok())
+                .filter(|value| (1..=64).contains(value))
+                .ok_or("--threads must be a whole number from 1 to 64")
+        })
+        .transpose()?
+        .unwrap_or(1);
+    Ok(Command::Calc(Calc {
+        file,
+        task,
+        method,
+        gradient: options.gradient,
+        bond_orders: options.wbo,
+        charge,
+        uhf,
+        conventions,
+        solvent,
+        scf,
+        thermo_temperature_k,
+        threads,
+    }))
+}
+
+fn charge(value: Option<&OsStr>) -> Result<i32, &'static str> {
+    optional_integer("--charge", value)
+        .map(|charge| charge.unwrap_or_default())
+        .map_err(|_| "--charge must be a whole number in the signed 32-bit range")
+}
+
+fn uhf(value: Option<&OsStr>) -> Result<Option<u32>, &'static str> {
+    optional_integer("--uhf", value)
+        .map_err(|_| "--uhf must be a nonnegative whole number in the unsigned 32-bit range")
+}
+
+fn ts(options: &Options) -> Result<Command, String> {
+    if options.input.is_some() {
+        return Err("ts takes no positional input; use --reactant or --product".into());
+    }
+    let path = |flag, value: Option<&OsStr>| {
+        value
+            .map(|value| {
+                if value.is_empty() || value == "-" {
+                    Err(format!("{flag} needs a file or directory path"))
+                } else {
+                    Ok(PathBuf::from(value))
+                }
+            })
+            .transpose()
+    };
+    let method = match option_text("--method", options.method.as_deref())? {
+        None | Some("gfn2") => Method::Gfn2,
+        Some("gxtb") => Method::Gxtb,
+        _ => return Err("--method must be gfn2 or gxtb".into()),
+    };
+    let refine = match option_text("--refine", options.refine.as_deref())? {
+        None => None,
+        Some("gxtb") => Some(Method::Gxtb),
+        _ => return Err("--refine must be gxtb".into()),
+    };
+    let ts = path("--ts", options.ts.as_deref())?;
+    let from = path("--from", options.from.as_deref())?;
+    if refine.is_none() && (ts.is_some() || from.is_some()) {
+        return Err("--ts and --from require --refine gxtb".into());
+    }
+    if refine.is_some() && options.method.is_some() {
+        return Err(
+            "--method cannot be combined with --refine; the refinement method is gxtb".into(),
+        );
+    }
+    if refine.is_some() && ts.is_none() == from.is_none() {
+        return Err("--refine gxtb requires exactly one of --ts TS.xyz or --from DIR".into());
+    }
+    let reactant = path("--reactant", options.reactant.as_deref())?;
+    let product = path("--product", options.product.as_deref())?;
+    let has_edits = !options.form.is_empty() || !options.break_.is_empty();
+    if options.remap_hydrogens && has_edits {
+        return Err(
+            "--remap-hydrogens requires two XYZ endpoints without --form or --break".into(),
+        );
+    }
+    if from.is_some()
+        && (reactant.is_some()
+            || product.is_some()
+            || has_edits
+            || options.remap_hydrogens
+            || options.keep_endpoints)
+    {
+        return Err("--from reads source endpoints; do not combine it with endpoint, bond, --keep-endpoints or remapping options".into());
+    }
+    if refine.is_some() && (options.keep_endpoints || options.remap_hydrogens) {
+        return Err("refinement requires relaxed endpoints and the original atom map; omit --keep-endpoints and --remap-hydrogens".into());
+    }
+    if method == Method::Gxtb && options.keep_endpoints {
+        return Err("g-xTB requires relaxed endpoints; omit --keep-endpoints".into());
+    }
+    match (&reactant, &product, has_edits) {
+        (None, None, false) if from.is_some() => {}
+        (None, None, _) => return Err("ts needs --reactant or --product".into()),
+        (Some(_), Some(_), true) => {
+            return Err("--form and --break require exactly one XYZ endpoint".into());
+        }
+        (Some(_), None, false) | (None, Some(_), false) => {
+            return Err("one XYZ endpoint requires at least one --form or --break".into());
+        }
+        _ => {}
+    }
+    let form = ts_pairs("--form", &options.form)?;
+    let break_ = ts_pairs("--break", &options.break_)?;
+    if let Some(&(i, j)) = form.iter().find(|pair| break_.contains(pair)) {
+        return Err(format!(
+            "atom pair {i}-{j} cannot be both formed and broken"
+        ));
+    }
+    let count = |value: Option<&OsStr>, flag, min, max| {
+        value
+            .map(|value| {
+                value
+                    .to_str()
+                    .and_then(|text| text.parse::<usize>().ok())
+                    .filter(|value| (min..=max).contains(value))
+                    .ok_or_else(|| format!("{flag} must be a whole number from {min} to {max}"))
+            })
+            .transpose()
+    };
+    let images = count(options.images.as_deref(), "--images", 5, 24)?
+        .unwrap_or_else(|| reshiki_optimize::ts::TsOptions::default().images);
+    let workers = count(options.workers.as_deref(), "--workers", 1, 8)?.unwrap_or_else(|| {
+        let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        4.min(cpus).min(images - 2)
+    });
+    Ok(Command::Ts(Ts {
+        method,
+        refine,
+        ts,
+        from,
+        reactant,
+        product,
+        form,
+        break_,
+        charge: charge(options.charge.as_deref())?,
+        charge_explicit: options.charge.is_some(),
+        uhf: uhf(options.uhf.as_deref())?,
+        images,
+        workers,
+        remap_hydrogens: options.remap_hydrogens,
+        keep_endpoints: options.keep_endpoints,
+        out_dir: path("--out-dir", options.out_dir.as_deref())?,
+        json: path("--json", options.json_file.as_deref())?,
+    }))
+}
+
+fn ts_pairs(flag: &str, values: &[OsString]) -> Result<Vec<(usize, usize)>, String> {
+    fn atom(text: &str) -> Option<usize> {
+        if !text.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        text.parse::<usize>().ok().filter(|&value| value > 0)
+    }
+    values
+        .iter()
+        .map(|value| {
+            let pair = value.to_str().and_then(|text| {
+                let (i, j) = text.split_once('-')?;
+                Some((atom(i)?, atom(j)?))
+            });
+            match pair {
+                Some((i, j)) if i != j => Ok((i.min(j), i.max(j))),
+                _ => Err(format!(
+                    "{flag} needs two distinct positive atom numbers as I-J, got `{}`",
+                    value.to_string_lossy()
+                )),
+            }
+        })
+        .collect()
+}
+
+fn calculate(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .filter(|file| {
+            file.extension()
+                .and_then(OsStr::to_str)
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("xyz"))
+        })
+        .ok_or("calculate needs an XYZ file: FILE.xyz")?;
+    let task = match option_text("--task", options.task.as_deref())? {
+        None | Some("energy") => "energy",
+        Some("optimize") => "optimize",
+        Some("frequencies") => "frequencies",
+        Some("opt+freq") => "opt+freq",
+        _ => return Err("--task must be energy, optimize, frequencies or opt+freq".into()),
+    };
+    let method = match option_text("--method", options.method.as_deref())? {
+        None | Some("gfn2") => "gfn2",
+        Some("gxtb") => "gxtb",
+        Some("gfnff") => "gfnff",
+        _ => return Err("--method must be gfn2, gxtb or gfnff".into()),
+    };
+    let conventions = match option_text("--conventions", options.conventions.as_deref())? {
+        None | Some("axtb") => "axtb",
+        Some("xtb-6.8") => "xtb-6.8",
+        _ => return Err("--conventions must be axtb or xtb-6.8".into()),
+    };
+    let uhf = integer("--uhf", options.uhf.as_deref(), 0_u32)?;
+    if uhf == u32::MAX {
+        return Err("--uhf is too large for a spin multiplicity".into());
+    }
+    let solvent = option_text("--solvent", options.solvent.as_deref())?
+        .map(|text| {
+            if text.trim().is_empty() {
+                Err("--solvent needs a nonempty name")
+            } else {
+                Ok(text.to_owned())
+            }
+        })
+        .transpose()?;
+    let electronic_temperature_k = option_text("--etemp", options.etemp.as_deref())?
+        .map(|text| {
+            text.parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value >= 0.0)
+                .ok_or("--etemp must be finite and at least 0 K")
+        })
+        .transpose()?;
+    let accuracy = option_text("--accuracy", options.accuracy.as_deref())?
+        .map(|text| {
+            text.parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .ok_or("--accuracy must be finite and positive")
+        })
+        .transpose()?;
+    let max_iterations = option_text("--max-iter", options.max_iter.as_deref())?
+        .map(|text| {
+            text.parse::<u32>()
+                .ok()
+                .filter(|value| *value > 0)
+                .ok_or("--max-iter must be a whole number from 1 to 4294967295")
+        })
+        .transpose()?;
+    let threads = option_text("--threads", options.threads.as_deref())?
+        .map(|text| {
+            text.parse::<u32>()
+                .ok()
+                .filter(|value| (1..=64).contains(value))
+                .ok_or("--threads must be a whole number from 1 to 64")
+        })
+        .transpose()?;
+    let convergence = match option_text("--convergence", options.convergence.as_deref())? {
+        None => None,
+        Some("normal") => Some("normal"),
+        Some("tight") => Some("tight"),
+        _ => return Err("--convergence must be normal or tight".into()),
+    };
+    let fixed_atoms = option_text("--fix", options.fix.as_deref())?
+        .map(|text| {
+            let mut atoms = Vec::new();
+            for atom in text.split(',') {
+                let atom = atom
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|atom| *atom > 0)
+                    .ok_or("--fix must list atom numbers starting at 1, separated by commas")?;
+                if atoms.contains(&atom) {
+                    return Err("--fix atom numbers must be unique");
+                }
+                atoms.push(atom);
+            }
+            Ok(atoms)
+        })
+        .transpose()?;
+    if !matches!(task, "optimize" | "opt+freq") {
+        if convergence.is_some() {
+            return Err("--convergence requires --task optimize or opt+freq".into());
+        }
+        if fixed_atoms.is_some() {
+            return Err("--fix requires --task optimize or opt+freq".into());
+        }
+    }
+    Ok(Command::Calculate(Calculate {
+        file,
+        task,
+        method,
+        charge: integer("--charge", options.charge.as_deref(), 0)?,
+        uhf,
+        solvent,
+        conventions,
+        electronic_temperature_k,
+        accuracy,
+        max_iterations,
+        threads,
+        convergence,
+        fixed_atoms,
+    }))
+}
+
+fn read_output(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .ok_or("read-output needs a file: FILE")?;
+    let job = option_text("--job", options.job.as_deref())?
+        .map(|text| {
+            text.parse::<usize>()
+                .map_err(|_| "--job must be a nonnegative whole number")
+        })
+        .transpose()?;
+    Ok(Command::ReadOutput(ReadOutput { file, job }))
 }
 
 fn pieces(spec: &CommandSpec, rest: &[OsString]) -> Result<Command, String> {
@@ -298,7 +895,10 @@ fn help(rest: &[OsString]) -> Result<Command, String> {
         };
     };
     let name = topic.to_string_lossy();
-    let topic = commands::find(&name).ok_or_else(|| unknown_command(&name))?;
+    let topic = commands::COMMANDS
+        .iter()
+        .find(|spec| spec.name == name)
+        .ok_or_else(|| unknown_command(&name))?;
     Ok(Command::Help {
         topic: Some(topic),
         json,
@@ -318,7 +918,7 @@ fn schema(options: &Options) -> Result<Command, String> {
     }
 }
 
-/// The tokens after a command, each option at most once.
+/// The tokens after a command.
 #[derive(Default)]
 struct Options {
     /// INPUT, PROPOSAL, FILE or `-`.
@@ -335,6 +935,45 @@ struct Options {
     nucleus: Option<OsString>,
     labels: Option<OsString>,
     decimals: Option<OsString>,
+    program: Option<OsString>,
+    job: Option<OsString>,
+    template: Option<OsString>,
+    method: Option<OsString>,
+    refine: Option<OsString>,
+    ts: Option<OsString>,
+    basis: Option<OsString>,
+    charge: Option<OsString>,
+    multiplicity: Option<OsString>,
+    cores: Option<OsString>,
+    memory_gb: Option<OsString>,
+    title: Option<OsString>,
+    extra: Option<OsString>,
+    uhf: Option<OsString>,
+    conventions: Option<OsString>,
+    task: Option<OsString>,
+    alpb: Option<OsString>,
+    gbsa: Option<OsString>,
+    solvent_correction: Option<OsString>,
+    etemp: Option<OsString>,
+    thermo_temperature: Option<OsString>,
+    accuracy: Option<OsString>,
+    max_iter: Option<OsString>,
+    scf_retry: Vec<OsString>,
+    threads: Option<OsString>,
+    reactant: Option<OsString>,
+    product: Option<OsString>,
+    hessian: Option<OsString>,
+    form: Vec<OsString>,
+    break_: Vec<OsString>,
+    images: Option<OsString>,
+    workers: Option<OsString>,
+    remap_hydrogens: bool,
+    keep_endpoints: bool,
+    out_dir: Option<OsString>,
+    json_file: Option<OsString>,
+    solvent: Option<OsString>,
+    convergence: Option<OsString>,
+    fix: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     dark: bool,
@@ -342,6 +981,8 @@ struct Options {
     receipt: bool,
     json: bool,
     locants: bool,
+    gradient: bool,
+    wbo: bool,
 }
 
 /// Splits `tokens` into the command's options and one positional input.
@@ -377,7 +1018,7 @@ fn parse_options(
             return Err(foreign_option(command, token));
         };
         let name = option.flag;
-        if seen.contains(&name) {
+        if !matches!(name, "--scf-retry" | "--form" | "--break") && seen.contains(&name) {
             return Err(format!("{name} given more than once"));
         }
         seen.push(name);
@@ -399,6 +1040,43 @@ fn parse_options(
                 "--nucleus" => options.nucleus = Some(value),
                 "--labels" => options.labels = Some(value),
                 "--decimals" => options.decimals = Some(value),
+                "--program" => options.program = Some(value),
+                "--job" => options.job = Some(value),
+                "--template" => options.template = Some(value),
+                "--method" => options.method = Some(value),
+                "--refine" => options.refine = Some(value),
+                "--ts" => options.ts = Some(value),
+                "--basis" => options.basis = Some(value),
+                "--charge" => options.charge = Some(value),
+                "--multiplicity" => options.multiplicity = Some(value),
+                "--cores" => options.cores = Some(value),
+                "--memory-gb" => options.memory_gb = Some(value),
+                "--title" => options.title = Some(value),
+                "--extra" => options.extra = Some(value),
+                "--uhf" => options.uhf = Some(value),
+                "--conventions" => options.conventions = Some(value),
+                "--task" => options.task = Some(value),
+                "--alpb" => options.alpb = Some(value),
+                "--gbsa" => options.gbsa = Some(value),
+                "--solvent-correction" => options.solvent_correction = Some(value),
+                "--etemp" => options.etemp = Some(value),
+                "--thermo-temperature" => options.thermo_temperature = Some(value),
+                "--accuracy" => options.accuracy = Some(value),
+                "--max-iter" => options.max_iter = Some(value),
+                "--scf-retry" => options.scf_retry.push(value),
+                "--threads" => options.threads = Some(value),
+                "--reactant" => options.reactant = Some(value),
+                "--product" => options.product = Some(value),
+                "--hessian" => options.hessian = Some(value),
+                "--form" => options.form.push(value),
+                "--break" => options.break_.push(value),
+                "--images" => options.images = Some(value),
+                "--workers" => options.workers = Some(value),
+                "--out-dir" => options.out_dir = Some(value),
+                "--json" => options.json_file = Some(value),
+                "--solvent" => options.solvent = Some(value),
+                "--convergence" => options.convergence = Some(value),
+                "--fix" => options.fix = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,
@@ -416,6 +1094,10 @@ fn parse_options(
                 "--receipt" => options.receipt = true,
                 "--json" => options.json = true,
                 "--locants" => options.locants = true,
+                "--gradient" => options.gradient = true,
+                "--wbo" => options.wbo = true,
+                "--remap-hydrogens" => options.remap_hydrogens = true,
+                "--keep-endpoints" => options.keep_endpoints = true,
                 _ => {}
             }
         }
@@ -609,6 +1291,151 @@ fn nucleus_code(nucleus: &OsStr) -> Result<&'static str, String> {
         .and_then(crate::nmr::Nucleus::from_code)
         .map(crate::nmr::Nucleus::code)
         .ok_or_else(|| "--nucleus must be 1H or 13C".into())
+}
+
+fn export_input(options: &Options) -> Result<Command, String> {
+    let input = options
+        .input
+        .as_ref()
+        .ok_or("export-input needs INPUT.xyz")?;
+    if input == "-" {
+        return Err("export-input needs an XYZ file path".into());
+    }
+    let program = match options.program.as_deref().and_then(OsStr::to_str) {
+        Some("gaussian") => Program::Gaussian,
+        Some("orca") => Program::Orca,
+        Some("gamess") => Program::Gamess,
+        Some("xyz") => Program::Xyz,
+        _ => return Err("--program must be gaussian, orca, gamess or xyz".into()),
+    };
+    if options.template.is_some() && (options.method.is_some() || options.basis.is_some()) {
+        return Err("--template cannot be combined with --method or --basis".into());
+    }
+    if options.method.is_some() != options.basis.is_some() {
+        return Err("--method and --basis must be given together".into());
+    }
+    let templates = builtin_templates();
+    let template = integer("--template", options.template.as_deref(), 1_usize)?;
+    let template = template
+        .checked_sub(1)
+        .and_then(|index| templates.get(index))
+        .ok_or_else(|| format!("--template must be from 1 to {}", templates.len()))?;
+    if template.only.is_some_and(|only| only != program) {
+        return Err(format!("{} is available only for ORCA", template.name));
+    }
+    let job = match option_text("--job", options.job.as_deref())? {
+        Some(text) => Job::parse(text).ok_or(
+            "--job must be single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts",
+        )?,
+        None => template.job,
+    };
+    let path = |flag, value: Option<&OsStr>| {
+        value
+            .map(|value| {
+                if value.is_empty() || value == "-" {
+                    Err(format!("{flag} needs a file path"))
+                } else {
+                    Ok(PathBuf::from(value))
+                }
+            })
+            .transpose()
+    };
+    let reactant = path("--reactant", options.reactant.as_deref())?;
+    let product = path("--product", options.product.as_deref())?;
+    let hessian = path("--hessian", options.hessian.as_deref())?;
+    if matches!(
+        (program, job),
+        (Program::Gaussian, Job::Qst2 | Job::Qst3) | (Program::Orca, Job::NebTs)
+    ) {
+        let missing = match (&reactant, &product) {
+            (None, None) => Some("--reactant and --product"),
+            (None, Some(_)) => Some("--reactant"),
+            (Some(_), None) => Some("--product"),
+            (Some(_), Some(_)) => None,
+        };
+        if let Some(missing) = missing {
+            return Err(format!("{} requires {missing}", job.label()));
+        }
+    } else if reactant.is_some() || product.is_some() {
+        return Err("--reactant and --product require Gaussian qst2/qst3 or ORCA neb-ts".into());
+    }
+    if hessian.is_some()
+        && !(program == Program::Orca && matches!(job, Job::TransitionState | Job::Irc))
+    {
+        return Err("--hessian requires --program orca with --job ts or irc".into());
+    }
+    let output = match &options.output {
+        None => Output::Stdout,
+        Some(path) if path == "-" => Output::Stdout,
+        Some(path) if path.is_empty() => return Err("--out needs a file path".into()),
+        Some(path) => Output::File(path.into()),
+    };
+    if output == Output::Stdout
+        && (hessian.is_some() || (program == Program::Orca && job == Job::NebTs))
+    {
+        return Err("use --out PATH to write the main input and its companion files".into());
+    }
+    let method = option_text("--method", options.method.as_deref())?.unwrap_or(&template.method);
+    let basis = match option_text("--basis", options.basis.as_deref())? {
+        Some(basis) => basis,
+        None if program == Program::Gamess => {
+            nearest_gamess_basis(&template.basis).unwrap_or(&template.basis)
+        }
+        None => &template.basis,
+    };
+    Ok(Command::ExportInput(ExportInput {
+        input: input.into(),
+        program,
+        job,
+        reactant,
+        product,
+        hessian,
+        method: method.into(),
+        basis: basis.into(),
+        charge: integer("--charge", options.charge.as_deref(), 0)?,
+        multiplicity: integer("--multiplicity", options.multiplicity.as_deref(), 1)?,
+        cores: integer("--cores", options.cores.as_deref(), template.cores)?,
+        memory_gb: integer(
+            "--memory-gb",
+            options.memory_gb.as_deref(),
+            template.memory_gb,
+        )?,
+        title: option_text("--title", options.title.as_deref())?.map(str::to_owned),
+        extra: option_text("--extra", options.extra.as_deref())?
+            .unwrap_or(&template.extra)
+            .into(),
+        output,
+    }))
+}
+
+fn option_text<'a>(flag: &str, value: Option<&'a OsStr>) -> Result<Option<&'a str>, String> {
+    value
+        .map(|value| {
+            value
+                .to_str()
+                .ok_or_else(|| format!("{flag} must be UTF-8"))
+        })
+        .transpose()
+}
+
+fn integer<T: std::str::FromStr>(
+    flag: &str,
+    value: Option<&OsStr>,
+    default: T,
+) -> Result<T, String> {
+    optional_integer(flag, value).map(|value| value.unwrap_or(default))
+}
+
+fn optional_integer<T: std::str::FromStr>(
+    flag: &str,
+    value: Option<&OsStr>,
+) -> Result<Option<T>, String> {
+    option_text(flag, value)?
+        .map(|text| {
+            text.parse()
+                .map_err(|_| format!("{flag} must be a whole number"))
+        })
+        .transpose()
 }
 
 /// `render`: the input, the image format and destination, then the size.

@@ -25,6 +25,106 @@ fn prepared() -> Opened {
     ))
 }
 
+#[test]
+fn native_open_names_results_and_counts_outdated_results_and_models() {
+    use reshiki::models3d::{ForceField, Model3d, Placed};
+    use reshiki::{qcdata, science};
+
+    fn attach(doc: &mut Document, atom: u64) {
+        let launch = science::launch(doc, atom, 0, 1).unwrap();
+        let result: qcdata::CalcResult = serde_json::from_value(serde_json::json!({
+            "frame": launch.frame.hash(),
+            "task": "energy",
+            "settings": {"imported": {}},
+            "provenance": {
+                "program": "test",
+                "source": {"imported": {"format": "test", "file_name": "water.out", "job": 0}}
+            },
+            "status": "converged",
+            "energy_hartree": -75.0
+        }))
+        .unwrap();
+        science::attach(doc, &launch, vec![], result).unwrap();
+    }
+
+    let path = std::path::Path::new("drawings/water.rsk");
+    let mut doc = Document::default();
+    assert!(opened_results_status(path, &doc).is_none());
+    let atoms = [0., 150.].map(|x| {
+        let id = doc.add_atom("O", Point::new(x, 0.));
+        doc.models.push(Model3d::new(
+            &doc,
+            vec![Placed { id, xyz: [0.; 3] }],
+            vec![],
+            ForceField::Mmff94s,
+        ));
+        id
+    });
+    attach(&mut doc, atoms[0]);
+    assert_eq!(
+        opened_results_status(path, &doc).as_deref(),
+        Some("Opened water.rsk · 1 calculation result")
+    );
+    let mut outdated = doc.clone();
+    outdated.atom_mut(atoms[1]).unwrap().charge = -1;
+    assert_eq!(
+        opened_results_status(path, &outdated).as_deref(),
+        Some(
+            "Opened water.rsk · 1 calculation result · 1 outdated 3D model · the drawing changed since"
+        )
+    );
+    attach(&mut doc, atoms[0]);
+    assert_eq!(
+        opened_results_status(path, &doc).as_deref(),
+        Some("Opened water.rsk · 2 calculation results")
+    );
+    attach(&mut doc, atoms[1]);
+    doc.atom_mut(atoms[0]).unwrap().charge = -1;
+    assert_eq!(doc.science.attachments.len(), 2);
+    let (mut app, _) = App::new();
+    let _ = app.file_prepared(Some((
+        path.into(),
+        Ok(Prepared::Native(Box::new(doc.clone()), None)),
+    )));
+    assert_eq!(
+        app.status,
+        "Opened water.rsk · 3 calculation results (2 outdated) · 1 outdated 3D model · the drawing changed since"
+    );
+    doc.atom_mut(atoms[1]).unwrap().charge = -1;
+    assert_eq!(
+        opened_results_status(path, &doc).as_deref(),
+        Some(
+            "Opened water.rsk · 3 calculation results (3 outdated) · 2 outdated 3D models · the drawing changed since"
+        )
+    );
+}
+
+#[test]
+fn native_open_reports_outdated_models_without_calculation_results() {
+    use reshiki::models3d::{ForceField, Model3d, Placed};
+
+    let path = std::path::Path::new("drawings/x.rsk");
+    let mut doc = Document::default();
+    let id = doc.add_atom("O", Point::default());
+    doc.models.push(Model3d::new(
+        &doc,
+        vec![Placed { id, xyz: [0.; 3] }],
+        vec![],
+        ForceField::Mmff94s,
+    ));
+    assert!(opened_results_status(path, &doc).is_none());
+    doc.atom_mut(id).unwrap().charge = -1;
+    let (mut app, _) = App::new();
+    let _ = app.file_prepared(Some((
+        path.into(),
+        Ok(Prepared::Native(Box::new(doc), None)),
+    )));
+    assert_eq!(
+        app.status,
+        "Opened x.rsk · 1 outdated 3D model · the drawing changed since"
+    );
+}
+
 fn png() -> Vec<u8> {
     let mut bytes = std::io::Cursor::new(Vec::new());
     image::DynamicImage::new_rgba8(3, 2)
@@ -498,6 +598,8 @@ fn cli_input_formats_match_the_app() {
             Prepared::Import { format, .. } => format,
             Prepared::Picture(..) => panic!("Structure files are not pictures"),
             Prepared::Records(_) => panic!("Structure files are not SD files"),
+            Prepared::Calculation(_) => panic!("Structure files are not program outputs"),
+            Prepared::Frames(_) => panic!("One structure has one frame"),
         };
         assert_eq!(
             chosen,
@@ -741,6 +843,42 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
 }
 
 #[test]
+fn keeping_chemdraw_warns_about_ir_figure_settings() {
+    use reshiki::graphics::{Graphic, GraphicKind, IrFigure, Journal};
+
+    let mut doc = Document::default();
+    let mut curve = Graphic::dragged(
+        1,
+        GraphicKind::Line,
+        Point::default(),
+        Point::new(100., 0.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    curve.ir = Some(Box::new(IrFigure::with_defaults(
+        "water".into(),
+        "GFN2-xTB".into(),
+        vec![[1590., 1.]],
+        Journal::Acs,
+    )));
+    doc.graphics.push(curve);
+    for format in ["cdxml", "cdx"] {
+        assert_eq!(
+            keep_format_text(format, Default::default(), &doc),
+            format!(
+                "Keep as {} loses IR figure settings. Save as ReShiki leaves the ChemDraw file unchanged.",
+                format.to_uppercase()
+            )
+        );
+    }
+    assert_eq!(
+        keep_format_text("mol", Default::default(), &doc),
+        "MOL keeps the structure only."
+    );
+}
+
+#[test]
 fn keeping_cdxml_keeps_panels_and_purpose_for_reshiki() {
     use reshiki::formats::ChemdrawLoss;
     let unchanged = "Save as ReShiki leaves the ChemDraw file unchanged.";
@@ -810,4 +948,247 @@ async fn a_drawing_reopens_at_the_view_it_was_saved_in() {
         // A restored view stays put when the window resizes; a fitted page refits.
         assert_eq!(app.tab.pages.fit.is_none(), saved);
     }
+}
+
+#[test]
+fn program_outputs_use_the_qc_reader_byte_limit() {
+    let limit = reshiki::qcread::MAX_FILE_BYTES as u64;
+    for path in [
+        "run.log",
+        "run.OUT",
+        "run.fchk",
+        "run.fch",
+        "run.molden",
+        "run.MOLDEN.INPUT",
+        "run.mold",
+        "run.gjf",
+        "run.com",
+        "run.gau",
+        "run.inp",
+    ] {
+        let open_limit = super::super::import::open_limit(std::path::Path::new(path));
+        assert_eq!(read_length(u64::MAX, open_limit), limit + 1, "{path}");
+    }
+}
+
+#[test]
+fn program_inputs_and_charge_notices_open_without_a_chooser() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let open = |name: &str, path: &str| {
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/qc/");
+        let bytes = std::fs::read(format!("{fixtures}{path}")).unwrap();
+        let (_, opened) = runtime
+            .block_on(prepare_contents(name.into(), Ok(bytes)))
+            .unwrap();
+        opened
+    };
+    // An input has no results to mention.
+    let Ok(Prepared::Records(batch)) = open("water.com", "cclib/g16_water_mp2.com") else {
+        panic!("a Gaussian input opens as a drawing");
+    };
+    assert_eq!(batch.warnings[0], "Geometry from the Gaussian input file");
+    // A .log that no reader recognizes is refused by name.
+    let error = open("notes.log", "README.md").err().unwrap_or_default();
+    assert!(error.contains("not a format ReShiki reads"), "{error}");
+
+    // Open the water Molden fixture under ORCA's double suffix in memory.
+    let Ok(Prepared::Calculation(batch)) =
+        open("water.molden.input", "cclib/molden5.7_water_mp2.molden")
+    else {
+        panic!("a .molden.input file opens as a drawing");
+    };
+    // H      3  1    -0.272880     0.951649     0.000000
+    assert_eq!(batch.drawings[0].atoms.len(), 3);
+    assert!(batch.warnings[0].contains("results in the palette"));
+
+    // The anion radical's "-1 2" line: the drawing cannot say which atom carries them.
+    let Ok(Prepared::Records(batch)) = open(
+        "MethylPyrrolidine_drawn.gjf",
+        "pymatgen/MethylPyrrolidine_drawn.gjf",
+    ) else {
+        panic!("a Gaussian Z-matrix input opens as a drawing");
+    };
+    assert_eq!(
+        batch.warnings[0],
+        "Geometry from the Gaussian input file · Not drawn: total charge -1, spin multiplicity 2"
+    );
+    // Charge only, spin only, and a single ion whose charge is drawn on its atom (in memory).
+    let input = |charge_spin: &str, atoms: &str| {
+        let text = format!("#p hf/sto-3g\n\nion\n\n{charge_spin}\n{atoms}\n\n");
+        let (_, opened) = runtime
+            .block_on(prepare_contents("ion.gjf".into(), Ok(text.into_bytes())))
+            .unwrap();
+        let Ok(Prepared::Records(batch)) = opened else {
+            panic!("{charge_spin}");
+        };
+        batch
+    };
+    let hydroxide = input("-1 1", "O 0 0 0\nH 0 0 0.96");
+    assert!(hydroxide.warnings[0].ends_with(" · Not drawn: total charge -1"));
+    let oxygen = input("0 3", "O 0 0 0\nO 0 0 1.21");
+    assert!(oxygen.warnings[0].ends_with(" · Not drawn: spin multiplicity 3"));
+    let chloride = input("-1 1", "Cl 0 0 0");
+    assert_eq!(chloride.drawings[0].atoms[0].charge, -1);
+    assert_eq!(
+        chloride.warnings[0],
+        "Geometry from the Gaussian input file"
+    );
+    // A Molden file that records its charge says so too (water as H3O+ in memory).
+    let water = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/qc/cclib/molden5.7_water_mp2.molden"
+    ))
+    .unwrap()
+    .replacen("[Atoms]", "[Charge]\n1\n[Atoms]", 1);
+    let (_, opened) = runtime
+        .block_on(prepare_contents(
+            "ion.molden".into(),
+            Ok(water.into_bytes()),
+        ))
+        .unwrap();
+    let Ok(Prepared::Calculation(batch)) = opened else {
+        panic!("a Molden file opens as a drawing");
+    };
+    assert!(
+        batch.warnings[0].contains(" · Not drawn: total charge +1"),
+        "{:?}",
+        batch.warnings
+    );
+    let science = &batch.drawings[0].science;
+    let frame = science.frame(&science.results[0].result.frame).unwrap();
+    assert_eq!((frame.charge, frame.multiplicity), (1, 2));
+}
+
+#[test]
+fn mismatched_calculation_opens_the_geometry_with_a_warning() {
+    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0\n\
+                   [MO]\nEne= -0.5\nSpin= Alpha\nOccup= 2\n";
+    let Prepared::Calculation(batch) = prepare_qc("overlap.molden".as_ref(), molden).unwrap()
+    else {
+        panic!("the geometry should still open");
+    };
+    let doc = &batch.drawings[0];
+    assert_eq!(doc.models[0].atoms.len(), 1);
+    assert!(doc.science.is_empty());
+    assert!(batch.warnings[0].contains("Results could not be attached"));
+    assert!(batch.warnings[0].contains("Check the source geometry"));
+}
+
+#[tokio::test]
+async fn molden_atoms_only_reports_no_calculated_results() {
+    let (mut app, _) = App::new();
+    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0.74\n";
+    let opened = prepare_contents("hydrogen.molden".into(), Ok(molden.to_vec())).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models[0].atoms.len(), 2);
+    assert!(app.tab.doc.science.is_empty());
+    assert!(app.xtb_bottom_palette().is_none());
+    assert!(
+        app.status.contains("The file has no calculated results."),
+        "{}",
+        app.status
+    );
+    assert!(
+        !app.status.contains("results in the palette"),
+        "{}",
+        app.status
+    );
+}
+
+#[tokio::test]
+async fn orca_molden_and_fchk_open_directly_with_their_results() {
+    let (mut app, _) = App::new();
+    let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/qc/cclib/");
+    for (name, modes, has_shapes) in [
+        ("orca60_dvb_ir.out", 54, false),
+        ("molden5.7_dvb_ir.molden", 54, true),
+        ("g09_dvb_ir.fchk", 0, true),
+    ] {
+        let opened = read(std::path::Path::new(fixtures).join(name)).await;
+        let _ = app.update(Message::FilePrepared(opened));
+        assert!(!app.error, "{name}: {}", app.status);
+        let doc = &app.tab.doc;
+        let [stored] = doc.science.results.as_slice() else {
+            panic!("{name}: {}", app.status);
+        };
+        assert!(app.frames_import.is_none(), "{name}");
+        assert!(
+            app.status.contains("results in the palette"),
+            "{name}: {}",
+            app.status
+        );
+        let views = crate::app::xtb::View::available(&stored.result);
+        assert_eq!(
+            views.contains(&crate::app::xtb::View::Vibrations),
+            modes > 0,
+            "{name}"
+        );
+        assert!(views.contains(&crate::app::xtb::View::Orbitals), "{name}");
+        assert_eq!(
+            stored
+                .result
+                .vibrations
+                .as_ref()
+                .map_or(0, |v| v.frequencies_cm1.len()),
+            modes,
+            "{name}"
+        );
+        let orbitals = stored.result.orbitals.as_ref().unwrap();
+        assert!(!orbitals.alpha.energies_hartree.is_empty());
+        assert_eq!(!orbitals.alpha.rows.is_empty(), has_shapes, "{name}");
+        assert_eq!(
+            !orbitals.alpha.coefficients.is_empty(),
+            has_shapes,
+            "{name}"
+        );
+        let attachment = doc.science.attachment(stored.attachment).unwrap();
+        assert_eq!(attachment.atoms, doc.models[0].geometry_sources());
+        assert_eq!(
+            attachment.freshness(doc),
+            reshiki::science::Freshness::Current
+        );
+        assert_eq!(app.tab.name(), name);
+        assert!(app.xtb_bottom_palette().is_some());
+    }
+}
+
+#[tokio::test]
+async fn orca_output_opens_its_result_in_the_palette() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/qc/cclib/orca60_water_mp2.out"
+    );
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::FilePrepared(read(path.into()).await));
+    assert!(!app.error, "{}", app.status);
+    let [stored] = app.tab.doc.science.results.as_slice() else {
+        panic!("{}", app.status);
+    };
+    assert_eq!(stored.result.provenance.program, "ORCA");
+    assert!(app.xtb_bottom_palette().is_some());
+}
+
+#[tokio::test]
+async fn xyz_opens_without_calculation_results() {
+    use iced::futures::StreamExt;
+
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.cancel_engine_job();
+    let contents = b"2\nhydrogen\nH 0 0 0\nH 0 0 0.74\n".to_vec();
+    let opened = prepare_contents("hydrogen.xyz".into(), Ok(contents)).await;
+    let task = app.file_prepared(opened);
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    let Some(iced_runtime::Action::Output(message)) = stream.next().await else {
+        panic!("missing XYZ import result");
+    };
+    let _ = app.update(message);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models[0].atoms.len(), 2);
+    assert!(app.tab.doc.science.is_empty());
+    assert!(app.xtb_bottom_palette().is_none());
 }

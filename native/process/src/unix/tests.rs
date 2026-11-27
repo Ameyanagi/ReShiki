@@ -42,7 +42,7 @@ fn linux_unreaped_exit_is_a_transient_sample_before_owned_cleanup() {
     };
     let mut command = Command::new("/bin/sh");
     command.args(["-c", "exit 37"]);
-    let mut child = spawn(&mut command, limits).unwrap();
+    let mut child = spawn(&mut command, limits, false).unwrap();
     let started = std::time::Instant::now();
     loop {
         // SAFETY: this observes the owned child without reaping it. Its
@@ -87,7 +87,7 @@ fn observed_exit_completes_group_cleanup_before_releasing_child_identity() {
     };
     let mut command = Command::new("/bin/sh");
     command.args(["-c", "exit 37"]);
-    let mut child = spawn(&mut command, limits).unwrap();
+    let mut child = spawn(&mut command, limits, false).unwrap();
     let started = std::time::Instant::now();
     let status = loop {
         if let Some(status) = child.try_wait().unwrap() {

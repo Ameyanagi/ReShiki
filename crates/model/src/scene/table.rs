@@ -367,7 +367,7 @@ pub(super) fn primitives_with_lines(doc: &Document, lines: bool) -> Vec<Primitiv
                 for a in &mut part.annotations {
                     wrap(frame, a);
                 }
-                super::primitives_in_cell(&part, backdrops.before_graphic(index), lines)
+                super::primitives_in_cell(doc, &part, backdrops.before_graphic(index), lines)
             } else {
                 vec![]
             };
@@ -388,11 +388,11 @@ pub(super) fn primitives_with_lines(doc: &Document, lines: bool) -> Vec<Primitiv
     let flat = crate::models3d::drawn(&ordinary);
     let opacity = crate::rear_opacity::Paint::new(&flat);
     super::primitives_with_tables(
+        doc,
         &ordinary,
         &flat,
         &opacity,
         &tables,
-        false,
         super::Resolve::Scene,
         lines,
     )

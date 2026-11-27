@@ -1,9 +1,15 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{control, hover_hint, keyed_command, muted_text, panel_action};
+use super::workspace::{
+    accessible_command, control, hover_hint, keyed_command, muted_text, panel_action, section,
+};
+use super::xtb::{
+    self,
+    orbitals::{self, DiagramEdit},
+};
 use super::{App, InspectorTab, Message};
 use crate::appearance::ChemDrawFormat;
 use crate::canvas::Tool;
-use iced::widget::{button, checkbox, column, container, row, text, tooltip};
+use iced::widget::{Space, button, checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 use reshiki::{
     bonds::{BondPreset, DoublePosition},
@@ -136,6 +142,7 @@ pub enum Section {
     GenericStructure,
     AtomMaps,
     StereoGroups,
+    Xtb,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -450,7 +457,6 @@ impl State {
         self.resolution_menu = false;
         self.chemical_menu = false;
     }
-    #[cfg(test)]
     pub(super) fn expanded(&self, section: Section) -> Option<bool> {
         self.expanded.get(&section).copied()
     }
@@ -1009,13 +1015,7 @@ impl App {
         expanded: bool,
         content: impl FnOnce() -> Content,
     ) -> Element<'a, Message> {
-        let expanded = self
-            .tab
-            .inspector_ui
-            .expanded
-            .get(&section)
-            .copied()
-            .unwrap_or(expanded);
+        let expanded = self.tab.inspector_ui.expanded(section).unwrap_or(expanded);
         let summary = summary.into();
         let mut heading = column![
             row![
@@ -1121,6 +1121,12 @@ impl App {
             .any(|g| selected.contains(&g.id) && g.tlc.is_some())
         {
             body = body.push(card(container(self.tlc_panel()).padding(12)));
+        }
+        if let Some(ir) = self.ir_figure_card() {
+            body = body.push(card(container(ir).padding(12)));
+        }
+        if let Some(mo) = self.mo_diagram_card() {
+            body = body.push(card(container(mo).padding(12)));
         }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
@@ -2621,6 +2627,38 @@ impl App {
                 .align_y(Alignment::Center),
             );
         }
+        if let Some(model) = self
+            .tab
+            .doc
+            .models
+            .iter()
+            .enumerate()
+            .find(|(index, model)| {
+                model.display != reshiki::models3d::Display::TwoD && self.model_stale(*index)
+            })
+            .map(|(_, model)| model)
+        {
+            body = body.push(
+                row![
+                    text("The 3D model does not match the drawing.")
+                        .size(11)
+                        .width(Length::Fill)
+                        .style(crate::appearance::text_color(Color::from_rgb8(161, 98, 7))),
+                    reshiki::accessibility::button(
+                        "export-outdated-show",
+                        "Show the outdated 3D model",
+                        text("Show").size(11),
+                    )
+                    .padding([3, 5])
+                    .style(button::text)
+                    .on_press(Message::Canvas(crate::canvas::Edit::Select(
+                        model.linked_ids(&self.tab.doc),
+                    ))),
+                ]
+                .spacing(4)
+                .align_y(Alignment::Center),
+            );
+        }
         if let Some(recent) = self.repeat_export() {
             let label = recent.label();
             body = body.push(
@@ -2734,15 +2772,22 @@ impl App {
                 .style(muted_text),
             )
             .push(
-                container(
+                row![
+                    panel_action(
+                        "Input for Gaussian / ORCA / GAMESS…",
+                        Message::QcExport(super::qc_export::Action::Open),
+                    )
+                    .padding([3, 0])
+                    .style(button::text),
+                    Space::new().width(Length::Fill),
                     panel_action(
                         "Reaction roles & export…",
                         Message::Reaction(super::reactions::Action::Open),
                     )
                     .padding([3, 0])
                     .style(button::text),
-                )
-                .align_right(Length::Fill),
+                ]
+                .align_y(Alignment::Center),
             );
         let background = self.export_tab_background;
         let default = self.appearance.export_editable_drawing;
@@ -2852,6 +2897,81 @@ impl App {
         }
         Task::none()
     }
+    fn mo_diagram_card(&self) -> Option<Element<'_, Message>> {
+        let [id] = self.tab.selected.as_slice() else {
+            return None;
+        };
+        let id = *id;
+        let mo = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .find(|g| g.id == id)?
+            .mo
+            .as_deref()?;
+        let send = move |edit| {
+            Message::Xtb(xtb::Action::Orbitals(orbitals::Action::EditDiagram(
+                id, edit,
+            )))
+        };
+        let stepper = |label, ids: [&'static str; 2], value: u8, edit: fn(u8) -> DiagramEdit| {
+            row![
+                text(label).size(11).width(Length::Fill),
+                accessible_command(ids[0], format!("Fewer {label}"), "−")
+                    .padding([3, 8])
+                    .on_press_maybe((value > 0).then(|| send(edit(value - 1)))),
+                text(value.to_string()).size(12).width(20).center(),
+                accessible_command(ids[1], format!("More {label}"), "+")
+                    .padding([3, 8])
+                    .on_press_maybe((value < 8).then(|| send(edit(value + 1)))),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+        };
+        let link = if mo.linked {
+            row![
+                text("Linked to the calculation")
+                    .size(11)
+                    .width(Length::Fill),
+                accessible_command("mo-diagram-unlink", "Unlink", "Unlink")
+                    .on_press(send(DiagramEdit::Unlink)),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+        } else {
+            row![text("Not linked: reruns leave it unchanged").size(11)]
+        };
+        Some(
+            column![
+                section("MO diagram"),
+                stepper(
+                    "Levels below HOMO",
+                    ["mo-diagram-below-less", "mo-diagram-below-more"],
+                    mo.below,
+                    DiagramEdit::Below
+                ),
+                stepper(
+                    "Levels above LUMO",
+                    ["mo-diagram-above-less", "mo-diagram-above-more"],
+                    mo.above,
+                    DiagramEdit::Above
+                ),
+                link,
+                accessible_command(
+                    "mo-diagram-remove-pictures",
+                    "Remove pictures",
+                    "Remove pictures"
+                )
+                .on_press_maybe(
+                    (!mo.pictures.is_empty()).then(|| send(DiagramEdit::RemovePictures))
+                ),
+            ]
+            .spacing(8)
+            .into(),
+        )
+    }
+
     /// Returns the Import tab's focus task. `None` lets update_inner's
     /// inspector reveal apply.
     pub(super) fn show_inspector_tab(&mut self, tab: InspectorTab) -> Option<Task<Message>> {

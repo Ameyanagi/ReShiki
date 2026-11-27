@@ -23,19 +23,28 @@ thread_local! {
     pub(in crate::canvas) static SPLIT: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
 }
 
-/// The drawing without the molecules a preview redraws.
-pub(in crate::canvas) struct Remainder {
+/// A retained part of a drawing and the area it can affect.
+pub(in crate::canvas) struct ScenePart {
     pub scene: Rc<[Primitive]>,
     /// Empty: the preview draws its own selection markers below both parts.
     pub markers: Rc<Markers>,
     layout: Vec<(World, World)>,
 }
 
-impl Remainder {
+impl ScenePart {
+    pub fn new(doc: &Document) -> Self {
+        let scene: Rc<[Primitive]> = scene::primitives(doc).into();
+        Self {
+            layout: layout(doc, &scene),
+            markers: Rc::default(),
+            scene,
+        }
+    }
+
     /// `doc` without the sorted `excluded` objects, or `None` when an object
     /// that stays references one of them. `scene` gives `doc`'s own scene,
     /// used when nothing is excluded.
-    pub fn new(
+    pub fn remainder(
         doc: &Document,
         excluded: &[u64],
         scene: impl FnOnce() -> Rc<[Primitive]>,
@@ -66,8 +75,9 @@ impl Remainder {
 }
 
 pub(super) struct Fragment {
-    pub remainder: Rc<Remainder>,
+    pub remainder: Rc<ScenePart>,
     pub scene: Rc<[Primitive]>,
+    pub shift: Option<World>,
 }
 
 impl Fragment {
@@ -78,9 +88,13 @@ impl Fragment {
         base: &Document,
         preview: &Document,
         camera: Camera,
+        move_delta: Option<World>,
     ) -> Option<Self> {
         #[cfg(test)]
         if !SPLIT.with(std::cell::Cell::get) {
+            return None;
+        }
+        if move_delta.is_none() && !base.models.is_empty() {
             return None;
         }
         let (part, excluded) = if let Some((piece, original)) = appended_piece(base, preview) {
@@ -112,16 +126,45 @@ impl Fragment {
             excluded.sort_unstable();
             (part, excluded)
         };
+        // Rebuilding a 2D part is cheap and exact; only a part showing a 3D
+        // model reuses its retained scene and tiles while it moves.
+        let rigid = move_delta
+            .filter(|_| {
+                part.models
+                    .iter()
+                    .any(|m| m.display != reshiki::models3d::Display::TwoD)
+            })
+            .and_then(|delta| rigid_part(base, &part, &excluded, delta));
+        if !base.models.is_empty() {
+            // A model must be kept whole on one side of the split.
+            rigid.as_ref()?;
+            for model in &base.models {
+                let linked = model.linked_ids(base);
+                let in_fragment = |id: &u64| excluded.binary_search(id).is_ok();
+                if linked.is_empty()
+                    || (linked.iter().any(in_fragment) && !linked.iter().all(in_fragment))
+                {
+                    return None;
+                }
+            }
+        }
         let remainder = cache.remainder(base, &excluded)?;
-        let scene: Rc<[Primitive]> = scene::primitives(&part).into();
-        let mut fragment = layout(&part, &scene);
+        let (scene, mut fragment, shift) = if let Some((original, delta)) = rigid {
+            let cached = cache.moved_part(base, &excluded, &original);
+            (cached.scene.clone(), cached.layout.clone(), Some(delta))
+        } else {
+            let scene: Rc<[Primitive]> = scene::primitives(&part).into();
+            let boxes = layout(&part, &scene);
+            (scene, boxes, None)
+        };
         // A pixel of antialiasing and a little more for estimated text widths,
         // plus the gap automatic hydrogens, charges and group labels keep from
         // other ink: 0.12 of their font size.
         let margin = 3. / camera.zoom + 0.12 * label_font(preview);
+        let delta = shift.unwrap_or_default();
         for (lo, hi) in &mut fragment {
-            *lo = lo.offset(-margin, -margin);
-            *hi = hi.offset(margin, margin);
+            *lo = lo.offset(delta.x, delta.y).offset(-margin, -margin);
+            *hi = hi.offset(delta.x, delta.y).offset(margin, margin);
         }
         let all = fragment.iter().copied().reduce(|(a, b), (c, d)| {
             (
@@ -136,8 +179,24 @@ impl Fragment {
                 .filter(|rest| overlap(rest, &all))
                 .all(|rest| !fragment.iter().any(|f| overlap(rest, f)))
         });
-        apart.then_some(Self { remainder, scene })
+        apart.then_some(Self {
+            remainder,
+            scene,
+            shift,
+        })
     }
+}
+
+fn rigid_part(
+    base: &Document,
+    part: &Document,
+    excluded: &[u64],
+    delta: World,
+) -> Option<(Document, World)> {
+    let original = reshiki::editing::preserved_expansion_selection(base, excluded).ok()?;
+    let mut moved = original.clone();
+    moved.translate(&original.all_ids(), delta.x, delta.y);
+    (moved == *part).then_some((original, delta))
 }
 
 fn appended_piece<'a>(base: &Document, preview: &'a Document) -> Option<(u64, &'a [Graphic])> {
@@ -154,7 +213,8 @@ fn appended_piece<'a>(base: &Document, preview: &'a Document) -> Option<(u64, &'
 
 /// Atoms whose drawing can differ, or `None` when anything besides atoms,
 /// bonds and abbreviations differs after setting aside the free preview piece.
-/// Rear opacity and 3D models depend on the whole drawing.
+/// Rear opacity depends on the whole drawing. Models can only be split
+/// for a rigid move.
 fn changed_atoms(
     base: &Document,
     preview: &Document,
@@ -189,11 +249,12 @@ fn changed_atoms(
         piece_definitions,
         on_other_canvas: _,
         seats,
+        // Calculation data is never drawn.
+        science: _,
     } = preview;
     let same = depth_appearance.is_empty()
         && base.depth_appearance.is_empty()
-        && models.is_empty()
-        && base.models.is_empty()
+        && *models == base.models
         && *generic == base.generic
         && *canvas_theme == base.canvas_theme
         && *color_theme == base.color_theme

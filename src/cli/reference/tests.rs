@@ -21,9 +21,20 @@ fn documented_app_version_strips_only_the_nightly_suffix() {
 fn the_agent_reference_is_current() {
     assert_eq!(
         include_str!("../../../docs/agent-reference.md"),
-        agent_reference(),
+        canonical_agent_reference(),
         "run cargo run --example agent_reference -- docs/agent-reference.md"
     );
+}
+
+#[test]
+fn documented_and_compiled_commands_match_the_build() {
+    let documented: Vec<_> = DOCUMENTED_COMMANDS
+        .iter()
+        .filter(|spec| cfg!(feature = "xtb") || !matches!(spec.name, "calc" | "calculate" | "ts"))
+        .map(|spec| spec.name)
+        .collect();
+    let compiled: Vec<_> = COMMANDS.iter().map(|spec| spec.name).collect();
+    assert_eq!(compiled, documented);
 }
 
 #[test]
@@ -50,6 +61,14 @@ fn the_agent_api_versions_are_current() {
 #[test]
 fn help_is_verbatim_and_commands_and_tools_keep_catalog_order() {
     let reference = agent_reference();
+    let headings: Vec<_> = reference
+        .lines()
+        .filter_map(|line| line.strip_prefix("### reshiki --cli "))
+        .collect();
+    assert_eq!(
+        headings,
+        COMMANDS.iter().map(|spec| spec.name).collect::<Vec<_>>()
+    );
     assert!(reference.contains(&format!("```text\n{}```", help(None))));
     assert!(reference.contains(&format!("```text\n{}```", *MCP_USAGE)));
     let mut remaining = reference.as_str();
@@ -84,6 +103,7 @@ fn parameters_render_nullable_types_and_constraints_from_schema() {
             }]},
             "ids": {"type": "array", "maxItems": 2,
                 "items": {"type": "integer", "minimum": 1, "maximum": 9}},
+            "fixed": {"type": ["array", "null"], "items": {"type": "integer", "minimum": 1}},
             "optional": {"type": "boolean", "description": "One | two\nlines"}
         },
         "required": ["choice", "ids"]
@@ -96,6 +116,9 @@ fn parameters_render_nullable_types_and_constraints_from_schema() {
     let ids = "| `ids` | `array<integer>` | true | false | maxItems: `2`; ";
     assert!(text.contains(ids));
     assert!(text.contains("items.minimum: `1`; items.maximum: `9`"));
+    assert!(
+        text.contains("| `fixed` | `array<integer> or null` | false | true | items.minimum: `1` |")
+    );
     assert!(text.contains("| `optional` | `boolean` | false | false |  | One \\| two lines |"));
 }
 
@@ -131,18 +154,30 @@ fn budget_units_cover_the_serialized_limits() {
     assert!(!agent_reference().contains("| `app` |"));
 }
 
-/// docs/agent-cli.md is hand-written: each command's usage must appear in it
-/// (line wraps aside), and its options table must list every option with
-/// the commands that take it.
+/// The CLI guide keeps every usage and points to the worker guide for calc options.
 #[test]
 fn the_cli_guide_states_every_usage_and_option() {
     let guide = include_str!("../../../docs/agent-cli.md");
+    let (_, worker_cli) = include_str!("../../../docs/xtb-worker.md")
+        .split_once("## Command line\n")
+        .unwrap();
     let folded = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
     let guide_folded = folded(guide);
     let mut missing = Vec::new();
-    for spec in COMMANDS {
+    for spec in DOCUMENTED_COMMANDS {
         if !guide_folded.contains(&folded(spec.usage)) {
             missing.push(format!("usage: {}", folded(spec.usage)));
+        }
+        if spec.name == "calc" {
+            assert!(guide.contains("(xtb-worker.md#command-line)"));
+            for option in spec.options {
+                assert!(
+                    worker_cli.contains(option.flag),
+                    "missing calc option {}",
+                    option.flag
+                );
+            }
+            continue;
         }
         for option in spec.options {
             let cell = match option.value {

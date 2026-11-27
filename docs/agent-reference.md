@@ -13,20 +13,25 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli <command> [options]
 
 Commands:
-  convert      Convert a structure or drawing to another file format
-  render       Render a preview image of a structure or drawing
-  compose      Lay out an assistant Proposal (JSON) and write it as a file
-  analyze      Print molecular properties as one JSON line
-  predict-nmr  Print predicted NMR shifts as one JSON line
-  name         Print the systematic name of a structure
-  pieces       Check or render equipment piece files
-  info         Print versions, limits and formats as one JSON line
-  tools        Print the agent tool catalog as one JSON line
-  schema       Print a JSON Schema: reshiki --cli schema proposal
-  skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
-  help         Show this help, or a command's help: reshiki --cli help <command>
+  convert       Convert a structure or drawing to another file format
+  render        Render a preview image of a structure or drawing
+  compose       Lay out an assistant Proposal (JSON) and write it as a file
+  analyze       Print molecular properties as one JSON line
+  predict-nmr   Print predicted NMR shifts as one JSON line
+  calculate     Print a compact xTB calculation summary as one JSON line
+  read-output   Print quantum chemistry job summaries and calculated values as one JSON line
+  export-input  Write a quantum-chemistry input from an XYZ structure
+  name          Print the systematic name of a structure
+  calc          Print an xTB calculation as one JSON line
+  ts            Search for or refine a transition state with xTB
+  pieces        Check or render equipment piece files
+  info          Print versions, limits and formats as one JSON line
+  tools         Print the agent tool catalog as one JSON line
+  schema        Print a JSON Schema: reshiki --cli schema proposal
+  skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
+  help          Show this help, or a command's help: reshiki --cli help <command>
 
-Options are allowed once each; -- ends the options.
+Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -38,7 +43,7 @@ Examples:
   reshiki --cli compose proposal.json -o scheme.svg
 
 Output:
-  stdout carries only the result: the file, one JSON line, or one receipt
+  stdout carries only the result: a file, a text report, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.
   Warnings and errors go to stderr.
 
@@ -216,6 +221,95 @@ A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
 ```
 
+### reshiki --cli calculate
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calculate [--task energy|optimize|frequencies|opt+freq]
+    [--method gfn2|gxtb|gfnff] [--charge N] [--uhf N] [--solvent NAME]
+    [--conventions axtb|xtb-6.8] [--etemp K] [--accuracy X] [--max-iter N]
+    [--threads N] [--convergence normal|tight] [--fix N,N,...] FILE.xyz
+
+Runs the calculate tool and prints its labelled result as one JSON line.
+Only available in builds with xTB. Reads at most 16777216 bytes and 500 atoms;
+frequencies allow at most 200 atoms. The calculation deadline is 30 minutes.
+
+Options:
+  --task TASK                Calculate energy (default), optimize, frequencies or opt+freq.
+  --method METHOD            Use gfn2 (default), gxtb or gfnff.
+  --charge N                 Set the molecular charge (default 0).
+  --uhf N                    Set unpaired electrons (default 0).
+  --solvent NAME             Use the named ALPB solvent.
+  --conventions MODE         Use axtb (default) or xtb-6.8 conventions.
+  --etemp K                  Set the electronic temperature in kelvin.
+  --accuracy X               Set a positive SCF accuracy multiplier.
+  --max-iter N               Set a positive SCF iteration limit.
+  --threads N                Use 1 to 64 worker threads (default available CPUs, at most 8).
+  --convergence LEVEL        Optimization convergence: normal (default) or tight.
+  --fix N,N,...              Fix unique XYZ atom numbers during optimization, counting from 1.
+```
+
+### reshiki --cli read-output
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli read-output [--job N] FILE
+
+Runs the read_output tool and prints its labelled result as one JSON line,
+including job summaries, calculated values and the selected XYZ geometry.
+
+Options:
+  --job N  Select a zero-based job index; omit for the default job.
+
+Reads at most max_text_bytes (16777216 bytes).
+```
+
+### reshiki --cli export-input
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--reactant R.xyz] [--product P.xyz] [--hessian H.hess]
+                                  [--out PATH]
+
+Writes input for another program from the first frame of INPUT.xyz (Å).
+Without --out, the input goes to stdout. With --out, the main file is
+replaced and new companions go beside it. An existing companion file
+stops the export. Warnings go to stderr.
+
+Endpoint files are only for Gaussian qst2/qst3 and ORCA neb-ts. They must
+list the same elements as INPUT.xyz in the same order. Corresponding atoms
+must have the same index in every structure.
+
+Options:
+  --program PROGRAM   gaussian, orca, gamess or xyz. Required.
+  --job JOB           single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts.
+  --template N        Built-in template, 1 to 3.
+  --method M          Method, given with --basis.
+  --basis B           Basis; empty for an ORCA composite method.
+  --charge C          Total charge.
+  --multiplicity M    2S + 1.
+  --cores N           Cores (8).
+  --memory-gb G       Total memory in GB (16).
+  --title T           Title (the input file name).
+  --extra TEXT        More keywords, or GAMESS groups.
+  --reactant R.xyz    First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
+  --product P.xyz     First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.
+  --hessian H.hess    ORCA Cartesian Hessian. Requires --program orca with --job ts or irc.
+  --out PATH          Main file. Required for ORCA neb-ts or when using --hessian.
+
+Templates:
+  1  B3LYP-D3BJ/def2-SVP opt+freq
+  2  r2SCAN-3c opt+freq (ORCA only)
+  3  HF/6-31G(d) single point
+
+Example:
+  reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz
+```
+
 ### reshiki --cli name
 
 ```text
@@ -248,6 +342,87 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   alternatives   Other verified names, each with name, status and reason.
 With --locants, value also contains locants: one string or null per imported
 atom, in input atom order. Atoms outside the principal parent have null.
+```
+
+### reshiki --cli calc
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
+
+Options:
+  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
+  --method METHOD              Use gfn2 (default), gfnff or gxtb.
+  --energy                     Accepted for compatibility. Energy is always included.
+  --gradient                   Include the Cartesian energy gradient.
+  --wbo                        Include Mayer–Wiberg bond orders.
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
+  --alpb NAME                  Use the ALPB solvent model.
+  --gbsa NAME                  Use the GBSA solvent model.
+  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
+  --etemp K                    Set the electronic temperature in kelvin.
+  --thermo-temperature K       Thermochemistry temperature in kelvin (default 298.15)
+  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N                 Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
+  --threads N                  Use 1 to 64 worker threads (default 1).
+
+Use calculate for the compact calculation summary.
+See docs/xtb-worker.md (Command line)
+```
+
+### reshiki --cli ts
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--method gfn2|gxtb] [--refine gxtb (--ts TS.xyz | --from DIR)]
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]
+
+Search using gas-phase GFN2-xTB (default) or g-xTB with axtb conventions.
+g-xTB is closer to DFT energies; slower for large molecules. Requires the xtb feature.
+Supply two atom-mapped XYZ files or one XYZ file with the bond changes.
+Each structure must have 2 to 120 atoms. With two files, atom order
+defines the map. --remap-hydrogens requires two files and keeps heavy atoms
+mapped by order.
+For --refine gxtb, supply --ts with endpoint inputs, or --from a verified
+GFN2-xTB output directory. All refinement checks and endpoints use g-xTB.
+Unverified g-xTB candidates never report a barrier. Output files must be new.
+
+Options:
+  --method METHOD              Use GFN2-xTB (default) or g-xTB for the entire search and verification.
+  --refine gxtb                Refine a TS with a g-xTB Hessian, saddle search, relaxed endpoints and IRC.
+  --ts TS.xyz                  Start --refine from this TS and the usual endpoint or bond-change inputs.
+  --from DIR                   Read a verified GFN2-xTB --out-dir; without report.json, use XYZ geometry seeds only.
+  --reactant R.xyz             Read the reactant from the first XYZ frame in angstroms.
+  --product P.xyz              Read the product from the first XYZ frame in angstroms.
+  --form I-J                   Form a bond from reactant to product (1-based atom numbers, repeatable).
+  --break I-J                  Break a bond from reactant to product (1-based atom numbers, repeatable).
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --images N                   Use 5 to 24 NEB images including endpoints (default 15).
+  --workers N                  Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).
+  --remap-hydrogens            Reassign product hydrogens by least motion and list changed heavy-atom neighbors.
+  --keep-endpoints             Skip relaxation of the search endpoints.
+  --out-dir DIR                Write endpoint, TS, path and IRC XYZ files, an ORCA Hessian and report.json.
+  --json FILE                  Write a JSON report.
+
+Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both
+checks, and IRC branches whose relaxed ends match both endpoints. Progress
+and the hydrogen mapping review go to stderr.
+
+Examples:
+  reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+  reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+  reshiki --cli ts --method gxtb --reactant hcn.xyz --product hnc.xyz
+  reshiki --cli ts --refine gxtb --from results --out-dir refined
 ```
 
 ### reshiki --cli pieces
@@ -399,7 +574,7 @@ Report ReShiki's versions, the limits this server enforces (budgets), the import
 
 Parameters: none; pass `{}`.
 
-Result `value`: `{operation_api, stability, budgets, formats, grants, files}`. operation_api is the operation API version; stability is "experimental". budgets lists the enforced limits, with the render limits nested under render. formats is {import, export}. grants is {read, write}, the granted folders as the user spelled them; files is {read, write}, the extensions file_open and file_save accept.
+Result `value`: `{operation_api, stability, budgets, formats, grants, files, calculations}`. operation_api is the operation API version; stability is "experimental". budgets lists the enforced limits, with the render limits nested under render. formats is {import, export}. grants is {read, write}, the granted folders as the user spelled them; files is {read, write}, the extensions file_open and file_save accept. calculations is null without an xTB hook. With one, it is {engine, methods, max_atoms, max_frequency_atoms}. engine is {name, version, license, source, rev}; methods is [{method, label, energy, optimize, frequencies, open_shell, solvent}]. solvent is native, gfn2_correction or null.
 
 ### document_new
 
@@ -755,12 +930,95 @@ Return an input schema that the tool list leaves out to stay small. sketch is th
 
 Result `value`: `{name, schema}`. name repeats the request; schema is the JSON Schema (2020-12) of that input, with its rules in the description.
 
+### export_input
+
+**Export calculation input**
+
+Write Gaussian, ORCA or GAMESS input from the first XYZ frame (Å). Null settings use CLI defaults.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints |
+| --- | --- | --- | --- | --- |
+| `basis` | `string or null` | true | true |  |
+| `charge` | `integer or null` | true | true |  |
+| `cores` | `integer or null` | true | true | minimum: `1` |
+| `extra` | `string or null` | true | true |  |
+| `job` | `string` | true | false | enum: `["single_point","optimize","opt_freq"]` |
+| `memory_gb` | `integer or null` | true | true | minimum: `1` |
+| `method` | `string or null` | true | true |  |
+| `multiplicity` | `integer or null` | true | true | minimum: `1` |
+| `program` | `string` | true | false | enum: `["gaussian","orca","gamess"]` |
+| `title` | `string or null` | true | true |  |
+| `xyz` | `string` | true | false |  |
+
+Result `value`: `{file_name, text, companions}`. The main input file name and text. companions is [{file_name, text}] for files the input references. The writer's messages become warnings. Total file text is at most max_output_bytes.
+
+### read_output
+
+**Read calculation output**
+
+Summarize quantum chemistry jobs with calculated values and XYZ geometry.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `file_name` | `string or null` | true | true |  | Format detection name; null uses path's file name. |
+| `job` | `integer or null` | true | true | minimum: `0` | Zero-based job index; null selects the default job. |
+| `path` | `string or null` | true | true | maxLength: `4096` | File in a granted READ folder, at most max_text_bytes. |
+| `text` | `string or null` | true | true |  | Inline file, at most max_text_bytes; needs file_name. Give text or path, never both. |
+
+Result `value`: `{format, program, program_version, jobs, job}`. jobs is [{index, kind, title, completion, steps, atoms, energy_hartree, frequencies, orbitals}]. job is the selected job or null. It has {index, kind, method, basis, keywords, completion, energy_hartree, homo_lumo_gap_ev, dipole_debye, frequencies_cm1, ir_intensities_km_mol, imaginary, thermo, xyz}. For unrestricted spectra, the gap uses the highest occupied and lowest empty levels across both spins. In thermo, zero_point_energy_hartree is the zero-point correction. enthalpy_hartree and gibbs_hartree are absolute energies (electronic energy plus correction). xyz is the geometry described by the result, or the last retained geometry if there is no result. File messages become warnings.
+
+### calculate
+
+**Run xTB calculation**
+
+Calculate energy, optimize or compute frequencies from the first XYZ frame (Å). Only in builds with xTB.
+
+| Hint | Value |
+| --- | --- |
+| `destructiveHint` | false |
+| `idempotentHint` | true |
+| `openWorldHint` | false |
+| `readOnlyHint` | true |
+
+| Parameter | Type | Required | Nullable | Constraints | Description |
+| --- | --- | --- | --- | --- | --- |
+| `accuracy` | `number or null` | true | true | minimum: `0` |  |
+| `charge` | `integer` | true | false |  |  |
+| `conventions` | `string` | true | false | enum: `["axtb","xtb-6.8"]` |  |
+| `convergence` | `string or null` | true | true | enum: `["normal","tight",null]` |  |
+| `electronic_temperature_k` | `number or null` | true | true | minimum: `0` |  |
+| `fixed_atoms` | `array<integer> or null` | true | true | items.minimum: `1` | Unique XYZ atom numbers for optimization. |
+| `max_iterations` | `integer or null` | true | true | minimum: `1` |  |
+| `method` | `string` | true | false | enum: `["gfn2","gxtb","gfnff"]` |  |
+| `solvent` | `string or null` | true | true |  | ALPB solvent name. |
+| `task` | `string` | true | false | enum: `["energy","optimize","frequencies","opt+freq"]` |  |
+| `threads` | `integer or null` | true | true | minimum: `1`; maximum: `64` |  |
+| `uhf` | `integer` | true | false | minimum: `0` | Unpaired electrons. |
+| `xyz` | `string` | true | false |  |  |
+
+Result `value`: `{task, method, engine, atoms, charge, multiplicity, energy_hartree, homo_lumo_gap_ev, dipole_debye, charges, optimization, frequencies, seconds}`. engine is {name, version, rev}. Gap, dipole and charges are null when absent. optimization is {converged, steps, rmsd_angstrom, xyz} or null. frequencies is {frequencies_cm1, ir_intensities_km_mol, imaginary, temperature_k, zero_point_energy_hartree, enthalpy_hartree, gibbs_hartree} or null. zero_point_energy_hartree is the zero-point correction. enthalpy_hartree and gibbs_hartree are absolute energies (electronic energy plus correction). Charges are rounded to four decimal places and frequencies to two. The hook's messages become warnings.
+
 ## Budgets
 
 Default operation budgets, as reported by `info`.
 
 | Budget | Value | Unit |
 | --- | --- | --- |
+| `calc_deadline_seconds` | 1800 | seconds |
 | `concurrency` | 2 | count |
 | `export_png_pixels` | 16000000 | pixels |
 | `history_depth` | 20 | count |
@@ -849,7 +1107,7 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
 | --- | --- |
 | `operation_api` | 2 |
 | `engine_protocol` | 1 |
-| `document` | 41 |
+| `document` | 42 |
 
 ## Proposal
 

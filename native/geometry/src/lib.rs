@@ -1,6 +1,11 @@
 //! Geometry-only Rust solver. Calculations never replace the editor graph.
 //! Coordinates are in angstroms, energies in kcal/mol, and gradients in
 //! kcal/mol/angstrom. Call this synchronous API only in the disposable worker.
+//!
+//! COSMolKit \[COSMolKit\] supplies ETKDGv3 (Riniker & Landrum 2015; Wang et al. 2020)
+//! \[Riniker2015ETKDG\] \[Wang2020ETKDGv3\], MMFF94 and MMFF94s (Halgren 1996, 1999)
+//! \[Halgren1996MMFF\] \[Halgren1999MMFF94s\] and UFF (Rappé et al. 1992) \[Rappe1992UFF\].
+//! Full references: docs/references/xtb.md.
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
@@ -15,6 +20,8 @@ pub const MAX_COORDINATES: usize = 4096;
 pub const MAX_BONDS: usize = 4096;
 pub const MAX_CONFORMERS: u32 = 32;
 pub const MAX_ITERATIONS: u32 = 10_000;
+/// Maximum original-atom count times requested conformers for an ensemble.
+pub const ENSEMBLE_ATOM_BUDGET: usize = 6400;
 
 /// Periodic-table metals used by relaxed geometry and coordination admission.
 /// Keep this shared with callers so alkali ions such as crown-bound K are
@@ -103,6 +110,14 @@ pub enum Operation {
     Evaluate,
 }
 
+/// Return every valid generated conformer, with optional force-field relaxation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum Ensemble {
+    Minimized,
+    Embedded,
+}
+
 /// Tetrahedral tags use RDKit's bond insertion order: 0 unspecified, 1 CW, 2 CCW.
 /// The caller must translate its graph's neighbor order before setting a tag.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -171,6 +186,9 @@ pub struct Request {
     pub bonds: Vec<BondInput>,
     pub field: ForceField,
     pub operation: Operation,
+    /// Ensembles require strict generation without starting coordinates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ensemble: Option<Ensemble>,
     /// Generate accepts either no coordinates or an optional original-atom 3D
     /// starting geometry. Relax/Evaluate require original+added-H coordinates.
     pub coordinates: Vec<[f64; 3]>,
@@ -178,6 +196,15 @@ pub struct Request {
     pub conformers: u32,
     pub seed: i32,
     pub max_iterations: u32,
+}
+
+/// One valid generated conformer, in embedding conformer-ID order.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnsembleMember {
+    pub coordinates: Vec<[f64; 3]>,
+    pub energy: f64,
+    pub converged: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -193,6 +220,9 @@ pub struct Response {
     pub converged: bool,
     pub field: ForceField,
     pub diagnostics: Vec<String>,
+    /// All valid generated candidates; top-level fields retain the lowest energy.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ensemble: Vec<EnsembleMember>,
     /// Disclosed force-field and preparation approximations in relaxed mode.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub approximations: Vec<String>,
@@ -227,8 +257,22 @@ impl Request {
             || self.max_iterations == 0
             || self.max_iterations > MAX_ITERATIONS
             || self.seed < 0
+            || (self.operation == Operation::Generate
+                && i64::from(self.seed) + i64::from(self.conformers) > i64::from(i32::MAX))
         {
             return Err("Invalid geometry sampling/minimization limits".into());
+        }
+        if self.ensemble.is_some() {
+            if self.relaxed || self.operation != Operation::Generate || !self.coordinates.is_empty()
+            {
+                return Err(
+                    "Geometry ensembles require strict generation without starting coordinates"
+                        .into(),
+                );
+            }
+            if n.saturating_mul(self.conformers as usize) > ENSEMBLE_ATOM_BUDGET {
+                return Err("Geometry ensemble atom/conformer budget exceeded".into());
+            }
         }
         if self.atoms.iter().any(|a| {
             a.atomic_number == 0
@@ -302,14 +346,23 @@ impl Request {
 }
 
 /// Execute one bounded operation using COSMolKit's Rust force fields and
-/// distance geometry. Only owned data leaves the disposable worker.
+/// distance geometry, using the historical 256 MiB heap allowance to cap
+/// ensemble concurrency. Only owned data leaves the disposable worker.
 pub fn solve(request: &Request) -> Result<Response, String> {
+    solve_with_heap_budget(request, REFERENCE_HEAP_BYTES)
+}
+
+/// Execute one operation with ensemble concurrency limited by the configured
+/// worker heap budget. The caller must enforce the allocation budget itself.
+pub fn solve_with_heap_budget(request: &Request, heap_bytes: usize) -> Result<Response, String> {
     request.validate()?;
     let _guard = SOLVER_OPERATION
         .lock()
         .map_err(|_| "Geometry solver lock poisoned")?;
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| solver::solve(request)))
-        .map_err(|_| "Rust geometry solver panicked".to_owned())?
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        solver::solve(request, heap_bytes)
+    }))
+    .map_err(|_| "Rust geometry solver panicked".to_owned())?
 }
 
 #[cfg(test)]

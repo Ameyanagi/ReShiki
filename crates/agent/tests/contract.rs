@@ -10,12 +10,18 @@ use reshiki_agent::{
     canvas_tools,
     ops::{
         budget::{Budgets, RenderBudget},
-        catalog::{RESULTS, SPECS, catalog_json, decode_check},
+        calculate::{
+            CalcFuture, CalcRequest, CalcTask, CalcValue, Calculated, Calculations, Engine,
+            EngineIdentity,
+        },
+        catalog::{BASE_SPECS, RESULTS, SPECS, catalog_json, decode_check},
         compose::SKETCH_PLACEHOLDER,
+        error::ErrorKind,
         headless::HeadlessHost,
         host::{Call, ToolHost},
         inspect::MAX_TEXT_CHARS,
         naming::{self, Naming, NamingFuture},
+        progress::{Monotonic, Progress},
         wire::{Principal, RequestId},
     },
     tool_spec::{ToolSpec, valid_name},
@@ -24,7 +30,11 @@ use serde_json::{Map, Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
 };
 use support::{
     corpus::{self, Contract},
@@ -215,6 +225,35 @@ fn ops_label_atoms_schema_and_decoder_parity() {
     }
 }
 
+#[test]
+fn quantum_chemistry_schema_and_decoder_parity() {
+    for contract in [
+        Contract {
+            name: "ops-export-input",
+            schema: || tools_schema(&["export_input"]),
+            decode: decode_tool_call,
+            cases: "ops-export-input-cases.json",
+        },
+        Contract {
+            name: "ops-read-output",
+            schema: || tools_schema(&["read_output"]),
+            decode: decode_tool_call,
+            cases: "ops-read-output-cases.json",
+        },
+        Contract {
+            name: "ops-calculate",
+            schema: || tools_schema(&["calculate"]),
+            decode: decode_tool_call,
+            cases: "ops-calculate-cases.json",
+        },
+    ] {
+        match corpus::check(&contract) {
+            Ok(report) => eprintln!("{report}"),
+            Err(failures) => panic!("{failures}"),
+        }
+    }
+}
+
 const RENDER: Contract = Contract {
     name: "ops-render",
     schema: || tools_schema(&["render"]),
@@ -355,16 +394,13 @@ fn compose_derives_its_proposal_schema_from_the_pinned_one() {
 
 /// The tool list every MCP client loads into its context stays small. It
 /// was 27,316 characters with the whole Proposal schema, 24,412 once
-/// compose shared its repeated subschemas, and CATALOG_CHARS now that the
-/// sketch schema is fetched with the schema tool, with three more tools.
+/// compose shared its repeated subschemas. The sketch schema is now fetched
+/// on demand.
 #[test]
 fn the_operation_catalog_stays_small() {
     let size = catalog_json().to_string().chars().count();
     eprintln!("the operation catalog is {size} characters");
-    // 19,500 held the 16 tools at 19,418. predict_nmr (#1203) adds about
-    // 1,000, and the label tool that follows it about as much again, so the
-    // cap leaves room for both while descriptions stay short.
-    assert!(size <= 21_500, "the catalog is {size} characters");
+    assert!(size <= 24_610, "the catalog is {size} characters");
     let sketch = reshiki_agent::ops::schema::sketch()
         .to_string()
         .chars()
@@ -547,6 +583,365 @@ impl Naming for Named {
     }
 }
 
+const WATER_XYZ: &str = "3\nwater\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n";
+const GAUSSIAN_OUTPUT: &str = include_str!("../../../tests/fixtures/qc/pymatgen/H2O_gau_vib.out");
+
+fn export_input_args() -> Value {
+    json!({
+        "xyz": format!("{WATER_XYZ}1\nsecond frame\nCl 1 2 3\n"),
+        "program": "gaussian", "job": "opt_freq", "method": null, "basis": null,
+        "charge": null, "multiplicity": null, "title": null, "cores": null,
+        "memory_gb": null, "extra": null,
+    })
+}
+
+fn calculate_args() -> Value {
+    json!({
+        "xyz": WATER_XYZ, "task": "energy", "method": "gfn2", "charge": 0, "uhf": 0,
+        "solvent": null, "conventions": "axtb", "electronic_temperature_k": null,
+        "accuracy": null, "max_iterations": null, "threads": null, "convergence": null,
+        "fixed_atoms": null,
+    })
+}
+
+struct FakeCalculations {
+    stall: Option<Arc<Stall>>,
+}
+
+#[derive(Default)]
+struct Stall {
+    started: tokio::sync::Notify,
+    dropped: AtomicBool,
+    /// Lets the stalled host's work thread end, dropping the call's hold.
+    released: AtomicBool,
+}
+
+struct DropFlag(Arc<Stall>);
+
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.dropped.store(true, Ordering::SeqCst);
+    }
+}
+
+impl Calculations for FakeCalculations {
+    fn engine(&self) -> Engine {
+        Engine {
+            name: "axtb".into(),
+            version: "test".into(),
+            license: "MIT".into(),
+            source: "test".into(),
+            rev: "abc123".into(),
+        }
+    }
+
+    fn calculate(&self, request: CalcRequest, progress: Option<Arc<Monotonic>>) -> CalcFuture {
+        assert_eq!(request.task, CalcTask::Energy);
+        assert_eq!(request.frame.numbers, [8, 1, 1]);
+        let now = Instant::now();
+        let deadline = request.deadline.expect("the host passes its deadline");
+        assert!(deadline > now && deadline <= now + Budgets::default().calc_deadline);
+        assert_eq!(
+            request.settings.method,
+            reshiki_io::qcdata::XtbMethod::Gfn2Xtb
+        );
+        if let Some(stall) = &self.stall {
+            // Like a worker thread: it keeps the call's slot until it ends.
+            let hold = request.hold;
+            let work = Arc::clone(stall);
+            std::thread::spawn(move || {
+                let _hold = hold;
+                while !work.released.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            });
+            let flag = DropFlag(Arc::clone(stall));
+            return Box::pin(async move {
+                flag.0.started.notify_one();
+                let _flag = flag;
+                std::future::pending().await
+            });
+        }
+        Box::pin(async move {
+            if let Some(progress) = progress {
+                progress.report(Progress {
+                    completed: 1.0,
+                    total: Some(2.0),
+                    message: Some("SCF".into()),
+                });
+            }
+            Ok(Calculated {
+                value: CalcValue {
+                    task: CalcTask::Energy,
+                    method: "gfn2".into(),
+                    engine: EngineIdentity {
+                        name: "axtb".into(),
+                        version: "test".into(),
+                        rev: "abc123".into(),
+                    },
+                    atoms: 3,
+                    charge: 0,
+                    multiplicity: 1,
+                    energy_hartree: -5.0,
+                    homo_lumo_gap_ev: Some(1.0),
+                    dipole_debye: Some(1.2),
+                    charges: Some(vec![-0.6, 0.3, 0.3]),
+                    optimization: None,
+                    frequencies: None,
+                    seconds: 0.25,
+                },
+                warnings: vec!["test warning".into()],
+            })
+        })
+    }
+}
+
+#[tokio::test]
+async fn calculate_is_hidden_without_a_hook_and_reports_progress_with_one() {
+    let host = HeadlessHost::new(
+        "contract-test",
+        Budgets {
+            op_deadline: Duration::from_nanos(1),
+            ..Budgets::default()
+        },
+    );
+    assert_eq!(host.catalog().len(), BASE_SPECS.len());
+    let call = |progress| Call {
+        principal: Principal::local(),
+        request: RequestId::Int(1),
+        tool: "calculate".into(),
+        arguments: calculate_args(),
+        progress,
+    };
+    let error = host.call(call(None)).await.unwrap_err();
+    assert_eq!(error.kind, ErrorKind::UnknownTool);
+
+    let host = host.with_calculations(Arc::new(FakeCalculations { stall: None }));
+    assert_eq!(host.catalog().len(), SPECS.len());
+    assert_eq!(host.catalog().last().unwrap().name, "calculate");
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let result = host
+        .call(call(Some(Arc::new({
+            let events = Arc::clone(&events);
+            move |progress| events.lock().unwrap().push(progress)
+        }))))
+        .await
+        .unwrap();
+    assert!(!result.is_error, "{:?}", result.value);
+    assert_eq!(result.value["value"]["energy_hartree"], -5.0);
+    assert_eq!(
+        result.value["warnings"],
+        json!([{"message":"test warning"}])
+    );
+    assert_eq!(events.lock().unwrap()[0].completed, 1.0);
+}
+
+#[tokio::test]
+async fn calculate_cancellation_drops_the_hook_future() {
+    let stall = Arc::new(Stall::default());
+    let host = Arc::new(
+        HeadlessHost::new("contract-test", Budgets::default()).with_calculations(Arc::new(
+            FakeCalculations {
+                stall: Some(Arc::clone(&stall)),
+            },
+        )),
+    );
+    let request = RequestId::Int(42);
+    let principal = Principal::local();
+    let run = tokio::spawn({
+        let host = Arc::clone(&host);
+        let request = request.clone();
+        let principal = principal.clone();
+        async move {
+            host.call(Call {
+                principal,
+                request,
+                tool: "calculate".into(),
+                arguments: calculate_args(),
+                progress: None,
+            })
+            .await
+        }
+    });
+    let bound = Duration::from_secs(10);
+    tokio::time::timeout(bound, stall.started.notified())
+        .await
+        .unwrap();
+    host.cancel(&principal, &request);
+    let error = tokio::time::timeout(bound, run)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error.kind, ErrorKind::Cancelled);
+    assert!(stall.dropped.load(Ordering::SeqCst));
+    // The cancelled call's slot stays taken until the host's work ends.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), host.drained())
+            .await
+            .is_err()
+    );
+    stall.released.store(true, Ordering::SeqCst);
+    tokio::time::timeout(bound, host.drained()).await.unwrap();
+}
+
+#[tokio::test]
+async fn gfnff_solvent_is_an_unsupported_calculation() {
+    let host = HeadlessHost::new("contract-test", Budgets::default())
+        .with_calculations(Arc::new(FakeCalculations { stall: None }));
+    let mut arguments = calculate_args();
+    arguments["method"] = json!("gfnff");
+    arguments["solvent"] = json!("water");
+    let result = host
+        .call(Call {
+            principal: Principal::local(),
+            request: RequestId::Int(1),
+            tool: "calculate".into(),
+            arguments,
+            progress: None,
+        })
+        .await
+        .unwrap();
+    assert!(result.is_error);
+    assert_eq!(result.value["error"]["code"], "unsupported");
+    assert_eq!(
+        result.value["error"]["message"],
+        "GFN-FF does not support solvent"
+    );
+}
+
+#[tokio::test]
+async fn export_input_checks_xyz_and_output_byte_limits() {
+    let request = || Call {
+        principal: Principal::local(),
+        request: RequestId::Int(1),
+        tool: "export_input".into(),
+        arguments: export_input_args(),
+        progress: None,
+    };
+    let host = HeadlessHost::new(
+        "contract-test",
+        Budgets {
+            max_text_bytes: 40,
+            ..Budgets::default()
+        },
+    );
+    let rejected = host.call(request()).await.unwrap();
+    assert_eq!(rejected.value["error"]["code"], "budget");
+    assert_eq!(rejected.value["error"]["param"], "xyz");
+
+    let host = HeadlessHost::new(
+        "contract-test",
+        Budgets {
+            max_output_bytes: 40,
+            ..Budgets::default()
+        },
+    );
+    let rejected = host.call(request()).await.unwrap();
+    assert_eq!(rejected.value["error"]["code"], "budget");
+    assert!(
+        rejected.value["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("max_output_bytes")
+    );
+}
+
+#[tokio::test]
+async fn export_input_uses_program_file_names_and_the_gamess_basis_default() {
+    let host = HeadlessHost::new("contract-test", Budgets::default());
+    for (program, basis, file_name, keyword) in [
+        ("orca", None, "molecule-orca.inp", "def2-SVP"),
+        (
+            "gamess",
+            None,
+            "molecule-gamess.inp",
+            " $BASIS GBASIS=N31 NGAUSS=6 NDFUNC=1 $END\n",
+        ),
+        (
+            "gamess",
+            Some("STO-3G"),
+            "molecule-gamess.inp",
+            " $BASIS GBASIS=STO NGAUSS=3 $END\n",
+        ),
+    ] {
+        let mut arguments = export_input_args();
+        arguments["program"] = json!(program);
+        arguments["basis"] = json!(basis);
+        let result = successful_result(&host, "export_input", arguments).await;
+        assert_eq!(result["value"]["file_name"], file_name);
+        let text = result["value"]["text"].as_str().unwrap();
+        assert!(text.contains(keyword), "{text}");
+    }
+
+    for basis in ["def2-SVP", ""] {
+        let mut arguments = export_input_args();
+        arguments["program"] = json!("gamess");
+        arguments["basis"] = json!(basis);
+        let rejected = host
+            .call(Call {
+                principal: Principal::local(),
+                request: RequestId::Int(1),
+                tool: "export_input".into(),
+                arguments,
+                progress: None,
+            })
+            .await
+            .unwrap();
+        assert!(rejected.is_error, "{basis:?}");
+        assert_eq!(rejected.value["error"]["code"], "failed");
+        assert_eq!(
+            rejected.value["error"]["message"],
+            "GAMESS exports use built-in bases only: 6-31G(d), 6-31G or STO-3G."
+        );
+    }
+}
+
+#[tokio::test]
+#[allow(clippy::disallowed_methods, clippy::disallowed_types)]
+async fn read_output_accepts_a_granted_file_at_the_text_limit_and_uses_its_detection_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("result");
+    std::fs::write(&path, WATER_XYZ).unwrap();
+    let args = json!({"text": null, "file_name": "result.xyz", "path": path, "job": 0});
+    let host = HeadlessHost::new(
+        "contract-test",
+        Budgets {
+            max_text_bytes: WATER_XYZ.len(),
+            ..Budgets::default()
+        },
+    );
+    let request = || Call {
+        principal: Principal::local(),
+        request: RequestId::Int(1),
+        tool: "read_output".into(),
+        arguments: args.clone(),
+        progress: None,
+    };
+    let denied = host.call(request()).await.unwrap();
+    assert_eq!(denied.value["error"]["code"], "access_denied");
+
+    let grants = Grants::open(&[dir.path().to_path_buf()], &[]).unwrap();
+    let host = host.with_grants(Arc::new(grants));
+    let result = successful_result(&host, "read_output", args.clone()).await;
+    assert_eq!(result["value"]["format"], "XYZ");
+    assert_eq!(result["value"]["job"]["index"], 0);
+
+    std::fs::write(&path, format!("{WATER_XYZ}\n")).unwrap();
+    let result = host.call(request()).await.unwrap();
+    assert!(result.is_error);
+    assert_eq!(result.value["error"]["code"], "budget");
+    assert_eq!(result.value["error"]["reason"], "file_too_large");
+    assert_eq!(result.value["error"]["param"], "path");
+    assert_eq!(
+        result.value["error"]["message"],
+        format!(
+            "file_too_large: the file exceeds max_text_bytes ({} bytes)",
+            WATER_XYZ.len()
+        )
+    );
+}
+
 /// Prefer successful real-binary goldens. Tools without one run against the
 /// same operation API through HeadlessHost; native files need no engine.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -579,7 +974,8 @@ async fn documented_result_keys_match_successful_operations() {
     .expect("fixture grants");
     let host = HeadlessHost::new("contract-test", Budgets::default())
         .with_grants(Arc::new(grants))
-        .with_naming(Arc::new(Named));
+        .with_naming(Arc::new(Named))
+        .with_calculations(Arc::new(FakeCalculations { stall: None }));
     for tool in missing {
         let arguments = match tool {
             "info" | "document_new" | "document_list" => json!({}),
@@ -597,6 +993,11 @@ async fn documented_result_keys_match_successful_operations() {
             }
             "file_open" => json!({"path": input, "format": "auto"}),
             "schema" => json!({"name": "sketch"}),
+            "export_input" => export_input_args(),
+            "read_output" => json!({
+                "text": GAUSSIAN_OUTPUT, "file_name": "H2O_gau_vib.out", "path": null, "job": null,
+            }),
+            "calculate" => calculate_args(),
             "convert" => json!({
                 "input": {
                     "format": "rsk",
@@ -613,6 +1014,31 @@ async fn documented_result_keys_match_successful_operations() {
         };
         let result = successful_result(&host, tool, arguments).await;
         assert_result_keys(tool, &result, "HeadlessHost");
+        match tool {
+            "info" => {
+                let calculations = &result["value"]["calculations"];
+                assert_eq!(calculations["engine"]["rev"], "abc123");
+                assert_eq!(calculations["max_atoms"], 500);
+                assert_eq!(calculations["max_frequency_atoms"], 200);
+                assert_eq!(calculations["methods"][0]["solvent"], "native");
+                assert_eq!(calculations["methods"][1]["solvent"], "gfn2_correction");
+                assert!(calculations["methods"][2]["solvent"].is_null());
+            }
+            "export_input" => {
+                assert_eq!(result["value"]["file_name"], "molecule.gjf");
+                let text = result["value"]["text"].as_str().unwrap();
+                assert!(text.contains("%nprocshared=8") && text.contains("%mem=16GB"));
+                assert!(text.contains("Def2SVP") && text.contains("molecule"));
+                assert!(!text.contains("Cl"));
+            }
+            "read_output" => {
+                let job = &result["value"]["job"];
+                assert_eq!(job["completion"], "normal");
+                assert_eq!(job["frequencies_cm1"].as_array().unwrap().len(), 3);
+                assert!(job["xyz"].as_str().unwrap().starts_with("3\n"));
+            }
+            _ => {}
+        }
         covered.insert(tool.to_owned());
     }
     assert_eq!(
@@ -829,7 +1255,7 @@ enum Effect {
 }
 
 /// Every operation tool's effect class.
-const EFFECTS: [(&str, Effect); 18] = [
+const EFFECTS: [(&str, Effect); 21] = [
     ("info", Effect::ReadOnly),
     ("convert", Effect::ReadOnly),
     ("name", Effect::ReadOnly),
@@ -840,6 +1266,9 @@ const EFFECTS: [(&str, Effect); 18] = [
     ("predict_nmr", Effect::ReadOnly),
     ("render", Effect::ReadOnly),
     ("export", Effect::ReadOnly),
+    ("export_input", Effect::ReadOnly),
+    ("read_output", Effect::ReadOnly),
+    ("calculate", Effect::ReadOnly),
     ("document_new", Effect::Additive),
     ("import", Effect::Additive),
     ("compose", Effect::Additive),
@@ -900,4 +1329,29 @@ fn hints_follow_effects() {
             tool["name"]
         );
     }
+}
+
+#[tokio::test]
+async fn read_output_results_respect_the_output_budget() {
+    let host = HeadlessHost::new(
+        "contract-test",
+        Budgets {
+            max_output_bytes: 64,
+            ..Budgets::default()
+        },
+    );
+    let result = host
+        .call(Call {
+            principal: Principal::local(),
+            request: RequestId::Int(1),
+            tool: "read_output".into(),
+            arguments: json!({
+                "text": WATER_XYZ, "file_name": "water.xyz", "path": null, "job": null,
+            }),
+            progress: None,
+        })
+        .await
+        .unwrap();
+    assert!(result.is_error);
+    assert_eq!(result.value["error"]["code"], "budget");
 }

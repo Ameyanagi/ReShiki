@@ -17,6 +17,7 @@ mod contact;
 pub mod crystal;
 mod ellipsoids;
 mod polish;
+pub mod surface;
 use crate::scene::Contact;
 use crate::{
     depth_appearance::Scope,
@@ -26,10 +27,11 @@ use crate::{
 pub use crystal::{Adp, Cell, Crossing, Site};
 use ellipsoids::Ellipsoid;
 pub use ellipsoids::Probability;
-pub(crate) use polish::deserialize_models;
 pub use polish::{Generated, Labels};
+pub(crate) use polish::{deserialize_models, fingerprint};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// How a molecule with a model is shown.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -235,6 +237,12 @@ pub struct Model3d {
     pub manual_along: bool,
     #[serde(default)]
     pub background: Background,
+    /// An orbital placed on this model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface: Option<surface::Figure>,
+    /// Small copies of the model under it, each with one captioned orbital.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub panels: Vec<surface::Panel>,
     pub force_field: ForceField,
     #[serde(default, skip_serializing_if = "is_original")]
     pub layout: Layout,
@@ -251,6 +259,12 @@ pub struct Model3d {
     /// it is let go. A morph keeps full detail. Never saved.
     #[serde(skip)]
     pub turning: bool,
+    /// Other geometries of the same atoms drawn faint behind the model, such as
+    /// the kept conformers of a conformer search: each holds one position per
+    /// atom, then per added hydrogen, in the model's order. Set only on the
+    /// canvas's preview copy; never saved.
+    #[serde(skip)]
+    pub overlay: Vec<Vec<[f32; 3]>>,
 }
 fn one_cell() -> [u8; 3] {
     [1; 3]
@@ -273,6 +287,7 @@ fn copy_opacity() -> f32 {
 fn is_copy_opacity(opacity: &f32) -> bool {
     *opacity == copy_opacity()
 }
+const OVERLAY_OPACITY: f32 = 0.18;
 /// The most cells a crystal repeats along each axis.
 pub const MAX_REPEAT: u8 = 4;
 
@@ -504,7 +519,7 @@ const MAX_ATOMS: usize = 100_000;
 const LABEL_AHEAD: f32 = 0.1;
 /// Room for the labels' text around the cell's bounding sphere.
 const LABEL_ROOM: f32 = 0.2;
-const MAX_COORDINATE: f32 = 10_000.;
+pub(crate) const MAX_COORDINATE: f32 = 10_000.;
 const GREY: [u8; 3] = [0x99; 3];
 const BOND_RADIUS: f32 = 0.085;
 const STICK_RADIUS: f32 = 0.16;
@@ -587,6 +602,13 @@ fn van_der_waals(symbol: &str) -> f32 {
 }
 
 impl Model3d {
+    /// Every orbital this model shows: its own, then its panels'.
+    pub fn figures(&self) -> impl Iterator<Item = &surface::Figure> {
+        self.surface
+            .iter()
+            .chain(self.panels.iter().map(|panel| &panel.figure))
+    }
+
     pub(crate) fn needs_ortep(&self) -> bool {
         self.style == Style::Ellipsoids
             || self.molecule_only
@@ -633,11 +655,14 @@ impl Model3d {
             along: None,
             manual_along: false,
             background: Background::default(),
+            surface: None,
+            panels: vec![],
             force_field,
             layout: Layout::Original,
             drawn: None,
             morph: None,
             turning: false,
+            overlay: vec![],
         };
         model.capture_generated(doc);
         model.fit(doc);
@@ -854,8 +879,8 @@ impl Model3d {
         self.source_ids().into_iter().collect()
     }
 
-    /// Element and position of each atom, then each force-field hydrogen.
-    fn points<'a>(&'a self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
+    /// Element and position (Å) of each atom, then each force-field hydrogen.
+    pub fn points<'a>(&'a self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
         let mut points = self
             .atoms
             .iter()
@@ -1050,10 +1075,21 @@ struct View<'a> {
     perspective: f32,
     /// Wireframe line width in drawing units.
     wire: f32,
+    orbital_meshes: Option<Arc<[surface::mesh::Mesh; 2]>>,
+    orbital_snapshot_reach: Option<f32>,
 }
 impl View<'_> {
     fn new<'a>(doc: &'a Document, model: &'a Model3d) -> Option<View<'a>> {
+        Self::with_meshes(doc, model, surface::draw::meshes(doc, model))
+    }
+
+    fn with_meshes<'a>(
+        doc: &'a Document,
+        model: &'a Model3d,
+        orbital_meshes: Option<Arc<[surface::mesh::Mesh; 2]>>,
+    ) -> Option<View<'a>> {
         let center = layout_center(doc, model)?;
+        let origin = center.offset(model.offset.x, model.offset.y);
         let mut points = model.points(doc)?;
         let originals = points.len();
         let mut shown = model.shown(doc);
@@ -1133,6 +1169,14 @@ impl View<'_> {
         } else {
             model.center(&points)
         };
+        let orbital_snapshot_reach = orbital_meshes
+            .is_none()
+            .then(|| surface::draw::snapshot_reach(doc, model))
+            .flatten();
+        let surface_reach = orbital_meshes.as_ref().map_or_else(
+            || orbital_snapshot_reach.unwrap_or_default(),
+            |meshes| surface::draw::reach(meshes, c),
+        );
         // The bounding sphere holds the cell and its labels too.
         let reach = if model.style == Style::Ellipsoids {
             points
@@ -1153,7 +1197,9 @@ impl View<'_> {
             0.
         } else {
             model.cell_reach(doc, c)
-        });
+        })
+        // A surface lies wholly inside the reach, so the camera stays out of it.
+        .max(surface_reach);
         Some(View {
             center: c,
             rotated: points
@@ -1176,11 +1222,13 @@ impl View<'_> {
                 .map(|e| e.map(|e| e.rotated(model.rotation)))
                 .collect(),
             reach,
-            origin: center.offset(model.offset.x, model.offset.y),
+            origin,
             scale: 0.44 * model.size / reach,
             camera: reach * (1.2 + 9. * (1. - model.perspective)),
             perspective: model.perspective,
             wire: (model.size / 190.).max(1.6),
+            orbital_meshes,
+            orbital_snapshot_reach,
         })
     }
     /// Drawing point and perspective factor of a rotated point.
@@ -1197,6 +1245,37 @@ impl View<'_> {
             ),
             f,
         )
+    }
+    /// Add the conformers for painting after the model's own view is set up.
+    fn append_overlays(
+        &mut self,
+        doc: &Document,
+        model: &Model3d,
+        bonds: &mut Vec<(usize, usize)>,
+    ) -> Option<()> {
+        let originals = self.originals;
+        let mut geometries = model
+            .overlay
+            .iter()
+            .filter(|p| p.len() == originals)
+            .peekable();
+        if geometries.peek().is_none() {
+            return Some(());
+        }
+        let sticks = sticks(doc, model, &self.shown)?;
+        for geometry in geometries {
+            let start = self.rotated.len();
+            self.symbols.extend_from_within(..originals);
+            self.shown.extend_from_within(..originals);
+            self.ellipsoids.resize(start + originals, None);
+            self.rotated.extend(
+                geometry
+                    .iter()
+                    .map(|&p| rotate(model.rotation, sub(p, self.center))),
+            );
+            bonds.extend(sticks.iter().map(|&(a, b)| (start + a, start + b)));
+        }
+        Some(())
     }
     /// Unit direction from a point toward the viewer in the rotated frame.
     fn eye(&self, point: [f32; 3]) -> [f32; 3] {
@@ -1260,6 +1339,14 @@ impl View<'_> {
     /// farthest drawn ball edge from the centre) in any rotation, perspective
     /// included, so the frame keeps its size and place while the model turns.
     fn bounds(&self) -> (Point, Point) {
+        let half = self.half_side();
+        (
+            self.origin.offset(-half, -half),
+            self.origin.offset(half, half),
+        )
+    }
+
+    fn half_side(&self) -> f32 {
         // Seen from the camera, a sphere of radius r spans r / √(1 − (r/c)²)
         // on the plane through its centre; the camera is always beyond reach.
         let spread = if self.perspective > 0. {
@@ -1274,11 +1361,7 @@ impl View<'_> {
         } else {
             0.
         };
-        let half = self.reach * self.scale * spread + dot;
-        (
-            self.origin.offset(-half, -half),
-            self.origin.offset(half, half),
-        )
+        self.reach * self.scale * spread + dot
     }
 }
 
@@ -1295,10 +1378,38 @@ pub fn viewed(doc: &Document, model: &Model3d) -> Vec<(u64, [f32; 3])> {
         .collect()
 }
 
+/// Where points in the model's own coordinates (ångström, as its atoms'
+/// `xyz`) are drawn now, in drawing units, or `None` without a linked source.
+pub fn project(doc: &Document, model: &Model3d, points: &[[f32; 3]]) -> Option<Vec<Point>> {
+    let view = View::new(doc, model)?;
+    Some(
+        points
+            .iter()
+            .map(|p| view.project(rotate(model.rotation, sub(*p, view.center))).0)
+            .collect(),
+    )
+}
+
 /// The frame's top-left and bottom-right corners in drawing units: a square
 /// that holds the model in every rotation, or `None` without a linked source.
 pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     Some(View::new(doc, model)?.bounds())
+}
+
+/// [`frame`] grown by the model's orbital panels and their captions.
+fn frame_with_panels(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
+    let (mut lo, mut hi) = frame(doc, model)?;
+    for (small, caption) in panels(doc, model) {
+        let boxes = [
+            frame(doc, &small),
+            Some(crate::scene::bounds(std::slice::from_ref(&caption))),
+        ];
+        for (a, b) in boxes.into_iter().flatten() {
+            lo = Point::new(lo.x.min(a.x), lo.y.min(a.y));
+            hi = Point::new(hi.x.max(b.x), hi.y.max(b.y));
+        }
+    }
+    Some((lo, hi))
 }
 
 /// The frame's corners, clockwise from the top left.
@@ -1327,8 +1438,14 @@ fn layout_bounds(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     }))
 }
 
+type InkBox = (Point, Point);
+
+mod reaction_row;
+pub use reaction_row::place_reaction_row;
+
 /// Show the molecule of model `index` as `display`; returns whether it changed.
-/// Beside the drawing the frame sits one bond length right of the atoms.
+/// Show both to the right when there is room, otherwise below the scheme,
+/// leaving a bond length between the model and nearby drawing ink.
 pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     let Some(model) = doc.models.get(index) else {
         return false;
@@ -1344,23 +1461,38 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
                 offset: Point::default(),
                 ..model.clone()
             };
-            let Some((left, _)) = frame(doc, &centered) else {
+            let Some((start, end)) = frame_with_panels(doc, &centered) else {
                 return false;
             };
-            // A crystal's 2D drawing reaches as far as its cell box and the
-            // copies of a repeat.
-            let flat = Model3d {
-                display: Display::TwoD,
-                ..model.clone()
+            let (molecule, obstacles) = placement_bounds(doc, index, model);
+            let right = molecule.map_or(hi.x, |(_, hi)| hi.x);
+            let bond = doc.drawing_style.bond_length_world;
+            let mut offset = Point::new(right + bond - start.x, 0.);
+            let overlaps = |offset: Point, (lo, hi): InkBox| {
+                let margin = bond / 4.;
+                start.x + offset.x - margin < hi.x
+                    && end.x + offset.x + margin > lo.x
+                    && start.y + offset.y - margin < hi.y
+                    && end.y + offset.y + margin > lo.y
             };
-            let cells = flat_cells(std::slice::from_ref(&flat), doc);
-            let ink = [cells.behind, cells.front, cells.above].concat();
-            let right = if ink.is_empty() {
-                hi.x
-            } else {
-                hi.x.max(crate::scene::bounds(&ink).1.x)
-            };
-            Point::new(right + doc.drawing_style.bond_length_world - left.x, 0.)
+            if obstacles.iter().any(|&bounds| overlaps(offset, bounds)) {
+                let ink_bottom = molecule.map_or(hi.y, |(_, hi)| hi.y);
+                offset = Point::new(0., ink_bottom + bond - start.y);
+                // Each move clears at least one obstacle permanently.
+                for _ in 0..=obstacles.len() {
+                    let Some(lowest) = obstacles
+                        .iter()
+                        .copied()
+                        .filter(|&bounds| overlaps(offset, bounds))
+                        .map(|(_, hi)| hi.y)
+                        .reduce(f32::max)
+                    else {
+                        break;
+                    };
+                    offset.y = lowest + bond - start.y;
+                }
+            }
+            offset
         }
         _ if model.display == Display::Both => Point::default(),
         Display::TwoD | Display::ThreeD => model.offset,
@@ -1375,6 +1507,88 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
         require_version(doc);
     }
     changed
+}
+
+/// Measure molecules and drawing objects together, with this model's own
+/// molecule and linked captions kept apart from the obstacles.
+fn placement_bounds(
+    doc: &Document,
+    index: usize,
+    model: &Model3d,
+) -> (Option<InkBox>, Vec<InkBox>) {
+    let sources = model.ids();
+    let mut remaining: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let mut adjacent: HashMap<u64, Vec<u64>> = HashMap::new();
+    for bond in &doc.bonds {
+        adjacent.entry(bond.a).or_default().push(bond.b);
+        adjacent.entry(bond.b).or_default().push(bond.a);
+    }
+    let mut own = Vec::new();
+    let mut selections = Vec::new();
+    for atom in &doc.atoms {
+        if !remaining.remove(&atom.id) {
+            continue;
+        }
+        let mut component = vec![atom.id];
+        let mut pending = vec![atom.id];
+        while let Some(id) = pending.pop() {
+            for &other in adjacent.get(&id).into_iter().flatten() {
+                if remaining.remove(&other) {
+                    component.push(other);
+                    pending.push(other);
+                }
+            }
+        }
+        if component.iter().any(|id| sources.contains(id)) {
+            own.extend(component);
+        } else {
+            selections.push(component);
+        }
+    }
+    let own = crate::molecule_names::include_annotations(doc, &own);
+    let own_ids: HashSet<_> = own.iter().copied().collect();
+    selections.insert(0, own);
+    selections.extend(
+        doc.arrows
+            .iter()
+            .map(|a| a.id)
+            .chain(doc.graphics.iter().map(|g| g.id))
+            .chain(doc.annotations.iter().map(|a| a.id))
+            .filter(|id| !own_ids.contains(id))
+            .map(|id| vec![id]),
+    );
+    let mut flat;
+    let drawing = if model.display == Display::ThreeD {
+        flat = doc.clone();
+        if let Some(model) = flat.models.get_mut(index) {
+            model.display = Display::TwoD;
+        }
+        &flat
+    } else {
+        doc
+    };
+    let measured = crate::scene::selections_ink_bounds(drawing, &selections);
+    let molecule = measured.first().copied().flatten();
+    let mut obstacles: Vec<_> = measured.into_iter().skip(1).flatten().collect();
+    obstacles.extend(
+        doc.models
+            .iter()
+            .enumerate()
+            .filter(|(i, model)| *i != index && model.display != Display::TwoD)
+            .filter_map(|(_, model)| frame_with_panels(doc, model)),
+    );
+    // A disconnected crystal's atoms belong to separate selections, so their
+    // individual bounds omit the whole cell and its repeat copies.
+    for (_, model) in drawing.models.iter().enumerate().filter(|(i, model)| {
+        *i != index && model.display != Display::ThreeD && model.cell.is_some()
+    }) {
+        let cells = flat_cells(std::slice::from_ref(model), drawing);
+        let ink = [cells.behind, cells.front, cells.above].concat();
+        if !ink.is_empty() {
+            obstacles.push(crate::scene::bounds(&ink));
+        }
+    }
+    (molecule, obstacles)
 }
 
 /// The document version a drawing's models need: none without models,
@@ -1492,9 +1706,20 @@ pub fn whole_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
         .then_some(atoms)
 }
 
-/// The atoms of the models whose frame contains `p`, topmost first.
+/// The atoms of the models whose frame, or one of whose orbital panels,
+/// contains `p`, topmost first.
 pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
-    model_at(doc, p, 0.).map(|m| m.linked_ids(doc))
+    let inside = |m: &Model3d| {
+        frame(doc, m)
+            .is_some_and(|(lo, hi)| (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y))
+    };
+    // Topmost first, each model with its panels, as they are painted.
+    doc.models
+        .iter()
+        .rev()
+        .filter(|m| m.display != Display::TwoD)
+        .find(|m| inside(m) || panels(doc, m).iter().any(|(small, _)| inside(small)))
+        .map(|m| m.linked_ids(doc))
 }
 
 /// The topmost shown model whose frame, shrunk by `inset` on every side,
@@ -2657,8 +2882,77 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let mut out = vec![];
     for model in doc.models.iter().filter(|m| m.display != Display::TwoD) {
         push_model(doc, model, &mut out);
+        for (panel, caption) in panels(doc, model) {
+            push_model(doc, &panel, &mut out);
+            out.push(caption);
+        }
     }
     out
+}
+
+/// Share of the model's frame side each panel takes.
+const PANEL_SCALE: f32 = 0.55;
+
+/// The small copy of `model` that draws one panel's `figure`, at the model's
+/// own offset; its view signature is the one the panel's snapshot keeps.
+pub(crate) fn panel_model(model: &Model3d, figure: &surface::Figure) -> Model3d {
+    let mut small = model.clone();
+    small.panels = vec![];
+    small.surface = Some(figure.clone());
+    small.size = model.size * PANEL_SCALE;
+    small
+}
+
+/// The model's panels as small models side by side under its frame, each
+/// with its orbital, and their captions centred below them.
+pub fn panels(doc: &Document, model: &Model3d) -> Vec<(Model3d, Primitive)> {
+    if model.panels.is_empty() {
+        return vec![];
+    }
+    let Some((lo, hi)) = frame(doc, model) else {
+        return vec![];
+    };
+    let side = (hi.x - lo.x) * PANEL_SCALE;
+    let gap = side * 0.15;
+    let size = (model.size / 22.).clamp(7., 14.);
+    // Captions wider than a small model still keep clear space between them.
+    let between = gap.max(size * 1.5);
+    let style = crate::typography::TextStyle::default();
+    // Each panel is as wide as its model or its caption, whichever is wider.
+    let widths: Vec<f32> = model
+        .panels
+        .iter()
+        .map(|panel| crate::style::styled_text_width(&panel.caption, size, &style).max(side))
+        .collect();
+    let total = widths.iter().sum::<f32>() + between * (widths.len() - 1) as f32;
+    let mut left = (lo.x + hi.x) / 2. - total / 2.;
+    let centre = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    model
+        .panels
+        .iter()
+        .zip(widths)
+        .filter_map(|(panel, slot)| {
+            let x = left + slot / 2.;
+            left += slot + between;
+            let y = hi.y + gap + side / 2.;
+            let mut small = panel_model(model, &panel.figure);
+            small.offset = Point::new(model.offset.x + x - centre.x, model.offset.y + y - centre.y);
+            let width = crate::style::styled_text_width(&panel.caption, size, &style);
+            // A stale result or another geometry shows neither the panel
+            // nor its energy.
+            if !surface::draw::figure_ready(doc, &small) {
+                return None;
+            }
+            let caption = Primitive::Text {
+                position: Point::new(x - width / 2., y + side / 2. + size * 0.4),
+                text: panel.caption.clone(),
+                size,
+                color: doc.canvas_theme.color([24, 24, 24]),
+                style: style.clone(),
+            };
+            Some((small, caption))
+        })
+        .collect()
 }
 
 /// Each bond between two drawn points as a pair of indices into the model's
@@ -3005,8 +3299,159 @@ pub fn balls_and_sticks(
     Some((balls, sticks))
 }
 
+struct ModelPaint {
+    dark: bool,
+    card: [u8; 3],
+    card_edge: [u8; 3],
+    backdrop: [u8; 3],
+    line: f32,
+    glossy: bool,
+    depth_fade: f32,
+}
+
+impl ModelPaint {
+    fn new(doc: &Document, model: &Model3d) -> Self {
+        let paper = doc.canvas_theme.background();
+        let dark = doc.canvas_theme.is_dark();
+        // On a dark canvas the card is the paper lightened a little.
+        let (card, card_edge) = if dark {
+            let lighter = |t| rgb(mix(float(paper), WHITE, t));
+            (lighter(0.08), lighter(0.16))
+        } else {
+            (CARD, CARD_EDGE)
+        };
+        Self {
+            dark,
+            card,
+            card_edge,
+            backdrop: match model.background {
+                Background::None => paper,
+                Background::Card => card,
+            },
+            line: (model.size / 400.).clamp(0.6, 1.1),
+            glossy: model.look == Look::Glossy,
+            depth_fade: model.depth_fade,
+        }
+    }
+
+    fn fade(&self, reach: f32, z: f32) -> f32 {
+        self.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.)
+    }
+
+    fn outline(&self, width: f32) -> Option<Outline> {
+        (!self.glossy)
+            .then_some(if self.dark { RIM } else { OUTLINE })
+            .map(|(color, alpha)| Outline {
+                color,
+                alpha,
+                width,
+            })
+    }
+}
+
+impl View<'_> {
+    fn live_surface(
+        &self,
+        doc: &Document,
+        model: &Model3d,
+        paint: &ModelPaint,
+    ) -> Option<(std::rc::Rc<surface::draw::Prepared>, Option<Primitive>)> {
+        self.orbital_meshes.as_ref()?;
+        // Stick draws a contour twice as wide.
+        let painted = match (paint.glossy, model.style) {
+            (true, _) => 0.,
+            (false, Style::Stick) => paint.line * 2.,
+            (false, _) => paint.line,
+        };
+        surface::draw::live(
+            doc,
+            model,
+            self,
+            surface::draw::SurfacePaint {
+                colors: surface::draw::phase_colors(model, paint.dark),
+                backdrop: float(paint.backdrop),
+                fade: paint.fade(self.reach, 0.),
+                painted,
+                outline: paint.outline(paint.line),
+                line_width: paint.line,
+            },
+        )
+    }
+}
+
+pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
+    // Each panel in its own slot; a hidden (stale) panel keeps its picture.
+    let refreshed: Vec<_> = model
+        .panels
+        .iter()
+        .map(|panel| {
+            let mut small = panel_model(model, &panel.figure);
+            surface::draw::figure_ready(doc, &small)
+                .then(|| {
+                    refresh_surface_snapshot(doc, &mut small);
+                    small.surface
+                })
+                .flatten()
+        })
+        .collect();
+    for (panel, figure) in model.panels.iter_mut().zip(refreshed) {
+        if let Some(figure) = figure {
+            panel.figure = figure;
+        }
+    }
+    if model.surface.is_none() {
+        return;
+    }
+    let Some(meshes) = surface::draw::meshes(doc, model) else {
+        return;
+    };
+    let snapshot = View::with_meshes(doc, model, Some(meshes)).and_then(|view| {
+        let (_, primitive) = view.live_surface(doc, model, &ModelPaint::new(doc, model))?;
+        // Even when occluded, the mesh still sets the projection scale.
+        let primitive = primitive.unwrap_or_else(|| Primitive::Surface { groups: vec![] });
+        Some(surface::Snapshot {
+            shapes: surface::snapshot::encode(&primitive, view.origin)?,
+            view: surface::draw::view_signature(doc, model),
+            reach: view.reach,
+        })
+    });
+    if let Some(figure) = &mut model.surface {
+        figure.snapshot = snapshot;
+    }
+}
+
 fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Option<()> {
+    paint_model(doc, model, View::new(doc, model)?, 1., out)
+}
+
+/// Place a small orbital model while retaining its saved view at its reference scale.
+pub(crate) fn push_orbital_picture(
+    doc: &Document,
+    model: &Model3d,
+    centre: Point,
+    side: f32,
+    out: &mut Vec<Primitive>,
+) -> Option<()> {
     let mut view = View::new(doc, model)?;
+    if view.orbital_meshes.is_none() && view.orbital_snapshot_reach.is_none() {
+        return None;
+    }
+    let scale = side / (2. * view.half_side());
+    if !scale.is_finite() || scale <= 0. {
+        return None;
+    }
+    view.origin = centre;
+    view.scale *= scale;
+    paint_model(doc, model, view, scale, out)
+}
+
+fn paint_model(
+    doc: &Document,
+    model: &Model3d,
+    mut view: View<'_>,
+    snapshot_scale: f32,
+    out: &mut Vec<Primitive>,
+) -> Option<()> {
     // The 2D → 3D morph, eased as in the prototype; hydrogens fade in.
     let grown = model.morph.filter(|m| *m < 1.).map_or(1., |m| {
         let m = m.max(0.);
@@ -3018,36 +3463,25 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         view.morph(doc, model, e);
         e
     });
-    let mut bonds = view.bonds.clone();
-    if model.style == Style::Ellipsoids {
-        bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
-    }
-    let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
-    let paper = doc.canvas_theme.background();
-    let dark = doc.canvas_theme.is_dark();
-    // On a dark canvas the card is the paper lightened a little.
-    let (card, card_edge) = if dark {
-        let lighter = |t| rgb(mix(float(paper), WHITE, t));
-        (lighter(0.08), lighter(0.16))
-    } else {
-        (CARD, CARD_EDGE)
-    };
-    let backdrop = match model.background {
-        Background::None => paper,
-        Background::Card => card,
-    };
-    let fade = |z: f32| model.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.);
-    let line = (model.size / 400.).clamp(0.6, 1.1);
-    let glossy = model.look == Look::Glossy;
-    let outline = |width| {
-        (!glossy)
-            .then_some(if dark { RIM } else { OUTLINE })
-            .map(|(color, alpha)| Outline {
-                color,
-                alpha,
-                width,
-            })
-    };
+    let (reach, style) = (view.reach, model.style);
+    let size = model.size * snapshot_scale;
+    let mut paint = ModelPaint::new(doc, model);
+    paint.line *= snapshot_scale;
+    let ModelPaint {
+        card,
+        card_edge,
+        backdrop,
+        line,
+        glossy,
+        ..
+    } = paint;
+    let fade = |z| paint.fade(reach, z);
+    let outline = |width| paint.outline(width);
+    // Labels of atoms in front of the surface, drawn after it.
+    let mut late = vec![];
+    let orbital = view
+        .live_surface(doc, model, &paint)
+        .and_then(|(prepared, primitive)| Some((prepared, primitive?)));
     let side_outline = || {
         outline(line * 2.).map(|o| Outline {
             color: rgb(mix(float(o.color), float(backdrop), 1. - o.alpha)),
@@ -3057,12 +3491,12 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     };
     if model.background == Background::Card {
         let (lo, hi) = view.bounds();
-        let width = model.size / 340.;
+        let width = size / 340.;
         let inset = width / 2.;
         out.push(Primitive::Card {
             lo: lo.offset(inset, inset),
             hi: hi.offset(-inset, -inset),
-            radius: (model.size * 10. / 340.).min((hi.x - lo.x).min(hi.y - lo.y) / 2.),
+            radius: (size * 10. / 340.).min((hi.x - lo.x).min(hi.y - lo.y) / 2.),
             fill: card,
             outline: Outline {
                 color: card_edge,
@@ -3071,6 +3505,17 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             },
         });
     }
+    // For both the surface above and the cell below, only the model and its
+    // crystal copies can occlude ink.
+    let (behind, front) = model_cell_ink(doc, model, &view, float(backdrop));
+    let overlay_start = view.rotated.len();
+    let overlay = |i| i >= overlay_start;
+    let mut bonds = view.bonds.clone();
+    view.append_overlays(doc, model, &mut bonds)?;
+    if style == Style::Ellipsoids {
+        bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
+    }
+    let rotated = &view.rotated;
     enum Item {
         /// The half-bond from a point toward another.
         Bond(usize, usize),
@@ -3096,7 +3541,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     }
     let joints = if style == Style::Stick {
         let front = |s: usize, o, z| {
-            rotated.get(s).is_some_and(|ps| z > ps[2])
+            !overlay(s)
+                && rotated.get(s).is_some_and(|ps| z > ps[2])
                 && !((copy(s) || copy(o)) && (model.copy_opacity < 1. || grown < 1.))
                 && !fades(s)
                 && !fades(o)
@@ -3145,7 +3591,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             }
         }
         items.extend(view.symbols.iter().enumerate().filter_map(|(i, symbol)| {
-            if view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
+            if overlay(i) || view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
                 return None;
             }
             let z = rotated.get(i)?[2];
@@ -3163,15 +3609,16 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Atom(_) | Item::Label(_) | Item::Crossing(..) => None,
         })
         .collect();
-    // Overlapping balls show only what lies in front, with seams between.
+    // Overlapping model balls show only what lies in front, with seams between.
+    // Overlay balls are painted behind them without cutting their silhouettes.
     // Turning uses fewer chords; a morph keeps full detail to hide the
     // hydrogens growing out of their atoms.
     let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) {
         let atoms: Vec<usize> = items
             .iter()
             .filter_map(|(.., item)| match item {
-                Item::Atom(i) => Some(*i),
-                Item::Bond(..) | Item::Label(_) | Item::Crossing(..) => None,
+                Item::Atom(i) if !overlay(*i) => Some(*i),
+                _ => None,
             })
             .collect();
         view.contacts(&atoms, grown, model.turning)
@@ -3191,17 +3638,24 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         .collect();
     // The contour behind the Stick fills traces their outer edge.
     let mut rims: [Vec<Vec<Point>>; 4] = Default::default();
+    let mut overlay_rim = vec![];
+    let mut overlay_drawn = vec![];
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
         let (Item::Bond(i, _) | Item::Atom(i) | Item::Label(i) | Item::Crossing(i, _)) = item;
-        let fading = fades(i);
-        let ghost = match item {
-            Item::Bond(a, b) => copy(a) || copy(b),
-            _ => copy(i),
+        let (alpha, rim, drawn) = if overlay(i) {
+            (OVERLAY_OPACITY, &mut overlay_rim, &mut overlay_drawn)
+        } else {
+            let fading = fades(i);
+            let copied = match item {
+                Item::Bond(a, b) => copy(a) || copy(b),
+                _ => copy(i),
+            };
+            let alpha = if copied { model.copy_opacity } else { 1. }
+                * if fading || copied { grown } else { 1. };
+            let rim = rims.get_mut(usize::from(copied) * 2 + usize::from(fading))?;
+            (alpha, rim, &mut drawn)
         };
-        let alpha =
-            if ghost { model.copy_opacity } else { 1. } * if fading || ghost { grown } else { 1. };
-        let rim = rims.get_mut(usize::from(ghost) * 2 + usize::from(fading))?;
         let symbol = *view.symbols.get(i)?;
         let base = mix(
             float(*colors.get(symbol).unwrap_or(&GREY)),
@@ -3212,7 +3666,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         let primitive = match item {
             Item::Label(i) => {
                 let (center, factor) = view.project(*rotated.get(i)?);
-                let size = (view.scale * factor * 0.34).clamp(model.size / 55., model.size / 16.);
+                let size = (view.scale * factor * 0.34).clamp(size / 55., size / 16.);
                 let style = crate::typography::TextStyle {
                     bold: true,
                     ..Default::default()
@@ -3228,7 +3682,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 let lightness = surface[0] * 0.2126 + surface[1] * 0.7152 + surface[2] * 0.0722;
                 let ink = if lightness < 135. { WHITE } else { [24.; 3] };
                 let color = rgb(mix(ink, float(backdrop), fade(z)));
-                Primitive::Text {
+                let text = Primitive::Text {
                     position: center.offset(-width / 2., -size * 0.6),
                     text: symbol.into(),
                     size,
@@ -3237,7 +3691,28 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     // already resolved model color exactly.
                     color: doc.canvas_theme.color(color),
                     style,
+                };
+                // Over the surface only when nothing nearer covers the label's
+                // anchor: neither the surface nor another ball.
+                let p = *rotated.get(i)?;
+                let radius = model.style.atom_radius(symbol);
+                let under_ball = || {
+                    view.balls()
+                        .take_while(|(j, ..)| !overlay(*j))
+                        .any(|(j, q, r)| {
+                            j != i
+                                && q.distance(center) < r
+                                && rotated.get(j).is_some_and(|o| o[2] > p[2])
+                        })
+                };
+                if orbital
+                    .as_ref()
+                    .is_some_and(|(s, _)| s.clear(&view, p, radius) && !under_ball())
+                {
+                    late.push((alpha, text));
+                    continue;
                 }
+                text
             }
             Item::Crossing(i, end) => {
                 let (start, f) = view.project(*rotated.get(i)?);
@@ -3489,8 +3964,80 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             primitive
         }
     };
-    // The cell's hidden edges lie behind the model and its front edges,
-    // origin and labels in front; they fade in with the hydrogens.
+    let cell_fading = grown < 1.;
+    out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
+    let with_opacity = |(alpha, primitive)| {
+        if alpha < 1. {
+            Primitive::Opacity {
+                alpha,
+                primitive: Box::new(primitive),
+            }
+        } else {
+            primitive
+        }
+    };
+    let rim_outline = outline(line * 2.);
+    if let Some(outline) = rim_outline
+        && !overlay_rim.is_empty()
+    {
+        out.push(with_opacity((
+            OVERLAY_OPACITY,
+            Primitive::Contour {
+                polygons: overlay_rim,
+                outline,
+            },
+        )));
+    }
+    out.extend(overlay_drawn.into_iter().map(with_opacity));
+    if let Some(outline) = rim_outline {
+        for (polygons, alpha) in rims.into_iter().zip([
+            1.,
+            grown,
+            model.copy_opacity * grown,
+            model.copy_opacity * grown,
+        ]) {
+            if !polygons.is_empty() {
+                out.push(with_opacity((
+                    alpha,
+                    Primitive::Contour { polygons, outline },
+                )));
+            }
+        }
+    }
+    if let Some(orbital) = orbital.map(|(_, primitive)| primitive).or_else(|| {
+        view.orbital_snapshot_reach?;
+        if model.morph.is_some_and(|m| m < 1.) {
+            return None;
+        }
+        let saved = model.surface.as_ref()?.snapshot.as_ref()?;
+        let primitive =
+            surface::snapshot::decode_scaled(&saved.shapes, view.origin, snapshot_scale).ok()?;
+        matches!(&primitive, Primitive::Surface { groups } if !groups.is_empty())
+            .then_some(primitive)
+    }) {
+        drawn.push((1., orbital));
+        drawn.extend(late);
+    }
+    out.extend(drawn.into_iter().map(with_opacity));
+    out.extend(front.into_iter().map(|p| fade_in(cell_fading, p)));
+    Some(())
+}
+
+/// The cell's hidden ink behind the model and its edges, origin and labels in front.
+fn model_cell_ink(
+    doc: &Document,
+    model: &Model3d,
+    view: &View,
+    backdrop: [f32; 3],
+) -> (Vec<Primitive>, Vec<Primitive>) {
+    let Some((cell, whole)) = model
+        .cell
+        .as_ref()
+        .filter(|_| !model.molecule_only)
+        .zip(model.whole_cell())
+    else {
+        return (vec![], vec![]);
+    };
     let ink = float(doc.canvas_theme.color([0; 3]));
     let place = |p| rotate(model.rotation, sub(p, view.center));
     let project = |q| view.project(q).0;
@@ -3501,59 +4048,17 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         width: (model.size / 220.).clamp(1., 3.),
         size: (model.size * 0.06).clamp(8., 60.),
         crowded: [false; 3],
-        occluders: (style == Style::SpaceFilling).then_some(&view),
+        occluders: (model.style == Style::SpaceFilling).then_some(view),
     };
-    let (behind, front) = model
-        .cell
-        .as_ref()
-        .filter(|_| !model.molecule_only)
-        .zip(model.whole_cell())
-        .map(|(cell, whole)| {
-            let (mut hidden, edges, marks) = cell_ink(&frame, &whole, ink, float(backdrop));
-            hidden.extend(seams(
-                &frame,
-                cell,
-                model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT))),
-                ink,
-                float(backdrop),
-            ));
-            (hidden, [edges, marks].concat())
-        })
-        .unwrap_or_default();
-    let cell_fading = grown < 1.;
-    out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
-    if let Some(outline) = outline(line * 2.) {
-        for (polygons, alpha) in rims.into_iter().zip([
-            1.,
-            grown,
-            model.copy_opacity * grown,
-            model.copy_opacity * grown,
-        ]) {
-            if !polygons.is_empty() {
-                let primitive = Primitive::Contour { polygons, outline };
-                out.push(if alpha < 1. {
-                    Primitive::Opacity {
-                        alpha,
-                        primitive: Box::new(primitive),
-                    }
-                } else {
-                    primitive
-                });
-            }
-        }
-    }
-    out.extend(drawn.into_iter().map(|(alpha, p)| {
-        if alpha < 1. {
-            Primitive::Opacity {
-                alpha,
-                primitive: Box::new(p),
-            }
-        } else {
-            p
-        }
-    }));
-    out.extend(front.into_iter().map(|p| fade_in(cell_fading, p)));
-    Some(())
+    let (mut hidden, edges, marks) = cell_ink(&frame, &whole, ink, backdrop);
+    hidden.extend(seams(
+        &frame,
+        cell,
+        model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT))),
+        ink,
+        backdrop,
+    ));
+    (hidden, [edges, marks].concat())
 }
 
 /// Each bond leaving the cell as the point it starts from and the rotated
@@ -4577,5 +5082,7 @@ mod crystal_3d_tests;
 mod opening_tests;
 #[cfg(test)]
 mod ortep_tests;
+#[cfg(test)]
+mod placement_tests;
 #[cfg(test)]
 mod tests;

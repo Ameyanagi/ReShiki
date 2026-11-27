@@ -1,0 +1,28 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
+
+Options:
+  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
+  --method METHOD              Use gfn2 (default), gfnff or gxtb.
+  --energy                     Accepted for compatibility. Energy is always included.
+  --gradient                   Include the Cartesian energy gradient.
+  --wbo                        Include Mayer–Wiberg bond orders.
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
+  --alpb NAME                  Use the ALPB solvent model.
+  --gbsa NAME                  Use the GBSA solvent model.
+  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
+  --etemp K                    Set the electronic temperature in kelvin.
+  --thermo-temperature K       Thermochemistry temperature in kelvin (default 298.15)
+  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N                 Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
+  --threads N                  Use 1 to 64 worker threads (default 1).
+
+Use calculate for the compact calculation summary.
+See docs/xtb-worker.md (Command line)

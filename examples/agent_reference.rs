@@ -20,6 +20,6 @@ fn main() -> anyhow::Result<()> {
     let path = std::env::args_os()
         .nth(1)
         .context("Usage: agent_reference OUTPUT.md")?;
-    std::fs::write(path, reshiki::cli::agent_reference())?;
+    std::fs::write(path, reshiki::cli::canonical_agent_reference())?;
     Ok(())
 }

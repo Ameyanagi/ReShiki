@@ -12,7 +12,7 @@ The Release builds workflow produces signed macOS disk images, Windows x64/ARM64
 
 Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.rsk` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
 
-The macOS disk image contains the signed app and an Applications shortcut, created as a zlib image (`UDZO`) and then converted to LZMA (`ULMO`), because creating an LZMA image straight from a folder can fail. On hosted runners the conversion has failed with "Resource temporarily unavailable", which `hdiutil` reports when it cannot lock an image file; what held the lock is not known. As a workaround each conversion attempt reads a fresh copy of the zlib image, and each `hdiutil` step is tried up to five times, waiting 5, 10, 20 and 40 seconds in between. The image is given an explicit size (the files' total length plus 10% and 32 MB), because `hdiutil`'s own estimate can be too small for the copy. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`; a nightly has eight, without the Intel Mac pair. Both publishers validate the exact filenames and their checksum sidecars before creating the shared OS/architecture/installer/portable download table. macOS archive manifests must declare the matching version, architecture, signature and notarization. Generated GitHub release notes are retained after this table.
+The macOS disk image contains the signed app and an Applications shortcut, created as a zlib image (`UDZO`) and then converted to LZMA (`ULMO`), because creating an LZMA image straight from a folder can fail. On hosted runners the conversion has failed with "Resource temporarily unavailable", which `hdiutil` reports when it cannot lock an image file; what held the lock is not known. As a workaround each conversion attempt reads a fresh copy of the zlib image, and each `hdiutil` step is tried up to five times, waiting 5, 10, 20 and 40 seconds in between. The image is given an explicit size (the files' total length plus 10% and 32 MB), because `hdiutil`'s own estimate can be too small for the copy. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. Stable releases have ten application downloads. Nightlies have eight because they skip the Intel Mac builds. Both publish the source archive, its `.sha256` file and `SHA256SUMS`. Both publishers validate the exact filenames and their checksum sidecars before creating the shared OS/architecture/installer/portable download table. Application checksums are published in `SHA256SUMS`. macOS archive manifests must declare the matching version, architecture, signature and notarization. Generated GitHub release notes are retained after this table.
 
 Keep the homepage, README, and installation guide's primary download links pointed
 at [the latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
@@ -22,6 +22,38 @@ list, where newer nightlies can appear above stable. See [GitHub's release optio
 Link to the [nightly installation instructions](https://reshiki.com/guide/install/#nightly-builds)
 as a secondary path for testers.
 
+## xTB and corresponding source
+
+macOS and Linux release builds, including nightlies, enable the `xtb` feature and
+contain axtb under LGPL-3.0-or-later. Windows releases keep the default features
+and report that xTB is not included. Archive verification exercises `--xtb-worker`
+on every platform, including a water energy and gradient when xTB is included.
+The [xTB licensing guide](xtb-licensing.md) describes the notices and source terms.
+
+Each release publishes `reshiki-<version>-source.tar.gz` and its `.sha256` on the
+same release page as the applications, with the source archive also listed in
+`SHA256SUMS`. It contains ReShiki's tracked release sources, the pinned axtb source,
+vendored Cargo dependencies, file hashes and `BUILD-WITH-XTB.md` with offline
+rebuild instructions, including how to use a modified axtb. With an empty
+`CARGO_HOME`, the source job checks the shipped sources and tests a rebuild with
+a modified axtb offline before publication. Nightly archives use the same unique
+version as their applications. Each archive is published in the same release as
+its applications, so it stays exactly as long as they do: permanently for tagged
+releases, and until the nightly release itself is deleted for nightlies. Prune
+nightlies only by deleting whole releases (`gh release delete`), never single
+assets; see [xTB licensing](xtb-licensing.md#corresponding-source).
+
+The source archive supports building and testing the application. Building the
+website requires the full repository because the archive excludes `docs/images/`
+assets used by the website.
+
+Build and check the source archive locally.
+
+```sh
+uv run --no-project --python 3.12 python scripts/xtb_source_archive.py build --output dist/releases
+uv run --no-project --python 3.12 python scripts/xtb_source_archive.py check dist/releases/reshiki-<version>-source.tar.gz
+```
+
 ## Test a build
 
 Open development pull requests against `main`, the default and development
@@ -29,7 +61,8 @@ branch. Tag tested commits on `main` for stable releases.
 
 The **Nightly builds** workflow builds `main` daily at 18:37 UTC (03:37 JST), or on
 manual dispatch with `main` selected. Each successful run publishes a downloadable
-GitHub prerelease with eight downloads and `SHA256SUMS`: a signed and notarized macOS
+GitHub prerelease with eight application downloads, the source archive, its
+checksum sidecar and `SHA256SUMS`: a signed and notarized macOS
 DMG/ZIP for Apple Silicon, Windows setup/ZIP for both architectures, and
 Linux archives for both architectures. Nightlies are not built for Intel Macs,
 whose build kept reaching the job's time limit; stable releases still include
@@ -115,10 +148,11 @@ Each release has a validation record, `docs/changes/release-<version>-validation
 
 ## Publish a version
 
-1. Update the application and workspace versions in `Cargo.toml`, the corresponding entries in `Cargo.lock`, and the app version in the [agent API version table](agent-api.md#versioning). Record the release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
+1. Update the application and workspace versions in `Cargo.toml`, the corresponding entries in `Cargo.lock`, and the app version in the [agent API version table](agent-api.md#versioning). Update the `reshiki-xtb==<version>` pin in `crates/python/pyproject.toml` to the PEP 440 form of the workspace version (`0.17.1-rc.1` becomes `0.17.1rc1`), then run `uv lock --project crates/python` to update its lockfile. Update the corresponding-source release link in `crates/python-xtb/README.md` to the new Cargo version. Repository tests check both values. Record the release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
 3. In the release build, run Clean up from the toolbar and close its ▾ menu with Esc, and close 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal, cycle layout review and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. Make catalytic cycle and Clean up ▾ → Clean up cycle must apply immediately as one Undo step and return the keys to the drawing. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
-4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.16.0` for version `0.16.0`.
+4. Until the matching `reshiki-xtb` version is on PyPI, keep any `reshiki` wheel that declares the `xtb` extra off PyPI, or accept that `pip install "reshiki[xtb]"` fails to resolve.
+5. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.16.0` for version `0.16.0`.
 
 ```sh
 git tag -a v0.16.0 -m "ReShiki 0.16.0"
@@ -149,6 +183,18 @@ Leave `/demo/` and `/demo/index.html` out of the rule, so a release reaches visi
 The **npm** job then publishes the two browser packages, the editor `@ameyanagi/reshiki` (`packages/editor`) and the headless library `@ameyanagi/reshiki-headless` (`packages/headless`), from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs both packages' tests, sets each package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.1` publishes `0.13.1`; the `version` in each `package.json` is only a placeholder), and publishes each with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.1-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it for a package (an expired token, or a trusted publisher that is not set up), the job leaves a notice for that package and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
 
 The **pypi** job publishes the Python package `reshiki` (`crates/python`) after the GitHub release. The reusable **Python wheels** workflow (`python-wheels.yml`) builds abi3 wheels for all six targets: manylinux2014 x64 and ARM64, macOS ARM64 and Intel, and Windows x64 and ARM64. It runs the Python tests against the built wheel on Linux x64, Linux ARM64, macOS ARM64 and Windows x64; the tests' RDKit has no Intel macOS or Windows ARM64 wheel. The wheel version is the app's version from `Cargo.toml`, which maturin writes in PEP 440 form, so `v0.13.1` publishes `0.13.1` and `v0.13.1-rc.1` publishes `0.13.1rc1`. pip and uv skip prereleases unless asked for one. There is no sdist: the package compiles assets, presets and vendored crates from the repository root, which a maturin source distribution cannot include. Nightly builds never publish to PyPI, and files already on PyPI are skipped, so rerunning a release is safe. Pull requests that change `crates/python` or that workflow build and test the same wheels without publishing. See [Configure PyPI publishing](#configure-pypi-publishing).
+
+That workflow also builds the separate LGPL `reshiki-xtb` engine wheels for macOS
+ARM64 and Intel, and Linux x64 and ARM64. The macOS rows follow the same PR rules
+as the base wheels. Both packages require macOS 14 or later. On testable targets,
+CI installs the matching base and engine wheels from a local wheelhouse with
+`--no-index --find-links dist`, checks that
+the worker is executable, and runs the calculation and file tests. The base wheel
+tests use only the `excel` and `pandas` extras, so they do not build the engine.
+The owner has deferred publishing `reshiki-xtb` to TestPyPI and PyPI. The
+**xtb_wheels_check** job runs a publish dry run only, after the version-tag run
+has published its GitHub release with corresponding source and built the
+wheels. Trusted publishing will be set up when publishing starts.
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 

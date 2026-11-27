@@ -1,0 +1,80 @@
+---
+title: Gaussian, ORCA and GAMESS files
+description: Write input files for Gaussian, ORCA and GAMESS from a 3D model, and open Gaussian, ORCA, Molden and fchk outputs.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+:::caution[Not released yet]
+These features are on the `xtb/next` branch and are not in a released version of ReShiki yet.
+:::
+
+Writing inputs and reading outputs works in every ReShiki build, Windows included. It does not need the xTB engine.
+
+## Write an input file
+
+ReShiki writes a text input for another program from the molecule's 3D model. Nothing runs in ReShiki.
+
+1. Select one molecule.
+2. Open **Export → Input for Gaussian / ORCA / GAMESS…**, or search the command palette for **Export input for Gaussian / ORCA / GAMESS…**. If the molecule has no 3D model, **Generate 3D model** makes one with MMFF94s first; for structures MMFF94s cannot handle, such as many metal complexes, make or open a 3D model another way.
+3. Choose the **Program**: **Gaussian**, **ORCA**, **GAMESS** or **XYZ** (coordinates only).
+4. Pick a **Template**, or set **Method**, **Basis** and **Task** yourself. The built-in templates are `B3LYP-D3BJ/def2-SVP opt+freq`, `r2SCAN-3c opt+freq` (ORCA only) and `HF/6-31G(d) single point`. **Save as template…** keeps your own.
+5. Check **Charge** and **Multiplicity**. They come from the charges and radicals drawn on the molecule, not from an xTB calculation: if you set another charge or spin there, or opened a file whose ion or spin state the drawing could not show, enter it here. Then set **Cores**, **Memory (GB)**, **Title** and **Extra keywords**.
+6. Read the **Preview**: it is the exact file text. **Copy** puts it on the clipboard; **Save** writes the file, named after the molecule (`aspirin.gjf`, `aspirin.inp`).
+
+<Screenshot
+  src="/manual/qc-export-gaussian.webp"
+  alt="The Export input file dialog for aspirin: Program Gaussian, Template B3LYP-D3BJ/def2-SVP opt+freq, Method B3LYP-D3BJ, Basis def2-SVP, Task Opt + freq, Charge 0, Multiplicity 1, Cores 8, Memory 16 GB, Title aspirin, Geometry Current 3D model · 21 atoms · MMFF94s, and the preview of aspirin.gjf starting with %nprocshared=8, %mem=16GB, %chk=aspirin.chk and #p B3LYP/Def2SVP EmpiricalDispersion=GD3BJ Opt Freq."
+/>
+
+**Geometry** shows which coordinates go into the file: the molecule's current 3D model. After an applied xTB optimization, that is the optimized geometry.
+
+### Tasks
+
+| Task                 | Gaussian                           | ORCA                                                                                          | GAMESS            |
+| -------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------- | ----------------- |
+| Single point         | yes                                | yes                                                                                           | yes               |
+| Optimize, Opt + freq | yes                                | yes                                                                                           | yes               |
+| Transition state     | `Opt=(TS,CalcFC,NoEigenTest) Freq` | `OptTS Freq` (`OptTS NumFreq` for methods without analytic frequencies, such as MP2 or DLPNO) | `RUNTYP=SADPOINT` |
+| IRC                  | yes                                | yes                                                                                           | —                 |
+
+The transition-state inputs start from the 3D model as the guess, and ORCA computes its own first Hessian. In the app, QST2, QST3 and NEB-TS are listed but greyed: they need the reactant and product of a [transition-state search](/guide/calculation-transition-states/), which runs from the command line for now. There, `reshiki --cli export-input` writes them, and reads the xTB Hessian into ORCA from a `.hess` file.
+
+GAMESS runs one task per job and uses its built-in basis sets: `6-31G(d)` (or `6-31G*`), `6-31G` and `STO-3G`. Other bases, such as the template's `def2-SVP`, are refused and **Copy** and **Save** stay off; choose one of these after switching to GAMESS.
+
+## Open an output file
+
+**Open** reads these files:
+
+| File                                           | What ReShiki reads                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| Gaussian `.log`, `.out`                        | Every job: geometries, energies, frequencies, orbital energies, how it ended |
+| ORCA `.out`                                    | The same                                                                     |
+| Gaussian `.fchk`, Molden `.molden`             | Geometry, orbitals, frequencies                                              |
+| XYZ, extended XYZ                              | One frame, or up to 32 lowest-energy frames as an ensemble (below)           |
+| SDF                                            | Conformers of one molecule as frames (below); other records side by side     |
+| Gaussian `.gjf`/`.com`, ORCA and GAMESS `.inp` | The geometry in the input                                                    |
+
+For a Gaussian or ORCA output, ReShiki opens the final geometry of the last job that has a geometry and ended normally, as a 3D model in a new, unsaved drawing named after the file. If there is none, it opens the last job that has a geometry, even a failed or cut-off one. The status bar names the job, its method and how it ended, for example `Final geometry of job 3 of 3: Frequencies · RB3LYP/6-31G, Normal termination`, so you can tell which one you got.
+
+Opening a Gaussian, ORCA, Molden or fchk file attaches its results to the molecule and opens the results palette, titled **Calculation results** with the file's program and method, with whatever the file supplies: energies, frequencies, orbitals. For a job cut off after its last result, the model shows that result's geometry. If the results cannot be attached, the status bar says `Results can't be shown yet`. Orbital shapes need a Molden or fchk file; see [Molecular orbitals](/guide/calculation-orbitals/#orbitals-from-other-programs).
+
+<Screenshot
+  src="/manual/qc-open-molden.webp"
+  alt="A PySCF formaldehyde Molden file opened in ReShiki: the 3D model with its HOMO drawn, and the Calculation results palette showing PySCF · imported · charge 0 · multiplicity 1 with the Orbitals tab open."
+/>
+
+## Open a file with several frames
+
+When an XYZ file has more than one frame, or an SDF file holds several 3D records of the same molecule (conformers from CREST, xtb, ORCA, RDKit or ReShiki's own export), **Open** asks **Choose what to import**. Every frame must list the same atoms in the same order, with the same charge and multiplicity; SDF records must also share the molecule's title (a trailing "conformer N" is ignored).
+
+<Screenshot
+  src="/manual/xtb-frames.webp"
+  alt="The Choose what to import sheet for crest_conformers.xyz (XYZ, 19 frames, 24 atoms): First, Last and Lowest energy (selected), a list of frames with comment, energy in Eh and ΔE in kcal/mol, a preview of the chosen frame, an energy-level diagram, Keep all frames as an ensemble (Conformers tab), and Cancel and Import."
+/>
+
+- Pick **First**, **Last** or **Lowest energy** (when every frame has an energy), or click a frame in the list (↑ and ↓ move, ⌘Return imports). The preview turns with a drag.
+- Energies are read from the comment line (CREST and xtb write the energy in hartree there) and from ReShiki's own XYZ and SDF exports.
+- **Keep all frames as an ensemble (Conformers tab)** keeps up to 32 frames, lowest energy first, with the molecule, and opens them in the [Conformers tab](/guide/calculation-conformers/#read-the-results) for preview, overlay and export. It needs an energy for every frame.
+
+When an XYZ comment has no `charge=` or `multiplicity=` (`mult=`), ReShiki assumes a neutral molecule in its lowest spin state and says so. ReShiki's own exports write both.

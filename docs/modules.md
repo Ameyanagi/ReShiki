@@ -22,6 +22,7 @@ explains how the crates and modules fit together.
 - `src/app/abbreviations.rs`
 - `src/app/accessibility.rs`: Window lifecycle and a bounded, generation-checked native action queue.
 - `src/app/add_panel.rs`: Shared search for templates, chemical names and SMILES in the Add tab.
+- `src/app/animation.rs`: Frame-by-frame playback and reaction-coordinate readouts.
 - `src/app/arcs.rs`
 - `src/app/arrow_labels.rs`: Contextual controls for attached reaction-condition clearances.
 - `src/app/arrows.rs`
@@ -70,6 +71,9 @@ explains how the crates and modules fit together.
 - `src/app/document_tab.rs`: Per-document state.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
+- `src/app/energy_plot.rs`: A small energy diagram shared by the import sheet and the Conformers tab
+- `src/app/energy_plot/profile.rs`: Labelled reaction-energy figures.
+- `src/app/energy_plot/scale.rs`: Round axis intervals shared by the Path plot and GIF export.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.
@@ -85,8 +89,11 @@ explains how the crates and modules fit together.
 - `src/app/file_shortcuts.rs`
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
+- `src/app/frames_import.rs`: Choose the job or geometry to open from a calculation or a multi-frame file.
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
+- `src/app/gif_export.rs`: Desktop export for the IRC and normal-mode previews.
+- `src/app/gif_export/encode.rs`
 - `src/app/github.rs`: GitHub in the editor
 - `src/app/github/account.rs`: The sign-in dialog
 - `src/app/github/compare.rs`: Two versions of a drawing side by side, with what changed marked by kind
@@ -121,12 +128,16 @@ explains how the crates and modules fit together.
 - `src/app/inspector/context.rs`: Properties follows the selection; an idle canvas shows drawing settings, while a drawing tool shows the same defaults as its context row.
 - `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
 - `src/app/inspector_pages.rs`: Chemical names and Assistant are pages within the ordinary inspector tabs.
+- `src/app/ir_figure.rs`: Properties for an infrared figure placed as a group of drawing objects.
+- `src/app/ir_figure/view.rs`: Properties for a placed IR figure, with explicit numeric drafts.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
 - `src/app/linked_properties.rs`: Property captions shown from the Properties panel pins and the right-click "Show properties" menu.
 - `src/app/macos_files.rs`: Finder and Dock requests to open drawings, which open as tabs.
 - `src/app/models3d.rs`: Show a selected molecule as its 2D drawing, a 3D model or both (#386).
+- `src/app/models3d/thumbnail.rs`: Prepared ball-and-stick thumbnails using the paper's model renderer.
+- `src/app/models3d/thumbnail/animation.rs`: Worker-owned movie frames through the model thumbnail/export SVG renderer.
 - `src/app/molecule_shortcuts.rs`: Molecule shortcuts and edit context.
 - `src/app/naming.rs`: Per-document local name parsing, editable previews and rule-based name generation.
 - `src/app/naming/aliases.rs`: Source-labelled aliases share the Import dock and normal linked captions.
@@ -166,6 +177,7 @@ explains how the crates and modules fit together.
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
 - `src/app/prompt.rs`: Questions the app asks in its own dialog
+- `src/app/qc_export.rs`: Export input for Gaussian, ORCA and GAMESS
 - `src/app/reaction_mapping.rs`: The reaction inspector edits chemical map numbers and reviews detached fits.
 - `src/app/reactions.rs`
 - `src/app/recovery_capture.rs`: Opt-in real-renderer recovery fixtures, also runnable on the unmodified base.
@@ -202,9 +214,54 @@ explains how the crates and modules fit together.
 - `src/app/workspace/layout_snapshots/context_status.rs`: Snapshots of the context row in keyboard drawing, the Check drawing findings and the status bar at the minimum and default window sizes.
 - `src/app/workspace/layout_snapshots/features.rs`: Snapshot scenes for the UI surfaces added after the maintainability refactor (40c8d82a)
 - `src/app/workspace/layout_snapshots/property_continuity.rs`: Matched real renderer fixtures for molecular Properties continuity.
+- `src/app/workspace/layout_snapshots/xtb_palette.rs`: The actual bottom dock, including chrome, at the minimum window size.
 - `src/app/workspace/model_controls_qa.rs`: Opt-in real-renderer captures at the issue's 1600 × 1000 logical pixels.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
+- `src/app/xtb.rs`: Predict → xTB
+- `src/app/xtb/conformers.rs`: Conformer search
+- `src/app/xtb/conformers/bench.rs`: Developer-only command for timing the desktop app's conformer search.
+- `src/app/xtb/conformers/export.rs`: Conformer ensembles as files
+- `src/app/xtb/conformers/pipeline.rs`: Stream the shared conformer search's progress to the Calculate card.
+- `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
+- `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
+- `src/app/xtb/history.rs`: Name the calculation or attached geometry restored by drawing history.
+- `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
+- `src/app/xtb/orbitals/compute.rs`: Work off the UI thread
+- `src/app/xtb/orbitals/diagram.rs`: Placed MO diagram edits and the orbital rows a picture is waiting for.
+- `src/app/xtb/orbitals/levels.rs`: The Orbitals tab's visible range and level diagram.
+- `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
+- `src/app/xtb/palette.rs`: The xTB results palette
+- `src/app/xtb/palette/sizing.rs`: The bottom dock's window budget and short-window collapse behavior.
+- `src/app/xtb/palette/status.rs`
+- `src/app/xtb/palette/view.rs`: The results palette's widgets
+- `src/app/xtb/results.rs`: The results palette's content, kept free of iced
+- `src/app/xtb/results/methods.rs`: The methods paragraph Copy methods text writes for a stored result, citing the BibTeX keys of docs/references/xtb.bib for what actually ran.
+- `src/app/xtb/run.rs`: Stream the shared xTB job's progress to the Calculate card.
+- `src/app/xtb/selection.rs`: Guidance when the drawing does not identify one molecule to calculate.
+- `src/app/xtb/source.rs`: Where a molecule's 3D coordinates came from (an xTB conformer, an optimized geometry or step, the file or the force field) and the other geometries its current xTB results hold, for the input-file dialog and the Undo status.
+- `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
+- `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
+- `src/app/xtb/ts.rs`: Transition-state searches and reaction-path previews from the reaction arrow.
+- `src/app/xtb/ts/card.rs`: Predict controls and results for a single selected reaction arrow.
+- `src/app/xtb/ts/energy.rs`: Reaction energies are ordinary, sequential molecule calculations.
+- `src/app/xtb/ts/export.rs`: Feed the existing input-export dialog from the saved TS, without depending on the current drawing or the geometry temporarily previewed on the canvas.
+- `src/app/xtb/ts/irc.rs`: Select the saved reaction path, preview its geometries, and export its XYZ trajectory.
+- `src/app/xtb/ts/irc/controls.rs`: Reusable transport controls for reaction-path animations.
+- `src/app/xtb/ts/irc/focus.rs`: Arrow-key stepping belongs to the focused path, never a document shortcut.
+- `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
+- `src/app/xtb/ts/refine.rs`: Resolve a saved saddle and its endpoint frames on the originating reaction.
+- `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
+- `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
+- `src/app/xtb/ts/review/view.rs`: Review both reaction sides while keeping uncommon calculation settings folded.
+- `src/app/xtb/ts/thumbnails.rs`: Saved-geometry preparation for the reactant, TS and product profile models.
+- `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
+- `src/app/xtb/vibrations.rs`: The Vibrations tab
+- `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
+- `src/app/xtb/vibrations/mode_list.rs`
+- `src/app/xtb/vibrations/motion.rs`: Geometric descriptions of normal modes, from internal-coordinate motion.
+- `src/app/xtb/vibrations/view.rs`: The Vibrations tab's widgets
+- `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
 - `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.
 - `src/assistant/codex/connection.rs`: Setup failures are classified at their source, never by matching provider text.
@@ -266,20 +323,29 @@ explains how the crates and modules fit together.
 - `src/cli.rs`: `reshiki --cli`
 - `src/cli/analyze.rs`: `reshiki --cli analyze`
 - `src/cli/args.rs`: Token parsing for the grammar in `commands::COMMANDS`, described by `reshiki --cli help`.
+- `src/cli/calc.rs`: CLI-only calculation sessions call the xTB worker directly.
+- `src/cli/calculate.rs`: `reshiki --cli calculate`
 - `src/cli/commands.rs`: The command grammar and help text for `reshiki --cli`.
 - `src/cli/compose.rs`: `reshiki --cli compose`
 - `src/cli/convert.rs`: `reshiki --cli convert`
+- `src/cli/export_input.rs`: Cartesian XYZ to quantum-chemistry input, without a drawing import.
 - `src/cli/host.rs`: The in-process `HeadlessHost` a CLI command runs on, called through `ToolHost::call` like `reshiki --mcp` calls it.
 - `src/cli/io.rs`: The CLI's file and standard-input access
 - `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
 - `src/cli/name.rs`: `reshiki --cli name`
 - `src/cli/pieces.rs`: `reshiki --cli pieces`
 - `src/cli/predict_nmr.rs`: `reshiki --cli predict-nmr`
+- `src/cli/read_output.rs`: `reshiki --cli read-output`
 - `src/cli/reference.rs`: Deterministic agent documentation from the live CLI and operation contracts.
 - `src/cli/render.rs`: `reshiki --cli render`
 - `src/cli/skill.rs`: The Agent Skill folder `reshiki --cli skill` writes
 - `src/cli/skill/references.rs`: Skill references rendered from live command help, operation contracts and MCP setup options.
 - `src/cli/skill/template.rs`: SKILL.md, the only hand-written part of a generated skill
+- `src/cli/ts.rs`: Gas-phase transition-state searches using the isolated xTB worker.
+- `src/cli/ts/geometry.rs`: XYZ admission and atom mapping before a transition-state search.
+- `src/cli/ts/output.rs`: Transition-state table and optional machine-readable outputs.
+- `src/cli/ts/source.rs`: Admit a previous, verified GFN2 result without guessing legacy provenance.
+- `src/cli/ts/worker.rs`: Shared thread-affine workers used by CLI and desktop TS searches.
 - `src/clipboard.rs`: Explicit native Copy/Paste with editable and image representations.
 - `src/clipboard/browser.rs`: The browser's clipboard.
 - `src/clipboard/copy_as.rs`: Format-specific copy.
@@ -314,6 +380,7 @@ explains how the crates and modules fit together.
 - `src/hotkeys.rs`: Transactional chemistry edits shared by contextual drawing shortcuts.
 - `src/hotkeys/ligands.rs`: Contextual pi-ligand construction uses real ring atoms and typed attachments.
 - `src/http.rs`: HTTPS clients for the update check, online name lookup and GitHub.
+- `src/irc_summary.rs`: Shared descriptions of incomplete downhill IRC traces and endpoint relaxation.
 - `src/kept_fonts.rs`: The fonts the browser editor kept from earlier visits, by SHA-256, in the order they are added as fallbacks once text needs them.
 - `src/keyboard_drawing.rs`: A keyboard drawing hotspot, independent of pointer hover and selection.
 - `src/launch.rs`: Headless entry points selected by the first command-line token.
@@ -353,6 +420,8 @@ explains how the crates and modules fit together.
 - `src/web/storage.rs`: Application data in the browser (see `reshiki::storage::browser`)
 - `src/window_fit.rs`: Windows work-area sizing; UI scale stays under Iced's DPI handling.
 - `src/workers.rs`: Worker modes
+- `src/xtb_agent.rs`: The worker-backed calculation hook for the CLI and MCP hosts.
+- `src/xtb_pool.rs`: A sendable potential backed by a thread-affine xTB session.
 
 ## reshiki-agent
 
@@ -375,6 +444,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/analyze.rs`: The `analyze` tool
 - `crates/agent/src/ops/apply.rs`: The `apply` tool
 - `crates/agent/src/ops/budget.rs`: Resource budgets for the operation API and the document cost helpers they are measured with.
+- `crates/agent/src/ops/calculate.rs`: The `calculate` tool
 - `crates/agent/src/ops/catalog.rs`: The operation tool catalog and the argument decoder for each tool.
 - `crates/agent/src/ops/compose.rs`: The `compose` tool
 - `crates/agent/src/ops/convert.rs`: The `convert` tool
@@ -382,6 +452,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/error.rs`: Operation errors and their stable wire codes.
 - `crates/agent/src/ops/exec.rs`: The bounded executor
 - `crates/agent/src/ops/export.rs`: The `export` tool
+- `crates/agent/src/ops/export_input.rs`: The `export_input` tool
 - `crates/agent/src/ops/files.rs`: The `file_open` and `file_save` tools
 - `crates/agent/src/ops/headless.rs`: The tool host for a process without the app
 - `crates/agent/src/ops/host.rs`: The transport-facing side of the operation API.
@@ -393,6 +464,7 @@ explains how the crates and modules fit together.
 - `crates/agent/src/ops/policy.rs`: Who may read or edit which document.
 - `crates/agent/src/ops/predict_nmr.rs`: The `predict_nmr` tool
 - `crates/agent/src/ops/progress.rs`: Progress reports from a running operation to the transport.
+- `crates/agent/src/ops/read_output.rs`: Quantum chemistry files as compact job summaries and calculated values.
 - `crates/agent/src/ops/render.rs`: The `render` tool
 - `crates/agent/src/ops/result.rs`: The protocol-neutral result of a tool call.
 - `crates/agent/src/ops/schema.rs`: The `schema` tool
@@ -654,6 +726,21 @@ explains how the crates and modules fit together.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
 - `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
+- `crates/io/src/qc_input.rs`: Quantum chemistry input files and Cartesian geometry exports.
+- `crates/io/src/qc_input/gamess.rs`: GAMESS-US input
+- `crates/io/src/qc_input/gaussian.rs`: Gaussian 16 input
+- `crates/io/src/qc_input/hess.rs`: Read and write Cartesian Hessians in ORCA `.hess` files.
+- `crates/io/src/qc_input/orca.rs`: ORCA 6 input
+- `crates/io/src/qc_input/sdf.rs`: SDF records with V3000 3D connection tables.
+- `crates/io/src/qc_input/xyz.rs`: XYZ files, one frame or a trajectory.
+- `crates/io/src/qcread.rs`: Readers for quantum chemistry files, from geometries to calculated results.
+- `crates/io/src/qcread/fchk.rs`: Gaussian formatted checkpoints, read from the documented record layout.
+- `crates/io/src/qcread/gaussian.rs`: Gaussian log jobs, coordinate steps, and results.
+- `crates/io/src/qcread/input.rs`: Geometry sections of Gaussian, ORCA and GAMESS input files.
+- `crates/io/src/qcread/molden.rs`: Molden records, converted at the boundary to the canonical AO convention.
+- `crates/io/src/qcread/orca.rs`: ORCA output read job by job into geometries, energies, orbital levels and vibrations.
+- `crates/io/src/qcread/sdf.rs`: Molecular geometries from native MOL and SD records.
+- `crates/io/src/qcread/xyz.rs`: Molecular geometries from plain and extended XYZ.
 - `crates/io/src/recovery.rs`
 - `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
 - `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.
@@ -803,6 +890,8 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
 - `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
 - `crates/model/src/graphics/heads.rs`
+- `crates/model/src/graphics/ir_figure.rs`: Stored parameters for a placed, editable infrared spectrum figure.
+- `crates/model/src/graphics/mo_diagram.rs`: A placed molecular orbital diagram and its vector layout.
 - `crates/model/src/graphics/panel.rs`: Figure panels, rectangles with a tint, rounded corners, titles and dividers.
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`
@@ -833,11 +922,27 @@ explains how the crates and modules fit together.
 - `crates/model/src/models3d/crystal.rs`: Crystal and periodic structures (#417)
 - `crates/model/src/models3d/ellipsoids.rs`: ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
 - `crates/model/src/models3d/polish.rs`: Persistent generated chemistry, separate from the live source drawing.
+- `crates/model/src/models3d/reaction_row.rs`: Align the models of a reaction beneath its drawing.
+- `crates/model/src/models3d/surface.rs`: Orbital isosurfaces drawn as vector shapes in a 3D model (see docs/plans/xtb-surfaces.md).
+- `crates/model/src/models3d/surface/draw.rs`: Orbital meshes and their projection into a model's picture.
+- `crates/model/src/models3d/surface/draw/figures.rs`
+- `crates/model/src/models3d/surface/figure.rs`: An orbital placed on a 3D model
+- `crates/model/src/models3d/surface/fit.rs`: Smooth cubic outlines for merged surface regions and runs, after Schneider's digitized-curve fitting (Graphics Gems, 1990).
+- `crates/model/src/models3d/surface/look.rs`: How an orbital surface is drawn
+- `crates/model/src/models3d/surface/mesh.rs`: Closed surfaces of a signed scalar field, in model coordinates (Å).
+- `crates/model/src/models3d/surface/orbital.rs`: A molecular orbital in the model frame (Å), evaluated from normalized Gaussian AOs.
+- `crates/model/src/models3d/surface/orbital/timing.rs`: Manual timings
+- `crates/model/src/models3d/surface/signing.rs`
+- `crates/model/src/models3d/surface/snapshot.rs`: Compact snapshots of the merged 2D shapes of an orbital surface.
+- `crates/model/src/models3d/surface/visible.rs`: Screen-affine hidden-surface clipping and merged, nested shading regions.
+- `crates/model/src/models3d/surface/visible/coverage.rs`
+- `crates/model/src/models3d/surface/visible/runs.rs`
 - `crates/model/src/molecule_names.rs`: Native associations for locally verified chemical-name captions.
 - `crates/model/src/molecule_names/axis_markers.rs`: Private naming identity for CIP-labelled biaryl axes.
 - `crates/model/src/molecule_names/identity.rs`: Canonical molecular identity, independent of document selection and captions.
 - `crates/model/src/molecule_names/identity_parity.rs`: Keep the app's chemistry copy and the standalone kernel identity in agreement.
 - `crates/model/src/molecule_names/ir.rs`: Direct preparation of naming IR, preserving its atom and bond identities.
+- `crates/model/src/orbital_levels.rs`: Molecular-orbital levels
 - `crates/model/src/pages.rs`: Physical publication pages, independent of viewport zoom and molecular scale.
 - `crates/model/src/palette.rs`: Theme palettes
 - `crates/model/src/pictures.rs`: Self-contained pictures with a portable PNG preview.
@@ -854,6 +959,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/reaction_mapping/search.rs`: Bounded maximum-cardinality graph matching.
 - `crates/model/src/reactions.rs`: Explicit reaction membership, independent of where a scheme is drawn.
 - `crates/model/src/reactions/hints.rs`: Informational checks of arrow meaning; neither chemistry nor drawing is edited.
+- `crates/model/src/reactions/ts_plan.rs`: Derive transition-state search inputs from a reaction's drawing and atom map.
 - `crates/model/src/rear_opacity.rs`: Transparency for view-occluded cage/atom/bond ink, independent of RGB.
 - `crates/model/src/rear_opacity/clip.rs`: Clipping and tessellation for rear-opacity paint in drawing coordinates.
 - `crates/model/src/rear_opacity/ink.rs`: Resolve alpha-affected ink once
@@ -880,6 +986,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/scene/projected_bonds.rs`: Secondary rails in a retained ring face, projected without rescaling XY.
 - `crates/model/src/scene/svg.rs`: SVG serialization of the scene primitives.
 - `crates/model/src/scene/table.rs`: Table cells are independently painted native drawing scopes.
+- `crates/model/src/science.rs`: Scientific frames and calculation results kept with molecules.
 - `crates/model/src/scientific.rs`: Chemical marks and orbital diagrams.
 - `crates/model/src/scientific/label_halo.rs`: Find the atom labels an orbital's complete lobes run into.
 - `crates/model/src/scientific/mark_placement.rs`: Click placement and the orbit of a dragged mark.
@@ -905,6 +1012,54 @@ explains how the crates and modules fit together.
 - `crates/model/src/typography.rs`: Editable rich text, independent of the UI and chemistry engine.
 - `crates/model/src/typography/name_markup.rs`: Presentation-only typography for chemical names.
 
+## reshiki-optimize
+
+- `crates/optimize/src/conformers.rs`: Cluster minimized starts by molecular symmetry and rank the reoptimized representatives.
+- `crates/optimize/src/conformers/alignment.rs`: Heavy-atom RMSD under a proper rotation using Horn's quaternion matrix.
+- `crates/optimize/src/conformers/clustering.rs`: Select diverse low-energy representatives from minimized starts with Butina clustering.
+- `crates/optimize/src/conformers/ranking.rs`: Deduplicate optimized candidates, compute thermal populations, and save aligned geometries.
+- `crates/optimize/src/conformers/topology.rs`: Validate molecular connectivity and enumerate heavy-atom graph automorphisms.
+- `crates/optimize/src/lib.rs`: Geometry optimization and conformer ranking for any energy-and-gradient potential.
+- `crates/optimize/src/linalg.rs`: Dense symmetric eigendecomposition and vector operations for geometry optimization.
+- `crates/optimize/src/linalg/cholesky.rs`: Scaled Cholesky factorization and triangular solves.
+- `crates/optimize/src/linalg/projected.rs`: Symmetric eigendecomposition on the complement of known orthonormal axes.
+- `crates/optimize/src/model_hessian.rs`: Lindh's positive semidefinite model Hessian in Cartesian atomic units.
+- `crates/optimize/src/model_hessian/contacts.rs`: Weak nonbonded stretch curvature for the Lindh Hessian.
+- `crates/optimize/src/optimizer.rs`: Molecular geometry minimization with TRIC or ANC RFO and Cartesian L-BFGS.
+- `crates/optimize/src/optimizer/anc.rs`: Approximate normal coordinates, rational-function steps and Hessian updates.
+- `crates/optimize/src/optimizer/anc/davidson.rs`: Lowest eigenvector of the symmetric RFO matrix [H g; gᵀ 0].
+- `crates/optimize/src/optimizer/anc/davidson/regression.rs`: Davidson regression on a realistic Lindh model Hessian after BFGS updates.
+- `crates/optimize/src/optimizer/anc/diis.rs`: Accepted-point histories and coordinate transforms for shared DIIS proposals.
+- `crates/optimize/src/optimizer/coordinates.rs`: Free Cartesian coordinates and the instantaneous translation and rotation subspace.
+- `crates/optimize/src/optimizer/internal.rs`: Translation-rotation-internal coordinates for molecular RFO.
+- `crates/optimize/src/optimizer/internal/back_transform.rs`: Iterative back-transformation after Pulay & Fogarasi, J.
+- `crates/optimize/src/optimizer/internal/chart.rs`: Primitive values, their local differences and free-column Wilson rows.
+- `crates/optimize/src/optimizer/internal/delocalize.rs`: Products of the sparse primitive Wilson rows at a DLC build.
+- `crates/optimize/src/optimizer/internal/fragment.rs`: Fragment translations and exponential-map rotations for TRIC.
+- `crates/optimize/src/optimizer/internal/geometry.rs`: Three-dimensional Cartesian geometry used by the internal coordinate charts.
+- `crates/optimize/src/optimizer/internal/metric.rs`: Dense Wilson matrices.
+- `crates/optimize/src/optimizer/internal/primitive.rs`: Local internal-coordinate values and analytic Wilson B rows.
+- `crates/optimize/src/optimizer/internal/product.rs`: Row-major A Bᵀ, optionally computing a symmetric result from its lower triangle.
+- `crates/optimize/src/optimizer/internal/profile.rs`: Test-only, nested wall timers.
+- `crates/optimize/src/optimizer/internal/topology.rs`: Covalent topology and the primitive part of a molecular coordinate chart.
+- `crates/optimize/src/optimizer/internal/topology/chart_check.rs`: Exact chart checks for bounded, ordinary organic coordination.
+- `crates/optimize/src/optimizer/lbfgs.rs`: Limited-memory inverse BFGS in free Cartesian coordinates.
+- `crates/optimize/src/optimizer/rfo.rs`: Shared rational-function, secant-update and DIIS calculations.
+- `crates/optimize/src/optimizer/rfo/diis.rs`: DIIS interpolation in the current RFO coordinate frame.
+- `crates/optimize/src/optimizer/rfo/positive.rs`: The unique negative RFO root for a positive-definite physical Hessian.
+- `crates/optimize/src/optimizer/trust.rs`: Trust-region acceptance and radius adjustment shared by both RFO coordinate models.
+- `crates/optimize/src/ts.rs`: Transition-state searches on mapped Cartesian geometries in atomic units.
+- `crates/optimize/src/ts/endpoint.rs`: Distance-restrained endpoint construction and covalent connectivity.
+- `crates/optimize/src/ts/idpp.rs`: Image-dependent pair-potential interpolation
+- `crates/optimize/src/ts/irc.rs`: Mass-weighted steepest descent on a local quadratic surface (Page & McIver, J.
+- `crates/optimize/src/ts/mapping.rs`: Proper rigid fits (Horn, J.
+- `crates/optimize/src/ts/modes.rs`: Eckart translation/rotation projection and harmonic normal modes.
+- `crates/optimize/src/ts/neb.rs`: Climbing-image NEB with the improved tangent of Henkelman & Jónsson, J.
+- `crates/optimize/src/ts/reactive_start.rs`: Graph-preserving preparation of a reactive starting conformer.
+- `crates/optimize/src/ts/recovery.rs`: Geometry-seeded and extra-mode saddle refinement.
+- `crates/optimize/src/ts/saddle.rs`: Partitioned rational-function saddle refinement.
+- `crates/optimize/src/ts/saddle_regressions.rs`: Analytic counterexamples for trust-model recovery and force-only acceptance.
+
 ## reshiki-process-heap
 
 - `crates/process-heap/src/allocation_metrics.rs`: Optional development measurements of requested Rust allocation sizes.
@@ -917,8 +1072,24 @@ explains how the crates and modules fit together.
 - `crates/python/src/bitmap_budget.rs`: Process-wide admission for batch PNGs' raw RGBA storage, not total RSS.
 - `crates/python/src/drawing.rs`
 - `crates/python/src/lib.rs`: Thin Python bindings over the same headless import, export and analysis API used by the browser.
+- `crates/python/src/qc.rs`: Quantum chemistry files and the shared, full-precision Python result shape.
 - `crates/python/src/render.rs`
 - `crates/python/src/styles.rs`
+- `crates/python/src/xtb.rs`: Run the optional external worker without holding the Python GIL.
+- `crates/python/src/xtb/conformers.rs`: Adapt a Python molecule to the shared conformer search.
+
+## reshiki-qcdata
+
+- `crates/qcdata/src/basis.rs`: Basis sets, molecular orbitals and the canonical atomic-orbital contract.
+- `crates/qcdata/src/capabilities.rs`: Method × task capabilities and calculation admission checks.
+- `crates/qcdata/src/compact.rs`: Compact encodings for floating-point arrays in their field's declared units.
+- `crates/qcdata/src/frame.rs`: Exact molecular frames, their SHA-256 identity, and trajectories.
+- `crates/qcdata/src/irc.rs`: Ordered intrinsic reaction coordinates, including the scalar data kept in light saves.
+- `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
+- `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
+- `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
+- `crates/qcdata/src/vibrational.rs`
+- `crates/qcdata/src/vibrational/symmetry.rs`
 
 ## reshiki-web
 
@@ -927,6 +1098,29 @@ explains how the crates and modules fit together.
 ## reshiki-web-worker
 
 - `crates/web-worker/src/lib.rs`: The browser editor's Web Worker for heavy jobs, as a WebAssembly module of its own that `packages/editor/src/worker.js` runs.
+
+## reshiki-xtb-jobs
+
+- `crates/xtb-jobs/src/conformers.rs`: Conformer search settings and the desktop and Python pipeline.
+- `crates/xtb-jobs/src/conformers/export.rs`: Conformers in energy order, with thermal populations and XYZ labels.
+- `crates/xtb-jobs/src/conformers/pipeline.rs`: Conformer sampling, clustering and xTB ranking.
+- `crates/xtb-jobs/src/conformers/rows.rs`: Statistics of the retained, saved ensemble, in trajectory order.
+- `crates/xtb-jobs/src/failure.rs`
+- `crates/xtb-jobs/src/lib.rs`: Shared xTB calculations and conformer searches for desktop and Python clients.
+- `crates/xtb-jobs/src/method.rs`: Apply a method's capabilities to the options supplied by clients.
+- `crates/xtb-jobs/src/run.rs`: One xTB worker session driven by the optimizer.
+- `crates/xtb-jobs/src/scf.rs`: Bounds for the Calculate card's SCF overrides.
+
+## reshiki-xtb-worker
+
+- `crates/xtb-worker/src/ao.rs`: Conversion from axtb's spherical AOs to qcdata's unit-norm canonical AOs.
+- `crates/xtb-worker/src/bin/reshiki-xtb-worker.rs`
+- `crates/xtb-worker/src/client.rs`: Persistent, synchronous supervision of one bounded xTB worker.
+- `crates/xtb-worker/src/engine.rs`: Warm-started calculations through the pinned axtb driver.
+- `crates/xtb-worker/src/lib.rs`: The xTB protocol, client and engine-backed worker.
+- `crates/xtb-worker/src/protocol.rs`: Version 2 of the ReShiki xTB worker wire format.
+- `crates/xtb-worker/src/protocol/wire_orbitals.rs`: Orbital metadata on the wire.
+- `crates/xtb-worker/src/worker.rs`: Request dispatch and error responses for the xTB worker.
 
 ## reshiki-geometry
 
@@ -954,7 +1148,7 @@ explains how the crates and modules fit together.
 
 ## reshiki-process
 
-- `native/process/src/lib.rs`: Safe, naming-specific child limits.
+- `native/process/src/lib.rs`: Safe child process supervision.
 - `native/process/src/unix.rs`
 - `native/process/src/windows.rs`: Windows 10+ creation-time job membership; no spawn/assign interval.
 

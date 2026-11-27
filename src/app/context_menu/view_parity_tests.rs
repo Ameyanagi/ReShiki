@@ -167,6 +167,7 @@ fn dump(app: &App, out: &mut String) {
         Page::Bonds,
         Page::Tilt,
         Page::Model,
+        Page::Calculate,
         Page::Attachments,
         Page::CopyAs,
         Page::AlignObjects,
@@ -174,6 +175,9 @@ fn dump(app: &App, out: &mut String) {
         Page::Order,
         Page::Arrange,
     ];
+    if super::super::xtb::available() {
+        pages.push(Page::Model3d);
+    }
     pages.extend((0..=app.context_commands().len()).map(Page::More));
     for page in pages {
         let _ = writeln!(out, "PAGE|{page:?}");
@@ -187,7 +191,7 @@ fn dump(app: &App, out: &mut String) {
                 } => writeln!(
                     out,
                     "Item|{label}|{action:?}|{enabled}|{:?}",
-                    shortcut(&action)
+                    app.context_shortcut(&action)
                 ),
                 Entry::Separator => writeln!(out, "Separator"),
                 Entry::Hint(text) => writeln!(out, "Hint|{text}"),

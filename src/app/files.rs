@@ -75,6 +75,9 @@ pub(super) fn keep_format_text(
         if reshiki::arrows::shapes_notice(doc).is_some() {
             lost.push("editable arrow looks and callouts".into());
         }
+        if matches!(format, "cdxml" | "cdx") && doc.graphics.iter().any(|g| g.ir.is_some()) {
+            lost.push("IR figure settings".into());
+        }
     }
     // ReShiki reads panels and purpose back from its own CDXML only.
     if format == "cdx" && doc.graphics.iter().any(|g| g.panel.is_some()) {
@@ -413,6 +416,10 @@ pub enum Prepared {
     },
     /// An SD file's records, read.
     Records(Box<super::import::Batch>),
+    /// A geometry and any results read from a calculation.
+    Calculation(Box<super::import::Batch>),
+    /// The import sheet asks which job or frame to open.
+    Frames(Box<super::frames_import::File>),
     #[cfg(target_arch = "wasm32")]
     Browser {
         handle: wasm_bindgen::JsValue,
@@ -421,15 +428,24 @@ pub enum Prepared {
     },
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub type Saved = PathBuf;
-
-#[cfg(target_arch = "wasm32")]
 #[derive(Debug, Clone)]
 pub struct Saved {
     pub path: PathBuf,
+    #[cfg(not(target_arch = "wasm32"))]
+    history: Option<Result<Vec<u8>, String>>,
     /// None means a download handoff, which does not establish a saved file.
+    #[cfg(target_arch = "wasm32")]
     pub handle: Option<wasm_bindgen::JsValue>,
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+impl<T: Into<PathBuf>> From<T> for Saved {
+    fn from(path: T) -> Self {
+        Self {
+            path: path.into(),
+            history: None,
+        }
+    }
 }
 
 pub type Opened = Option<(PathBuf, Result<Prepared, String>)>;
@@ -481,6 +497,10 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             Box::new(doc),
             reshiki::document::View::read(&contents),
         ))
+    } else if is_qc_file(path, &extension) {
+        prepare_qc(path, &contents)
+    } else if let Some(file) = super::frames_import::detect(path, &contents) {
+        Ok(Prepared::Frames(Box::new(file)))
     } else {
         // An SD file's records are read next, in `records`. Its extension
         // comes first, as for Insert: POSCAR is told by its name.
@@ -506,9 +526,180 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
     }
 }
 
+const QC_EXTENSIONS: [&str; 10] = [
+    "log", "out", "fchk", "fch", "molden", "mold", "gjf", "com", "gau", "inp",
+];
+
+/// Whether Open reads this name as a quantum chemistry program output or input.
+pub(super) fn is_qc_file(path: &std::path::Path, extension: &str) -> bool {
+    QC_EXTENSIONS.contains(&extension)
+        || extension == "input"
+            && super::import::name(path)
+                .to_ascii_lowercase()
+                .ends_with(".molden.input")
+}
+
+/// Read a calculation once, then choose a job or step when there is a choice.
+fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, String> {
+    let name = super::import::name(path);
+    let file = reshiki::qcread::read(&name, contents).map_err(|e| e.to_string())?;
+    let index = file.default_job().ok_or("The file has no geometry")?;
+    let output = file.format.has_results();
+    if output
+        && (file.jobs.len() > 1 || file.jobs.get(index).is_some_and(|job| job.steps.len() > 1))
+    {
+        return Ok(Prepared::Frames(Box::new(
+            super::frames_import::File::calculation(name, file),
+        )));
+    }
+    prepare_qc_drawing(file, index, None, output)
+}
+
+pub(super) fn has_calculated_results(result: &reshiki::qcdata::CalcResult) -> bool {
+    result.energy_hartree.is_some()
+        || result.vibrations.is_some()
+        || result.orbitals.is_some()
+        || !result.charges.is_empty()
+}
+
+/// Open a job at its result's geometry, or open an explicitly picked step.
+pub(super) fn prepare_qc_drawing(
+    file: reshiki::qcread::QcFile,
+    index: usize,
+    step_index: Option<usize>,
+    add_2d: bool,
+) -> Result<Prepared, String> {
+    let jobs = file.jobs.len();
+    let output = file.format.has_results();
+    let job = file
+        .jobs
+        .into_iter()
+        .nth(index)
+        .ok_or("The file has no such job")?;
+    let step = match step_index {
+        Some(i) => job.steps.get(i),
+        None => super::frames_import::job_step(&job),
+    }
+    .ok_or("The file has no geometry")?;
+    let frame = step.frame.clone();
+    let (mut drawing, mut warnings) = super::frames_import::drawing(&frame)?;
+    let mut notice = if output {
+        let formula = super::frames_import::molecule(&frame);
+        let kind = job.kind.name();
+        let mut notice = if jobs > 1 {
+            format!(
+                "Job {} of {jobs} opened · {formula} · {kind}",
+                job.index + 1
+            )
+        } else if let Some(i) = step_index {
+            format!(
+                "Step {} of {} opened · {formula} · {kind}",
+                i + 1,
+                job.steps.len()
+            )
+        } else {
+            format!("{formula} opened · {kind}")
+        };
+        if let Some(completion) = &job.completion
+            && !matches!(completion, reshiki::qcread::Completion::Normal)
+        {
+            notice.push_str(&format!(" · {}", completion.name()));
+        }
+        notice
+    } else {
+        format!("Geometry from the {} file", file.format.name())
+    };
+    // Files give the total charge and spin, not which atoms carry them, unless there is one
+    // atom. Where a file records neither, the reader's warning says what it assumed.
+    let mut omitted = Vec::new();
+    match drawing.atoms.as_mut_slice() {
+        [atom] if frame.numbers.len() == 1 => atom.charge = frame.charge,
+        _ if frame.charge != 0 => omitted.push(format!("total charge {:+}", frame.charge)),
+        _ => {}
+    }
+    if frame.multiplicity != 1 {
+        omitted.push(format!("spin multiplicity {}", frame.multiplicity));
+    }
+    if add_2d {
+        add_qc_structure(&mut drawing);
+    }
+    if let Some(result) = job.result.filter(has_calculated_results) {
+        if frame.hash() == result.frame {
+            let frames = result
+                .input_frame
+                .filter(|hash| *hash != result.frame)
+                .and_then(|hash| job.steps.iter().find(|step| step.frame.hash() == hash))
+                .map(|step| step.frame.clone())
+                .into_iter()
+                .collect();
+            match reshiki::science::import(&mut drawing, 0, frame, frames, result) {
+                Ok(_) => notice.push_str(" · results in the palette"),
+                Err(error) => notice.push_str(&format!(
+                    " · Results could not be attached ({error}). Check the source geometry and open the file again."
+                )),
+            }
+        } else if let Some(bound) = super::frames_import::result_step_index(&job.steps, &result) {
+            notice.push_str(&format!(
+                " · Reopen and choose step {} to see the calculation results",
+                bound + 1
+            ));
+        }
+    } else if output {
+        notice.push_str(" · The file has no calculated results.");
+    }
+    if !omitted.is_empty() {
+        notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
+    }
+    warnings.insert(0, notice);
+    warnings.extend(file.warnings);
+    let batch = Box::new(super::import::Batch::one(drawing, warnings));
+    Ok(if output {
+        Prepared::Calculation(batch)
+    } else {
+        Prepared::Records(batch)
+    })
+}
+
+fn add_qc_structure(drawing: &mut reshiki::document::Document) {
+    use reshiki::models3d::{Display, set_display};
+    set_display(drawing, 0, Display::TwoD);
+    let mut request = super::Request::molecule("clean", drawing.clone());
+    request.cleanup = Some(reshiki::cleanup::Options {
+        keep_orientation: false,
+        style_bond_length: true,
+        ..Default::default()
+    });
+    // The XYZ reader already made an opening-view projection for structures
+    // the 2D solver cannot lay out.
+    if let Ok(cleaned) = reshiki::engine::native_cleanup::prepare(&request) {
+        *drawing = cleaned.document;
+    }
+    set_display(drawing, 0, Display::Both);
+}
+
+pub(super) fn nonblank(value: &str) -> Option<&str> {
+    let value = value.trim();
+    (!value.is_empty()).then_some(value)
+}
+
+/// The program as named in the import sheet and the result header.
+pub(super) fn program_label(program: &str, version: Option<&str>) -> String {
+    match version.and_then(nonblank) {
+        Some(version) => {
+            let release = if program == "Gaussian" {
+                version.split(" Revision ").next().unwrap_or(version)
+            } else {
+                version
+            };
+            format!("{program} {release}")
+        }
+        None => program.into(),
+    }
+}
+
 /// Every record of an SD file, read as Insert reads them, before the file
 /// is reported: files then still open in the order they were chosen.
-async fn records(
+pub(super) async fn records(
     path: &std::path::Path,
     prepared: Result<Prepared, String>,
 ) -> Result<Prepared, String> {
@@ -559,7 +750,7 @@ pub(super) async fn read(path: PathBuf) -> Opened {
 }
 
 /// The Open dialog's title, which names what it opens: it has no filter.
-const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR or XYZ file";
+const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR, XYZ, Molden, fchk, or Gaussian/ORCA/GAMESS file";
 
 /// Opens the files the user chooses, each in a tab.
 pub(super) fn open_dialog(
@@ -600,10 +791,13 @@ pub(super) fn open_picked(
                     #[cfg(target_arch = "wasm32")]
                     let result = match (file.handle, result) {
                         (Some(handle), Ok(prepared))
-                            // Neither a picture nor an SD file stays the tab's file.
+                            // These imports start an untitled drawing.
                             if !matches!(
                                 &prepared,
-                                Prepared::Picture(..) | Prepared::Records(..)
+                                Prepared::Picture(..)
+                                    | Prepared::Records(..)
+                                    | Prepared::Calculation(..)
+                                    | Prepared::Frames(..)
                             ) =>
                         {
                             let mut duplicate = None;
@@ -710,22 +904,22 @@ impl super::App {
         snapshot: Box<reshiki::document::Document>,
         result: Result<Option<Saved>, String>,
     ) -> iced::Task<super::Message> {
-        // A GitHub drawing keeps what this save wrote as a version.
         #[cfg(not(target_arch = "wasm32"))]
-        let written = match &result {
-            Ok(Some(path)) if epoch == self.tab.file_epoch => self
-                .github
-                .locate(Some(path))
-                .map(|_| (path.clone(), (*snapshot).clone())),
+        let mut result = result;
+        #[cfg(not(target_arch = "wasm32"))]
+        let written = match &mut result {
+            Ok(Some(saved)) if epoch == self.tab.file_epoch => {
+                // Before a close, count the write as unsent so it asks whether to send it.
+                self.github_unread(&saved.path);
+                saved
+                    .history
+                    .take()
+                    .map(|history| (saved.path.clone(), history))
+            }
             _ => None,
         };
         #[cfg(not(target_arch = "wasm32"))]
         let saved = matches!(&result, Ok(Some(_))) && epoch == self.tab.file_epoch;
-        // Before a close the save goes on with asks whether to send it.
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Some((path, _)) = &written {
-            self.github_unread(path);
-        }
         let task = self.drawing_saved(epoch, snapshot, result);
         #[cfg(not(target_arch = "wasm32"))]
         let task = iced::Task::batch([task, self.github_saved(saved, written)]);
@@ -767,7 +961,7 @@ impl super::App {
                     saved.path
                 };
                 #[cfg(not(target_arch = "wasm32"))]
-                let path = saved;
+                let path = saved.path;
                 // Continue the save dialog's action only when nothing is left unsaved.
                 self.tab.mark_saved(snapshot);
                 if self
@@ -845,6 +1039,7 @@ impl super::App {
         let Some((path, result)) = opened else {
             return iced::Task::none();
         };
+        let calculation = matches!(&result, Ok(Prepared::Calculation(_)));
         match result {
             #[cfg(target_arch = "wasm32")]
             Ok(Prepared::Browser {
@@ -865,7 +1060,7 @@ impl super::App {
             }
             // Side by side, as an unsaved drawing with the file's name: Save
             // cannot write an SD file back.
-            Ok(Prepared::Records(batch)) => {
+            Ok(Prepared::Records(batch) | Prepared::Calculation(batch)) => {
                 let name = super::import::name(&path);
                 let Some((doc, placed, total)) = super::import::side_by_side(batch.drawings) else {
                     self.status = format!("Could not open {name}: it has no structure");
@@ -874,6 +1069,12 @@ impl super::App {
                 };
                 self.open_target(None);
                 self.show_opened(doc, None);
+                if let Some(stored) = self.tab.doc.science.results.last()
+                    && (!calculation || has_calculated_results(&stored.result))
+                {
+                    let result = stored.result.clone();
+                    self.xtb_show_result(&result);
+                }
                 self.tab.untitled_name = Some(name);
                 self.tab.mark_saved(reshiki::document::Document::default());
                 // A record that no longer fits in one drawing is left out, and
@@ -882,13 +1083,26 @@ impl super::App {
                     self.status =
                         format!("Opened {placed} of {total} structures · The rest don't fit");
                 }
+                if calculation {
+                    self.status.clear();
+                }
                 for warning in batch.warnings {
-                    self.status.push_str(" · ");
+                    if !self.status.is_empty() {
+                        self.status.push_str(" · ");
+                    }
                     self.status.push_str(&warning);
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 if placed < total {
                     self.github.amber = Some(self.status.clone());
+                }
+            }
+            Ok(Prepared::Frames(file)) => {
+                // One sheet at a time: files opened together wait their turn.
+                if self.frames_import.is_some() || !self.frames_queue.is_empty() {
+                    self.frames_queue.push_back((path, *file));
+                } else {
+                    self.ask_frames_import(path, *file);
                 }
             }
             Ok(Prepared::Import {
@@ -921,9 +1135,13 @@ impl super::App {
                 #[cfg(target_arch = "wasm32")]
                 let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
+                    let result_status = opened_results_status(&path, &doc);
                     self.show_opened(*doc, Some(path));
                     if let Some(view) = view {
                         self.restore_view(view);
+                    }
+                    if let Some(status) = result_status {
+                        self.status = status;
                     }
                 }
                 return kept;
@@ -1064,6 +1282,14 @@ impl super::App {
             self.prompt = Some(super::prompt::Prompt::KeepFormat(format));
             return Task::none();
         }
+        // Results above 5 MB: asked once per document, before an .rsk save.
+        let native = save_as.map_or_else(
+            || self.tab.path.as_deref().and_then(kept_format).is_none(),
+            |format| format == reshiki::compatibility::NATIVE_EXTENSION,
+        );
+        if native && self.xtb_size_question(save_as.map_or(Message::Save, Message::SaveFormat)) {
+            return Task::none();
+        }
         self.save_drawing_to(
             save_as.is_some(),
             None,
@@ -1090,6 +1316,12 @@ impl super::App {
     }
 
     pub(super) fn save_drawing_named(&mut self, name: String) -> Task<Message> {
+        let then = Message::Xtb(super::xtb::Action::Palette(
+            super::xtb::palette::Action::SaveNamed(name.clone()),
+        ));
+        if self.xtb_size_question(then) {
+            return Task::none();
+        }
         self.save_drawing_to(
             true,
             Some(name),
@@ -1166,7 +1398,9 @@ impl super::App {
             self.error = false;
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
-        let save_snapshot = std::sync::Arc::clone(&snapshot);
+        let save_snapshot = self.tab.xtb.orbitals.save_snapshot((*snapshot).clone());
+        #[cfg(not(target_arch = "wasm32"))]
+        let export_snapshot = std::sync::Arc::clone(&snapshot);
         #[cfg(not(target_arch = "wasm32"))]
         let github_root = self.github.root.clone();
         let view = Some(reshiki::document::View {
@@ -1235,42 +1469,42 @@ impl super::App {
                         .as_ref()
                         .filter(|binding| binding.same_path(&path))
                         .map_or(path.clone(), |binding| binding.path.clone());
-                    let save_path = path.clone();
                     // A drawing kept in a GitHub repository is shared: each
                     // person's view stays out of its commits and versions.
-                    let view = view.filter(|_| {
-                        github_root.as_deref().is_none_or(|root| {
-                            reshiki::github::workcopy::locate(root, &path).is_none()
-                        })
+                    let github = github_root.as_deref().is_some_and(|root| {
+                        reshiki::github::workcopy::locate(root, &path).is_some()
                     });
+                    let view = view.filter(|_| !github);
                     // A ChemDraw or MOL file is written by the chemistry engine.
-                    let exported = match kept_format(&path) {
-                        Some(format) => Some(
-                            reshiki::formats::write_with_engine(
-                                (*save_snapshot).clone(),
+                    let (exported, export_history) = match kept_format(&path) {
+                        Some(format) => {
+                            // History opens native drawings, including for working copies saved in other formats.
+                            let history = github.then(|| std::sync::Arc::clone(&export_snapshot));
+                            let bytes = reshiki::formats::write_with_engine(
+                                std::sync::Arc::unwrap_or_clone(export_snapshot),
                                 format,
                                 &engine,
                             )
-                            .await?,
-                        ),
-                        None => None,
+                            .await?;
+                            (Some(bytes), history)
+                        }
+                        None => (None, None),
                     };
-                    reshiki::task::spawn_blocking(move || {
+                    let saved = reshiki::task::spawn_blocking(move || {
                         let bytes = match exported {
                             Some(bytes) => bytes,
                             None => save_snapshot.file_json_with_view(view)?,
                         };
                         #[cfg(any(windows, target_os = "linux"))]
                         let _target_owner = if office.as_ref().is_some_and(|binding| {
-                            binding.lease.is_some() && binding.same_path(&save_path)
+                            binding.lease.is_some() && binding.same_path(&path)
                         }) {
                             None // The GUI owns this lease's fence, including this clone.
                         } else {
-                            Some(crate::desktop::write_target(&save_path)?)
+                            Some(crate::desktop::write_target(&path)?)
                         };
-                        let office_host = if let Some(binding) = office
-                            .as_ref()
-                            .filter(|binding| binding.same_path(&save_path))
+                        let office_host = if let Some(binding) =
+                            office.as_ref().filter(|binding| binding.same_path(&path))
                         {
                             if !binding.writable() {
                                 return Err(OFFICE_SESSION_ENDED.to_owned());
@@ -1280,18 +1514,22 @@ impl super::App {
                             None
                         };
                         if save_backend(office_host) == SaveBackend::Addin {
-                            reshiki::office_addin::save(&save_path, &bytes)?;
+                            reshiki::office_addin::save(&path, &bytes)?;
                         } else {
                             #[cfg(windows)]
-                            super::windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
+                            super::windows_libreoffice_save::save(&path, &bytes, office_host)?;
                             #[cfg(not(windows))]
-                            write(&save_path, &bytes)?;
+                            write(&path, &bytes)?;
                         }
-                        Ok::<_, String>(())
+                        let history = github.then(|| match export_history {
+                            Some(doc) => doc.file_json(),
+                            None => Ok(bytes),
+                        });
+                        Ok(Saved { path, history })
                     })
                     .await
                     .map_err(|error| error.to_string())??;
-                    Ok(Some(path))
+                    Ok(Some(saved))
                 }
             },
             move |result| {
@@ -1386,6 +1624,55 @@ mod performance;
 /// A browser download can still be blocked or cancelled after this handoff.
 fn download_status(filename: &str) -> String {
     format!("Downloaded {filename}")
+}
+
+/// A native open names the file, its saved results, and anything outdated.
+fn opened_results_status(
+    path: &std::path::Path,
+    doc: &reshiki::document::Document,
+) -> Option<String> {
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
+    let results = doc.science.results.len();
+    let outdated_models = doc
+        .models
+        .iter()
+        .filter(|model| model.is_stale(doc))
+        .count();
+    if results == 0 && outdated_models == 0 {
+        return None;
+    }
+    let outdated_results = doc
+        .science
+        .results
+        .iter()
+        .filter(|stored| {
+            doc.science
+                .attachment(stored.attachment)
+                .is_some_and(|link| link.freshness(doc) == reshiki::science::Freshness::Stale)
+        })
+        .count();
+    let name = path
+        .file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy();
+    let mut parts = vec![format!("Opened {name}")];
+    if results > 0 {
+        let mut text = format!("{results} calculation result{}", plural(results));
+        if outdated_results > 0 {
+            text.push_str(&format!(" ({outdated_results} outdated)"));
+        }
+        parts.push(text);
+    }
+    if outdated_models > 0 {
+        parts.push(format!(
+            "{outdated_models} outdated 3D model{}",
+            plural(outdated_models)
+        ));
+    }
+    if outdated_results + outdated_models > 0 {
+        parts.push("the drawing changed since".into());
+    }
+    Some(parts.join(" · "))
 }
 
 pub(super) fn export_status(path: &std::path::Path, details: &[String], browser: bool) -> String {

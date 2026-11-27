@@ -34,6 +34,7 @@ mod input;
 pub mod layered;
 mod markers;
 mod models3d;
+pub(crate) use models3d::ModelImage;
 mod movement;
 pub(crate) mod nmr;
 pub(crate) mod optimization;
@@ -82,6 +83,8 @@ pub use hit::{bond_text_at, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub(crate) use paper::HINT_STRIP_HEIGHT_PX;
+pub(crate) use paper::{BondChangeKind, BondChangeMark, draw_bond_changes};
+pub(crate) use previews::BondChangeThumbnail;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 pub use previews::DrawingPreview;
 pub use previews::{
@@ -189,6 +192,7 @@ pub enum Edit {
     /// as the live preview uses them; a chemical symbol's attachment is separate.
     Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
+    MoLevelClick(u64, u8, usize),
     /// Move a connected path handle, optionally breaking its node's tangency.
     PathPoint {
         id: u64,
@@ -507,11 +511,16 @@ struct HandleClick {
     position: Point,
 }
 impl State {
-    /// Every drag ends here, so a Ctrl/Cmd drag copy never outlives its drag.
+    /// Release the data retained for the active drag.
     fn end_gesture(&mut self) -> Option<Gesture> {
-        self.scene.get_mut().release_copy();
+        let scene = self.scene.get_mut();
+        scene.release_copy();
+        let gesture = self.gesture.take();
+        if matches!(gesture, Some(Gesture::Move { .. })) {
+            scene.release_move();
+        }
         self.bond_text_hover = None;
-        self.gesture.take()
+        gesture
     }
 }
 #[derive(Debug)]
@@ -755,6 +764,11 @@ pub struct MoleculeCanvas<'a> {
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
+    /// On-screen xTB energy and partial charges.
+    pub(crate) result_label: Option<ResultLabel>,
+    pub(crate) bond_changes: Vec<BondChangeMark>,
+    /// Linked atoms of outdated models, for editing aids absent from exports.
+    pub(crate) outdated_models: Vec<&'a [u64]>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -819,6 +833,9 @@ impl<'a> MoleculeCanvas<'a> {
             keyboard_marker: false,
             morph: None,
             model_generation: None,
+            result_label: None,
+            bond_changes: vec![],
+            outdated_models: vec![],
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,
@@ -855,12 +872,23 @@ impl<'a> MoleculeCanvas<'a> {
     }
 }
 
+/// A calculation's value drawn under its molecule; session-only, like NMR
+/// labels, and absent from exported scenes.
+pub(crate) struct ResultLabel {
+    pub atoms: Vec<u64>,
+    pub text: String,
+    /// Per-atom values, such as partial charges, beside their atoms.
+    pub atom_labels: Vec<(u64, String)>,
+}
+
 /// An editing aid for a current, abortable 3D-generation job. It never changes
 /// the drawing and is absent from previews and exported scenes.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ModelGeneration<'a> {
     pub atoms: &'a [u64],
     pub started: iced::time::Instant,
+    /// What the badge says is running: "Generating 3D" or "Calculating xTB".
+    pub label: &'static str,
 }
 
 impl ModelGeneration<'_> {

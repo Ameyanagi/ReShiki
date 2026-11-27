@@ -22,26 +22,31 @@ has every help text as the program prints it.
 
 ## Commands
 
-| Command                     | What it does                                                      |
-| --------------------------- | ----------------------------------------------------------------- |
-| [convert](#convert)         | Convert a structure or drawing to another file format             |
-| [render](#render)           | Render a preview image of a structure or drawing                  |
-| [compose](#compose)         | Lay out a Proposal (JSON) and write it as a file                  |
-| [analyze](#analyze)         | Print molecular properties as one JSON line                       |
-| [predict-nmr](#predict-nmr) | Print predicted NMR shifts as one JSON line                       |
-| [name](#name)               | Print the systematic name of a structure                          |
-| [pieces](#pieces)           | Check or render equipment piece files                             |
-| [info](#info)               | Print versions, limits and formats as one JSON line               |
-| [tools](#tools)             | Print the agent tool catalog as one JSON line                     |
-| [schema](#schema)           | Print the Proposal JSON Schema                                    |
-| [skill](#skill)             | Write an Agent Skill folder that teaches AI agents to use ReShiki |
-| [help](#help)               | Show the help, or one command's help, as text or JSON             |
+| Command                       | What it does                                                      |
+| ----------------------------- | ----------------------------------------------------------------- |
+| [convert](#convert)           | Convert a structure or drawing to another file format             |
+| [render](#render)             | Render a preview image of a structure or drawing                  |
+| [compose](#compose)           | Lay out a Proposal (JSON) and write it as a file                  |
+| [analyze](#analyze)           | Print molecular properties as one JSON line                       |
+| [predict-nmr](#predict-nmr)   | Print predicted NMR shifts as one JSON line                       |
+| [calculate](#calculate)       | Print a compact xTB calculation summary as one JSON line          |
+| [read-output](#read-output)   | Print quantum-chemistry job summaries as one JSON line            |
+| [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
+| [name](#name)                 | Print the systematic name of a structure                          |
+| [calc](#calc)                 | Print an xTB calculation as one JSON line                         |
+| [ts](#ts)                     | Search for a transition state with GFN2-xTB                       |
+| [pieces](#pieces)             | Check or render equipment piece files                             |
+| [info](#info)                 | Print versions, limits and formats as one JSON line               |
+| [tools](#tools)               | Print the agent tool catalog as one JSON line                     |
+| [schema](#schema)             | Print the Proposal JSON Schema                                    |
+| [skill](#skill)               | Write an Agent Skill folder that teaches AI agents to use ReShiki |
+| [help](#help)                 | Show the help, or one command's help, as text or JSON             |
 
 ## Rules for every command
 
 - Each run takes one command. A command accepts only its own options; any
   other option is a usage error, such as `render does not take --pages`.
-- Each option is allowed once. A second `--to` gives `--to given more than once`.
+- `calc --scf-retry`, `ts --form` and `ts --break` can repeat. Other options are allowed once each.
 - An option that takes a value uses the next argument as the value, even one
   that starts with `-`.
 - `--` ends the options. Every argument after it is the input, so a file
@@ -400,7 +405,7 @@ to 9 decimal places to remove floating-point noise. This is
   },
   "versions": {
     "app": "0.17.1",
-    "document": 41,
+    "document": 42,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -466,7 +471,7 @@ lines with the long text fields cut:
   },
   "versions": {
     "app": "0.17.1",
-    "document": 41,
+    "document": 42,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -493,6 +498,117 @@ the nucleus fail with `error[failed]`; a site without reference data is a row
 with `null` values. The result has the same fields as the MCP `predict_nmr`
 tool's [result](agent-api.md#results), plus `experimental` and `api`. When you
 publish predicted values, cite `credit` with them.
+
+## calculate
+
+```text
+reshiki --cli calculate [--task energy|optimize|frequencies|opt+freq]
+    [--method gfn2|gxtb|gfnff] [--charge N] [--uhf N] [--solvent NAME]
+    [--conventions axtb|xtb-6.8] [--etemp K] [--accuracy X] [--max-iter N]
+    [--threads N] [--convergence normal|tight] [--fix N,N,...] FILE.xyz
+```
+
+Calculates on the first XYZ frame, with coordinates in ångströms.
+
+| Option                | Commands  | Meaning                                             |
+| --------------------- | --------- | --------------------------------------------------- |
+| `--task TASK`         | calculate | Energy (default), optimize, frequencies or opt+freq |
+| `--method METHOD`     | calculate | gfn2 (default), gxtb or gfnff                       |
+| `--charge N`          | calculate | Molecular charge (default 0)                        |
+| `--uhf N`             | calculate | Unpaired electrons (default 0)                      |
+| `--solvent NAME`      | calculate | Named ALPB solvent (default none)                   |
+| `--conventions MODE`  | calculate | axtb (default) or xtb-6.8                           |
+| `--etemp K`           | calculate | Electronic temperature in kelvin                    |
+| `--accuracy X`        | calculate | Positive SCF accuracy multiplier                    |
+| `--max-iter N`        | calculate | Positive SCF iteration limit                        |
+| `--threads N`         | calculate | 1 to 64 threads (default available CPUs, up to 8)   |
+| `--convergence LEVEL` | calculate | Optimization convergence, normal (default) or tight |
+| `--fix N,N,...`       | calculate | 1-based atom numbers held fixed during optimization |
+
+The command prints the MCP `calculate` result as one labelled JSON line. The
+`value` contains the energy, available electronic properties and, for the
+requested tasks, the optimized XYZ geometry or frequencies with
+thermochemistry. The result includes any warnings.
+
+The input limit is `max_text_bytes` (16 MiB by default), with at most 500
+atoms or 200 for a task that computes frequencies. The calculation deadline
+is 30 minutes. This command requires a build with xTB. A build without it
+writes `reshiki: xTB is not included in this build` to stderr and exits 1.
+
+## read-output
+
+```text
+reshiki --cli read-output [--job N] FILE
+```
+
+Reads a quantum-chemistry output or geometry file and prints the MCP
+`read_output` result as one labelled JSON line. `value.jobs` summarizes the
+jobs in the file, and `value.job` contains available calculated values and their
+XYZ geometry. A job without calculated results uses its last retained geometry.
+
+| Option    | Commands    | Meaning                                       |
+| --------- | ----------- | --------------------------------------------- |
+| `--job N` | read-output | Zero-based job index (default chosen by file) |
+
+The input limit is `max_text_bytes` (16 MiB by default), the same limit as the
+MCP tool's `path` argument.
+
+## export-input
+
+```text
+reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+    [--job JOB] [--template N|--method M --basis B]
+    [--charge C] [--multiplicity M] [--cores N] [--memory-gb G] [--title T] [--extra TEXT]
+    [--reactant R.xyz] [--product P.xyz] [--hessian H.hess] [--out PATH]
+```
+
+`reshiki --cli help export-input` prints the [full help](agent-reference.md#reshiki---cli-export-input).
+
+The command shares its XYZ parser and input writer with the MCP `export_input`
+tool. The command also supports XYZ output and transition-state jobs.
+`--title` defaults to the input file's stem.
+
+| Option              | Commands     | Meaning                                                                                              |
+| ------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| `--program PROGRAM` | export-input | gaussian, orca, gamess or xyz                                                                        |
+| `--job JOB`         | export-input | single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts                   |
+| `--template N`      | export-input | Built-in template 1 to 3                                                                             |
+| `--method M`        | export-input | Method, with `--basis`                                                                               |
+| `--basis B`         | export-input | Basis, which can be empty for ORCA composites                                                        |
+| `--charge C`        | export-input | Total charge (0)                                                                                     |
+| `--multiplicity M`  | export-input | 2S + 1 (1)                                                                                           |
+| `--cores N`         | export-input | Cores (8)                                                                                            |
+| `--memory-gb G`     | export-input | Memory in GB (16)                                                                                    |
+| `--title T`         | export-input | Title                                                                                                |
+| `--extra TEXT`      | export-input | More keywords                                                                                        |
+| `--reactant R.xyz`  | export-input | First reactant XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                           |
+| `--product P.xyz`   | export-input | First product XYZ frame. Required for Gaussian qst2/qst3 and ORCA neb-ts.                            |
+| `--hessian H.hess`  | export-input | ORCA Cartesian Hessian for ORCA ts or irc.                                                           |
+| `--out PATH`        | export-input | Replaces the main file and writes new companions beside it. Required for ORCA neb-ts or `--hessian`. |
+
+Endpoint flags are only for Gaussian `qst2` and `qst3` and ORCA `neb-ts`.
+All XYZ files are read in ångströms and must list the same elements in the
+same order. Corresponding atoms must have the same index in every structure.
+Gaussian QST2 writes the endpoints. QST3 adds `INPUT.xyz` as the TS guess.
+ORCA NEB-TS puts the reactant inline and writes product and TS guess XYZ
+companions.
+
+For ORCA `ts` or `irc`, `--hessian` reads the `$hessian` and `$atoms` blocks
+and writes a Hessian companion for `INPUT.xyz`. The matrix dimension must be
+three times the number of input atoms. All entries must be finite, and
+mirrored entries `a` and `b` may differ by at most
+`1e-6 + 1e-6 × max(|a|, |b|)`. The atom count and element order must match
+`INPUT.xyz`, and each coordinate must agree within `1e-3` Å in the original
+coordinate frame. For example, use `ts.xyz` and `ts.hess` from
+`reshiki --cli ts --out-dir DIR`.
+
+ORCA companion filenames replace characters outside ASCII letters, digits,
+`.`, `_` and `-` in the output stem with underscores.
+
+```sh
+reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz
+reshiki --cli export-input --program orca --job ts --hessian results/ts.hess --out opt-ts.inp results/ts.xyz
+```
 
 ## name
 
@@ -544,7 +660,7 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
   },
   "versions": {
     "app": "0.17.1",
-    "document": 41,
+    "document": 42,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -606,9 +722,12 @@ limits and formats under `value`. `cli`, beside `value`, lists the formats the
 command line reads and writes. `grants` and `files` describe the file tools of
 the MCP server; the command line uses neither.
 
-`reshiki --version` (or `reshiki --cli --version`) prints only the
-application version, such as `reshiki 0.17.1`, and exits without opening a
-window.
+`reshiki --version` (or `reshiki --cli --version`) prints the application
+version, such as `reshiki 0.17.1`, followed by an xTB status line, and exits
+without opening a window. The second line is `xTB: not included in this build`
+or `xTB: included (axtb VERSION, LICENSE, source URL)`, with the engine version,
+license and pinned fork source URL. See [xTB licensing and packaging](xtb-licensing.md)
+for the builds that include it.
 
 <details>
 <summary>Output of <code>reshiki --cli info</code>, shown on several lines</summary>
@@ -721,7 +840,7 @@ window.
   },
   "versions": {
     "app": "0.17.1",
-    "document": 41,
+    "document": 42,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -814,6 +933,174 @@ several lines:
 }
 ```
 
+## calc
+
+```text
+reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
+```
+
+Runs one GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 calculation through the
+[isolated worker](xtb-worker.md) on the first frame of an XYZ file (1 to 500
+atoms, Ångström). It has no MCP tool. `--task` is `energy` (default),
+`gradient`, `hessian` (with vibrations and thermochemistry, at most 200 atoms)
+or `orbitals` (every coefficient row and the basis); `--gradient` and `--wbo`
+(bond orders) add to any task; `--energy` is accepted for compatibility.
+`--scf-retry K[:N]` repeats to build an SCF retry ladder. g-xTB in solvent
+needs `--solvent-correction gfn2`. GFN-FF takes no solvent, SCF settings,
+orbitals or bond orders. Unsupported combinations exit 1 with the capability
+message. The options and output are described in
+[the worker's command line](xtb-worker.md#command-line).
+
+It prints the worker's `Computed` JSON plus `engine`, with binary arrays as
+`{"shape":[rows,columns],"values":[...]}`, and no experimental envelope. A gap
+below 0.1 eV also writes a warning to stderr and leaves the exit status
+unchanged. Use [`calculate`](#calculate) for a compact summary.
+
+In a build without xTB, it writes `reshiki: xTB is not included in this build`
+to stderr and exits 1.
+
+## ts
+
+```text
+reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--method gfn2|gxtb] [--refine gxtb (--ts TS.xyz | --from DIR)]
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]
+```
+
+Searches for a gas-phase transition state with GFN2-xTB (default) or g-xTB,
+using axtb conventions. The selected method computes the entire path, endpoint
+relaxation, saddle, Hessian, frequencies and IRC. g-xTB is closer to DFT energies;
+slower for large molecules. The command requires the `xtb` feature.
+The `calc`, `calculate` and `ts` commands are absent from discovery help and
+generated agent references in builds without xTB. Explicit invocations still
+explain that xTB is unavailable. [xTB worker reference](xtb-worker.md)
+
+Each endpoint uses the first plain XYZ frame with 2 to 120 atoms and
+coordinates in ångströms. Two files must have the same element sequence.
+Their atom order defines the map. `--remap-hydrogens` requires two XYZ files.
+With one file, supply at least one bond change in the reactant-to-product
+direction to construct the missing endpoint.
+
+With one XYZ, the search first pulls distant forming pairs toward each other
+(the `--break` pairs when starting from a product), then releases the restraints.
+It uses the relaxed conformer as the barrier reference on that side if the original
+bonds survive and the distant pairs move closer. `--keep-endpoints` skips this step.
+An accepted fold appears on stderr and in the JSON `reactive_start` object, with
+1-based `pairs`, parallel `before_angstrom` and `after_angstrom` arrays, and the
+physical energy change `energy_change_kcal` in kcal/mol. Otherwise the field is `null`.
+
+| Option              | Command | Meaning                                                                                                              |
+| ------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `--method METHOD`   | ts      | `gfn2` (default) or `gxtb` for the full search and verification.                                                     |
+| `--refine gxtb`     | ts      | Start P-RFO from a supplied TS with a g-xTB Hessian; relax endpoints and rerun frequencies and IRC with g-xTB.       |
+| `--ts TS.xyz`       | ts      | TS geometry for `--refine gxtb`, with the usual endpoint files or one endpoint and bond changes.                     |
+| `--from DIR`        | ts      | Read `reactant.xyz`, `product.xyz`, `ts.xyz` and a verified GFN2-xTB `report.json` from a previous output directory. |
+| `--reactant R.xyz`  | ts      | Read the reactant XYZ.                                                                                               |
+| `--product P.xyz`   | ts      | Read the product XYZ.                                                                                                |
+| `--form I-J`        | ts      | Form a bond using 1-based atom numbers. Repeatable.                                                                  |
+| `--break I-J`       | ts      | Break a bond using 1-based atom numbers. Repeatable.                                                                 |
+| `--charge N`        | ts      | Molecular charge. Defaults to 0.                                                                                     |
+| `--uhf N`           | ts      | Unpaired electron count. The worker infers it from the valence electron count when omitted.                          |
+| `--images N`        | ts      | Use 5 to 24 NEB images, including the endpoints. Defaults to 15.                                                     |
+| `--workers N`       | ts      | Use 1 to 8 single-threaded xTB sessions. Defaults to the smallest of 4, available CPUs and interior images.          |
+| `--remap-hydrogens` | ts      | Map heavy atoms by order and assign hydrogens by least motion. Print changed nearest heavy atoms on stderr.          |
+| `--keep-endpoints`  | ts      | Skip GFN2 endpoint relaxation. A missing endpoint is still constructed. Incompatible with g-xTB and refinement.      |
+| `--out-dir DIR`     | ts      | Write `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz`, `ts.hess` and `report.json` to new files.      |
+| `--json FILE`       | ts      | Write the machine-readable report to a new file.                                                                     |
+
+For refinement, choose exactly one of `--ts` and `--from`, and omit `--method`,
+`--keep-endpoints` and `--remap-hydrogens`. With `--from`, omit endpoint and bond
+options. A verified source report supplies charge and unpaired electrons;
+explicit `--charge` or `--uhf` must agree with it. Source atom order and the
+exported coordinates must match the report. A present report with missing,
+failed or mixed-method verification is rejected; use explicit `--ts` and
+endpoint inputs to treat its geometry as a new seed.
+
+Older output directories have no `report.json`. For those directories only,
+`--from` accepts their three XYZ files as geometry seeds, says so on stderr,
+and uses explicit `--charge`/`--uhf` or their defaults. It assumes no previous
+method, checks or barrier. The JSON `source_seed` records this distinction.
+Source files are never replaced. Use a new output directory for the refinement.
+
+Refinement always relaxes both endpoints with g-xTB and requires their
+connectivity to preserve the supplied endpoint identities. Full g-xTB searches
+make the same check before running NEB. Refinement uses a new g-xTB Hessian and
+P-RFO saddle, then independently checks its spectrum and traces its IRC with
+g-xTB. `path.xyz` contains a g-xTB R/TS/P profile for refinement; no NEB is run.
+Single-point g-xTB energies at a GFN2 saddle never count as a g-xTB barrier.
+
+The table on stdout gives energies in hartree, barriers in kcal/mol and
+frequencies in cm⁻¹. The worker independently checks the frequencies at the
+reported TS with the same atomic masses and cutoff of −50 cm⁻¹. Exit 0
+requires a converged saddle refinement, exactly one imaginary mode in each
+check, and IRC branches whose relaxed ends match the two endpoints. A failed
+worker check or a count disagreement appears in the table and JSON report
+and exits 1. Progress appears on stderr. Set `RESHIKI_TS_TRACE` to `1` or
+lowercase `true` to enable detailed tracing. All other values disable it.
+The NEB trace gives the peak energy across all images and the active climbing
+image's energy (`pending` before climbing starts). Each P-RFO trial logs the
+measured-to-predicted energy and squared-force ratios alongside the decision.
+The trace also gives projected gradients, followed curvatures, mode overlaps,
+trust radii and stopping reasons.
+
+An unverified g-xTB candidate prints `Barrier unavailable`; both numeric
+`barriers` fields are `null` in JSON. Its structures and absolute energies remain
+available with `verification=unverified-candidate` in XYZ comments. A failed refinement
+keeps the verified GFN2 result, its checks and barrier in `source_result` and
+shows the retained result on stdout. Each result keeps its own method labels.
+
+Refinement allows 10 kcal/mol of headroom by default. Library callers can set
+`TsOptions::saddle_headroom_kcal`. The reference is the higher of the climbing
+image and the midpoint accepted for a restart. A midpoint above the initial
+ceiling is eligible when both images on its link have lower energies.
+The restart shares the original accepted-step limit. Rejected trial checks,
+force-only steps, stale-model refreshes and restart Hessians share a budget of
+eight extra Hessian builds. The engine can also verify one final provisional
+candidate. The JSON report records the
+stopping reason in `saddle.reason` and optional SCF failures in
+`saddle.diagnostics`.
+
+`path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
+from the reactant side through the TS to the product side. The two relaxed
+ends are included when they fit within the 1,000-frame import limit. When refinement
+is unconverged or the engine imaginary count differs from one, IRC is skipped.
+If IRC is skipped or fails, `irc.xyz` contains the TS frame. `ts.hess` can be
+read with ORCA's `InHess Read`. It uses the worker's Cartesian Hessian when
+available and the engine's Cartesian Hessian if the worker computation fails.
+The version 2 JSON report includes spectra, IRC branch labels and energies, convergence,
+work counts and the hydrogen mapping review. `irc_error` and `worker_check_error`
+record verification failures when present. For each of `irc.plus` and `irc.minus`,
+`completed` records whether the downhill trace converged near a minimum
+after leaving the saddle region. If endpoint relaxation fails, each finished
+trace retains its diagnostics. Its `reached` field is null if relaxation failed,
+and an untraced branch is null. The
+`stop_reason` gives `converged`, `length cap`, `step budget`, or `step size exhausted`
+if a downhill step could no longer be resolved. `steps` counts accepted steps,
+`path_length_sqrt_amu_bohr` sums their mass-weighted arcs, and `gradient_calls`
+counts all descent evaluations, including rejected trials. The run-wide
+`evaluations` also includes endpoint relaxation and the other search stages.
+The `methods` object names the method used for endpoint and TS energies,
+barriers, saddle, spectra, Hessian, IRC, path and work. Energy and barrier
+objects and each IRC branch also carry their method and units. `structures`
+stores atom numbers and the R/TS/P coordinates in bohr for provenance checks;
+`verified` reports the combined saddle, spectrum and connectivity checks.
+Output files must be new. The JSON destination must differ from the output
+directory and its six structure/Hessian files. `--json DIR/report.json` may name
+the automatic report itself; it is written once.
+
+```sh
+reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+reshiki --cli ts --method gxtb --reactant hcn.xyz --product hnc.xyz --out-dir gxtb
+reshiki --cli ts --refine gxtb --from results --out-dir refined
+reshiki --cli ts --refine gxtb --ts TS.xyz --reactant hcn.xyz --product hnc.xyz --out-dir refined
+```
+
 ## help
 
 ```text
@@ -835,10 +1122,11 @@ Prints the overview, or one command's help. `--help` and `-h` work in place of
 
 ## Output and messages
 
-Standard output carries only the result: the file, one JSON line, or one
-receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
+Standard output carries only the result: a file, a text report, one JSON line,
+or one receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
 empty. Every JSON line has `"experimental": true` and an `api` object with
-`operation_api` and `stability`, except the raw schema from `schema proposal`.
+`operation_api` and `stability`, except the raw schema from `schema proposal`
+and the worker calculation result from `calc`.
 
 Messages go to standard error, one per line:
 

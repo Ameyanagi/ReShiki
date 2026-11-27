@@ -1,0 +1,1265 @@
+use super::*;
+use iced::Point;
+
+#[test]
+fn reopened_and_stale_profiles_explain_why_the_model_does_not_preview() {
+    assert_eq!(profile_note(false, false), Some(RELOAD_NOTE));
+    assert_eq!(profile_note(false, true), Some(RELOAD_NOTE));
+    assert!(profile_note(true, true).unwrap().contains("saved energy"));
+    assert_eq!(profile_note(true, false), None);
+}
+
+#[test]
+fn live_path_chart_uses_the_saved_chart_axes_without_point_labels() {
+    let chart = PathChart::live(&[-5., -4.97, -5.01], EnergyUnit::KjPerMol);
+    let next = PathChart::live(&[-5., -4.95, -5.02], EnergyUnit::KjPerMol);
+    assert_eq!(chart.axis_title(), next.axis_title());
+    assert_eq!(next.axis_title(), "ΔE (kJ/mol)");
+    assert_eq!(next.deltas[0], 0.);
+    assert!(next.deltas[1] > chart.deltas[1]);
+    assert!(next.deltas[2] < chart.deltas[2]);
+    assert!(!next.interactive);
+    assert_eq!(next.endpoint_marker(0), None);
+    assert_eq!(next.endpoint_marker(1), None);
+    assert_eq!(next.refined_ts_marker(), None);
+}
+
+#[test]
+fn profile_selection_keeps_search_details_out_of_the_readout() {
+    let energies = [0., 1., 3., 2., -1.];
+    assert_eq!(climbing_image(&energies, None), 2);
+    assert_eq!(climbing_image(&energies, Some(1)), 1);
+    assert_eq!(climbing_image(&energies, Some(99)), 2);
+    assert_eq!(climbing_image(&energies, Some(usize::MAX)), 2);
+    assert_eq!(climbing_image(&[0., 3., 3., 0.], None), 1);
+    assert_eq!(climbing_image(&[], None), 0);
+    assert_eq!(
+        selection_label(26.5, EnergyUnit::KcalPerMol),
+        "ΔE 26.5 kcal/mol"
+    );
+    assert_eq!(
+        selection_label(-8.2, EnergyUnit::KcalPerMol),
+        "ΔE −8.2 kcal/mol"
+    );
+}
+
+#[test]
+fn chart_clicks_follow_the_nearest_image_even_for_reopened_profiles() {
+    let chart = PathChart {
+        deltas: vec![0., 2., 5., 1., -1.],
+        refined_delta: Some(4.),
+        selected: Some(2),
+        climbing: 2,
+        interactive: true,
+        stale: false,
+        live: false,
+        unit: EnergyUnit::KcalPerMol,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(420., 190.));
+    assert_eq!(chart.nearest(chart.x(0, bounds), bounds), Some(0));
+    assert_eq!(chart.nearest(chart.x(3, bounds) + 1., bounds), Some(3));
+    assert_eq!(chart.nearest(bounds.width, bounds), Some(4));
+}
+
+#[test]
+fn refined_ts_label_uses_saddle_energy_while_image_keeps_neb_energy() {
+    let reactant = -5.;
+    let energy = |delta| reactant + delta / KCAL_PER_HARTREE;
+    let (deltas, refined_delta) = relative_energies(
+        &[reactant, energy(30.2), energy(-8.2)],
+        Some(energy(26.5)),
+        None,
+    );
+    let chart = PathChart {
+        deltas,
+        refined_delta,
+        selected: Some(1),
+        climbing: 1,
+        interactive: true,
+        stale: false,
+        live: false,
+        unit: EnergyUnit::KcalPerMol,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    assert_eq!(chart.refined_ts_marker().unwrap().1, "TS‡ 26.5");
+    assert!(selection_label(chart.deltas[1], chart.unit).ends_with("ΔE 30.2 kcal/mol"));
+    assert_eq!(chart.energy_bounds(), (chart.deltas[2], chart.deltas[1]));
+
+    let higher_saddle = PathChart {
+        refined_delta: Some(34.1),
+        ..chart
+    };
+    assert_eq!(
+        higher_saddle.energy_bounds(),
+        (higher_saddle.deltas[2], 34.1)
+    );
+    let lower_saddle = PathChart {
+        refined_delta: Some(-12.3),
+        ..higher_saddle
+    };
+    assert_eq!(
+        lower_saddle.energy_bounds(),
+        (-12.3, lower_saddle.deltas[1])
+    );
+    let no_saddle = PathChart {
+        refined_delta: None,
+        ..lower_saddle
+    };
+    assert_eq!(no_saddle.refined_ts_marker(), None);
+}
+
+#[test]
+fn irc_markers_show_the_actual_reached_ends_and_refined_saddle() {
+    let chart = PathChart {
+        deltas: vec![0., 12., 26.5, 4., -7.2],
+        refined_delta: Some(26.5),
+        coordinates: vec![-8., -0.5, 0., 1.2, 9.],
+        neb_overlay: vec![(-8., 0.), (0., 30.2), (9., -8.44)],
+        endpoint_labels: ["R", "P"],
+        irc: true,
+        live: false,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    let profile = chart.profile();
+    let ts = profile
+        .markers
+        .iter()
+        .find(|marker| marker.transition)
+        .unwrap();
+    assert_eq!((ts.sample.x, ts.sample.energy), (0., 26.5));
+    assert_eq!(chart.energy_bounds(), (-8.44, 30.2));
+    assert_eq!(chart.endpoint_marker(0).as_deref(), Some("R 0.0"));
+    assert_eq!(chart.endpoint_marker(1).as_deref(), Some("P −7.2"));
+    assert_eq!(chart.deltas[0], 0.);
+    assert_eq!(chart.deltas[4], -7.2);
+    assert!(chart.accessible_name().contains("reactant side negative"));
+    assert!(profile.x_title.contains("amu½·bohr"));
+    let reached = PathChart {
+        endpoint_labels: ["R", "Other endpoint"],
+        ..chart
+    };
+    assert_eq!(
+        reached.endpoint_marker(1).as_deref(),
+        Some("Other endpoint −7.2")
+    );
+    assert!(!reached.accessible_name().contains("P −8.4"));
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn irc_chart_ts_label_matches_the_card_barrier_and_relaxed_r_is_off_zero() {
+    let (mut app, _) = super::super::tests::finished_irc();
+    for unit in EnergyUnit::ALL {
+        app.appearance.energy_unit = unit;
+        let shown = app.xtb_shown().unwrap();
+        let result = &shown.stored.result;
+        let card = presentation(result, app.xtb_ts_refinement_session(result));
+        let chart = app.xtb_ts_path_chart(&shown, card.refined_kcal);
+        let expected = (result.energy_hartree.unwrap() + 5.) * KCAL_PER_HARTREE;
+        assert_eq!(
+            card.barrier_line(unit),
+            Some(format!("ΔE‡ {}", unit.format(expected)))
+        );
+        assert_eq!(
+            chart.refined_ts_marker(),
+            Some((expected, format!("TS‡ {}", unit.number(expected))))
+        );
+
+        let profile = chart.profile();
+        let reactant = profile
+            .markers
+            .iter()
+            .find(|marker| marker.label == "R")
+            .unwrap();
+        let relaxed = (-5.003 + 5.) * KCAL_PER_HARTREE;
+        assert_eq!(reactant.sample.energy, relaxed);
+        assert_eq!(reactant.tooltip.as_deref(), Some("relaxed IRC end"));
+        let traced_end = reactant.connector_from.unwrap();
+        assert_eq!(traced_end.x, reactant.sample.x);
+        assert_eq!(traced_end.energy, profile.samples[0].energy);
+        assert_ne!(traced_end.energy, relaxed);
+        assert_eq!(profile.samples.len(), irc::saved(result).unwrap().steps());
+    }
+}
+
+#[test]
+fn irc_clicks_seek_the_nearest_frame_without_selecting_a_neb_image() {
+    let chart = PathChart {
+        deltas: vec![0., 10., -2.],
+        coordinates: vec![-1., 0., 1.],
+        irc: true,
+        interactive: true,
+        live: false,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(330., 146.));
+    let profile = chart.profile();
+    let cursor = mouse::Cursor::Available(profile.layout(bounds).point(profile.samples[1]));
+    let (message, _, status) = canvas::Program::update(
+        &chart,
+        &mut (),
+        &iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        bounds,
+        cursor,
+    )
+    .unwrap()
+    .into_inner();
+    assert!(matches!(
+        message,
+        Some(Message::Xtb(XtbAction::Ts(Action::IrcSeek(1))))
+    ));
+    assert_eq!(status, iced::event::Status::Captured);
+    assert_eq!(
+        canvas::Program::mouse_interaction(&chart, &(), bounds, cursor),
+        mouse::Interaction::Pointer
+    );
+}
+
+#[test]
+fn irc_curve_clicks_use_screen_distance_on_steep_sections_and_neb_keeps_x_picking() {
+    let chart = PathChart {
+        deltas: vec![0., 100., 0.],
+        coordinates: vec![0., 0.05, 1.],
+        irc: true,
+        ..PathChart::live(&[], EnergyUnit::KcalPerMol)
+    };
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(420., 210.));
+    let profile = chart.profile();
+    let layout = profile.layout(bounds);
+    let low = layout.point(profile.samples[0]);
+    let high = layout.point(profile.samples[1]);
+    let click = Point::new(high.x, low.y);
+    assert_eq!(profile.nearest_point(click, bounds), Some(0));
+    assert_eq!(chart.nearest(click.x, bounds), Some(1));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn changed_bonds_use_saved_endpoints_and_lengths_use_ts_coordinates() {
+    let frame = |positions_angstrom| Frame {
+        numbers: vec![6, 6, 8],
+        positions_angstrom,
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let reactant = frame(vec![[0., 0., 0.], [1.5, 0., 0.], [4., 0., 0.]]);
+    let product = frame(vec![[0., 0., 0.], [3., 0., 0.], [4.4, 0., 0.]]);
+    assert_eq!(
+        changed_bonds(&reactant, &product),
+        vec![("Forming", [1, 2]), ("Breaking", [0, 1])]
+    );
+    let ts = frame(vec![[0., 0., 0.], [2., 0., 0.], [4.1, 0., 0.]]);
+    assert_eq!(bond_label(&ts, [1, 2], &[]), "C2···O3");
+    assert_eq!(
+        bond_label(&ts, [1, 2], &[None, Some(12), Some(6)]),
+        "C12···O6"
+    );
+    assert!((bond_length(&ts, [1, 2]).unwrap() - 2.1).abs() < 1e-12);
+    assert_eq!(bond_length(&ts, [1, 99]), None);
+    assert_eq!(
+        bond_geometry_rows(&reactant, &ts, &product, &[]),
+        vec![
+            ["Forming C2···O3", "2.50", "2.10", "1.40"].map(str::to_owned),
+            ["Breaking C1···C2", "1.50", "2.00", "3.00"].map(str::to_owned),
+        ]
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod presentation_tests {
+    use super::*;
+    use crate::app::xtb::run;
+    use crate::app::xtb::ts::card::tests::{ViewHarness, ViewSnapshot};
+    use reshiki::document::Document;
+    use reshiki::qcdata::{Endpoints, Task, Trajectory, Vibrations};
+    use reshiki::science::{self, Launch};
+    use std::sync::Arc;
+
+    fn frame() -> Frame {
+        Frame {
+            numbers: vec![3, 17, 2],
+            positions_angstrom: vec![[0., 0., 0.], [0., 0., 2.], [4., 0., 0.]],
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            drawing_atoms: vec![],
+        }
+    }
+
+    fn result() -> CalcResult {
+        let frame = frame();
+        let energy = |delta| -5. + delta / KCAL_PER_HARTREE;
+        let mut result = run::example_computed(energy(26.5), 1.)
+            .to_calc_result(&frame, Task::Energy, &run::example_engine(), None)
+            .unwrap();
+        result.task = Task::TransitionState;
+        result.status = Status::Converged;
+        result.vibrations = Some(Vibrations {
+            frequencies_cm1: vec![-387.],
+            ir_intensities_km_mol: vec![],
+            modes: vec![],
+            reduced_masses_amu: vec![],
+            masses_amu: vec![],
+        });
+        result.trajectory = Some(Trajectory {
+            rmsd_to_best_angstrom: Vec::new(),
+            numbers: frame.numbers,
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            positions_angstrom: vec![],
+            energies_hartree: vec![energy(0.), energy(30.2), energy(-8.2)],
+            labels: vec![],
+            minimizer_energies_hartree: vec![],
+            cluster_sizes: vec![],
+        });
+        result
+    }
+
+    fn path_app(mut result: CalcResult) -> App {
+        let mut doc = Document::default();
+        let atoms: Vec<_> = ["Li", "Cl", "He"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, element)| {
+                doc.add_atom(
+                    element,
+                    reshiki::document::Point::new(index as f32 * 28., 0.),
+                )
+            })
+            .collect();
+        let frame = Arc::new(frame());
+        let launch = Launch {
+            frame: Arc::clone(&frame),
+            atoms: atoms.iter().copied().map(Some).collect(),
+            baseline: science::baseline(&doc, &atoms),
+        };
+        result.endpoints = Some(Endpoints {
+            reactant: frame.hash(),
+            product: frame.hash(),
+        });
+        science::attach(&mut doc, &launch, vec![], result).expect("valid saved TS fixture");
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = doc;
+        let result = Arc::clone(&app.tab.doc.science.results[0].result);
+        app.tab.xtb.palette.show(&result);
+        app
+    }
+
+    fn profile(snapshot: &ViewSnapshot) -> &reshiki::accessibility::Node {
+        snapshot
+            .semantics
+            .nodes
+            .iter()
+            .find(|node| node.id == "xtb-ts-path-profile")
+            .expect("the production Path view must expose its chart")
+    }
+
+    #[test]
+    fn path_output_uses_the_app_energy_unit_setting() {
+        let mut app = path_app(result());
+        let _ = app.update(send(Action::Image(1)));
+        for (unit, title, saddle, selected, product) in [
+            (EnergyUnit::KjPerMol, "kJ/mol", "110.9", "126.4", "−34.3"),
+            (EnergyUnit::Ev, "eV", "1.15", "1.31", "−0.36"),
+        ] {
+            app.appearance.energy_unit = unit;
+            let shown = app.xtb_shown().expect("saved Path result");
+            let saved = presentation(&shown.stored.result, shown.ts);
+            let chart = app.xtb_ts_path_chart(&shown, saved.refined_kcal);
+            assert_eq!(chart.axis_title(), format!("ΔE ({title})"));
+            assert_eq!(
+                chart.refined_ts_marker().unwrap().1,
+                format!("TS‡ {saddle}")
+            );
+            assert_eq!(chart.endpoint_marker(1), Some(format!("P {product}")));
+            assert!(
+                chart
+                    .accessible_name()
+                    .contains(&format!("Selected ΔE {selected} {title}"))
+            );
+            assert_eq!(
+                selection_label(chart.deltas[1], chart.unit),
+                format!("ΔE {selected} {title}")
+            );
+            let rows = shown.rows(Some(app.appearance.energy_unit));
+            let tsv = crate::app::xtb::results::tsv(&shown.method(), &rows);
+            assert!(tsv.contains(&format!("TS‡ ΔE\t{saddle} {title}")));
+            assert!(tsv.contains(&format!("P ΔE\t{product} {title}")));
+            assert!(tsv.contains("Total energy\t−4.957770 Eh"));
+            assert!(!tsv.contains("kcal/mol"));
+            assert!(
+                saved
+                    .status_line(unit)
+                    .ends_with(&format!("ΔE‡ {saddle} {title}"))
+            );
+        }
+    }
+
+    #[test]
+    fn method_labels_follow_saved_settings_in_status_log_and_copied_path_values() {
+        let mut result = gxtb_result();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut result.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        // Stale descriptive provenance cannot relabel the numerical method.
+        result.provenance.method = Some("GFN2-xTB · optimizer P-RFO".into());
+        let saved = presentation(&result, None);
+        assert_eq!(saved.method, "g-xTB");
+        assert_eq!(
+            saved.status_line(EnergyUnit::KcalPerMol),
+            "Transition state · g-xTB · ΔE‡ 26.5 kcal/mol"
+        );
+        assert!(
+            search_log(&result, None, EnergyUnit::default()).contains("Electronic method: g-xTB")
+        );
+        assert_eq!(
+            path_rows(&result, None, EnergyUnit::default(), None)[0],
+            ("Electronic method".into(), "g-xTB".into())
+        );
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert_eq!(
+            presentation(&result, None).status_line(EnergyUnit::KcalPerMol),
+            "g-xTB · No reliable transition state found."
+        );
+        result.settings = reshiki::qcdata::Settings::Imported { keywords: vec![] };
+        assert_eq!(method_name(&result), "g-xTB");
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
+    async fn linked_barriers_keep_each_methods_checks_and_the_source_on_failed_refine() {
+        let mut source = result();
+        source.energy_hartree = Some(-5. + 25.6 / KCAL_PER_HARTREE);
+        source.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-315.];
+        let source = Arc::new(source);
+        let ui = ViewHarness::new().await.at_width(330.);
+        let both = ui.inspect(crate::app::xtb::ts::card::linked_barriers(
+            [&source, &Arc::new(gxtb_result())],
+            EnergyUnit::KjPerMol,
+        ));
+        for expected in [
+            "GFN2-xTB Barrier ΔE‡",
+            "g-xTB Barrier ΔE‡",
+            "107.1",
+            "110.9",
+        ] {
+            assert!(both.texts.iter().any(|text| text == expected));
+        }
+        for frequency in ["315i", "387i"] {
+            assert!(
+                both.texts.iter().any(|line| line.contains(frequency)
+                    && line.contains("connects reactant and product"))
+            );
+        }
+        let mut refined = result();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut refined.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        refined.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        refined.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-120., -60.];
+        let refined = Arc::new(refined);
+        let view = ui.inspect(crate::app::xtb::ts::card::linked_barriers(
+            [&source, &refined],
+            EnergyUnit::KcalPerMol,
+        ));
+        assert!(view.texts.iter().any(|text| text == "GFN2-xTB Barrier ΔE‡"));
+        assert!(view.texts.iter().any(|text| text == "g-xTB Barrier ΔE‡"));
+        assert!(view.texts.iter().any(|text| text == "25.6"));
+        assert!(!view.texts.iter().any(|text| text == "26.5"));
+        assert_eq!(
+            view.texts
+                .iter()
+                .filter(|text| text.contains("connects reactant and product"))
+                .count(),
+            1
+        );
+        assert!(
+            view.texts
+                .iter()
+                .any(|text| text.contains("g-xTB refinement failed")
+                    && text.contains("two imaginary frequencies"))
+        );
+    }
+
+    #[test]
+    fn old_saved_path_keeps_optimized_reaction_energy_even_if_saddle_verification_failed() {
+        let mut result = result();
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert!((reaction_energy_kcal(&result).unwrap() + 8.2).abs() < 1e-10);
+        assert!(
+            path_rows(&result, None, EnergyUnit::KjPerMol, None)
+                .iter()
+                .all(|(label, _)| !label.contains("TS‡"))
+        );
+        result
+            .trajectory
+            .as_mut()
+            .unwrap()
+            .energies_hartree
+            .truncate(1);
+        assert_eq!(reaction_energy_kcal(&result), None);
+    }
+
+    fn result_with_gibbs() -> CalcResult {
+        use reshiki::qcdata::{RunSummary, Thermo, TransitionStateMapping, TransitionStateRun};
+
+        let mut result = result();
+        let correction = |gibbs_correction_hartree| Thermo {
+            temperature_k: 298.15,
+            pressure_pa: 101_325.,
+            zero_point_energy_hartree: 0.,
+            enthalpy_correction_hartree: gibbs_correction_hartree,
+            entropy_hartree_per_k: 0.,
+            gibbs_correction_hartree,
+            heat_capacity_hartree_per_k: None,
+            frequency_scale: 1.,
+            rotor_cutoff_cm1: 50.,
+            imaginary_cutoff_cm1: 20.,
+            symmetry_number: 1,
+            point_group: None,
+        };
+        result.thermo = Some(correction(0.03));
+        let frame = frame();
+        result.endpoints = Some(Endpoints {
+            reactant: frame.hash(),
+            product: frame.hash(),
+        });
+        let search = TransitionStateRun {
+            method: Default::default(),
+            refined_from: None,
+            irc: None,
+            arrow: None,
+            context: None,
+            free_energy: true,
+            endpoint_energies_hartree: Some([-5., -5. + -8.2 / KCAL_PER_HARTREE]),
+            endpoint_thermo: Some([Some(correction(0.01)), Some(correction(0.02))]),
+            reached_positions_angstrom: vec![],
+            saddle_converged: true,
+            imaginary: 1,
+            imaginary_cm1: Some(-387.),
+            climbing_image: 1,
+            forming_bonds: vec![],
+            breaking_bonds: vec![],
+            mapping: TransitionStateMapping {
+                formed: vec![],
+                broken: vec![],
+                hydrogen_moves: vec![],
+                automatic: true,
+            },
+            diagnostics: vec![],
+        };
+        result.run = Some(RunSummary {
+            seconds: 1.,
+            scf_iterations: vec![],
+            finished: None,
+            search: None,
+            transition_state: Some(Box::new(search)),
+        });
+        result.validate(&frame).unwrap();
+        result
+    }
+
+    /// A light saved g-xTB refinement keeps its own spectrum and observed IRC ends.
+    fn gxtb_result() -> CalcResult {
+        use reshiki::qcdata::{IrcEndpoint, IrcPath, IrcRelaxedEnd};
+        let mut result = result_with_gibbs();
+        let parent = result.transition_state_id().unwrap();
+        let reshiki::qcdata::Settings::Xtb(settings) = &mut result.settings else {
+            panic!("calculated fixture must have xTB settings");
+        };
+        settings.method = XtbMethod::GXtb;
+        let mut frame = frame();
+        frame.masses_amu = vec![7., 35., 4.];
+        result.frame = frame.hash();
+        result.endpoints = Some(Endpoints {
+            reactant: frame.hash(),
+            product: frame.hash(),
+        });
+        let mut trajectory = result.trajectory.take().unwrap();
+        trajectory.masses_amu = frame.masses_amu.clone();
+        trajectory.energies_hartree[1] = result.energy_hartree.unwrap();
+        let ends = [
+            trajectory.energies_hartree[0],
+            trajectory.energies_hartree[2],
+        ];
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.method = XtbMethod::GXtb;
+        search.refined_from = Some(parent);
+        search.irc = Some(IrcPath {
+            trajectory,
+            arc_lengths_sqrt_amu_bohr: vec![-1., 0., 1.],
+            neb_arc_lengths_sqrt_amu_bohr: vec![],
+            ts_index: 1,
+            reached: [IrcEndpoint::Reactant, IrcEndpoint::Product],
+            relaxed_ends: Some(ends.map(|energy_hartree| IrcRelaxedEnd {
+                energy_hartree,
+                positions_angstrom: vec![],
+            })),
+            completed: [true; 2],
+        });
+        result.validate(&frame).unwrap();
+        result
+    }
+
+    fn irc_path_mut(result: &mut CalcResult) -> &mut reshiki::qcdata::IrcPath {
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc
+            .as_mut()
+            .unwrap()
+    }
+
+    fn set_irc_step_counts(result: &mut CalcResult, steps: [usize; 2]) {
+        let saddle_energy = result.energy_hartree.unwrap();
+        let path = irc_path_mut(result);
+        path.ts_index = steps[0];
+        path.trajectory.energies_hartree = vec![-5.; steps[0] + steps[1] + 1];
+        path.trajectory.energies_hartree[path.ts_index] = saddle_energy;
+        path.arc_lengths_sqrt_amu_bohr = (0..path.steps())
+            .map(|index| index as f64 - path.ts_index as f64)
+            .collect();
+        path.validate().unwrap();
+    }
+
+    #[test]
+    fn short_irc_detail_reports_actual_steps_and_the_side_that_stopped() {
+        let mut result = gxtb_result();
+        set_irc_step_counts(&mut result, [4, 2]);
+        let path = irc_path_mut(&mut result);
+        path.completed = [false, true];
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path stopped after 4 steps on the reactant side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        irc_path_mut(&mut result).completed = [true, false];
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path stopped after 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        // The trace counts exclude the saddle and the separately relaxed ends.
+        let card = presentation(&result, None);
+        assert!(card.verification.contains("✓ one imaginary frequency"));
+        assert!(
+            card.verification
+                .contains("✓ path connects reactant and product")
+        );
+        assert!(!card.verification.contains("steps"));
+        assert!(!card.verification.contains("gradient"));
+    }
+
+    #[test]
+    fn two_short_irc_branches_keep_each_actual_step_count() {
+        let mut result = gxtb_result();
+        irc_path_mut(&mut result).completed = [false; 2];
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path was followed for 1 step in each direction. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        set_irc_step_counts(&mut result, [4, 2]);
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path was followed for 4 steps on the reactant side and 2 steps on the product side. Both ends were then relaxed to the nearest minimum. The endpoints match the drawn reactant and product."
+            )
+        );
+        irc_path_mut(&mut result).completed = [true; 2];
+        assert_eq!(irc_path_detail(&result, None, false), None);
+    }
+
+    #[test]
+    fn short_irc_detail_states_the_observed_endpoint_match() {
+        use reshiki::qcdata::IrcEndpoint::{Other, Product, Reactant};
+        let mut result = gxtb_result();
+        for (reached, expected) in [
+            (
+                [Reactant, Reactant],
+                "Both endpoints match the drawn reactant.",
+            ),
+            (
+                [Product, Product],
+                "Both endpoints match the drawn product.",
+            ),
+            (
+                [Reactant, Other],
+                "One end matches the drawn reactant. The other could not be matched.",
+            ),
+            (
+                [Other, Product],
+                "One end matches the drawn product. The other could not be matched.",
+            ),
+            (
+                [Other, Other],
+                "Neither end could be matched to a drawn endpoint.",
+            ),
+        ] {
+            let path = irc_path_mut(&mut result);
+            path.completed = [false; 2];
+            path.reached = reached;
+            let detail = irc_path_detail(&result, None, false).unwrap();
+            assert!(detail.ends_with(expected), "{detail}");
+            assert!(!detail.contains("The endpoints match the drawn reactant and product"));
+        }
+        let path = irc_path_mut(&mut result);
+        path.completed = [true, false];
+        path.reached = [Reactant, Other];
+        assert!(
+            irc_path_detail(&result, None, false)
+                .unwrap()
+                .contains("1 step in the positive direction")
+        );
+    }
+
+    #[test]
+    fn short_irc_detail_does_not_invent_unsaved_relaxation_or_legacy_counts() {
+        let mut result = gxtb_result();
+        let path = irc_path_mut(&mut result);
+        path.completed = [false, true];
+        path.relaxed_ends = None;
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some(
+                "The path stopped after 1 step on the reactant side. The endpoints match the drawn reactant and product."
+            )
+        );
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.irc = None;
+        search.diagnostics.push((
+            "IRC +mode".into(),
+            "reactant · downhill trace not converged · 10 points".into(),
+        ));
+        // A legacy log row supplies its original count but no relaxed geometry.
+        assert_eq!(
+            irc_path_detail(&result, None, false).as_deref(),
+            Some("The path stopped after 10 steps on the reactant side.")
+        );
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics[0]
+            .1 = "reactant · downhill trace not converged · count not saved".into();
+        assert_eq!(irc_path_detail(&result, None, false), None);
+    }
+
+    #[test]
+    fn short_irc_detail_keeps_technical_stop_metadata_in_the_log() {
+        let mut result = gxtb_result();
+        irc_path_mut(&mut result).completed = [false, true];
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics
+            .push((
+                "IRC +mode".into(),
+                "reactant · length cap · accepted steps: 1 · gradient calls: 7 · path length: 2.126540 amu½·bohr".into(),
+            ));
+        let detail = irc_path_detail(&result, None, false).unwrap();
+        let checks = presentation(&result, None).verification;
+        let log = search_log(&result, None, EnergyUnit::default());
+        for technical in ["length cap", "gradient calls", "path length"] {
+            assert!(log.contains(technical));
+            assert!(!detail.contains(technical));
+            assert!(!checks.contains(technical));
+        }
+    }
+
+    #[test]
+    fn gxtb_barriers_require_observed_irc_ends_and_the_actual_worker_spectrum() {
+        use reshiki::qcdata::IrcEndpoint;
+        let mut result = gxtb_result();
+        assert!(presentation(&result, None).reliable());
+        result.vibrations = None;
+        assert!(!presentation(&result, None).reliable());
+        assert!(
+            !presentation(&result, None)
+                .verification
+                .contains("✓ one imaginary")
+        );
+        let mut result = gxtb_result();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc
+            .as_mut()
+            .unwrap()
+            .reached = [IrcEndpoint::Reactant; 2];
+        assert!(!presentation(&result, None).reliable());
+        assert!(
+            !presentation(&result, None)
+                .verification
+                .contains("✓ path connects")
+        );
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .irc = None;
+        assert!(!presentation(&result, None).reliable());
+    }
+
+    #[test]
+    fn refined_path_copy_keeps_its_own_endpoint_energies_without_a_neb_band() {
+        let result = gxtb_result();
+        assert!(result.trajectory.is_none());
+        let rows = path_rows(&result, None, EnergyUnit::KjPerMol, None);
+        assert!(rows.contains(&("R ΔE".into(), "0.0 kJ/mol".into())));
+        assert!(rows.contains(&("P ΔE".into(), "−34.3 kJ/mol".into())));
+        assert!(rows.contains(&("TS‡ ΔE".into(), "110.9 kJ/mol".into())));
+        assert!(!rows.iter().any(|(label, _)| label.starts_with("Image ")));
+    }
+
+    #[test]
+    fn saved_gibbs_values_need_matching_conditions_and_a_verified_barrier() {
+        let mut result = result_with_gibbs();
+        assert!(
+            (barrier_gibbs_kcal(&result).unwrap() - (26.5 + 0.02 * KCAL_PER_HARTREE)).abs() < 1e-10
+        );
+        assert!(
+            (reaction_gibbs_kcal(&result).unwrap() - (-8.2 + 0.01 * KCAL_PER_HARTREE)).abs()
+                < 1e-10
+        );
+        let rows = path_rows(&result, None, EnergyUnit::KjPerMol, None);
+        assert!(rows.contains(&("TS‡ ΔG (298.15 K)".into(), "163.4 kJ/mol".into())));
+        assert!(rows.contains(&("P ΔG (298.15 K)".into(), "−8.1 kJ/mol".into())));
+
+        result.thermo.as_mut().unwrap().temperature_k = 300.;
+        assert_eq!(barrier_gibbs_kcal(&result), None);
+        assert!(reaction_gibbs_kcal(&result).is_some());
+        result.thermo.as_mut().unwrap().temperature_k = 298.15;
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert_eq!(barrier_gibbs_kcal(&result), None);
+        assert!(reaction_gibbs_kcal(&result).is_some());
+    }
+
+    #[test]
+    fn second_small_imaginary_mode_suppresses_only_the_gibbs_barrier() {
+        let mut result = result_with_gibbs();
+        result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-450., -35.];
+        assert!(presentation(&result, None).reliable());
+        assert_eq!(barrier_gibbs_kcal(&result), None);
+        assert_eq!(
+            barrier_gibbs_unavailable(&result).as_deref(),
+            Some("ΔG‡ not reported: a second small imaginary mode (35i cm⁻¹)")
+        );
+        assert!(reaction_gibbs_kcal(&result).is_some());
+    }
+
+    #[test]
+    fn forward_gibbs_barrier_survives_a_saved_product_frequency_failure() {
+        let mut result = result_with_gibbs();
+        let expected = barrier_gibbs_kcal(&result).unwrap();
+        let search = result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap();
+        search.endpoint_thermo.as_mut().unwrap()[1] = None;
+        search.diagnostics.push((
+            "Product thermochemistry".into(),
+            "Free energy unavailable: endpoint worker timed out".into(),
+        ));
+
+        let light = result.light(&[]);
+        let decoded: CalcResult =
+            serde_json::from_str(&serde_json::to_string(&light).unwrap()).unwrap();
+        decoded.validate(&frame()).unwrap();
+        assert_eq!(barrier_gibbs_kcal(&decoded), Some(expected));
+        assert_eq!(reaction_gibbs_kcal(&decoded), None);
+        assert_eq!(
+            reaction_gibbs_unavailable(&decoded).as_deref(),
+            Some(
+                "Reaction ΔG not reported: product frequency analysis failed (endpoint worker timed out)"
+            )
+        );
+    }
+
+    #[test]
+    fn path_copy_labels_the_optimized_complex_reference() {
+        let mut result = result_with_gibbs();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .context = Some(reshiki::qcdata::TransitionStateContext {
+            reactant_chemistry: "ab".repeat(32),
+            product_chemistry: "cd".repeat(32),
+            title: "A + B → C".into(),
+            reactant: "A".into(),
+            endpoint_complex: Some(true),
+        });
+        let app = path_app(result);
+        let rows = app.xtb_shown().unwrap().rows(Some(EnergyUnit::default()));
+        assert!(rows.contains(&("P ΔE (optimized complex)".into(), "−8.2 kcal/mol".into())));
+    }
+
+    #[test]
+    fn folded_start_log_uses_the_selected_energy_unit() {
+        let mut result = result_with_gibbs();
+        result
+            .run
+            .as_mut()
+            .unwrap()
+            .transition_state
+            .as_mut()
+            .unwrap()
+            .diagnostics
+            .push((
+                "Folded the starting conformer".into(),
+                "C1···C6 4.72 → 3.05 Å (-1.8 kcal/mol)".into(),
+            ));
+        for (unit, energy) in [
+            (EnergyUnit::KcalPerMol, "−1.8 kcal/mol"),
+            (EnergyUnit::KjPerMol, "−7.5 kJ/mol"),
+            (EnergyUnit::Ev, "−0.08 eV"),
+        ] {
+            assert!(search_log(&result, None, unit).contains(&format!(
+                "Folded the starting conformer: C1···C6 4.72 → 3.05 Å ({energy})"
+            )));
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
+    async fn production_path_view_uses_the_refined_marker_and_activates_saved_images() {
+        let ui = ViewHarness::new().await;
+        let mut app = path_app(result());
+        let snapshot = ui.inspect(app.xtb_bottom_palette().expect("open Path palette"));
+        assert!(snapshot.semantics.duplicate_ids.is_empty());
+        assert!(profile(&snapshot).name.contains("TS‡ 26.5 kcal/mol"));
+        assert!(!profile(&snapshot).name.contains("TS‡ 30.2"));
+        assert!(
+            snapshot
+                .semantics
+                .nodes
+                .iter()
+                .any(|node| { node.id == "xtb-results-path" && node.checked == Some(true) })
+        );
+        let image = snapshot
+            .semantics
+            .nodes
+            .iter()
+            .find(|node| node.id == "xtb-ts-image-1")
+            .expect("the saved image's keyboard control");
+        assert_eq!(image.name, "ΔE 30.2 kcal/mol");
+        let action = ui
+            .activate(
+                app.xtb_bottom_palette().expect("open Path palette"),
+                "xtb-ts-image-1",
+            )
+            .expect("the actual image button must dispatch");
+        assert!(matches!(
+            action,
+            Message::Xtb(XtbAction::Ts(Action::Image(1)))
+        ));
+        let _ = app.update(action);
+        let snapshot = ui.inspect(app.xtb_bottom_palette().expect("selected Path image"));
+        assert!(snapshot.texts.iter().any(|text| text == "ΔE 30.2 kcal/mol"));
+        assert!(
+            profile(&snapshot)
+                .name
+                .contains("Selected ΔE 30.2 kcal/mol")
+        );
+        assert!(
+            snapshot
+                .semantics
+                .nodes
+                .iter()
+                .any(|node| { node.id == "xtb-ts-image-1" && node.checked == Some(true) })
+        );
+
+        app.xtb.dock.inspector = true;
+        let snapshot = ui.inspect(app.xtb_inspector_palette().expect("inspector Path palette"));
+        assert!(profile(&snapshot).name.contains("TS‡ 26.5 kcal/mol"));
+        assert!(
+            snapshot
+                .semantics
+                .nodes
+                .iter()
+                .any(|node| node.id == "xtb-ts-back")
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in renderer check: needs a graphics adapter"]
+    async fn production_path_view_omits_the_marker_for_failed_verification() {
+        let ui = ViewHarness::new().await;
+        let mut failures = Vec::new();
+        for frequencies in [vec![], vec![-49.9], vec![-50.], vec![-120., -60.]] {
+            let mut result = result();
+            result.vibrations.as_mut().unwrap().frequencies_cm1 = frequencies;
+            failures.push(result);
+        }
+        for reason in [
+            "saddle refinement did not converge",
+            "IRC reaches the reactant on both sides",
+            "IRC failed: endpoint minimization reached its step limit",
+            "worker check failed: timed out",
+        ] {
+            let mut result = result();
+            result.status = Status::NotConverged {
+                reason: reason.into(),
+            };
+            failures.push(result);
+        }
+        for result in failures {
+            let app = path_app(result);
+            let snapshot = ui.inspect(app.xtb_bottom_palette().expect("failed Path palette"));
+            assert!(!profile(&snapshot).name.contains("TS‡"));
+            assert!(
+                snapshot
+                    .texts
+                    .iter()
+                    .any(|text| text == "No reliable transition state found.")
+            );
+            assert!(snapshot.texts.iter().all(|text| !text.contains("ΔE‡")));
+            // Builds without the engine offer no rerun.
+            assert_eq!(
+                snapshot
+                    .semantics
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "xtb-ts-rerun-20"),
+                crate::app::xtb::available()
+            );
+        }
+    }
+
+    #[test]
+    fn saved_result_uses_one_refined_barrier_and_the_same_status_value() {
+        let presentation = presentation(&result(), None);
+        assert!(presentation.reliable());
+        assert!((presentation.refined_kcal.unwrap() - 26.5).abs() < 1e-10);
+        assert!((presentation.highest_path_kcal.unwrap() - 30.2).abs() < 1e-10);
+        let status = presentation.status_line(EnergyUnit::KcalPerMol);
+        assert_eq!(status.matches("26.5").count(), 1);
+        assert!(!status.contains("30.2"));
+        assert!(presentation.verification.contains("387i cm⁻¹"));
+        assert!(
+            presentation
+                .verification
+                .contains("connects reactant and product")
+        );
+    }
+
+    #[test]
+    fn nonconverged_or_wrong_mode_count_has_no_barrier() {
+        for frequencies in [vec![], vec![-49.9], vec![-50.], vec![-120., -60.]] {
+            let mut result = result();
+            result.vibrations.as_mut().unwrap().frequencies_cm1 = frequencies;
+            let presentation = presentation(&result, None);
+            assert!(!presentation.reliable());
+            assert_eq!(presentation.refined_kcal, None);
+            assert!(
+                !presentation
+                    .status_line(EnergyUnit::KcalPerMol)
+                    .contains("kcal/mol")
+            );
+        }
+        let mut result = result();
+        result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-120., -60.];
+        assert_eq!(presentation(&result, None).recovery, Recovery::FinerPath);
+        assert!(
+            presentation(&result, None)
+                .reason
+                .unwrap()
+                .contains("two imaginary frequencies")
+        );
+        result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-387.];
+        result.status = Status::NotConverged {
+            reason: "saddle refinement did not converge".into(),
+        };
+        assert_eq!(presentation(&result, None).refined_kcal, None);
+    }
+
+    #[test]
+    fn persisted_frequency_disagreement_keeps_the_counts_and_finer_recovery() {
+        for (engine, worker) in [(1, 2), (2, 1), (0, 2)] {
+            let mut result = result_with_gibbs();
+            result
+                .run
+                .as_mut()
+                .unwrap()
+                .transition_state
+                .as_mut()
+                .unwrap()
+                .imaginary = engine;
+            result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-100.; worker];
+            result.status = Status::NotConverged {
+                reason: format!(
+                    "engine/worker imaginary frequency counts disagree: engine {engine}, worker {worker}"
+                ),
+            };
+            let shown = presentation(&result, None);
+            assert_eq!(shown.refined_kcal, None);
+            assert_eq!(shown.recovery, Recovery::FinerPath);
+            assert_eq!(
+                shown.reason,
+                Some(format!(
+                    "The two frequency checks disagree (engine {engine}, worker {worker})."
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn contradictory_saved_counts_cannot_verify_a_transition_state() {
+        let mut result = result_with_gibbs();
+        result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-387., -100.];
+        let shown = presentation(&result, None);
+        assert_eq!(shown.refined_kcal, None);
+        assert_eq!(shown.recovery, Recovery::FinerPath);
+        assert_eq!(
+            shown.reason.as_deref(),
+            Some("The two frequency checks disagree (engine 1, worker 2).")
+        );
+    }
+
+    #[test]
+    fn wrong_endpoints_and_irc_errors_hide_the_barrier() {
+        for reason in [
+            "IRC reaches the reactant on both sides",
+            "IRC reaches the product on both sides",
+            "IRC reaches the product and a different minimum",
+            "IRC reaches neither the reactant nor the product",
+            "IRC did not connect the reactant and product",
+            "worker check failed: timed out",
+            "engine/worker imaginary frequency counts disagree: engine 1, worker 0",
+        ] {
+            let mut result = result();
+            result.status = Status::NotConverged {
+                reason: reason.into(),
+            };
+            let presentation = presentation(&result, None);
+            assert!(!presentation.reliable(), "{reason}");
+            assert!(
+                !presentation
+                    .status_line(EnergyUnit::KcalPerMol)
+                    .contains("26.5"),
+                "{reason}"
+            );
+        }
+        for (reason, explanation) in [
+            (
+                "IRC failed: endpoint minimization reached its step limit",
+                "the endpoint optimization reached its step limit",
+            ),
+            (
+                "IRC failed: SCF failure: iteration limit",
+                "the electronic calculation did not converge",
+            ),
+        ] {
+            let mut result = result();
+            result.status = Status::NotConverged {
+                reason: reason.into(),
+            };
+            let presentation = presentation(&result, None);
+            assert_eq!(presentation.refined_kcal, None);
+            assert_eq!(
+                presentation.reason,
+                Some(format!(
+                    "The reaction-path check could not finish: {explanation}."
+                ))
+            );
+            assert_eq!(
+                presentation.status_line(EnergyUnit::KcalPerMol),
+                "GFN2-xTB · No reliable transition state found."
+            );
+        }
+    }
+
+    #[test]
+    fn saved_search_log_has_a_technical_block_without_inventing_missing_counters() {
+        let result = result();
+        let log = search_log(&result, None, EnergyUnit::default());
+        assert!(log.starts_with("Transition-state search\n"));
+        for label in [
+            "Method:",
+            "Images:",
+            "NEB iterations / convergence:",
+            "Saddle steps / reason:",
+            "Worker check:",
+            "IRC branches:",
+            "Evaluations:",
+            "Hessians:",
+        ] {
+            assert!(log.contains(label), "missing {label}");
+        }
+        assert!(log.contains("not saved with this result"));
+        assert!(log.contains("IDPP → CI-NEB → P-RFO → IRC"));
+        assert!(
+            !crate::app::xtb::results::method_line(
+                &result,
+                &Frame {
+                    numbers: vec![3, 17],
+                    positions_angstrom: vec![[0.; 3]; 2],
+                    isotopes: vec![],
+                    masses_amu: vec![],
+                    charge: 0,
+                    multiplicity: 1,
+                    drawing_atoms: vec![],
+                }
+            )
+            .contains("CI-NEB")
+        );
+    }
+}

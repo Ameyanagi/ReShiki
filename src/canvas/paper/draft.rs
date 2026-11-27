@@ -513,6 +513,7 @@ impl MoleculeCanvas<'_> {
             preview,
             ring_selection,
             translation,
+            move_delta,
             smart,
             chain_badge,
             cycle_drop,
@@ -560,6 +561,7 @@ impl MoleculeCanvas<'_> {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
                 preview.to_mut().translate(ids, delta.x, delta.y);
+                *move_delta = Some(delta);
                 reshiki::cycles::fit_moved(self.doc, preview.to_mut(), ids);
                 *ring_selection = Some(ids.clone());
                 // Fitted runs reproject ink and stations even on a rigid move;
@@ -577,6 +579,7 @@ impl MoleculeCanvas<'_> {
                 *ring_selection = Some(snapped);
             } else {
                 preview.to_mut().translate(ids, delta.x, delta.y);
+                *move_delta = Some(delta);
                 *ring_selection = Some(ids.clone());
                 let reach = self.camera.world_len(reshiki::equipment::solve::REACH_PX);
                 // The snapped pose shows what releasing makes; guides would mislead.

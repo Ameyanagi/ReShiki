@@ -14,7 +14,10 @@ mod fake_host;
 use fake_host::{FakeHost, SPECS};
 use reshiki_agent::{
     access::GrantSummary,
-    ops::wire::{Principal, RequestId},
+    ops::{
+        progress::Progress,
+        wire::{Principal, RequestId},
+    },
     tool_spec::ToolSpec,
 };
 use reshiki_mcp::{
@@ -586,6 +589,74 @@ fn structured_content_is_an_object_in_every_era() {
         assert_eq!(calls[1].arguments, json!({}), "null arguments are {{}}");
         drop(calls);
         finish(session, &host, &format!("{era:?}"));
+    }
+}
+
+#[test]
+fn progress_notifications_are_ordered_before_the_result() {
+    const SPECS: &[ToolSpec] = &[fake_host::PROGRESS_SPEC];
+    for era in ERAS {
+        for token in [json!("calculation"), json!(0)] {
+            let context = format!("{era:?}, token {token}");
+            let host = Arc::new(FakeHost::with_catalog(SPECS));
+            let mut session = Session::with_host(Arc::clone(&host), Limits::default());
+            era.open(&mut session);
+            let mut call: Value =
+                serde_json::from_str(&era.call(1, "progress", json!({}))).unwrap();
+            if call["params"].get("_meta").is_none() {
+                call["params"]["_meta"] = json!({});
+            }
+            call["params"]["_meta"]["progressToken"] = token.clone();
+            session.send(&call.to_string());
+            assert_eq!(
+                session.receive(&context),
+                json!({
+                    "jsonrpc": "2.0",
+                    "method": "notifications/progress",
+                    "params": {"progressToken": token, "progress": 0.0},
+                }),
+                "{context}"
+            );
+            for completed in 1..=fake_host::PROGRESS_STEPS {
+                assert_eq!(
+                    session.receive(&context),
+                    json!({
+                        "jsonrpc": "2.0",
+                        "method": "notifications/progress",
+                        "params": {
+                            "progressToken": token,
+                            "progress": f64::from(completed),
+                            "total": f64::from(fake_host::PROGRESS_STEPS),
+                            "message": format!("Step {completed}"),
+                        },
+                    }),
+                    "{context}, progress {completed}"
+                );
+            }
+            let reply = session.receive(&context);
+            assert_eq!(reply["id"], 1, "{context}: {reply}");
+            assert_eq!(
+                reply["result"]["structuredContent"],
+                json!({"progress": true}),
+                "{context}"
+            );
+            // Keeping a clone alive cannot delay the result or send late progress.
+            host.retained_progress.lock().unwrap().as_ref().unwrap()(Progress {
+                completed: 100.0,
+                total: None,
+                message: Some("Late".into()),
+            });
+            // Without a token, the host receives no sink and emits no notification.
+            session.send(&era.call(2, "progress", json!({})));
+            let reply = session.receive(&context);
+            assert_eq!(reply["id"], 2, "{context}: {reply}");
+            assert_eq!(
+                reply["result"]["structuredContent"],
+                json!({"progress": false}),
+                "{context}"
+            );
+            finish(session, &host, &context);
+        }
     }
 }
 
