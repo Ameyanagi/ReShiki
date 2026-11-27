@@ -410,7 +410,8 @@ class GeometryReferenceTests(unittest.TestCase):
                     f"UFF used: {field} parameters are unavailable for this molecule",
                     fallback["Ok"]["approximations"],
                 )
-                self.assert_parity(molecule, request, fallback["Ok"]["coordinates"])
+                evaluated = self.assert_parity(molecule, request, fallback["Ok"]["coordinates"])
+                self.assert_energy(fallback["Ok"]["energy"], evaluated["energy"])
                 # ...but Evaluate and Relax keep the caller's field and refuse.
                 for operation in ("Evaluate", "Relax"):
                     result = self.worker_result(
