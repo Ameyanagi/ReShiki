@@ -442,7 +442,10 @@ impl Prepared {
                 &part,
                 &molecule,
                 fallback,
-                radicals.is_empty(),
+                // Any drawn radical left uncapped, such as one on a metal.
+                part.atoms.iter().any(|atom| {
+                    atom.radical_electrons != 0 && !radicals.iter().any(|r| r.atom == atom.id)
+                }),
                 non_tetrahedral,
                 enhanced,
             )
@@ -885,12 +888,7 @@ fn relaxed_skipped_checks(
     {
         checks.push("Coordination bonds do not count toward ligand valence".into());
     }
-    if uncapped_radicals
-        && document
-            .atoms
-            .iter()
-            .any(|atom| atom.radical_electrons != 0)
-    {
+    if uncapped_radicals {
         checks.push("Radicals taken as drawn".into());
     }
     // Double bonds count too: their drawn geometry defines E/Z.

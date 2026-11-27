@@ -31,7 +31,8 @@ the canvas and never delays input; ReShiki has no reduced-motion setting yet.
 
 A radical is built from its closed-shell parent: each radical centre gets one
 hydrogen per unpaired electron for the conformer search (a propyl radical
-starts as propane), and the model leaves those hydrogens out again. The status
+starts as propane), and the model leaves those hydrogens out again; a radical
+on a metal or noble gas stays as drawn. The status
 bar says so and names the parent, for example "C1 is a radical: start built
 from propane, added H removed". The drawing keeps its radicals. When a model
 cannot be built, the message names the atom, for example "Can't build a
