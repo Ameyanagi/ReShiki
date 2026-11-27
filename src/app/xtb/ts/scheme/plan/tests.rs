@@ -286,17 +286,179 @@ fn spectator_cancellation_counts_coefficients_and_preserves_an_excess() {
         drawn_reactants: vec![drawn(0, 1, 1), drawn(2, 3, 2)],
         drawn_products: vec![drawn(1, 2, 1), drawn(2, 4, 1)],
     };
-    let (reactants, products) = path_sides(&source).unwrap();
+    let no_neighbors = PathSides::default();
+    let (reactants, products) = path_sides(&source, &no_neighbors, &no_neighbors).unwrap();
     assert!(reactants.contains(&vec![3]));
     assert!(!products.contains(&vec![4]));
     source.drawn_products[1].coefficient = 2;
-    let (reactants, products) = path_sides(&source).unwrap();
+    let (reactants, products) = path_sides(&source, &no_neighbors, &no_neighbors).unwrap();
     assert!(!reactants.contains(&vec![3]));
     assert!(!products.contains(&vec![4]));
     source.drawn_products[0].species = 0;
-    let (reactants, products) = path_sides(&source).unwrap();
+    let (reactants, products) = path_sides(&source, &no_neighbors, &no_neighbors).unwrap();
     assert_eq!(reactants, BTreeSet::from([vec![1], vec![3]]));
     assert_eq!(products, BTreeSet::from([vec![2], vec![4]]));
+}
+
+#[test]
+fn spectator_cancellation_keeps_the_link_in_either_copy_creation_order() {
+    for shared_created_first in [true, false] {
+        let mut doc = Document::default();
+        let ether = molecule_at(&mut doc, &["C", "O", "C"], &[(0, 1, 1), (1, 2, 1)], 0.);
+        let initial = molecule_at(&mut doc, &["C", "C", "O"], &[(0, 1, 1), (1, 2, 1)], -160.);
+        let mut ethanol_at =
+            |x| molecule_at(&mut doc, &["C", "C", "O"], &[(0, 1, 1), (1, 2, 1)], x);
+        let (shared, other) = if shared_created_first {
+            (ethanol_at(240.), ethanol_at(360.))
+        } else {
+            let other = ethanol_at(360.);
+            (ethanol_at(240.), other)
+        };
+        let product = molecule_at(&mut doc, &["C", "C"], &[(0, 1, 2)], 600.);
+        let first = step(
+            &mut doc,
+            &[one(&ether), one(&initial)],
+            &[one(&shared), one(&other)],
+            120.,
+        );
+        let second = step(&mut doc, &[one(&shared)], &[one(&product)], 480.);
+        reactions::validate(&doc).unwrap();
+        for _ in 0..2 {
+            let plan = Plan::read(&doc, &[second, first]).unwrap();
+            assert_eq!(plan.arrows, [first, second]);
+            assert!(!plan.cyclic);
+            doc.reactions[0].products.reverse();
+        }
+    }
+}
+
+#[test]
+fn a_fully_canceled_carried_molecule_can_be_the_only_link() {
+    let mut doc = Document::default();
+    let alcohol = molecule_at(
+        &mut doc,
+        &["C", "C", "C", "O"],
+        &[(0, 1, 1), (1, 2, 1), (2, 3, 1)],
+        0.,
+    );
+    let initial = molecule_at(&mut doc, &["C", "C", "O"], &[(0, 1, 1), (1, 2, 1)], -160.);
+    let intermediate = molecule_at(&mut doc, &["C", "C", "C"], &[(0, 1, 1), (1, 2, 2)], 240.);
+    let shared = molecule_at(&mut doc, &["C", "C", "O"], &[(0, 1, 1), (1, 2, 1)], 360.);
+    let product = molecule_at(&mut doc, &["C", "C"], &[(0, 1, 2)], 600.);
+    let first = step(
+        &mut doc,
+        &[one(&alcohol), one(&initial)],
+        &[one(&intermediate), one(&shared)],
+        120.,
+    );
+    let second = step(&mut doc, &[one(&shared)], &[one(&product)], 480.);
+    reactions::validate(&doc).unwrap();
+    let plan = Plan::read(&doc, &[second, first]).unwrap();
+    assert_eq!(plan.arrows, [first, second]);
+    assert!(!plan.cyclic);
+    assert_eq!(
+        plan.notes
+            .iter()
+            .filter(|note| note.starts_with("Balanced by adding"))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn surviving_copy_links_take_precedence_over_fully_canceled_shortcuts() {
+    let drawn = |species, atom| DrawnTerm {
+        species,
+        atoms: vec![atom],
+        coefficient: 1,
+        label: String::new(),
+    };
+    let row = |arrow, drawn_reactants, drawn_products| Step {
+        arrow,
+        drawn_reactants,
+        drawn_products,
+        reactants: Vec::new(),
+        products: Vec::new(),
+        notes: Vec::new(),
+    };
+    let source = row(
+        1,
+        vec![drawn(0, 10), drawn(2, 20), drawn(3, 30)],
+        vec![drawn(1, 11), drawn(2, 21), drawn(2, 22), drawn(3, 31)],
+    );
+    let middle = row(2, vec![drawn(2, 21)], vec![drawn(4, 40)]);
+    let last = row(
+        3,
+        vec![drawn(4, 40), drawn(3, 31)],
+        vec![drawn(5, 50), drawn(3, 32)],
+    );
+    assert_eq!(
+        order(&[source, middle, last]).unwrap(),
+        (vec![0, 1, 2], false)
+    );
+}
+
+#[test]
+fn fully_canceled_links_keep_matching_instances_on_both_sides() {
+    let drawn = |species, atom| DrawnTerm {
+        species,
+        atoms: vec![atom],
+        coefficient: 1,
+        label: String::new(),
+    };
+    let row = |arrow, drawn_reactants, drawn_products| Step {
+        arrow,
+        drawn_reactants,
+        drawn_products,
+        reactants: Vec::new(),
+        products: Vec::new(),
+        notes: Vec::new(),
+    };
+    let source = row(
+        1,
+        vec![drawn(0, 10), drawn(2, 20), drawn(3, 30)],
+        vec![drawn(1, 11), drawn(2, 21), drawn(3, 31)],
+    );
+    let mut target = row(
+        2,
+        vec![drawn(4, 40), drawn(3, 31), drawn(2, 21)],
+        vec![drawn(5, 50), drawn(3, 32), drawn(2, 22)],
+    );
+    for _ in 0..2 {
+        assert_eq!(
+            order(&[source.clone(), target.clone()]).unwrap(),
+            (vec![0, 1], false)
+        );
+        target.drawn_reactants.reverse();
+    }
+}
+
+#[test]
+fn fully_canceled_tail_to_head_link_does_not_close_an_open_path() {
+    let (mut doc, original) = two_step();
+    let shared = molecule_at(&mut doc, &["Cl"], &[], -120.);
+    let after_first = molecule_at(&mut doc, &["Cl"], &[], 200.);
+    let before_second = molecule_at(&mut doc, &["Cl"], &[], 300.);
+    doc.reactions[0].reactants.push(Participant {
+        atoms: shared.clone(),
+        coefficient: 1,
+    });
+    doc.reactions[0].products.push(Participant {
+        atoms: after_first,
+        coefficient: 1,
+    });
+    doc.reactions[1].reactants.push(Participant {
+        atoms: before_second,
+        coefficient: 1,
+    });
+    doc.reactions[1].products.push(Participant {
+        atoms: shared,
+        coefficient: 1,
+    });
+    reactions::validate(&doc).unwrap();
+    let plan = Plan::read(&doc, &original.arrows).unwrap();
+    assert_eq!(plan.arrows, original.arrows);
+    assert!(!plan.cyclic);
 }
 
 #[test]

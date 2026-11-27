@@ -90,11 +90,12 @@ struct TransitionJob<'a> {
 /// Queue policy is independent of native execution so fake jobs exercise cache,
 /// partial failure, retry and cancellation without chemistry timing assumptions.
 trait Backend {
+    /// Publish the electronic minimum before starting a requested Hessian.
     fn species(
         &mut self,
         job: SpeciesJob<'_>,
         cancel: &Cancel,
-        emit: &mut dyn FnMut(EventKind),
+        minimum: &mut dyn FnMut(&SpeciesValue),
     ) -> Result<SpeciesComputed, String>;
     fn transition(
         &mut self,
@@ -158,18 +159,23 @@ fn optimized_start<'a>(
     candidates.next().is_none().then_some(launch)
 }
 
+#[derive(Default)]
+struct Minima {
+    values: BTreeMap<usize, SpeciesValue>,
+    failures: BTreeMap<usize, String>,
+    warnings: BTreeMap<usize, String>,
+}
+
 fn endpoint_value(
     request: &Request,
     step: &super::super::plan::Step,
     options: StepOptions,
-    values: &BTreeMap<usize, SpeciesValue>,
-    failures: &BTreeMap<usize, String>,
-    warnings: &BTreeMap<usize, String>,
+    minima: &Minima,
 ) -> StepValue {
     let mut value = StepValue::empty(step.arrow, request.method);
     let sum = |terms: &[super::super::plan::Term], free| {
         super::super::plan::sum_energy(terms.iter().copied(), |index| {
-            species_energy(values.get(&index)?, free)
+            species_energy(minima.values.get(&index)?, free)
         })
     };
     let kcal = qcdata::KCAL_PER_HARTREE;
@@ -189,11 +195,12 @@ fn endpoint_value(
         .map(|term| (term, options.frequencies()))
         .chain(step.products.iter().map(|term| (term, options.free_energy)))
         .filter_map(|(term, needs_frequency)| {
-            failures
+            minima
+                .failures
                 .get(&term.species)
                 .or_else(|| {
                     needs_frequency
-                        .then(|| warnings.get(&term.species))
+                        .then(|| minima.warnings.get(&term.species))
                         .flatten()
                 })
                 .map(|reason| {
@@ -265,11 +272,50 @@ fn calculate(
         &request.options,
         active.iter().map(|(index, _, _, _)| *index),
     );
-    let mut values = BTreeMap::new();
-    let mut failures = BTreeMap::new();
-    let mut warnings = BTreeMap::new();
+    let mut minima = Minima::default();
     let mut ready = BTreeSet::new();
     let mut endpoints = BTreeMap::new();
+    let mut publish = |minima: &Minima,
+                       pending_hessian: Option<usize>,
+                       emit: &mut dyn FnMut(EventKind)| {
+        for &(index, step, options, _) in &active {
+            if ready.contains(&index)
+                || !step.reactants.iter().chain(&step.products).all(|term| {
+                    minima.values.contains_key(&term.species)
+                        || minima.failures.contains_key(&term.species)
+                })
+            {
+                continue;
+            }
+            let waiting_for_thermo = pending_hessian.is_some_and(|species| {
+                (options.frequencies() && step.reactants.iter().any(|t| t.species == species))
+                    || (options.free_energy && step.products.iter().any(|t| t.species == species))
+            });
+            if waiting_for_thermo {
+                let electronic = StepOptions {
+                    free_energy: false,
+                    free_barrier: false,
+                    ..options
+                };
+                let value = endpoint_value(request, step, electronic, minima);
+                if value.energy.is_some() {
+                    emit(EventKind::Endpoints { index, value });
+                }
+                continue;
+            }
+            let value = endpoint_value(request, step, options, minima);
+            if options.transition_state() {
+                emit(EventKind::Endpoints {
+                    index,
+                    value: value.clone(),
+                });
+                endpoints.insert(index, value);
+            } else {
+                emit(EventKind::Step { index, value });
+            }
+            ready.insert(index);
+        }
+    };
     // Every required minimum is ready before a slow TS can hold up another
     // step's ground-state calculation. Each shared species is visited once.
     for &(species_index, index) in &owners {
@@ -281,7 +327,7 @@ fn calculate(
             step: index,
             species: Some(species_index),
             label: format!("Optimizing {}", species.label),
-            completed_species: values.len(),
+            completed_species: minima.values.len(),
             total_species: needed.len(),
             stage: None,
         };
@@ -317,47 +363,35 @@ fn calculate(
                     cached,
                 },
                 cancel,
-                &mut emit,
+                &mut |value| {
+                    emit(EventKind::Species {
+                        key: species.key.clone(),
+                        value: value.clone(),
+                    });
+                    minima.values.insert(species_index, value.clone());
+                    // A Hessian for this minimum can block other steps that
+                    // already have all their electronic energies.
+                    publish(&minima, Some(species_index), &mut emit);
+                },
             )
         };
-        checked(cancel)?;
         match computed {
             Ok(computed) => {
                 emit(EventKind::Species {
                     key: species.key.clone(),
                     value: computed.value.clone(),
                 });
-                values.insert(species_index, computed.value);
+                minima.values.insert(species_index, computed.value);
                 if let Some(warning) = computed.warning {
-                    warnings.insert(species_index, warning);
+                    minima.warnings.insert(species_index, warning);
                 }
             }
             Err(reason) => {
-                failures.insert(species_index, reason);
+                checked(cancel)?;
+                minima.failures.insert(species_index, reason);
             }
         }
-        // Keep completed endpoint quantities available even when another
-        // species is slow or the user cancels before the minima phase ends.
-        for &(index, step, options, _) in &active {
-            if ready.contains(&index)
-                || !step.reactants.iter().chain(&step.products).all(|term| {
-                    values.contains_key(&term.species) || failures.contains_key(&term.species)
-                })
-            {
-                continue;
-            }
-            let value = endpoint_value(request, step, options, &values, &failures, &warnings);
-            if options.transition_state() {
-                emit(EventKind::Endpoints {
-                    index,
-                    value: value.clone(),
-                });
-                endpoints.insert(index, value);
-            } else {
-                emit(EventKind::Step { index, value });
-            }
-            ready.insert(index);
-        }
+        publish(&minima, None, &mut emit);
     }
     for &(index, step, options, input) in &active {
         if !options.transition_state() {
@@ -368,7 +402,7 @@ fn calculate(
             step: index,
             species: None,
             label: "Preparing step".into(),
-            completed_species: values.len(),
+            completed_species: minima.values.len(),
             total_species: needed.len(),
             stage: None,
         };
@@ -378,7 +412,7 @@ fn calculate(
         };
         let sum = |terms: &[super::super::plan::Term], free| {
             super::super::plan::sum_energy(terms.iter().copied(), |index| {
-                species_energy(values.get(&index)?, free)
+                species_energy(minima.values.get(&index)?, free)
             })
         };
         let reactant = sum(&step.reactants, false);
@@ -401,7 +435,7 @@ fn calculate(
                 let result = backend.transition(
                     TransitionJob {
                         input,
-                        optimized: optimized_start(input, values.values()),
+                        optimized: optimized_start(input, minima.values.values()),
                         arrow: step.arrow,
                         method: request.method,
                         free: options.free_barrier,
@@ -630,7 +664,7 @@ impl Backend for Native {
         &mut self,
         job: SpeciesJob<'_>,
         cancel: &Cancel,
-        emit: &mut dyn FnMut(EventKind),
+        minimum: &mut dyn FnMut(&SpeciesValue),
     ) -> Result<SpeciesComputed, String> {
         let SpeciesJob {
             index,
@@ -656,21 +690,17 @@ impl Backend for Native {
                 cancel,
             )?;
             let (frame, result) = self.ordinary(&launch.frame, method, true, false, cancel)?;
-            let value = SpeciesValue {
+            SpeciesValue {
                 species: index,
                 method,
                 frame,
                 result,
                 launch: Some(launch),
-            };
-            emit(EventKind::Species {
-                key: species.key.clone(),
-                value: value.clone(),
-            });
-            value
+            }
         };
         let mut warning = None;
         if frequencies && !has_thermo(&value) {
+            minimum(&value);
             match self.ordinary(&value.frame, method, false, true, cancel) {
                 Ok((_, result)) => {
                     let mut combined = (*result).clone();

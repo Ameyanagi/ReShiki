@@ -137,6 +137,52 @@ fn app() -> App {
     app
 }
 
+/// Format 43 used the shared end-side inference for both #1481 single-arrow
+/// figures and later schemes. Compute those saved keys directly, without
+/// building a current scheme figure and removing its arrow identities.
+fn legacy_profile(doc: &Document, arrows: &[u64]) -> EnergyProfile {
+    let mut states = vec![profile::state(Kind::Reactant, "R".into(), 0.)];
+    let mut steps = Vec::new();
+    for (index, &arrow) in arrows.iter().enumerate() {
+        let reaction = reshiki::reactions::preview(doc, arrow).unwrap();
+        let from = states.len() - 1;
+        states.push(profile::state(
+            Kind::TransitionState,
+            if arrows.len() == 1 {
+                "TS‡".into()
+            } else {
+                format!("TS{}‡", index + 1)
+            },
+            10.,
+        ));
+        states.push(profile::state(
+            if index + 1 == arrows.len() {
+                Kind::Product
+            } else {
+                Kind::Intermediate
+            },
+            "P".into(),
+            -5.,
+        ));
+        steps.push(EnergyProfileStep {
+            from,
+            to: states.len() - 1,
+            transition: Some(from + 1),
+            source: None,
+            source_key: (index > 0).then(|| profile::source_key(doc, &reaction)),
+            irc: Vec::new(),
+        });
+    }
+    let first = *arrows.first().unwrap();
+    EnergyProfile::new(
+        first,
+        profile::source_key(doc, &reshiki::reactions::preview(doc, first).unwrap()),
+        "GFN2-xTB".into(),
+        states,
+        steps,
+    )
+}
+
 #[test]
 fn two_steps_use_one_inventory_for_energies_labels_and_models() {
     let (doc, plan) = Plan::example();
@@ -666,26 +712,119 @@ fn placing_gibbs_after_electronic_selects_the_matching_quantity() {
 }
 
 #[test]
-fn rerun_upgrades_an_unambiguous_legacy_link_in_place() {
+fn single_arrow_1481_figure_keeps_its_original_inferred_roles_after_reopen() {
+    use reshiki::arrows::{ArrowStyle, Preset};
+    use reshiki::document::Arrow;
+
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::new(-80., 0.));
+    doc.add_atom("C", Point::new(180., 0.));
+    let above = doc.add_atom("O", Point::new(30., -20.));
+    let below = doc.add_atom("O", Point::new(70., 20.));
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::new(0., 0.),
+        Point::new(100., 0.),
+        Preset::Forward,
+        ArrowStyle::preset(Preset::Forward),
+    ));
+    let original = reshiki::reactions::preview(&doc, arrow).unwrap();
+    assert!(original.reactants.iter().any(|part| part.atoms == [above]));
+    assert!(original.products.iter().any(|part| part.atoms == [below]));
+    let current_scheme = preview(&doc, arrow).unwrap();
+    assert_eq!(current_scheme.agents.len(), 2);
+    let legacy = legacy_profile(&doc, &[arrow]);
+    assert_ne!(
+        legacy.source_key,
+        profile::source_key(&doc, &current_scheme)
+    );
+    let id = doc.next_id();
+    doc.graphics.push(Graphic::energy_profile(
+        id,
+        Point::new(0., 100.),
+        Point::new(200., 160.),
+        legacy,
+        Default::default(),
+    ));
+    assert_eq!(doc.file_version(), reshiki::document::ENERGY_PROFILES);
+    let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+    let figure = reopened
+        .graphics
+        .last()
+        .unwrap()
+        .energy_profile
+        .as_deref()
+        .unwrap();
+    assert_eq!(
+        profile::source_reactions(&reopened, figure),
+        Some(vec![original])
+    );
+    let mut stale = reopened.clone();
+    stale.atom_mut(above).unwrap().charge = 1;
+    assert!(!profile::source_current(&stale, figure));
+}
+
+#[test]
+fn rerun_upgrades_old_inference_keys_in_place_without_placing_a_second_figure() {
     let mut app = app();
-    app.xtb_place_scheme_profile();
-    let graphic = app.tab.doc.graphics.last_mut().unwrap();
-    let id = graphic.id;
-    let step = &mut graphic.energy_profile.as_deref_mut().unwrap().steps[1];
-    let arrow = step.source.take().unwrap();
+    let arrows = app.tab.xtb.scheme.as_ref().unwrap().plan.arrows.clone();
+    let above = app.tab.doc.add_atom("O", Point::new(170., -20.));
+    let below = app.tab.doc.add_atom("O", Point::new(450., 20.));
+    app.tab.doc.reactions.clear();
+    let plan = Plan::read(&app.tab.doc, &arrows).unwrap();
+    let scheme = app.tab.xtb.scheme.as_mut().unwrap();
+    scheme.work.report = report(&plan);
+    scheme.plan = plan;
+    let legacy = legacy_profile(&app.tab.doc, &arrows);
+    let fresh = app.xtb_scheme_profile().unwrap();
+    assert_ne!(legacy.source_key, fresh.source_key);
+    assert_ne!(legacy.steps[1].source_key, fresh.steps[1].source_key);
+    let mut identified = legacy.clone();
+    identified.steps[1].source = Some(arrows[1]);
+    assert!(!profile::source_current(&app.tab.doc, &identified));
+    let id = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::energy_profile(
+        id,
+        Point::new(40., 100.),
+        Point::new(300., 180.),
+        legacy,
+        Default::default(),
+    ));
+    app.tab.doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
     let before = app.tab.doc.clone();
     assert_eq!(before.file_version(), reshiki::document::ENERGY_PROFILES);
+    let old = before
+        .graphics
+        .last()
+        .unwrap()
+        .energy_profile
+        .as_deref()
+        .unwrap();
+    let matched = profile::source_reactions(&before, old).unwrap();
+    assert_eq!(
+        matched.iter().map(|step| step.arrow).collect::<Vec<_>>(),
+        arrows
+    );
+    assert!(
+        matched[0]
+            .reactants
+            .iter()
+            .any(|part| part.atoms == [above])
+    );
+    assert!(matched[1].products.iter().any(|part| part.atoms == [below]));
     app.xtb_refresh_scheme_profile(before);
     let upgraded = app.tab.doc.graphics.last().unwrap();
     assert_eq!(upgraded.id, id);
-    assert_eq!(
-        upgraded.energy_profile.as_deref().unwrap().steps[1].source,
-        Some(arrow)
-    );
+    assert_eq!(upgraded.energy_profile.as_deref(), Some(&fresh));
     assert_eq!(
         app.tab.doc.file_version(),
         reshiki::document::SCHEME_PROFILE_LINKS
     );
+    app.tab.selected = arrows;
+    app.xtb_place_scheme_profile();
+    assert_eq!(app.tab.selected, [id]);
+    assert_eq!(app.tab.doc.graphics.len(), 1);
 }
 
 #[cfg(all(not(windows), feature = "xtb"))]

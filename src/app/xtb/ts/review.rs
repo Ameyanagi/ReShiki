@@ -878,7 +878,14 @@ impl App {
                     return Task::none();
                 }
                 let arrow = dialog.arrow;
-                let proposal = dialog.mapping.proposal().cloned();
+                // Scheme reviews map an isolated step. The drawing editor's
+                // freshness check covers the full document, so Auto-map must
+                // create its proposal there after this handoff.
+                let proposal = if dialog.scheme.is_some() {
+                    None
+                } else {
+                    dialog.mapping.proposal().cloned()
+                };
                 if dialog.scheme.is_some() {
                     let _ = self.xtb_scheme_action(scheme::Action::Cancel);
                 }

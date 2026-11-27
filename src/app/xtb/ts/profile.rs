@@ -104,19 +104,31 @@ pub(in crate::app) fn source_reaction_prefix(
     doc: &Document,
     profile: &EnergyProfile,
 ) -> Vec<Reaction> {
-    let preview = |id| {
-        if profile.steps.len() > 1 {
-            super::scheme::plan::preview(doc, id).ok()
-        } else {
-            reactions::preview(doc, id).ok()
-        }
-    };
-    let Some(first) = profile.source.and_then(preview) else {
-        return vec![];
-    };
-    if source_key(doc, &first) != profile.source_key || profile.steps.is_empty() {
+    if profile.steps.is_empty() {
         return vec![];
     }
+    // Before format 44, inferred roles used reactions::preview even for a
+    // scheme. Its end-side inference can include a molecule above the shaft
+    // as a reactant/product where the newer scheme preview calls it an agent.
+    // Resolve against the roles that produced the saved key so playback also
+    // highlights the saved participants until a rerun replaces the figure.
+    let legacy = profile.steps.iter().all(|step| step.source.is_none());
+    let preview = |id, key: &str| {
+        let matches = |reaction: &Reaction| source_key(doc, reaction) == key;
+        if profile.steps.len() > 1 {
+            let current = super::scheme::plan::preview(doc, id).ok().filter(matches);
+            if current.is_some() || !legacy {
+                return current;
+            }
+        }
+        reactions::preview(doc, id).ok().filter(matches)
+    };
+    let Some(first) = profile
+        .source
+        .and_then(|id| preview(id, &profile.source_key))
+    else {
+        return vec![];
+    };
     let first_arrow = first.arrow;
     let mut reactions = vec![first];
     let mut visited = BTreeSet::from([first_arrow]);
@@ -125,8 +137,10 @@ pub(in crate::app) fn source_reaction_prefix(
             break;
         };
         if let Some(id) = step.source {
-            let Some(reaction) = preview(id) else { break };
-            if !visited.insert(id) || source_key(doc, &reaction) != key {
+            let Some(reaction) = preview(id, key) else {
+                break;
+            };
+            if !visited.insert(id) {
                 break;
             }
             reactions.push(reaction);
@@ -137,8 +151,7 @@ pub(in crate::app) fn source_reaction_prefix(
             .arrows
             .iter()
             .filter(|arrow| !visited.contains(&arrow.id))
-            .filter_map(|arrow| preview(arrow.id))
-            .filter(|reaction| source_key(doc, reaction) == key)
+            .filter_map(|arrow| preview(arrow.id, key))
             .collect();
         let side = |reaction: &Reaction, role| {
             reaction

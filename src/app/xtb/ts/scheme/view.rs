@@ -1,6 +1,6 @@
 //! A single setup sheet and the multistep reaction's progress and Path result.
 use super::run::{StepOptions, StepStatus, StepValue};
-use super::{Action, Quantity, State, send};
+use super::{Action, BARRIER_SKIPPED, Quantity, State, send};
 use crate::app::energy_plot::profile::{Marker, Profile, Sample, Side, Style};
 use crate::app::help::{Placement, modal};
 use crate::app::models3d::thumbnail::Thumbnail;
@@ -503,6 +503,15 @@ impl App {
                 .size(12)
             ]
             .spacing(3);
+            if let Some(reaction) = state.plan.steps.get(index) {
+                for note in reaction
+                    .notes
+                    .iter()
+                    .filter(|note| note.starts_with(BARRIER_SKIPPED))
+                {
+                    step = step.push(line(note, Tone::Warning));
+                }
+            }
             if let Some(value) = state.work.step(index) {
                 for (name, value) in energy_rows(value, unit) {
                     step = step.push(

@@ -260,6 +260,8 @@ async fn path_keeps_partial_energies_and_one_failure_reason_with_retry() {
     let state = app.tab.xtb.scheme.as_mut().unwrap();
     state.sheet = false;
     let reason = "No saddle found";
+    let skipped = "Barrier skipped: the map could not include the added H₂";
+    state.plan.steps[0].notes.push(skipped.into());
     state.work.steps = vec![StepStatus::Done, StepStatus::Failed(reason.into())];
     let mut first = value();
     first.arrow = state.plan.arrows[0];
@@ -271,6 +273,14 @@ async fn path_keeps_partial_energies_and_one_failure_reason_with_retry() {
     state.work.report.steps = vec![Some(first), Some(second)];
     state.work.error = Some("The xTB worker could not start".into());
     let snapshot = ui.inspect(app.xtb_scheme_path(true));
+    assert_eq!(
+        snapshot
+            .texts
+            .iter()
+            .filter(|text| *text == skipped)
+            .count(),
+        1
+    );
     assert_eq!(
         snapshot.texts.iter().filter(|text| *text == reason).count(),
         1

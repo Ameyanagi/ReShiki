@@ -177,6 +177,7 @@ struct Fake {
     frequency_warning: bool,
     cancel_after_species: bool,
     cancel_species: Option<usize>,
+    cancel_hessian: Option<usize>,
     optimized_starts: usize,
     order: Vec<Job>,
     thermo: bool,
@@ -187,7 +188,7 @@ impl Backend for Fake {
         &mut self,
         job: SpeciesJob<'_>,
         cancel: &Cancel,
-        _: &mut dyn FnMut(EventKind),
+        minimum: &mut dyn FnMut(&SpeciesValue),
     ) -> Result<SpeciesComputed, String> {
         let SpeciesJob {
             index,
@@ -198,8 +199,14 @@ impl Backend for Fake {
         } = job;
         self.species.push((index, frequencies));
         self.order.push(Job::Species(index));
+        if frequencies && self.cancel_hessian == Some(index) {
+            minimum(&cached.unwrap_or_else(|| species_value(index, method)));
+            cancel.cancel();
+            return Err("Scheme calculation canceled".into());
+        }
         if self.cancel_after_species || self.cancel_species == Some(index) {
             cancel.cancel();
+            return Err("Scheme calculation canceled".into());
         }
         Ok(SpeciesComputed {
             value: cached.unwrap_or_else(|| {
@@ -636,6 +643,57 @@ fn endpoint_results_survive_cancel_during_an_unrelated_minimum_with_or_without_a
         assert_eq!(state.steps[1], StepStatus::Cancelled);
         assert_eq!(state.step(0).unwrap().energy, Some(0.));
         assert!(state.step(0).unwrap().barrier.is_none());
+    }
+}
+
+#[test]
+fn electronic_row_is_published_before_the_shared_products_hessian() {
+    for free_energy in [false, true] {
+        let mut request = distinct_request();
+        request.options[0].barrier = false;
+        request.options[0].free_energy = free_energy;
+        request.options[1].reaction_energy = false;
+        request.options[1].barrier = false;
+        request.options[1].free_energy = true;
+        let mut fake = Fake {
+            cancel_hessian: Some(1),
+            thermo: true,
+            ..Default::default()
+        };
+        let cancel = Cancel::default();
+        let mut state = State::default();
+        state.serial = request.serial;
+        state.running = true;
+        state.steps = vec![StepStatus::Pending; 2];
+        state.report.steps = vec![None; 2];
+        assert!(
+            calculate(&request, &mut fake, &cancel, |kind| {
+                assert!(
+                    !cancel.is_cancelled(),
+                    "publish before starting the Hessian"
+                );
+                assert!(state.accept(Event {
+                    serial: request.serial,
+                    kind,
+                }));
+            })
+            .is_err()
+        );
+        state.cancel();
+        assert_eq!(fake.species, [(0, free_energy), (1, true)]);
+        assert_eq!(state.report.species.len(), 2);
+        assert_eq!(state.step(0).unwrap().energy, Some(0.));
+        assert!(state.step(0).unwrap().gibbs.is_none());
+        assert_eq!(
+            state.steps[0],
+            if free_energy {
+                StepStatus::Cancelled
+            } else {
+                StepStatus::Done
+            }
+        );
+        assert_eq!(state.steps[1], StepStatus::Cancelled);
+        assert!(state.step(1).is_none());
     }
 }
 

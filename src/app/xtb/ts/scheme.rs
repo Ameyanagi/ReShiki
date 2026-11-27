@@ -26,6 +26,7 @@ use plan::Plan;
 use run::{StepOptions, TsInput};
 
 static NEXT_REVIEW: AtomicU64 = AtomicU64::new(0);
+const BARRIER_SKIPPED: &str = "Barrier skipped:";
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Quantity {
@@ -110,8 +111,21 @@ impl State {
         self.reviews.is_some() || self.work.running()
     }
 
+    #[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+    pub(super) fn reviewed_step(&self, index: usize) -> Option<(StepOptions, &[String])> {
+        Some((
+            *self.options.get(index)?,
+            &self.plan.steps.get(index)?.notes,
+        ))
+    }
+
     fn discard_choices(&mut self) {
         if let Some((options, method)) = self.original.take() {
+            for (step, option) in self.plan.steps.iter_mut().zip(&options) {
+                if option.transition_state() {
+                    step.notes.retain(|note| !note.starts_with(BARRIER_SKIPPED));
+                }
+            }
             self.options = options;
             self.method = method;
         }
@@ -449,6 +463,13 @@ impl App {
         #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
         if let Some(reviews) = state.reviews.take() {
             state.original = None;
+            for (index, (step, options)) in
+                state.plan.steps.iter_mut().zip(&state.options).enumerate()
+            {
+                if reviews.retry.is_none_or(|retry| retry == index) && options.transition_state() {
+                    step.notes.retain(|note| !note.starts_with(BARRIER_SKIPPED));
+                }
+            }
             state
                 .work
                 .seed(&self.tab.doc, &state.plan, state.method, &state.options);
@@ -477,10 +498,37 @@ impl App {
         index: usize,
         input: Result<TsInput, String>,
     ) -> Task<Message> {
-        self.xtb_scheme_finish_review(index, input.map(Some))
+        match input {
+            Ok(input) => self.xtb_scheme_finish_review(index, Ok(Some(input))),
+            Err(reason) => {
+                let added_hydrogen = self.tab.xtb.scheme.as_ref().is_some_and(|state| {
+                    state.plan.steps.get(index).is_some_and(|step| {
+                        step.reactants.iter().chain(&step.products).any(|term| {
+                            state.plan.species.get(term.species).is_some_and(|species| {
+                                species.atoms.is_empty() && species.formula == "H2"
+                            })
+                        })
+                    })
+                });
+                let note = if added_hydrogen {
+                    "Barrier skipped: the map could not include the added H₂".into()
+                } else {
+                    format!("{BARRIER_SKIPPED} {reason}")
+                };
+                self.xtb_scheme_skip_barrier_with_note(index, Some(note))
+            }
+        }
     }
 
     pub(super) fn xtb_scheme_skip_barrier(&mut self, index: usize) -> Task<Message> {
+        self.xtb_scheme_skip_barrier_with_note(index, None)
+    }
+
+    fn xtb_scheme_skip_barrier_with_note(
+        &mut self,
+        index: usize,
+        note: Option<String>,
+    ) -> Task<Message> {
         let Some(state) = self.tab.xtb.scheme.as_mut() else {
             return Task::none();
         };
@@ -497,6 +545,12 @@ impl App {
         options.barrier = false;
         options.free_barrier = false;
         options.reaction_energy = true;
+        if let Some(note) = note
+            && let Some(step) = state.plan.steps.get_mut(index)
+        {
+            step.notes.retain(|note| !note.starts_with(BARRIER_SKIPPED));
+            step.notes.push(note);
+        }
         self.xtb_scheme_finish_review(index, Ok(None))
     }
 

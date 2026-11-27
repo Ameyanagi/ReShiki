@@ -726,8 +726,9 @@ pub(in crate::app::xtb::ts) fn preview(doc: &Document, arrow: u64) -> Result<Rea
 }
 
 type DrawnInstances = BTreeSet<Vec<u64>>;
+type PathSides = (DrawnInstances, DrawnInstances);
 
-fn path_sides(step: &Step) -> Result<(DrawnInstances, DrawnInstances), String> {
+fn spectator_quantities(step: &Step) -> Result<BTreeMap<usize, u32>, String> {
     let mut quantities = BTreeMap::<usize, [u32; 2]>::new();
     for (drawn, product) in [(&step.drawn_reactants, false), (&step.drawn_products, true)] {
         for term in drawn {
@@ -741,46 +742,186 @@ fn path_sides(step: &Step) -> Result<(DrawnInstances, DrawnInstances), String> {
     // Cancel common quantities by molecular identity before linking drawn
     // instances. A wholly unchanged row can still link numbered copies of one
     // compound; preserve that row because it has no distinguishable spectator.
-    let unchanged = quantities.values().all(|counts| counts[0] == counts[1]);
-    let remaining = |side: &[DrawnTerm]| {
-        let mut cancel: BTreeMap<_, _> = quantities
-            .iter()
-            .map(|(&species, counts)| {
-                (
-                    species,
-                    if unchanged {
-                        0
-                    } else {
-                        counts[0].min(counts[1])
-                    },
-                )
-            })
-            .collect();
-        let mut drawn: Vec<_> = side.iter().collect();
-        drawn.sort_by(|a, b| a.atoms.cmp(&b.atoms));
+    let unchanged = quantities.values().all(|[r, p]| r == p);
+    Ok(quantities
+        .into_iter()
+        .map(|(species, [r, p])| (species, if unchanged { 0 } else { r.min(p) }))
+        .collect())
+}
+
+#[derive(Clone, Copy)]
+enum PathCandidates {
+    Certain,
+    Chemical,
+    Drawn,
+}
+
+/// Give unavoidable endpoints priority over interchangeable copies, and those
+/// copies priority over a chemically unchanged molecule carried to the next row.
+fn candidate_sides(step: &Step, candidates: PathCandidates) -> Result<PathSides, String> {
+    let quantities = spectator_quantities(step)?;
+    let side = |drawn: &[DrawnTerm]| {
         drawn
-            .into_iter()
+            .iter()
+            .filter(|term| match candidates {
+                PathCandidates::Certain => {
+                    term.coefficient > quantities.get(&term.species).copied().unwrap_or(0)
+                }
+                PathCandidates::Chemical => {
+                    drawn
+                        .iter()
+                        .filter(|other| other.species == term.species)
+                        .map(|other| u64::from(other.coefficient))
+                        .sum::<u64>()
+                        > u64::from(quantities.get(&term.species).copied().unwrap_or(0))
+                }
+                PathCandidates::Drawn => true,
+            })
+            .map(|term| term.atoms.clone())
+            .collect()
+    };
+    Ok((side(&step.drawn_reactants), side(&step.drawn_products)))
+}
+
+fn path_sides(step: &Step, neighbors: &PathSides, others: &PathSides) -> Result<PathSides, String> {
+    let quantities = spectator_quantities(step)?;
+    let remaining = |side: &[DrawnTerm], preferred: &DrawnInstances, other: &DrawnInstances| {
+        let mut cancel = quantities.clone();
+        let mut drawn: Vec<_> = side.iter().collect();
+        // Keep the copy linking the adjacent step. Cancel a nonneighbor's
+        // shortcut first, then an unshared copy, without using atom-ID order.
+        drawn.sort_by_key(|term| {
+            (
+                preferred.contains(&term.atoms),
+                !other.contains(&term.atoms),
+            )
+        });
+        let mut remaining: DrawnInstances = drawn
+            .iter()
             .filter_map(|term| {
                 let count = cancel.get_mut(&term.species)?;
                 let used = (*count).min(term.coefficient);
                 *count -= used;
                 (used < term.coefficient).then(|| term.atoms.clone())
             })
-            .collect()
+            .collect();
+        // Retain the same shared instances on both ends of a chosen link, even
+        // if their chemical quantity canceled. The energy terms are unchanged.
+        remaining.extend(
+            side.iter()
+                .filter(|term| preferred.contains(&term.atoms))
+                .map(|term| term.atoms.clone()),
+        );
+        remaining
     };
     Ok((
-        remaining(&step.drawn_reactants),
-        remaining(&step.drawn_products),
+        remaining(&step.drawn_reactants, &neighbors.0, &others.0),
+        remaining(&step.drawn_products, &neighbors.1, &others.1),
     ))
 }
 
 fn order(steps: &[Step]) -> Result<(Vec<usize>, bool), String> {
-    let sides: Vec<_> = steps.iter().map(path_sides).collect::<Result<_, _>>()?;
-    let mut incoming = vec![Vec::new(); steps.len()];
-    let mut outgoing = vec![Vec::new(); steps.len()];
+    let certain: Vec<_> = steps
+        .iter()
+        .map(|step| candidate_sides(step, PathCandidates::Certain))
+        .collect::<Result<_, _>>()?;
+    let chemical: Vec<_> = steps
+        .iter()
+        .map(|step| candidate_sides(step, PathCandidates::Chemical))
+        .collect::<Result<_, _>>()?;
+    let possible: Vec<_> = steps
+        .iter()
+        .map(|step| candidate_sides(step, PathCandidates::Drawn))
+        .collect::<Result<_, _>>()?;
+    let mut preferred_links = path_links(&certain, |_, _| true)?;
+    check_branches(&preferred_links.0, &preferred_links.1)?;
+    // Certain links take precedence over optional links from interchangeable
+    // copies. In particular, a carried spectator cannot skip a known step.
+    for (sides, connect_components) in [(&chemical, false), (&possible, true)] {
+        let (incoming, outgoing) = &preferred_links;
+        let components = path_components(incoming, outgoing);
+        preferred_links = path_links(sides, |from, to| {
+            outgoing
+                .get(from)
+                .is_some_and(|edges| edges.is_empty() || edges.contains(&to))
+                && incoming
+                    .get(to)
+                    .is_some_and(|edges| edges.is_empty() || edges.contains(&from))
+                && (!connect_components
+                    || outgoing.get(from).is_some_and(|edges| edges.contains(&to))
+                    || components.get(from) != components.get(to))
+        })?;
+        check_branches(&preferred_links.0, &preferred_links.1)?;
+    }
+    let (path, cyclic) = path_order(&preferred_links.0, &preferred_links.1)?;
+    let mut sides = vec![PathSides::default(); steps.len()];
+    for (position, &index) in path.iter().enumerate() {
+        let previous = position
+            .checked_sub(1)
+            .and_then(|i| path.get(i))
+            .copied()
+            .or_else(|| cyclic.then(|| path.last().copied()).flatten());
+        let next = path
+            .get(position + 1)
+            .copied()
+            .or_else(|| cyclic.then(|| path.first().copied()).flatten());
+        let mut neighbors = PathSides::default();
+        let mut others = PathSides::default();
+        for (other, (reactants, products)) in possible.iter().enumerate() {
+            if other == index {
+                continue;
+            }
+            if Some(other) == previous {
+                neighbors.0.extend(products.iter().cloned());
+            } else {
+                others.0.extend(products.iter().cloned());
+            }
+            if Some(other) == next {
+                neighbors.1.extend(reactants.iter().cloned());
+            } else {
+                others.1.extend(reactants.iter().cloned());
+            }
+        }
+        let step = steps.get(index).ok_or("Unknown reaction step")?;
+        *sides.get_mut(index).ok_or("Unknown reaction step")? =
+            path_sides(step, &neighbors, &others)?;
+    }
+    // A coefficient can require several copies to remain. Verify that choosing
+    // the neighboring instances did not leave an unavoidable extra link.
+    let (incoming, outgoing) = path_links(&sides, |_, _| true)?;
+    path_order(&incoming, &outgoing)
+}
+
+type PathLinks = (Vec<Vec<usize>>, Vec<Vec<usize>>);
+
+fn path_components(incoming: &[Vec<usize>], outgoing: &[Vec<usize>]) -> Vec<Option<usize>> {
+    let mut components = vec![None; incoming.len()];
+    for start in 0..incoming.len() {
+        let mut pending = vec![start];
+        while let Some(index) = pending.pop() {
+            let Some(component) = components.get_mut(index) else {
+                continue;
+            };
+            if component.is_some() {
+                continue;
+            }
+            *component = Some(start);
+            pending.extend(incoming.get(index).into_iter().flatten().copied());
+            pending.extend(outgoing.get(index).into_iter().flatten().copied());
+        }
+    }
+    components
+}
+
+fn path_links(
+    sides: &[PathSides],
+    include: impl Fn(usize, usize) -> bool,
+) -> Result<PathLinks, String> {
+    let mut incoming = vec![Vec::new(); sides.len()];
+    let mut outgoing = vec![Vec::new(); sides.len()];
     for (from, (_, products)) in sides.iter().enumerate() {
         for (to, (reactants, _)) in sides.iter().enumerate() {
-            if from != to && !products.is_disjoint(reactants) {
+            if from != to && include(from, to) && !products.is_disjoint(reactants) {
                 incoming
                     .get_mut(to)
                     .ok_or("Unknown reaction step")?
@@ -792,15 +933,23 @@ fn order(steps: &[Step]) -> Result<(Vec<usize>, bool), String> {
             }
         }
     }
-    if incoming
-        .iter()
-        .chain(&outgoing)
-        .any(|edges| edges.len() > 1)
-    {
+    Ok((incoming, outgoing))
+}
+
+fn check_branches(incoming: &[Vec<usize>], outgoing: &[Vec<usize>]) -> Result<(), String> {
+    if incoming.iter().chain(outgoing).any(|edges| edges.len() > 1) {
         return Err(
             "The selected scheme branches or merges. Select one consecutive reaction path".into(),
         );
     }
+    Ok(())
+}
+
+fn path_order(
+    incoming: &[Vec<usize>],
+    outgoing: &[Vec<usize>],
+) -> Result<(Vec<usize>, bool), String> {
+    check_branches(incoming, outgoing)?;
     let starts: Vec<_> = incoming
         .iter()
         .enumerate()
@@ -828,7 +977,7 @@ fn order(steps: &[Step]) -> Result<(Vec<usize>, bool), String> {
         order.push(index);
         next = outgoing.get(index).and_then(|edges| edges.first()).copied();
     }
-    if order.len() != steps.len() {
+    if order.len() != incoming.len() {
         return Err("The selected arrows contain disconnected paths or cycles. Select one consecutive reaction path".into());
     }
     Ok((order, cyclic))
