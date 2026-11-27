@@ -924,29 +924,39 @@ fn older_reader_refuses_result_files() {
     let start = launch(&doc, oxygen, 0, 1).unwrap();
     add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
     let bytes = doc.file_json().unwrap();
-    assert_eq!(VERSION, 42);
-    assert_eq!(Document::from_json(&bytes).unwrap().version, 42);
-    assert_eq!(read_with_version(&bytes, VERSION).unwrap().version, 42);
+    assert_eq!(Document::from_json(&bytes).unwrap().version, CALCULATIONS);
     assert_eq!(
-        read_with_version(&bytes, VERSION - 1).unwrap_err(),
-        "This drawing was made with a newer version of ReShiki (document version 42). Update ReShiki to open it."
+        read_with_version(&bytes, VERSION).unwrap().version,
+        CALCULATIONS
     );
+    assert_eq!(
+        read_with_version(&bytes, CALCULATIONS - 1).unwrap_err(),
+        format!(
+            "This drawing was made with a newer version of ReShiki (document version {CALCULATIONS}). Update ReShiki to open it."
+        )
+    );
+    let future_version = VERSION + 1;
     let mut newer: Value = serde_json::from_slice(&bytes).unwrap();
-    newer["version"] = json!(43);
+    newer["version"] = json!(future_version);
     assert_eq!(
         Document::from_json(&serde_json::to_vec(&newer).unwrap()).unwrap_err(),
-        "This drawing was made with a newer version of ReShiki (document version 43). Update ReShiki to open it."
+        format!(
+            "This drawing was made with a newer version of ReShiki (document version {future_version}). Update ReShiki to open it."
+        )
     );
 }
 
 #[test]
 fn newer_version_is_refused_before_reading_science() {
+    let future_version = VERSION + 1;
     let mut newer = serde_json::to_value(Document::default()).unwrap();
-    newer["version"] = json!(43);
+    newer["version"] = json!(future_version);
     newer["science"] = json!({"results": "invalid"});
     assert_eq!(
         Document::from_native_file(&serde_json::to_vec(&newer).unwrap()).unwrap_err(),
-        "This drawing was made with a newer version of ReShiki (document version 43). Update ReShiki to open it."
+        format!(
+            "This drawing was made with a newer version of ReShiki (document version {future_version}). Update ReShiki to open it."
+        )
     );
     newer["version"] = json!(VERSION);
     let error = Document::from_native_file(&serde_json::to_vec(&newer).unwrap()).unwrap_err();
