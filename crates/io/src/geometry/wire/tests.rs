@@ -22,7 +22,7 @@ fn frames_reject_truncation_trailing_bytes_unknown_fields_and_oversize() {
 }
 
 #[test]
-fn legacy_protocol_defaults_to_strict_with_no_approximations_or_ensemble() {
+fn legacy_protocol_defaults_to_strict_with_no_rough_start_approximations_or_ensemble() {
     let mut document = crate::document::Document::default();
     document.add_atom("C", crate::document::Point::new(0., 0.));
     let prepared = super::super::Prepared::new(&document, &[]).unwrap();
@@ -39,10 +39,12 @@ fn legacy_protocol_defaults_to_strict_with_no_approximations_or_ensemble() {
         .as_object_mut()
         .unwrap()
         .remove("relaxed");
+    value["operation"].as_object_mut().unwrap().remove("rough");
     assert!(value["operation"].get("ensemble").is_none());
     let frame = encode(&value, MAX_REQUEST_BYTES).unwrap();
     let legacy: Request = decode(&frame, MAX_REQUEST_BYTES).unwrap();
     assert!(!legacy.operation.relaxed);
+    assert!(!legacy.operation.rough);
     assert!(legacy.operation.ensemble.is_none());
     legacy.operation.validate().unwrap();
 

@@ -1909,6 +1909,8 @@ fn answer(app: &mut App, field: ForceField) {
         key,
         Ok(Arc::new(optimized)),
     )));
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    super::refine_tests::fail_optional_refinement(app, key);
 }
 
 #[test]
@@ -1922,14 +1924,17 @@ fn a_molecule_strict_checks_refuse_gets_an_approximate_model_with_the_reason() {
     answer(&mut app, ForceField::Uff);
     assert!(!app.error);
     assert_eq!(app.tab.doc.models.len(), 1);
-    assert_eq!(
-        app.status,
+    assert!(app.status.starts_with(
         "Shown as 3D model · Approximate UFF model · MMFF has no parameters for U (uranium)"
-    );
+    ));
 }
 
 #[test]
 fn an_unsupported_cerium_shape_rings_the_atom_and_keeps_the_selection() {
+    #[cfg(all(feature = "xtb", not(target_arch = "wasm32")))]
+    if super::super::xtb::available() {
+        return;
+    }
     let mut app = star("Ce", "F", 3, 1);
     let cerium = app.tab.doc.atoms[0].id;
     let atoms: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
@@ -2021,6 +2026,8 @@ fn a_propyl_radical_builds_from_propane_and_removes_only_its_extra_hydrogen() {
         key,
         Ok(Arc::new(optimized)),
     )));
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    super::refine_tests::fail_optional_refinement(&mut app, key);
     assert!(
         app.status.contains("its closed-shell parent"),
         "{}",
@@ -2072,8 +2079,8 @@ fn a_model_built_in_uff_because_mmff_has_no_types_says_so() {
     assert_eq!(job.prepared.mode(), reshiki::geometry::Mode::Strict);
     answer(&mut app, ForceField::Uff);
     assert_eq!(app.tab.doc.models[0].force_field, models3d::ForceField::Uff);
-    assert_eq!(
-        app.status,
-        "Shown as 3D model · UFF used: no MMFF94s parameters for this molecule"
+    assert!(
+        app.status
+            .starts_with("Shown as 3D model · UFF used: no MMFF94s parameters for this molecule")
     );
 }

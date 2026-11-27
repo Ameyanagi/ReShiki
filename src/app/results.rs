@@ -16,7 +16,7 @@ enum Completion {
     Engine,
     /// Optimization(WorkerDone).
     Optimization,
-    /// Models3d(Generated | ParentNamed).
+    /// Models3d(Generated | Refined | ParentNamed).
     Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
@@ -473,6 +473,10 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         Message::Models3d(action) => match action {
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            super::models3d::Action::Refined(..) => Some(Completion::Models3d),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            super::models3d::Action::Cancel => None,
             super::models3d::Action::Generated(..) | super::models3d::Action::ParentNamed(..) => {
                 Some(Completion::Models3d)
             }

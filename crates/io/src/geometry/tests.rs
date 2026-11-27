@@ -947,11 +947,14 @@ fn atom_range_and_parameter_errors_are_typed() {
     // coordinates can still be flattened.
     let mut source = Document::default();
     let atom = source.add_atom("Rf", Point::default());
-    assert!(matches!(
-        Prepared::relaxed(&source, &[]).unwrap().check_generation(),
-        Err(Error::Atom { atom: id, label, problem: AtomProblem::NoParameters, .. })
-            if id == atom && label == "Rf1"
-    ));
+    let prepared = Prepared::relaxed(&source, &[]).unwrap();
+    for prepared in [prepared.clone(), prepared.rough()] {
+        assert!(matches!(
+            prepared.check_generation(),
+            Err(Error::Atom { atom: id, label, problem: AtomProblem::NoParameters, .. })
+                if id == atom && label == "Rf1"
+        ));
+    }
     assert_eq!(
         AtomProblem::WrongShape { bonds: 1 }.to_string(),
         "the force field gives it the wrong shape with 1 bond"

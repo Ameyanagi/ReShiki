@@ -137,6 +137,7 @@ explains how the crates and modules fit together.
 - `src/app/linked_properties.rs`: Property captions shown from the Properties panel pins and the right-click "Show properties" menu.
 - `src/app/macos_files.rs`: Finder and Dock requests to open drawings, which open as tabs.
 - `src/app/models3d.rs`: Show a selected molecule as its 2D drawing, a 3D model or both (#386).
+- `src/app/models3d/refine.rs`: Refine starting geometries whose force-field shapes need an electronic method.
 - `src/app/models3d/thumbnail.rs`: Prepared ball-and-stick thumbnails using the paper's model renderer.
 - `src/app/models3d/thumbnail/animation.rs`: Worker-owned movie frames through the model thumbnail/export SVG renderer.
 - `src/app/molecule_shortcuts.rs`: Molecule shortcuts and edit context.

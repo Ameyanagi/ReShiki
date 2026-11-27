@@ -19,6 +19,8 @@ use reshiki::models3d::{
 };
 use std::sync::Arc;
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+pub(super) mod refine;
 pub(in crate::app) mod thumbnail;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +51,10 @@ pub(crate) enum Action {
     /// The 2D layout that the Structure section's 2D button uses.
     Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    Refined(Key, super::xtb::RunEvent),
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    Cancel,
     /// The closed-shell parent's name for the radical model that the tab's
     /// (file epoch, model serial) built.
     ParentNamed((u64, u64), String),
@@ -100,8 +106,19 @@ pub(crate) struct Job {
     pub(super) prepared: Arc<Prepared>,
     /// Why strict chemistry checks refused a model built in relaxed mode.
     strict_error: Option<geometry::Error>,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    rough: Option<refine::Rough>,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    refining: Option<refine::Refining>,
     started: iced::time::Instant,
     _handle: iced::task::Handle,
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+impl Job {
+    pub(super) fn is_rough(&self) -> bool {
+        self.rough.is_some()
+    }
 }
 
 /// A generated model and the models it can replace when its result is stored.
@@ -112,6 +129,11 @@ pub(super) struct CalculationModel {
 }
 
 impl CalculationModel {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn notes(&self) -> &[String] {
+        &self.model.notes
+    }
+
     fn new(doc: &Document, mut model: models3d::Model3d, target: Option<usize>) -> Self {
         let mut previous = Vec::new();
         let mut position = None;
@@ -227,10 +249,13 @@ impl App {
                 }
                 Task::none()
             }
-            Action::Generated(key, result) => {
-                let named = self.model_generated(key, result);
-                // A calculation waiting for this model goes on, or stops.
-                Task::batch([named, self.xtb_model_finished(key)])
+            Action::Generated(key, result) => self.model_generated(key, result),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            Action::Refined(key, event) => self.model_refined(key, event),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            Action::Cancel => {
+                self.cancel_model_generation();
+                Task::none()
             }
         }
     }
@@ -244,70 +269,86 @@ impl App {
         let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
             return Task::none();
         };
-        if job.current != self.model_key() {
-            self.status = "Drawing changed · 3D model not applied".into();
-            self.error = false;
-            return Task::none();
-        }
-        // A preview or label editor owns the drawing; adding a model
-        // under it would cancel or outdate it.
-        if self.tab.drawing_edit_active() {
-            self.status = "3D model not applied · Choose 3D again after this edit".into();
-            self.error = false;
-            return Task::none();
+        if let Err(reason) = self.model_job_applies(&job) {
+            return self.xtb_model_finished(key, Some(reason));
         }
         let model = result.map_err(Failure::other).and_then(|optimized| {
             job.prepared
                 .model(&optimized)
-                .map(|model| (model, optimized.force_field))
+                .map(|model| (model, optimized))
                 .map_err(|error| build_failure(&error))
         });
-        match model {
-            Ok((mut model, field)) => {
-                let ids = job.prepared.ids();
-                self.tab
-                    .model_failure
-                    .take_if(|failure| failure.molecule.iter().any(|id| ids.contains(id)));
-                model.seed = job.seed;
-                if job.reaction.is_some() {
-                    let model = CalculationModel::new(&self.tab.doc, model, job.target);
-                    self.xtb_stage_model(key, model);
-                } else if let Some(index) = job.target {
-                    self.replace_model(index, model);
-                } else {
-                    self.add_model(model, job.display);
+        let named = match model {
+            Ok((model, optimized)) => {
+                let field = optimized.force_field;
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                if refine::needed(&job, field) {
+                    return self.start_model_refinement(job, model, &optimized);
                 }
-                let caution = match &job.strict_error {
-                    Some(geometry::Error::Atom {
-                        symbol,
-                        problem: AtomProblem::NoMmffParameters,
-                        ..
-                    }) => Some(format!(
-                        "Approximate {field} model · MMFF has no parameters for {symbol} ({})",
-                        element_name(symbol)
-                    )),
-                    Some(_) => Some(format!("Approximate {field} model · relaxed checks")),
-                    None if field != job.force_field => Some(format!(
-                        "{field} used: no {} parameters for this molecule",
-                        job.force_field
-                    )),
-                    None => None,
-                };
-                if let Some(caution) = caution.filter(|_| !self.error) {
-                    self.status = format!("{} · {caution}", self.status);
-                }
-                if !self.error
-                    && let Some(who) = radical_subject(job.prepared.radicals())
-                {
-                    self.status = format!(
-                        "{} · {who}: start built from {UNNAMED_PARENT}, added H removed",
-                        self.status
-                    );
-                    return self.name_parent(&job.prepared);
-                }
+                self.model_succeeded(&job, model, force_field_caution(&job, field))
             }
             Err(failure) => {
                 self.record_model_failure(job.prepared.ids().to_vec(), failure);
+                Task::none()
+            }
+        };
+        Task::batch([named, self.xtb_model_finished(key, None)])
+    }
+
+    fn model_job_applies(&mut self, job: &Job) -> Result<(), &'static str> {
+        // A preview or label editor owns the drawing; adding a model
+        // under it would cancel or outdate it.
+        let reason = if job.current != self.model_key() {
+            self.status = "Drawing changed · 3D model not applied".into();
+            "Drawing changed"
+        } else if self.tab.drawing_edit_active() {
+            self.status = "3D model not applied · Choose 3D again after this edit".into();
+            "Finish the current edit, then run again"
+        } else {
+            return Ok(());
+        };
+        self.error = false;
+        Err(reason)
+    }
+
+    fn model_succeeded(
+        &mut self,
+        job: &Job,
+        mut model: models3d::Model3d,
+        notes: impl IntoIterator<Item = String>,
+    ) -> Task<Message> {
+        let ids = job.prepared.ids();
+        self.tab
+            .model_failure
+            .take_if(|failure| failure.molecule.iter().any(|id| ids.contains(id)));
+        model.seed = job.seed;
+        let radical = radical_subject(job.prepared.radicals())
+            .map(|who| format!("{who}: start built from {UNNAMED_PARENT}, added H removed"));
+        let name_parent = radical.is_some();
+        // The model keeps how it was built, through Undo, files and any
+        // calculation that starts from it.
+        model.notes = notes
+            .into_iter()
+            .chain(radical)
+            .map(|note| model_note(&note))
+            .take(16)
+            .collect();
+        let notes = model.notes.clone();
+        if job.reaction.is_some() {
+            let model = CalculationModel::new(&self.tab.doc, model, job.target);
+            self.xtb_stage_model(job.key, model);
+        } else if let Some(index) = job.target {
+            self.replace_model(index, model);
+        } else {
+            self.add_model(model, job.display);
+        }
+        if !self.error {
+            for note in &notes {
+                self.status.push_str(" · ");
+                self.status.push_str(note);
+            }
+            if name_parent {
+                return self.name_parent(&job.prepared);
             }
         }
         Task::none()
@@ -354,6 +395,15 @@ impl App {
     /// The atom a current 3D build failure names, ringed on the canvas.
     pub(super) fn model_failure_atom(&self) -> Option<u64> {
         self.current_failure()?.atom
+    }
+
+    pub(super) fn model_failure_message(&self, atoms: &[u64]) -> Option<&str> {
+        let failure = self.current_failure()?;
+        failure
+            .molecule
+            .iter()
+            .any(|id| atoms.contains(id))
+            .then_some(failure.message.as_str())
     }
 
     /// Name the closed-shell parent of a radical model off the UI thread;
@@ -430,7 +480,7 @@ impl App {
         self.status = "3D model canceled · Drawing unchanged".into();
         self.error = false;
         // A calculation waiting for this model stops too.
-        let _ = self.xtb_model_finished(job.key);
+        let _ = self.xtb_model_finished(job.key, Some("3D model canceled"));
         true
     }
 
@@ -639,7 +689,12 @@ impl App {
         self.tab
             .model_failure
             .take_if(|failure| failure.molecule.iter().any(|id| atoms.contains(id)));
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        let mut rough = None;
         let prepared = prepare(&self.tab.doc, &atoms).and_then(|(prepared, strict_error)| {
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            let prepared = refine::prepare(prepared, &mut rough)?;
+            #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
             prepared.check_generation()?;
             Ok((prepared, strict_error))
         });
@@ -678,7 +733,7 @@ impl App {
         .abortable();
         // A calculation waiting for a replaced generation stops.
         if let Some(old) = self.tab.model_job.take() {
-            let _ = self.xtb_model_finished(old.key);
+            let _ = self.xtb_model_finished(old.key, Some("Another 3D model was started"));
         }
         self.status = if let Some(who) = who {
             format!("{who} · Building the 3D start from its closed-shell parent…")
@@ -687,6 +742,10 @@ impl App {
         } else {
             format!("Generating 3D model · {}", force_field.name())
         };
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if let Some(rough) = &rough {
+            self.status = rough.status();
+        }
         self.tab.model_job = Some(Job {
             key,
             current: key,
@@ -697,6 +756,10 @@ impl App {
             force_field,
             prepared,
             strict_error,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            rough,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            refining: None,
             started: iced::time::Instant::now(),
             _handle: handle.abort_on_drop(),
         });
@@ -1139,6 +1202,7 @@ impl App {
             .and_then(|i| self.tab.doc.models.get(i))
             .map_or(Display::TwoD, |m| m.display);
         let pending = self.pending(&atoms);
+        let pending_job = self.tab.model_job.as_ref().filter(|_| pending.is_some());
         let model = index.and_then(|i| self.tab.doc.models.get(i));
         let stale = index.is_some_and(|i| self.model_stale(i));
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
@@ -1174,14 +1238,18 @@ impl App {
                     .into()
             }),)
             .spacing(4),
-            text(subtitle(
-                self.tab.model_job.as_ref().filter(|_| pending.is_some()),
-                model
-            ))
-            .size(11)
-            .style(muted_text),
+            text(subtitle(pending_job, model))
+                .size(11)
+                .style(muted_text),
         ]
         .spacing(6);
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if pending_job.is_some_and(|job| job.refining.is_some()) {
+            body = body.push(
+                accessible_command("structure-cancel-3d", "Cancel the 3D build", "Cancel")
+                    .on_press(Message::Models3d(Action::Cancel)),
+            );
+        }
         if let Some(failure) = &self.tab.model_failure
             && failure.epoch == self.tab.file_epoch
             && failure.revision == self.tab.revision
@@ -1859,6 +1927,10 @@ fn align_conformer(model: &mut models3d::Model3d, old: &models3d::Model3d, live:
 /// before there is a model).
 fn subtitle(job: Option<&Job>, model: Option<&models3d::Model3d>) -> String {
     if let Some(job) = job {
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if let Some(note) = refine::subtitle(job) {
+            return note;
+        }
         let field = job.force_field;
         return if !job.prepared.radicals().is_empty() {
             format!("Generating the conformer · closed-shell parent, then {field}")
@@ -1958,6 +2030,42 @@ fn element_name(symbol: &str) -> String {
         .to_lowercase()
 }
 
+/// A build note as a saved model note may be: one line of at most 512 bytes.
+fn model_note(note: &str) -> String {
+    let mut note: String = note
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if note.len() > 512 {
+        let mut end = 509;
+        while !note.is_char_boundary(end) {
+            end -= 1;
+        }
+        note.truncate(end);
+        note.push('…');
+    }
+    note
+}
+
+fn force_field_caution(job: &Job, field: ForceField) -> Option<String> {
+    match &job.strict_error {
+        Some(geometry::Error::Atom {
+            symbol,
+            problem: AtomProblem::NoMmffParameters,
+            ..
+        }) => Some(format!(
+            "Approximate {field} model · MMFF has no parameters for {symbol} ({})",
+            element_name(symbol)
+        )),
+        Some(_) => Some(format!("Approximate {field} model · relaxed checks")),
+        None if field != job.force_field => Some(format!(
+            "{field} used: no {} parameters for this molecule",
+            job.force_field
+        )),
+        None => None,
+    }
+}
+
 fn build_failure(error: &geometry::Error) -> Failure {
     let geometry::Error::Atom {
         atom,
@@ -2026,3 +2134,6 @@ mod crystal_tests;
 
 #[cfg(test)]
 mod ortep_tests;
+
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "xtb"))]
+pub(super) mod refine_tests;

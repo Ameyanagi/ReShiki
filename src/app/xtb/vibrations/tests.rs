@@ -1520,6 +1520,7 @@ fn push_is_refused_if_the_model_moved_after_calculation() {
     let request = Request {
         atoms: vec![atom],
         config,
+        spin_typed: false,
         keep_full: false,
         start: Some(Start {
             positions: vibrational::displaced(

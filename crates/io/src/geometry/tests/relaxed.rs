@@ -30,12 +30,11 @@ fn strict_is_the_default_and_legacy_chemistry_rejections_keep_their_messages() {
     assert_eq!(prepared.mode(), Mode::Strict);
     assert!(prepared.skipped_checks().is_empty());
     assert!(prepared.mmff_available());
-    assert!(
-        !prepared
-            .generation_request(ForceField::Uff, DEFAULT_SEED)
-            .unwrap()
-            .relaxed
-    );
+    let request = prepared
+        .generation_request(ForceField::Uff, DEFAULT_SEED)
+        .unwrap();
+    assert!(!request.relaxed);
+    assert!(!request.rough);
     let mut radical = pair("C", "C", 1);
     radical.atoms[0].radical_electrons = 1;
     for (document, expected) in [
@@ -136,8 +135,8 @@ fn relaxed_amine_oxide_keeps_the_checked_charges_and_adds_no_o_h() {
 }
 
 #[test]
-fn relaxed_flag_crosses_the_wire_for_generate_relax_and_evaluate() {
-    let prepared = Prepared::relaxed(&ethanol(), &[]).unwrap();
+fn relaxed_and_rough_flags_cross_the_wire_for_generate_relax_and_evaluate() {
+    let prepared = Prepared::relaxed(&ethanol(), &[]).unwrap().rough();
     let conf = conformer(&prepared);
     for operation in [
         reshiki_geometry::Operation::Generate,
@@ -164,6 +163,10 @@ fn relaxed_flag_crosses_the_wire_for_generate_relax_and_evaluate() {
         .unwrap();
         let decoded: wire::Request = wire::decode(&frame, wire::MAX_REQUEST_BYTES).unwrap();
         assert!(decoded.operation.relaxed);
+        assert_eq!(
+            decoded.operation.rough,
+            operation == reshiki_geometry::Operation::Generate
+        );
         assert_eq!(decoded.operation.operation, operation);
         decoded.operation.validate().unwrap();
     }
@@ -190,7 +193,7 @@ fn relaxed_radicals_and_hydrogen_policy_are_taken_exactly_as_drawn() {
 }
 
 #[test]
-fn relaxed_uff_shape_refusal_identifies_cef3_before_starting_a_worker() {
+fn relaxed_uff_shape_refusal_identifies_cef3_unless_a_rough_start_is_requested() {
     let mut document = Document::default();
     document.add_atom("C", Point::new(300., 0.));
     let cerium = document.add_atom("Ce", Point::default());
@@ -227,6 +230,14 @@ fn relaxed_uff_shape_refusal_identifies_cef3_before_starting_a_worker() {
             problem: AtomProblem::WrongShape { bonds: 3 },
         } if atom == cerium && symbol == "Ce" && label == "Ce1"
     ));
+    let prepared = prepared.rough();
+    prepared.check_generation().unwrap();
+    let request = prepared
+        .generation_request(ForceField::Uff, DEFAULT_SEED)
+        .unwrap();
+    assert!(request.relaxed);
+    assert!(request.rough);
+    request.validate().unwrap();
     assert_eq!(document, before);
 }
 

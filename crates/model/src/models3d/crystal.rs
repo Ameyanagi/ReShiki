@@ -391,6 +391,8 @@ pub fn import_notes<'a>(doc: &'a crate::document::Document, ids: &[u64]) -> Vec<
     doc.models
         .iter()
         .filter(|m| ids.is_empty() || ids.iter().any(|id| m.contains(*id)))
+        // An outdated model's notes describe a structure no longer drawn.
+        .filter(|m| !m.is_stale(doc))
         .flat_map(|m| m.notes.iter().map(String::as_str))
         .filter(|note| seen.insert(*note))
         .collect()

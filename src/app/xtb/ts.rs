@@ -815,6 +815,7 @@ impl App {
         self.xtb_begin(super::Request {
             atoms: plan.start_atoms.clone(),
             config,
+            spin_typed: true,
             keep_full: false,
             start: None,
             search: None,
@@ -1027,7 +1028,7 @@ impl App {
                     frames,
                     result,
                     line,
-                    notes: vec![],
+                    notes: std::mem::take(&mut run.model_notes),
                     info,
                     attempt: Some(attempt),
                     generated: run.generated.take(),

@@ -459,7 +459,15 @@ fn has_three_dimensional_extent(coordinates: &[[f64; 3]]) -> bool {
             }
         }
     }
-    // Jacobi diagonalization of this small symmetric matrix.
+    let (mut extents, _) = principal_axes(covariance);
+    extents.sort_by(f64::total_cmp);
+    extents[0] > 1e-4 && extents[0] > extents[2] * 1e-4
+}
+
+// Jacobi diagonalization of a 3×3 symmetric matrix. Each axis is paired
+// with the diagonal entry for its eigenvalue.
+fn principal_axes(mut covariance: [[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
+    let mut axes = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
     for _ in 0..24 {
         let (p, q) = [(0, 1), (0, 2), (1, 2)]
             .into_iter()
@@ -486,10 +494,11 @@ fn has_three_dimensional_extent(coordinates: &[[f64; 3]]) -> bool {
         covariance[p][other] = covariance[other][p];
         covariance[other][q] = sin * op + cos * oq;
         covariance[q][other] = covariance[other][q];
+        let (u, v) = (axes[p], axes[q]);
+        axes[p] = std::array::from_fn(|i| cos * u[i] - sin * v[i]);
+        axes[q] = std::array::from_fn(|i| sin * u[i] + cos * v[i]);
     }
-    let mut extents = [covariance[0][0], covariance[1][1], covariance[2][2]];
-    extents.sort_by(f64::total_cmp);
-    extents[0] > 1e-4 && extents[0] > extents[2] * 1e-4
+    ([covariance[0][0], covariance[1][1], covariance[2][2]], axes)
 }
 
 fn existing_coordinates(
@@ -661,9 +670,35 @@ fn embed(
     }
     loop {
         calls += 1;
-        let embedded = mol
-            .with_3d_conformers_result_with_params(conformers, &parameters)
-            .map_err(|error| error.to_string())?;
+        let embedded = match mol.with_3d_conformers_result_with_params(conformers, &parameters) {
+            Ok(embedded) => embedded,
+            Err(error) => {
+                if request.relaxed
+                    && request.rough
+                    && request.ensemble.is_none()
+                    && request.coordinates.is_empty()
+                    && let Some(points) = relaxed::star_seed_after_embedding_error(mol)
+                {
+                    diagnostics.push(format!(
+                        "initialization=rough-star; terminal ligands around one unsupported UFF shape; ETKDG strict-valence rejection={}",
+                        error.to_string().chars().take(512).collect::<String>()
+                    ));
+                    let molecule = mol
+                        .with_only_3d_conformer(rows(&points))
+                        .map_err(|error| error.to_string())?;
+                    return Ok((
+                        EmbedMultipleConfsResult {
+                            molecule,
+                            conf_ids: vec![0],
+                            requested_num_confs: conformers,
+                            params: parameters,
+                        },
+                        "Rust rough star",
+                    ));
+                }
+                return Err(error.to_string());
+            }
+        };
         // Each call retains its 100-attempt/10-second limits; the disposable
         // worker also bounds the entire operation. Count the cage pilot here.
         if calls >= 3 {
@@ -714,6 +749,7 @@ struct Candidate {
     initial_energy: f64,
     energy: f64,
     converged: bool,
+    rough_start_note: Option<String>,
 }
 
 fn embedded_candidate(
@@ -738,6 +774,7 @@ fn embedded_candidate(
         initial_energy: energy,
         energy,
         converged: false,
+        rough_start_note: None,
     })
 }
 
@@ -803,10 +840,18 @@ fn minimized(
         final_energy <= initial + 1e-6,
         "force-field minimization increased the energy",
     )?;
-    let result = field.positions();
+    let mut result = field.positions();
+    let rough_start_note = if request.rough {
+        relaxed::spread_misshaped_centres(mol, &mut result)
+    } else {
+        None
+    };
     validate_geometry(mol, &result)?;
     // Only generated geometry: Relax may hold an angle the caller pinned.
-    if request.field == ForceField::UFF && request.operation == Operation::Generate {
+    if !request.rough
+        && request.field == ForceField::UFF
+        && request.operation == Operation::Generate
+    {
         reject_collapsed_ligands(mol, &result)?;
     }
     expected.validate(mol, &result)?;
@@ -824,6 +869,7 @@ fn minimized(
         initial_energy: initial,
         energy: final_energy,
         converged: outcome.converged(),
+        rough_start_note,
     })
 }
 
@@ -863,7 +909,7 @@ pub(super) fn solve_with_threads(
     let expected = StereoExpectation::new(&mol)?;
     // MMFF types none of these elements, so this is the UFF that generation
     // would fall back to; refuse before typing, which may fail for Og first.
-    if request.operation == Operation::Generate {
+    if request.operation == Operation::Generate && !request.rough {
         refuse_shapes_uff_gets_wrong(request)?;
     }
     let check = |field| {
@@ -965,6 +1011,7 @@ pub(super) fn solve_with_threads(
                     response.initial_energy = candidate.initial_energy;
                     response.energy = candidate.energy;
                     response.converged = candidate.converged;
+                    response.approximations.extend(candidate.rough_start_note);
                     response
                         .approximations
                         .push("Started from the drawn coordinates".into());
@@ -988,6 +1035,7 @@ pub(super) fn solve_with_threads(
                     response.initial_energy = candidate.initial_energy;
                     response.energy = candidate.energy;
                     response.converged = candidate.converged;
+                    response.approximations.extend(candidate.rough_start_note);
                     response.diagnostics.push(format!(
                         "initialization=existing-3d; reused existing original-atom 3D coordinates; temporary hydrogens added with coordinate-aware AddHs; selection=validated existing geometry; iteration_limit={}; converged={}",
                         request.max_iterations, response.converged
@@ -1045,6 +1093,7 @@ pub(super) fn solve_with_threads(
         let mut valid = 0;
         let mut rejected = 0;
         let mut last_failure = String::new();
+        let mut rough_start_note = None;
         let mut ids: Vec<_> = valid_conformer_ids(&embedded.conf_ids).collect();
         if request.ensemble.is_some() {
             ids.sort_unstable();
@@ -1097,6 +1146,7 @@ pub(super) fn solve_with_threads(
                     response.initial_energy = candidate.initial_energy;
                     response.energy = candidate.energy;
                     response.converged = candidate.converged;
+                    rough_start_note = candidate.rough_start_note;
                 }
             }
             Err(error) => {
@@ -1141,6 +1191,7 @@ pub(super) fn solve_with_threads(
             format!("all generated conformers failed validation: {last_failure}"),
         )
         .map_err(generation_error)?;
+        response.approximations.extend(rough_start_note);
         let mut sampling = format!(
             "{method}; requested={}; actual_count={}; embedded={embedded_count}; failed_embedding_ids={failed_embedding_ids}; valid={valid}; rejected={rejected}; seed={}; selection=lowest energy among valid generated conformers; iteration_limit={}; converged={}; embedding_failure_counters={failures}",
             request.conformers,

@@ -1292,6 +1292,7 @@ impl App {
             atoms,
             search,
             config,
+            spin_typed: true,
             keep_full: shown.stored.keep_full,
             start: None,
             ts: None,

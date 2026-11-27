@@ -41,6 +41,22 @@ bonds the wrong shape.", that atom flashes and keeps a ring until the drawing
 changes, and **Properties → Structure** repeats the message with **Open a 3D
 file…** to use geometry from a file instead.
 
+In builds with xTB (macOS and Linux), a start the force field can't be trusted
+for is refined with xTB as part of building the model: a molecule MMFF can't
+type (O₂, CO, UF₆), a metal complex built with relaxed checks, a radical, a
+saved UFF model being regenerated, and the shapes UFF gets wrong. For those
+(CeF₃, ThCl₄, XeF₄), ReShiki builds a rough start with the centre's ligands
+spread out in 3D instead of refusing. After a small nudge, the start is
+optimized with g-xTB when the molecule has a lanthanide, an actinide or an
+element past radon, and with GFN2-xTB otherwise. The status bar and the
+Structure section show the step and time, and **Cancel** (or Esc) stops it. The
+result note says what was done, for example "Refined with g-xTB · 14 steps,
+1.2 s (start: Th ligands spread out)". If refinement fails or would change the
+drawn stereochemistry, a force-field model is kept with that note; a rough start
+is refused with the reason instead. A Calculate run that needs the model waits
+for this step, shows its progress, and lists the same notes with its result.
+Builds without xTB keep the force-field model and the refusal.
+
 The model links to the molecule by atom ID. It never changes chemistry, atom IDs
 or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it

@@ -27,11 +27,11 @@ pub(super) use conformers::superposed;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
-mod run;
+pub(super) mod run;
 mod selection;
 mod source;
 pub(super) use source::Source;
-mod state;
+pub(super) mod state;
 mod tone;
 pub(super) mod ts;
 pub(crate) mod vibrations;
@@ -187,6 +187,9 @@ fn is(weak: &Weak<CalcResult>, result: &Arc<CalcResult>) -> bool {
 pub(crate) struct Request {
     atoms: Vec<u64>,
     config: state::Config,
+    /// The spin is fixed: typed (including 0), saved or reviewed. Only a
+    /// blank Unpaired field in Calculate is inferred from the 3D model.
+    spin_typed: bool,
     /// "Keep full results in this file" for the new result.
     keep_full: bool,
     /// Start here (Å, frame order) instead of the model: "Push along mode".
@@ -209,6 +212,7 @@ pub(crate) struct Run {
     serial: u64,
     atoms: Vec<u64>,
     config: state::Config,
+    spin_typed: bool,
     keep_full: bool,
     start: Option<Start>,
     /// A conformer search's settings and progress.
@@ -218,6 +222,10 @@ pub(crate) struct Run {
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
     model: Option<super::models3d::Key>,
+    /// Progress from refinement while the calculation waits for that model.
+    model_stage: Option<String>,
+    /// Starting-model cautions and refinement details retained by the card.
+    model_notes: Vec<String>,
     generated: Option<super::models3d::CalculationModel>,
     reaction: Option<u64>,
     started: iced::time::Instant,
@@ -290,6 +298,11 @@ impl Failed {
 
     /// The error card's sentence and its second line.
     fn explain(&self, retry: bool) -> (String, String) {
+        if let state::Failure::Other(message) = self.failure.reason()
+            && message.starts_with("xTB not started")
+        {
+            return (message.clone(), String::new());
+        }
         let (title, detail) = self.failure.explain(self.method(), &self.numbers);
         if retry && let Some(n) = self.scf_iteration_limit() {
             return (
@@ -383,7 +396,10 @@ struct Attempt {
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
-    if matches!(message, Message::Xtb(Action::TsEvent(..))) {
+    if matches!(
+        message,
+        Message::Xtb(Action::TsEvent(..)) | Message::Models3d(super::models3d::Action::Refined(..))
+    ) {
         return true;
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -775,6 +791,7 @@ impl App {
         let request = Request {
             atoms,
             config,
+            spin_typed: typed && !settings.unpaired.trim().is_empty(),
             keep_full: false,
             start: None,
             search,
@@ -814,10 +831,13 @@ impl App {
             }),
             ts: request.ts.map(ts::Live::new),
             config: request.config,
+            spin_typed: request.spin_typed,
             keep_full: request.keep_full,
             start: request.start,
             launch: None,
             model: None,
+            model_stage: None,
+            model_notes: Vec::new(),
             generated: None,
             reaction: request.reaction,
             started: iced::time::Instant::now(),
@@ -898,16 +918,30 @@ impl App {
                     )));
                     return Task::none();
                 };
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                let preserve_model_status = self
+                    .tab
+                    .model_job
+                    .as_ref()
+                    .is_some_and(|job| job.is_rough());
+                #[cfg(not(all(not(target_arch = "wasm32"), feature = "xtb")))]
+                let preserve_model_status = false;
                 if let Some(run) = &mut self.tab.xtb.run {
                     run.model = Some(key);
                     run.started = iced::time::Instant::now();
-                    self.status = run.status();
+                    if !preserve_model_status {
+                        self.status = run.status();
+                    }
                 }
                 self.error = false;
                 task
             }
             Err(error @ (science::ScienceError::NoModel | science::ScienceError::StaleModel)) => {
-                self.xtb_fail(state::Failure::Other(format!("xTB not started: {error}")));
+                let message = self.model_failure_message(&run.atoms).map_or_else(
+                    || format!("xTB not started: {error}"),
+                    |message| format!("xTB not started · {message}"),
+                );
+                self.xtb_fail(state::Failure::Other(message));
                 Task::none()
             }
             Err(error) => {
@@ -929,19 +963,63 @@ impl App {
         }
     }
 
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    pub(super) fn xtb_model_stage(&mut self, key: super::models3d::Key, line: String) {
+        if let Some(run) = &mut self.tab.xtb.run
+            && run.launch.is_none()
+            && run.model == Some(key)
+        {
+            run.model_stage = Some(line);
+        }
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    pub(super) fn xtb_model_spin(&mut self, key: super::models3d::Key, frame: &Frame) {
+        if let Some(run) = &mut self.tab.xtb.run
+            && run.launch.is_none()
+            && run.model == Some(key)
+            && !run.spin_typed
+            && let Some(&first) = run.atoms.first()
+        {
+            let (_, multiplicity) = science::drawn_state(&self.tab.doc, first);
+            let unpaired = super::models3d::refine::unpaired_electrons(
+                &frame.numbers,
+                run.config.charge,
+                multiplicity - 1,
+            );
+            if run.config.unpaired == unpaired {
+                return;
+            }
+            run.config.unpaired = unpaired;
+            let plural = if unpaired == 1 { "" } else { "s" };
+            run.model_notes.push(format!(
+                "Odd electron count: calculated with {unpaired} unpaired electron{plural}"
+            ));
+        }
+    }
+
     /// The model generation `key` ended, in any way (done, failed, dropped,
     /// canceled or replaced): a run waiting for it starts or stops.
-    pub(super) fn xtb_model_finished(&mut self, key: super::models3d::Key) -> Task<Message> {
+    pub(super) fn xtb_model_finished(
+        &mut self,
+        key: super::models3d::Key,
+        stopped: Option<&str>,
+    ) -> Task<Message> {
         let waiting = self
             .tab
             .xtb
             .run
             .as_ref()
             .is_some_and(|run| run.launch.is_none() && run.model == Some(key));
-        if waiting {
-            return self.xtb_launch();
+        if !waiting {
+            return Task::none();
         }
-        Task::none()
+        if let Some(reason) = stopped {
+            self.xtb_fail(state::Failure::Other(format!("xTB not started · {reason}")));
+            Task::none()
+        } else {
+            self.xtb_launch()
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -958,6 +1036,23 @@ impl App {
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
         };
+        // The notes of the model it starts from: how that model was built.
+        let built = run
+            .generated
+            .as_ref()
+            .map(|model| model.notes().to_vec())
+            .or_else(|| {
+                let first = launch.atoms.iter().flatten().next()?;
+                let model = self.tab.doc.models.iter().find(|m| m.contains(*first))?;
+                Some(model.notes.clone())
+            });
+        // A transition-state run may start from a saved path, not this model.
+        if run.ts.is_none() {
+            let mut built = built.unwrap_or_default();
+            built.retain(|note| !run.model_notes.contains(note));
+            built.dedup();
+            run.model_notes.splice(0..0, built);
+        }
         if run.search.is_some() {
             return self.xtb_search_start(launch);
         }
@@ -1400,6 +1495,7 @@ impl Run {
             request: Box::new(Request {
                 atoms: self.atoms.clone(),
                 config: self.config.clone(),
+                spin_typed: self.spin_typed,
                 keep_full: self.keep_full,
                 start: self.start.clone(),
                 search: self.search.as_ref().map(|live| live.config.clone()),
@@ -1416,6 +1512,11 @@ impl Run {
     }
 
     fn status(&self) -> String {
+        if self.launch.is_none()
+            && let Some(line) = &self.model_stage
+        {
+            return format!("xTB · {line}");
+        }
         if let Some(live) = &self.ts {
             return format!("{} · {}", live.request.method.label(), live.line());
         }
@@ -1435,7 +1536,7 @@ impl Run {
 
 /// The worker job for `config` on `frame`, holding frame atoms `fixed`.
 #[cfg(not(target_arch = "wasm32"))]
-fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
+pub(super) fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
     use reshiki_xtb_jobs::{method, run::worker_method};
     use reshiki_xtb_worker::protocol::{Conventions, ScfSettings, SolventModel};
 
@@ -1629,7 +1730,7 @@ fn pending(run: &mut Run, report: &run::Report) -> Result<Pending, state::Failur
     result.status = status;
     result.trajectory = trajectory;
     result.keep_full = run.keep_full;
-    let mut notes = Vec::new();
+    let mut notes = run.model_notes.clone();
     if computed.near_degenerate {
         notes.push(state::NEAR_DEGENERATE.into());
     }
@@ -1661,8 +1762,10 @@ fn pending(run: &mut Run, report: &run::Report) -> Result<Pending, state::Failur
     })
 }
 
+#[cfg(all(not(target_arch = "wasm32"), any(test, feature = "xtb")))]
+pub(super) use run::Event as RunEvent;
 #[cfg(test)]
-pub(super) use run::{Event as RunEvent, Report as RunReport, example_computed, example_engine};
+pub(super) use run::{Report as RunReport, example_computed, example_engine};
 
 #[cfg(test)]
 impl App {

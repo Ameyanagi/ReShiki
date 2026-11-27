@@ -1,9 +1,12 @@
 //! Opt-in preparation and disclosures for approximate coordination geometry.
 //! UFF parameter acceptance always goes through COSMolKit's actual typer.
 use super::*;
-use crate::is_metal_atomic_number;
+use crate::{is_metal_atomic_number, uff_misshaped};
 use cosmolkit::{Atom, CoordinateBlock, Hybridization, SanitizeOperations as Ops, SanitizeParams};
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeSet, VecDeque},
+    f64::consts::TAU,
+};
 
 const TYPE_FALLBACK: &str = "_reshikiGeometryUffTypeFallback";
 
@@ -491,41 +494,223 @@ fn lift_octahedral_ligands(mol: &Molecule, points: &mut [[f64; 3]]) {
             .collect();
         let turn = |p: [f64; 3]| (p[1] - y).atan2(p[0] - x);
         donors.sort_by(|&a, &b| turn(points[a]).total_cmp(&turn(points[b])));
-        let lifts: Vec<_> = donors
+        let displacements: Vec<_> = donors
             .iter()
             .enumerate()
             .map(|(rank, &donor)| {
                 let side = if rank % 2 == 0 { 1. } else { -1. };
                 let radius = (points[donor][0] - x).hypot(points[donor][1] - y);
-                z + side * radius * std::f64::consts::FRAC_1_SQRT_2 - points[donor][2]
+                let lift = z + side * radius * std::f64::consts::FRAC_1_SQRT_2 - points[donor][2];
+                [0., 0., lift]
             })
             .collect();
-        // Every other atom moves by the mean lift of the donors it hangs from,
-        // searched without passing the centre or another donor.
-        let mut shift = vec![(0., 0_u32); points.len()];
-        for (&donor, &lift) in donors.iter().zip(&lifts) {
-            let mut reached = vec![false; points.len()];
-            reached[centre] = true;
-            for &other in &donors {
-                reached[other] = true;
+        translate_ligands(mol, points, centre, &donors, &displacements);
+    }
+}
+
+fn misshaped_centres(mol: &Molecule) -> impl Iterator<Item = &Atom> {
+    mol.atoms().iter().filter(|atom| {
+        let count = mol
+            .topology()
+            .adjacency
+            .neighbors_of(atom.id().index())
+            .len();
+        uff_misshaped(u32::from(atom.atomic_number()), count)
+    })
+}
+
+pub(super) fn star_seed_after_embedding_error(mol: &Molecule) -> Option<Vec<[f64; 3]>> {
+    let mut centres = misshaped_centres(mol);
+    let (Some(atom), None) = (centres.next(), centres.next()) else {
+        return None;
+    };
+    let centre = atom.id().index();
+    let neighbors = mol.topology().adjacency.neighbors_of(centre);
+    // Only a complete star with terminal ligands needs no internal conformer
+    // search. Chelates, bridges, and larger ligands still belong to ETKDG.
+    if !matches!(neighbors.len(), 2..=4)
+        || mol.num_atoms() != neighbors.len() + 1
+        || mol.num_bonds() != neighbors.len()
+        || cosmolkit_core::assign_valence_for_topology(
+            mol.topology(),
+            cosmolkit_core::ValenceModel::RdkitLike,
+        )
+        .is_ok()
+    {
+        return None;
+    }
+    // COSMolKit's embedder recomputes strict valence before using its options;
+    // e.g. bonded Kr is rejected despite the prepared nonstrict property cache.
+    // Supply a bent seed for the normal UFF minimization and rough spreading.
+    let mut points = vec![[0.; 3]; mol.num_atoms()];
+    let step = TAU / neighbors.len().max(3) as f64;
+    for (rank, neighbor) in neighbors.iter().enumerate() {
+        let angle = step * rank as f64;
+        points[neighbor.atom_index] = [2.1 * angle.cos(), 2.1 * angle.sin(), 0.];
+    }
+    Some(points)
+}
+
+// Translating donors independently would stretch a chelate or a shared
+// bridge. With the centre removed, each donor must own a separate component.
+fn independent_ligands(mol: &Molecule, centre: usize, donors: &[usize]) -> bool {
+    let mut owners = vec![None; mol.num_atoms()];
+    let mut pending = VecDeque::new();
+    for &donor in donors {
+        owners[donor] = Some(donor);
+        pending.push_back(donor);
+    }
+    while let Some(index) = pending.pop_front() {
+        for neighbor in mol.topology().adjacency.neighbors_of(index) {
+            let next = neighbor.atom_index;
+            if next == centre {
+                continue;
             }
-            let mut pending = vec![donor];
-            while let Some(index) = pending.pop() {
-                for neighbor in adjacency.neighbors_of(index) {
-                    if !std::mem::replace(&mut reached[neighbor.atom_index], true) {
-                        shift[neighbor.atom_index].0 += lift;
-                        shift[neighbor.atom_index].1 += 1;
-                        pending.push(neighbor.atom_index);
-                    }
+            match owners[next] {
+                Some(owner) if Some(owner) != owners[index] => return false,
+                Some(_) => {}
+                None => {
+                    owners[next] = owners[index];
+                    pending.push_back(next);
                 }
             }
         }
-        for (&donor, &lift) in donors.iter().zip(&lifts) {
-            points[donor][2] += lift;
+    }
+    true
+}
+
+pub(super) fn spread_misshaped_centres(mol: &Molecule, points: &mut [[f64; 3]]) -> Option<String> {
+    // Independent moves at two centres could pull their shared bridge apart.
+    let mut centres = misshaped_centres(mol);
+    let (Some(atom), None) = (centres.next(), centres.next()) else {
+        return None;
+    };
+    let centre = atom.id().index();
+    let neighbors = mol.topology().adjacency.neighbors_of(centre);
+    if !matches!(neighbors.len(), 2..=4) {
+        return None;
+    }
+    let mut ligands: Vec<_> = neighbors
+        .iter()
+        .map(|neighbor| {
+            let donor = neighbor.atom_index;
+            let offset = sub(points[donor], points[centre]);
+            let length = norm(offset);
+            let direction = if length > 0. {
+                scale(offset, length.recip())
+            } else {
+                offset
+            };
+            (donor, direction, length)
+        })
+        .collect();
+
+    let donors: Vec<_> = ligands.iter().map(|&(donor, _, _)| donor).collect();
+    if !independent_ligands(mol, centre, &donors) {
+        return None;
+    }
+
+    let covariance = std::array::from_fn(|row| {
+        std::array::from_fn(|column| ligands.iter().map(|(_, u, _)| u[row] * u[column]).sum())
+    });
+    let (values, axes) = principal_axes(covariance);
+    let normal = axes[(0..3)
+        .min_by(|&a, &b| values[a].total_cmp(&values[b]))
+        .unwrap()];
+    let project = |u| sub(u, scale(normal, dot(u, normal)));
+    // Start at the first ligand with a direction in the plane.
+    let anchor = ligands
+        .iter()
+        .position(|&(_, u, _)| norm(project(u)) > 1e-6)?;
+    ligands.swap(0, anchor);
+    let first = project(ligands[0].1);
+    let first = scale(first, norm(first).recip());
+    let second = cross(normal, first);
+    let turn = |u| dot(u, second).atan2(dot(u, first)).rem_euclid(TAU);
+    ligands[1..].sort_by(|a, b| turn(a.1).total_cmp(&turn(b.1)));
+
+    let count = ligands.len();
+    // Sine of the lift angle: 19.47° for a trigonal pyramid and
+    // 35.26° on alternating sides for a tetrahedron.
+    let height = match count {
+        3 => 1. / 3.,
+        4 => (1_f64 / 3.).sqrt(),
+        _ => 0.,
+    };
+    let radius = (1. - height * height).sqrt();
+    let (donors, displacements): (Vec<_>, Vec<_>) = ligands
+        .into_iter()
+        .enumerate()
+        .map(|(rank, (donor, _, length))| {
+            let (sin, cos) = (TAU * rank as f64 / count as f64).sin_cos();
+            let lift = if count == 4 && rank % 2 == 1 {
+                -height
+            } else {
+                height
+            };
+            let target = std::array::from_fn(|axis| {
+                let direction =
+                    radius * (cos * first[axis] + sin * second[axis]) + lift * normal[axis];
+                points[centre][axis] + length * direction
+            });
+            (donor, sub(target, points[donor]))
+        })
+        .unzip();
+    translate_ligands(mol, points, centre, &donors, &displacements);
+    Some(format!(
+        "Rough start for an xTB refinement: {} ligands spread out",
+        symbol(atom)
+    ))
+}
+
+fn norm(vector: [f64; 3]) -> f64 {
+    dot(vector, vector).sqrt()
+}
+
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+fn translate_ligands(
+    mol: &Molecule,
+    points: &mut [[f64; 3]],
+    centre: usize,
+    donors: &[usize],
+    displacements: &[[f64; 3]],
+) {
+    let adjacency = &mol.topology().adjacency;
+    let mut shifts = vec![([0.; 3], 0_u32); points.len()];
+    // Follow each ligand without passing the centre or another donor.
+    for (&donor, &displacement) in donors.iter().zip(displacements) {
+        let mut reached = vec![false; points.len()];
+        reached[centre] = true;
+        for &other in donors {
+            reached[other] = true;
         }
-        for (point, (lift, count)) in points.iter_mut().zip(shift) {
-            if count > 0 {
-                point[2] += lift / f64::from(count);
+        let mut pending = VecDeque::from([donor]);
+        shifts[donor] = (displacement, 1);
+        while let Some(index) = pending.pop_front() {
+            for neighbor in adjacency.neighbors_of(index) {
+                let next = neighbor.atom_index;
+                if !std::mem::replace(&mut reached[next], true) {
+                    let (sum, count) = &mut shifts[next];
+                    for (total, delta) in sum.iter_mut().zip(displacement) {
+                        *total += delta;
+                    }
+                    *count += 1;
+                    pending.push_back(next);
+                }
+            }
+        }
+    }
+    for (point, (shift, count)) in points.iter_mut().zip(shifts) {
+        if count > 0 {
+            for (coordinate, delta) in point.iter_mut().zip(shift) {
+                *coordinate += delta / f64::from(count);
             }
         }
     }
