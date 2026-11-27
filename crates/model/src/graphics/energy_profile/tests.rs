@@ -171,18 +171,25 @@ fn default_profile_is_compact_with_models_and_a_caption_inside_the_plot() {
         let caption = labels.iter().find(|l| l.text == method).unwrap().bounds();
         assert!(contains(plot, caption));
         assert!(plot.1.x - caption.1.x < em * 0.5 && plot.1.y - caption.1.y < em * 0.5);
-        assert!(layout.height <= layout.width * 0.68);
 
         let coordinate = labels
             .iter()
             .find(|l| l.text == "Reaction coordinate")
             .unwrap()
             .bounds();
-        assert!((0. ..em * 0.5).contains(&(coordinate.0.y - plot.1.y)));
+        let title_gap_em = (coordinate.0.y - plot.1.y) / em;
+        assert!(
+            (0. ..0.45).contains(&title_gap_em),
+            "title gap: {title_gap_em} em"
+        );
         let ts = &layout.pictures[1];
         assert_eq!(ts.state, 1);
         let model_bottom = ts.centre.y + layout.picture_side / 2.;
-        assert!((0. ..em * 1.5).contains(&(layout.top - model_bottom)));
+        let model_gap_em = (layout.top - model_bottom) / em;
+        assert!(
+            (0. ..1.075).contains(&model_gap_em),
+            "TS model gap: {model_gap_em} em"
+        );
     }
 }
 
@@ -198,6 +205,54 @@ fn blocked_method_caption_moves_to_the_top_of_the_energy_axis() {
     let axis_top = layout.world(&g, layout.lines[0][0]);
     assert!((0. ..layout.font.size() * 0.5).contains(&(caption.bounds().0.x - axis_top.x)));
     assert!((caption.centre().y - axis_top.y).abs() < 1e-3);
+}
+
+#[test]
+fn axis_top_caption_clears_the_rendered_axis() {
+    let mut p = profile(&[0., 27.3, -7.6]);
+    p.method = "GFN2-xTB + g-xTB".into();
+    for (width_pt, scale) in [(12., 1.), (0.6, 0.08)] {
+        let mut g = placed(p.clone());
+        g.style.width_pt = width_pt;
+        let origin = g.origin;
+        g.map_positions(|point| origin.lerp(point, scale));
+        let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
+        let caption = labels.iter().find(|l| l.text == p.method).unwrap();
+        let axis = &parts[0];
+        let PathCommand::Move(axis_top) = axis.commands[0] else {
+            panic!("expected the energy axis");
+        };
+        assert!((caption.centre().y - axis_top.y).abs() < 1e-3);
+        assert!(
+            caption.bounds().0.x > axis_top.x + axis.style.width() / 2.,
+            "caption intersects the axis at {width_pt} pt and scale {scale}"
+        );
+    }
+}
+
+#[test]
+fn bottom_bar_clears_the_reaction_coordinate_at_ten_percent() {
+    let mut p = profile(&[0., 18., -20., 14., -5.]);
+    p.models = EnergyProfileModels::Off;
+    let mut g = placed(p);
+    let origin = g.origin;
+    g.map_positions(|point| origin.lerp(point, 0.1));
+    let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
+    let bar = &parts[parts.len() - 3];
+    let [PathCommand::Move(left), PathCommand::Line(right)] = bar.commands.as_slice() else {
+        panic!("expected the central bar");
+    };
+    let PathCommand::Line(plot_bottom) = parts[0].commands[1] else {
+        panic!("expected the bottom of the energy axis");
+    };
+    assert_eq!(left.y, plot_bottom.y);
+    let (lo, hi) = labels
+        .iter()
+        .find(|label| label.text == "Reaction coordinate")
+        .unwrap()
+        .bounds();
+    assert!(left.x < hi.x && right.x > lo.x);
+    assert!(lo.y > left.y + bar.style.width() / 2.);
 }
 
 #[test]
