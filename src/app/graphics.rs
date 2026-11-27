@@ -325,11 +325,11 @@ impl App {
         .align_y(Alignment::Center);
         let pattern = selected
             .iter()
-            .find(|g| g.kind != GraphicKind::MoDiagram)
+            .find(|g| !matches!(g.kind, GraphicKind::MoDiagram | GraphicKind::EnergyProfile))
             .map(|g| (g.kind, g.style.pattern))
             .or_else(|| selected.is_empty().then_some((kind, style.pattern)));
         if let Some((kind, pattern)) = pattern
-            && kind != GraphicKind::MoDiagram
+            && !matches!(kind, GraphicKind::MoDiagram | GraphicKind::EnergyProfile)
         {
             line = line.push(
                 crate::appearance::pick_list(
@@ -828,7 +828,9 @@ impl App {
             .selected_graphics_mut()
             .filter(|g| g.picture.is_none() && g.table.is_none() && g.tlc.is_none())
         {
-            if matches!(change, GraphicChange::Pattern(_)) && g.kind == GraphicKind::MoDiagram {
+            if matches!(change, GraphicChange::Pattern(_))
+                && matches!(g.kind, GraphicKind::MoDiagram | GraphicKind::EnergyProfile)
+            {
                 continue;
             }
             // Symbols and orbitals draw no waves.

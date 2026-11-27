@@ -20,6 +20,8 @@ mod cycles;
 #[cfg(test)]
 mod effects_tests;
 #[cfg(test)]
+mod energy_profile_tests;
+#[cfg(test)]
 mod fill_effects_tests;
 mod generic;
 mod groups;
@@ -74,6 +76,9 @@ pub const TEXT_LABEL_COPY_ADVICE: &str =
 pub const MO_DIAGRAM_EXPORT_NOTICE: &str = "CDXML/CDX exports MO diagrams as grouped lines and text, without orbital pictures or calculation links. Save a .rsk file to retain the complete diagram.";
 const MO_DIAGRAM_TEXT_SIZE_NOTICE: &str =
     "MO diagram label sizes are adjusted to the supported 4–144 pt range.";
+pub const ENERGY_PROFILE_EXPORT_NOTICE: &str = "CDXML/CDX exports energy profiles as grouped lines and text, without 3D models or calculation links. Save a .rsk file to retain the complete profile.";
+const ENERGY_PROFILE_TEXT_SIZE_NOTICE: &str =
+    "Energy profile label sizes are adjusted to the supported 4–144 pt range.";
 
 pub(crate) fn mo_diagram_export_notice(document: &Document) -> Option<String> {
     let mut diagrams = document.graphics.iter().filter(|g| g.mo.is_some());
@@ -88,6 +93,25 @@ pub(crate) fn mo_diagram_export_notice(document: &Document) -> Option<String> {
         format!("{MO_DIAGRAM_EXPORT_NOTICE} {MO_DIAGRAM_TEXT_SIZE_NOTICE}")
     } else {
         MO_DIAGRAM_EXPORT_NOTICE.into()
+    })
+}
+
+pub(crate) fn energy_profile_export_notice(document: &Document) -> Option<String> {
+    let mut profiles = document
+        .graphics
+        .iter()
+        .filter(|g| g.energy_profile.is_some());
+    let first = profiles.next()?;
+    let adjusted = std::iter::once(first).chain(profiles).any(|g| {
+        g.energy_profile_parts(&document.drawing_style)
+            .1
+            .iter()
+            .any(|a| !(4. ..=144.).contains(&a.format.style.size_pt))
+    });
+    Some(if adjusted {
+        format!("{ENERGY_PROFILE_EXPORT_NOTICE} {ENERGY_PROFILE_TEXT_SIZE_NOTICE}")
+    } else {
+        ENERGY_PROFILE_EXPORT_NOTICE.into()
     })
 }
 
@@ -219,8 +243,8 @@ struct Writer<'a> {
     split_fragments: bool,
 }
 
-/// Serialize a complete drawing without mutating it. MO diagrams travel as
-/// grouped lines and text, omitting orbital pictures and calculation links.
+/// Serialize a complete drawing without mutating it. MO diagrams and energy
+/// profiles travel as grouped lines and text, omitting pictures and calculation links.
 /// Reject other unrepresentable appearances and ownership.
 /// Mechanism-arrow curves retain their resolved geometry; their optional editor
 /// links cannot be represented. Callers display `arrow_anchors::export_notice`.

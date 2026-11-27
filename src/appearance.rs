@@ -1,52 +1,8 @@
 //! Interface preferences and defaults for new drawings. Existing drawings keep their page colors.
 use iced::advanced::{Clipboard, Layout, Shell, layout, overlay, renderer, widget};
 use iced::{Color, Theme};
-use reshiki::qcdata::{HARTREE_TO_EV, KCAL_PER_HARTREE};
+pub use reshiki::graphics::EnergyUnit;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EnergyUnit {
-    #[default]
-    KcalPerMol,
-    KjPerMol,
-    Ev,
-}
-
-impl EnergyUnit {
-    pub const ALL: [Self; 3] = [Self::KcalPerMol, Self::KjPerMol, Self::Ev];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::KcalPerMol => "kcal/mol",
-            Self::KjPerMol => "kJ/mol",
-            Self::Ev => "eV",
-        }
-    }
-
-    pub fn convert_kcal(self, energy: f64) -> f64 {
-        match self {
-            Self::KcalPerMol => energy,
-            Self::KjPerMol => energy * 4.184,
-            Self::Ev => energy / KCAL_PER_HARTREE * HARTREE_TO_EV,
-        }
-    }
-
-    pub fn number(self, energy: f64) -> String {
-        let (digits, half_digit) = if self == Self::Ev {
-            (2, 0.005)
-        } else {
-            (1, 0.05)
-        };
-        let value = self.convert_kcal(energy);
-        let value = if value.abs() < half_digit { 0. } else { value };
-        format!("{value:.digits$}").replace('-', "−")
-    }
-
-    pub fn format(self, energy: f64) -> String {
-        format!("{} {}", self.number(energy), self.label())
-    }
-}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

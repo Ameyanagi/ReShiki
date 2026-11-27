@@ -121,36 +121,22 @@ impl ReactionLabel {
         self.line(false)
     }
 
+    pub(super) fn endpoint_names(&self) -> [String; 2] {
+        [
+            species_line(&self.reactants, false, "Reactants"),
+            species_line(&self.products, false, "Products"),
+        ]
+    }
+
     fn formula(&self) -> String {
         self.line(true)
     }
 
     fn line(&self, formula: bool) -> String {
-        let side = |species: &[SpeciesLabel], empty: &str| {
-            if species.is_empty() {
-                return empty.to_owned();
-            }
-            species
-                .iter()
-                .map(|species| {
-                    let name = if formula {
-                        &species.formula
-                    } else {
-                        &species.name
-                    };
-                    if species.coefficient == 1 {
-                        name.clone()
-                    } else {
-                        format!("{} {name}", species.coefficient)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join(" + ")
-        };
         format!(
             "{} → {}",
-            side(&self.reactants, "Reactants"),
-            side(&self.products, "Products")
+            species_line(&self.reactants, formula, "Reactants"),
+            species_line(&self.products, formula, "Products")
         )
     }
 
@@ -163,6 +149,28 @@ impl ReactionLabel {
             .first()
             .map(|species| species.formula.as_str())
     }
+}
+
+fn species_line(species: &[SpeciesLabel], formula: bool, empty: &str) -> String {
+    if species.is_empty() {
+        return empty.to_owned();
+    }
+    species
+        .iter()
+        .map(|species| {
+            let name = if formula {
+                &species.formula
+            } else {
+                &species.name
+            };
+            if species.coefficient == 1 {
+                name.clone()
+            } else {
+                format!("{} {name}", species.coefficient)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 fn drawn_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
@@ -860,6 +868,21 @@ impl App {
                 .spacing(12),
             )
         };
+        if reaction.is_some() {
+            content = content.push(
+                accessible_command(
+                    "xtb-ts-place-energy-profile",
+                    "Place energy profile",
+                    "Place energy profile",
+                )
+                .style(crate::appearance::secondary)
+                .on_press_maybe(
+                    (idle && (batch.is_some() || !stale)).then_some(Message::Xtb(XtbAction::Ts(
+                        TsAction::PlaceEnergyProfile(Some(arrow)),
+                    ))),
+                ),
+            );
+        }
         if let Some(failed) = refine_failed {
             let (reason, detail) = failed.explain(self.xtb_can_retry(failed));
             content = content

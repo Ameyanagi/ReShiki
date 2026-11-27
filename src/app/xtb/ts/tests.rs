@@ -2304,6 +2304,7 @@ fn cancel_drops_generation_and_a_late_finish_cannot_attach() {
 }
 
 mod irc_profile;
+mod placed_profile;
 mod refine;
 pub(super) use irc_profile::finished as finished_irc;
 mod tab_playback;

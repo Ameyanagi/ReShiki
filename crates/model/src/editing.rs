@@ -258,6 +258,15 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
             mo.linked = false;
         }
     }
+    for profile in part
+        .graphics
+        .iter_mut()
+        .filter_map(|g| g.energy_profile.as_deref_mut())
+    {
+        if profile.source.is_some_and(|id| !ids.contains(&id)) {
+            profile.unlink();
+        }
+    }
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
     part.abbreviations
@@ -650,6 +659,14 @@ fn rename_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Option<()> {
             mo.molecule = mo.molecule.and_then(|id| mapping.get(&id).copied());
             if mo.molecule.is_none() {
                 mo.linked = false;
+            }
+        }
+        if let Some(profile) = &mut g.energy_profile
+            && let Some(source) = profile.source
+        {
+            profile.source = mapping.get(&source).copied();
+            if profile.source.is_none() {
+                profile.linked = false;
             }
         }
         if let Some(text) = &mut g.text {

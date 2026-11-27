@@ -468,11 +468,12 @@ async fn prepare_copy_with_limit(
         }
     };
     // Marked like a saved file, with the results needed by placed orbitals.
-    let doc = Document {
+    let mut doc = Document {
         science: crate::science::for_figures(&doc),
         ..doc
     }
     .current();
+    payload::unlink_energy_profiles(&mut doc);
     let mut representations = Vec::new();
     // The browser keeps ReShiki's drawing in the HTML picture other apps
     // paste, so it leaves it out with the pictures' drawing.

@@ -250,6 +250,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/irc/controls.rs`: Reusable transport controls for reaction-path animations.
 - `src/app/xtb/ts/irc/focus.rs`: Arrow-key stepping belongs to the focused path, never a document shortcut.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
+- `src/app/xtb/ts/profile.rs`: Place a reaction result on the drawing and keep its linked figure current.
 - `src/app/xtb/ts/refine.rs`: Resolve a saved saddle and its endpoint frames on the originating reaction.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
 - `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
@@ -889,6 +890,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics.rs`: Editable vector graphics in drawing coordinates.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
 - `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
+- `crates/model/src/graphics/energy_profile.rs`: A placed reaction energy profile, with owned geometries and vector artwork.
 - `crates/model/src/graphics/heads.rs`
 - `crates/model/src/graphics/ir_figure.rs`: Stored parameters for a placed, editable infrared spectrum figure.
 - `crates/model/src/graphics/mo_diagram.rs`: A placed molecular orbital diagram and its vector layout.

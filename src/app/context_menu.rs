@@ -392,6 +392,7 @@ impl App {
     /// its molecule, connect and reshape, generic structures, the clipboard,
     /// then Properties and Delete, pinned in the footer.
     fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
+        use super::xtb::ts::profile;
         let command = Entry::command;
         // A selected cycle's step commands come first.
         let cycle_first = self.selected_cycle().is_some();
@@ -407,6 +408,22 @@ impl App {
             self.molecule_entries(atoms),
             self.structure_entries(atoms, bonds, tilt),
             self.generic_entries(),
+            if let &[id] = self.tab.selected.as_slice()
+                && self
+                    .tab
+                    .doc
+                    .graphics
+                    .iter()
+                    .any(|g| g.id == id && g.energy_profile.as_ref().is_some_and(|p| p.linked))
+            {
+                vec![command(
+                    "Unlink",
+                    profile::edit_message(id, profile::Edit::Unlink),
+                    true,
+                )]
+            } else {
+                vec![]
+            },
             self.tube_bend_context_command()
                 .map(|(label, action)| {
                     vec![command(

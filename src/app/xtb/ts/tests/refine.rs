@@ -246,6 +246,12 @@ fn show_where_previews_the_failed_gxtb_endpoint_with_a_verified_parent() {
 #[test]
 fn verified_refinement_reopens_on_its_own_irc_and_switches_back_to_the_source() {
     let (mut app, arrow) = irc_profile::finished();
+    send(
+        &mut app,
+        XtbAction::Ts(Action::PlaceEnergyProfile(Some(arrow))),
+    );
+    select(&mut app, arrow);
+    let original_profile = app.tab.doc.graphics.last().unwrap().clone();
     let source = app.tab.doc.science.results[0].result.clone();
     send(
         &mut app,
@@ -279,8 +285,21 @@ fn verified_refinement_reopens_on_its_own_irc_and_switches_back_to_the_source() 
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
     );
+    let saved = app.tab.doc.clone();
+    let updated = saved.graphics.last().unwrap();
+    assert_eq!(
+        (updated.origin, updated.axis_x, updated.axis_y),
+        (
+            original_profile.origin,
+            original_profile.axis_x,
+            original_profile.axis_y
+        ),
+    );
+    assert_eq!(updated.energy_profile.as_ref().unwrap().method, "g-xTB");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.graphics.last(), Some(&original_profile));
     let mut app = reaction_app(
-        Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap(),
+        Document::from_native_file(&saved.file_json().unwrap()).unwrap(),
         arrow,
     );
     assert_eq!(app.tab.doc.science.results.len(), 2);

@@ -767,7 +767,10 @@ impl Document {
         use crate::graphics::{GraphicKind, LinePattern};
         if !self.science.is_empty()
             || self.orbital_figures().next().is_some()
-            || self.graphics.iter().any(|g| g.mo.is_some())
+            || self
+                .graphics
+                .iter()
+                .any(|g| g.mo.is_some() || g.energy_profile.is_some())
         {
             CALCULATIONS
         } else if self.graphics.iter().any(|g| {
@@ -1033,6 +1036,17 @@ impl Document {
             if mo.molecule.is_some_and(|id| ids.contains(&id)) {
                 mo.molecule = None;
                 mo.linked = false;
+            }
+        }
+        for profile in self
+            .graphics
+            .iter_mut()
+            .filter_map(|g| g.energy_profile.as_deref_mut())
+        {
+            if profile.source.is_some_and(|id| ids.contains(&id)) {
+                // A removed source leaves a stale linked snapshot. Explicit
+                // Unlink is the action that makes it permanently static.
+                profile.source = None;
             }
         }
         crate::equipment::solve::prune(self);
@@ -1649,6 +1663,12 @@ fn frame_bytes(doc: &Document) -> usize {
                     .sum::<usize>()
         })
         .sum();
+    let energy_profiles: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.energy_profile.as_deref())
+        .map(|p| size_of::<crate::graphics::EnergyProfile>() + p.heap_bytes())
+        .sum();
     let ir: usize = doc
         .graphics
         .iter()
@@ -1718,6 +1738,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + paths
         + ir
         + mos
+        + energy_profiles
         + tables
         + tlc
         + nodes

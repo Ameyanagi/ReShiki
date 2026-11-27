@@ -381,9 +381,19 @@ fn input_totals(
     task: CalcTask,
     method: qcdata::XtbMethod,
 ) -> Option<Totals> {
+    current_totals(doc, species, inputs.iter(), task, method)
+}
+
+fn current_totals<'a>(
+    doc: &Document,
+    species: &[Species],
+    inputs: impl Iterator<Item = &'a Input> + Clone,
+    task: CalcTask,
+    method: qcdata::XtbMethod,
+) -> Option<Totals> {
     let science = &doc.science;
-    if inputs.len() != species.len()
-        || !inputs.iter().all(|input| {
+    if inputs.clone().count() != species.len()
+        || !inputs.clone().all(|input| {
             science.results.iter().any(|stored| {
                 stored.attachment == input.attachment && input.matches(&stored.result)
             }) && science.frame(&input.result.frame).is_some()
@@ -397,16 +407,58 @@ fn input_totals(
     totals(
         species
             .iter()
-            .zip(inputs.iter().map(|input| input.result.as_ref())),
+            .zip(inputs.map(|input| input.result.as_ref())),
         task,
         method,
     )
+}
+
+fn profile_data<'a, 'b>(
+    doc: &'a Document,
+    species: &[Species],
+    inputs: impl Iterator<Item = &'b Input> + Clone,
+    task: CalcTask,
+    method: qcdata::XtbMethod,
+) -> Option<(Totals, [Vec<&'a Frame>; 2])> {
+    let totals = current_totals(doc, species, inputs.clone(), task, method)?;
+    let mut frames = [vec![], vec![]];
+    for (species, input) in species.iter().zip(inputs) {
+        frames
+            .get_mut(usize::from(species.product))?
+            .push(doc.science.frame(&input.result.frame)?.as_ref());
+    }
+    Some((totals, frames))
 }
 
 impl State {
     pub(in crate::app::xtb) fn placement_arrow(&self, doc: &Document, serial: u64) -> Option<u64> {
         let batch = self.batch.as_ref().filter(|b| b.active == Some(serial))?;
         batch.is_current(doc).then_some(batch.arrow)
+    }
+
+    /// The last stored result can finish the batch along with cached terms.
+    /// Build the picture before committing so Undo restores the previous one.
+    pub(super) fn finishing_profile<'a>(
+        &self,
+        doc: &'a Document,
+        serial: u64,
+    ) -> Option<(Totals, [Vec<&'a Frame>; 2])> {
+        let batch = self
+            .batch
+            .as_ref()
+            .filter(|b| b.active == Some(serial) && b.is_current(doc))?;
+        let (current, remaining) = batch.species.get(batch.next..)?.split_first()?;
+        let mut tail = vec![completed(doc, current, batch.task, batch.method)?];
+        for species in remaining {
+            tail.push(reusable(doc, species, batch.task, batch.method)?);
+        }
+        profile_data(
+            doc,
+            &batch.species,
+            batch.inputs.iter().chain(&tail),
+            batch.task,
+            batch.method,
+        )
     }
 
     /// Follow light or pinned copies while keeping Undo's original identity.
@@ -554,7 +606,7 @@ impl App {
                         self.status.clone(),
                     ));
                 }
-                let preceding_ts = match self.xtb_ts_card_result(batch.arrow) {
+                let preceding_ts = match self.xtb_ts_card_display_result(batch.arrow) {
                     super::card::ArrowResult::Found(result) => vec![Arc::downgrade(result)],
                     _ => Vec::new(),
                 };
@@ -575,6 +627,7 @@ impl App {
                     inputs: batch.inputs,
                     preceding_ts,
                 });
+                self.xtb_follow_energy_batch_profile(batch.arrow);
                 return Task::none();
             };
             if let Some(input) = reusable(&self.tab.doc, &species, batch.task, batch.method) {
@@ -669,19 +722,7 @@ impl App {
         newer_ts: Option<&Arc<CalcResult>>,
     ) -> (Option<Totals>, Option<&str>) {
         let state = &self.tab.xtb.energy_state;
-        let summary = state
-            .summaries
-            .iter()
-            .find(|summary| summary.arrow == arrow)
-            .filter(|summary| {
-                newer_ts.is_none_or(|result| {
-                    summary
-                        .preceding_ts
-                        .iter()
-                        .any(|previous| xtb::is(previous, result))
-                }) && snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
-                    == Some(&summary.snapshot)
-            });
+        let summary = self.xtb_energy_summary(arrow, newer_ts);
         let totals = summary.and_then(|summary| {
             input_totals(
                 &self.tab.doc,
@@ -696,6 +737,41 @@ impl App {
             None => summary.and_then(|summary| summary.barrier_refusal.as_deref()),
         };
         (totals, refusal)
+    }
+
+    fn xtb_energy_summary(
+        &self,
+        arrow: u64,
+        newer_ts: Option<&Arc<CalcResult>>,
+    ) -> Option<&Summary> {
+        self.tab.xtb.energy_state.summaries.iter().find(|summary| {
+            summary.arrow == arrow
+                && newer_ts.is_none_or(|result| {
+                    summary
+                        .preceding_ts
+                        .iter()
+                        .any(|previous| xtb::is(previous, result))
+                })
+                && snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
+                    == Some(&summary.snapshot)
+        })
+    }
+
+    pub(super) fn xtb_energy_profile_batch(
+        &self,
+        arrow: u64,
+        newer_ts: Option<&Arc<CalcResult>>,
+    ) -> Option<reshiki::graphics::EnergyProfile> {
+        let summary = self.xtb_energy_summary(arrow, newer_ts)?;
+        let doc = &self.tab.doc;
+        let (totals, frames) = profile_data(
+            doc,
+            &summary.species,
+            summary.inputs.iter(),
+            summary.task,
+            summary.method,
+        )?;
+        self.xtb_endpoint_energy_profile(doc, arrow, &totals, frames)
     }
 
     pub(super) fn xtb_energy_has_summary(&self, arrow: u64) -> bool {

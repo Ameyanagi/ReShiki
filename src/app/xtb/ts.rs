@@ -26,6 +26,7 @@ pub(in crate::app) mod export;
 pub(in crate::app) mod irc;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod job;
+pub(in crate::app) mod profile;
 mod refine;
 pub(in crate::app) mod review;
 pub(in crate::app) mod thumbnails;
@@ -37,6 +38,8 @@ pub(super) use job::Event;
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Card(card::Action),
+    PlaceEnergyProfile(Option<u64>),
+    EditEnergyProfile(u64, profile::Edit),
     Calculate(u64),
     RefineGxtb(u64, Arc<CalcResult>),
     Review(review::Mode, Option<u64>),
@@ -613,6 +616,14 @@ impl App {
     pub(super) fn xtb_ts_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Card(action) => self.xtb_ts_card_action(action),
+            Action::PlaceEnergyProfile(arrow) => {
+                self.xtb_place_energy_profile(arrow);
+                Task::none()
+            }
+            Action::EditEnergyProfile(id, edit) => {
+                self.xtb_edit_energy_profile(id, edit);
+                Task::none()
+            }
             Action::Calculate(arrow) => self.xtb_calculate_reaction(arrow),
             Action::RefineGxtb(arrow, source) => self.xtb_refine_gxtb(arrow, &source),
             Action::Review(mode, arrow) => self.xtb_review_open(mode, arrow),

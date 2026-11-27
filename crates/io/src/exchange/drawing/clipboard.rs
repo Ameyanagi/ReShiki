@@ -60,6 +60,7 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
         .into_iter()
         .chain(crate::graphics::export_notice(source))
         .chain(mo_diagram_export_notice(source))
+        .chain(energy_profile_export_notice(source))
         .collect();
     if opacity {
         notices.push(crate::rear_opacity::EXPORT_NOTICE.into());

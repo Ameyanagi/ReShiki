@@ -619,6 +619,7 @@ impl App {
         }
         let outcome = match result.and_then(|mut outcome| {
             outcome.document.validate()?;
+            reshiki::payload::unlink_energy_profiles(&mut outcome.document);
             normalize_pasted_captions(&mut outcome.document);
             Ok(outcome)
         }) {
@@ -805,6 +806,7 @@ impl App {
             if let Some(json) = editing::clipboard_json(&contents) {
                 match Document::from_json(json.as_bytes()) {
                     Ok(mut part) => {
+                        reshiki::payload::unlink_energy_profiles(&mut part);
                         normalize_pasted_captions(&mut part);
                         let part = reshiki::canvas_theme::for_native_paste(
                             part,

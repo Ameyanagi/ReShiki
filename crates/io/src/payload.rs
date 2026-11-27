@@ -47,6 +47,18 @@ pub fn visible(doc: &Document) -> Document {
     doc
 }
 
+/// Clipboard transfer keeps energy profiles as self-contained static snapshots.
+/// File and embedded-figure readers retain their saved calculation links.
+pub fn unlink_energy_profiles(doc: &mut Document) {
+    for profile in doc
+        .graphics
+        .iter_mut()
+        .filter_map(|graphic| graphic.energy_profile.as_deref_mut())
+    {
+        profile.unlink();
+    }
+}
+
 /// Compact JSON, its length and digest, followed by a zlib stream.
 pub fn encode(doc: &Document) -> Result<Vec<u8>, String> {
     let json = serde_json::to_vec(&visible(doc)).map_err(|e| e.to_string())?;
