@@ -1,43 +1,46 @@
 //! Admit a previous, verified GFN2 result without guessing legacy provenance.
 
 use super::{bohr, geometry};
-use crate::cli::args::Ts;
+use crate::cli::{args::Ts, calc::Geometry, io};
 use serde_json::Value;
-use std::fs;
+use std::{fs, path::Path};
 
-pub(super) fn load(command: &mut Ts) -> Result<Option<Value>, String> {
+pub(super) struct Loaded {
+    pub(super) report: Option<Value>,
+    pub(super) geometries: [Geometry; 3],
+}
+
+fn geometries(dir: &Path) -> Result<[Geometry; 3], String> {
+    let reactant = geometry::endpoint(&dir.join("reactant.xyz"))?;
+    let product = geometry::endpoint(&dir.join("product.xyz"))?;
+    let ts = geometry::endpoint(&dir.join("ts.xyz"))?;
+    for structure in [&product, &ts] {
+        geometry::check_sequence(&reactant.numbers, &structure.numbers)?;
+    }
+    Ok([reactant, product, ts])
+}
+
+pub(super) fn load(command: &mut Ts) -> Result<Option<Loaded>, String> {
     let Some(dir) = &command.from else {
         return Ok(None);
     };
     let fallback = "use --refine gxtb --ts TS.xyz with explicit endpoints or bond changes";
     let path = dir.join("report.json");
-    let text = match fs::read(&path) {
-        Ok(text) => text,
-        Err(error)
-            if error.kind() == std::io::ErrorKind::NotFound
-                && fs::symlink_metadata(&path)
-                    .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
-        {
-            // Historical --out-dir runs wrote six files without a report.
-            // Admit only their geometries, exactly like explicit --ts input.
-            // No energy or claimed source method crosses this boundary.
-            let reactant = geometry::endpoint(&dir.join("reactant.xyz"))?;
-            for name in ["product.xyz", "ts.xyz"] {
-                let structure = geometry::endpoint(&dir.join(name))?;
-                geometry::check_sequence(&reactant.numbers, &structure.numbers)?;
-            }
-            command.reactant = Some(dir.join("reactant.xyz"));
-            command.product = Some(dir.join("product.xyz"));
-            command.ts = Some(dir.join("ts.xyz"));
-            return Ok(None);
-        }
-        Err(error) => {
-            return Err(format!(
-                "cannot verify the prior GFN2-xTB result in {}: {error}; {fallback}",
-                path.display()
-            ));
-        }
-    };
+    if fs::symlink_metadata(&path).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+    {
+        // Historical exports supply only geometry seeds, without verified energies.
+        return Ok(Some(Loaded {
+            report: None,
+            geometries: geometries(dir)?,
+        }));
+    }
+    let limit = reshiki_agent::ops::budget::Budgets::default().max_text_bytes;
+    let text = io::read_input(Some(&path), limit).map_err(|error| {
+        format!(
+            "cannot verify the prior GFN2-xTB result in {}: {error}; {fallback}",
+            path.display()
+        )
+    })?;
     let report: Value = serde_json::from_slice(&text)
         .map_err(|error| format!("invalid {}: {error}; {fallback}", path.display()))?;
     let text = |path: &str| report.pointer(path).and_then(Value::as_str);
@@ -119,8 +122,10 @@ pub(super) fn load(command: &mut Ts) -> Result<Option<Value>, String> {
         .cloned()
         .and_then(|value| serde_json::from_value(value).ok())
         .ok_or_else(|| format!("{} lacks atom provenance; {fallback}", path.display()))?;
-    for name in ["reactant", "product", "ts"] {
-        let geometry = geometry::endpoint(&dir.join(format!("{name}.xyz")))?;
+    // Keep the admitted coordinates: reopening these paths later could follow
+    // a changed directory symlink and combine two different source runs.
+    let geometries = geometries(dir)?;
+    for (name, geometry) in ["reactant", "product", "ts"].into_iter().zip(&geometries) {
         let positions: Vec<f64> = report
             .pointer(&format!("/structures/{name}"))
             .cloned()
@@ -131,7 +136,7 @@ pub(super) fn load(command: &mut Ts) -> Result<Option<Value>, String> {
                     path.display()
                 )
             })?;
-        let xyz = bohr(&geometry);
+        let xyz = bohr(geometry);
         if geometry.numbers != numbers
             || positions.len() != xyz.len()
             || positions
@@ -178,8 +183,8 @@ pub(super) fn load(command: &mut Ts) -> Result<Option<Value>, String> {
     }
     command.charge = charge;
     command.uhf = Some(uhf);
-    command.reactant = Some(dir.join("reactant.xyz"));
-    command.product = Some(dir.join("product.xyz"));
-    command.ts = Some(dir.join("ts.xyz"));
-    Ok(Some(report))
+    Ok(Some(Loaded {
+        report: Some(report),
+        geometries,
+    }))
 }
