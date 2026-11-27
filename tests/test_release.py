@@ -684,7 +684,7 @@ while data := sys.stdin.buffer.read(header.size):
     with open(config["requests"], "a") as stream:
         stream.write(json.dumps(request) + "\n")
     response = json.dumps({"id": request["id"], "ok": config["replies"][request["op"]]}).encode()
-    sys.stdout.buffer.write(header.pack(b"RSHXTBWK", 1, 0, len(response)) + response)
+    sys.stdout.buffer.write(header.pack(b"RSHXTBWK", 2, 0, len(response)) + response)
     sys.stdout.buffer.flush()
     if request["op"] == "close":
         break
@@ -696,7 +696,7 @@ while data := sys.stdin.buffer.read(header.size):
 
         return {
             "hello": {
-                "protocol": 1,
+                "protocol": 2,
                 "engine": {"name": "axtb", "version": "0.2.0", "rev": AXTB_REV},
                 "methods": ["gfn2"],
             },
@@ -804,7 +804,7 @@ while data := sys.stdin.buffer.read(header.size):
         replies["hello"].update(engine=None, methods=[])
         requests, summary = self.verify_fixture(replies=replies, included=False)
         self.assertEqual([request["op"] for request in requests], ["hello"])
-        self.assertEqual(summary, "xTB worker protocol 1 verified with no engine.\n")
+        self.assertEqual(summary, "xTB worker protocol 2 verified with no engine.\n")
 
     def test_worker_ignores_external_lapack_overrides_and_preserves_other_environment(self):
         environment = {
@@ -852,12 +852,12 @@ while data := sys.stdin.buffer.read(header.size):
     def test_timeout_keeps_reader_from_reaping_during_group_signal(self):
         import build_release
 
-        body = json.dumps(dict(id=1, ok=dict(protocol=1, engine=None, methods=[]))).encode()
+        body = json.dumps(dict(id=1, ok=dict(protocol=2, engine=None, methods=[]))).encode()
         process = SimpleNamespace(
             pid=12345,
             returncode=None,
             stdin=io.BytesIO(),
-            stdout=io.BytesIO(build_release.XTB_HEADER.pack(b"RSHXTBWK", 1, 0, len(body)) + body),
+            stdout=io.BytesIO(build_release.XTB_HEADER.pack(b"RSHXTBWK", 2, 0, len(body)) + body),
         )
         exit_requested = threading.Event()
         reader_waiting = threading.Event()
