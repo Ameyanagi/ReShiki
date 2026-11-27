@@ -294,6 +294,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Query(..)
                 | Action::NewCanvas(..)
                 | Action::DrawingUnit(..)
+                | Action::EnergyUnit(..)
                 | Action::CopyBackground(..)
                 | Action::ExportBackground(..)
                 | Action::Custom(..)
@@ -770,6 +771,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Discard => None,
                 Action::Palette(
                     super::xtb::palette::Action::Exported(..)
+                    | super::xtb::palette::Action::IrcExported(..)
                     | super::xtb::palette::Action::IrExported(..),
                 ) => Some(Completion::Xtb),
                 Action::Conformers(..) | Action::Palette(..) | Action::Ts(..) => None,
@@ -793,7 +795,9 @@ fn completion(message: &Message) -> Option<Completion> {
             super::figure_export::Kind::Figure => Completion::FigureExport,
             super::figure_export::Kind::Structure => Completion::Export,
             super::figure_export::Kind::Nmr => Completion::Nmr,
-            super::figure_export::Kind::Xtb | super::figure_export::Kind::Ir => Completion::Xtb,
+            super::figure_export::Kind::Xtb
+            | super::figure_export::Kind::Irc
+            | super::figure_export::Kind::Ir => Completion::Xtb,
         }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,
@@ -855,6 +859,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::AtomSinglet(..)
         | Message::ToggleInspector
         | Message::Inspector(..)
+        | Message::ReactionBondHover(..)
         | Message::InsertInput
         | Message::ToggleHelp
         | Message::Help(..)

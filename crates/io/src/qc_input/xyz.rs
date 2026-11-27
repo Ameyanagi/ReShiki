@@ -2,7 +2,7 @@
 use std::fmt::Write;
 
 use crate::{
-    qcdata::{MAX_FRAME_ATOMS, Trajectory},
+    qcdata::{IrcPath, MAX_FRAME_ATOMS, Trajectory},
     qcread::xyz_species,
 };
 
@@ -17,14 +17,8 @@ pub(super) fn frame(frame: &Frame, title: &str) -> String {
 }
 
 pub fn write_xyz_trajectory(path: &Trajectory, title: &str) -> Result<String, Error> {
-    let mut text = String::new();
-    if path.positions_angstrom.is_empty() {
-        return Ok(text);
-    }
     let title = clean_title(title);
-    for step in 0..path.steps() {
-        let Some(frame) = path.frame(step) else { break };
-        check_atoms(&frame)?;
+    let comments = (0..path.steps()).map(|step| {
         let mut comment = path.labels.get(step).map_or_else(
             || format!("{title} step {}", step + 1),
             |label| single_line(label),
@@ -32,7 +26,45 @@ pub fn write_xyz_trajectory(path: &Trajectory, title: &str) -> Result<String, Er
         if let Some(energy) = path.energies_hartree.get(step) {
             let _ = write!(comment, "  E = {energy:.10} Eh");
         }
-        write_frame(&mut text, &frame, &comment);
+        comment
+    });
+    write_xyz_trajectory_with_comments(path, comments)
+}
+
+/// Write the traced IRC frames with absolute and reactant-relative energies.
+pub fn write_irc_xyz(
+    path: &IrcPath,
+    reference_hartree: f64,
+    units_per_hartree: f64,
+    unit: &str,
+) -> Result<String, Error> {
+    let comments = path
+        .arc_lengths_sqrt_amu_bohr
+        .iter()
+        .zip(&path.trajectory.energies_hartree)
+        .map(|(s, energy)| {
+            let delta = (energy - reference_hartree) * units_per_hartree;
+            format!("E = {energy} Eh · s = {s:.6} amu½·bohr · ΔE = {delta:.6} {unit}")
+        });
+    write_xyz_trajectory_with_comments(&path.trajectory, comments)
+}
+
+/// Write ångström frames in trajectory order, with one comment line per frame.
+pub fn write_xyz_trajectory_with_comments(
+    path: &Trajectory,
+    comments: impl ExactSizeIterator<Item = String>,
+) -> Result<String, Error> {
+    let mut text = String::new();
+    if path.positions_angstrom.is_empty() {
+        return Ok(text);
+    }
+    if comments.len() != path.steps() {
+        return Err(Error::Invalid("Each XYZ frame needs one comment.".into()));
+    }
+    for (step, comment) in comments.enumerate() {
+        let Some(frame) = path.frame(step) else { break };
+        check_atoms(&frame)?;
+        write_frame(&mut text, &frame, &single_line(&comment));
     }
     Ok(text)
 }

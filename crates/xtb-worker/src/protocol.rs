@@ -11,7 +11,7 @@ use std::{
 };
 
 pub use reshiki_qcdata::{
-    ScfRetry, SolvationState, Solvent, SolventCorrection, SolventModel,
+    HARTREE_TO_EV, ScfRetry, SolvationState, Solvent, SolventCorrection, SolventModel,
     XtbConventions as Conventions,
 };
 
@@ -22,8 +22,6 @@ pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 pub const CHUNK_VALUES: usize = (MAX_FRAME_BYTES - 4) / 8;
 pub const BOND_ORDER_MIN: f64 = 0.1;
 pub const HEADER_LEN: usize = 16;
-/// CODATA 2022 Hartree energy in eV.
-pub const HARTREE_TO_EV: f64 = 27.211386245981;
 pub const NEAR_DEGENERATE_GAP_EV: f64 = 0.1;
 const MAGIC: &[u8; 8] = b"RSHXTBWK";
 

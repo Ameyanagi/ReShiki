@@ -1,6 +1,7 @@
 //! A desktop transition-state search using thread-affine, isolated xTB workers.
 
-use super::{Extras, Stage};
+use super::view::THERMO_IMAGINARY_CM1;
+use super::{Extras, Retry, Stage};
 use crate::app::xtb::{
     results::{Evaluation, RunInfo},
     state::{Failure, symbol},
@@ -20,14 +21,30 @@ use reshiki_xtb_worker::{
     client::{Cancel, Limits},
     protocol::{Computed, Conventions, Engine, Method, Open, Units},
 };
-use std::{collections::BTreeSet, ops::ControlFlow, sync::Arc, time::Instant};
+use std::{
+    collections::BTreeSet,
+    ops::ControlFlow,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+const THERMO_TEMPERATURE_K: f64 = 298.15;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
     Stage(Stage),
-    Neb { iteration: usize },
-    Saddle { step: usize },
-    Irc { forward: bool, step: usize },
+    IrcSkipped,
+    Neb {
+        iteration: usize,
+        energies: Vec<f64>,
+    },
+    Saddle {
+        step: usize,
+    },
+    Irc {
+        forward: bool,
+        step: usize,
+    },
     Done(Result<Arc<Report>, Failure>),
 }
 
@@ -40,11 +57,22 @@ pub(crate) struct Report {
     pub(super) info: RunInfo,
 }
 
+pub(super) enum SearchPath {
+    New(usize),
+    Finer(usize),
+    Saved {
+        points: Vec<ts::Minimum>,
+        converged: bool,
+        candidate: ts::SaddleCandidate,
+    },
+}
+
 pub(super) fn start(
     launch: Launch,
     plan: TsPlan,
     drawn_bonds: Vec<(u64, u64)>,
-    images: usize,
+    path: SearchPath,
+    free_energy: bool,
     cancel: Cancel,
 ) -> impl Stream<Item = Event> + Send + 'static {
     let (tx, rx) = mpsc::unbounded();
@@ -52,7 +80,15 @@ pub(super) fn start(
     let thread = std::thread::Builder::new()
         .name("xtb-ts-run".into())
         .spawn(move || {
-            let result = run(&launch, &plan, &drawn_bonds, images, &cancel, &events);
+            let result = run(
+                &launch,
+                &plan,
+                &drawn_bonds,
+                path,
+                free_energy,
+                &cancel,
+                &events,
+            );
             let _ = events.unbounded_send(Event::Done(result.map(Arc::new)));
             events.close_channel();
         });
@@ -67,13 +103,31 @@ fn run(
     launch: &Launch,
     plan: &TsPlan,
     drawn_bonds: &[(u64, u64)],
-    images: usize,
+    path: SearchPath,
+    free_energy: bool,
     cancel: &Cancel,
     tx: &mpsc::UnboundedSender<Event>,
 ) -> Result<Report, Failure> {
     let started = Instant::now();
-    let mut trace = SearchTrace::default();
-    trace.enter("Building endpoints");
+    let images = match &path {
+        SearchPath::New(images) | SearchPath::Finer(images) => *images,
+        SearchPath::Saved { points, .. } => points.len(),
+    };
+    let retry = match &path {
+        SearchPath::New(_) => None,
+        SearchPath::Finer(_) => Some(Retry::FinerPath),
+        SearchPath::Saved { .. } => Some(Retry::RefineHighest),
+    };
+    let mut trace = SearchTrace {
+        retry,
+        ..Default::default()
+    };
+    let refining = retry == Some(Retry::RefineHighest);
+    trace.enter(if refining {
+        "Preparing refinement"
+    } else {
+        "Building endpoints"
+    });
     if !(5..=24).contains(&images) {
         return Err(Failure::Other(
             "A transition-state search needs 5 to 24 images".into(),
@@ -99,10 +153,14 @@ fn run(
         threads: 1,
         heap_bytes: limits.heap_bytes,
     };
-    let count = worker_count(
-        images,
-        std::thread::available_parallelism().map_or(1, usize::from),
-    );
+    let count = if refining {
+        1
+    } else {
+        worker_count(
+            images,
+            std::thread::available_parallelism().map_or(1, usize::from),
+        )
+    };
     let mut workers = Vec::with_capacity(count);
     let mut engine = None;
     for _ in 0..count {
@@ -116,53 +174,19 @@ fn run(
     let first = workers
         .first_mut()
         .ok_or_else(|| Failure::Other("No xTB worker".into()))?;
-    send(tx, cancel, Event::Stage(Stage::Endpoints))?;
-    let (start, folded) = ts::prepare_reactive_start(
-        first,
-        &open.numbers,
-        &bohr(&launch.frame.positions_angstrom),
-        &changes.form,
-        &changes.break_,
-        |_, _| control(cancel, tx),
-    )
-    .map_err(failed)?;
-    let (other, matched) = ts::build_endpoint(
-        first,
-        &open.numbers,
-        &start,
-        &changes.form,
-        &changes.break_,
-        |_, _| control(cancel, tx),
-    )
-    .map_err(failed)?;
-    if !matched {
-        let name = if plan.start == Side::Reactant {
-            "product"
-        } else {
-            "reactant"
-        };
-        return Err(Failure::Other(format!(
-            "The constructed {name} does not match the requested bond changes"
-        )));
-    }
-    check_cancel(cancel)?;
-    let (reactant, product) = match plan.start {
-        Side::Reactant => (start, other.positions),
-        Side::Product => (other.positions, start),
+    let (reactant, product) = match &path {
+        SearchPath::Saved { points, .. } => {
+            let [reactant, .., product] = points.as_slice() else {
+                return Err(Failure::Other("The saved path needs both endpoints".into()));
+            };
+            (reactant.positions.clone(), product.positions.clone())
+        }
+        _ => endpoints(launch, plan.start, &changes, first, cancel, tx, &mut trace)?,
     };
     let options = ts::TsOptions {
         images,
         ..ts::TsOptions::default()
     };
-    trace.reactive_start = folded.map(|fold| {
-        fold.description(|i| {
-            format!(
-                "{}{}",
-                open.numbers.get(i).copied().map_or("?", symbol),
-                i + 1
-            )
-        })
-    });
     let search = ts::Search {
         numbers: &open.numbers,
         masses_amu: &masses,
@@ -170,29 +194,83 @@ fn run(
         product: &product,
         options: &options,
     };
-    let report = ts::search_with_cancel(
-        &mut workers,
-        &search,
-        |event| {
-            trace.observe(event);
-            if let Some(event) = progress(event)
-                && send(tx, cancel, event).is_err()
-            {
-                return ControlFlow::Break(());
-            }
-            control(cancel, tx)
-        },
-        || control(cancel, tx),
-    )
+    let mut last_band = None;
+    let trace = std::cell::RefCell::new(trace);
+    let observe = |event: ts::Event<'_>| {
+        trace.borrow_mut().observe(event);
+        if let Some(event) = progress(event, &mut last_band, Instant::now)
+            && send(tx, cancel, event).is_err()
+        {
+            return ControlFlow::Break(());
+        }
+        control(cancel, tx)
+    };
+    let verify = |worker: &mut Worker, positions: &[f64], imaginary: usize| {
+        send(tx, cancel, Event::Stage(Stage::Saddle)).map_err(|_| ts::TsError::Cancelled)?;
+        trace.borrow_mut().enter("Worker check");
+        let check = worker
+            .checked_hessian(positions, &masses)
+            .map_err(ts::TsError::from);
+        if control(cancel, tx).is_break() || matches!(check, Err(ts::TsError::Cancelled)) {
+            return Err(ts::TsError::Cancelled);
+        }
+        let agrees = check
+            .as_ref()
+            .ok()
+            .and_then(|computed| computed.vibrations.as_ref())
+            .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == imaginary);
+        Ok((agrees, check))
+    };
+    let (report, checked) = match path {
+        SearchPath::Saved {
+            points,
+            converged,
+            candidate,
+        } => ts::refine_from_candidate(
+            first, &search, &points, converged, &candidate, observe, verify,
+        ),
+        _ => ts::search_with_verification(
+            &mut workers,
+            &search,
+            observe,
+            || control(cancel, tx),
+            verify,
+        ),
+    }
     .map_err(failed)?;
     check_cancel(cancel)?;
-    trace.enter("Worker check");
-    let checked = workers
-        .first_mut()
-        .ok_or_else(|| Failure::Other("No xTB worker".into()))?
-        .checked_hessian(&report.ts.positions, &masses)
-        .map_err(ts::TsError::from);
-    check_cancel(cancel)?;
+    if report.irc.is_none() && report.irc_error.is_none() {
+        send(tx, cancel, Event::IrcSkipped)?;
+    }
+    let mut trace = trace.into_inner();
+    let endpoint_thermo = if free_energy {
+        trace.enter("Endpoint thermochemistry");
+        send(tx, cancel, Event::Stage(Stage::Thermochemistry))?;
+        let worker = workers
+            .first_mut()
+            .ok_or_else(|| Failure::Other("No xTB worker".into()))?;
+        let mut analysis =
+            endpoint_thermochemistry(&launch.frame, &report, &masses, |positions, masses| {
+                if control(cancel, tx).is_break() {
+                    return Err(ts::TsError::Cancelled);
+                }
+                let computed = worker.checked_hessian(positions, masses);
+                if control(cancel, tx).is_break() {
+                    return Err(ts::TsError::Cancelled);
+                }
+                computed.map_err(ts::TsError::from)
+            })
+            .map_err(failed)?;
+        if plan.shape != (1, 1) {
+            analysis.diagnostics.push((
+                "Endpoint convention".into(),
+                "Free energies use the optimized endpoint complexes.".into(),
+            ));
+        }
+        Some(analysis)
+    } else {
+        None
+    };
     trace.finish();
     let evaluations = workers
         .iter()
@@ -209,6 +287,7 @@ fn run(
         Completion {
             report,
             checked,
+            endpoint_thermo,
             engine,
             changes: changes.in_reaction_direction(plan.start),
             evaluations,
@@ -217,6 +296,58 @@ fn run(
             trace,
         },
     )
+}
+
+fn endpoints(
+    launch: &Launch,
+    side: Side,
+    changes: &Changes,
+    worker: &mut Worker,
+    cancel: &Cancel,
+    tx: &mpsc::UnboundedSender<Event>,
+    trace: &mut SearchTrace,
+) -> Result<(Vec<f64>, Vec<f64>), Failure> {
+    let numbers = &launch.frame.numbers;
+    let (start, folded) = ts::prepare_reactive_start(
+        worker,
+        numbers,
+        &bohr(&launch.frame.positions_angstrom),
+        &changes.form,
+        &changes.break_,
+        |_, _| control(cancel, tx),
+    )
+    .map_err(failed)?;
+    let (other, matched) = ts::build_endpoint(
+        worker,
+        numbers,
+        &start,
+        &changes.form,
+        &changes.break_,
+        |_, _| control(cancel, tx),
+    )
+    .map_err(failed)?;
+    if !matched {
+        let name = if side == Side::Reactant {
+            "product"
+        } else {
+            "reactant"
+        };
+        return Err(Failure::Other(format!(
+            "The constructed {name} does not match the requested bond changes"
+        )));
+    }
+    check_cancel(cancel)?;
+    let (reactant, product) = match side {
+        Side::Reactant => (start, other.positions),
+        Side::Product => (other.positions, start),
+    };
+    trace.reactive_start = folded.map(|fold| {
+        let distances = fold.distance_description(|i| {
+            format!("{}{}", numbers.get(i).copied().map_or("?", symbol), i + 1)
+        });
+        format!("{distances} ({:+} kcal/mol)", fold.energy_change_kcal)
+    });
+    Ok((reactant, product))
 }
 
 fn worker_count(images: usize, parallelism: usize) -> usize {
@@ -390,6 +521,7 @@ fn pair(a: usize, b: usize) -> (usize, usize) {
 struct Completion {
     report: TsReport,
     checked: Result<Computed, ts::TsError>,
+    endpoint_thermo: Option<EndpointThermo>,
     engine: Engine,
     changes: Changes,
     evaluations: Vec<Evaluation>,
@@ -398,9 +530,100 @@ struct Completion {
     trace: SearchTrace,
 }
 
+struct EndpointThermo {
+    corrections: [Option<qcdata::Thermo>; 2],
+    diagnostics: Vec<(String, String)>,
+}
+
+/// Analyze the exact optimized search endpoints. Electronic energies returned
+/// with these Hessians never replace the energies used by the search.
+fn endpoint_thermochemistry(
+    frame: &Frame,
+    report: &TsReport,
+    masses: &[f64],
+    mut analyze: impl FnMut(&[f64], &[f64]) -> Result<Computed, ts::TsError>,
+) -> Result<EndpointThermo, ts::TsError> {
+    let mut corrections = [None, None];
+    let mut diagnostics = Vec::with_capacity(2);
+    for ((name, endpoint), slot) in [("Reactant", &report.reactant), ("Product", &report.product)]
+        .into_iter()
+        .zip(&mut corrections)
+    {
+        let correction = analyze(&endpoint.positions, masses).and_then(|computed| {
+            let vibrations = computed.vibrations.ok_or_else(|| {
+                ts::TsError::Failed("The xTB worker returned no vibrational analysis".into())
+            })?;
+            if vibrations
+                .frequencies_cm1
+                .iter()
+                .any(|&frequency| frequency < -THERMO_IMAGINARY_CM1)
+            {
+                return Err(ts::TsError::Failed(format!(
+                    "the optimized endpoint has an imaginary frequency below -{THERMO_IMAGINARY_CM1} cm-1"
+                )));
+            }
+            Ok(thermochemistry(
+                frame,
+                &angstroms(&endpoint.positions),
+                masses,
+                &vibrations.frequencies_cm1,
+            ))
+        });
+        match correction {
+            Ok(correction) => {
+                *slot = Some(correction);
+                diagnostics.push((
+                    format!("{name} thermochemistry"),
+                    "298.15 K · 101325 Pa · quasi-RRHO".into(),
+                ));
+            }
+            Err(ts::TsError::Cancelled) => return Err(ts::TsError::Cancelled),
+            Err(error) => diagnostics.push((
+                format!("{name} thermochemistry"),
+                format!("Free energy unavailable: {error}"),
+            )),
+        }
+    }
+    Ok(EndpointThermo {
+        corrections,
+        diagnostics,
+    })
+}
+
+fn thermochemistry(
+    frame: &Frame,
+    positions_angstrom: &[[f64; 3]],
+    masses_amu: &[f64],
+    frequencies_cm1: &[f64],
+) -> qcdata::Thermo {
+    use qcdata::vibrational::{ThermoInput, rotational_symmetry_number, thermochemistry};
+
+    let labels: Vec<_> = frame
+        .numbers
+        .iter()
+        .enumerate()
+        .map(|(index, &number)| {
+            u32::from(number) * 1000 + u32::from(frame.isotopes.get(index).copied().unwrap_or(0))
+        })
+        .collect();
+    thermochemistry(&ThermoInput {
+        frequencies_cm1,
+        masses_amu,
+        positions_angstrom,
+        symmetry_number: rotational_symmetry_number(&labels, positions_angstrom, masses_amu),
+        linear: None,
+        temperature_k: THERMO_TEMPERATURE_K,
+        pressure_pa: 101_325.,
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: THERMO_IMAGINARY_CM1,
+    })
+}
+
 /// Search counters and wall times are independent of the visible progress text.
 #[derive(Default)]
 struct SearchTrace {
+    retry: Option<Retry>,
     reactive_start: Option<String>,
     neb_iterations: Option<usize>,
     saddle_steps: Option<usize>,
@@ -419,8 +642,12 @@ impl SearchTrace {
 
     fn finish(&mut self) {
         if let Some((stage, started)) = self.current.take() {
-            self.times
-                .push((stage.into(), started.elapsed().as_secs_f64()));
+            let seconds = started.elapsed().as_secs_f64();
+            if let Some((_, total)) = self.times.iter_mut().find(|(name, _)| name == stage) {
+                *total += seconds;
+            } else {
+                self.times.push((stage.into(), seconds));
+            }
         }
     }
 
@@ -445,6 +672,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     let Completion {
         report,
         checked,
+        endpoint_thermo,
         engine,
         changes,
         evaluations,
@@ -495,6 +723,21 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     result.task = qcdata::Task::TransitionState;
     // The search's refined saddle is the energy used by every barrier display.
     result.energy_hartree = Some(report.ts.energy);
+    // Reuse the existing TS frequency analysis; endpoint corrections and this
+    // correction share the same temperature, isotope and symmetry policy.
+    result.thermo = endpoint_thermo.as_ref().and_then(|_| {
+        let vibrations = result.vibrations.as_ref()?;
+        super::view::extra_thermo_imaginary(&vibrations.frequencies_cm1)
+            .is_none()
+            .then(|| {
+                thermochemistry(
+                    &transition,
+                    &transition.positions_angstrom,
+                    &masses,
+                    &vibrations.frequencies_cm1,
+                )
+            })
+    });
     result.input_frame = Some(launch.frame.hash());
     result.endpoints = Some(qcdata::Endpoints {
         reactant: reactant.hash(),
@@ -531,19 +774,41 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     result
         .validate(&transition)
         .map_err(|error| Failure::Other(error.to_string()))?;
+    let mut diagnostic_rows = diagnostics(&report, &worker_frequencies, &result, &trace);
+    let endpoint_corrections = endpoint_thermo.and_then(|analysis| {
+        diagnostic_rows.extend(analysis.diagnostics);
+        analysis
+            .corrections
+            .iter()
+            .any(Option::is_some)
+            .then_some(analysis.corrections)
+    });
+    let irc = ordered_irc(&report, &transition)?;
+    let image_positions: Vec<_> = report
+        .path
+        .iter()
+        .map(|point| angstroms(&point.positions))
+        .collect();
+    if irc.is_some()
+        && let Some(band) = &mut result.trajectory
+    {
+        band.positions_angstrom = image_positions
+            .iter()
+            .flatten()
+            .flatten()
+            .copied()
+            .collect();
+    }
     let extras = Extras {
+        endpoint_energies_hartree: [report.reactant.energy, report.product.energy],
+        endpoint_thermo: endpoint_corrections,
         saddle_converged: report.saddle_converged,
         num_imaginary: report.imaginary,
-        diagnostics: diagnostics(&report, &worker_frequencies, &result, &trace),
-        image_positions: report
-            .path
-            .iter()
-            .map(|point| angstroms(&point.positions))
-            .collect(),
-        irc_energies: report.irc.as_ref().map_or_else(
-            || [Vec::new(), Vec::new()],
-            |branches| branches.each_ref().map(|branch| branch.energies.clone()),
-        ),
+        diagnostics: diagnostic_rows,
+        image_positions,
+        neb_converged: report.neb_converged,
+        reached_positions_angstrom: reached_endpoint(&report),
+        irc,
         connects: report.connects,
         forming: changes.form.iter().map(|&(a, b)| [a, b]).collect(),
         breaking: changes.break_.iter().map(|&(a, b)| [a, b]).collect(),
@@ -554,6 +819,10 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .first()
             .copied()
             .filter(|&f| f < -ts::IMAGINARY_CM1),
+        candidate: (report.imaginary >= 2).then_some(ts::SaddleCandidate {
+            positions: report.ts.positions,
+            hessian: report.hessian,
+        }),
     };
     Ok(Report {
         frames: vec![transition, reactant, product],
@@ -561,6 +830,87 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         extras,
         info,
     })
+}
+
+/// Order the negative branch toward the reactant independently of the arbitrary
+/// eigenvector sign used to launch the engine's two branches.
+fn ordered_irc(report: &TsReport, frame: &Frame) -> Result<Option<qcdata::IrcPath>, Failure> {
+    let Some(branches) = &report.irc else {
+        return Ok(None);
+    };
+    use ts::Reached::{Product, Reactant};
+    let [plus, minus] = branches;
+    let ordered = match (plus.reached, minus.reached) {
+        (Reactant, _) => [plus, minus],
+        (_, Reactant) | (Product, _) => [minus, plus],
+        _ => [plus, minus],
+    };
+    let points: Vec<_> = ordered[0]
+        .path
+        .iter()
+        .rev()
+        .chain(std::iter::once(&report.ts))
+        .chain(ordered[1].path.iter())
+        .collect();
+    let trajectory = |points: &[&ts::Minimum]| qcdata::Trajectory {
+        numbers: frame.numbers.clone(),
+        isotopes: frame.isotopes.clone(),
+        masses_amu: frame.masses_amu.clone(),
+        charge: frame.charge,
+        multiplicity: frame.multiplicity,
+        positions_angstrom: points
+            .iter()
+            .flat_map(|point| point.positions.iter().map(|x| x * ANGSTROM_PER_BOHR))
+            .collect(),
+        energies_hartree: points.iter().map(|point| point.energy).collect(),
+        labels: Vec::new(),
+        minimizer_energies_hartree: Vec::new(),
+        cluster_sizes: Vec::new(),
+        rmsd_to_best_angstrom: Vec::new(),
+    };
+    let reached = ordered.map(|branch| match branch.reached {
+        ts::Reached::Reactant => qcdata::IrcEndpoint::Reactant,
+        ts::Reached::Product => qcdata::IrcEndpoint::Product,
+        ts::Reached::Other => qcdata::IrcEndpoint::Other,
+    });
+    let mut path = qcdata::IrcPath::new(
+        trajectory(&points),
+        ordered[0].path.len(),
+        reached,
+        ordered.map(|branch| branch.completed),
+        ordered.map(|branch| qcdata::IrcRelaxedEnd {
+            energy_hartree: branch.end.energy,
+            positions_angstrom: branch
+                .end
+                .positions
+                .iter()
+                .map(|x| x * ANGSTROM_PER_BOHR)
+                .collect(),
+        }),
+    )
+    .map_err(|error| Failure::Other(error.to_string()))?;
+    let neb = trajectory(&report.path.iter().collect::<Vec<_>>());
+    path.project_neb(&neb, report.climbing_image)
+        .map_err(|error| Failure::Other(error.to_string()))?;
+    Ok(Some(path))
+}
+
+fn reached_endpoint(report: &TsReport) -> Vec<[f64; 3]> {
+    use ts::Reached::{Other, Product};
+
+    let Some(branches) = report.irc.as_ref().filter(|_| !report.connects) else {
+        return Vec::new();
+    };
+    branches
+        .iter()
+        .find(|branch| branch.reached == Other)
+        .or_else(|| {
+            branches
+                .iter()
+                .all(|branch| branch.reached == Product)
+                .then(|| &branches[0])
+        })
+        .map_or_else(Vec::new, |branch| angstroms(&branch.end.positions))
 }
 
 fn diagnostics(
@@ -576,8 +926,17 @@ fn diagnostics(
             "not converged"
         }
     };
+    let refining = trace.retry == Some(Retry::RefineHighest);
     let mut rows = vec![
-        ("Method".into(), "IDPP → CI-NEB → P-RFO → IRC".into()),
+        (
+            "Method".into(),
+            if refining {
+                "Displaced saddle candidate → P-RFO → IRC"
+            } else {
+                "IDPP → CI-NEB → P-RFO → IRC"
+            }
+            .into(),
+        ),
         (
             "Images".into(),
             format!(
@@ -590,10 +949,14 @@ fn diagnostics(
             "NEB".into(),
             format!(
                 "{} · {}",
-                trace.neb_iterations.map_or_else(
-                    || "iterations unavailable".into(),
-                    |n| format!("{n} iterations")
-                ),
+                if refining {
+                    "reused the saved path".into()
+                } else {
+                    trace.neb_iterations.map_or_else(
+                        || "iterations unavailable".into(),
+                        |n| format!("{n} iterations"),
+                    )
+                },
                 convergence(report.neb_converged)
             ),
         ),
@@ -609,13 +972,21 @@ fn diagnostics(
             ),
         ),
     ];
+    if let Some(retry) = trace.retry {
+        rows.push((
+            "Retry".into(),
+            match retry {
+                Retry::RefineHighest => {
+                    "Displaced the saved candidate along an extra imaginary mode".into()
+                }
+                Retry::FinerPath => format!("New search with {} path points", report.path.len()),
+            },
+        ));
+    }
     if let Some(detail) = &trace.reactive_start {
         rows.push(("Folded the starting conformer".into(), detail.clone()));
     }
-    let worker = worker_frequencies
-        .iter()
-        .filter(|&&f| f < -ts::IMAGINARY_CM1)
-        .count();
+    let worker = imaginary_count(worker_frequencies);
     rows.push((
         "Worker check".into(),
         if worker_frequencies.is_empty() {
@@ -737,14 +1108,18 @@ fn engine_candidate(frame: &Frame, report: &TsReport, engine: &Engine) -> CalcRe
     }
 }
 
+fn imaginary_count(frequencies: &[f64]) -> usize {
+    frequencies
+        .iter()
+        .filter(|&&f| f < -ts::IMAGINARY_CM1)
+        .count()
+}
+
 /// Keep the same acceptance rule and diagnostic order as the CLI.
 fn failure_reason(report: &TsReport, worker_frequencies: &[f64]) -> Option<String> {
     use ts::Reached::{Other, Product, Reactant};
 
-    let worker = worker_frequencies
-        .iter()
-        .filter(|&&f| f < -ts::IMAGINARY_CM1)
-        .count();
+    let worker = imaginary_count(worker_frequencies);
     if worker != report.imaginary {
         Some(format!(
             "engine/worker imaginary frequency counts disagree: engine {}, worker {worker}",
@@ -767,7 +1142,7 @@ fn failure_reason(report: &TsReport, worker_frequencies: &[f64]) -> Option<Strin
                 .as_ref()
                 .map(|branches| branches.each_ref().map(|b| b.reached))
             {
-                Some([Reactant, Reactant]) => "IRC reaches the reactant on both sides",
+                Some([Reactant, Reactant]) => super::view::IRC_RETURNS_TO_REACTANT,
                 Some([Product, Product]) => "IRC reaches the product on both sides",
                 Some([Reactant, Other] | [Other, Reactant]) => {
                     "IRC reaches the reactant and a different minimum"
@@ -785,7 +1160,11 @@ fn failure_reason(report: &TsReport, worker_frequencies: &[f64]) -> Option<Strin
     }
 }
 
-fn progress(event: ts::Event<'_>) -> Option<Event> {
+fn progress(
+    event: ts::Event<'_>,
+    last_band: &mut Option<Instant>,
+    clock: impl FnOnce() -> Instant,
+) -> Option<Event> {
     Some(match event {
         ts::Event::Stage(stage) => Event::Stage(match stage {
             ts::Stage::Endpoints => Stage::Endpoints,
@@ -794,7 +1173,25 @@ fn progress(event: ts::Event<'_>) -> Option<Event> {
             ts::Stage::Saddle | ts::Stage::Frequencies => Stage::Saddle,
             ts::Stage::Irc => Stage::Irc,
         }),
-        ts::Event::Neb { iteration, .. } => Event::Neb { iteration },
+        ts::Event::Neb {
+            iteration,
+            energies,
+            finished,
+            ..
+        } => {
+            let now = clock();
+            if !finished
+                && last_band
+                    .is_some_and(|last| now.duration_since(last) < Duration::from_millis(250))
+            {
+                return None;
+            }
+            *last_band = Some(now);
+            Event::Neb {
+                iteration,
+                energies: energies.to_vec(),
+            }
+        }
         ts::Event::Saddle { step, .. } => Event::Saddle { step },
         ts::Event::Irc { forward, step, .. } => Event::Irc { forward, step },
         ts::Event::Endpoint { .. } | ts::Event::SaddleTrial { .. } | ts::Event::SaddleStatus(_) => {
@@ -803,7 +1200,7 @@ fn progress(event: ts::Event<'_>) -> Option<Event> {
     })
 }
 
-fn bohr(positions: &[[f64; 3]]) -> Vec<f64> {
+pub(super) fn bohr(positions: &[[f64; 3]]) -> Vec<f64> {
     positions
         .as_flattened()
         .iter()

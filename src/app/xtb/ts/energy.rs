@@ -3,16 +3,16 @@
 //! with the open document.
 use crate::app::workspace::accessible_command;
 use crate::app::xtb::tone::{Tone, line};
-use crate::app::xtb::{self, CalcTask, Outcome, Request, state};
+use crate::app::xtb::{self, CalcTask, EnergyUnit, Outcome, Request, state};
 use crate::app::{App, Message};
-use iced::widget::{column, row, text};
-use iced::{Element, Length, Task};
+use iced::widget::column;
+use iced::{Element, Task};
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
 use reshiki::science::{self, Freshness};
 use std::sync::{Arc, Weak};
 
-const KCAL_PER_HARTREE: f64 = 627.509_474_063;
+use reshiki_xtb_jobs::conformers::KCAL_PER_HARTREE;
 const TEMPERATURE_K: f64 = 298.15;
 
 /// One connected molecule, with its reviewed electronic state. Coefficients
@@ -28,7 +28,6 @@ pub(in crate::app::xtb) struct Species {
 
 #[derive(Default)]
 pub(in crate::app::xtb) struct State {
-    task: Option<CalcTask>,
     batch: Option<Batch>,
     summaries: Vec<Summary>,
     stopped: Option<(u64, String)>,
@@ -39,6 +38,7 @@ struct Batch {
     species: Vec<Species>,
     task: CalcTask,
     snapshot: String,
+    barrier_refusal: Option<String>,
     next: usize,
     reused: usize,
     inputs: Vec<Input>,
@@ -51,8 +51,10 @@ struct Summary {
     species: Vec<Species>,
     task: CalcTask,
     snapshot: String,
+    barrier_refusal: Option<String>,
     reused: usize,
     inputs: Vec<Input>,
+    preceding_ts: Vec<Weak<CalcResult>>,
 }
 
 /// The exact stored calculation used for one term, retained across later
@@ -83,17 +85,14 @@ impl Input {
 }
 
 #[derive(Debug, PartialEq)]
-struct Totals {
-    energy: f64,
-    gibbs: Option<f64>,
+pub(super) struct Totals {
+    pub energy: f64,
+    pub gibbs: Option<f64>,
 }
 
 impl Totals {
-    fn line(&self) -> String {
-        let energy = format!("ΔE {:+.2} kcal/mol", self.energy);
-        self.gibbs.map_or(energy.clone(), |gibbs| {
-            format!("{energy} · ΔG (298.15 K) {gibbs:+.2} kcal/mol")
-        })
+    fn line(&self, unit: EnergyUnit) -> String {
+        format!("Reaction energy · ΔE {}", unit.format(self.energy))
     }
 }
 
@@ -362,6 +361,18 @@ impl State {
         old: &science::Stored,
         new: &science::Stored,
     ) {
+        for summary in &mut self.summaries {
+            if summary
+                .preceding_ts
+                .iter()
+                .any(|previous| xtb::is(previous, &old.result))
+            {
+                summary
+                    .preceding_ts
+                    .retain(|previous| previous.strong_count() > 0);
+                summary.preceding_ts.push(Arc::downgrade(&new.result));
+            }
+        }
         let inputs = self
             .batch
             .iter_mut()
@@ -380,14 +391,6 @@ impl State {
                 input.result = Arc::clone(&new.result);
             }
         }
-    }
-
-    pub(in crate::app::xtb) fn task(&self, fallback: CalcTask) -> CalcTask {
-        self.task.unwrap_or(if fallback == CalcTask::OptFreq {
-            CalcTask::OptFreq
-        } else {
-            CalcTask::Optimize
-        })
     }
 
     pub(in crate::app::xtb) fn in_progress(&self) -> bool {
@@ -427,21 +430,13 @@ impl State {
 }
 
 impl App {
-    pub(in crate::app::xtb) fn xtb_reaction_energy_task(&mut self, task: CalcTask) {
-        if matches!(task, CalcTask::Optimize | CalcTask::OptFreq)
-            && self.tab.xtb.run.is_none()
-            && !self.tab.xtb.energy_state.in_progress()
-        {
-            self.tab.xtb.energy_state.task = Some(task);
-        }
-    }
-
     /// Entered only after the shared review has validated every species.
     pub(in crate::app::xtb) fn xtb_reaction_energy_begin(
         &mut self,
         arrow: u64,
         species: Vec<Species>,
         task: CalcTask,
+        barrier_refusal: Option<String>,
     ) -> Task<Message> {
         if !xtb::available() || !self.xtb_can_start() {
             return Task::none();
@@ -456,13 +451,13 @@ impl App {
         let Some(snapshot) = snapshot(&self.tab.doc, arrow, &species) else {
             return Task::none();
         };
-        self.tab.xtb.energy_state.task = Some(task);
         self.tab.xtb.energy_state.stopped = None;
         self.tab.xtb.energy_state.batch = Some(Batch {
             arrow,
             species,
             task,
             snapshot,
+            barrier_refusal,
             next: 0,
             reused: 0,
             inputs: Vec::new(),
@@ -494,7 +489,18 @@ impl App {
                     self.error = false;
                     return Task::none();
                 };
-                self.status = format!("Reaction energy · {}", totals.line());
+                self.status = totals.line(self.appearance.energy_unit);
+                if self.xtb_selected_reaction() == Some(batch.arrow) {
+                    self.tab.xtb.ts_card.status = Some((
+                        batch.arrow,
+                        super::card::Status::ReactionEnergy,
+                        self.status.clone(),
+                    ));
+                }
+                let preceding_ts = match self.xtb_ts_card_result(batch.arrow) {
+                    super::card::ArrowResult::Found(result) => vec![Arc::downgrade(result)],
+                    _ => Vec::new(),
+                };
                 self.error = false;
                 self.tab
                     .xtb
@@ -506,8 +512,10 @@ impl App {
                     species: batch.species,
                     task: batch.task,
                     snapshot: batch.snapshot,
+                    barrier_refusal: batch.barrier_refusal,
                     reused: batch.reused,
                     inputs: batch.inputs,
+                    preceding_ts,
                 });
                 return Task::none();
             };
@@ -595,106 +603,108 @@ impl App {
         self.xtb_reaction_energy_next()
     }
 
-    pub(super) fn xtb_reaction_energy_section(&self, arrow: u64) -> Element<'_, Message> {
+    pub(super) fn xtb_energy_result(
+        &self,
+        arrow: u64,
+        newer_ts: Option<&Arc<CalcResult>>,
+    ) -> (Option<Totals>, Option<&str>) {
         let state = &self.tab.xtb.energy_state;
-        let mut body = column![text("Reaction energy").size(13)].spacing(7);
-        let batch = state.batch.as_ref().filter(|b| b.arrow == arrow);
-        if let Some(batch) = batch {
-            body = body.push(line(state.progress().unwrap_or_default(), Tone::Muted));
+        let summary = state
+            .summaries
+            .iter()
+            .find(|summary| summary.arrow == arrow)
+            .filter(|summary| {
+                newer_ts.is_none_or(|result| {
+                    summary
+                        .preceding_ts
+                        .iter()
+                        .any(|previous| xtb::is(previous, result))
+                }) && snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
+                    == Some(&summary.snapshot)
+            });
+        let totals = summary.and_then(|summary| {
+            input_totals(
+                &self.tab.doc,
+                &summary.species,
+                &summary.inputs,
+                summary.task,
+            )
+        });
+        let refusal = match state.batch.as_ref().filter(|batch| batch.arrow == arrow) {
+            Some(batch) => batch.barrier_refusal.as_deref(),
+            None => summary.and_then(|summary| summary.barrier_refusal.as_deref()),
+        };
+        (totals, refusal)
+    }
+
+    pub(super) fn xtb_energy_has_summary(&self, arrow: u64) -> bool {
+        self.tab
+            .xtb
+            .energy_state
+            .summaries
+            .iter()
+            .any(|summary| summary.arrow == arrow)
+    }
+
+    pub(in crate::app::xtb) fn xtb_energy_status(&self, arrow: u64) -> Option<String> {
+        self.xtb_energy_result(arrow, None)
+            .0
+            .map(|totals| totals.line(self.appearance.energy_unit))
+    }
+
+    pub(super) fn xtb_energy_feedback(
+        &self,
+        arrow: u64,
+        showing_batch: bool,
+    ) -> Option<Element<'_, Message>> {
+        let state = &self.tab.xtb.energy_state;
+        if let Some(batch) = state.batch.as_ref().filter(|batch| batch.arrow == arrow) {
+            let mut body =
+                column![line(state.progress().unwrap_or_default(), Tone::Muted)].spacing(6);
             if batch.review
                 && let Some(outcome @ Outcome::Review(_)) = &self.tab.xtb.outcome
             {
                 body = body.push(xtb::view::outcome_view(self, outcome));
             }
-            body = body.push(
-                accessible_command(
-                    "xtb-reaction-energy-cancel",
-                    "Cancel reaction energy",
-                    "Cancel",
-                )
-                .on_press(Message::Xtb(xtb::Action::Cancel)),
-            );
-        } else {
-            // A failed rerun comes first; an older summary is then the previous result.
-            let stopped = state.stopped.as_ref().filter(|(at, _)| *at == arrow);
-            if let Some((_, reason)) = stopped {
-                body = body.push(line(reason.clone(), Tone::Warning));
-            }
-            let summary = state.summaries.iter().find(|s| s.arrow == arrow);
-            if let Some(summary) = summary {
-                let current = snapshot(&self.tab.doc, arrow, &summary.species).as_ref()
-                    == Some(&summary.snapshot);
-                if let Some(totals) = current
-                    .then(|| {
-                        input_totals(
-                            &self.tab.doc,
-                            &summary.species,
-                            &summary.inputs,
-                            summary.task,
-                        )
-                    })
-                    .flatten()
-                {
-                    body = body.push(match stopped {
-                        Some(_) => line(format!("Previous result: {}", totals.line()), Tone::Muted),
-                        None => line(totals.line(), Tone::Good),
-                    });
-                    if summary.reused > 0 {
-                        body = body.push(line(
-                            format!(
-                                "Reused {} current species result{}",
-                                summary.reused,
-                                if summary.reused == 1 { "" } else { "s" }
-                            ),
-                            Tone::Muted,
-                        ));
-                    }
-                } else {
-                    body = body.push(line(
-                        "The reaction or a species result changed; calculate again for current energies.",
-                        Tone::Warning,
-                    ));
-                }
-            }
-            let idle = xtb::available()
-                && self.tab.xtb.run.is_none()
-                && state.batch.is_none()
-                && !self.tab.busy
-                && !self.ts_review_open();
-            let task = state.task(self.xtb.settings.task);
-            body = body.push(
-                row([
-                    (CalcTask::Optimize, "Optimize", "optimize"),
-                    (CalcTask::OptFreq, "Opt + freq", "opt-freq"),
-                ]
-                .into_iter()
-                .map(|(choice, name, id)| {
-                    crate::app::xtb::view::segment(
-                        format!("xtb-reaction-energy-task-{id}"),
-                        name,
-                        task == choice,
-                        idle.then_some(Message::Xtb(xtb::Action::Ts(super::Action::EnergyTask(
-                            choice,
-                        )))),
-                        None,
+            return Some(
+                body.push(
+                    accessible_command(
+                        "xtb-reaction-energy-cancel",
+                        "Cancel reaction energy",
+                        "Cancel",
                     )
-                }))
-                .spacing(4),
-            );
-            body = body.push(
-                accessible_command(
-                    "xtb-reaction-energy-review",
-                    "Calculate reaction energy",
-                    "Calculate",
+                    .on_press(Message::Xtb(xtb::Action::Cancel)),
                 )
-                .style(crate::appearance::primary)
-                .width(Length::Fill)
-                .on_press_maybe(idle.then_some(Message::Xtb(xtb::Action::Ts(
-                    super::Action::Review(super::review::Mode::Energy, Some(arrow)),
-                )))),
+                .into(),
             );
         }
-        body.width(Length::Fill).into()
+        let stopped = state.stopped.as_ref().filter(|(at, _)| *at == arrow);
+        let summary = state.summaries.iter().find(|s| s.arrow == arrow);
+        if stopped.is_none() && summary.is_none() {
+            return None;
+        }
+        let mut body = column![].spacing(4);
+        if let Some((_, reason)) = stopped {
+            body = body.push(line(reason, Tone::Warning));
+        }
+        if let Some(summary) = summary {
+            if !showing_batch && self.xtb_energy_result(arrow, None).0.is_none() {
+                body = body.push(line(
+                    "The reaction or a species result changed; calculate again for current energies.",
+                    Tone::Warning,
+                ));
+            } else if showing_batch && summary.reused > 0 {
+                body = body.push(line(
+                    format!(
+                        "Reused {} current species result{}",
+                        summary.reused,
+                        if summary.reused == 1 { "" } else { "s" }
+                    ),
+                    Tone::Muted,
+                ));
+            }
+        }
+        Some(body.into())
     }
 }
 

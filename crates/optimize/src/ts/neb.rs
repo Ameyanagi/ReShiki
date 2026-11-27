@@ -38,6 +38,22 @@ pub(super) struct RecoverySeed {
 }
 
 impl Band {
+    /// Restore the handoff from an already validated molecular band. The same
+    /// highest-image choice and improved tangent are used by a fresh NEB run.
+    pub(super) fn from_saved(path: &[Minimum], masses: &[f64], converged: bool) -> Self {
+        let energies: Vec<_> = path.iter().map(|point| point.energy).collect();
+        let positions: Vec<_> = path.iter().map(|point| point.positions.clone()).collect();
+        let climbing = highest(&energies);
+        let weights = vec![1.0; masses.len()];
+        let (tangent, _) = tangent(&positions, &energies, climbing, &weights);
+        Self {
+            path: path.to_vec(),
+            converged,
+            climbing,
+            tangent,
+        }
+    }
+
     /// Probe unresolved peaks next to the climbing image without changing the band.
     /// Adaptive insertion near a transition state follows the motivation of
     /// Kolsbjerg, Groves & Hammer, J. Chem. Phys. 145, 094107 (2016)
@@ -204,6 +220,7 @@ pub(super) fn run<P: Potential + Send>(
                 energies: &energies,
                 max_force: projected.maximum,
                 climbing,
+                finished: converged || iteration == options.neb_max_iterations,
             },
         )?;
         if converged || iteration == options.neb_max_iterations {

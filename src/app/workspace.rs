@@ -319,6 +319,7 @@ impl App {
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             result_label: self.xtb_label(),
+            bond_changes: self.xtb_reaction_bond_marks(),
             outdated_models: self.outdated_models(),
             element: self.atom_tool_element(),
             atom_label: (self.element == super::palettes::R_GROUP)
@@ -1197,19 +1198,12 @@ impl App {
                 .filter(|arrow| super::xtb::ts::review::reaction_arrow(&self.tab.doc, arrow.id))
         {
             use super::xtb::{Action, ts};
-            use ts::review::Mode;
-            commands.extend(
-                [
-                    ("Find transition state (GFN2-xTB)", Mode::TransitionState),
-                    ("Reaction energy", Mode::Energy),
-                ]
-                .map(|(label, mode)| RowCommand {
-                    label,
-                    menu: label,
-                    message: Message::Xtb(Action::Ts(ts::Action::Review(mode, Some(arrow.id)))),
-                    enabled: !self.tab.busy && !self.xtb_running(),
-                }),
-            );
+            commands.push(RowCommand {
+                label: "Calculate (xTB)",
+                menu: "Calculate (xTB)",
+                message: Message::Xtb(Action::Ts(ts::Action::Calculate(arrow.id))),
+                enabled: self.xtb_can_calculate_reaction(arrow.id),
+            });
         }
         if !keyboard {
             commands.push(RowCommand {

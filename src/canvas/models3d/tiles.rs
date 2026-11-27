@@ -66,7 +66,76 @@ impl Cache {
 
 thread_local! {
     static TILES: RefCell<Cache> = RefCell::default();
+    // Paper frames release TILES when no model is present on the drawing.
+    // Result-panel thumbnails keep their small cache independently.
+    static MODEL_IMAGES: RefCell<Cache> = RefCell::default();
     static SAMPLES: std::cell::Cell<f32> = const { std::cell::Cell::new(OVERSAMPLE) };
+}
+
+/// A small prepared model image outside the paper, rasterized and cached by
+/// the same SVG path as its canvas tiles and figure exports.
+#[derive(Clone, Debug)]
+pub(crate) struct ModelImage {
+    run: std::rc::Rc<[Primitive]>,
+    lo: World,
+    hi: World,
+    key: u64,
+}
+
+impl ModelImage {
+    pub(crate) fn new(run: Vec<Primitive>, lo: World, hi: World) -> Self {
+        let mut hasher = DefaultHasher::new();
+        // Keep thumbnails in a separate cache-key domain from paper tiles.
+        "model thumbnail".hash(&mut hasher);
+        for primitive in &run {
+            key(primitive, &mut hasher);
+        }
+        for value in [lo.x, lo.y, hi.x, hi.y] {
+            value.to_bits().hash(&mut hasher);
+        }
+        Self {
+            run: run.into(),
+            lo,
+            hi,
+            key: hasher.finish(),
+        }
+    }
+
+    /// Draw at `origin`, with `scale` logical pixels per drawing unit.
+    pub(crate) fn draw(
+        &self,
+        frame: &mut canvas::Frame,
+        origin: Point,
+        scale: f32,
+        theme: reshiki::canvas_theme::CanvasTheme,
+    ) {
+        let raster_scale = scale * OVERSAMPLE;
+        let width = ((self.hi.x - self.lo.x) * raster_scale).ceil();
+        let height = ((self.hi.y - self.lo.y) * raster_scale).ceil();
+        if !raster_scale.is_finite()
+            || raster_scale <= 0.
+            || !(1. ..=4096.).contains(&width)
+            || !(1. ..=4096.).contains(&height)
+        {
+            return;
+        }
+        let size = [width as u32, height as u32];
+        let mut hasher = DefaultHasher::new();
+        self.key.hash(&mut hasher);
+        raster_scale.to_bits().hash(&mut hasher);
+        size.hash(&mut hasher);
+        theme.is_dark().hash(&mut hasher);
+        let render = || pixels_on(&self.run, self.lo, raster_scale, size[0], size[1], theme);
+        let Some(handle) =
+            MODEL_IMAGES.with_borrow_mut(|cache| cache.get(hasher.finish(), size, render))
+        else {
+            return;
+        };
+        frame.draw_image(
+            Rectangle::new(origin, Size::new(width / OVERSAMPLE, height / OVERSAMPLE)),
+            canvas::Image::new(handle),
+        );
+    }
 }
 
 /// Set up the paper's next frame of `doc`: models render coarser while one

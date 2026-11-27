@@ -433,11 +433,17 @@ impl App {
         stored.result.vibrations.is_some().then_some(stored)
     }
 
-    /// Ticks while a mode animates.
+    /// Ticks while a mode animates or a reaction search displays elapsed time.
     pub(in crate::app) fn xtb_subscription(&self) -> iced::Subscription<Message> {
         let vibrations = &self.tab.xtb.vibrations;
         if vibrations.playing && self.xtb_vibration_preview().is_some() {
             iced::time::every(TICK).map(|_| Message::Xtb(super::Action::Vibrations(Action::Tick)))
+        } else if self.xtb_irc_preview().is_some() {
+            iced::time::every(std::time::Duration::from_millis(80))
+                .map(|_| Message::Xtb(super::Action::Ts(super::ts::Action::IrcTick)))
+        } else if self.xtb_live_ts().is_some() {
+            iced::time::every(std::time::Duration::from_millis(100))
+                .map(|_| Message::Xtb(super::Action::Ts(super::ts::Action::Tick)))
         } else {
             iced::Subscription::none()
         }

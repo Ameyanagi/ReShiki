@@ -7,6 +7,7 @@ mod capabilities;
 /// Serde codecs for compact floating-point arrays.
 pub mod compact;
 mod frame;
+mod irc;
 mod molden;
 mod result;
 /// Thermochemistry, IR spectra, and normal-mode geometries.
@@ -20,6 +21,7 @@ pub use capabilities::{
     Capabilities, OrbitalRequest, SolventSupport, XtbMethod, check_calculation,
 };
 pub use frame::{Frame, FrameHash, Trajectory};
+pub use irc::{IrcEndpoint, IrcPath, IrcRelaxedEnd};
 pub use molden::{
     CartesianNorm, axial_norm_ratio, mo_from_molden, mo_to_molden, molden_cartesian_order,
     molden_pure_order, shell_from_molden, shell_to_molden,
@@ -35,6 +37,10 @@ pub use result::{
 pub const ANGSTROM_PER_BOHR: f64 = 0.529177210544;
 /// Debye per elementary charge times bohr, CODATA 2022.
 pub const DEBYE_PER_E_BOHR: f64 = 2.541746473;
+/// Electronvolts per hartree, CODATA 2022.
+pub const HARTREE_TO_EV: f64 = 27.211386245981;
+/// Thermochemical kcal/mol per hartree, CODATA 2022.
+pub const KCAL_PER_HARTREE: f64 = 627.509_474_063;
 /// Atom limit for xTB energies, gradients, and optimizations.
 pub const MAX_CALC_ATOMS: usize = 500;
 /// Atom limit for Hessians, vibrational analysis, and xTB conformer re-ranking.
