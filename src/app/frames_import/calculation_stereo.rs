@@ -130,25 +130,20 @@ fn tetrahedral_candidate(
     match *neighbors.as_slice() {
         [a, b, c, d] => {
             let [a, b, c, d] = [a, b, c, d].map(point);
-            let scale = [a, b, c, d]
-                .iter()
-                .map(|p| (0..3).map(|i| (p[i] - center[i]).powi(2)).sum::<f64>())
-                .fold(0.0_f64, f64::max)
-                .sqrt();
-            // Moving the centre out of a square plane can give nonzero
-            // center-relative volume while the ligand tetrahedron stays flat,
-            // and a seesaw centre sits on an edge of its ligand tetrahedron:
-            // a tetrahedral centre lies well inside it.
+            let vectors =
+                [a, b, c, d].map(|p| std::array::from_fn::<_, 3, _>(|i| p[i] - center[i]));
+            let lengths = vectors.map(|v| v.iter().map(|x| x * x).sum::<f64>().sqrt());
+            let scale = lengths.into_iter().fold(0.0_f64, f64::max);
+            // Reject flat ligand tetrahedra. Use the spatial stereo cutoff
+            // for nearly opposite ligands in seesaws and square planes.
             let total = signed_volume(a, [b, c, d]);
-            let inside = [
-                signed_volume(center, [b, c, d]),
-                signed_volume(a, [center, c, d]),
-                signed_volume(a, [b, center, d]),
-                signed_volume(a, [b, c, center]),
-            ]
-            .iter()
-            .all(|part| part * total > 0. && part.abs() > 0.05 * total.abs());
-            total.abs() > 0.1 * scale.powi(3) && inside
+            total.abs() > 0.1 * scale.powi(3)
+                && !(0..4).any(|i| {
+                    (0..i).any(|j| {
+                        let dot: f64 = (0..3).map(|k| vectors[i][k] * vectors[j][k]).sum();
+                        dot < -0.9 * lengths[i] * lengths[j]
+                    })
+                })
         }
         [a, b, c] => {
             (!atom.no_implicit

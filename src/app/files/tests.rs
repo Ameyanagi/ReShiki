@@ -162,40 +162,110 @@ fn calculation_output_leaves_pyramidalized_square_planar_complex_unwedged() {
 }
 
 #[test]
-fn calculation_output_wedges_tetrahedral_tin_but_not_a_seesaw_sulfur() {
+fn calculation_output_wedges_tetrahedral_tin() {
     use reshiki::qcread::{self, Format};
 
-    let wedged = |xyz: &str| {
-        let mut file = qcread::read("centre.xyz", xyz.as_bytes()).unwrap();
+    let xyz = "5\ntin tetrahalide\n\
+        Sn 0 0 0\n\
+        F 1.13 1.13 1.13\n\
+        Cl -1.36 -1.36 1.36\n\
+        Br -1.44 1.44 -1.44\n\
+        I 1.57 -1.57 -1.57\n";
+    let mut file = qcread::read("tin.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+        panic!("expected a calculation output");
+    };
+    let doc = &batch.drawings[0];
+    let tin = &doc.atoms[0];
+    assert!(tin.stereo.is_some());
+    assert!(
+        doc.bonds
+            .iter()
+            .any(|b| b.a == tin.id && matches!(b.display.as_str(), "wedge" | "hash"))
+    );
+}
+
+#[test]
+fn calculation_output_leaves_seesaw_sulfur_unwedged() {
+    use reshiki::qcread::{self, Format};
+
+    for (name, f, i) in [
+        ("axial", "0 0 1.65", "0 0 -2.45"),
+        ("distorted", "-0.10 -0.19 1.65", "-0.12 -0.28 -2.45"),
+    ] {
+        // The first three ligands span a nonzero volume about sulfur.
+        let xyz = format!(
+            "5\nseesaw sulfur\n\
+            S 0 0 0\n\
+            F {f}\n\
+            Cl 2.05 0 0\n\
+            Br -1.10 1.90 0\n\
+            I {i}\n"
+        );
+        let mut file = qcread::read("sulfur.xyz", xyz.as_bytes()).unwrap();
         file.format = Format::OrcaOutput;
         let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
             panic!("expected a calculation output");
         };
         let doc = &batch.drawings[0];
-        doc.atoms[0].stereo.is_some()
-            && doc
-                .bonds
+        let sulfur = &doc.atoms[0];
+        assert_eq!(
+            doc.bonds
                 .iter()
-                .any(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+                .filter(|b| b.a == sulfur.id || b.b == sulfur.id)
+                .count(),
+            4,
+            "{name} seesaw"
+        );
+        assert!(sulfur.stereo.is_none(), "{name} seesaw");
+        assert!(
+            doc.bonds
+                .iter()
+                .all(|b| !matches!(b.display.as_str(), "wedge" | "hash")),
+            "{name} seesaw"
+        );
+    }
+}
+
+#[test]
+fn calculation_output_wedges_inverted_propellane_bridgeheads() {
+    use reshiki::qcread::{self, Format};
+
+    // C123C([12CH2]1)([13CH2]2)[14CH2]3 with explicit H, embedded with
+    // RDKit ETKDGv3 (seed 12345) and optimized with MMFF94.
+    let xyz = "11\n[1.1.1]propellane isotopologue\n\
+        C 0.07807 -0.10206 -0.75945\n\
+        C -0.07807 0.10206 0.75945\n\
+        12C 1.22660 -0.31151 0.16796\n\
+        13C -0.89857 -0.90636 0.02943\n\
+        14C -0.32803 1.21787 -0.19739\n\
+        H 1.58905 -1.32150 0.34096\n\
+        H 2.05066 0.39716 0.15745\n\
+        H -1.96207 -0.72605 -0.10415\n\
+        H -0.70427 -1.96343 0.19146\n\
+        H 0.37302 2.04755 -0.23684\n\
+        H -1.34639 1.56628 -0.34889\n";
+    let mut file = qcread::read("propellane.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+        panic!("expected a calculation output");
     };
-    // Tetrahedral SnFClBrI: a stereocentre.
-    assert!(wedged(
-        "5\ntin tetrahalide\n\
-        Sn 0 0 0\n\
-        F 1.13 1.13 1.13\n\
-        Cl -1.36 -1.36 1.36\n\
-        Br -1.44 1.44 -1.44\n\
-        I 1.57 -1.57 -1.57\n"
-    ));
-    // Seesaw SFClBrI: F and I axial through the centre, Cl and Br equatorial.
-    assert!(!wedged(
-        "5\nseesaw sulfur\n\
-        S 0 0 0\n\
-        F 0 0 1.65\n\
-        I 0 0 -2.45\n\
-        Cl 2.05 0 0\n\
-        Br -1.10 1.90 0\n"
-    ));
+    let doc = &batch.drawings[0];
+    assert_eq!(
+        doc.atoms.iter().map(|a| a.isotope).collect::<Vec<_>>(),
+        [0, 0, 12, 13, 14]
+    );
+    assert_eq!(doc.models[0].hydrogens.len(), 6);
+    assert_eq!(doc.bonds.len(), 7);
+    for bridgehead in &doc.atoms[..2] {
+        assert!(bridgehead.stereo.is_some());
+        assert!(
+            doc.bonds
+                .iter()
+                .any(|b| b.a == bridgehead.id && matches!(b.display.as_str(), "wedge" | "hash"))
+        );
+    }
 }
 
 #[test]
