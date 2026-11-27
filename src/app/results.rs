@@ -748,7 +748,7 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Exported(..) | Message::QcExport(super::qc_export::Action::Saved(..)) => {
             Some(Completion::Export)
         }
-        Message::QcExport(_) | Message::FramesImport(_) => None,
+        Message::QcExport(_) | Message::FramesImport(_) | Message::ProfileAnimation(_) => None,
         #[cfg(not(target_arch = "wasm32"))]
         Message::GifExport(action) => {
             use super::gif_export::Action;
@@ -756,6 +756,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Picked(..) | Action::Finished(..) => Some(Completion::GifExport),
                 Action::OpenIrc
                 | Action::OpenMode
+                | Action::OpenProfile
+                | Action::Format(_)
                 | Action::Size(_)
                 | Action::Transparent(_)
                 | Action::Plot(_)

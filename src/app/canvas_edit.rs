@@ -42,6 +42,10 @@ impl App {
 
     pub(super) fn edit(&mut self, edit: Edit) {
         let edit = match edit {
+            Edit::PauseProfileAnimation => {
+                self.pause_profile_animation();
+                Edit::Hover(None)
+            }
             Edit::PointerHover(offset) => Edit::Hover(offset.map(|p| self.tab.camera.pointer(p))),
             edit => edit,
         };
@@ -472,6 +476,7 @@ impl App {
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
             Edit::EquipmentAuthoringPoint(_)
+            | Edit::PauseProfileAnimation
             | Edit::TubeBendDrag { .. }
             | Edit::TubeBendFinish { .. }
             | Edit::TubeBendAbort { .. }

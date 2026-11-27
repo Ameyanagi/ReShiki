@@ -36,6 +36,7 @@ async fn native_copy_preserves_profiles_that_carry_their_source_arrows() {
             from: 0,
             to: 1,
             transition: None,
+            source_key: None,
             irc: vec![],
         }],
     );

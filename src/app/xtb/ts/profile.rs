@@ -3,10 +3,11 @@ use super::{card::ReactionAnswer, energy::EndpointResult, irc, optimized_reactan
 use crate::app::{App, Message};
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{
-    EnergyProfile, EnergyProfileModels, EnergyProfileSample, EnergyProfileState,
-    EnergyProfileStateKind as Kind, EnergyProfileStep, EnergyUnit, Graphic, GraphicStyle,
+    EnergyProfile, EnergyProfileGeometry, EnergyProfileModels, EnergyProfileSample,
+    EnergyProfileState, EnergyProfileStateKind as Kind, EnergyProfileStep, EnergyUnit, Graphic,
+    GraphicStyle,
 };
-use reshiki::qcdata::{CalcResult, IrcEndpoint, KCAL_PER_HARTREE};
+use reshiki::qcdata::{CalcResult, IrcEndpoint, IrcPath, KCAL_PER_HARTREE};
 use reshiki::reactions::{self, Reaction, Role};
 use reshiki::scene;
 use sha2::{Digest, Sha256};
@@ -312,6 +313,7 @@ impl App {
             from: 0,
             to,
             transition: (to == 2).then_some(1),
+            source_key: None,
             irc,
         };
         let mut profile = EnergyProfile::new(
@@ -401,30 +403,148 @@ fn state(kind: Kind, label: String, energy_kcal: f64) -> EnergyProfileState {
     }
 }
 
+#[derive(Clone)]
+pub(in crate::app) struct ProfileIrc {
+    result: Arc<CalcResult>,
+    pub samples: Vec<IrcSample>,
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::app) struct IrcSample {
+    pub point: EnergyProfileSample,
+    pub coordinate: f64,
+    pub frame: usize,
+}
+
+impl ProfileIrc {
+    pub(in crate::app) fn geometry(&self, index: usize) -> Option<EnergyProfileGeometry> {
+        let frame = irc::saved(&self.result)?.frame(index)?;
+        let bonds = super::thumbnails::bonds(&frame)?;
+        Some(EnergyProfileGeometry {
+            frame,
+            bonds,
+            forming: vec![],
+            breaking: vec![],
+        })
+    }
+}
+
+impl App {
+    pub(in crate::app) fn energy_profile_paths(
+        &self,
+        profile: &EnergyProfile,
+    ) -> Vec<Option<ProfileIrc>> {
+        let doc = &self.tab.doc;
+        let resolved = profile
+            .source
+            .filter(|_| source_current(doc, profile))
+            .and_then(|arrow| self.xtb_resolve_reaction(doc, arrow, None).result);
+        profile
+            .steps
+            .iter()
+            .map(|step| {
+                if step.irc.is_empty() {
+                    return None;
+                }
+                let from = profile.states.get(step.from)?.energy_kcal;
+                let to = profile.states.get(step.to)?.energy_kcal;
+                let ts = profile.states.get(step.transition?)?;
+                let bind = |result: &Arc<CalcResult>| {
+                    let path = irc::saved(result).filter(|p| p.has_frames())?;
+                    let reference = optimized_reactant_energy(result)? - from / KCAL_PER_HARTREE;
+                    let mut samples = irc_trace(path, reference, ts.energy_kcal)?;
+                    let endpoints = [
+                        EnergyProfileSample {
+                            x: 0.,
+                            energy_kcal: from,
+                        },
+                        EnergyProfileSample {
+                            x: 1.,
+                            energy_kcal: to,
+                        },
+                    ];
+                    let expected = iter_irc_points(&samples, endpoints);
+                    // Full saves round positions before reconstructing arc lengths.
+                    let agrees = step.irc.iter().zip(expected).all(|(a, b)| {
+                        (a.x - b.x).abs() < 1e-4 && (a.energy_kcal - b.energy_kcal).abs() < 1e-6
+                    });
+                    if step.irc.len() != samples.len() + 2 || !agrees {
+                        return None;
+                    }
+                    for (sample, &point) in samples.iter_mut().zip(step.irc.iter().skip(1)) {
+                        sample.point = point;
+                    }
+                    Some(ProfileIrc {
+                        result: Arc::clone(result),
+                        samples,
+                    })
+                };
+                resolved.and_then(bind).or_else(|| {
+                    // A multistep figure can refer to more than one saved calculation.
+                    // Require its saddle geometry as well as its trace to match.
+                    let saddle = ts.geometry.as_ref()?.frame.hash();
+                    doc.science.results.iter().rev().find_map(|stored| {
+                        (stored.result.frame == saddle)
+                            .then(|| bind(&stored.result))
+                            .flatten()
+                    })
+                })
+            })
+            .collect()
+    }
+}
+
 fn irc_samples(
-    path: &reshiki::qcdata::IrcPath,
+    path: &IrcPath,
     reference: f64,
     barrier: f64,
     product: f64,
 ) -> Vec<EnergyProfileSample> {
+    irc_trace(path, reference, barrier).map_or_else(Vec::new, |trace| {
+        iter_irc_points(
+            &trace,
+            [
+                EnergyProfileSample {
+                    x: 0.,
+                    energy_kcal: 0.,
+                },
+                EnergyProfileSample {
+                    x: 1.,
+                    energy_kcal: product,
+                },
+            ],
+        )
+        .collect()
+    })
+}
+
+fn iter_irc_points(
+    trace: &[IrcSample],
+    [from, to]: [EnergyProfileSample; 2],
+) -> impl Iterator<Item = EnergyProfileSample> {
+    std::iter::once(from)
+        .chain(trace.iter().map(|p| p.point))
+        .chain(std::iter::once(to))
+}
+
+fn irc_trace(path: &IrcPath, reference: f64, barrier: f64) -> Option<Vec<IrcSample>> {
     use IrcEndpoint::{Product, Reactant};
     let reversed = match path.reached {
         [Reactant, Product] => false,
         [Product, Reactant] => true,
-        _ => return vec![],
+        _ => return None,
     };
     let arc = &path.arc_lengths_sqrt_amu_bohr;
     let energies = &path.trajectory.energies_hartree;
     let &[lo, .., hi] = arc.as_slice() else {
-        return vec![];
+        return None;
     };
     if arc.len() != energies.len()
         || !(1..arc.len() - 1).contains(&path.ts_index)
         || !(lo < 0. && hi > 0.)
     {
-        return vec![];
+        return None;
     }
-    let sample = |x, energy_kcal| EnergyProfileSample { x, energy_kcal };
     let mut samples: Vec<_> = arc
         .iter()
         .zip(energies)
@@ -437,22 +557,26 @@ fn irc_samples(
             } else {
                 0.5 + 0.46 * s / hi
             };
-            let x = if reversed { 1. - x } else { x };
-            let energy = if index == path.ts_index {
+            let energy_kcal = if index == path.ts_index {
                 barrier
             } else {
                 (energy - reference) * KCAL_PER_HARTREE
             };
-            sample(x, energy)
+            IrcSample {
+                point: EnergyProfileSample {
+                    x: if reversed { 1. - x } else { x },
+                    energy_kcal,
+                },
+                coordinate: if reversed { -s } else { s },
+                frame: index,
+            }
         })
         .collect();
     if reversed {
         samples.reverse();
     }
-    samples.dedup_by(|a, b| a.x == b.x);
-    samples.insert(0, sample(0., 0.));
-    samples.push(sample(1., product));
-    samples
+    samples.dedup_by(|a, b| a.point.x == b.point.x);
+    Some(samples)
 }
 
 fn profile_origin(doc: &Document, reaction: &Reaction, size: Point) -> Option<Point> {

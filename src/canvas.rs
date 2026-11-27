@@ -180,6 +180,8 @@ pub enum Edit {
     /// Native pointer motion stays relative to the canvas center until consumed,
     /// so preceding wheel packets in the same Iced batch cannot stale its world point.
     PointerHover(Option<Vector>),
+    /// Keep the profile readout at the state hidden by a move or resize preview.
+    PauseProfileAnimation,
     Chain {
         points: Vec<World>,
         source: Option<u64>,
@@ -675,6 +677,13 @@ pub struct GraphicOptions<'a> {
     pub superscript: Option<&'a str>,
     /// The document revision, which invalidates per-drag caches.
     pub revision: u64,
+    pub(crate) profile_animation: Option<ProfileAnimation<'a>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ProfileAnimation<'a> {
+    pub hidden_picture: Option<(u64, usize)>,
+    pub ink: &'a [reshiki::scene::Primitive],
 }
 
 impl Default for GraphicOptions<'_> {
@@ -693,6 +702,7 @@ impl Default for GraphicOptions<'_> {
             bracket_sides: Default::default(),
             superscript: None,
             revision: 0,
+            profile_animation: None,
         }
     }
 }
@@ -1116,3 +1126,5 @@ pub(crate) fn select_drag(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::profile_animation_gesture;

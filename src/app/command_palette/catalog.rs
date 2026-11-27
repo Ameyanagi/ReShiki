@@ -87,6 +87,7 @@ pub(crate) enum Need {
     RingFill,
     Purpose,
     ReactionPreview,
+    EnergyProfile,
     XtbReaction,
     ReactionReady,
     ReactionColors,
@@ -1672,6 +1673,16 @@ fn analysis(app: &App) -> Vec<Command> {
         "reaction energy profile diagram barrier transition state irc xtb",
         Message::Xtb(xtb::Action::Ts(xtb::ts::Action::PlaceEnergyProfile(None))),
     ));
+    list.push(
+        send(
+            "Play energy profile",
+            Analyze,
+            "Play the selected energy profile",
+            "animate reaction energy profile diagram irc",
+            Message::ProfileAnimation(super::super::profile_animation::Action::Toggle),
+        )
+        .need(Need::EnergyProfile),
+    );
     // Builds that cannot calculate hide it, as they hide Run.
     if xtb::available() {
         list.push(Command::new(

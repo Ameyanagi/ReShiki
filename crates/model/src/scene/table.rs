@@ -335,11 +335,15 @@ pub fn annotation_layout(
     crate::typography::cell_layout(&effective.text, &effective.format)
 }
 
-pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
-    primitives_with_lines(doc, false)
+pub(super) fn primitives_with_lines(doc: &Document, lines: bool) -> Vec<Primitive> {
+    primitives_with_profile_view(doc, lines, None)
 }
 
-pub(super) fn primitives_with_lines(doc: &Document, lines: bool) -> Vec<Primitive> {
+pub(super) fn primitives_with_profile_view(
+    doc: &Document,
+    lines: bool,
+    hidden_picture: Option<(u64, usize)>,
+) -> Vec<Primitive> {
     // Malformed ownership must never paint the same child outside its clip.
     // Stored drawings are validated; an invalid transient view paints no ink.
     let Ok(owners) = Membership::new(doc) else {
@@ -367,7 +371,13 @@ pub(super) fn primitives_with_lines(doc: &Document, lines: bool) -> Vec<Primitiv
                 for a in &mut part.annotations {
                     wrap(frame, a);
                 }
-                super::primitives_in_cell(doc, &part, backdrops.before_graphic(index), lines)
+                super::primitives_in_cell(
+                    doc,
+                    &part,
+                    backdrops.before_graphic(index),
+                    lines,
+                    hidden_picture,
+                )
             } else {
                 vec![]
             };
@@ -392,7 +402,10 @@ pub(super) fn primitives_with_lines(doc: &Document, lines: bool) -> Vec<Primitiv
         &ordinary,
         &flat,
         &opacity,
-        &tables,
+        super::SceneGraphics {
+            tables: Some(&tables),
+            hidden_picture,
+        },
         super::Resolve::Scene,
         lines,
     )

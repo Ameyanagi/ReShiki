@@ -346,6 +346,7 @@ impl App {
                     .bracket_superscript
                     .text(&self.tab.bracket_superscript_input),
                 revision: self.tab.revision,
+                profile_animation: self.profile_animation_overlay(),
             },
             arrows: ArrowOptions {
                 preset: self.tab.arrow_style,

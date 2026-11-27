@@ -1182,6 +1182,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
             bracket_sides: BracketSides::Both,
             superscript: None,
             revision: 0,
+            profile_animation: None,
         },
         bond_drawing: Default::default(),
         chain_drawing: Default::default(),
@@ -3180,6 +3181,61 @@ pub(super) fn guided_drag(
         mouse::Event::ButtonReleased(mouse::Button::Left),
     );
     (edits, preview)
+}
+
+/// Move or resize a profile through the real canvas, optionally back to its start.
+pub(crate) fn profile_animation_gesture(
+    doc: &Document,
+    id: u64,
+    animation: ProfileAnimation<'_>,
+    resize: bool,
+    commit: bool,
+) -> [Vec<Edit>; 3] {
+    let selected = [id];
+    let mut canvas = chain_canvas(doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    canvas.selected = &selected;
+    canvas.graphics.profile_animation = Some(animation);
+    let bounds = Rectangle::with_size(iced::Size::new(1200., 1000.));
+    let (lo, hi) = reshiki::scene::selection_bounds(doc, &selected).unwrap();
+    canvas.camera.center = lo.lerp(hi, 0.5);
+    let start = if resize {
+        canvas.camera.screen(hi, bounds) + Vector::new(FRAME_PADDING_PX, FRAME_PADDING_PX)
+    } else {
+        canvas.camera.screen(lo.lerp(hi, 0.5), bounds)
+    };
+    let away = start + Vector::new(30., 20.);
+    let mut moves = vec![mouse::Event::CursorMoved { position: away }];
+    if !commit {
+        moves.push(mouse::Event::CursorMoved { position: start });
+    }
+    let mut state = State::default();
+    let groups = [
+        vec![
+            mouse::Event::CursorMoved { position: start },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+        ],
+        moves,
+        vec![mouse::Event::ButtonReleased(mouse::Button::Left)],
+    ];
+    let mut phase = 0;
+    groups.map(|events| {
+        let edits = events.into_iter().filter_map(|event| {
+            canvas.update(&mut state, &Event::Mouse(event), bounds, mouse::Cursor::Available(start))
+                .and_then(|action| action.into_inner().0)
+        }).collect();
+        if phase == 0 {
+            if resize {
+                assert!(matches!(&state.gesture, Some(Gesture::Transform(drag)) if matches!(drag.handle, Handle::Resize(_))));
+            } else {
+                assert!(matches!(state.gesture, Some(Gesture::Move { .. })));
+            }
+        } else if phase == 2 {
+            assert!(state.gesture.is_none());
+        }
+        phase += 1;
+        edits
+    })
 }
 
 fn rectangle(doc: &mut Document, lo: World, hi: World) -> u64 {

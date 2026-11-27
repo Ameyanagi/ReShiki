@@ -479,6 +479,10 @@ impl App {
                 .iter()
                 .any(|id| reshiki::purpose::of(&self.tab.doc, *id).is_some()))
             .then_some("Select a molecule or arrow"),
+            Need::EnergyProfile => self
+                .selected_energy_profile()
+                .is_none()
+                .then_some("Select an energy profile"),
             Need::ReactionPreview => (!self.reaction_arrow().is_some_and(|id| {
                 self.tab.doc.arrows.iter().any(|a| {
                     a.id == id

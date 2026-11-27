@@ -96,6 +96,7 @@ fn energy_profile_scheme_with_group(
             from: 0,
             to: 1,
             transition: None,
+            source_key: None,
             irc: vec![],
         }],
     );

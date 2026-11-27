@@ -327,3 +327,121 @@ fn units_follow_the_live_link_and_source_changes_leave_the_snapshot() {
     complete(&mut app);
     assert_eq!(app.tab.doc.graphics.last(), Some(&frozen));
 }
+
+#[test]
+fn smooth_profile_uses_saved_frames_and_includes_each_state_in_the_movie() {
+    use crate::app::{
+        animation::PlaybackMode,
+        profile_animation::{Action as Play, Motion, Timeline},
+    };
+    let (mut app, arrow) = irc_profile::finished();
+    let id = place(&mut app, arrow);
+    let graphic = app.selected_energy_profile().unwrap();
+    let profile = graphic.energy_profile.as_deref().unwrap();
+    let paths = app.energy_profile_paths(profile);
+    assert!(paths[0].is_some());
+    let timeline = Timeline::new(profile, &paths, Motion::Smooth);
+    let traced = timeline.frame(1).unwrap();
+    assert!(timeline.geometry(traced).is_some());
+    assert!(traced.sample().unwrap().1.x < 0.5);
+    let first_pass = timeline.sequence(20, PlaybackMode::Once, 1.);
+    assert_eq!(first_pass.len(), 37);
+    assert_eq!(first_pass.first(), Some(&0));
+    assert_eq!(first_pass.last(), Some(&4));
+    let state_indices: Vec<_> = first_pass
+        .iter()
+        .map(|&index| timeline.frame(index).unwrap().state)
+        .collect();
+    assert!(state_indices.contains(&0) && state_indices.contains(&1) && state_indices.contains(&2));
+    assert_eq!(timeline.sequence(20, PlaybackMode::Loop, 1.), first_pass);
+    assert_eq!(
+        timeline.sequence(20, PlaybackMode::BackAndForth, 1.).len(),
+        42
+    );
+
+    let mut multistep = profile.clone();
+    let mut second_ts = profile.states[1].clone();
+    second_ts.label = "TS2‡".into();
+    multistep.states[2].kind = Kind::Intermediate;
+    multistep
+        .states
+        .extend([second_ts, profile.states[2].clone()]);
+    multistep.steps.push(reshiki::graphics::EnergyProfileStep {
+        from: 2,
+        to: 4,
+        transition: Some(3),
+        source_key: None,
+        irc: vec![],
+    });
+    let timeline = Timeline::new(&multistep, &paths, Motion::Smooth);
+    for repeat in PlaybackMode::ALL {
+        let mut states: Vec<_> = timeline
+            .sequence(20, repeat, 1.)
+            .iter()
+            .map(|&index| timeline.frame(index).unwrap().state)
+            .collect();
+        states.dedup();
+        if repeat == PlaybackMode::BackAndForth {
+            assert_eq!(states, [0, 1, 2, 3, 4, 3, 2, 1, 0]);
+        } else {
+            assert_eq!(states, [0, 1, 2, 3, 4]);
+        }
+    }
+
+    let (doc, revision, history) = (
+        app.tab.doc.clone(),
+        app.tab.revision,
+        app.tab.history.can_undo(),
+    );
+    let _ = app.update(Message::ProfileAnimation(Play::Motion(Motion::Smooth)));
+    let _ = app.update(Message::ProfileAnimation(Play::Toggle));
+    crate::app::profile_animation::tests::finish_hold(&mut app);
+    assert_eq!(
+        app.profile_animation_overlay().unwrap().hidden_picture,
+        Some((id, 1))
+    );
+    assert_eq!(app.tab.doc, doc);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.can_undo(), history);
+
+    let mut full = app.tab.doc.clone();
+    Arc::make_mut(&mut full.science.results[0].result).keep_full = true;
+    let mut reopened = reaction_app(
+        Document::from_native_file(&full.file_json().unwrap()).unwrap(),
+        arrow,
+    );
+    reopened.set_selection(vec![id]);
+    let profile = reopened
+        .selected_energy_profile()
+        .unwrap()
+        .energy_profile
+        .as_deref()
+        .unwrap();
+    assert!(reopened.energy_profile_paths(profile)[0].is_some());
+
+    let result = Arc::make_mut(&mut app.tab.doc.science.results[0].result);
+    result
+        .run
+        .as_mut()
+        .unwrap()
+        .transition_state
+        .as_mut()
+        .unwrap()
+        .irc
+        .as_mut()
+        .unwrap()
+        .trajectory
+        .positions_angstrom
+        .clear();
+    let profile = app
+        .selected_energy_profile()
+        .unwrap()
+        .energy_profile
+        .as_deref()
+        .unwrap();
+    assert!(
+        app.energy_profile_paths(profile)
+            .iter()
+            .all(Option::is_none)
+    );
+}

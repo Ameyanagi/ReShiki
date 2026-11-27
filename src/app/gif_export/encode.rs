@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering::Relaxed;
 
 const FRAME_DELAY: u16 = 100 / FPS as u16;
 
-pub(super) fn file_name(stem: &str) -> String {
+pub(super) fn file_name(stem: &str, extension: &str) -> String {
     let mut name = String::new();
     for c in stem.chars().flat_map(char::to_lowercase) {
         if c.is_alphanumeric() {
@@ -16,7 +16,10 @@ pub(super) fn file_name(stem: &str) -> String {
     }
     name.truncate(name.floor_char_boundary(80));
     let name = name.trim_end_matches('-');
-    format!("{}.gif", if name.is_empty() { "animation" } else { name })
+    format!(
+        "{}.{extension}",
+        if name.is_empty() { "animation" } else { name }
+    )
 }
 
 pub(super) fn irc_frames(
@@ -231,9 +234,9 @@ mod tests {
 
     #[test]
     fn names_use_the_reaction_or_molecule() {
-        assert_eq!(file_name("Pent-4-enal-irc"), "pent-4-enal-irc.gif");
-        assert_eq!(file_name("Water mode 2"), "water-mode-2.gif");
-        assert_eq!(file_name("../../"), "animation.gif");
+        assert_eq!(file_name("Pent-4-enal-irc", "gif"), "pent-4-enal-irc.gif");
+        assert_eq!(file_name("Water mode 2", "gif"), "water-mode-2.gif");
+        assert_eq!(file_name("../../", "gif"), "animation.gif");
     }
 
     #[test]

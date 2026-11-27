@@ -13,6 +13,8 @@ use crate::{
     typography::{TextFormat, TextStyle},
 };
 
+mod animation;
+
 /// The same display unit used by result plots and placed figures.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -168,8 +170,18 @@ pub struct EnergyProfileStep {
     pub from: usize,
     pub to: usize,
     pub transition: Option<usize>,
+    /// Saved chemistry key for a later arrow, resolved from the shared intermediate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub irc: Vec<EnergyProfileSample>,
+}
+
+fn valid_source_key(key: &str) -> bool {
+    key.len() == 64
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -225,6 +237,37 @@ impl EnergyProfile {
         let layout = Layout::new(self, style);
         (layout.width, layout.height)
     }
+    /// States with their plotted role and any additional authored name.
+    pub fn states_with_labels(
+        &self,
+    ) -> impl Iterator<Item = (&EnergyProfileState, String, Option<&str>)> {
+        let single_ts = self
+            .states
+            .iter()
+            .filter(|s| s.kind == EnergyProfileStateKind::TransitionState)
+            .count()
+            == 1;
+        self.states
+            .iter()
+            .scan((0, 0), move |(transitions, intermediates), state| {
+                let (role, short) = match state.kind {
+                    EnergyProfileStateKind::Reactant => ("R".into(), "R"),
+                    EnergyProfileStateKind::TransitionState if single_ts => ("TS‡".into(), "TS1‡"),
+                    EnergyProfileStateKind::TransitionState => {
+                        *transitions += 1;
+                        (format!("TS{transitions}‡"), "TS‡")
+                    }
+                    EnergyProfileStateKind::Intermediate => {
+                        *intermediates += 1;
+                        (format!("I{intermediates}"), "I")
+                    }
+                    EnergyProfileStateKind::Product => ("P".into(), "P"),
+                };
+                let name = (state.label != role && state.label != short && !state.label.is_empty())
+                    .then_some(state.label.as_str());
+                Some((state, role, name))
+            })
+    }
     pub(crate) fn heap_bytes(&self) -> usize {
         self.source_key.len()
             + self.method.len()
@@ -243,16 +286,14 @@ impl EnergyProfile {
             + self
                 .steps
                 .iter()
-                .map(|s| std::mem::size_of_val(s.irc.as_slice()))
+                .map(|s| {
+                    s.source_key.as_ref().map_or(0, String::len)
+                        + std::mem::size_of_val(s.irc.as_slice())
+                })
                 .sum::<usize>()
     }
     pub(super) fn validate(&self, g: &Graphic) -> Result<(), String> {
-        let key_valid = self.source_key.len() == 64
-            && self
-                .source_key
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-        if (!self.source_key.is_empty() || self.linked) && !key_valid
+        if (!self.source_key.is_empty() || self.linked) && !valid_source_key(&self.source_key)
             || self.source.is_some_and(|id| id == 0 || id == u64::MAX)
             || self.method.len() > 128
             || self.method.chars().any(char::is_control)
@@ -293,6 +334,9 @@ impl EnergyProfile {
                 };
                 s.from != from
                     || s.to != to
+                    || s.source_key
+                        .as_deref()
+                        .is_some_and(|key| !valid_source_key(key))
                     || match s.transition {
                         Some(ts) => {
                             ts != from + 1
@@ -346,6 +390,15 @@ impl EnergyProfile {
         style: &DrawingStyle,
         source: &Document,
     ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
+        self.draw_without_picture(g, style, source, None)
+    }
+    fn draw_without_picture(
+        &self,
+        g: &Graphic,
+        style: &DrawingStyle,
+        source: &Document,
+        skip: Option<usize>,
+    ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
         let mut layout = Layout::with_frame(self, style, Some(g), Some(source));
         let (parts, labels) = layout.ink(g);
         let side = layout.picture_world_side(g);
@@ -357,6 +410,7 @@ impl EnergyProfile {
         let outline_width = (side / 400.).clamp(0.6, 1.1);
         let pictures = std::mem::take(&mut layout.pictures)
             .into_iter()
+            .filter(|slot| Some(slot.state) != skip)
             .flat_map(|slot| {
                 let centre = layout.world(g, slot.centre);
                 slot.artwork.into_iter().map(move |mut primitive| {
@@ -420,6 +474,19 @@ impl Graphic {
             .as_deref()
             .map_or_else(Default::default, |p| p.draw(self, style, source))
     }
+    /// View-only playback leaves this model slot for the animated overlay.
+    pub fn energy_profile_scene_without_picture(
+        &self,
+        style: &DrawingStyle,
+        source: &Document,
+        state: usize,
+    ) -> (Vec<Part>, Vec<Annotation>, Vec<Primitive>) {
+        self.energy_profile
+            .as_deref()
+            .map_or_else(Default::default, |p| {
+                p.draw_without_picture(self, style, source, Some(state))
+            })
+    }
 }
 
 struct Label {
@@ -448,6 +515,7 @@ impl Label {
     }
 }
 struct PictureSlot {
+    state: usize,
     centre: Point,
     half_size: Point,
     ink_centre: Point,
@@ -511,34 +579,12 @@ impl Layout {
                 .iter()
                 .map(|s| width_of(s, tick_size))
                 .fold(0., f32::max);
-        let single_ts = profile
-            .states
-            .iter()
-            .filter(|s| s.kind == EnergyProfileStateKind::TransitionState)
-            .count()
-            == 1;
-        let (mut transitions, mut intermediates) = (0, 0);
         let captions: Vec<_> = profile
-            .states
-            .iter()
-            .map(|s| {
-                let (role, short) = match s.kind {
-                    EnergyProfileStateKind::Reactant => ("R".into(), "R"),
-                    EnergyProfileStateKind::TransitionState if single_ts => ("TS‡".into(), "TS1‡"),
-                    EnergyProfileStateKind::TransitionState => {
-                        transitions += 1;
-                        (format!("TS{transitions}‡"), "TS‡")
-                    }
-                    EnergyProfileStateKind::Intermediate => {
-                        intermediates += 1;
-                        (format!("I{intermediates}"), "I")
-                    }
-                    EnergyProfileStateKind::Product => ("P".into(), "P"),
-                };
-                let name = (s.label != role && s.label != short && !s.label.is_empty())
-                    .then_some(s.label.as_str());
+            .states_with_labels()
+            .map(|(state, role, name)| {
                 (
-                    format!("{role} {}", profile.unit.number(s.energy_kcal)),
+                    state,
+                    format!("{role} {}", profile.unit.number(state.energy_kcal)),
                     name,
                 )
             })
@@ -546,7 +592,9 @@ impl Layout {
         let value_size = em * 0.9;
         let slot = captions
             .iter()
-            .map(|(value, name)| width_of(value, value_size).max(width_of(name.unwrap_or(""), em)))
+            .map(|(_, value, name)| {
+                width_of(value, value_size).max(width_of(name.unwrap_or(""), em))
+            })
             .fold(0., f32::max);
         let slots = profile.states.len().max(1) as f32;
         let slot = (slot + em * 1.2)
@@ -643,10 +691,8 @@ impl Layout {
                 Point::new(extent(x), extent(y))
             })
         };
-        for (i, ((state, (value, name)), level)) in profile
-            .states
-            .iter()
-            .zip(captions)
+        for (i, ((state, value, name), level)) in captions
+            .into_iter()
             .zip(layout.states.iter().copied())
             .enumerate()
         {
@@ -701,6 +747,7 @@ impl Layout {
                     label.centre.y + h + gap + half.y
                 };
                 layout.pictures.push(PictureSlot {
+                    state: i,
                     centre: Point::new(x, model_y),
                     half_size: half,
                     ink_centre,

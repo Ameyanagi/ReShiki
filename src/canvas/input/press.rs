@@ -13,6 +13,14 @@ use iced::{Point, Rectangle};
 use reshiki::{chains::ChainMode, graphics::GraphicKind};
 
 impl MoleculeCanvas<'_> {
+    fn profile_animation_gesture(&self, action: Action<Edit>) -> Action<Edit> {
+        if self.graphics.profile_animation.is_some() {
+            Action::publish(Edit::PauseProfileAnimation).and_capture()
+        } else {
+            action
+        }
+    }
+
     pub(super) fn right_press(
         &self,
         state: &mut State,
@@ -162,7 +170,7 @@ impl MoleculeCanvas<'_> {
         } else {
             Gesture::Select { start: p }
         });
-        Some(Action::publish(Edit::Hover(None)).and_capture())
+        Some(self.profile_animation_gesture(Action::publish(Edit::Hover(None)).and_capture()))
     }
 
     fn press_stretch(
@@ -398,7 +406,7 @@ impl MoleculeCanvas<'_> {
                 p,
                 self.selected,
             ))));
-            return Some(Action::request_redraw().and_capture());
+            return Some(self.profile_animation_gesture(Action::request_redraw().and_capture()));
         }
         None
     }
@@ -558,6 +566,6 @@ impl MoleculeCanvas<'_> {
             }
             _ => return Some(Action::publish(Edit::Click(p)).and_capture()),
         };
-        Some(Action::publish(Edit::Hover(None)).and_capture())
+        Some(self.profile_animation_gesture(Action::publish(Edit::Hover(None)).and_capture()))
     }
 }

@@ -165,19 +165,7 @@ impl AnimationRenderer {
             )?;
         }
         svg.push_str("</svg>");
-        let tree = reshiki::export::parse_svg(svg)?;
-        let mut pixels = tiny_skia::Pixmap::new(self.side, self.side)
-            .ok_or("Could not allocate an animation frame")?;
-        if !self.transparent {
-            pixels.fill(tiny_skia::Color::WHITE);
-        }
-        let scale = self.side as f32 / 720.;
-        resvg::render(
-            &tree,
-            tiny_skia::Transform::from_scale(scale, scale),
-            &mut pixels.as_mut(),
-        );
-        Ok(reshiki::export::straight_alpha(pixels))
+        raster_animation_frame(svg, self.side, 720., self.transparent)
     }
 
     fn positions(&mut self, positions: &[[f32; 3]]) -> Result<(), String> {
@@ -213,6 +201,28 @@ impl AnimationRenderer {
         model.size = self.size * reach / self.reach;
         Ok(())
     }
+}
+
+/// Render a square SVG into straight-alpha RGBA for a movie encoder.
+pub(in crate::app) fn raster_animation_frame(
+    svg: String,
+    side: u32,
+    svg_side: f32,
+    transparent: bool,
+) -> Result<Vec<u8>, String> {
+    let tree = reshiki::export::parse_svg(svg)?;
+    let mut pixels =
+        tiny_skia::Pixmap::new(side, side).ok_or("Could not allocate an animation frame")?;
+    if !transparent {
+        pixels.fill(tiny_skia::Color::WHITE);
+    }
+    let scale = side as f32 / svg_side;
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixels.as_mut(),
+    );
+    Ok(reshiki::export::straight_alpha(pixels))
 }
 
 #[allow(clippy::indexing_slicing)] // Each coordinate has both axes, selected only by [0, 1].

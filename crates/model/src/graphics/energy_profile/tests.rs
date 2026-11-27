@@ -56,6 +56,7 @@ fn profile(energies: &[f64]) -> EnergyProfile {
                 from,
                 to,
                 transition: (to == from + 2).then_some(from + 1),
+                source_key: None,
                 irc: vec![],
             }
         })
@@ -704,10 +705,11 @@ fn native_roundtrip_budget_and_validation_cover_profile_payloads() {
     doc.validate().unwrap();
     let opened = Document::from_json(&serde_json::to_vec(&doc.current()).unwrap()).unwrap();
     assert_eq!(opened.graphics[0], g);
-    let variants: [fn(&mut EnergyProfile); 9] = [
+    let variants: [fn(&mut EnergyProfile); 10] = [
         |p| p.states.clear(),
         |p| p.states[0].energy_kcal = f64::INFINITY,
         |p| p.source_key = "wrong".into(),
+        |p| p.steps[0].source_key = Some("wrong".into()),
         |p| p.steps[0].to = 0,
         |p| p.steps[0].transition = None,
         |p| p.rotation = [0.; 4],
@@ -774,4 +776,213 @@ fn remap_preserves_source_and_provenance_and_deletion_leaves_stale_values() {
     );
     doc.graphics[0].energy_profile.as_mut().unwrap().unlink();
     assert!(!doc.graphics[0].energy_profile.as_ref().unwrap().linked);
+}
+
+fn playback_marker(overlay: &[Primitive]) -> Point {
+    let Primitive::Path {
+        commands,
+        filled: true,
+        ..
+    } = &overlay[1]
+    else {
+        panic!("Missing playback marker")
+    };
+    let points: Vec<_> = commands.iter().flat_map(PathCommand::iter_points).collect();
+    let lo = points
+        .iter()
+        .fold(Point::new(f32::INFINITY, f32::INFINITY), |lo, p| {
+            Point::new(lo.x.min(p.x), lo.y.min(p.y))
+        });
+    let hi = points
+        .iter()
+        .fold(Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY), |hi, p| {
+            Point::new(hi.x.max(p.x), hi.y.max(p.y))
+        });
+    Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
+}
+
+#[test]
+fn playback_draws_a_filled_marker_without_an_outline_at_five_points_high() {
+    let mut data = profile(&[0., 18., -6.]);
+    let sample = EnergyProfileSample {
+        x: 0.4,
+        energy_kcal: 16.,
+    };
+    data.steps[0].irc.push(sample);
+    let mut g = placed(data);
+    g.axis_y.y = style::DEFAULT.world(5.);
+    g.validate().unwrap();
+    let source = Document::default();
+    for (state, sample) in [(0, None), (1, None), (2, None), (1, Some((0, sample)))] {
+        let overlay = g.energy_profile_overlay(&style::DEFAULT, &source, state, sample, None);
+        let [
+            _,
+            Primitive::Path {
+                commands,
+                style: marker_style,
+                filled: true,
+            },
+        ] = overlay.as_slice()
+        else {
+            panic!("Missing filled playback marker")
+        };
+        assert_eq!(
+            marker_style.fill,
+            Some(Color::Palette(Hue::Green, Row::Strong))
+        );
+        assert_eq!(marker_style.width_pt, 0.);
+        let Some(PathCommand::Move(edge)) = commands.first() else {
+            panic!("Missing marker path")
+        };
+        let centre = playback_marker(&overlay);
+        assert!(edge.distance(centre) >= style::DEFAULT.world(0.5) - 0.001);
+    }
+}
+
+#[test]
+fn playback_marker_follows_drawn_irc_blends_and_every_level_after_affine_placement() {
+    let mut p = profile(&[0., 18., -6., 12., -17.]);
+    for step in &mut p.steps {
+        step.irc = vec![
+            EnergyProfileSample {
+                x: 0.01,
+                energy_kcal: -9.,
+            },
+            EnergyProfileSample {
+                x: 0.12,
+                energy_kcal: 10.,
+            },
+            EnergyProfileSample {
+                x: 0.4,
+                energy_kcal: 16.,
+            },
+            EnergyProfileSample {
+                x: 0.6,
+                energy_kcal: 8.,
+            },
+            EnergyProfileSample {
+                x: 0.9,
+                energy_kcal: -12.,
+            },
+        ];
+    }
+    let mut g = placed(p.clone());
+    g.style.width_pt = 12.;
+    g.axis_x = Point::new(g.axis_x.x * 0.8, g.axis_x.x * 0.45);
+    g.axis_y = Point::new(-g.axis_y.y * 0.1, g.axis_y.y * 0.5);
+    let source = Document::default();
+    let (parts, labels, _) = g.energy_profile_scene(&style::DEFAULT, &source);
+    assert!(
+        labels
+            .iter()
+            .all(|label| label.text != "Reaction coordinate")
+    );
+    let bars = &parts[parts.len() - p.states.len()..];
+    let paths: Vec<_> = parts
+        .iter()
+        .rev()
+        .take(p.states.len() + p.steps.len() * 2)
+        .flat_map(|part| super::super::flattened(&part.commands))
+        .collect();
+    for (index, step) in p.steps.iter().enumerate() {
+        for x in [0., 0.09, 0.13, 0.2, 0.43, 0.5, 0.6, 0.87, 0.91, 1.] {
+            let sample = EnergyProfileSample {
+                x,
+                energy_kcal: 9000.,
+            };
+            let overlay = g.energy_profile_overlay(
+                &style::DEFAULT,
+                &source,
+                step.from,
+                Some((index, sample)),
+                None,
+            );
+            let marker = playback_marker(&overlay);
+            let distance = paths
+                .iter()
+                .flat_map(|path| path.windows(2))
+                .map(|pair| {
+                    let [a, b] = pair else { unreachable!() };
+                    let (dx, dy) = (b.x - a.x, b.y - a.y);
+                    let t = (((marker.x - a.x) * dx + (marker.y - a.y) * dy) / (dx * dx + dy * dy))
+                        .clamp(0., 1.);
+                    (marker.x - a.x - dx * t).hypot(marker.y - a.y - dy * t)
+                })
+                .fold(f32::INFINITY, f32::min);
+            assert!(distance < 0.1, "step {index}, x {x}, distance {distance}");
+        }
+    }
+    for (state, bar) in bars.iter().enumerate() {
+        let overlay = g.energy_profile_overlay(&style::DEFAULT, &source, state, None, None);
+        let Primitive::Path {
+            commands, style, ..
+        } = &overlay[0]
+        else {
+            panic!("Missing playback highlight")
+        };
+        assert_eq!(*commands, bar.commands);
+        assert_eq!(style.width_pt, bar.style.width_pt);
+        let [PathCommand::Move(a), PathCommand::Line(b)] = bar.commands.as_slice() else {
+            panic!("Expected one level bar segment")
+        };
+        let expected = a.lerp(*b, 0.5);
+        let marker = playback_marker(&overlay);
+        assert!((marker.x - expected.x).hypot(marker.y - expected.y) < 0.001);
+    }
+}
+
+#[test]
+fn playback_replaces_only_the_requested_picture_without_changing_the_profile() {
+    let g = placed(profile(&[0., 18., -6.]));
+    let before = serde_json::to_string(&g).unwrap();
+    let source = Document::default();
+    let (_, _, pictures) = g.energy_profile_scene(&style::DEFAULT, &source);
+    let (_, _, without) = g.energy_profile_scene_without_picture(&style::DEFAULT, &source, 1);
+    let p = g.energy_profile.as_deref().unwrap();
+    let layout = Layout::with_frame(p, &style::DEFAULT, Some(&g), Some(&source));
+    let [reactant, ts, _] = layout.pictures.as_slice() else {
+        panic!("Expected three model slots")
+    };
+    assert_eq!(pictures.len(), without.len() + ts.artwork.len());
+    let start = reactant.artwork.len();
+    let original = &pictures[start..start + ts.artwork.len()];
+    // On the reactant half of the path the moving geometry still replaces the
+    // TS picture, leaving the endpoint models at their authored level slots.
+    let overlay = |geometry: &EnergyProfileGeometry| {
+        g.energy_profile_overlay(
+            &style::DEFAULT,
+            &source,
+            0,
+            Some((
+                0,
+                EnergyProfileSample {
+                    x: 0.2,
+                    energy_kcal: 4.,
+                },
+            )),
+            Some(geometry),
+        )
+    };
+    let geometry = p.states[1].geometry.as_ref().unwrap();
+    let original_overlay = overlay(geometry);
+    assert_eq!(original_overlay.len(), 2 + original.len());
+    let (expected_lo, expected_hi) = crate::scene::bounds(original);
+    assert_eq!(
+        crate::scene::bounds(&original_overlay[2..]),
+        (expected_lo, expected_hi)
+    );
+
+    let mut taller = geometry.clone();
+    taller.frame.positions_angstrom[1] = [0., 1.4, 0.2];
+    let taller_overlay = overlay(&taller);
+    assert!(taller_overlay.len() > 2);
+    let (lo, hi) = crate::scene::bounds(&taller_overlay[2..]);
+    assert!(hi.x - lo.x <= expected_hi.x - expected_lo.x + 0.001);
+    assert!(hi.y - lo.y <= expected_hi.y - expected_lo.y + 0.001);
+    assert!(
+        lo.lerp(hi, 0.5)
+            .distance(expected_lo.lerp(expected_hi, 0.5))
+            < 0.001
+    );
+    assert_eq!(serde_json::to_string(&g).unwrap(), before);
 }

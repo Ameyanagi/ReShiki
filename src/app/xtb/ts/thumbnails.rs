@@ -60,7 +60,7 @@ pub(super) fn endpoint_changes(reactant: &Frame, product: &Frame) -> BondChanges
     }
 }
 
-fn bonds(frame: &Frame) -> Option<Vec<[usize; 2]>> {
+pub(super) fn bonds(frame: &Frame) -> Option<Vec<[usize; 2]>> {
     let positions: Vec<_> = frame
         .positions_angstrom
         .iter()
