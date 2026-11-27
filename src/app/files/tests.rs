@@ -162,6 +162,43 @@ fn calculation_output_leaves_pyramidalized_square_planar_complex_unwedged() {
 }
 
 #[test]
+fn calculation_output_wedges_tetrahedral_tin_but_not_a_seesaw_sulfur() {
+    use reshiki::qcread::{self, Format};
+
+    let wedged = |xyz: &str| {
+        let mut file = qcread::read("centre.xyz", xyz.as_bytes()).unwrap();
+        file.format = Format::OrcaOutput;
+        let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+            panic!("expected a calculation output");
+        };
+        let doc = &batch.drawings[0];
+        doc.atoms[0].stereo.is_some()
+            && doc
+                .bonds
+                .iter()
+                .any(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+    };
+    // Tetrahedral SnFClBrI: a stereocentre.
+    assert!(wedged(
+        "5\ntin tetrahalide\n\
+        Sn 0 0 0\n\
+        F 1.13 1.13 1.13\n\
+        Cl -1.36 -1.36 1.36\n\
+        Br -1.44 1.44 -1.44\n\
+        I 1.57 -1.57 -1.57\n"
+    ));
+    // Seesaw SFClBrI: F and I axial through the centre, Cl and Br equatorial.
+    assert!(!wedged(
+        "5\nseesaw sulfur\n\
+        S 0 0 0\n\
+        F 0 0 1.65\n\
+        I 0 0 -2.45\n\
+        Cl 2.05 0 0\n\
+        Br -1.10 1.90 0\n"
+    ));
+}
+
+#[test]
 fn calculation_output_retains_alkene_geometry_when_hydrogens_fold() {
     use reshiki::qcread::{self, Format};
 

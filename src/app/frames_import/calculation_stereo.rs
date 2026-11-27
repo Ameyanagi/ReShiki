@@ -116,7 +116,7 @@ fn tetrahedral_candidate(
     let atom = &graph.atoms[index];
     // Main-group centres that support tetrahedral winding. Metal
     // coordination geometry is outside this calculation-output inference.
-    if !matches!(atom.atomic_number, 5..=7 | 14..=16 | 32..=34 | 51 | 52) {
+    if !matches!(atom.atomic_number, 5..=7 | 14..=16 | 32..=34 | 50..=52 | 82) {
         return false;
     }
     let neighbors = &adjacent[index];
@@ -136,8 +136,19 @@ fn tetrahedral_candidate(
                 .fold(0.0_f64, f64::max)
                 .sqrt();
             // Moving the centre out of a square plane can give nonzero
-            // center-relative volume while the ligand tetrahedron stays flat.
-            signed_volume(a, [b, c, d]).abs() > 0.1 * scale.powi(3)
+            // center-relative volume while the ligand tetrahedron stays flat,
+            // and a seesaw centre sits on an edge of its ligand tetrahedron:
+            // a tetrahedral centre lies well inside it.
+            let total = signed_volume(a, [b, c, d]);
+            let inside = [
+                signed_volume(center, [b, c, d]),
+                signed_volume(a, [center, c, d]),
+                signed_volume(a, [b, center, d]),
+                signed_volume(a, [b, c, center]),
+            ]
+            .iter()
+            .all(|part| part * total > 0. && part.abs() > 0.05 * total.abs());
+            total.abs() > 0.1 * scale.powi(3) && inside
         }
         [a, b, c] => {
             (!atom.no_implicit
@@ -496,10 +507,12 @@ mod tests {
             .collect();
         for center in 0..carbons {
             let [x, y, _] = positions[center];
+            // Away from both carbon neighbours, so each centre is tetrahedral.
+            let away = if y == 0.0 { -0.6 } else { 0.6 };
             for z in [-1.0, 1.0] {
                 graph.bonds.push(single(center, graph.atoms.len()));
                 graph.atoms.push(atom(1));
-                positions.push([x, y, z]);
+                positions.push([x, y + away, z]);
             }
         }
         for (center, direction) in [(0, -1.0), (carbons - 1, 1.0)] {
