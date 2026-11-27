@@ -764,13 +764,19 @@ impl Prepared {
     /// fallback gets wrong (3- or 4-coordinate f block, bonded noble gas),
     /// naming the atom. Only new geometry: existing coordinates stay usable.
     pub fn check_generation(&self) -> Result<(), Error> {
-        let request = self.native_request(
+        let mut request = self.native_request(
             ForceField::default(),
             reshiki_geometry::Operation::Generate,
             None,
             &[],
             500,
         )?;
+        // The shape is the drawn one: radical caps are not ligands.
+        for (atom, id) in request.atoms.iter_mut().zip(&self.ids) {
+            if let Some(radical) = self.radicals.iter().find(|r| r.atom == *id) {
+                atom.explicit_h = atom.explicit_h.saturating_sub(u32::from(radical.electrons));
+            }
+        }
         // UFF, the fallback for everything MMFF cannot type, ends at Lr.
         let refusal = request
             .atoms

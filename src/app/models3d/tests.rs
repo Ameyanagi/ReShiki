@@ -1952,6 +1952,16 @@ fn a_propyl_radical_builds_from_propane_and_removes_only_its_extra_hydrogen() {
         app.status
     );
     let model = (app.tab.file_epoch, app.tab.model_serial);
+    // A name for another file's model never lands here.
+    let _ = app.update(Message::Models3d(Action::ParentNamed(
+        (model.0 + 1, model.1),
+        "butane".into(),
+    )));
+    assert!(
+        app.status.contains("its closed-shell parent"),
+        "{}",
+        app.status
+    );
     let _ = app.update(Message::Models3d(Action::ParentNamed(
         model,
         "propane".into(),

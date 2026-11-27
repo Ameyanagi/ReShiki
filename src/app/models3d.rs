@@ -240,7 +240,7 @@ impl App {
                         }
                     }
                     Err(failure) => {
-                        return self.record_model_failure(job.prepared.ids().to_vec(), failure);
+                        self.record_model_failure(job.prepared.ids().to_vec(), failure);
                     }
                 }
                 Task::none()
@@ -258,8 +258,8 @@ impl App {
     }
 
     /// Show why a 3D start failed: status, a red ring on the named atom and
-    /// the Structure section (scrolled into view) with the next step.
-    fn record_model_failure(&mut self, molecule: Vec<u64>, failure: Failure) -> Task<Message> {
+    /// the Structure section with the next step.
+    fn record_model_failure(&mut self, molecule: Vec<u64>, failure: Failure) {
         let failure = ModelFailure {
             epoch: self.tab.file_epoch,
             revision: self.tab.revision,
@@ -277,11 +277,6 @@ impl App {
         self.status = failure.message.clone();
         self.error = true;
         self.tab.model_failure = Some(failure);
-        // Structure is the last section of the molecule's Properties.
-        iced::widget::operation::snap_to(
-            "inspector-content",
-            iced::widget::operation::RelativeOffset::END,
-        )
     }
 
     /// The current failure, if the drawing has not changed since.
@@ -562,7 +557,17 @@ impl App {
                 (Arc::new(prepared.without_retained_depth()), strict_error)
             }
             Err(error) => {
-                return self.record_model_failure(atoms, build_failure(&error));
+                self.record_model_failure(atoms, build_failure(&error));
+                // A new model's Structure is the last section of Properties,
+                // in the tab in front: show the next step.
+                return if target.is_none() {
+                    iced::widget::operation::snap_to(
+                        "inspector-content",
+                        iced::widget::operation::RelativeOffset::END,
+                    )
+                } else {
+                    Task::none()
+                };
             }
         };
         let who = radical_subject(prepared.radicals());

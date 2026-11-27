@@ -448,6 +448,21 @@ fn atom_range_and_parameter_errors_are_typed() {
                 if label == "O3"
         ));
     }
+    // Radical caps are not ligands: a radical CeF4 is still 4-coordinate.
+    let mut source = Document::default();
+    let cerium = source.add_atom("Ce", Point::default());
+    for i in 0..4 {
+        let turn = std::f32::consts::FRAC_PI_2 * i as f32;
+        let fluorine = source.add_atom("F", Point::new(42. * turn.cos(), 42. * turn.sin()));
+        source.add_bond(cerium, fluorine, 1, "plain");
+    }
+    source.atom_mut(cerium).unwrap().radical_electrons = 1;
+    let prepared = Prepared::starting(&source, &[], Mode::Relaxed).unwrap();
+    assert!(matches!(
+        prepared.check_generation(),
+        Err(Error::Atom { atom, problem: AtomProblem::WrongShape { bonds: 4 }, .. })
+            if atom == cerium
+    ));
     // Hydrogens written on the atom count as ligands: [CeH3] is 3-coordinate.
     let mut source = Document::default();
     let cerium = source.add_atom("Ce", Point::default());
