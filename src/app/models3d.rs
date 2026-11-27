@@ -129,6 +129,7 @@ pub(super) struct CalculationModel {
 }
 
 impl CalculationModel {
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn notes(&self) -> &[String] {
         &self.model.notes
     }
