@@ -402,10 +402,28 @@ class GeometryReferenceTests(unittest.TestCase):
             generated = self.solve(request)
             self.assert_parity(molecule, request, generated["coordinates"])
             for field in ("MMFF94", "MMFF94s"):
-                request["field"] = field
-                result = self.worker_result(request)
-                self.assertIn("Err", result)
-                self.assertIn("MMFF parameters", result["Err"])
+                # Generation falls back to UFF and says so...
+                fallback = self.worker_result(dict(request, field=field))
+                self.assertIn("Ok", fallback, fallback.get("Err"))
+                self.assertEqual(fallback["Ok"]["field"], "UFF")
+                self.assertIn(
+                    f"UFF used: {field} parameters are unavailable for this molecule",
+                    fallback["Ok"]["approximations"],
+                )
+                self.assert_parity(molecule, request, fallback["Ok"]["coordinates"])
+                # ...but Evaluate and Relax keep the caller's field and refuse.
+                for operation in ("Evaluate", "Relax"):
+                    result = self.worker_result(
+                        dict(
+                            request,
+                            field=field,
+                            operation=operation,
+                            coordinates=generated["coordinates"],
+                            fixed_atoms=[],
+                        )
+                    )
+                    self.assertIn("Err", result, operation)
+                    self.assertIn("MMFF parameters", result["Err"])
         for field in FIELDS:
             _, request = molecule_request("[Zn+2](Cl)Cl", field)
             result = self.worker_result(request)
