@@ -12,8 +12,8 @@ use objc2_foundation::{NSDictionary, NSError, NSNumber, NSString, NSURL};
 use std::ffi::c_void;
 use std::path::Path;
 use std::ptr::{NonNull, null, null_mut};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::thread;
 use std::time::Duration;
 
@@ -21,6 +21,26 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 const WRITING: isize = 1;
 const COMPLETED: isize = 2;
 const PIXEL_FORMAT_420V: u32 = u32::from_be_bytes(*b"420v");
+
+// The rasterizer supplies sRGB, while the output declares BT.709 transfer.
+// Decode sRGB to linear light, then apply the BT.709 OETF before the matrix.
+// Cache the byte conversion so encoding needs no per-pixel power functions.
+static SRGB_TO_BT709: LazyLock<[i32; 256]> = LazyLock::new(|| {
+    std::array::from_fn(|value| {
+        let srgb = value as f64 / 255.0;
+        let linear = if srgb <= 0.04045 {
+            srgb / 12.92
+        } else {
+            ((srgb + 0.055) / 1.055).powf(2.4)
+        };
+        let bt709 = if linear < 0.018 {
+            4.5 * linear
+        } else {
+            1.099 * linear.powf(0.45) - 0.099
+        };
+        (bt709 * 255.0).round() as i32
+    })
+});
 
 /// Square, fixed-rate video. Per-frame readouts disable held-frame reuse.
 #[derive(Clone, Copy)]
@@ -392,7 +412,8 @@ impl Drop for PixelBuffer {
 }
 
 /// BT.709 video-range NV12. Chroma averages each 2×2 block after compositing
-/// straight-alpha renderer output onto white; MP4 does not preserve alpha.
+/// straight-alpha sRGB renderer output onto white and converting to BT.709
+/// transfer; MP4 does not preserve alpha.
 #[allow(clippy::indexing_slicing)] // Bounds follow the validated even-sized plane layout.
 fn fill_yuv(
     rgba: &[u8],
@@ -402,6 +423,7 @@ fn fill_yuv(
     uv: &mut [u8],
     uv_stride: usize,
 ) {
+    let transfer = &*SRGB_TO_BT709;
     for row in (0..side).step_by(2) {
         for col in (0..side).step_by(2) {
             let mut rgb = [0_i32; 3];
@@ -410,8 +432,10 @@ fn fill_yuv(
                     let offset = ((row + dy) * side + col + dx) * 4;
                     let pixel = &rgba[offset..offset + 4];
                     let alpha = i32::from(pixel[3]);
-                    let [r, g, b] = [pixel[0], pixel[1], pixel[2]]
-                        .map(|c| (i32::from(c) * alpha + 255 * (255 - alpha) + 127) / 255);
+                    let [r, g, b] = [pixel[0], pixel[1], pixel[2]].map(|c| {
+                        let srgb = (i32::from(c) * alpha + 255 * (255 - alpha) + 127) / 255;
+                        transfer[srgb as usize]
+                    });
                     rgb[0] += r;
                     rgb[1] += g;
                     rgb[2] += b;
@@ -550,6 +574,11 @@ mod tests {
         assert!(bytes.len() > 100);
         assert!(bytes.windows(4).any(|x| x == b"ftyp"));
         assert!(bytes.windows(4).any(|x| x == b"avc1"));
+        assert!(bytes.windows(14).any(|x| {
+            &x[..4] == b"colr"
+                && (&x[4..8] == b"nclc" || &x[4..8] == b"nclx")
+                && x[8..] == [0, 1, 0, 1, 0, 1] // BT.709 primaries, transfer, matrix.
+        }));
         autoreleasepool(|_| unsafe {
             let url = NSURL::from_file_path(&path).unwrap();
             let asset: Retained<AnyObject> = msg_send![class!(AVURLAsset), URLAssetWithURL: &*url, options: None::<&NSDictionary<NSString, NSObject>>];
@@ -592,5 +621,28 @@ mod tests {
         );
         assert_eq!(y, [63, 63, 0, 0, 32, 32, 0, 0]);
         assert_eq!(uv[..2], [171, 179]);
+    }
+
+    #[test]
+    fn yuv_converts_srgb_midtones_to_the_declared_bt709_transfer() {
+        let mut y = [0; 4];
+        let mut uv = [0; 2];
+        for (srgb, luma) in [(32, 31), (128, 115), (192, 175)] {
+            fill_yuv(
+                &[[srgb, srgb, srgb, 255]; 4].concat(),
+                2,
+                &mut y,
+                2,
+                &mut uv,
+                2,
+            );
+            assert_eq!(y, [luma; 4]);
+            assert_eq!(uv, [128, 128]);
+        }
+        // Composite in the renderer's sRGB space before transfer conversion:
+        // black at this alpha over white has the same samples as sRGB 128.
+        fill_yuv(&[[0, 0, 0, 127]; 4].concat(), 2, &mut y, 2, &mut uv, 2);
+        assert_eq!(y, [115; 4]);
+        assert_eq!(uv, [128, 128]);
     }
 }

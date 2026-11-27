@@ -9,6 +9,7 @@ use super::{
         ts::{self, irc::focus, profile::ProfileIrc},
     },
 };
+use iced::time::Instant;
 use iced::widget::{checkbox, column, row, text};
 use iced::{Element, Subscription, Task};
 use reshiki::document::Document;
@@ -34,7 +35,7 @@ pub enum Action {
     Motion(Motion),
     Highlight(bool),
     Step(i32),
-    Tick,
+    Tick { deadline: Instant, now: Instant },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -55,6 +56,8 @@ pub(super) struct Session {
     artwork: artwork::Artwork,
     ink: Vec<Primitive>,
     hidden_picture: Option<(u64, usize)>,
+    deadline: Instant,
+    speed: PlaybackSpeed,
 }
 
 impl Session {
@@ -79,7 +82,22 @@ impl Session {
             artwork: artwork::Artwork::new(doc, graphic),
             ink: vec![],
             hidden_picture: None,
+            deadline: Instant::now(),
+            speed: PlaybackSpeed::Normal,
         }
+    }
+
+    fn hold(&self) -> Duration {
+        self.timeline
+            .frame(self.position.frame)
+            .map_or(Duration::ZERO, |frame| {
+                Duration::from_secs_f32(frame.seconds / self.speed.factor())
+            })
+    }
+
+    fn start_hold(&mut self, speed: PlaybackSpeed, now: Instant) {
+        self.speed = speed;
+        self.deadline = now + self.hold();
     }
 
     fn show(&mut self, doc: &Document, graphic: &Graphic) {
@@ -142,6 +160,16 @@ impl App {
     pub(super) fn sync_profile_animation(&mut self) {
         if self.current_profile_animation().is_none() {
             self.profile_animation = None;
+        } else if let Some(session) = &mut self.profile_animation
+            && session.speed != self.appearance.playback_speed
+        {
+            session.start_hold(self.appearance.playback_speed, Instant::now());
+        }
+    }
+
+    pub(super) fn pause_profile_animation(&mut self) {
+        if let Some(session) = &mut self.profile_animation {
+            session.position.playing = false;
         }
     }
 
@@ -163,19 +191,26 @@ impl App {
         else {
             return Subscription::none();
         };
-        let Some(frame) = session.timeline.frame(session.position.frame) else {
-            return Subscription::none();
-        };
-        let hold = frame.seconds / self.appearance.playback_speed.factor();
-        iced::time::every(Duration::from_secs_f32(hold))
-            .map(|_| Message::ProfileAnimation(Action::Tick))
+        // The deadline restarts equal-duration desktop timers. Checking it again
+        // on receipt also rejects WASM's immediate tick and queued older ticks.
+        iced::time::every(session.hold())
+            .with(session.deadline)
+            .map(|(deadline, _)| {
+                Message::ProfileAnimation(Action::Tick {
+                    deadline,
+                    now: Instant::now(),
+                })
+            })
     }
 
-    pub(super) fn tick_profile_animation(&mut self) {
+    pub(super) fn tick_profile_animation(&mut self, deadline: Instant, now: Instant) {
         self.sync_profile_animation();
         let Some(session) = &mut self.profile_animation else {
             return;
         };
+        if session.deadline != deadline || now < deadline {
+            return;
+        }
         if session
             .position
             .advance(self.appearance.playback_mode, session.timeline.len())
@@ -187,6 +222,7 @@ impl App {
                 .find(|g| g.id == session.target.graphic)
         {
             session.show(&self.tab.doc, graphic);
+            session.start_hold(self.appearance.playback_speed, now.max(Instant::now()));
         }
     }
 
@@ -218,8 +254,12 @@ impl App {
             )
         });
         let len = session.timeline.len();
+        let mut restart_hold = false;
         match action {
-            Action::Toggle => session.position.toggle(self.appearance.playback_mode, len),
+            Action::Toggle => {
+                session.position.toggle(self.appearance.playback_mode, len);
+                restart_hold = session.position.playing;
+            }
             Action::Motion(motion) => {
                 if motion == Motion::Steps || session.paths.iter().any(Option::is_some) {
                     session.motion = motion;
@@ -227,6 +267,7 @@ impl App {
                     let playing = session.position.playing;
                     session.position.seek(0, session.timeline.len());
                     session.position.playing = playing && session.timeline.len() > 1;
+                    restart_hold = true;
                 }
             }
             Action::Highlight(value) => session.highlight = value,
@@ -238,10 +279,14 @@ impl App {
                         .saturating_add_signed(direction as isize),
                     len,
                 );
+                restart_hold = true;
             }
             _ => {}
         }
         session.show(&self.tab.doc, graphic);
+        if restart_hold {
+            session.start_hold(self.appearance.playback_speed, Instant::now());
+        }
         let reveal = matches!(action, Action::Toggle)
             && session.position.playing
             && (!self.inspector_open || self.inspector_tab != super::InspectorTab::Properties);

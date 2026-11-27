@@ -1209,11 +1209,10 @@ impl App {
         self.update(message)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        if matches!(
-            message,
-            Message::ProfileAnimation(profile_animation::Action::Tick)
-        ) {
-            self.tick_profile_animation();
+        if let Message::ProfileAnimation(profile_animation::Action::Tick { deadline, now }) =
+            message
+        {
+            self.tick_profile_animation(deadline, now);
             return Task::none();
         }
         if let Message::ReactionBondHover(arrow, kind, pair, entered) = message {

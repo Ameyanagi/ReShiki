@@ -170,8 +170,18 @@ pub struct EnergyProfileStep {
     pub from: usize,
     pub to: usize,
     pub transition: Option<usize>,
+    /// Saved chemistry key for a later arrow, resolved from the shared intermediate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_key: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub irc: Vec<EnergyProfileSample>,
+}
+
+fn valid_source_key(key: &str) -> bool {
+    key.len() == 64
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -245,16 +255,14 @@ impl EnergyProfile {
             + self
                 .steps
                 .iter()
-                .map(|s| std::mem::size_of_val(s.irc.as_slice()))
+                .map(|s| {
+                    s.source_key.as_ref().map_or(0, String::len)
+                        + std::mem::size_of_val(s.irc.as_slice())
+                })
                 .sum::<usize>()
     }
     pub(super) fn validate(&self, g: &Graphic) -> Result<(), String> {
-        let key_valid = self.source_key.len() == 64
-            && self
-                .source_key
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-        if (!self.source_key.is_empty() || self.linked) && !key_valid
+        if (!self.source_key.is_empty() || self.linked) && !valid_source_key(&self.source_key)
             || self.source.is_some_and(|id| id == 0 || id == u64::MAX)
             || self.method.len() > 128
             || self.method.chars().any(char::is_control)
@@ -295,6 +303,9 @@ impl EnergyProfile {
                 };
                 s.from != from
                     || s.to != to
+                    || s.source_key
+                        .as_deref()
+                        .is_some_and(|key| !valid_source_key(key))
                     || match s.transition {
                         Some(ts) => {
                             ts != from + 1

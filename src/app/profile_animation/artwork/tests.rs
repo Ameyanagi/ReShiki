@@ -81,6 +81,7 @@ fn fixture() -> (Document, u64, Vec<u64>, Vec<u64>) {
             from: 0,
             to: 2,
             transition: Some(1),
+            source_key: None,
             irc: vec![],
         }],
     );
@@ -101,8 +102,8 @@ fn scheme_boxes_reactant_and_product_and_maps_ts_bonds_in_exact_saved_order() {
     let (doc, id, reactants, products) = fixture();
     let g = doc.graphics.iter().find(|g| g.id == id).unwrap();
     let artwork = Artwork::new(&doc, g);
-    assert_eq!(artwork.species[0], vec![reactants.clone()]);
-    assert_eq!(artwork.species[2], vec![products]);
+    assert_eq!(artwork.species[0][0].owner, reactants[0]);
+    assert_eq!(artwork.species[2][0].owner, products[0]);
     assert_eq!(
         artwork.changes[1].forming,
         vec![[reactants[2], reactants[0]]]
@@ -165,11 +166,15 @@ fn mapped_attachments_take_priority_over_creation_ids_after_paste() {
 }
 
 #[test]
-fn a_drawn_intermediate_is_boxed_between_two_reaction_steps() {
+fn five_states_check_the_saved_chemistry_of_each_arrow() {
     let (mut doc, id, _, intermediate) = fixture();
     let final_atoms: Vec<_> = (0..3)
         .map(|i| doc.add_atom("C", Point::new(320. + i as f32 * 25., 0.)))
         .collect();
+    for (i, &atom) in final_atoms.iter().enumerate() {
+        doc.atom_mut(atom).unwrap().map_num = i as u32 + 1;
+    }
+    doc.add_bond(final_atoms[0], final_atoms[1], 1, "plain");
     let arrow = doc.next_id();
     doc.arrows.push(Arrow::new(
         arrow,
@@ -187,16 +192,19 @@ fn a_drawn_intermediate_is_boxed_between_two_reaction_steps() {
         atoms: final_atoms.clone(),
         coefficient: 1,
     });
+    let key = source_key(&doc, &reaction);
     doc.reactions.push(reaction);
     let g = doc.graphics.iter_mut().find(|g| g.id == id).unwrap();
     let profile = g.energy_profile.as_deref_mut().unwrap();
     profile.states[2].kind = Kind::Intermediate;
+    let mut second_ts = profile.states[1].geometry.clone().unwrap();
+    std::mem::swap(&mut second_ts.forming, &mut second_ts.breaking);
     profile.states.extend([
         EnergyProfileState {
             kind: Kind::TransitionState,
             label: "TS2‡".into(),
             energy_kcal: 16.,
-            geometry: None,
+            geometry: Some(second_ts),
         },
         EnergyProfileState {
             kind: Kind::Product,
@@ -209,14 +217,89 @@ fn a_drawn_intermediate_is_boxed_between_two_reaction_steps() {
         from: 2,
         to: 4,
         transition: Some(3),
+        source_key: Some(key),
         irc: vec![],
     });
-    let g = doc.graphics.iter().find(|g| g.id == id).unwrap();
+    let g = &doc.graphics[0];
     let artwork = Artwork::new(&doc, g);
-    assert_eq!(artwork.species[2], vec![intermediate]);
-    assert_eq!(artwork.species[4], vec![final_atoms]);
+    assert_eq!(artwork.species[2][0].owner, intermediate[0]);
+    assert_eq!(artwork.species[4][0].owner, final_atoms[0]);
     assert!(artwork.selection.contains(&arrow));
-    assert_eq!(artwork.overlay(&doc, g, 2, None, None, true).len(), 3);
+    let count = |doc: &Document, artwork: &Artwork, state| {
+        artwork
+            .overlay(doc, &doc.graphics[0], state, None, None, true)
+            .len()
+    };
+    assert_eq!(count(&doc, &artwork, 3), 5);
+    assert_eq!(count(&doc, &artwork, 4), 3);
+
+    doc.atom_mut(final_atoms[0]).unwrap().charge = 1;
+    let artwork = Artwork::new(&doc, &doc.graphics[0]);
+    assert!(!artwork.selection.contains(&arrow));
+    assert_eq!(
+        (0..5)
+            .map(|state| count(&doc, &artwork, state))
+            .collect::<Vec<_>>(),
+        [3, 5, 3, 2, 2],
+    );
+    let g = &doc.graphics[0];
+    let sample = Some((
+        1,
+        EnergyProfileSample {
+            x: 0.1,
+            energy_kcal: -4.,
+        },
+    ));
+    assert_eq!(
+        artwork.overlay(&doc, g, 2, sample, None, true).len(),
+        artwork.overlay(&doc, g, 2, sample, None, false).len(),
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn linked_models_do_not_contribute_to_scheme_highlights() {
+    use reshiki::models3d::{Display, ForceField, Model3d, Placed};
+
+    let (mut doc, id, reactants, _) = fixture();
+    let bounds = scene::selection_bounds(&doc, &reactants).unwrap();
+    let mut model = Model3d::new(
+        &doc,
+        reactants
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| Placed {
+                id,
+                xyz: [i as f32, 0., 0.],
+            })
+            .collect(),
+        vec![],
+        ForceField::default(),
+    );
+    model.display = Display::Both;
+    model.offset = Point::new(1000., 0.);
+    doc.models.push(model);
+    assert_ne!(scene::selection_bounds(&doc, &reactants), Some(bounds));
+    let renderer = FrameRenderer::new(&doc, id, 480, true).unwrap();
+    let live = Artwork::new(&doc, &doc.graphics[0]);
+    for artwork in [&live, &renderer.artwork] {
+        let species = &artwork.species[0][0];
+        assert_eq!((species.lo, species.hi), bounds);
+        assert_eq!(artwork.changes[1].forming.len(), 1);
+        assert_eq!(artwork.changes[1].breaking.len(), 1);
+    }
+
+    doc.models[0].display = Display::ThreeD;
+    let renderer = FrameRenderer::new(&doc, id, 480, true).unwrap();
+    let live = Artwork::new(&doc, &doc.graphics[0]);
+    for (artwork, doc, graphic) in [
+        (&live, &doc, &doc.graphics[0]),
+        (&renderer.artwork, &renderer.doc, &renderer.graphic),
+    ] {
+        assert_eq!(artwork.overlay(doc, graphic, 0, None, None, true).len(), 2);
+        assert_eq!(artwork.overlay(doc, graphic, 1, None, None, true).len(), 2);
+        assert_eq!(artwork.overlay(doc, graphic, 2, None, None, true).len(), 3);
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

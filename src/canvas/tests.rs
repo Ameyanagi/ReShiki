@@ -3183,6 +3183,59 @@ pub(super) fn guided_drag(
     (edits, preview)
 }
 
+/// Press, move out and back, then release a profile through the real canvas.
+pub(crate) fn profile_animation_gesture(
+    doc: &Document,
+    id: u64,
+    animation: ProfileAnimation<'_>,
+    resize: bool,
+) -> [Vec<Edit>; 3] {
+    let selected = [id];
+    let mut canvas = chain_canvas(doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    canvas.selected = &selected;
+    canvas.graphics.profile_animation = Some(animation);
+    let bounds = Rectangle::with_size(iced::Size::new(1200., 1000.));
+    let (lo, hi) = reshiki::scene::selection_bounds(doc, &selected).unwrap();
+    canvas.camera.center = lo.lerp(hi, 0.5);
+    let start = if resize {
+        canvas.camera.screen(hi, bounds) + Vector::new(FRAME_PADDING_PX, FRAME_PADDING_PX)
+    } else {
+        canvas.camera.screen(lo.lerp(hi, 0.5), bounds)
+    };
+    let away = start + Vector::new(30., 20.);
+    let mut state = State::default();
+    let groups = [
+        vec![
+            mouse::Event::CursorMoved { position: start },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+        ],
+        vec![
+            mouse::Event::CursorMoved { position: away },
+            mouse::Event::CursorMoved { position: start },
+        ],
+        vec![mouse::Event::ButtonReleased(mouse::Button::Left)],
+    ];
+    let mut phase = 0;
+    groups.map(|events| {
+        let edits = events.into_iter().filter_map(|event| {
+            canvas.update(&mut state, &Event::Mouse(event), bounds, mouse::Cursor::Available(start))
+                .and_then(|action| action.into_inner().0)
+        }).collect();
+        if phase == 0 {
+            if resize {
+                assert!(matches!(&state.gesture, Some(Gesture::Transform(drag)) if matches!(drag.handle, Handle::Resize(_))));
+            } else {
+                assert!(matches!(state.gesture, Some(Gesture::Move { .. })));
+            }
+        } else if phase == 2 {
+            assert!(state.gesture.is_none());
+        }
+        phase += 1;
+        edits
+    })
+}
+
 fn rectangle(doc: &mut Document, lo: World, hi: World) -> u64 {
     let id = doc.next_id();
     doc.graphics.push(Graphic::dragged(

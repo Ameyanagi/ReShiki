@@ -56,6 +56,7 @@ fn profile(energies: &[f64]) -> EnergyProfile {
                 from,
                 to,
                 transition: (to == from + 2).then_some(from + 1),
+                source_key: None,
                 irc: vec![],
             }
         })
@@ -704,10 +705,11 @@ fn native_roundtrip_budget_and_validation_cover_profile_payloads() {
     doc.validate().unwrap();
     let opened = Document::from_json(&serde_json::to_vec(&doc.current()).unwrap()).unwrap();
     assert_eq!(opened.graphics[0], g);
-    let variants: [fn(&mut EnergyProfile); 9] = [
+    let variants: [fn(&mut EnergyProfile); 10] = [
         |p| p.states.clear(),
         |p| p.states[0].energy_kcal = f64::INFINITY,
         |p| p.source_key = "wrong".into(),
+        |p| p.steps[0].source_key = Some("wrong".into()),
         |p| p.steps[0].to = 0,
         |p| p.steps[0].transition = None,
         |p| p.rotation = [0.; 4],

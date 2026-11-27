@@ -85,12 +85,10 @@ pub(in crate::app) fn source_key(doc: &Document, reaction: &Reaction) -> String 
 }
 
 pub(in crate::app) fn source_current(doc: &Document, profile: &EnergyProfile) -> bool {
-    source_reaction(doc, profile).is_some()
-}
-
-pub(in crate::app) fn source_reaction(doc: &Document, profile: &EnergyProfile) -> Option<Reaction> {
-    let reaction = reactions::preview(doc, profile.source?).ok()?;
-    (source_key(doc, &reaction) == profile.source_key).then_some(reaction)
+    profile
+        .source
+        .and_then(|arrow| reactions::preview(doc, arrow).ok())
+        .is_some_and(|reaction| source_key(doc, &reaction) == profile.source_key)
 }
 
 fn profile(doc: &Document, id: u64) -> Option<&EnergyProfile> {
@@ -315,6 +313,7 @@ impl App {
             from: 0,
             to,
             transition: (to == 2).then_some(1),
+            source_key: None,
             irc,
         };
         let mut profile = EnergyProfile::new(

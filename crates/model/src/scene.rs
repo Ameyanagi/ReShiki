@@ -1525,7 +1525,7 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
 }
 
 /// Visible selected ink, with 3D model frames measured separately by the caller.
-pub(crate) fn selections_ink_bounds(
+pub fn selections_ink_bounds(
     doc: &Document,
     selections: &[Vec<u64>],
 ) -> Vec<Option<(Point, Point)>> {

@@ -180,6 +180,8 @@ pub enum Edit {
     /// Native pointer motion stays relative to the canvas center until consumed,
     /// so preceding wheel packets in the same Iced batch cannot stale its world point.
     PointerHover(Option<Vector>),
+    /// Keep the profile readout at the state hidden by a move or resize preview.
+    PauseProfileAnimation,
     Chain {
         points: Vec<World>,
         source: Option<u64>,
@@ -1124,3 +1126,5 @@ pub(crate) fn select_drag(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::profile_animation_gesture;

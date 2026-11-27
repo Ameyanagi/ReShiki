@@ -2,7 +2,7 @@ use super::*;
 use crate::appearance::EnergyUnit;
 use reshiki::qcdata::{IrcEndpoint, IrcPath, IrcRelaxedEnd, KCAL_PER_HARTREE};
 
-pub(in crate::app::xtb::ts) fn finished() -> (App, u64) {
+pub(in crate::app) fn finished() -> (App, u64) {
     let (mut doc, arrow) = card::tests::claisen();
     name_reactant(&mut doc, arrow, "Allyl vinyl ether");
     let mut app = reaction_app(doc, arrow);

@@ -370,6 +370,7 @@ fn smooth_profile_uses_saved_frames_and_includes_each_state_in_the_movie() {
         from: 2,
         to: 4,
         transition: Some(3),
+        source_key: None,
         irc: vec![],
     });
     let timeline = Timeline::new(&multistep, &paths, Motion::Smooth);
@@ -394,7 +395,7 @@ fn smooth_profile_uses_saved_frames_and_includes_each_state_in_the_movie() {
     );
     let _ = app.update(Message::ProfileAnimation(Play::Motion(Motion::Smooth)));
     let _ = app.update(Message::ProfileAnimation(Play::Toggle));
-    let _ = app.update(Message::ProfileAnimation(Play::Tick));
+    crate::app::profile_animation::tests::finish_hold(&mut app);
     assert_eq!(
         app.profile_animation_overlay().unwrap().hidden_picture,
         Some((id, 1))

@@ -40,6 +40,7 @@ fn profile(kinds: &[Kind]) -> EnergyProfile {
                 return None;
             };
             Some(EnergyProfileStep {
+                source_key: None,
                 from,
                 to,
                 transition: (to == from + 2).then_some(from + 1),
@@ -171,6 +172,207 @@ pub(in crate::app) fn claisen() -> (Document, u64) {
     (doc, id)
 }
 
+fn animation_app() -> (App, u64) {
+    let (mut doc, id) = claisen();
+    let before = doc.clone();
+    let _ = reshiki::transaction::reconcile(&mut doc, before).unwrap();
+    let (mut app, _) = App::new();
+    app.tab.doc = doc.clone();
+    app.tab.saved = doc;
+    app.appearance.playback_mode = PlaybackMode::Loop;
+    app.appearance.playback_speed = PlaybackSpeed::Normal;
+    app.set_selection(vec![id]);
+    (app, id)
+}
+
+fn tick(app: &mut App, deadline: Instant, now: Instant) {
+    let _ = app.update(Message::ProfileAnimation(Action::Tick { deadline, now }));
+}
+
+pub(in crate::app) fn finish_hold(app: &mut App) {
+    let deadline = app.profile_animation.as_ref().unwrap().deadline;
+    tick(app, deadline, deadline);
+}
+
+fn timer_id(app: &App) -> u64 {
+    use iced::advanced::subscription::{Hasher, into_recipes};
+    use std::hash::Hasher as _;
+    let mut hash = Hasher::default();
+    let recipes = into_recipes(app.profile_animation_subscription());
+    assert_eq!(recipes.len(), 1);
+    recipes[0].hash(&mut hash);
+    hash.finish()
+}
+
+#[test]
+fn start_resume_and_seek_hold_the_current_state_for_the_full_speed_adjusted_duration() {
+    for speed in PlaybackSpeed::ALL {
+        let (mut app, _) = animation_app();
+        app.appearance.playback_speed = speed;
+        let hold = Duration::from_secs_f32(0.8 / speed.factor());
+        for frame in [0, 1] {
+            let started = Instant::now();
+            let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+            let session = app.profile_animation.as_ref().unwrap();
+            let deadline = session.deadline;
+            assert_eq!(session.position.frame, frame);
+            assert_eq!(session.hold(), hold);
+            assert!(deadline >= started + hold);
+            // The WASM interval's initial tick and an almost-due tick stay put.
+            tick(&mut app, deadline, started);
+            tick(&mut app, deadline, deadline - Duration::from_nanos(1));
+            assert_eq!(
+                app.profile_animation.as_ref().unwrap().position.frame,
+                frame
+            );
+
+            let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+            if frame == 0 {
+                let _ = app.update(Message::ProfileAnimation(Action::Step(1)));
+            }
+        }
+        let started = Instant::now();
+        let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+        let deadline = app.profile_animation.as_ref().unwrap().deadline;
+        assert!(deadline >= started + hold);
+        tick(&mut app, deadline, deadline);
+        let session = app.profile_animation.as_ref().unwrap();
+        assert_eq!(session.position.frame, 2);
+        assert!(session.deadline >= deadline + hold);
+    }
+}
+
+#[test]
+fn queued_ticks_cannot_advance_a_new_hold_or_a_replacement_session() {
+    let (mut app, id) = animation_app();
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    let old = Instant::now() + Duration::from_millis(1);
+    app.profile_animation.as_mut().unwrap().deadline = old;
+    let old_timer = timer_id(&app);
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    let current = app.profile_animation.as_ref().unwrap().deadline;
+    assert_ne!(timer_id(&app), old_timer);
+    tick(&mut app, old, current + Duration::from_secs(10));
+    assert_eq!(app.profile_animation.as_ref().unwrap().position.frame, 0);
+
+    tick(&mut app, current, current);
+    let next = app.profile_animation.as_ref().unwrap().deadline;
+    tick(&mut app, current, next + Duration::from_secs(10));
+    assert_eq!(app.profile_animation.as_ref().unwrap().position.frame, 1);
+
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![])));
+    app.set_selection(vec![id]);
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    let replacement = app.profile_animation.as_ref().unwrap().deadline;
+    tick(&mut app, next, replacement + Duration::from_secs(10));
+    assert_eq!(app.profile_animation.as_ref().unwrap().position.frame, 0);
+}
+
+#[test]
+fn changing_speed_restarts_the_current_state_hold() {
+    let (mut app, _) = animation_app();
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    let deadline = app.profile_animation.as_ref().unwrap().deadline;
+    tick(&mut app, deadline, deadline);
+    for speed in [PlaybackSpeed::Half, PlaybackSpeed::Double] {
+        let previous = app.profile_animation.as_ref().unwrap().deadline;
+        let started = Instant::now();
+        app.appearance.playback_speed = speed;
+        app.sync_profile_animation();
+        let deadline = app.profile_animation.as_ref().unwrap().deadline;
+        assert!(deadline >= started + Duration::from_secs_f32(0.8 / speed.factor()));
+        tick(&mut app, previous, deadline + Duration::from_secs(10));
+        tick(&mut app, deadline, deadline - Duration::from_nanos(1));
+        assert_eq!(app.profile_animation.as_ref().unwrap().position.frame, 1);
+    }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn switching_steps_and_smooth_restarts_equal_duration_state_holds() {
+    let (mut app, arrow) = ts::tests::finished_irc();
+    let _ = app.update(Message::Xtb(xtb::Action::Ts(
+        ts::Action::PlaceEnergyProfile(Some(arrow)),
+    )));
+    app.appearance.playback_speed = PlaybackSpeed::Normal;
+    app.appearance.playback_mode = PlaybackMode::Loop;
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    assert!(
+        app.profile_animation
+            .as_ref()
+            .unwrap()
+            .paths
+            .iter()
+            .any(Option::is_some)
+    );
+    for motion in [Motion::Smooth, Motion::Steps] {
+        let old = Instant::now() + Duration::from_millis(1);
+        app.profile_animation.as_mut().unwrap().deadline = old;
+        let old_timer = timer_id(&app);
+        let started = Instant::now();
+        let _ = app.update(Message::ProfileAnimation(Action::Motion(motion)));
+        let session = app.profile_animation.as_ref().unwrap();
+        let deadline = session.deadline;
+        assert_eq!(session.motion, motion);
+        assert!(session.position.playing);
+        assert_eq!(session.position.frame, 0);
+        assert!(deadline >= started + Duration::from_secs_f32(0.8));
+        assert_ne!(timer_id(&app), old_timer);
+        tick(&mut app, old, deadline + Duration::from_secs(10));
+        tick(&mut app, deadline, deadline - Duration::from_nanos(1));
+        assert_eq!(app.profile_animation.as_ref().unwrap().position.frame, 0);
+        tick(&mut app, deadline, deadline);
+        assert_eq!(app.profile_animation.as_ref().unwrap().position.frame, 1);
+    }
+}
+
+#[test]
+fn no_op_canvas_move_and_resize_pause_playback_without_desynchronizing_the_overlay() {
+    for resize in [false, true] {
+        let (mut app, id) = animation_app();
+        let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+        let deadline = app.profile_animation.as_ref().unwrap().deadline;
+        tick(&mut app, deadline, deadline);
+        let session = app.profile_animation.as_ref().unwrap();
+        let frame = session.position.frame;
+        let deadline = session.deadline;
+        let ink = format!("{:?}", app.profile_animation_overlay().unwrap().ink);
+        let doc = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let groups = crate::canvas::profile_animation_gesture(
+            &app.tab.doc,
+            id,
+            app.profile_animation_overlay().unwrap(),
+            resize,
+        );
+        assert!(
+            groups[0]
+                .iter()
+                .any(|edit| matches!(edit, crate::canvas::Edit::PauseProfileAnimation))
+        );
+        for (phase, edits) in groups.into_iter().enumerate() {
+            for edit in edits {
+                let _ = app.update(Message::Canvas(edit));
+            }
+            tick(&mut app, deadline, deadline + Duration::from_secs(10));
+            let session = app.profile_animation.as_ref().unwrap_or_else(|| {
+                panic!("Playback session ended at gesture phase {phase}, resize: {resize}")
+            });
+            assert!(!session.position.playing);
+            assert_eq!(session.position.frame, frame);
+            assert_eq!(
+                format!("{:?}", app.profile_animation_overlay().unwrap().ink),
+                ink
+            );
+        }
+        assert_eq!(app.tab.doc, doc);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+        assert!(!app.dirty());
+    }
+}
+
 #[test]
 fn steps_play_the_whole_profile_in_each_repeat_mode() {
     use Kind::{Intermediate as I, Product as P, Reactant as R, TransitionState as Ts};
@@ -231,7 +433,7 @@ fn play_and_pause_are_view_only_and_a_deselection_edit_or_tab_change_stops_them(
     let before = app.tab.revision;
     let play = || Message::ProfileAnimation(Action::Toggle);
     let _ = app.update(play());
-    let _ = app.update(Message::ProfileAnimation(Action::Tick));
+    finish_hold(&mut app);
     assert_eq!(app.profile_animation.as_ref().unwrap().position.frame, 1);
     assert!(app.profile_animation_overlay().is_some());
     let _ = app.update(play());

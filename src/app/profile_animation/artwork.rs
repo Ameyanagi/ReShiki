@@ -1,5 +1,6 @@
 //! One view-only overlay for the drawing and exported animation frames.
 
+use crate::app::xtb::ts::profile::source_key;
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{
     EnergyProfileGeometry, EnergyProfileSample, EnergyProfileStateKind as Kind, Graphic,
@@ -16,9 +17,17 @@ struct Changes {
     breaking: Vec<[u64; 2]>,
 }
 
+struct SpeciesBox {
+    owner: u64,
+    lo: Point,
+    hi: Point,
+}
+
+#[derive(Default)]
 pub(super) struct Artwork {
-    species: Vec<Vec<Vec<u64>>>,
+    species: Vec<Vec<SpeciesBox>>,
     changes: Vec<Changes>,
+    matched_steps: BTreeSet<usize>,
     selection: Vec<u64>,
     clips: BTreeMap<u64, [Point; 4]>,
 }
@@ -26,44 +35,65 @@ pub(super) struct Artwork {
 impl Artwork {
     pub(super) fn new(doc: &Document, graphic: &Graphic) -> Self {
         let Some(profile) = graphic.energy_profile.as_deref() else {
-            return Self {
-                species: vec![],
-                changes: vec![],
-                selection: vec![],
-                clips: BTreeMap::new(),
-            };
+            return Self::default();
         };
         let mut artwork = Self {
-            species: vec![vec![]; profile.states.len()],
+            species: (0..profile.states.len()).map(|_| vec![]).collect(),
             changes: (0..profile.states.len())
                 .map(|_| Changes::default())
                 .collect(),
             selection: vec![graphic.id],
-            clips: BTreeMap::new(),
+            ..Self::default()
         };
-        let mut reaction = crate::app::xtb::ts::profile::source_reaction(doc, profile);
+        let mut reaction = profile
+            .source
+            .and_then(|id| reactions::preview(doc, id).ok());
         let mut visited = BTreeSet::new();
-        for step in &profile.steps {
+        for (index, step) in profile.steps.iter().enumerate() {
             let Some(current) = reaction.take() else {
                 break;
             };
             visited.insert(current.arrow);
-            artwork.selection.extend(current.ids());
-            for (state, participants) in [
-                (step.from, &current.reactants),
-                (step.to, &current.products),
-            ] {
-                if let Some(species) = artwork.species.get_mut(state) {
-                    *species = participants.iter().map(|p| p.atoms.clone()).collect();
+            let key = if index == 0 {
+                Some(profile.source_key.as_str())
+            } else {
+                step.source_key.as_deref()
+            };
+            if key.is_some_and(|key| source_key(doc, &current) == key) {
+                artwork.matched_steps.insert(index);
+                artwork.selection.extend(current.ids());
+                for (state, participants) in [
+                    (step.from, &current.reactants),
+                    (step.to, &current.products),
+                ] {
+                    if let Some(species) = artwork.species.get_mut(state) {
+                        let atoms: Vec<_> = participants.iter().map(|p| p.atoms.clone()).collect();
+                        *species = scene::selections_ink_bounds(doc, &atoms)
+                            .into_iter()
+                            .zip(atoms)
+                            .filter_map(|(bounds, atoms)| {
+                                let (lo, hi) = bounds?;
+                                let &owner = atoms.first()?;
+                                atoms
+                                    .iter()
+                                    .any(|&id| doc.atom_drawn(id))
+                                    .then_some(SpeciesBox { owner, lo, hi })
+                            })
+                            .collect();
+                    }
+                }
+                if let Some(state) = step.transition
+                    && let Some(changes) = artwork.changes.get_mut(state)
+                    && let Some(geometry) =
+                        profile.states.get(state).and_then(|s| s.geometry.as_ref())
+                {
+                    *changes = scheme_changes(doc, &current, geometry);
+                    for pairs in [&mut changes.forming, &mut changes.breaking] {
+                        pairs.retain(|&[a, b]| doc.atom_drawn(a) && doc.atom_drawn(b));
+                    }
                 }
             }
-            if let Some(state) = step.transition
-                && let Some(changes) = artwork.changes.get_mut(state)
-                && let Some(geometry) = profile.states.get(state).and_then(|s| s.geometry.as_ref())
-            {
-                *changes = scheme_changes(doc, &current, geometry);
-            }
-            if step.to + 1 >= profile.states.len() {
+            if index + 1 == profile.steps.len() {
                 break;
             }
             // A later minimum can also be a drawn intermediate. Continue only
@@ -108,30 +138,28 @@ impl Artwork {
             graphic.id,
             graphic.energy_profile_overlay(&doc.drawing_style, doc, state, sample, geometry),
         );
-        if !highlight {
+        if !highlight || sample.is_some_and(|(step, _)| !self.matched_steps.contains(&step)) {
             return out;
         }
         let padding = doc.drawing_style.bond_length_world * 0.22;
         if let Some(species) = self.species.get(state) {
-            for atoms in species {
-                if let Some((lo, hi)) = scene::selection_bounds(doc, atoms) {
-                    let (lo, hi) = (lo.offset(-padding, -padding), hi.offset(padding, padding));
-                    out.extend(self.clip(
-                        atoms.first().copied().unwrap_or(0),
-                        vec![path(
-                            vec![
-                                PathCommand::Move(lo),
-                                PathCommand::Line(Point::new(hi.x, lo.y)),
-                                PathCommand::Line(hi),
-                                PathCommand::Line(Point::new(lo.x, hi.y)),
-                                PathCommand::Close,
-                            ],
-                            Hue::Green,
-                            false,
-                            doc,
-                        )],
-                    ));
-                }
+            for &SpeciesBox { owner, lo, hi } in species {
+                let (lo, hi) = (lo.offset(-padding, -padding), hi.offset(padding, padding));
+                out.extend(self.clip(
+                    owner,
+                    vec![path(
+                        vec![
+                            PathCommand::Move(lo),
+                            PathCommand::Line(Point::new(hi.x, lo.y)),
+                            PathCommand::Line(hi),
+                            PathCommand::Line(Point::new(lo.x, hi.y)),
+                            PathCommand::Close,
+                        ],
+                        Hue::Green,
+                        false,
+                        doc,
+                    )],
+                ));
             }
         }
         if graphic
@@ -150,9 +178,6 @@ impl Artwork {
                     let Some((a, b)) = doc.atom(a).zip(doc.atom(b)) else {
                         continue;
                     };
-                    if !doc.atom_visible(a.id) || !doc.atom_visible(b.id) {
-                        continue;
-                    }
                     let (a, b) = (a.position, b.position);
                     let mut bond = vec![path(
                         vec![PathCommand::Move(a), PathCommand::Line(b)],
