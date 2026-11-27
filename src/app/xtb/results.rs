@@ -7,7 +7,6 @@ use super::state::{
     symbol,
 };
 use crate::app::files::{nonblank, program_label};
-use reshiki::orbital_levels::EV_PER_HARTREE;
 use reshiki::qcdata;
 pub(crate) use reshiki::qcdata::HARTREE_TO_EV as EV_PER_HARTREE;
 use reshiki::qcdata::{
