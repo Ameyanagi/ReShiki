@@ -872,6 +872,7 @@ fn a_waiting_uf6_run_uses_its_own_charge_and_keeps_typed_spin() {
             assert_eq!(failed.request.as_ref().unwrap().config.unpaired, 0);
             assert!(
                 app.status
+                    .to_lowercase()
                     .contains("electron count and spin multiplicity disagree"),
                 "{}",
                 app.status
