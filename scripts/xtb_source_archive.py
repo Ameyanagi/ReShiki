@@ -58,8 +58,8 @@ DIST_ENV = {
         "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "off",
     },
     "Linux x64": {
-        "CARGO_PROFILE_DIST_LTO": "fat",
-        "CARGO_PROFILE_DIST_CODEGEN_UNITS": "1",
+        "CARGO_PROFILE_DIST_LTO": "false",
+        "CARGO_PROFILE_DIST_CODEGEN_UNITS": "16",
         "CARGO_PROFILE_DIST_STRIP": "none",
         "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "off",
     },
