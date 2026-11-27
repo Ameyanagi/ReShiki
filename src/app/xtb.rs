@@ -11,6 +11,7 @@ use super::{App, Message};
 use crate::appearance::EnergyUnit;
 use iced::Task;
 use reshiki::document::Document;
+use reshiki::models3d;
 use reshiki::qcdata::{self, CalcResult, Frame};
 #[cfg(any(test, not(target_arch = "wasm32")))]
 use reshiki::science::isotope_masses;
@@ -195,6 +196,7 @@ pub(crate) struct Request {
     /// The search, for a Conformers task.
     search: Option<conformers::Config>,
     ts: Option<ts::Request>,
+    reaction: Option<u64>,
 }
 
 /// A displaced input and the accepted geometry from which it was pushed.
@@ -217,6 +219,7 @@ pub(crate) struct Run {
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
     model: Option<super::models3d::Key>,
+    reaction: Option<u64>,
     started: iced::time::Instant,
     progress: Progress,
     /// The document state the run started from; edits stop the preview.
@@ -772,6 +775,7 @@ impl App {
             start: None,
             search,
             ts: None,
+            reaction: None,
         };
         self.xtb_begin(request)
     }
@@ -810,6 +814,7 @@ impl App {
             start: request.start,
             launch: None,
             model: None,
+            reaction: request.reaction,
             started: iced::time::Instant::now(),
             progress: Progress::default(),
             revision: (self.tab.file_epoch, self.tab.revision),
@@ -842,7 +847,7 @@ impl App {
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
                 if run.model.is_none() =>
             {
-                let task = self.model_for_calculation(run.atoms.clone());
+                let task = self.model_for_calculation(run.atoms.clone(), run.reaction);
                 let Some(key) = self.tab.model_job.as_ref().map(|job| job.key) else {
                     self.xtb_fail(state::Failure::Other(format!(
                         "xTB not started · {}",
@@ -984,7 +989,13 @@ impl App {
                     .then_some(run.launch.as_ref())
                     .flatten()
                     .and_then(|launch| launch.atoms.iter().flatten().next().copied())
-                    .and_then(|atom| preview(&self.tab.doc, atom, &positions))
+                    .and_then(|atom| {
+                        let mut doc = preview(&self.tab.doc, atom, &positions)?;
+                        if let Some(arrow) = run.reaction {
+                            models3d::place_reaction_row(&mut doc, arrow, None);
+                        }
+                        Some(doc)
+                    })
                     .map(Box::new);
                 self.status = run.status();
                 self.error = false;
@@ -1204,8 +1215,17 @@ impl App {
                     false
                 }
             };
+        let reaction = pending
+            .attempt
+            .as_ref()
+            .filter(|attempt| {
+                !moved
+                    && attached.freshness == Freshness::Current
+                    && attempt.revision == (self.tab.file_epoch, self.tab.revision)
+            })
+            .and_then(|attempt| attempt.request.reaction);
         let before = std::mem::replace(&mut self.tab.doc, doc);
-        self.changed(before);
+        self.changed_with_reaction_row(before, reaction);
         if self.error {
             self.xtb_store_failed(pending, self.status.clone());
             return;
@@ -1289,6 +1309,7 @@ impl Run {
                 start: self.start.clone(),
                 search: self.search.as_ref().map(|live| live.config.clone()),
                 ts: self.ts.as_ref().map(|live| live.request.clone()),
+                reaction: self.reaction,
             }),
             seconds: self.seconds(),
             revision: self.revision,

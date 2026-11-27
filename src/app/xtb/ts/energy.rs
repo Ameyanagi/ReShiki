@@ -540,6 +540,7 @@ impl App {
                 tight: false,
                 fixed: vec![],
             };
+            let arrow = batch.arrow;
             self.tab.xtb.energy_state.batch = Some(batch);
             let task = self.xtb_begin(Request {
                 atoms: species.atoms,
@@ -548,6 +549,7 @@ impl App {
                 start: None,
                 search: None,
                 ts: None,
+                reaction: Some(arrow),
             });
             let serial = self.tab.xtb.run.as_ref().map(|r| r.serial);
             if let Some(batch) = &mut self.tab.xtb.energy_state.batch {

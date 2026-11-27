@@ -910,6 +910,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/models3d/crystal.rs`: Crystal and periodic structures (#417)
 - `crates/model/src/models3d/ellipsoids.rs`: ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
 - `crates/model/src/models3d/polish.rs`: Persistent generated chemistry, separate from the live source drawing.
+- `crates/model/src/models3d/reaction_row.rs`: Align the models of a reaction beneath its drawing.
 - `crates/model/src/models3d/surface.rs`: Orbital isosurfaces drawn as vector shapes in a 3D model (see docs/plans/xtb-surfaces.md).
 - `crates/model/src/models3d/surface/draw.rs`: Orbital meshes and their projection into a model's picture.
 - `crates/model/src/models3d/surface/draw/figures.rs`

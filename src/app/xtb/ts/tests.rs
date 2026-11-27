@@ -111,7 +111,7 @@ fn finish_model(app: &mut App) {
 }
 
 #[test]
-fn generated_ts_model_clears_the_arrow_and_all_participants() {
+fn barrier_generation_places_the_start_model_under_its_species() {
     let (mut doc, arrow) = card::tests::claisen();
     let product = doc.reactions[0].products[0].atoms[2];
     doc.atom_mut(product).unwrap().position.y = 75.;
@@ -148,10 +148,54 @@ fn generated_ts_model_clears_the_arrow_and_all_participants() {
 
     let doc = &app.tab.doc;
     let (lo, hi) = reshiki::models3d::frame(doc, &doc.models[0]).unwrap();
+    let start = &app.xtb_live_ts().unwrap().request.plan.start_atoms;
+    let (a, b) = bounds[objects
+        .iter()
+        .position(|ids| ids.contains(&start[0]))
+        .unwrap()]
+    .unwrap();
+    assert!(((lo.x + hi.x - a.x - b.x) / 2.).abs() < 0.01);
+    assert!(lo.y >= b.y + doc.drawing_style.bond_length_world - 0.01);
     for (a, b) in bounds.into_iter().map(Option::unwrap) {
         let overlaps = lo.x < b.x && hi.x > a.x && lo.y < b.y && hi.y > a.y;
         assert!(!overlaps, "frame {lo:?}–{hi:?} covers {a:?}–{b:?}");
     }
+}
+
+#[test]
+fn saved_path_model_preview_is_centered_under_the_arrow() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    complete(&mut app);
+    let original = app.tab.doc.clone();
+    let atoms = original.reactions[0].reactants[0].atoms.clone();
+    let (species_lo, species_hi) = reshiki::scene::selection_bounds(
+        &Document {
+            models: vec![],
+            ..original.clone()
+        },
+        &atoms,
+    )
+    .unwrap();
+    send(&mut app, XtbAction::Ts(Action::Image(1)));
+
+    let doc = app.display_document();
+    let (a, b) = doc
+        .arrows
+        .iter()
+        .find(|item| item.id == arrow)
+        .unwrap()
+        .bounds();
+    let (lo, hi) = reshiki::models3d::frame(doc, &doc.models[0]).unwrap();
+    assert!(((lo.x + hi.x - a.x - b.x) / 2.).abs() < 0.01);
+    assert!(lo.y >= b.y + doc.drawing_style.bond_length_world - 0.01);
+    let (species_model_lo, species_model_hi) =
+        reshiki::models3d::frame(doc, &doc.models[1]).unwrap();
+    assert!((species_model_lo.y - lo.y).abs() < 0.01);
+    assert!(
+        ((species_model_lo.x + species_model_hi.x - species_lo.x - species_hi.x) / 2.).abs() < 0.01
+    );
+    assert_eq!(app.tab.doc, original);
 }
 
 fn example_report(launch: &Launch) -> Arc<job::Report> {

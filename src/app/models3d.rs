@@ -87,6 +87,7 @@ pub(crate) struct Job {
     /// another molecule's display moves it on.
     current: Key,
     display: Display,
+    reaction: Option<u64>,
     /// An existing model to replace, keeping its view at completion.
     target: Option<usize>,
     seed: i32,
@@ -172,9 +173,9 @@ impl App {
             Ok(mut model) => {
                 model.seed = job.seed;
                 if let Some(index) = job.target {
-                    self.replace_model(index, model);
+                    self.replace_model(index, model, job.reaction);
                 } else {
-                    self.add_model(model, job.display);
+                    self.add_model(model, job.display, job.reaction);
                 }
             }
             Err(error) => {
@@ -356,7 +357,7 @@ impl App {
             }
             return Task::none();
         }
-        self.generate_model(atoms, display, ModelGeneration::default())
+        self.generate_model(atoms, display, ModelGeneration::default(), None)
     }
 
     fn regenerate_model(&mut self, fresh: bool) -> Task<Message> {
@@ -369,23 +370,31 @@ impl App {
         let Some(generation) = ModelGeneration::for_model(&self.tab.doc, index, fresh) else {
             return Task::none();
         };
-        self.regenerate_saved_model(generation)
+        self.regenerate_saved_model(generation, None)
     }
 
-    /// A model for a calculation on `atoms`: a new one shown beside the
+    /// A model for a calculation on `atoms`: a new one shown with the
     /// drawing, or an Update of an out-of-date one. Starts nothing on error;
     /// the status says why.
-    pub(super) fn model_for_calculation(&mut self, atoms: Vec<u64>) -> Task<Message> {
+    pub(super) fn model_for_calculation(
+        &mut self,
+        atoms: Vec<u64>,
+        reaction: Option<u64>,
+    ) -> Task<Message> {
         let Some(generation) = ModelGeneration::for_calculation(&self.tab.doc, &atoms) else {
             return Task::none();
         };
         match generation.target {
-            Some(_) => self.regenerate_saved_model(generation),
-            None => self.generate_model(atoms, Display::Both, generation),
+            Some(_) => self.regenerate_saved_model(generation, reaction),
+            None => self.generate_model(atoms, Display::Both, generation, reaction),
         }
     }
 
-    fn regenerate_saved_model(&mut self, generation: ModelGeneration) -> Task<Message> {
+    fn regenerate_saved_model(
+        &mut self,
+        generation: ModelGeneration,
+        reaction: Option<u64>,
+    ) -> Task<Message> {
         let Some(index) = generation.target else {
             return Task::none();
         };
@@ -403,7 +412,7 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        self.generate_model(atoms, model.display, generation)
+        self.generate_model(atoms, model.display, generation, reaction)
     }
 
     fn generate_model(
@@ -411,6 +420,7 @@ impl App {
         atoms: Vec<u64>,
         display: Display,
         generation: ModelGeneration,
+        reaction: Option<u64>,
     ) -> Task<Message> {
         let ModelGeneration {
             target,
@@ -459,6 +469,7 @@ impl App {
             key,
             current: key,
             display,
+            reaction,
             target,
             seed,
             force_field,
@@ -678,7 +689,7 @@ impl App {
         (key == self.model_key()).then_some((id, start))
     }
 
-    fn add_model(&mut self, model: models3d::Model3d, display: Display) {
+    fn add_model(&mut self, model: models3d::Model3d, display: Display, reaction: Option<u64>) {
         let before = self.tab.doc.clone();
         let atoms = model.linked_ids(&before);
         let previous = before
@@ -688,9 +699,11 @@ impl App {
             .map_or(Display::TwoD, |m| m.display);
         self.tab.doc.models.push(model);
         models3d::require_version(&mut self.tab.doc);
-        let index = self.tab.doc.models.len() - 1;
-        models3d::set_display(&mut self.tab.doc, index, display);
-        self.changed(before);
+        if reaction.is_none() {
+            let index = self.tab.doc.models.len() - 1;
+            models3d::set_display(&mut self.tab.doc, index, display);
+        }
+        self.changed_with_reaction_row(before, reaction);
         if !self.error {
             self.status = status(display);
             self.start_morph(&atoms, previous, display);
@@ -698,7 +711,7 @@ impl App {
         }
     }
 
-    fn replace_model(&mut self, index: usize, mut model: models3d::Model3d) {
+    fn replace_model(&mut self, index: usize, mut model: models3d::Model3d, reaction: Option<u64>) {
         let before = self.tab.doc.clone();
         let Some(old) = before.models.get(index) else {
             return;
@@ -754,7 +767,7 @@ impl App {
         {
             model.offset = model.offset.offset(origin.x - now.x, origin.y - now.y);
         }
-        self.changed(before);
+        self.changed_with_reaction_row(before, reaction);
         if !self.error {
             self.status = "3D conformer regenerated".into();
         }
