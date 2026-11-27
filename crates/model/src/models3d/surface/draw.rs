@@ -275,11 +275,21 @@ fn supported(model: &Model3d) -> bool {
 
 /// Whether this figure's molecule and displayed geometry still match its result.
 pub fn figure_ready(doc: &Document, model: &Model3d) -> bool {
-    supported(model) && current(doc, model).is_some()
+    model
+        .surface
+        .as_ref()
+        .is_some_and(|figure| ready_result(doc, model, &figure.orbital).is_some())
 }
 
-fn current(doc: &Document, model: &Model3d) -> Option<()> {
-    let (_, stored) = science::figure_result(doc, model)?;
+pub(crate) fn ready_result<'a>(
+    doc: &'a Document,
+    model: &Model3d,
+    orbital: &OrbitalRef,
+) -> Option<(usize, &'a science::Stored)> {
+    if !supported(model) {
+        return None;
+    }
+    let (index, stored) = science::figure_result_for(doc, model, orbital)?;
     let attachment = doc.science.attachment(stored.attachment)?;
     if attachment.freshness(doc) != Freshness::Current {
         return None;
@@ -303,7 +313,7 @@ fn current(doc: &Document, model: &Model3d) -> Option<()> {
                         .sum::<f64>()
                         <= 1e-6
             }))
-    .then_some(())
+    .then_some((index, stored))
 }
 
 pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {

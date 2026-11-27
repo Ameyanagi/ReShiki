@@ -95,7 +95,7 @@ fn saving_examples_requires_a_personal_destination() {
     assert!(app.tab.path.is_none());
     let snapshot = Box::new(app.tab.doc.clone());
     let personal = PathBuf::from("My examples.rsk");
-    let _ = app.file_saved(epoch, snapshot, Ok(Some(personal.clone())));
+    let _ = app.file_saved(epoch, snapshot, Ok(Some(personal.clone().into())));
     assert_eq!(app.tab.untitled_name, None);
     assert_eq!(app.drawing_save_target(false).0, Some(personal));
     let saved = app.tab.id;

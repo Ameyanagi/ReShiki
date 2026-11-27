@@ -899,6 +899,7 @@ fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
 #[tokio::test]
 async fn saving_relinked_pictures_keeps_cached_rows_and_preserves_history() {
     use iced::futures::StreamExt;
+    use reshiki::github::{RepoKey, workcopy};
 
     let mut app = tab_with_mo_diagram();
     let new_levels = rerun_diagram(&mut app);
@@ -937,7 +938,13 @@ async fn saving_relinked_pictures_keeps_cached_rows_and_preserves_history() {
     assert!(!app.dirty());
 
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("diagram.rsk");
+    let repo = RepoKey {
+        owner: "octo".into(),
+        repo: "lab".into(),
+    };
+    let path = workcopy::working_path(dir.path(), &repo, "diagram.rsk");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    app.github.root = Some(dir.path().into());
     app.tab.path = Some(path.clone());
     let task = app.save_drawing(None);
     let mut stream = iced_runtime::task::into_stream(task).unwrap();
@@ -945,7 +952,7 @@ async fn saving_relinked_pictures_keeps_cached_rows_and_preserves_history() {
     else {
         panic!("missing native save result");
     };
-    let _ = app.update(message);
+    let completion = app.update(message);
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.doc, relinked);
     assert_eq!(app.tab.saved, relinked);
@@ -954,7 +961,8 @@ async fn saving_relinked_pictures_keeps_cached_rows_and_preserves_history() {
     assert!(app.tab.history.redo_frames().eq(&redo));
     assert!(!app.dirty());
 
-    let reopened = Document::from_json(&std::fs::read(path).unwrap()).unwrap();
+    let bytes = std::fs::read(path).unwrap();
+    let reopened = Document::from_json(&bytes).unwrap();
     assert_eq!(rerun_rows(&reopened), [3, 4]);
     let (stored_index, _) = reopened.orbital_pins_by_result().next().unwrap();
     for (index, orbital) in reopened.orbital_pins_by_result() {
@@ -968,6 +976,59 @@ async fn saving_relinked_pictures_keeps_cached_rows_and_preserves_history() {
             .is_some()
         );
     }
+
+    let mut stream = iced_runtime::task::into_stream(completion).unwrap();
+    while stream.next().await.is_some() {}
+    let versions = workcopy::snapshots(dir.path(), &repo, "diagram.rsk").unwrap();
+    assert_eq!(versions.len(), 1);
+    assert_eq!(std::fs::read(&versions[0].path).unwrap(), bytes);
+}
+
+#[test]
+fn editable_clipboard_snapshot_copies_cached_rows_for_the_selected_diagram() {
+    let mut app = tab_with_mo_diagram();
+    let levels = rerun_diagram(&mut app);
+    let graphic = &app.tab.doc.graphics[0];
+    let id = graphic.id;
+    let key = graphic.mo.as_ref().unwrap().result.clone();
+    reply_with_rerun_rows(&mut app, key, &levels, &[0, 3, 4]);
+
+    app.set_selection(vec![id]);
+    assert!(app.native_copy_snapshot().science.results.is_empty());
+
+    let mut selected: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    selected.push(id);
+    app.set_selection(selected);
+    let snapshot = app.native_copy_snapshot();
+    let copied = Document::from_json(&snapshot.file_json().unwrap()).unwrap();
+    let mut pasted = Document::default();
+    reshiki::editing::append(&mut pasted, &copied, Default::default());
+    assert_eq!(rerun_rows(&pasted), [3, 4]);
+    assert!(rerun_rows(&app.tab.doc).is_empty());
+}
+
+#[test]
+fn save_snapshot_requires_a_current_attachment_and_matching_geometry() {
+    let mut app = tab_with_mo_diagram();
+    let levels = rerun_diagram(&mut app);
+    let key = app.tab.doc.graphics[0].mo.as_ref().unwrap().result.clone();
+    reply_with_rerun_rows(&mut app, key, &levels, &[3, 4]);
+    let orbitals = &app.tab.xtb.orbitals;
+    let ready = app.tab.doc.clone();
+    let enriched = orbitals.save_snapshot(ready.clone());
+    assert_eq!(rerun_rows(&enriched), [3, 4]);
+
+    let mut stale = ready.clone();
+    stale.atoms[0].charge += 1;
+    assert_eq!(orbitals.save_snapshot(stale.clone()), stale);
+
+    let mut moved = ready;
+    moved.models[0].atoms[0].xyz[2] += 0.01;
+    assert_eq!(orbitals.save_snapshot(moved.clone()), moved);
+
+    let mut stored = enriched;
+    stored.atoms[0].charge += 1;
+    assert_eq!(orbitals.save_snapshot(stored.clone()), stored);
 }
 
 #[test]

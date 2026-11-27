@@ -656,6 +656,9 @@ fn the_gap_follows_the_summary_rule_for_separate_spins() {
 
 #[test]
 fn electrons_cross_their_bar_up_left_and_down_right() {
+    let mut explicit_occupations = benzene();
+    // The occupied-count fallback would fill the first three levels with pairs.
+    explicit_occupations.columns[0].occupations = vec![2., 1., 0., 1., 0., 0.];
     let open_shell = MoDiagram::new(
         1,
         "old".into(),
@@ -666,6 +669,11 @@ fn electrons_cross_their_bar_up_left_and_down_right() {
     );
     for (name, mo, counts) in [
         ("closed shell", benzene(), vec![vec![2, 2, 2, 0, 0, 0]]),
+        (
+            "explicit occupations",
+            explicit_occupations,
+            vec![vec![2, 1, 0, 1, 0, 0]],
+        ),
         (
             "open shell",
             open_shell,
