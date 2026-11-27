@@ -428,15 +428,24 @@ pub enum Prepared {
     },
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub type Saved = PathBuf;
-
-#[cfg(target_arch = "wasm32")]
 #[derive(Debug, Clone)]
 pub struct Saved {
     pub path: PathBuf,
+    #[cfg(not(target_arch = "wasm32"))]
+    history: Option<Result<Vec<u8>, String>>,
     /// None means a download handoff, which does not establish a saved file.
+    #[cfg(target_arch = "wasm32")]
     pub handle: Option<wasm_bindgen::JsValue>,
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+impl<T: Into<PathBuf>> From<T> for Saved {
+    fn from(path: T) -> Self {
+        Self {
+            path: path.into(),
+            history: None,
+        }
+    }
 }
 
 pub type Opened = Option<(PathBuf, Result<Prepared, String>)>;
@@ -895,22 +904,22 @@ impl super::App {
         snapshot: Box<reshiki::document::Document>,
         result: Result<Option<Saved>, String>,
     ) -> iced::Task<super::Message> {
-        // A GitHub drawing keeps what this save wrote as a version.
         #[cfg(not(target_arch = "wasm32"))]
-        let written = match &result {
-            Ok(Some(path)) if epoch == self.tab.file_epoch => self
-                .github
-                .locate(Some(path))
-                .map(|_| (path.clone(), (*snapshot).clone())),
+        let mut result = result;
+        #[cfg(not(target_arch = "wasm32"))]
+        let written = match &mut result {
+            Ok(Some(saved)) if epoch == self.tab.file_epoch => {
+                // Before a close, count the write as unsent so it asks whether to send it.
+                self.github_unread(&saved.path);
+                saved
+                    .history
+                    .take()
+                    .map(|history| (saved.path.clone(), history))
+            }
             _ => None,
         };
         #[cfg(not(target_arch = "wasm32"))]
         let saved = matches!(&result, Ok(Some(_))) && epoch == self.tab.file_epoch;
-        // Before a close the save goes on with asks whether to send it.
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Some((path, _)) = &written {
-            self.github_unread(path);
-        }
         let task = self.drawing_saved(epoch, snapshot, result);
         #[cfg(not(target_arch = "wasm32"))]
         let task = iced::Task::batch([task, self.github_saved(saved, written)]);
@@ -952,7 +961,7 @@ impl super::App {
                     saved.path
                 };
                 #[cfg(not(target_arch = "wasm32"))]
-                let path = saved;
+                let path = saved.path;
                 // Continue the save dialog's action only when nothing is left unsaved.
                 self.tab.mark_saved(snapshot);
                 if self
@@ -1460,42 +1469,42 @@ impl super::App {
                         .as_ref()
                         .filter(|binding| binding.same_path(&path))
                         .map_or(path.clone(), |binding| binding.path.clone());
-                    let save_path = path.clone();
                     // A drawing kept in a GitHub repository is shared: each
                     // person's view stays out of its commits and versions.
-                    let view = view.filter(|_| {
-                        github_root.as_deref().is_none_or(|root| {
-                            reshiki::github::workcopy::locate(root, &path).is_none()
-                        })
+                    let github = github_root.as_deref().is_some_and(|root| {
+                        reshiki::github::workcopy::locate(root, &path).is_some()
                     });
+                    let view = view.filter(|_| !github);
                     // A ChemDraw or MOL file is written by the chemistry engine.
-                    let exported = match kept_format(&path) {
-                        Some(format) => Some(
-                            reshiki::formats::write_with_engine(
+                    let (exported, export_history) = match kept_format(&path) {
+                        Some(format) => {
+                            // History opens native drawings, including for working copies saved in other formats.
+                            let history = github.then(|| std::sync::Arc::clone(&export_snapshot));
+                            let bytes = reshiki::formats::write_with_engine(
                                 std::sync::Arc::unwrap_or_clone(export_snapshot),
                                 format,
                                 &engine,
                             )
-                            .await?,
-                        ),
-                        None => None,
+                            .await?;
+                            (Some(bytes), history)
+                        }
+                        None => (None, None),
                     };
-                    reshiki::task::spawn_blocking(move || {
+                    let saved = reshiki::task::spawn_blocking(move || {
                         let bytes = match exported {
                             Some(bytes) => bytes,
                             None => save_snapshot.file_json_with_view(view)?,
                         };
                         #[cfg(any(windows, target_os = "linux"))]
                         let _target_owner = if office.as_ref().is_some_and(|binding| {
-                            binding.lease.is_some() && binding.same_path(&save_path)
+                            binding.lease.is_some() && binding.same_path(&path)
                         }) {
                             None // The GUI owns this lease's fence, including this clone.
                         } else {
-                            Some(crate::desktop::write_target(&save_path)?)
+                            Some(crate::desktop::write_target(&path)?)
                         };
-                        let office_host = if let Some(binding) = office
-                            .as_ref()
-                            .filter(|binding| binding.same_path(&save_path))
+                        let office_host = if let Some(binding) =
+                            office.as_ref().filter(|binding| binding.same_path(&path))
                         {
                             if !binding.writable() {
                                 return Err(OFFICE_SESSION_ENDED.to_owned());
@@ -1505,18 +1514,22 @@ impl super::App {
                             None
                         };
                         if save_backend(office_host) == SaveBackend::Addin {
-                            reshiki::office_addin::save(&save_path, &bytes)?;
+                            reshiki::office_addin::save(&path, &bytes)?;
                         } else {
                             #[cfg(windows)]
-                            super::windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
+                            super::windows_libreoffice_save::save(&path, &bytes, office_host)?;
                             #[cfg(not(windows))]
-                            write(&save_path, &bytes)?;
+                            write(&path, &bytes)?;
                         }
-                        Ok::<_, String>(())
+                        let history = github.then(|| match export_history {
+                            Some(doc) => doc.file_json(),
+                            None => Ok(bytes),
+                        });
+                        Ok(Saved { path, history })
                     })
                     .await
                     .map_err(|error| error.to_string())??;
-                    Ok(Some(path))
+                    Ok(Some(saved))
                 }
             },
             move |result| {

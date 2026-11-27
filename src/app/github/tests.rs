@@ -115,7 +115,7 @@ fn save_here(app: &mut App, path: &Path) -> Vec<u8> {
     std::fs::write(path, &bytes).unwrap();
     app.tab.doc = Document::from_native_file(&bytes).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
-    let _ = app.github_saved(true, Some((path.to_owned(), app.tab.doc.clone())));
+    let _ = app.github_saved(true, Some((path.to_owned(), Ok(bytes.clone()))));
     read_back(app);
     bytes
 }
@@ -899,7 +899,7 @@ async fn unsaved_edits_are_saved_first_and_are_what_is_kept() {
     let edited = app.tab.doc.file_json().unwrap();
     std::fs::write(&path, &edited).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
-    let saved = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    let saved = app.github_saved(true, Some((path.clone(), Ok(edited.clone()))));
     run(&mut app, saved).await;
     let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
     assert_eq!(std::fs::read(&copy).unwrap(), edited);
@@ -918,7 +918,7 @@ async fn a_save_still_writing_is_waited_for() {
     assert!(!copy.exists(), "nothing is kept before the save lands");
     assert_eq!(std::fs::read(&path).unwrap(), mine);
     app.file_io.saving = false;
-    let saved = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    let saved = app.github_saved(true, Some((path.clone(), Ok(mine.clone()))));
     run(&mut app, saved).await;
     assert_eq!(std::fs::read(&copy).unwrap(), mine);
     assert_eq!(std::fs::read(&path).unwrap(), drawing(30.));
@@ -936,14 +936,20 @@ async fn a_choice_made_while_another_tab_saves_can_be_made_again() {
     github(&mut app, Action::Resolve(send::Choice::KeepBoth));
     // The other tab's save lands; nothing of this drawing was saved.
     app.file_io.saving = false;
-    let _ = app.github_saved(true, Some((other, app.tab.doc.clone())));
+    let _ = app.github_saved(
+        true,
+        Some((
+            other.clone(),
+            std::fs::read(other).map_err(|e| e.to_string()),
+        )),
+    );
     github(&mut app, Action::Resolve(send::Choice::KeepBoth));
     assert!(app.file_io.saving, "the second choice saves first");
     app.file_io.saving = false;
     let edited = app.tab.doc.file_json().unwrap();
     std::fs::write(&path, &edited).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
-    let saved = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    let saved = app.github_saved(true, Some((path.clone(), Ok(edited.clone()))));
     run(&mut app, saved).await;
     let copy = workcopy::working_path(dir.path(), &repo().key, "ring (2).rsk");
     assert_eq!(std::fs::read(&copy).unwrap(), edited);

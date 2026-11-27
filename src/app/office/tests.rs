@@ -432,7 +432,7 @@ fn bound_office_generic_expansion_delivers_after_tab_switch_without_rebinding_or
         Box::new(Message::Saved(
             source_epoch,
             Box::new(source.clone()),
-            Ok(Some(path.clone())),
+            Ok(Some(path.clone().into())),
         )),
     ));
     assert!(!app.file_io.saving);

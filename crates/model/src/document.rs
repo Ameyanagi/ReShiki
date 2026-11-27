@@ -733,15 +733,34 @@ impl Document {
         pins
     }
 
-    /// Orbital pins paired with the stored result each figure uses.
+    /// Orbital pins paired with the stored result each ready figure uses.
     pub fn orbital_pins_by_result(
         &self,
     ) -> impl Iterator<Item = (usize, &crate::models3d::surface::OrbitalRef)> {
-        self.orbital_figures().filter_map(|(model, figure)| {
-            let orbital = &figure.orbital;
-            let (index, _) = crate::science::figure_result_for(self, model?, orbital)?;
-            Some((index, orbital))
-        })
+        use crate::models3d::surface::draw::ready_result;
+
+        self.models
+            .iter()
+            .flat_map(move |model| {
+                model.figures().filter_map(move |figure| {
+                    let orbital = &figure.orbital;
+                    let (index, _) = ready_result(self, model, orbital)?;
+                    Some((index, orbital))
+                })
+            })
+            .chain(
+                self.graphics
+                    .iter()
+                    .filter_map(|g| g.mo.as_deref())
+                    .flat_map(move |mo| {
+                        mo.pictures.iter().filter_map(move |picture| {
+                            let model = mo.orbital_model(self, &picture.figure)?;
+                            let orbital = &picture.figure.orbital;
+                            let (index, _) = ready_result(self, &model, orbital)?;
+                            Some((index, orbital))
+                        })
+                    }),
+            )
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
