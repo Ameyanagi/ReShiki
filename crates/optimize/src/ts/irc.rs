@@ -391,19 +391,21 @@ impl Descent<'_> {
                     energy: point.energy,
                 },
             )?;
-            // A falling transverse force near the TS is insufficient. Require
-            // departure by one configured arc or an energy drop above SCF
-            // noise, and a nearby minimum of the accepted point's quadratic
-            // model. A soft curved valley can have a small force long before
-            // its minimum, even when the estimated curvature is positive.
+            let energy_drop = ts_energy - point.energy;
             if approaching
                 && norm(&gradient) <= GRADIENT_TOLERANCE
-                && (stats.path_length >= self.options.irc_step
-                    || ts_energy - point.energy > departure_energy)
+                && (stats.path_length >= self.options.irc_step || energy_drop > departure_energy)
             {
+                // Once the mean downhill force from the TS exceeds tolerance
+                // above SCF noise, stop on the small, falling force alone.
+                // Backtracking can make the last accepted arc arbitrarily short.
+                if energy_drop > GRADIENT_TOLERANCE * stats.path_length + departure_energy {
+                    stats.reason = IrcReason::Converged;
+                    break;
+                }
                 let spectrum = spectrum_at(&point, &h)?;
-                // Require the model minimum within the spacing that the
-                // interior guards just accepted.
+                // In a soft valley the force can be small all the way from the
+                // saddle. Require a model minimum within the accepted spacing.
                 let remaining_arc =
                     quadratic_minimum_arc_bound(&spectrum.0, &spectrum.1, &gradient);
                 if remaining_arc.is_some_and(|arc| arc <= length) {
@@ -793,6 +795,32 @@ mod tests {
             g[0] = 0.0008 * x[0] * q;
             Ok(0.0008 * q * q / 4.)
         }
+    }
+
+    #[test]
+    fn resolved_descent_converges_with_a_model_minimum_beyond_the_last_step() {
+        // At x = 0.95 the force has fallen below tolerance, two arcs from x = 1.
+        let ts = Minimum {
+            positions: vec![0.],
+            energy: 0.0002,
+        };
+        let options = TsOptions {
+            irc_step: 0.025,
+            irc_max_steps: 38,
+            ..Default::default()
+        };
+        let (end, _, stats) = Descent {
+            ts: &ts,
+            mode: &[1.],
+            hessian: &[-0.0008],
+            masses: &[],
+            options: &options,
+        }
+        .trace(&mut SoftQuartic, true, &mut proceed)
+        .unwrap();
+        assert_eq!(stats.reason, IrcReason::Converged);
+        assert!(1. - end.positions[0] > options.irc_step);
+        assert!(norm(&evaluate(&mut SoftQuartic, &end.positions).unwrap().1) <= GRADIENT_TOLERANCE);
     }
 
     struct ShiftedSoftSaddle;
