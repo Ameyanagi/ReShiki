@@ -879,8 +879,18 @@ impl App {
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
                 if run.model.is_none() =>
             {
+                let serial = self.tab.model_serial;
                 let task = self.model_for_calculation(run.atoms.clone(), run.reaction);
-                let Some(key) = self.tab.model_job.as_ref().map(|job| job.key) else {
+                // Only a generation this call started: a refused start, such
+                // as a shape the force field gets wrong, leaves another
+                // molecule's job in place.
+                let Some(key) = self
+                    .tab
+                    .model_job
+                    .as_ref()
+                    .filter(|_| self.tab.model_serial != serial)
+                    .map(|job| job.key)
+                else {
                     self.xtb_fail(state::Failure::Other(format!(
                         "xTB not started · {}",
                         self.status
