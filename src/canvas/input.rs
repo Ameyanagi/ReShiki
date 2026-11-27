@@ -183,6 +183,9 @@ impl MoleculeCanvas<'_> {
                     && self.tool == Tool::Template
                     && crate::platform::control(state.modifiers) =>
             {
+                if matches!(state.gesture, Some(Gesture::Move { .. })) {
+                    state.end_gesture();
+                }
                 state.gesture = Some(Gesture::Ring {
                     start: self.camera.world(point?, bounds),
                     attached: true,
@@ -193,6 +196,9 @@ impl MoleculeCanvas<'_> {
                 self.right_press(state, point, bounds, canvas_bounds)
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) if inside => {
+                if matches!(state.gesture, Some(Gesture::Move { .. })) {
+                    state.end_gesture();
+                }
                 state.gesture = Some(Gesture::Pan { last: point? });
                 Some(Action::capture())
             }

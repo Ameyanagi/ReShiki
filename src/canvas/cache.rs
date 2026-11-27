@@ -1,5 +1,6 @@
 //! Canvas-local derived data, invalidated by document contents rather than edit hooks.
 //! Keeping one snapshot covers imports, undo/redo, styles and in-place edits alike.
+use super::paper::{SceneGeometryCache, ScenePart};
 use super::{Camera, Document, Rectangle, SelectionBox, nmr};
 use reshiki::rear_opacity::Paint;
 use reshiki::scene::{self, Primitive};
@@ -29,7 +30,10 @@ pub(super) struct SceneCache {
     ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
     cycle_hits: HashMap<u64, reshiki::cycles::HitLayout>,
     /// Keyed by the objects a preview redraws itself.
-    remainder: Option<(Vec<u64>, Option<Rc<super::paper::Remainder>>)>,
+    remainder: Option<(Vec<u64>, Option<Rc<ScenePart>>)>,
+    /// The base scene of the objects that move together.
+    moved_part: Option<(Vec<u64>, Rc<ScenePart>)>,
+    pub(super) moved_geometry: Option<SceneGeometryCache>,
     pub(super) preview: Option<Rc<super::paper::PreviewMemo>>,
     /// Orbital meshes registered when the scene was made: a new mesh
     /// changes the picture of an unchanged drawing.
@@ -40,6 +44,8 @@ pub(super) struct SceneCache {
     pub comparisons: usize,
     #[cfg(test)]
     pub cycle_hit_layouts: usize,
+    #[cfg(test)]
+    pub moved_part_builds: usize,
 }
 
 /// One draw of the canvas. It compares the drawing with the cached one as it
@@ -140,7 +146,7 @@ impl SceneCache {
             self.ring_interiors = None;
             self.cycle_hits.clear();
             self.remainder = None;
-            self.preview = None;
+            self.release_move();
         }
     }
 
@@ -242,6 +248,12 @@ impl SceneCache {
         self.copy = None;
     }
 
+    pub(super) fn release_move(&mut self) {
+        self.moved_part = None;
+        self.moved_geometry = None;
+        self.preview = None;
+    }
+
     /// Rear-opacity paint shared by rendering and picking for the same document,
     /// without the atoms shown as 3D models.
     pub fn opacity(&mut self, doc: &Document) -> Rc<Paint> {
@@ -277,18 +289,36 @@ impl SceneCache {
 
     /// The drawing without the sorted `excluded` objects, which a preview
     /// redraws itself; `None` when they cannot be drawn apart.
-    pub fn remainder(
-        &mut self,
-        doc: &Document,
-        excluded: &[u64],
-    ) -> Option<Rc<super::paper::Remainder>> {
-        use super::paper::Remainder;
+    pub fn remainder(&mut self, doc: &Document, excluded: &[u64]) -> Option<Rc<ScenePart>> {
         self.document(doc);
         if !matches!(&self.remainder, Some((key, _)) if key == excluded) {
-            let part = Remainder::new(doc, excluded, || self.scene(doc)).map(Rc::new);
+            let part = ScenePart::remainder(doc, excluded, || self.scene(doc)).map(Rc::new);
             self.remainder = Some((excluded.to_vec(), part));
         }
         self.remainder.as_ref().and_then(|(_, part)| part.clone())
+    }
+
+    pub fn moved_part(&mut self, doc: &Document, ids: &[u64], part: &Document) -> Rc<ScenePart> {
+        self.document(doc);
+        if let Some((key, cached)) = &self.moved_part
+            && key == ids
+        {
+            return cached.clone();
+        }
+        let cached = Rc::new(ScenePart::new(part));
+        self.moved_part = Some((ids.to_vec(), cached.clone()));
+        #[cfg(test)]
+        {
+            self.moved_part_builds += 1;
+        }
+        cached
+    }
+
+    #[cfg(test)]
+    pub(super) fn retained_moved_scene(&self) -> Option<&[Primitive]> {
+        self.moved_part
+            .as_ref()
+            .map(|(_, part)| part.scene.as_ref())
     }
 
     pub fn nmr_assignments(
