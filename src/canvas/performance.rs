@@ -929,8 +929,10 @@ async fn rigid_partial_orbital_drag_matches_whole_preview_and_reuses_tiles() {
 
             let whole = shot(&reference, false);
             let changed = retained
-                .chunks_exact(4)
-                .zip(whole.chunks_exact(4))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(whole.as_chunks::<4>().0)
                 .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 8))
                 .count();
             let error: usize = retained
