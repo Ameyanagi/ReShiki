@@ -669,3 +669,12 @@ fn canceling_refinement_discards_the_job_and_ignores_a_late_result() {
     );
     assert_eq!(app.tab.history.undo_frames().count(), 0);
 }
+
+#[test]
+fn build_notes_always_pass_model_validation() {
+    let long = "C1, ".repeat(200);
+    let note = super::model_note(&format!("worker said:\nheap limit {long}"));
+    assert!(!note.chars().any(char::is_control));
+    assert!(note.len() <= 512, "{}", note.len());
+    assert!(note.starts_with("worker said: heap limit C1"));
+}

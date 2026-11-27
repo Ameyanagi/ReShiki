@@ -240,7 +240,6 @@ impl App {
                 Task::none()
             }
             Action::ParentNamed(model, name) => {
-                self.xtb_model_parent_named(model, UNNAMED_PARENT, &name);
                 // Only while the status still describes that model.
                 if model == (self.tab.file_epoch, self.tab.model_serial)
                     && self.tab.model_job.is_none()
@@ -327,7 +326,12 @@ impl App {
         let name_parent = radical.is_some();
         // The model keeps how it was built, through Undo, files and any
         // calculation that starts from it.
-        model.notes = notes.into_iter().chain(radical).collect();
+        model.notes = notes
+            .into_iter()
+            .chain(radical)
+            .map(|note| model_note(&note))
+            .take(16)
+            .collect();
         let notes = model.notes.clone();
         if job.reaction.is_some() {
             let model = CalculationModel::new(&self.tab.doc, model, job.target);
@@ -342,7 +346,6 @@ impl App {
                 self.status.push_str(" · ");
                 self.status.push_str(note);
             }
-            self.xtb_model_notes();
             if name_parent {
                 return self.name_parent(&job.prepared);
             }
@@ -2024,6 +2027,23 @@ fn element_name(symbol: &str) -> String {
     super::command_palette::catalog::element_name(symbol)
         .unwrap_or_else(|| if symbol == "*" { "wildcard" } else { symbol }.into())
         .to_lowercase()
+}
+
+/// A build note as a saved model note may be: one line of at most 512 bytes.
+fn model_note(note: &str) -> String {
+    let mut note: String = note
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if note.len() > 512 {
+        let mut end = 509;
+        while !note.is_char_boundary(end) {
+            end -= 1;
+        }
+        note.truncate(end);
+        note.push('…');
+    }
+    note
 }
 
 fn force_field_caution(job: &Job, field: ForceField) -> Option<String> {

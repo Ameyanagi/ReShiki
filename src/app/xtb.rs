@@ -148,8 +148,6 @@ pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
     selection_hint: Option<String>,
-    /// The generation whose notes belong to this run or its last outcome.
-    model_notes_source: Option<(u64, u64)>,
     serial: u64,
     pub(super) palette: palette::Palette,
     conformer_stereo: std::cell::RefCell<conformers::CardStereo>,
@@ -821,7 +819,6 @@ impl App {
         }
         self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
         self.tab.xtb.outcome = None;
-        self.tab.xtb.model_notes_source = None;
         self.tab.xtb.run = Some(Run {
             serial: self.tab.xtb.serial,
             atoms: request.atoms,
@@ -965,12 +962,6 @@ impl App {
         }
     }
 
-    /// Keep the starting model's explanation with the calculation it belongs to.
-    /// The latest build's notes are the ones a late parent name completes.
-    pub(super) fn xtb_model_notes(&mut self) {
-        self.tab.xtb.model_notes_source = Some((self.tab.file_epoch, self.tab.model_serial));
-    }
-
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     pub(super) fn xtb_model_stage(&mut self, key: super::models3d::Key, line: String) {
         if let Some(run) = &mut self.tab.xtb.run
@@ -1003,26 +994,6 @@ impl App {
             run.model_notes.push(format!(
                 "Odd electron count: calculated with {unpaired} unpaired electron{plural}"
             ));
-        }
-    }
-
-    /// An asynchronous closed-shell parent name also belongs in the card's notes.
-    pub(super) fn xtb_model_parent_named(&mut self, model: (u64, u64), unnamed: &str, name: &str) {
-        if self.tab.xtb.model_notes_source != Some(model) || model.0 != self.tab.file_epoch {
-            return;
-        }
-        let replace = |notes: &mut Vec<String>| {
-            for note in notes {
-                *note = note.replacen(unnamed, name, 1);
-            }
-        };
-        if let Some(run) = &mut self.tab.xtb.run {
-            replace(&mut run.model_notes);
-        }
-        match &mut self.tab.xtb.outcome {
-            Some(Outcome::Done { notes, .. }) => replace(notes),
-            Some(Outcome::Review(review)) => replace(&mut review.pending.notes),
-            _ => {}
         }
     }
 
@@ -1074,7 +1045,13 @@ impl App {
                 let model = self.tab.doc.models.iter().find(|m| m.contains(*first))?;
                 Some(model.notes.clone())
             });
-        run.model_notes.splice(0..0, built.unwrap_or_default());
+        // A transition-state run may start from a saved path, not this model.
+        if run.ts.is_none() {
+            let mut built = built.unwrap_or_default();
+            built.retain(|note| !run.model_notes.contains(note));
+            built.dedup();
+            run.model_notes.splice(0..0, built);
+        }
         if run.search.is_some() {
             return self.xtb_search_start(launch);
         }
