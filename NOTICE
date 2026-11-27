@@ -34,6 +34,8 @@ of adaptations, copyright notices, and license texts are recorded in:
   vendor/zune-jpeg/        Modified JPEG dependency and its upstream notices
   vendor/usvg/            Variable-font weight support in the SVG dependency
   vendor/svg2pdf/         Variable-font PDF instances and upstream notices
+  gif 0.14.2              Animated GIF encoding (MIT OR Apache-2.0)
+                          https://github.com/image-rs/image-gif
 
   tests/fixtures/crystal/  COD ferrocene data (CC0; source notice retained)
   tests/fixtures/qc/       Quantum chemistry test files, not distributed:

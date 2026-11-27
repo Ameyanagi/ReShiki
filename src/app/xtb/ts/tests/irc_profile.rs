@@ -144,7 +144,7 @@ fn default_profile_uses_a_completed_or_connected_irc_and_keeps_partial_traces_se
 }
 
 #[test]
-fn animate_irc_previews_only_traced_frames_and_stop_restores_the_model() {
+fn animate_irc_previews_only_traced_frames_and_loops_without_editing_the_model() {
     let (mut app, _) = finished();
     let before = app.tab.doc.clone();
     let revision = app.tab.revision;
@@ -163,11 +163,23 @@ fn animate_irc_previews_only_traced_frames_and_stop_restores_the_model() {
         assert_eq!(app.tab.doc, before);
         send(&mut app, XtbAction::Ts(Action::IrcTick));
     }
-    assert!(app.xtb_irc_preview().is_none());
-    send(&mut app, XtbAction::Ts(Action::PlayIrc));
+    assert!(app.xtb_irc_playing());
+    assert_eq!(
+        app.xtb_irc_frame(),
+        Some(0),
+        "Loop returns to the first traced frame"
+    );
     send(&mut app, XtbAction::Ts(Action::IrcTick));
     send(&mut app, XtbAction::Ts(Action::PlayIrc));
-    assert_eq!(model(app.display_document()), model(&before));
+    assert!(!app.xtb_irc_playing());
+    assert_eq!(
+        app.xtb_irc_frame(),
+        Some(1),
+        "Pause keeps the current geometry visible"
+    );
+    send(&mut app, XtbAction::Ts(Action::IrcTick));
+    assert_eq!(app.xtb_irc_frame(), Some(1));
+    assert_eq!(app.tab.doc, before);
     assert_eq!(app.tab.revision, revision);
 
     send(&mut app, XtbAction::Ts(Action::PlayIrc));
@@ -180,6 +192,92 @@ fn animate_irc_previews_only_traced_frames_and_stop_restores_the_model() {
     assert_eq!(app.xtb_profile(&result), irc::Profile::Neb);
     send(&mut app, XtbAction::Ts(Action::PlayIrc));
     assert!(app.xtb_irc_preview().is_none());
+}
+
+#[test]
+fn irc_seek_and_paused_steps_keep_readout_frame_and_model_together() {
+    let (mut app, _) = finished();
+    let before = app.tab.doc.clone();
+    let result = app.xtb_shown().unwrap().stored.result.clone();
+    let path = irc::saved(&result).unwrap();
+    for (requested, expected) in [(1, 1), (usize::MAX, path.steps() - 1), (0, 0)] {
+        send(&mut app, XtbAction::Ts(Action::IrcSeek(requested)));
+        assert!(!app.xtb_irc_playing());
+        assert_eq!(app.xtb_irc_frame(), Some(expected));
+        assert_eq!(
+            model(app.xtb_irc_preview().unwrap()),
+            crate::app::xtb::tests::f32s(&path.frame(expected).unwrap().positions_angstrom)
+        );
+    }
+    send(&mut app, XtbAction::Ts(Action::IrcStep(-1)));
+    assert_eq!(app.xtb_irc_frame(), Some(0));
+    send(&mut app, XtbAction::Ts(Action::IrcStep(1)));
+    assert_eq!(app.xtb_irc_frame(), Some(1));
+    send(&mut app, XtbAction::Ts(Action::PlayIrc));
+    send(&mut app, XtbAction::Ts(Action::IrcStep(1)));
+    assert_eq!(
+        app.xtb_irc_frame(),
+        Some(1),
+        "Arrow stepping is paused-only"
+    );
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn irc_play_once_keeps_the_last_frame_and_back_and_forth_reverses() {
+    use crate::app::animation::PlaybackMode;
+    let (mut app, _) = finished();
+    send(&mut app, XtbAction::Ts(Action::IrcMode(PlaybackMode::Once)));
+    send(&mut app, XtbAction::Ts(Action::PlayIrc));
+    for _ in 0..3 {
+        send(&mut app, XtbAction::Ts(Action::IrcTick));
+    }
+    assert_eq!(app.xtb_irc_frame(), Some(2));
+    assert!(!app.xtb_irc_playing());
+    assert!(app.xtb_irc_preview().is_some());
+    send(&mut app, XtbAction::Ts(Action::PlayIrc));
+    assert_eq!(app.xtb_irc_frame(), Some(0));
+    send(
+        &mut app,
+        XtbAction::Ts(Action::IrcMode(PlaybackMode::BackAndForth)),
+    );
+    for expected in [1, 2, 1, 0, 1] {
+        send(&mut app, XtbAction::Ts(Action::IrcTick));
+        assert_eq!(app.xtb_irc_frame(), Some(expected));
+    }
+}
+
+#[test]
+fn irc_gif_uses_the_current_preview_and_the_same_reactant_energy_reference() {
+    use crate::app::gif_export::Motion;
+    let (mut app, _) = finished();
+    app.appearance.energy_unit = EnergyUnit::KjPerMol;
+    send(&mut app, XtbAction::Ts(Action::IrcSeek(1)));
+    let source = app.xtb_irc_gif_source().unwrap();
+    assert_eq!(source.name, "allyl-vinyl-ether-irc");
+    assert_eq!(source.doc, *app.xtb_irc_preview().unwrap());
+    let result = app.xtb_shown().unwrap().stored.result.clone();
+    let path = irc::saved(&result).unwrap();
+    let Motion::Irc {
+        trajectory,
+        samples,
+        unit,
+    } = source.motion
+    else {
+        panic!("IRC export must use the traced trajectory")
+    };
+    assert_eq!(*trajectory, path.trajectory);
+    assert_eq!(unit, EnergyUnit::KjPerMol);
+    for (index, sample) in samples.iter().enumerate() {
+        assert_eq!(sample.s, path.arc_lengths_sqrt_amu_bohr[index]);
+        assert_eq!(
+            sample.energy_kcal,
+            (path.trajectory.energies_hartree[index] + 5.) * KCAL_PER_HARTREE
+        );
+    }
+    assert_eq!(samples[0].direction(), "toward reactant");
+    assert_eq!(samples[1].direction(), "at the transition state");
+    assert_eq!(samples[2].direction(), "toward product");
 }
 
 #[test]
@@ -265,6 +363,29 @@ async fn path_controls_offer_irc_animation_and_export_only_with_saved_frames() {
         );
         assert_eq!(nodes.iter().any(|n| n.id == "xtb-animate-irc"), full);
         assert_eq!(nodes.iter().any(|n| n.id == "xtb-export-irc"), full);
+        assert_eq!(nodes.iter().any(|n| n.id == "xtb-irc-export-gif"), full);
+        assert_eq!(
+            nodes
+                .iter()
+                .any(|n| n.id == "xtb-animate-irc-mode" && n.value.as_deref() == Some("Loop")),
+            full
+        );
+        assert_eq!(
+            nodes
+                .iter()
+                .any(|n| n.id == "xtb-animate-irc-speed" && n.value.as_deref() == Some("1×")),
+            full
+        );
+        if full {
+            assert!(
+                snapshot
+                    .texts
+                    .iter()
+                    .any(|text| text.contains("frame 1 / 3")
+                        && text.contains("toward reactant")
+                        && text.contains("kcal/mol"))
+            );
+        }
         let action = ui
             .activate(reopened.xtb_bottom_palette().unwrap(), "xtb-path-neb")
             .unwrap();

@@ -1,12 +1,18 @@
 //! Select the saved reaction path, preview its geometries, and export its XYZ trajectory.
 use super::super::{palette::Shown, results::View};
 use super::{optimized_reactant_energy, saved_search};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::app::animation::PathSample;
+use crate::app::animation::{Playback as Position, PlaybackMode, PlaybackSpeed};
 use crate::app::figure_export::{Kind, Prepared};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::{CalcResult, Frame, IrcEndpoint, IrcPath, KCAL_PER_HARTREE};
 use std::sync::{Arc, Weak};
+
+pub(crate) mod controls;
+pub(crate) mod focus;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Profile {
@@ -25,7 +31,7 @@ pub(in crate::app::xtb) struct Playback {
     atoms: Vec<Option<u64>>,
     input: Arc<Frame>,
     doc: Document,
-    step: usize,
+    position: Position,
 }
 
 impl App {
@@ -81,21 +87,31 @@ impl App {
             .then_some(&playback.doc)
     }
 
-    pub(super) fn xtb_play_irc(&mut self) {
-        let stopping = self.xtb_irc_preview().is_some();
-        self.tab.xtb.palette.irc_playback = None;
-        if stopping || self.xtb_running() {
-            return;
+    /// A paused preview remains visible, but does not subscribe to animation ticks.
+    pub(in crate::app) fn xtb_irc_playing(&self) -> bool {
+        self.xtb_irc_preview().is_some()
+            && self
+                .tab
+                .xtb
+                .palette
+                .irc_playback
+                .as_ref()
+                .is_some_and(|p| p.position.playing)
+    }
+
+    pub(super) fn xtb_irc_frame(&self) -> Option<usize> {
+        self.xtb_irc_preview()?;
+        Some(self.tab.xtb.palette.irc_playback.as_ref()?.position.frame)
+    }
+
+    fn xtb_new_irc_playback(&self) -> Option<Playback> {
+        if self.xtb_running() {
+            return None;
         }
-        let Some(shown) = self.xtb_shown().filter(|s| !s.stale) else {
-            return;
-        };
-        let Some(path) = saved(&shown.stored.result)
-            .filter(|_| self.xtb_profile(&shown.stored.result) == Profile::Irc)
-        else {
-            return;
-        };
-        let Some(frame) = path.frame(0) else { return };
+        let shown = self.xtb_shown().filter(|s| !s.stale)?;
+        let path = saved(&shown.stored.result)
+            .filter(|_| self.xtb_profile(&shown.stored.result) == Profile::Irc)?;
+        let frame = path.frame(0)?;
         let doc = shown.atoms.iter().flatten().next().and_then(|&atom| {
             let mut doc = super::super::preview(&self.tab.doc, atom, &frame.positions_angstrom)?;
             super::preview_endpoint_image(&mut doc, shown.atoms, shown.input, &frame).ok()?;
@@ -108,25 +124,90 @@ impl App {
             }
             Some(doc)
         });
-        let Some(doc) = doc else {
-            self.xtb_set_palette_status(
-                super::super::palette::StatusKind::Palette,
-                "Animating the IRC requires a matching 3D model for this reaction.",
-                true,
-            );
-            return;
-        };
-        let playback = Playback {
+        let mut position = Position::default();
+        position.playing = path.steps() > 1;
+        Some(Playback {
             result: Arc::downgrade(&shown.stored.result),
             attachment: shown.stored.attachment,
             revision: (self.tab.file_epoch, self.tab.revision),
             atoms: shown.atoms.to_vec(),
             input: shown.input.clone(),
-            doc,
-            step: 0,
+            doc: doc?,
+            position,
+        })
+    }
+
+    fn xtb_irc_initialize(&mut self) -> bool {
+        if self.xtb_irc_preview().is_some() {
+            return true;
+        }
+        self.tab.xtb.palette.irc_playback = None;
+        let Some(playback) = self.xtb_new_irc_playback() else {
+            self.xtb_set_palette_status(
+                super::super::palette::StatusKind::Palette,
+                "Animating the IRC requires a matching 3D model for this reaction.",
+                true,
+            );
+            return false;
         };
         self.xtb_end_preview();
         self.tab.xtb.palette.irc_playback = Some(playback);
+        true
+    }
+
+    pub(super) fn xtb_play_irc(&mut self) {
+        let existing = self.xtb_irc_preview().is_some();
+        if !self.xtb_irc_initialize() {
+            return;
+        }
+        if existing && let Some(playback) = &mut self.tab.xtb.palette.irc_playback {
+            let len = playback
+                .result
+                .upgrade()
+                .and_then(|r| saved(&r).map(IrcPath::steps));
+            if let Some(len) = len {
+                playback.position.toggle(self.appearance.playback_mode, len);
+                if !playback.show() {
+                    self.tab.xtb.palette.irc_playback = None;
+                }
+            }
+        }
+    }
+
+    pub(super) fn xtb_seek_irc(&mut self, frame: usize) {
+        if !self.xtb_irc_initialize() {
+            return;
+        }
+        if let Some(playback) = &mut self.tab.xtb.palette.irc_playback {
+            let len = playback
+                .result
+                .upgrade()
+                .and_then(|r| saved(&r).map(IrcPath::steps));
+            if let Some(len) = len {
+                playback.position.seek(frame, len);
+                if !playback.show() {
+                    self.tab.xtb.palette.irc_playback = None;
+                }
+            }
+        }
+    }
+
+    pub(super) fn xtb_step_irc(&mut self, direction: i32) {
+        if self.xtb_irc_playing() {
+            return;
+        }
+        let current = self.xtb_irc_frame().unwrap_or(0);
+        self.xtb_seek_irc(current.saturating_add_signed(direction as isize));
+    }
+
+    pub(super) fn xtb_irc_mode(&mut self, mode: PlaybackMode) {
+        self.appearance.playback_mode = mode;
+        let _ = self.appearance.save();
+    }
+
+    pub(super) fn xtb_irc_speed(&mut self, speed: PlaybackSpeed) {
+        self.appearance.playback_speed = speed;
+        let _ = self.appearance.save();
     }
 
     pub(super) fn xtb_irc_tick(&mut self) {
@@ -137,24 +218,52 @@ impl App {
         let Some(playback) = self.tab.xtb.palette.irc_playback.as_mut() else {
             return;
         };
-        let next = playback.step + 1;
-        let frame = playback
+        let len = playback
             .result
             .upgrade()
-            .and_then(|result| saved(&result)?.frame(next));
-        if frame.is_some_and(|frame| {
-            super::preview_endpoint_image(
-                &mut playback.doc,
-                &playback.atoms,
-                &playback.input,
-                &frame,
-            )
-            .is_ok()
-        }) {
-            playback.step = next;
-        } else {
+            .and_then(|r| saved(&r).map(IrcPath::steps));
+        if let Some(len) = len
+            && playback
+                .position
+                .advance(self.appearance.playback_mode, len)
+            && !playback.show()
+        {
             self.tab.xtb.palette.irc_playback = None;
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(in crate::app) fn xtb_irc_gif_source(&self) -> Option<crate::app::gif_export::Source> {
+        use crate::app::gif_export::{Motion, Source};
+        let shown = self.xtb_shown().filter(|shown| !shown.stale)?;
+        let result = &shown.stored.result;
+        let path = saved(result).filter(|path| path.has_frames())?;
+        let reference = optimized_reactant_energy(result)?;
+        let source = self.xtb_ts_export_source(result, shown.arrow)?;
+        let doc = self
+            .xtb_irc_preview()
+            .cloned()
+            .or_else(|| self.xtb_new_irc_playback().map(|p| p.doc))?;
+        let atom = shown.atoms.iter().flatten().next()?;
+        let model = doc
+            .models
+            .iter()
+            .position(|model| model.linked_atoms.contains(atom))?;
+        let samples = (0..path.steps())
+            .map(|frame| PathSample::from_irc(path, reference, frame))
+            .collect::<Option<_>>()?;
+        Some(Source {
+            name: source.stem(reshiki::qc_input::Job::Irc),
+            doc,
+            model,
+            motion: Motion::Irc {
+                trajectory: Box::new(path.trajectory.clone()),
+                samples,
+                unit: self.appearance.energy_unit,
+            },
+            mode: self.appearance.playback_mode,
+            speed: self.appearance.playback_speed.factor(),
+        })
     }
 
     pub(super) fn xtb_prepare_irc(&self, shown: &Shown<'_>) -> Option<Result<Prepared, String>> {
@@ -195,5 +304,17 @@ impl App {
             ))),
             None => Task::none(),
         }
+    }
+}
+
+impl Playback {
+    fn show(&mut self) -> bool {
+        self.result
+            .upgrade()
+            .and_then(|result| saved(&result)?.frame(self.position.frame))
+            .is_some_and(|frame| {
+                super::preview_endpoint_image(&mut self.doc, &self.atoms, &self.input, &frame)
+                    .is_ok()
+            })
     }
 }

@@ -708,8 +708,8 @@ impl App {
         {
             let delta = |energy: f64| (energy - reference) * KCAL_PER_HARTREE;
             chart.irc = true;
-            chart.interactive = false;
-            chart.selected = None;
+            chart.interactive = path.has_frames() && !shown.stale && !self.xtb_running();
+            chart.selected = self.xtb_irc_frame();
             chart.climbing = path.ts_index;
             chart.coordinates = path.arc_lengths_sqrt_amu_bohr.clone();
             if !refinement {
@@ -862,18 +862,18 @@ impl App {
         }
         controls = controls.push(tabs);
         if profile == Profile::Irc && path.is_some_and(|p| p.has_frames()) {
-            let playing = self.xtb_irc_preview().is_some();
-            let label = if playing { "Stop" } else { "Animate IRC" };
-            controls = controls
-                .push(
-                    accessible_command("xtb-animate-irc", label, label).on_press_maybe(
-                        (!shown.stale && !self.xtb_running()).then(|| send(Action::PlayIrc)),
-                    ),
-                )
-                .push(
-                    accessible_command("xtb-export-irc", "Export IRC (XYZ)", "Export IRC (XYZ)…")
-                        .on_press(send(Action::ExportIrc)),
-                );
+            controls = controls.push(
+                accessible_command("xtb-export-irc", "Export IRC (XYZ)", "Export IRC (XYZ)…")
+                    .on_press(send(Action::ExportIrc)),
+            );
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                controls = controls.push(crate::app::gif_export::button(
+                    "xtb-irc-export-gif",
+                    crate::app::gif_export::Action::OpenIrc,
+                    !shown.stale && !self.xtb_running(),
+                ));
+            }
         }
         controls.wrap().vertical_spacing(4).into()
     }
@@ -923,8 +923,41 @@ impl App {
             (crate::app::xtb::palette::dock_height(self.window_size.height) - 148.)
                 .clamp(146., 212.)
         } + if narrow_models { 76. } else { 0. };
-        profile = profile.push(chart.widget_height(height));
-        if let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
+        let frame = self.xtb_irc_frame().unwrap_or(0);
+        let chart = chart.widget_height(height);
+        if is_irc
+            && let Some(path) = irc::saved(result).filter(|path| path.has_frames())
+            && let Some(reference) = super::optimized_reactant_energy(result)
+            && let Some(sample) =
+                crate::app::animation::PathSample::from_irc(path, reference, frame)
+        {
+            profile = profile.push(irc::controls::view(
+                "xtb-animate-irc",
+                irc::controls::State {
+                    frame,
+                    len: path.steps(),
+                    playing: self.xtb_irc_playing(),
+                    active: self.xtb_irc_preview().is_some(),
+                    enabled: interactive && !shown.stale,
+                    initial_label: "Animate IRC",
+                    mode: self.appearance.playback_mode,
+                    speed: self.appearance.playback_speed,
+                },
+                sample,
+                unit,
+                irc::controls::Actions {
+                    toggle: send(Action::PlayIrc),
+                    seek: |frame| send(Action::IrcSeek(frame)),
+                    step: |direction| send(Action::IrcStep(direction)),
+                    mode: |mode| send(Action::IrcMode(mode)),
+                    speed: |speed| send(Action::IrcSpeed(speed)),
+                },
+                chart,
+            ));
+        } else {
+            profile = profile.push(chart);
+        }
+        if !is_irc && let Some(delta) = selected.and_then(|index| deltas.get(index).copied()) {
             profile = profile.push(text(selection_label(delta, unit)).size(12));
         }
         if !is_irc && !deltas.is_empty() {
@@ -974,7 +1007,7 @@ impl App {
                 Tone::Muted,
             ));
         }
-        if selected.is_some() || reached {
+        if (!is_irc && selected.is_some()) || reached {
             profile = profile.push(
                 accessible_command(
                     "xtb-ts-back",
@@ -1460,11 +1493,20 @@ impl canvas::Program<Message> for PathChart {
         let iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event else {
             return None;
         };
-        let point = cursor
-            .position_in(bounds)
-            .filter(|_| self.interactive && !self.irc)?;
-        let image = self.nearest(point.x, bounds)?;
-        Some(canvas::Action::publish(send(Action::Image(image))).and_capture())
+        let point = cursor.position_in(bounds).filter(|_| self.interactive)?;
+        let image = if self.irc {
+            self.profile().nearest_point(point, bounds)
+        } else {
+            self.nearest(point.x, bounds)
+        }?;
+        Some(
+            canvas::Action::publish(send(if self.irc {
+                Action::IrcSeek(image)
+            } else {
+                Action::Image(image)
+            }))
+            .and_capture(),
+        )
     }
 
     fn mouse_interaction(
@@ -1473,7 +1515,7 @@ impl canvas::Program<Message> for PathChart {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if self.interactive && !self.irc && cursor.is_over(bounds) && !self.deltas.is_empty() {
+        if self.interactive && cursor.is_over(bounds) && !self.deltas.is_empty() {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::default()

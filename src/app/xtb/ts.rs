@@ -23,7 +23,7 @@ use std::time::Duration;
 pub(super) mod card;
 pub(super) mod energy;
 pub(in crate::app) mod export;
-pub(super) mod irc;
+pub(in crate::app) mod irc;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod job;
 mod refine;
@@ -49,6 +49,10 @@ pub(crate) enum Action {
     Profile(irc::Profile),
     PlayIrc,
     IrcTick,
+    IrcSeek(usize),
+    IrcStep(i32),
+    IrcMode(crate::app::animation::PlaybackMode),
+    IrcSpeed(crate::app::animation::PlaybackSpeed),
     ExportIrc,
     Export,
     Tick,
@@ -592,39 +596,13 @@ pub(super) fn preview_endpoint_image(
     input: &Frame,
     image: &Frame,
 ) -> Result<(), ScienceError> {
-    let positions: Vec<_> = image
-        .positions_angstrom
-        .iter()
-        .flatten()
-        .map(|value| value / reshiki_optimize::ANGSTROM_PER_BOHR)
-        .collect();
-    let bonds = reshiki_optimize::ts::bonds(&image.numbers, &positions)
-        .map_err(|_| ScienceError::ModelMismatch)?;
     let model = preview_model(doc, atoms, input, image)?;
-    let mut sources = model.geometry_sources();
-    sources.extend(std::iter::repeat_n(None, model.hydrogens.len()));
-    for hydrogen in model.hydrogens.drain(..) {
-        model.atoms.push(reshiki::models3d::Placed {
-            id: model.atoms.len() as u64,
-            xyz: hydrogen.xyz,
-        });
-    }
-    for (index, atom) in model.atoms.iter_mut().enumerate() {
-        atom.id = index as u64;
-    }
-    model.generated = Some(reshiki::models3d::Generated {
-        sources,
-        elements: image
-            .numbers
-            .iter()
-            .map(|&number| state::symbol(number).to_owned())
-            .collect(),
-        bonds: bonds.into_iter().map(|(a, b)| [a, b]).collect(),
-    });
-    // This transient geometry has its own perceived graph and geometry-only H.
-    // It is not a generated conformer awaiting an update from the drawing.
-    model.fingerprint = None;
-    Ok(())
+    crate::app::animation::set_irc_topology(
+        model,
+        &image.numbers,
+        image.positions_angstrom.iter().flatten().copied(),
+    )
+    .map_err(|_| ScienceError::ModelMismatch)
 }
 
 impl App {
@@ -690,6 +668,22 @@ impl App {
             }
             Action::IrcTick => {
                 self.xtb_irc_tick();
+                Task::none()
+            }
+            Action::IrcSeek(frame) => {
+                self.xtb_seek_irc(frame);
+                Task::none()
+            }
+            Action::IrcStep(direction) => {
+                self.xtb_step_irc(direction);
+                Task::none()
+            }
+            Action::IrcMode(mode) => {
+                self.xtb_irc_mode(mode);
+                Task::none()
+            }
+            Action::IrcSpeed(speed) => {
+                self.xtb_irc_speed(speed);
                 Task::none()
             }
             Action::ExportIrc => self.xtb_export_irc(),

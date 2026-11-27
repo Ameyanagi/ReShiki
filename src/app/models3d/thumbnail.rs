@@ -9,6 +9,11 @@ use reshiki::models3d::{self, Display, ForceField, Model3d, Placed};
 use reshiki::palette::Palette;
 use reshiki::qcdata::Frame;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod animation;
+#[cfg(not(target_arch = "wasm32"))]
+pub(in crate::app) use animation::{AnimationPlot, AnimationRenderer};
+
 #[derive(Clone, Copy, Debug)]
 struct Change {
     kind: BondChangeKind,
