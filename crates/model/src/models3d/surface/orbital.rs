@@ -7,7 +7,11 @@ use reshiki_qcdata::{
 
 use std::thread;
 
-use super::{draw::DETAIL, mesh, mesh::Grid};
+use super::{
+    draw::{DETAIL, turning_detail},
+    mesh,
+    mesh::Grid,
+};
 
 /// One molecular orbital with its contractions and angular coefficients prepared for evaluation.
 pub struct OrbitalField {
@@ -370,7 +374,7 @@ pub fn orbital_meshes(
         return None;
     }
     let fine = mesh::simplify(&raw, DETAIL[0]);
-    let coarse = mesh::simplify(&fine, DETAIL[1]);
+    let coarse = mesh::simplify(&fine, turning_detail(points.len()));
     Some([fine, coarse].map(|m| mesh::refine(&m, value, iso, step)))
 }
 

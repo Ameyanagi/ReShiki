@@ -13,7 +13,7 @@ use serde_json::json;
 
 static REGISTRY_TEST: Mutex<()> = Mutex::new(());
 
-fn lock_registry() -> std::sync::MutexGuard<'static, ()> {
+pub(super) fn lock_registry() -> std::sync::MutexGuard<'static, ()> {
     let guard = REGISTRY_TEST
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -21,7 +21,7 @@ fn lock_registry() -> std::sync::MutexGuard<'static, ()> {
     guard
 }
 
-fn energy_result(frame: &Frame) -> CalcResult {
+pub(super) fn energy_result(frame: &Frame) -> CalcResult {
     serde_json::from_value(json!({
         "frame": frame.hash(),
         "task": "energy",
@@ -36,7 +36,7 @@ fn energy_result(frame: &Frame) -> CalcResult {
     .unwrap()
 }
 
-fn place(model: &mut Model3d, result: &CalcResult) {
+pub(super) fn place(model: &mut Model3d, result: &CalcResult) {
     model.surface = Some(Figure {
         orbital: OrbitalRef {
             result: science::result_key(result),
@@ -723,6 +723,33 @@ fn placed_orbital_uses_live_meshes_or_a_matching_current_snapshot() {
     let half_turn = std::f32::consts::FRAC_1_SQRT_2;
     reopened.models[0].rotation = [half_turn, half_turn, 0., 0.];
     assert!(groups(&reopened).is_none());
+}
+
+#[test]
+fn saving_a_turning_orbital_uses_resting_quality_at_the_saved_angle() {
+    let _guard = lock_registry();
+    let mut doc = tests::ethylene();
+    let launch = science::launch(&doc, doc.atoms[0].id, 0, 1).unwrap();
+    let result = energy_result(&launch.frame);
+    place(&mut doc.models[0], &result);
+    science::attach(&mut doc, &launch, vec![], result).unwrap();
+    let model = &mut doc.models[0];
+    model.surface.as_mut().unwrap().look.opacity = 50;
+    let half_turn = std::f32::consts::FRAC_1_SQRT_2;
+    let rotation = [half_turn, half_turn, 0., 0.];
+    model.rotation = rotation;
+    register(key(&doc, &doc.models[0]).unwrap(), two_lobes());
+
+    let resting = doc.current().models[0].surface.clone().unwrap();
+    assert!(!resting.snapshot.as_ref().unwrap().shapes.is_empty());
+    doc.models[0].turning = true;
+    let saved = doc.current();
+    assert_eq!(saved.models[0].surface.as_ref(), Some(&resting));
+    assert_eq!(saved.models[0].rotation, rotation);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models[0].surface.as_ref(), Some(&resting));
+    assert_eq!(reopened.models[0].rotation, rotation);
+    assert!(doc.models[0].turning);
 }
 
 #[test]

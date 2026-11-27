@@ -3405,13 +3405,19 @@ pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
     let Some(meshes) = surface::draw::meshes(doc, model) else {
         return;
     };
-    let snapshot = View::with_meshes(doc, model, Some(meshes)).and_then(|view| {
-        let (_, primitive) = view.live_surface(doc, model, &ModelPaint::new(doc, model))?;
+    let resting = model.turning.then(|| Model3d {
+        turning: false,
+        ..model.clone()
+    });
+    let render_model = resting.as_ref().unwrap_or(model);
+    let snapshot = View::with_meshes(doc, render_model, Some(meshes)).and_then(|view| {
+        let (_, primitive) =
+            view.live_surface(doc, render_model, &ModelPaint::new(doc, render_model))?;
         // Even when occluded, the mesh still sets the projection scale.
         let primitive = primitive.unwrap_or_else(|| Primitive::Surface { groups: vec![] });
         Some(surface::Snapshot {
             shapes: surface::snapshot::encode(&primitive, view.origin)?,
-            view: surface::draw::view_signature(doc, model),
+            view: surface::draw::view_signature(doc, render_model),
             reach: view.reach,
         })
     });

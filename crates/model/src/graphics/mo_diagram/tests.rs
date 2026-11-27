@@ -417,6 +417,151 @@ fn shared_rows_hit_and_relink_by_column() {
 }
 
 #[test]
+fn both_spin_connectors_clear_other_columns_and_shared_row_labels() {
+    use crate::atom_labels::segment_hits_rect;
+
+    let energies = [-12., -10., -10., -8., -5., -3.];
+    let mut mo = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![
+            column(Spin::Alpha, "α", &energies, 3),
+            column(Spin::Beta, "β", &energies, 2),
+        ],
+    );
+    mo.pictures = [(0, Spin::Alpha), (1, Spin::Beta)]
+        .into_iter()
+        .flat_map(|(column, spin)| (0..4).map(move |index| picture("old", column, spin, index)))
+        .collect();
+    let layout = Layout::new(&mo, &style::DEFAULT);
+    let em = layout.font.size();
+    assert_eq!(layout.pictures.len(), 8);
+    assert!(layout.pictures.iter().any(|p| p.centre.y != p.connector.y));
+    assert!(layout.columns[1].groups.iter().any(|g| g.labels.len() == 2));
+    for transformed in [false, true] {
+        let mut g = placed(mo.clone(), &style::DEFAULT);
+        if transformed {
+            // With this reflected shear, readable text follows axis_y.
+            g.axis_x = Point::new(layout.width * -1.2782942, layout.width * 0.0956462);
+            g.axis_y = Point::new(layout.height * 0.4707453, layout.height * 0.0289482);
+            assert!(g.frame_determinant() < 0.);
+        }
+        let local = |p| {
+            let p = g.world_to_local(p, g.frame_determinant());
+            Point::new(p.x * layout.width, p.y * layout.height)
+        };
+        let (_, annotations) = layout.ink(&g);
+        let bounds = |a: &Annotation| layout.annotation_x_bounds(&g, a);
+        let side = layout.picture_world_side(&g);
+        for slot in &layout.pictures {
+            let picture = &mo.pictures[slot.index];
+            let column = picture.column;
+            let own = &layout.columns[usize::from(column)];
+            let orbital = (column, picture.figure.orbital.index as usize);
+            let row = own
+                .groups
+                .iter()
+                .find(|group| group.levels.contains(&orbital.1))
+                .unwrap();
+            let lane_left = own.picture_x - layout.picture_side / 2.;
+            let lane_right = own.picture_x + layout.picture_side / 2.;
+            assert!(layout.labels.iter().zip(&annotations).all(|(label, a)| {
+                let belongs = label.orbital.is_some_and(|(c, _)| c == column)
+                    || label.text == own.column.label;
+                let (lo, hi) = bounds(a);
+                !belongs || (lo >= own.left - 1e-3 && hi < lane_left)
+            }));
+            if column == 0 {
+                assert!(lane_right < layout.columns[1].left);
+            }
+            let connector = layout
+                .picture_connector(&g, slot, &annotations, side)
+                .unwrap();
+            let points: Vec<_> = connector
+                .iter()
+                .flat_map(PathCommand::iter_points)
+                .collect();
+            let (start, end) = (local(points[0]), local(*points.last().unwrap()));
+            assert!(start.x > own.left && start.x < lane_left);
+            assert!(end.x >= lane_left - 1e-3 && end.x <= own.picture_x);
+            assert!((start.y - slot.connector.y).abs() < 1e-3);
+            assert!((end.y - slot.centre.y).abs() < 1e-3);
+            if let Some((i, label)) = layout
+                .labels
+                .iter()
+                .enumerate()
+                .find(|(_, label)| label.orbital == Some(orbital))
+            {
+                let right = bounds(&annotations[i]).1;
+                if let Some((j, _)) =
+                    layout
+                        .labels
+                        .iter()
+                        .enumerate()
+                        .skip(i + 1)
+                        .find(|(_, next)| {
+                            next.left.y == label.left.y
+                                && next.orbital.is_some_and(|(c, _)| c == column)
+                        })
+                {
+                    assert!(start.x > right && start.x < bounds(&annotations[j]).0);
+                    assert!(
+                        points.len() > 2,
+                        "the connector must go around the next label"
+                    );
+                } else {
+                    assert!((start.x - right - em * 0.63).abs() < 1e-3);
+                }
+            }
+            for segment in points.windows(2) {
+                let (from, to) = (segment[0], segment[1]);
+                for other in layout.columns.iter().filter(|c| c.index != column) {
+                    for group in &other.groups {
+                        for (_, left, right) in other.bars(group, em) {
+                            assert!(
+                                !segment_hits_rect(
+                                    local(from),
+                                    local(to),
+                                    Point::new(left, group.y),
+                                    Point::new(right, group.y)
+                                ),
+                                "spin {column} connector crosses spin {} bar with transformed={transformed}",
+                                other.index
+                            );
+                        }
+                    }
+                }
+                for (label, annotation) in
+                    layout.labels.iter().zip(&annotations).filter(|(label, _)| {
+                        let check_column = |c| c != column || row.labels.len() > 1;
+                        label.orbital.is_some_and(|(c, _)| check_column(c))
+                            || layout
+                                .columns
+                                .iter()
+                                .any(|c| label.text == c.column.label && check_column(c.index))
+                    })
+                {
+                    let centre = annotation.centre();
+                    let (w, h) = annotation.size();
+                    let a = from.turned(centre, -annotation.angle);
+                    let b = to.turned(centre, -annotation.angle);
+                    assert!(
+                        !segment_hits_rect(
+                            a,
+                            b,
+                            annotation.position,
+                            annotation.position.offset(w, h)
+                        ),
+                        "spin {column} connector crosses {} with transformed={transformed}",
+                        label.text
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn native_version_and_validation_cover_mo_diagram_data() {
     let g = placed(benzene(), &style::DEFAULT);
     let mut doc = Document {

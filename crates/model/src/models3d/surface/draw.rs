@@ -6,6 +6,7 @@ use super::mesh::{self, Grid, Mesh};
 use super::visible::{self, Input, Line, Occluder, Visible};
 use super::{Figure, Fill, Look, OrbitalRef, fit};
 use crate::document::{Document, Point};
+use crate::graphics::PathCommand;
 use crate::models3d::{BLACK, Model3d, Style, View, WHITE, dot, mix, rgb, rotate, sub};
 use crate::scene::{Outline, Primitive, SurfaceFill, SurfaceGroup, SurfaceStroke};
 use crate::science::{self, Freshness};
@@ -16,7 +17,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-/// Triangles for the drawing and export, and while the model turns.
+/// Triangle budgets for the drawing and export, and for a typical turn.
 pub const DETAIL: [usize; 2] = [20_000, 4_000];
 /// Fit error of outlines, outline runs and mesh lines, and of shading-tone
 /// contours (clipped to their region, so they may stray further), in
@@ -31,8 +32,7 @@ const TOLERANCE: f32 = 0.03;
 const MAX_TONES: usize = 128;
 const MAX_GROUPS: usize = 6;
 // Full shading returns when the model stops turning.
-const TURNING_GROUPS: usize = 2;
-const TURNING_TONES: usize = 16;
+const TURNING_TONES: usize = 6;
 const TONE_STEP: f32 = 1.;
 /// The distance between mesh planes, in ångströms.
 const MESH_SPACING: f64 = 0.3;
@@ -367,7 +367,7 @@ fn demo_meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {
     // and remember that.
     let found = (!raw.truncated).then(|| {
         let fine = mesh::simplify(&raw, DETAIL[0]);
-        let coarse = mesh::simplify(&fine, DETAIL[1]);
+        let coarse = mesh::simplify(&fine, turning_detail(points.len()));
         Arc::new([fine, coarse].map(|m| mesh::refine(&m, &field, iso, step)))
     });
     MESHES.with_borrow_mut(|kept| {
@@ -377,6 +377,11 @@ fn demo_meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {
         kept.push((key, found.clone()));
     });
     found
+}
+
+/// Larger models need a smaller mesh to regenerate visibility at each angle.
+pub(super) fn turning_detail(atoms: usize) -> usize {
+    if atoms >= 32 { 1_600 } else { DETAIL[1] }
 }
 
 const KEPT: usize = 4;
@@ -804,6 +809,7 @@ pub(in crate::models3d) struct Prepared {
     visible: Rc<Visible>,
     look: Look,
     tones: Vec<usize>,
+    turning: bool,
 }
 
 impl Prepared {
@@ -861,7 +867,7 @@ impl Prepared {
             .collect();
         let mut tones = phase_tone_counts(look, colors, backdrop, fade);
         if model.turning {
-            tones.truncate(TURNING_GROUPS);
+            tones.truncate(1);
             for count in &mut tones {
                 *count = (*count).min(TURNING_TONES);
             }
@@ -880,7 +886,7 @@ impl Prepared {
             Vec::new()
         };
         let occluders = occluders(view, model, painted / 2.);
-        let visible = visible::visible(&Input {
+        let input = Input {
             positions: &positions,
             triangles: &mesh.triangles,
             positive: &mesh.positive,
@@ -890,7 +896,12 @@ impl Prepared {
             tones: &tones,
             lines: &lines,
             tolerance: TOLERANCE,
-        });
+        };
+        let visible = if model.turning {
+            visible::visible_while_turning(&input)
+        } else {
+            visible::visible(&input)
+        };
         Prepared {
             positions,
             triangles: Rc::from(mesh.triangles.as_slice()),
@@ -898,6 +909,7 @@ impl Prepared {
             visible: Rc::new(visible),
             look,
             tones,
+            turning: model.turning,
         }
     }
 
@@ -934,19 +946,26 @@ impl Prepared {
         // Layers fit independently: in parallel. A sign and depth's first
         // layer is its outline; later ones are tone contours under a clip.
         let layers = &self.visible.layers;
-        let fitted = visible::ordered_jobs(
-            layers.len(),
-            4,
-            || (),
-            |_, i| {
-                let first = i == 0 || {
-                    let (a, b) = (&layers[i - 1], &layers[i]);
-                    (a.depth, a.positive) != (b.depth, b.positive)
-                };
-                let error = if first { FIT_ERROR } else { TONE_FIT_ERROR };
-                fit::region(&layers[i].region, error, MIN_AREA, MIN_WIDTH)
-            },
-        );
+        let fitted = if self.turning {
+            layers
+                .iter()
+                .map(|layer| polygon_path(&layer.region))
+                .collect()
+        } else {
+            visible::ordered_jobs(
+                layers.len(),
+                4,
+                || (),
+                |_, i| {
+                    let first = i == 0 || {
+                        let (a, b) = (&layers[i - 1], &layers[i]);
+                        (a.depth, a.positive) != (b.depth, b.positive)
+                    };
+                    let error = if first { FIT_ERROR } else { TONE_FIT_ERROR };
+                    fit::region(&layers[i].region, error, MIN_AREA, MIN_WIDTH)
+                },
+            )
+        };
         let mut groups = Vec::new();
         for (depth, &count) in self.tones.iter().enumerate().rev() {
             let mut fills = Vec::new();
@@ -1015,6 +1034,22 @@ impl Prepared {
         }
         (!groups.is_empty()).then_some(Primitive::Surface { groups })
     }
+}
+
+/// Paint the merged preview contours directly, retaining the winding of holes.
+fn polygon_path(contours: &[Vec<[f32; 2]>]) -> Vec<PathCommand> {
+    let mut path = Vec::new();
+    for contour in contours {
+        if let Some((&[x, y], rest)) = contour.split_first() {
+            path.push(PathCommand::Move(Point::new(x, y)));
+            path.extend(
+                rest.iter()
+                    .map(|&[x, y]| PathCommand::Line(Point::new(x, y))),
+            );
+            path.push(PathCommand::Close);
+        }
+    }
+    path
 }
 
 /// A rotated point in screen-depth space: drawing units across, and a depth
