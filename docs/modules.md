@@ -90,6 +90,7 @@ explains how the crates and modules fit together.
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
 - `src/app/frames_import.rs`: Choose the job or geometry to open from a calculation or a multi-frame file.
+- `src/app/frames_import/calculation_stereo.rs`: Perceive stereo in the explicit geometry of an opened calculation output.
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/gif_export.rs`: Desktop export for the IRC and normal-mode previews.
