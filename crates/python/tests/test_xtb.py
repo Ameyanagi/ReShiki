@@ -266,9 +266,10 @@ def test_borane_conformers_use_uff_for_the_first_model(worker):
     assert result.conformers
     assert result.method.startswith("UFF ")
 
-    with pytest.raises(xtb.XtbError, match="MMFF parameters") as caught:
-        xtb.conformers("B", starts=1)
-    assert caught.value.code == "failed"
+    # MMFF has no boron parameters, so generation falls back to UFF and says so.
+    fallback = xtb.conformers("B", starts=1)
+    assert fallback.conformers
+    assert fallback.method.startswith("UFF ")
 
 
 def test_lysine_conformers_preserve_stereo(worker):
