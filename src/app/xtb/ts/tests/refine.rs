@@ -115,6 +115,125 @@ fn direct_gxtb_search_keeps_the_selected_method() {
     assert!(request.refined_from().is_none());
 }
 
+#[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
+async fn running_gxtb_search_and_refine_keep_saved_gfn2_rows_labeled() {
+    let ui = card::tests::ViewHarness::new().await;
+    for refine in [false, true] {
+        let (mut app, arrow) = start();
+        finish_model(&mut app);
+        let run = app.tab.xtb.run.as_ref().unwrap();
+        let serial = run.serial;
+        let mut report = Arc::unwrap_or_clone(example_report(run.launch.as_ref().unwrap()));
+        let thermo = reshiki::qcdata::Thermo {
+            temperature_k: 298.15,
+            pressure_pa: 101_325.,
+            zero_point_energy_hartree: 0.,
+            enthalpy_correction_hartree: 0.01,
+            entropy_hartree_per_k: 0.,
+            gibbs_correction_hartree: 0.01,
+            heat_capacity_hartree_per_k: None,
+            frequency_scale: 1.,
+            rotor_cutoff_cm1: 50.,
+            imaginary_cutoff_cm1: 20.,
+            symmetry_number: 1,
+            point_group: None,
+        };
+        report.result.thermo = Some(thermo.clone());
+        report.extras.endpoint_thermo = Some([Some(thermo.clone()), Some(thermo)]);
+        send(
+            &mut app,
+            XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
+        );
+        let source = app.tab.doc.science.results[0].result.clone();
+        if refine {
+            send(&mut app, XtbAction::Ts(Action::RefineGxtb(arrow, source)));
+        } else {
+            send(
+                &mut app,
+                XtbAction::Ts(Action::Card(card::Action::Method(XtbMethod::GXtb))),
+            );
+            send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
+        }
+        let live = app.xtb_live_ts().unwrap();
+        assert_eq!(live.request.method, XtbMethod::GXtb);
+        let texts = ui.inspect(app.xtb_reaction_card(arrow)).texts;
+        for prefix in [
+            "GFN2-xTB Barrier ΔE‡",
+            "GFN2-xTB Reaction ΔE",
+            "GFN2-xTB ΔG‡ ",
+            "GFN2-xTB ΔG ",
+            "GFN2-xTB ✓ one imaginary frequency",
+        ] {
+            assert!(
+                texts.iter().any(|text| text.starts_with(prefix)),
+                "{prefix}: {texts:?}"
+            );
+        }
+        assert!(
+            texts
+                .iter()
+                .any(|text| text == &format!("g-xTB · {}", live.line()))
+        );
+        assert!(
+            texts
+                .iter()
+                .filter(|text| text.contains("gas phase") || text.contains("Gas phase"))
+                .all(|text| !text.contains("xTB"))
+        );
+    }
+}
+
+#[test]
+fn show_where_previews_the_failed_gxtb_endpoint_with_a_verified_parent() {
+    let (mut app, arrow) = irc_profile::finished();
+    let parent = app.tab.doc.science.results[0].result.clone();
+    send(
+        &mut app,
+        XtbAction::Ts(Action::RefineGxtb(arrow, parent.clone())),
+    );
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let mut report = Arc::unwrap_or_clone(example_report(run.launch.as_ref().unwrap()));
+    let reshiki::qcdata::Settings::Xtb(settings) = &mut report.result.settings else {
+        unreachable!()
+    };
+    settings.method = XtbMethod::GXtb;
+    report.result.provenance.method = Some(settings.method.label().into());
+    report.result.trajectory = None;
+    report.extras.image_positions.clear();
+    report.extras.connects = false;
+    report.result.status = Status::NotConverged {
+        reason: "IRC reaches the reactant and a different minimum".into(),
+    };
+    let mut reached = report.frames[2].positions_angstrom.clone();
+    reached[0][2] += 0.25;
+    report.extras.reached_positions_angstrom = reached.clone();
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
+    );
+
+    let child = app.tab.doc.science.results[1].result.clone();
+    assert_eq!(
+        view::presentation(&child, None).recovery,
+        view::Recovery::ShowWhere
+    );
+    assert!(app.xtb_show_reaction_path(arrow));
+    assert!(Arc::ptr_eq(
+        &app.xtb_shown().unwrap().stored.result,
+        &parent
+    ));
+    send(&mut app, XtbAction::Ts(Action::ShowWhere(arrow)));
+    assert!(Arc::ptr_eq(&app.xtb_shown().unwrap().stored.result, &child));
+    assert!(app.xtb_reached_endpoint_selected());
+    assert_eq!(
+        model(app.display_document())[0],
+        reached[0].map(|x| x as f32)
+    );
+    assert_ne!(model(&app.tab.doc)[0], reached[0].map(|x| x as f32));
+}
+
 #[test]
 fn verified_refinement_reopens_on_its_own_irc_and_switches_back_to_the_source() {
     let (mut app, arrow) = irc_profile::finished();

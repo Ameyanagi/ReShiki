@@ -668,10 +668,7 @@ impl App {
                             })
                     });
                 if valid {
-                    self.xtb_show_result(&result);
-                    self.tab.xtb.palette.view = xtb::results::View::Path;
-                    self.tab.xtb.palette.collapsed = false;
-                    self.xtb_vibrations_sync();
+                    self.xtb_open_saved_path(&result);
                     let status =
                         view::presentation(&result, None).status_line(self.appearance.energy_unit);
                     self.tab.xtb.ts_card.status =
@@ -704,11 +701,15 @@ impl App {
             return false;
         };
         let result = Arc::clone(result);
-        self.xtb_show_result(&result);
+        self.xtb_open_saved_path(&result);
+        true
+    }
+
+    pub(super) fn xtb_open_saved_path(&mut self, result: &Arc<CalcResult>) {
+        self.xtb_show_result(result);
         self.tab.xtb.palette.view = xtb::results::View::Path;
         self.tab.xtb.palette.collapsed = false;
         self.xtb_vibrations_sync();
-        true
     }
 
     pub(in crate::app::xtb) fn xtb_reaction_card(&self, arrow: u64) -> Element<'_, Message> {
@@ -768,15 +769,10 @@ impl App {
             || result.zip(search).is_some_and(|(result, search)| {
                 search.mapping.automatic && !self.xtb_ts_search_stale(result)
             });
-        let method = live
-            .map(|live| live.request.method.label())
-            .or_else(|| result.map(|result| view::method_name(result)))
-            .or_else(|| batch.as_ref().map(|totals| totals.method.label()))
-            .unwrap_or_else(|| self.xtb.settings.barrier_method.label());
         let subtitle = if matched {
-            format!("{method} · gas phase · atoms matched ✓")
+            "Gas phase · atoms matched ✓"
         } else {
-            format!("{method} · gas phase")
+            "Gas phase"
         };
         let mut subtitle = row![line(subtitle, Tone::Muted)]
             .spacing(4)
@@ -818,12 +814,15 @@ impl App {
         } else {
             result.and_then(|result| self.xtb_ts_reference(result, Some(arrow)))
         };
+        let method = result.map(|result| view::method_name(result));
+        let reaction_method = batch
+            .as_ref()
+            .map(|totals| totals.method.label())
+            .or(method);
         let reaction_number = energy_number(
             unit,
-            batch.as_ref().map_or_else(
-                || "Reaction ΔE".into(),
-                |totals| format!("Reaction ΔE · {}", totals.method.label()),
-            ),
+            reaction_method,
+            "Reaction ΔE",
             reaction,
             reference,
             "ΔG",
@@ -843,6 +842,7 @@ impl App {
                     } else {
                         energy_number(
                             unit,
+                            method,
                             if barrier.is_some() && batch.is_some() {
                                 "Previous barrier ΔE‡"
                             } else {
@@ -904,7 +904,8 @@ impl App {
             if let Some(highest) = view.highest_path_kcal {
                 content = content.push(line(
                     format!(
-                        "Highest point on the path: about {} above the reactants.",
+                        "{} highest point on the path: about {} above the reactants.",
+                        view.method,
                         unit.format(highest)
                     ),
                     Tone::Muted,
@@ -928,7 +929,7 @@ impl App {
             .as_ref()
             .filter(|_| barrier.is_some() && linked.is_none())
         {
-            let copy = verification.verification.clone();
+            let copy = format!("{} {}", verification.method, verification.verification);
             content = content.push(
                 iced::widget::responsive(move |size| {
                     let preferred = 11.;
@@ -1187,10 +1188,12 @@ fn stepper(live: &Live) -> Element<'static, Message> {
                     StepState::Done(elapsed) => (toned_text("✓", Tone::Good), text(label), elapsed),
                     StepState::Current(elapsed) => (
                         text("●"),
-                        text(live.line()).font(iced::Font {
-                            weight: iced::font::Weight::Bold,
-                            ..iced::Font::DEFAULT
-                        }),
+                        text(format!("{} · {}", live.request.method.label(), live.line())).font(
+                            iced::Font {
+                                weight: iced::font::Weight::Bold,
+                                ..iced::Font::DEFAULT
+                            },
+                        ),
                         Some(elapsed),
                     ),
                     StepState::Todo => (
@@ -1230,9 +1233,9 @@ pub(super) fn linked_barriers(
     row(pair.into_iter().map(|result| {
         let presentation = view::presentation(result, None);
         let mut details = column![
-            line(view::method_name(result).to_owned(), Tone::Muted),
             energy_number(
                 unit,
+                Some(&presentation.method),
                 "Barrier ΔE‡",
                 presentation.refined_kcal,
                 None,
@@ -1240,7 +1243,7 @@ pub(super) fn linked_barriers(
                 view::barrier_gibbs_kcal(result)
             ),
             line(
-                presentation.verification.clone(),
+                format!("{} {}", presentation.method, presentation.verification),
                 if presentation.reliable() {
                     Tone::Good
                 } else {
@@ -1263,12 +1266,15 @@ pub(super) fn linked_barriers(
 
 fn energy_number(
     unit: EnergyUnit,
-    label: impl Into<String>,
+    method: Option<&str>,
+    label: &str,
     energy: Option<f64>,
     reference: Option<&'static str>,
     gibbs_label: &'static str,
     gibbs: Option<f64>,
 ) -> Element<'static, Message> {
+    let with_method =
+        |label: &str| method.map_or_else(|| label.to_owned(), |method| format!("{method} {label}"));
     let mut number = row![
         text(energy.map_or_else(|| "—".into(), |value| unit.number(value)))
             .size(22)
@@ -1283,12 +1289,15 @@ fn energy_number(
         number = number.push(text(unit.label()).size(10).style(muted_text));
     }
     column![
-        line(label.into(), Tone::Muted),
+        line(with_method(label), Tone::Muted),
         number,
         reference
             .filter(|_| energy.is_some())
             .map(|reference| line(reference, Tone::Muted)),
-        gibbs.map(|value| line(format!("{gibbs_label} {}", unit.format(value)), Tone::Muted)),
+        gibbs.map(|value| line(
+            format!("{} {}", with_method(gibbs_label), unit.format(value)),
+            Tone::Muted
+        )),
     ]
     .spacing(1)
     .into()
@@ -1392,7 +1401,13 @@ fn failure_actions(
     has_endpoint: bool,
 ) -> Element<'static, Message> {
     row![
-        recovery.button("xtb-ts-rerun", Some(arrow), idle, has_endpoint),
+        recovery.button(
+            "xtb-ts-rerun",
+            Some(arrow),
+            idle,
+            has_endpoint,
+            TsAction::ShowWhere(arrow)
+        ),
         accessible_command(
             "xtb-ts-card-path",
             "Show what was found",

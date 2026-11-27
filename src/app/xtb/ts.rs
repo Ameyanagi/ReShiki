@@ -646,10 +646,10 @@ impl App {
                 {
                     return Task::none();
                 }
-                if self.xtb_show_reaction_path(arrow) {
-                    self.xtb_end_preview();
-                    self.xtb_preview_reached_endpoint();
-                }
+                let result = Arc::clone(result);
+                self.xtb_open_saved_path(&result);
+                self.xtb_end_preview();
+                self.xtb_preview_reached_endpoint();
                 Task::none()
             }
             Action::ReachedEndpoint => {

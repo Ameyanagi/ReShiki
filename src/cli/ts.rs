@@ -33,24 +33,33 @@ pub(super) fn run(
     err: &mut dyn Write,
 ) -> Result<bool, CliError> {
     output::check_destinations(&command).map_err(CliError::Failed)?;
-    let source_report = source::load(&mut command).map_err(CliError::Failed)?;
+    let (source_report, reactant, product, ts_guess) =
+        match source::load(&mut command).map_err(CliError::Failed)? {
+            Some(source::Loaded {
+                report,
+                geometries: [reactant, product, ts],
+            }) => (report, Some(reactant), Some(product), Some(ts)),
+            None => {
+                let (reactant, product) = geometry::load(&command).map_err(CliError::Failed)?;
+                let ts = command
+                    .ts
+                    .as_deref()
+                    .map(geometry::endpoint)
+                    .transpose()
+                    .map_err(CliError::Failed)?;
+                (None, reactant, product, ts)
+            }
+        };
     if command.from.is_some() && source_report.is_none() {
         let _ = writeln!(
             err,
             "The source directory has no report.json; using its XYZ files as geometry seeds only. No prior method, verification or barrier is assumed. Charge and unpaired electrons use --charge/--uhf or their defaults."
         );
     }
-    let (reactant, product) = geometry::load(&command).map_err(CliError::Failed)?;
     let start = reactant
         .as_ref()
         .or(product.as_ref())
         .ok_or_else(|| CliError::Failed("no XYZ endpoint".into()))?;
-    let ts_guess = command
-        .ts
-        .as_deref()
-        .map(geometry::endpoint)
-        .transpose()
-        .map_err(CliError::Failed)?;
     if let Some(guess) = &ts_guess {
         geometry::check_sequence(&start.numbers, &guess.numbers).map_err(CliError::Failed)?;
     }

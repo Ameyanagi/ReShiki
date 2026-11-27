@@ -371,11 +371,15 @@ fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
     let dir = original.out_dir.as_ref().unwrap();
     let source_ts = std::fs::read(dir.join("ts.xyz")).unwrap();
     let mut refine = from_command(directory.path());
-    let source = super::source::load(&mut refine).unwrap().unwrap();
+    let source = super::source::load(&mut refine)
+        .unwrap()
+        .unwrap()
+        .report
+        .unwrap();
     assert_eq!(source, original_json);
     assert_eq!(refine.charge, original.charge);
     assert_eq!(refine.uhf, Some(1));
-    assert_eq!(refine.ts, Some(dir.join("ts.xyz")));
+    assert!(refine.ts.is_none());
     super::output::check_destinations(&refine).unwrap();
 
     let mut refined = summary(&refine);
@@ -446,11 +450,15 @@ fn from_rejects_legacy_unverified_mixed_method_and_modified_geometry_sources() {
             _ => unreachable!(),
         }
         std::fs::write(dir.join("report.json"), json.to_string()).unwrap();
-        let error = super::source::load(&mut from_command(directory.path())).unwrap_err();
+        let error = super::source::load(&mut from_command(directory.path()))
+            .err()
+            .unwrap();
         assert!(error.contains("--ts TS.xyz"), "{failure}: {error}");
     }
     let directory = tempfile::tempdir().unwrap();
-    let error = super::source::load(&mut from_command(directory.path())).unwrap_err();
+    let error = super::source::load(&mut from_command(directory.path()))
+        .err()
+        .unwrap();
     assert!(error.contains("reactant.xyz"), "{error}");
 }
 
@@ -465,10 +473,16 @@ fn legacy_directory_without_a_report_is_only_a_geometry_seed() {
     refine.charge = -1;
     refine.charge_explicit = true;
     refine.uhf = Some(2);
-    assert!(super::source::load(&mut refine).unwrap().is_none());
+    assert!(
+        super::source::load(&mut refine)
+            .unwrap()
+            .unwrap()
+            .report
+            .is_none()
+    );
     assert_eq!(refine.charge, -1);
     assert_eq!(refine.uhf, Some(2));
-    assert_eq!(refine.ts, Some(dir.join("ts.xyz")));
+    assert!(refine.ts.is_none());
     let mut refined = summary(&refine);
     refined.report.saddle_converged = false;
     refined.write_files().unwrap();
@@ -492,9 +506,84 @@ fn verified_source_charge_and_spin_cannot_be_changed() {
         refine.charge = charge;
         refine.charge_explicit = true;
         refine.uhf = uhf;
-        let error = super::source::load(&mut refine).unwrap_err();
+        let error = super::source::load(&mut refine).err().unwrap();
         assert!(error.contains("disagrees"), "{error}");
     }
+}
+
+#[test]
+fn from_keeps_admitted_geometries_when_the_source_directory_is_replaced() {
+    for verified in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let original = command(directory.path());
+        let (_, _, _, report) = finish_report(&summary(&original));
+        let dir = original.out_dir.as_ref().unwrap();
+        if !verified {
+            std::fs::remove_file(dir.join("report.json")).unwrap();
+        }
+        let loaded = super::source::load(&mut from_command(directory.path()))
+            .unwrap()
+            .unwrap();
+        std::fs::rename(dir, directory.path().join("admitted")).unwrap();
+        let mut replacement = command(directory.path());
+        replacement.json = None;
+        let mut replacement = summary(&replacement);
+        for geometry in [
+            &mut replacement.report.reactant,
+            &mut replacement.report.product,
+            &mut replacement.report.ts,
+        ] {
+            geometry.positions[5] += 10.;
+        }
+        replacement.write_files().unwrap();
+
+        assert_eq!(loaded.report, verified.then_some(report.clone()));
+        for (name, geometry) in ["reactant", "product", "ts"]
+            .into_iter()
+            .zip(&loaded.geometries)
+        {
+            assert_eq!(geometry.numbers, [6, 1]);
+            let expected: Vec<f64> =
+                serde_json::from_value(report["structures"][name].clone()).unwrap();
+            assert!(
+                super::bohr(geometry)
+                    .iter()
+                    .zip(expected)
+                    .all(|(a, b)| (a - b).abs() < 1e-8)
+            );
+            let replacement = super::geometry::endpoint(&dir.join(format!("{name}.xyz"))).unwrap();
+            assert_ne!(geometry.positions, replacement.positions);
+        }
+    }
+}
+
+#[test]
+fn from_rejects_oversized_and_non_regular_reports() {
+    let directory = tempfile::tempdir().unwrap();
+    let dir = directory.path().join("structures");
+    std::fs::create_dir(&dir).unwrap();
+    let path = dir.join("report.json");
+    let limit = reshiki_agent::ops::budget::Budgets::default().max_text_bytes;
+    std::fs::File::create(&path)
+        .unwrap()
+        .set_len(limit as u64 + 1)
+        .unwrap();
+    let error = super::source::load(&mut from_command(directory.path()))
+        .err()
+        .unwrap();
+    assert!(
+        error.contains(&format!("input exceeds {limit} bytes")),
+        "{error}"
+    );
+    assert!(error.contains("--ts TS.xyz"), "{error}");
+
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    let error = super::source::load(&mut from_command(directory.path()))
+        .err()
+        .unwrap();
+    assert!(error.contains("not a regular file"), "{error}");
+    assert!(error.contains("--ts TS.xyz"), "{error}");
 }
 
 pub(in crate::cli) fn worker_failure_keeps_characterized_candidate_and_files() {

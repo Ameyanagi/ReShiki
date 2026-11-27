@@ -52,6 +52,7 @@ impl Recovery {
         arrow: Option<u64>,
         enabled: bool,
         has_endpoint: bool,
+        show_where: Action,
     ) -> Element<'static, Message> {
         let label = match self {
             Self::CheckMap => "Check the atom map",
@@ -66,7 +67,7 @@ impl Recovery {
                 send(match self {
                     Self::CheckMap => Action::ReviewMap(arrow),
                     Self::RefineHighest => Action::Retry(arrow, super::Retry::RefineHighest),
-                    Self::ShowWhere => Action::ShowWhere(arrow),
+                    Self::ShowWhere => show_where,
                     Self::FinerPath => Action::Retry(arrow, super::Retry::FinerPath),
                 })
             }))
@@ -1113,6 +1114,7 @@ impl App {
                 self.xtb_ts_can_rerun(shown)
                     && (presentation.recovery != Recovery::ShowWhere || !shown.stale),
                 has_reached_endpoint(result),
+                Action::ReachedEndpoint,
             ));
         }
         details = details.push(line(
