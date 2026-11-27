@@ -615,46 +615,143 @@ fn restore_reaction_maps(
         };
         indices.get(id).copied()
     };
-    let used: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
-    let mut next = 1;
-    for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
-        if pairs.is_empty() {
-            continue;
+    // Join every step's pairs before numbering, so a chain whose steps are
+    // listed out of order (A→B, C→D, B→C) still shares one number per atom.
+    // Path halving keeps lookups short along long chains.
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
+        while let Some(&up) = parent.get(i)
+            && up != i
+        {
+            let grand = parent.get(up).copied().unwrap_or(up);
+            if let Some(slot) = parent.get_mut(i) {
+                *slot = grand;
+            }
+            i = grand;
         }
-        let reactants: HashSet<_> = reaction
-            .reactants
-            .iter()
-            .flat_map(|part| part.atoms.iter().copied())
-            .collect();
-        let products: HashSet<_> = reaction
-            .products
-            .iter()
-            .flat_map(|part| part.atoms.iter().copied())
-            .collect();
+        i
+    }
+    // Saving pairs atoms by equal numbers, so a chain keeps a pair on a step
+    // side only while no other atom of the chain is on that side too.
+    #[derive(Default)]
+    struct Chain {
+        // Atoms of the chain on each (step, product side).
+        sides: HashMap<(usize, bool), usize>,
+        // The step sides that hold one of the chain's pairs.
+        paired: HashSet<(usize, bool)>,
+    }
+    let mut sides_of = HashMap::<u64, Vec<(usize, bool)>>::new();
+    for (step, reaction) in doc.reactions.iter().skip(before).enumerate() {
+        for (side, parts) in [(false, &reaction.reactants), (true, &reaction.products)] {
+            for &id in parts.iter().flat_map(|part| &part.atoms) {
+                sides_of.entry(id).or_default().push((step, side));
+            }
+        }
+    }
+    let mut parent: Vec<_> = (0..doc.atoms.len()).collect();
+    let mut chains = HashMap::<usize, Chain>::new();
+    let mut order = Vec::new();
+    // Steps on arrows that take no reaction roles, such as resonance, are not
+    // saved as steps, so the saved steps' pairs go first.
+    let mut steps: Vec<_> = doc
+        .reactions
+        .iter()
+        .skip(before)
+        .zip(maps)
+        .enumerate()
+        .collect();
+    steps.sort_by_key(|(_, (r, _))| reactions::preview(doc, r.arrow).is_err());
+    for (step, (reaction, &pairs)) in steps {
+        let side = |parts: &[Participant]| {
+            parts
+                .iter()
+                .flat_map(|part| part.atoms.iter().copied())
+                .collect::<HashSet<_>>()
+        };
+        let (reactants, products) = (side(&reaction.reactants), side(&reaction.products));
+        let id = |i: usize| doc.atoms.get(i).map(|a| a.id);
+        let take = |chains: &mut HashMap<usize, Chain>, root: usize| {
+            chains.remove(&root).unwrap_or_else(|| Chain {
+                sides: id(root)
+                    .and_then(|id| sides_of.get(&id))
+                    .into_iter()
+                    .flatten()
+                    .map(|&slot| (slot, 1))
+                    .collect(),
+                paired: HashSet::new(),
+            })
+        };
         let mut paired = HashSet::new();
         for &[a, b] in pairs {
             if let Some((a, b)) = index(a).zip(index(b))
-                && let Ok([a, b]) = doc.atoms.get_disjoint_mut([a, b])
-                && reactants.contains(&a.id)
-                && products.contains(&b.id)
-                && !paired.contains(&a.id)
-                && !paired.contains(&b.id)
+                && id(a).is_some_and(|id| reactants.contains(&id))
+                && id(b).is_some_and(|id| products.contains(&id))
+                && !paired.contains(&a)
+                && !paired.contains(&b)
             {
-                paired.extend([a.id, b.id]);
-                match (a.map_num, b.map_num) {
-                    (0, 0) => {
-                        while used.contains(&next) {
-                            next += 1;
-                        }
-                        a.map_num = next;
-                        b.map_num = next;
-                        next += 1;
+                paired.extend([a, b]);
+                let (ra, rb) = (root(&mut parent, a), root(&mut parent, b));
+                let mut chain = take(&mut chains, ra);
+                let other = if ra == rb {
+                    Chain::default()
+                } else {
+                    take(&mut chains, rb)
+                };
+                let new = [(step, false), (step, true)];
+                let count = |slot| {
+                    chain.sides.get(slot).unwrap_or(&0) + other.sides.get(slot).unwrap_or(&0)
+                };
+                // A pair that would make a numbered step side ambiguous
+                // conflicts with earlier pairs, which keep their numbers.
+                if chain
+                    .paired
+                    .iter()
+                    .chain(&other.paired)
+                    .chain(&new)
+                    .any(|slot| count(slot) > 1)
+                {
+                    chains.insert(ra, chain);
+                    if ra != rb {
+                        chains.insert(rb, other);
                     }
-                    (map, 0) => b.map_num = map,
-                    (0, map) => a.map_num = map,
-                    _ => {}
+                    continue;
                 }
+                for (slot, n) in other.sides {
+                    *chain.sides.entry(slot).or_default() += n;
+                }
+                chain.paired.extend(other.paired);
+                chain.paired.extend(new);
+                chains.insert(rb, chain);
+                if let Some(slot) = parent.get_mut(ra) {
+                    *slot = rb;
+                }
+                order.extend([a, b]);
             }
+        }
+    }
+    // A chain keeps the first number any of its atoms already had; otherwise
+    // it takes the next unused one. Atoms with their own number keep it.
+    let mut numbers = HashMap::new();
+    for &i in &order {
+        let r = root(&mut parent, i);
+        if let Some(map) = doc.atoms.get(i).map(|a| a.map_num).filter(|&m| m != 0) {
+            numbers.entry(r).or_insert(map);
+        }
+    }
+    let used: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
+    let mut next = 1;
+    for &i in &order {
+        let r = root(&mut parent, i);
+        let number = *numbers.entry(r).or_insert_with(|| {
+            while used.contains(&next) {
+                next += 1;
+            }
+            next += 1;
+            next - 1
+        });
+        if let Some(atom) = doc.atoms.get_mut(i)
+            && atom.map_num == 0
+        {
+            atom.map_num = number;
         }
     }
 }

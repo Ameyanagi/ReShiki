@@ -211,8 +211,12 @@ controls if the panel is hidden or showing another tab.
    **MMFF94**, **MMFF94s**, or **UFF**; the selected button is checked and the
    default is **MMFF94s**. If generation fails,
    choose another field to regenerate, or use **Generate 3D** to retry the current
-   field. Missing parameters
-   produce an error; ReShiki does not silently change the chosen field.
+   field. When MMFF has no parameters for the molecule (O₂, CO, any metal),
+   generation uses UFF instead, selects it and shows the note "UFF used: …";
+   relaxing or evaluating never changes the chosen field. ReShiki refuses to
+   build shapes UFF gets wrong: a lanthanide or actinide drawn with three or
+   four bonds (CeF₃, ThCl₄) and any noble-gas compound (XeF₂), with a message
+   that says so.
 4. Use **Start relaxation** to enable live local relaxation. Drag an unpinned atom to move
    it while the rest of the molecule relaxes around the target. Dragging retains
    that atom's current displayed depth. **Stop relaxation** stops calculation and keeps the

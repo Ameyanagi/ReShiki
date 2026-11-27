@@ -384,6 +384,71 @@ fn validate_geometry(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
     Ok(())
 }
 
+/// UFF has only octahedral (90°) angle types for the f block and a square
+/// planar one for xenon, so it builds CeF3 or GdCl3 with 90° angles, ThCl4
+/// square planar and XeF2 bent. Generation refuses those drawings, counting
+/// each atom's drawn bonds: f-block centres with three or four, and any
+/// bonded noble gas. Two- and six-coordinate f-block centres (uranyl, UF6,
+/// hexanitratocerate) come out right and are built.
+fn refuse_shapes_uff_gets_wrong(request: &Request) -> Result<()> {
+    let mut bonds = vec![0; request.atoms.len()];
+    for bond in &request.bonds {
+        bonds[bond.a] += 1;
+        bonds[bond.b] += 1;
+    }
+    for (atom, count) in request.atoms.iter().zip(bonds) {
+        let number = atom.atomic_number;
+        let f_block = matches!(number, 57..=71 | 89..=103) && matches!(count, 3 | 4);
+        let noble_gas = matches!(number, 2 | 10 | 18 | 36 | 54 | 86 | 118) && count > 0;
+        if f_block || noble_gas {
+            let symbol = cosmolkit_core::rdkit_element_symbol(number as u8).unwrap_or("?");
+            return Err(format!(
+                "ReShiki can't build a reliable 3D shape for this yet: UFF has no correct geometry for 3- and 4-coordinate lanthanides/actinides or noble-gas compounds such as XeF2 ({symbol} has {count} bond{})",
+                if count == 1 { "" } else { "s" }
+            ));
+        }
+    }
+    Ok(())
+}
+
+// UFF has no 1-3 repulsion, and some of its angle terms also have a minimum
+// at 0°: at an octahedral (sp3d2) centre, (1 - cos 4θ) / 16 has minima at 0°,
+// 90° and 180° with a barrier at 45°. Ligands that cross such a barrier slide
+// onto RDKit's 30° penalty wall (UF6 from a flat drawing: F···F 1.19 Å; PF5
+// from ETKDG). Real angles between two ligands of one atom stay above 45°
+// unless the two are bonded to each other, as in an η2 alkene, which is not
+// checked.
+fn reject_collapsed_ligands(mol: &Molecule, coordinates: &[[f64; 3]]) -> Result<()> {
+    let adjacency = &mol.topology().adjacency;
+    for atom in mol.atoms() {
+        let centre = atom.id().index();
+        let ligands = adjacency.neighbors_of(centre);
+        for (index, a) in ligands.iter().enumerate() {
+            for b in &ligands[index + 1..] {
+                let (a, b) = (a.atom_index, b.atom_index);
+                if adjacency
+                    .neighbors_of(a)
+                    .iter()
+                    .any(|neighbor| neighbor.atom_index == b)
+                {
+                    continue;
+                }
+                let u = sub(coordinates[a], coordinates[centre]);
+                let v = sub(coordinates[b], coordinates[centre]);
+                let cosine = dot(u, v) / (dot(u, u) * dot(v, v)).sqrt();
+                require(
+                    cosine < std::f64::consts::FRAC_1_SQRT_2,
+                    format!(
+                        "atoms {a} and {b} collapsed to {:.0} degrees at atom {centre}",
+                        cosine.clamp(-1., 1.).acos().to_degrees()
+                    ),
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
 // Test the principal extents, not the drawing's z coordinates: a flat drawing
 // remains flat after rotation. A conservative thickness threshold also avoids
 // treating roundoff or tiny display offsets as a physical starting geometry.
@@ -749,6 +814,10 @@ fn minimized(
     )?;
     let result = field.positions();
     validate_geometry(mol, &result)?;
+    // Only generated geometry: Relax may hold an angle the caller pinned.
+    if request.field == ForceField::UFF && request.operation == Operation::Generate {
+        reject_collapsed_ligands(mol, &result)?;
+    }
     expected.validate(mol, &result)?;
     if let Some(cage) = cage {
         cage.validate(mol, &result)?;
@@ -801,11 +870,41 @@ pub(super) fn solve_with_threads(
         1
     };
     let expected = StereoExpectation::new(&mol)?;
-    if request.relaxed {
-        relaxed::check_field(&mol, request.field)?;
-    } else {
-        check_field_parameters(&mol, request.field)?;
+    // MMFF types none of these elements, so this is the UFF that generation
+    // would fall back to; refuse before typing, which may fail for Og first.
+    if request.operation == Operation::Generate {
+        refuse_shapes_uff_gets_wrong(request)?;
     }
+    let check = |field| {
+        if request.relaxed {
+            relaxed::check_field(&mol, field)
+        } else {
+            check_field_parameters(&mol, field)
+        }
+    };
+    // MMFF cannot type metals or some small molecules (O2, O3, CO, SF6).
+    // Generation then uses UFF and says so. Relax and Evaluate continue a
+    // geometry in the caller's field, so they keep refusing.
+    let fallback = match check(request.field) {
+        Ok(()) => None,
+        Err(error)
+            if request.operation == Operation::Generate && request.field != ForceField::UFF =>
+        {
+            check(ForceField::UFF).map_err(|uff| format!("{error}; UFF fallback: {uff}"))?;
+            Some(Request {
+                field: ForceField::UFF,
+                ..request.clone()
+            })
+        }
+        Err(error) => return Err(error),
+    };
+    let field_note = fallback.as_ref().map(|_| {
+        format!(
+            "UFF used: {:?} parameters are unavailable for this molecule",
+            request.field
+        )
+    });
+    let request = fallback.as_ref().unwrap_or(request);
     let cage = Cage::from_molecule(&mol);
     validate_original_order(&mol, request.atoms.len())?;
     let parents = hydrogen_parents(&mol, request.atoms.len())?;
@@ -820,11 +919,14 @@ pub(super) fn solve_with_threads(
         field: request.field,
         diagnostics: Vec::new(),
         ensemble: Vec::new(),
-        approximations: if request.relaxed {
-            relaxed::approximations(&mol)?
-        } else {
-            Vec::new()
-        },
+        approximations: field_note
+            .into_iter()
+            .chain(if request.relaxed {
+                relaxed::approximations(&mol)?
+            } else {
+                Vec::new()
+            })
+            .collect(),
     };
     if request.operation == Operation::Generate {
         let minimize_seed = |coordinates: Vec<[f64; 3]>| {
