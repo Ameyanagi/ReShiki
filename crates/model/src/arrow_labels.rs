@@ -291,7 +291,7 @@ fn half_thickness(arrow: &Arrow, frame: &Frame) -> f32 {
 /// The side whose slot contains this text, if any: its centre lies within the
 /// arrow span, or the text spans the arrow midpoint, no further from the axis
 /// than about a bond length past the attached position.
-fn slot(doc: &Document, arrow: &Arrow, text: &Annotation) -> Option<(Side, f32)> {
+pub(crate) fn slot(doc: &Document, arrow: &Arrow, text: &Annotation) -> Option<(Side, f32)> {
     let frame = frame(arrow)?;
     let offset = sub(centre(text), frame.mid);
     let along = dot(offset, frame.dir).abs();

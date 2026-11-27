@@ -340,6 +340,22 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     reconcile_inner(doc, before, None)
 }
 
+/// Settle the drawing before placing its reaction models, so resizing a
+/// frame does not reflow a layout group or create another history entry.
+pub fn reconcile_with_reaction_row(
+    doc: &mut Document,
+    before: Document,
+    arrow: u64,
+) -> Result<Reconciled, Rejection> {
+    let reconciled = reconcile(doc, before)?;
+    crate::models3d::place_reaction_row(doc, arrow, None);
+    if let Err(error) = crate::models3d::validate(doc) {
+        *doc = reconciled.before;
+        return Err(Rejection::Invalid(error));
+    }
+    Ok(reconciled)
+}
+
 /// Reconcile an explicit resize whose chosen unit must stay fixed while
 /// layout groups reflow around it. Numeric parameter edits use `reconcile`.
 pub fn reconcile_with_layout_anchor(

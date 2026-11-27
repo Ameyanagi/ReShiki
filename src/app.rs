@@ -884,10 +884,13 @@ impl App {
         })
     }
     fn changed(&mut self, before: Document) {
+        self.changed_with_reaction_row(before, None);
+    }
+    fn changed_with_reaction_row(&mut self, before: Document, reaction: Option<u64>) {
         if self.tab.doc != before {
             self.tab.erase_stroke = false;
         }
-        self.changed_continuing(before, false);
+        self.reconcile_edit(before, false, None, reaction);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
         self.changed_continuing_anchored(before, continuing, None);
@@ -898,15 +901,27 @@ impl App {
         continuing: bool,
         anchor: Option<u64>,
     ) {
+        self.reconcile_edit(before, continuing, anchor, None);
+    }
+    fn reconcile_edit(
+        &mut self,
+        before: Document,
+        continuing: bool,
+        anchor: Option<u64>,
+        reaction: Option<u64>,
+    ) {
         self.prepare_document_change(self.tab.doc != before);
         // Label the edited molecules before reconciling, so the edit's first
         // frame and the layout around it already have their hydrogens.
         reshiki::atom_labels::refresh::refresh_edited(&before, &mut self.tab.doc);
-        let result = match anchor {
-            Some(id) => {
+        let result = match (anchor, reaction) {
+            (Some(id), _) => {
                 reshiki::transaction::reconcile_with_layout_anchor(&mut self.tab.doc, before, id)
             }
-            None => reshiki::transaction::reconcile(&mut self.tab.doc, before),
+            (None, Some(arrow)) => {
+                reshiki::transaction::reconcile_with_reaction_row(&mut self.tab.doc, before, arrow)
+            }
+            (None, None) => reshiki::transaction::reconcile(&mut self.tab.doc, before),
         };
         let reconciled = match result {
             Ok(reconciled) => reconciled,

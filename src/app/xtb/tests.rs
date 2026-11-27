@@ -284,6 +284,7 @@ fn frequencies_reject_a_target_above_the_hessian_limit() {
         start: None,
         search: None,
         ts: None,
+        reaction: None,
     });
     assert!(matches!(
         &app.tab.xtb.outcome,

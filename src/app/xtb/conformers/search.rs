@@ -434,5 +434,8 @@ pub(super) fn pending_for(
         notes,
         info,
         attempt: None,
+        generated: None,
+        energy_serial: None,
+        reaction_epoch: None,
     })
 }
