@@ -396,10 +396,11 @@ impl Descent<'_> {
                 && norm(&gradient) <= GRADIENT_TOLERANCE
                 && (stats.path_length >= self.options.irc_step || energy_drop > departure_energy)
             {
-                // Once the mean downhill force from the TS exceeds tolerance
-                // above SCF noise, stop on the small, falling force alone.
-                // Backtracking can make the last accepted arc arbitrarily short.
-                if energy_drop > GRADIENT_TOLERANCE * stats.path_length + departure_energy {
+                // A steep initial drop can hide a concave shoulder. Check the
+                // sign of the measured secant curvature over the accepted step.
+                if energy_drop > GRADIENT_TOLERANCE * stats.path_length + departure_energy
+                    && dot(&change, &displacement) >= 0.
+                {
                     stats.reason = IrcReason::Converged;
                     break;
                 }
@@ -821,6 +822,49 @@ mod tests {
         assert_eq!(stats.reason, IrcReason::Converged);
         assert!(1. - end.positions[0] > options.irc_step);
         assert!(norm(&evaluate(&mut SoftQuartic, &end.positions).unwrap().1) <= GRADIENT_TOLERANCE);
+    }
+
+    struct RadialShoulder;
+
+    impl Potential for RadialShoulder {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            let r = crate::ts::endpoint::distance(x, 0, 1);
+            let q = 6_f64.sqrt() * (r - 3.);
+            let barrier = 2e-4 * (-950. * q * q).exp();
+            let slope = -1900. * q * barrier + 1e-7 * q * (q - 6.) * (q + 2.);
+            for k in 0..3 {
+                g[k] = 6_f64.sqrt() * slope * (x[k] - x[k + 3]) / r;
+                g[k + 3] = -g[k];
+            }
+            Ok(barrier + 1e-7 * (q.powi(4) / 4. - 4. * q.powi(3) / 3. - 6. * q * q))
+        }
+    }
+
+    #[test]
+    fn steep_barrier_does_not_end_the_trace_on_a_concave_shoulder() {
+        let ts = pair(3.);
+        let options = TsOptions::default();
+        let descent = Descent {
+            ts: &ts,
+            mode: &[-1., 0., 0., 1., 0., 0.],
+            hessian: &saddle::hessian(&mut RadialShoulder, &ts.positions).unwrap(),
+            masses: &[12., 12.],
+            options: &options,
+        };
+        for forward in [true, false] {
+            let (end, path, stats) = descent
+                .trace(&mut RadialShoulder, forward, &mut proceed)
+                .unwrap();
+            let q = 6_f64.sqrt() * (crate::ts::endpoint::distance(&end.positions, 0, 1) - 3.);
+            assert!(path.len() > 1, "stopped at q={q} with {:?}", stats.reason);
+            if forward {
+                assert_eq!(stats.reason, IrcReason::Converged);
+                assert!(
+                    (q - 6.).abs() <= options.irc_step,
+                    "missed product well: q={q}"
+                );
+            }
+        }
     }
 
     struct ShiftedSoftSaddle;
