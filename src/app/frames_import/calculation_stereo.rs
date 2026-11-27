@@ -481,14 +481,14 @@ mod tests {
             bonds: (1..5).map(|i| single(0, i)).collect(),
         };
         let adjacent = adjacency(&graph);
-        // Shallow enough that no two ligands are nearly opposite: only the
-        // ligand volume rejects it.
+        // The centre lies inside a shallow ligand tetrahedron and no two
+        // ligands are nearly opposite: only the ligand volume rejects it.
         let near_planar = [
-            [0.0, 0.0, 0.40],
+            [0.0, 0.0, 0.0],
             [1.5, 0.0, 0.0],
-            [0.0, 1.5, 0.0],
-            [-1.5, 0.0, 0.0],
-            [0.0, -1.5, 0.01],
+            [0.5, 1.4, 0.0],
+            [-1.2, 0.9, -0.045],
+            [-1.2, -0.9, 0.025],
         ];
         let tetrahedral = [
             [0.0, 0.0, 0.0],
