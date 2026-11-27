@@ -1,0 +1,410 @@
+//! A scheme owns a queue, while every calculation keeps the ordinary isolated
+//! molecule/TS worker boundary. Partial results survive cancellation and retry.
+use super::plan::Plan;
+use crate::app::xtb::ts::Stage;
+use reshiki::{
+    document::Document,
+    qcdata::{CalcResult, Frame, XtbMethod},
+    reactions::ts_plan::TsPlan,
+};
+use std::collections::BTreeSet;
+use std::sync::Arc;
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+static NEXT_SERIAL: AtomicU64 = AtomicU64::new(1);
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+mod worker;
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+use reshiki_xtb_worker::client::Cancel;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::app) struct StepOptions {
+    pub reaction_energy: bool,
+    pub barrier: bool,
+    pub free_energy: bool,
+    pub free_barrier: bool,
+}
+
+impl Default for StepOptions {
+    fn default() -> Self {
+        Self {
+            reaction_energy: true,
+            barrier: true,
+            free_energy: false,
+            free_barrier: false,
+        }
+    }
+}
+
+impl StepOptions {
+    pub fn any(self) -> bool {
+        self.reaction_energy || self.barrier || self.free_energy || self.free_barrier
+    }
+    pub fn transition_state(self) -> bool {
+        self.barrier || self.free_barrier
+    }
+    pub fn frequencies(self) -> bool {
+        self.free_energy || self.free_barrier
+    }
+}
+
+fn frequency_species(
+    plan: &Plan,
+    options: &[StepOptions],
+    steps: impl IntoIterator<Item = usize>,
+) -> BTreeSet<usize> {
+    let mut species = BTreeSet::new();
+    for index in steps {
+        let (Some(step), Some(options)) = (plan.steps.get(index), options.get(index)) else {
+            continue;
+        };
+        if options.frequencies() {
+            species.extend(step.reactants.iter().map(|term| term.species));
+        }
+        if options.free_energy {
+            species.extend(step.products.iter().map(|term| term.species));
+        }
+    }
+    species
+}
+
+/// Reviewed, balanced, detached reaction. Synthetic atoms never enter the
+/// user's document, including during model generation and endpoint building.
+#[derive(Clone, Debug)]
+pub(in crate::app) struct TsInput {
+    pub document: Document,
+    pub plan: TsPlan,
+    pub images: usize,
+    pub charge: i32,
+    pub multiplicity: u32,
+    pub automatic: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct SpeciesValue {
+    pub species: usize,
+    pub method: XtbMethod,
+    pub frame: Arc<Frame>,
+    pub result: Arc<CalcResult>,
+    pub launch: Option<reshiki::science::Launch>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct StepValue {
+    pub arrow: u64,
+    pub method: XtbMethod,
+    pub ts: Option<Arc<CalcResult>>,
+    pub frames: Vec<Arc<Frame>>,
+    pub launch: Option<reshiki::science::Launch>,
+    /// All displayed quantities use kcal/mol. Missing values are never zero.
+    pub energy: Option<f64>,
+    pub gibbs: Option<f64>,
+    pub barrier: Option<f64>,
+    pub free_barrier: Option<f64>,
+    pub error: Option<String>,
+}
+
+impl StepValue {
+    fn empty(arrow: u64, method: XtbMethod) -> Self {
+        Self {
+            arrow,
+            method,
+            ts: None,
+            frames: Vec::new(),
+            launch: None,
+            energy: None,
+            gibbs: None,
+            barrier: None,
+            free_barrier: None,
+            error: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(in crate::app) struct Report {
+    pub species: Vec<SpeciesValue>,
+    pub steps: Vec<Option<StepValue>>,
+}
+
+impl Report {
+    pub fn species(&self, index: usize) -> Option<&SpeciesValue> {
+        self.species.iter().find(|value| value.species == index)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(in crate::app) enum StepStatus {
+    Pending,
+    Running,
+    Done,
+    Failed(String),
+    Cancelled,
+    Skipped,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct Progress {
+    pub step: usize,
+    pub species: Option<usize>,
+    pub label: String,
+    pub completed_species: usize,
+    pub total_species: usize,
+    pub stage: Option<Stage>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Event {
+    serial: u64,
+    kind: EventKind,
+}
+
+#[derive(Clone, Debug)]
+enum EventKind {
+    Progress(Progress),
+    Species { key: String, value: SpeciesValue },
+    Step { index: usize, value: StepValue },
+    Finished(Result<(), String>),
+}
+
+impl Event {
+    /// Exactly one final event is emitted, including failed launches and cancel.
+    pub fn finished(&self) -> bool {
+        matches!(self.kind, EventKind::Finished(_))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Cached {
+    key: String,
+    method: XtbMethod,
+    frame: Arc<Frame>,
+    result: Arc<CalcResult>,
+    launch: Option<reshiki::science::Launch>,
+}
+
+#[derive(Default)]
+pub(in crate::app) struct State {
+    pub report: Report,
+    pub steps: Vec<StepStatus>,
+    pub progress: Option<Progress>,
+    pub error: Option<String>,
+    cache: Vec<Cached>,
+    serial: u64,
+    running: bool,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    cancel: Option<Cancel>,
+}
+
+impl Drop for State {
+    fn drop(&mut self) {
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if let Some(cancel) = &self.cancel {
+            cancel.cancel();
+        }
+    }
+}
+
+impl State {
+    pub fn running(&self) -> bool {
+        self.running
+    }
+    pub fn step(&self, index: usize) -> Option<&StepValue> {
+        self.report.steps.get(index)?.as_ref()
+    }
+
+    /// Original document results are admitted with the exact eligibility rules
+    /// of single-arrow reaction energies. Detached copies carry no attachments.
+    pub fn seed(
+        &mut self,
+        doc: &Document,
+        plan: &Plan,
+        method: XtbMethod,
+        options: &[StepOptions],
+    ) {
+        let frequencies = frequency_species(plan, options, 0..plan.steps.len());
+        for (index, species) in plan.species.iter().enumerate() {
+            let lookup = |frequencies| {
+                crate::app::xtb::ts::energy::scheme_reusable(
+                    doc,
+                    &species.atoms,
+                    species.charge,
+                    species.multiplicity,
+                    method,
+                    frequencies,
+                )
+            };
+            let cached = frequencies
+                .contains(&index)
+                .then(|| lookup(true))
+                .flatten()
+                .or_else(|| lookup(false));
+            if let Some((frame, result, launch)) = cached {
+                self.cache_value(species.key.clone(), method, frame, result, Some(launch));
+            }
+        }
+    }
+
+    fn cache_value(
+        &mut self,
+        key: String,
+        method: XtbMethod,
+        frame: Arc<Frame>,
+        result: Arc<CalcResult>,
+        launch: Option<reshiki::science::Launch>,
+    ) {
+        if !transition_thermo(&result, &frame)
+            && self.cache.iter().any(|old| {
+                old.key == key && old.method == method && transition_thermo(&old.result, &old.frame)
+            })
+        {
+            return;
+        }
+        self.cache
+            .retain(|old| old.key != key || old.method != method);
+        self.cache.push(Cached {
+            key,
+            method,
+            frame,
+            result,
+            launch,
+        });
+    }
+
+    pub fn cancel(&mut self) {
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if let Some(cancel) = self.cancel.take() {
+            cancel.cancel();
+        }
+        self.running = false;
+        self.serial = self.serial.wrapping_add(1);
+        self.progress = None;
+        for status in &mut self.steps {
+            if matches!(status, StepStatus::Pending | StepStatus::Running) {
+                *status = StepStatus::Cancelled;
+            }
+        }
+    }
+
+    /// Ignore late events from a cancelled or replaced run. Every accepted
+    /// species and step becomes available immediately to placement and retry.
+    pub fn accept(&mut self, event: Event) -> bool {
+        if event.serial != self.serial || !self.running {
+            return false;
+        }
+        match event.kind {
+            EventKind::Progress(progress) => {
+                if let Some(status) = self.steps.get_mut(progress.step) {
+                    *status = StepStatus::Running;
+                }
+                self.progress = Some(progress);
+            }
+            EventKind::Species { key, value } => {
+                self.cache_value(
+                    key,
+                    value.method,
+                    Arc::clone(&value.frame),
+                    Arc::clone(&value.result),
+                    value.launch.clone(),
+                );
+                self.report
+                    .species
+                    .retain(|old| old.species != value.species);
+                self.report.species.push(value);
+            }
+            EventKind::Step { index, value } => {
+                if let Some(status) = self.steps.get_mut(index) {
+                    *status = value.error.as_ref().map_or(StepStatus::Done, |reason| {
+                        StepStatus::Failed(reason.clone())
+                    });
+                }
+                if let Some(slot) = self.report.steps.get_mut(index) {
+                    *slot = Some(value);
+                }
+            }
+            EventKind::Finished(result) => {
+                self.running = false;
+                self.progress = None;
+                self.error = result.err();
+                if let Some(reason) = &self.error {
+                    for status in &mut self.steps {
+                        if matches!(status, StepStatus::Pending | StepStatus::Running) {
+                            *status = StepStatus::Failed(reason.clone());
+                        }
+                    }
+                }
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                {
+                    self.cancel = None;
+                }
+            }
+        }
+        true
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    pub fn start(
+        &mut self,
+        plan: &Plan,
+        options: &[StepOptions],
+        method: XtbMethod,
+        inputs: Vec<Result<Option<TsInput>, String>>,
+        threads: u32,
+        retry: Option<usize>,
+    ) -> iced::futures::channel::mpsc::UnboundedReceiver<Event> {
+        self.cancel();
+        self.serial = NEXT_SERIAL.fetch_add(1, Ordering::Relaxed);
+        self.running = true;
+        self.error = None;
+        let cancel = Cancel::default();
+        self.cancel = Some(cancel.clone());
+        if retry.is_none() || self.report.steps.len() != plan.steps.len() {
+            self.report = Report {
+                species: Vec::new(),
+                steps: vec![None; plan.steps.len()],
+            };
+            self.steps = options
+                .iter()
+                .map(|options| {
+                    if options.any() {
+                        StepStatus::Pending
+                    } else {
+                        StepStatus::Skipped
+                    }
+                })
+                .collect();
+        } else if let Some(index) = retry {
+            if let Some(status) = self.steps.get_mut(index) {
+                *status = StepStatus::Pending;
+            }
+            if let Some(value) = self.report.steps.get_mut(index) {
+                *value = None;
+            }
+        }
+        worker::start(
+            worker::Request {
+                plan: plan.clone(),
+                options: options.to_vec(),
+                method,
+                inputs,
+                threads,
+                retry,
+                cache: self.cache.clone(),
+                serial: self.serial,
+            },
+            cancel,
+        )
+    }
+}
+
+fn transition_thermo(result: &CalcResult, frame: &Frame) -> bool {
+    crate::app::xtb::ts::energy::matching_thermo(result, frame)
+        && result.vibrations.as_ref().is_some_and(|v| {
+            v.frequencies_cm1
+                .iter()
+                .all(|f| f.is_finite() && *f >= -20.)
+        })
+}

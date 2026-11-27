@@ -1277,6 +1277,8 @@ impl App {
         let mut task = self.handle(message);
         self.sync_profile_animation();
         self.xtb_sync_conformer_inversion();
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        self.xtb_finish_pending_scheme();
         self.xtb_clear_selection_hint();
         let document_changed = document != (self.tab.id, self.tab.file_epoch);
         if !xtb_page_was_shown || document_changed {
@@ -1678,6 +1680,7 @@ impl App {
             || self.qc_export.is_some()
             || gif_open
             || self.ts_review_visible()
+            || self.scheme_sheet_visible()
             || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
@@ -1687,8 +1690,10 @@ impl App {
             && (!(self.commands.open || self.help_open)
                 || self.updates.open
                 || self.assistant.viewed_image.is_some());
-        let workspace = self.with_ts_review(self.with_frames_import(self.with_commands(
-            self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+        let workspace = self.with_ts_review(self.with_scheme_sheet(self.with_frames_import(
+            self.with_commands(
+                self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+            ),
         )));
         #[cfg(not(target_arch = "wasm32"))]
         let workspace = self.with_gif_export(workspace);
@@ -1727,6 +1732,8 @@ impl App {
                     None
                 } else if self.ts_review_visible() {
                     Some(xtb::ts::review::modal_key)
+                } else if self.scheme_sheet_visible() {
+                    Some(xtb::ts::scheme::modal_key)
                 } else if self.frames_import.is_some() {
                     Some(frames_import::modal_key)
                 } else if self.help_open {

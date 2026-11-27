@@ -3,7 +3,7 @@ use super::super::{
     Action as XtbAction, CalcTask, Page, available,
     tone::{Tone, line},
 };
-use super::{Action as TsAction, Retry, energy::Species};
+use super::{Action as TsAction, Retry, energy::Species, scheme};
 use crate::app::reaction_mapping::{Preview, calculate, with_roles};
 use crate::app::{App, InspectorTab, Message};
 use crate::canvas::{BondChangeKind, BondChangeMark};
@@ -24,7 +24,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-mod species;
+pub(super) mod species;
 mod view;
 
 pub(super) const SHAPE_NOTE: &str = "Transition-state search handles 1→1, 1→2 and 2→1 reactions. Reaction energy works for any stoichiometry.";
@@ -211,6 +211,7 @@ struct Picture {
 
 pub(in crate::app::xtb) struct Dialog {
     id: u64,
+    scheme: Option<(usize, Arc<Document>)>,
     at: (u64, u64),
     arrow: u64,
     mode: Mode,
@@ -231,6 +232,14 @@ pub(in crate::app::xtb) struct Dialog {
     pictures: Option<[Picture; 2]>,
     changes: Result<Changes, TsPlanError>,
     plan: Result<TsPlan, TsPlanError>,
+}
+
+struct ReviewOptions {
+    mode: Mode,
+    explicit: bool,
+    retry: Option<Retry>,
+    energy_fallback: bool,
+    free_energy: bool,
 }
 
 impl Dialog {
@@ -256,6 +265,9 @@ impl Dialog {
     }
 
     fn run_label(&self) -> String {
+        if self.scheme.is_some() {
+            return "Accept atom map".into();
+        }
         if self.mode == Mode::Energy {
             return self.heading().into();
         }
@@ -581,7 +593,7 @@ impl App {
 
     fn xtb_review_open_inner(
         &mut self,
-        mut mode: Mode,
+        mode: Mode,
         arrow: Option<u64>,
         explicit: bool,
         retry: Option<Retry>,
@@ -605,19 +617,61 @@ impl App {
         self.tab.selected = vec![arrow];
         self.xtb.page = Page::Xtb;
         let _ = self.show_inspector_tab(InspectorTab::Predict);
-        let reaction = match reactions::preview(&self.tab.doc, arrow) {
-            Ok(reaction) if reaction.ready() => reaction,
-            Ok(_) => return self.review_error("Assign reactants and products first".into()),
-            Err(error) => return self.review_error(error.into()),
+        let options = ReviewOptions {
+            mode,
+            explicit,
+            retry,
+            energy_fallback,
+            free_energy: self.tab.xtb.ts_card.free_energy,
         };
-        let source = match with_roles(&self.tab.doc, arrow) {
-            Ok(source) => source,
-            Err(error) => return self.review_error(error.into()),
+        match self.prepare_review(&self.tab.doc, arrow, options) {
+            Ok((dialog, task)) => self.show_prepared_review(dialog, task),
+            Err(reason) => self.review_error(reason),
+        }
+    }
+
+    pub(super) fn xtb_review_scheme_step(
+        &mut self,
+        index: usize,
+        document: Document,
+        arrow: u64,
+        free_energy: bool,
+    ) -> Task<Message> {
+        let options = ReviewOptions {
+            mode: Mode::TransitionState,
+            explicit: false,
+            retry: None,
+            energy_fallback: false,
+            free_energy,
         };
-        let (inputs, shape) = match species::inputs(&source, &reaction) {
-            Ok(inputs) => inputs,
-            Err(error) => return self.review_error(error),
-        };
+        match self.prepare_review(&document, arrow, options) {
+            Ok((mut dialog, task)) => {
+                dialog.scheme = Some((index, Arc::new(document)));
+                self.show_prepared_review(dialog, task)
+            }
+            Err(reason) => self.xtb_scheme_reviewed(index, Err(reason)),
+        }
+    }
+
+    fn prepare_review(
+        &self,
+        doc: &Document,
+        arrow: u64,
+        options: ReviewOptions,
+    ) -> Result<(Dialog, Task<Message>), String> {
+        let ReviewOptions {
+            mut mode,
+            explicit,
+            retry,
+            energy_fallback,
+            free_energy,
+        } = options;
+        let reaction = reactions::preview(doc, arrow)?;
+        if !reaction.ready() {
+            return Err("Assign reactants and products first".into());
+        }
+        let source = with_roles(doc, arrow)?;
+        let (inputs, shape) = species::inputs(&source, &reaction)?;
         let plan = ts_plan::plan_for_review(&source, arrow);
         if energy_fallback && barrier_refusal(&plan).is_some() {
             mode = Mode::Energy;
@@ -632,7 +686,7 @@ impl App {
             ) = &plan
             && species::validate(&inputs).is_ok()
         {
-            return self.review_error(match error {
+            return Err(match error {
                 TsPlanError::Shape { .. } => SHAPE_NOTE.into(),
                 _ => error.to_string(),
             });
@@ -667,7 +721,6 @@ impl App {
             Mapping::Drawing
         };
         let id = NEXT_SHEET.fetch_add(1, Ordering::Relaxed);
-        let free_energy = self.tab.xtb.ts_card.free_energy;
         let task = if free_energy {
             CalcTask::OptFreq
         } else {
@@ -676,6 +729,7 @@ impl App {
         let edit_species = species::validate(&inputs).is_err();
         let mut dialog = Dialog {
             id,
+            scheme: None,
             at: self.review_stamp(),
             arrow,
             mode,
@@ -700,23 +754,34 @@ impl App {
             pictures: None,
         };
         let finding = matches!(dialog.mapping, Mapping::Finding);
-        // Every entry route reveals the same reaction card while a detached
-        // map is calculated. The sheet is reserved for decisions to review.
-        if !dialog.needs_review() {
-            return self.xtb_review_run(dialog);
+        if dialog.needs_review() {
+            dialog.pictures = dialog.pictures(&source);
         }
-        dialog.pictures = dialog.pictures(&source);
         let map_task = finding.then(|| {
             Task::perform(calculate(source.into_owned(), arrow), move |result| {
                 send(Action::Ready(id, result))
             })
         });
+        Ok((dialog, map_task.unwrap_or_else(Task::none)))
+    }
+
+    fn show_prepared_review(&mut self, dialog: Dialog, task: Task<Message>) -> Task<Message> {
+        let finding = matches!(dialog.mapping, Mapping::Finding);
+        if let Some((index, _)) = dialog.scheme
+            && !finding
+            && let Err(reason) = dialog.validate()
+        {
+            return self.xtb_scheme_reviewed(index, Err(reason));
+        }
+        if !dialog.needs_review() {
+            return self.xtb_review_run(dialog);
+        }
         if finding && !dialog.visible() {
             self.status = "Matching reaction atoms…".into();
             self.error = false;
         }
         self.tab.xtb.ts_review = Some(dialog);
-        map_task.unwrap_or_else(Task::none)
+        task
     }
 
     pub(super) fn xtb_review_action(&mut self, action: Action) -> Task<Message> {
@@ -726,6 +791,9 @@ impl App {
         };
         match action {
             Action::Cancel => {
+                if dialog.scheme.is_some() {
+                    return self.xtb_scheme_action(scheme::Action::Cancel);
+                }
                 if !dialog.visible() {
                     self.status = "Atom matching canceled".into();
                     self.error = false;
@@ -734,6 +802,9 @@ impl App {
                 return crate::app::focus_drawing();
             }
             _ if dialog.at != at => {
+                if dialog.scheme.is_some() {
+                    return self.xtb_scheme_action(scheme::Action::Cancel);
+                }
                 if !dialog.visible() {
                     self.tab.xtb.ts_review = None;
                     self.status = "Reaction changed; atom matching canceled".into();
@@ -744,8 +815,10 @@ impl App {
             Action::Ready(id, result)
                 if id == dialog.id && matches!(dialog.mapping, Mapping::Finding) =>
             {
+                let scheme_doc = dialog.scheme.as_ref().map(|(_, doc)| Arc::clone(doc));
                 let result = result.and_then(|proposal| {
-                    let source = with_roles(&self.tab.doc, dialog.arrow)?;
+                    let source =
+                        with_roles(scheme_doc.as_deref().unwrap_or(&self.tab.doc), dialog.arrow)?;
                     let candidate = proposal.apply(&source, true)?;
                     Ok((source, candidate, proposal))
                 });
@@ -765,10 +838,16 @@ impl App {
                         Mapping::Failed(error)
                     }
                 };
+                if let Some((index, _)) = dialog.scheme
+                    && let Err(reason) = dialog.validate()
+                {
+                    self.tab.xtb.ts_review = None;
+                    return self.xtb_scheme_reviewed(index, Err(reason));
+                }
                 if !dialog.needs_review()
                     && let Some(dialog) = self.tab.xtb.ts_review.take()
                 {
-                    return if self.xtb_can_start() {
+                    return if dialog.scheme.is_some() || self.xtb_can_start() {
                         self.xtb_review_run(dialog)
                     } else {
                         Task::none()
@@ -794,12 +873,19 @@ impl App {
                     return Task::none();
                 }
                 let arrow = dialog.arrow;
-                let proposal = dialog.mapping.proposal().cloned();
+                let proposal = if dialog.scheme.is_some() {
+                    // A map can contain calculation-only atoms introduced for balance.
+                    let _ = self.xtb_scheme_action(scheme::Action::Cancel);
+                    None
+                } else {
+                    dialog.mapping.proposal().cloned()
+                };
                 self.tab.xtb.ts_review = None;
                 return self.open_reaction_map(arrow, proposal);
             }
             Action::Accept => {
-                if dialog.validate().is_err() || !self.xtb_can_start() {
+                if dialog.validate().is_err() || (dialog.scheme.is_none() && !self.xtb_can_start())
+                {
                     return Task::none();
                 }
                 if let Some(dialog) = self.tab.xtb.ts_review.take() {
@@ -816,6 +902,27 @@ impl App {
             Err(error) => return self.review_error(error),
         };
         let arrow = dialog.arrow;
+        if let Some((index, source)) = &dialog.scheme {
+            let input = (|| {
+                let images = dialog.images()?;
+                let plan = dialog.plan.as_ref().map_err(ToString::to_string)?;
+                let start = species::ts_state(&species, plan.start)?;
+                let proposal = dialog.mapping.proposal();
+                let document = match proposal {
+                    Some(proposal) => proposal.apply(source, true)?,
+                    None => source.as_ref().clone(),
+                };
+                Ok(scheme::run::TsInput {
+                    document,
+                    plan: plan.clone(),
+                    images,
+                    charge: start.charge,
+                    multiplicity: start.multiplicity,
+                    automatic: proposal.is_some(),
+                })
+            })();
+            return self.xtb_scheme_reviewed(*index, input);
+        }
         let result = with_roles(&self.tab.doc, arrow)
             .map_err(str::to_owned)
             .and_then(|source| {

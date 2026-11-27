@@ -11,7 +11,7 @@ use reshiki::qcdata::{CalcResult, IrcEndpoint, IrcPath, KCAL_PER_HARTREE};
 use reshiki::reactions::{self, Reaction, Role};
 use reshiki::scene;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
@@ -85,10 +85,73 @@ pub(in crate::app) fn source_key(doc: &Document, reaction: &Reaction) -> String 
 }
 
 pub(in crate::app) fn source_current(doc: &Document, profile: &EnergyProfile) -> bool {
-    profile
+    source_reactions(doc, profile).is_some()
+}
+
+/// Resolve every authored step before treating a linked figure as current.
+/// A shared drawn intermediate is preferred; a uniquely matching later arrow
+/// also supports schemes that repeat the intermediate drawing between steps.
+pub(in crate::app) fn source_reactions(
+    doc: &Document,
+    profile: &EnergyProfile,
+) -> Option<Vec<Reaction>> {
+    let reactions = source_reaction_prefix(doc, profile);
+    (reactions.len() == profile.steps.len() && !reactions.is_empty()).then_some(reactions)
+}
+
+/// A stale later step may still leave earlier, independently verified scheme
+/// highlights available. Refreshes require the complete sequence above.
+pub(in crate::app) fn source_reaction_prefix(
+    doc: &Document,
+    profile: &EnergyProfile,
+) -> Vec<Reaction> {
+    let Some(first) = profile
         .source
-        .and_then(|arrow| reactions::preview(doc, arrow).ok())
-        .is_some_and(|reaction| source_key(doc, &reaction) == profile.source_key)
+        .and_then(|id| reactions::preview(doc, id).ok())
+    else {
+        return vec![];
+    };
+    if source_key(doc, &first) != profile.source_key || profile.steps.is_empty() {
+        return vec![];
+    }
+    let first_arrow = first.arrow;
+    let mut reactions = vec![first];
+    let mut visited = BTreeSet::from([first_arrow]);
+    for step in profile.steps.iter().skip(1) {
+        let Some(key) = step.source_key.as_deref() else {
+            break;
+        };
+        let candidates: Vec<_> = doc
+            .arrows
+            .iter()
+            .filter(|arrow| !visited.contains(&arrow.id))
+            .filter_map(|arrow| reactions::preview(doc, arrow.id).ok())
+            .filter(|reaction| source_key(doc, reaction) == key)
+            .collect();
+        let side = |reaction: &Reaction, role| {
+            reaction
+                .participants(role)
+                .iter()
+                .flat_map(|part| part.atoms.iter().copied())
+                .collect::<BTreeSet<_>>()
+        };
+        let Some(current) = reactions.last() else {
+            break;
+        };
+        let products = side(current, Role::Product);
+        let connected: Vec<_> = candidates
+            .iter()
+            .filter(|candidate| !side(candidate, Role::Reactant).is_disjoint(&products))
+            .collect();
+        let next = match (connected.as_slice(), candidates.as_slice()) {
+            ([reaction], _) => (*reaction).clone(),
+            ([], [reaction]) => reaction.clone(),
+            _ => break,
+        };
+        visited.insert(next.arrow);
+        reactions.push(next);
+    }
+    reactions
 }
 
 fn profile(doc: &Document, id: u64) -> Option<&EnergyProfile> {
@@ -106,7 +169,11 @@ fn refresh(doc: &mut Document, fresh: EnergyProfile) {
         .iter_mut()
         .filter_map(|g| g.energy_profile.as_deref_mut())
     {
-        if placed.linked && placed.source == fresh.source && placed.source_key == fresh.source_key {
+        if placed.linked
+            && placed.steps.len() == 1
+            && placed.source == fresh.source
+            && placed.source_key == fresh.source_key
+        {
             placed.relink(fresh.clone());
         }
     }
@@ -117,7 +184,7 @@ fn linked_reaction(doc: &Document, arrow: u64) -> Option<Reaction> {
         .graphics
         .iter()
         .filter_map(|g| g.energy_profile.as_deref())
-        .any(|profile| profile.linked && profile.source == Some(arrow));
+        .any(|profile| profile.linked && profile.steps.len() == 1 && profile.source == Some(arrow));
     linked
         .then(|| reactions::preview(doc, arrow).ok())
         .flatten()
@@ -126,6 +193,20 @@ fn linked_reaction(doc: &Document, arrow: u64) -> Option<Reaction> {
 impl App {
     pub(super) fn xtb_place_energy_profile(&mut self, arrow: Option<u64>) {
         if self.tab.busy || self.tab.drawing_edit_active() {
+            return;
+        }
+        if arrow.is_none()
+            && let Some(graphic) = self.selected_energy_profile()
+            && graphic
+                .energy_profile
+                .as_ref()
+                .is_some_and(|profile| profile.steps.len() > 1)
+        {
+            self.select_energy_profile(graphic.id);
+            return;
+        }
+        if arrow.is_none() && self.xtb_scheme_selected() {
+            self.xtb_place_scheme_profile();
             return;
         }
         let arrow = arrow
@@ -145,7 +226,11 @@ impl App {
         let key = source_key(doc, &reaction);
         if let Some(id) = doc.graphics.iter().find_map(|g| {
             let profile = g.energy_profile.as_deref()?;
-            (profile.linked && profile.source == arrow && profile.source_key == key).then_some(g.id)
+            (profile.linked
+                && profile.steps.len() == 1
+                && profile.source == arrow
+                && profile.source_key == key)
+                .then_some(g.id)
         }) {
             self.select_energy_profile(id);
             return;
@@ -180,7 +265,7 @@ impl App {
         }
     }
 
-    fn select_energy_profile(&mut self, id: u64) {
+    pub(in crate::app::xtb) fn select_energy_profile(&mut self, id: u64) {
         self.xtb_end_preview();
         self.set_selection(vec![id]);
         if let Some((lo, hi)) = scene::selection_bounds(&self.tab.doc, &[id]) {
@@ -389,7 +474,11 @@ impl App {
     }
 }
 
-fn state(kind: Kind, label: String, energy_kcal: f64) -> EnergyProfileState {
+pub(in crate::app::xtb) fn state(
+    kind: Kind,
+    label: String,
+    energy_kcal: f64,
+) -> EnergyProfileState {
     let mut label = label.replace(char::is_control, " ");
     if label.len() > 256 {
         label.truncate(label.floor_char_boundary(253));
@@ -439,6 +528,7 @@ impl App {
             .source
             .filter(|_| source_current(doc, profile))
             .and_then(|arrow| self.xtb_resolve_reaction(doc, arrow, None).result);
+        let transient = self.xtb_scheme_profile_results(profile);
         profile
             .steps
             .iter()
@@ -451,7 +541,10 @@ impl App {
                 let ts = profile.states.get(step.transition?)?;
                 let bind = |result: &Arc<CalcResult>| {
                     let path = irc::saved(result).filter(|p| p.has_frames())?;
-                    let reference = optimized_reactant_energy(result)? - from / KCAL_PER_HARTREE;
+                    // A scheme barrier can use an isolated-species reference
+                    // rather than the search's endpoint complex. The plotted
+                    // saddle energy uniquely defines the common reference.
+                    let reference = result.energy_hartree? - ts.energy_kcal / KCAL_PER_HARTREE;
                     let mut samples = irc_trace(path, reference, ts.energy_kcal)?;
                     let endpoints = [
                         EnergyProfileSample {
@@ -483,18 +576,24 @@ impl App {
                     // A multistep figure can refer to more than one saved calculation.
                     // Require its saddle geometry as well as its trace to match.
                     let saddle = ts.geometry.as_ref()?.frame.hash();
-                    doc.science.results.iter().rev().find_map(|stored| {
-                        (stored.result.frame == saddle)
-                            .then(|| bind(&stored.result))
-                            .flatten()
-                    })
+                    transient
+                        .iter()
+                        .rev()
+                        .chain(
+                            doc.science
+                                .results
+                                .iter()
+                                .rev()
+                                .map(|stored| &stored.result),
+                        )
+                        .find_map(|result| (result.frame == saddle).then(|| bind(result)).flatten())
                 })
             })
             .collect()
     }
 }
 
-fn irc_samples(
+pub(in crate::app::xtb) fn irc_samples(
     path: &IrcPath,
     reference: f64,
     barrier: f64,
@@ -580,7 +679,15 @@ fn irc_trace(path: &IrcPath, reference: f64, barrier: f64) -> Option<Vec<IrcSamp
 }
 
 fn profile_origin(doc: &Document, reaction: &Reaction, size: Point) -> Option<Point> {
-    let scheme = reshiki::molecule_names::include_annotations(doc, &reaction.ids());
+    profile_origin_for_ids(doc, &reaction.ids(), size)
+}
+
+pub(in crate::app::xtb) fn profile_origin_for_ids(
+    doc: &Document,
+    ids: &[u64],
+    size: Point,
+) -> Option<Point> {
+    let scheme = reshiki::molecule_names::include_annotations(doc, ids);
     let other: Vec<_> = doc.object_ids().filter(|id| !scheme.contains(id)).collect();
     let gap = doc.drawing_style.bond_length_world;
     let mut selections = vec![scheme];
@@ -605,4 +712,66 @@ fn profile_origin(doc: &Document, reaction: &Reaction, size: Point) -> Option<Po
         }
     }
     Some(Point::new(x, y))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn figure(steps: usize, energy: f64) -> EnergyProfile {
+        let mut states = vec![state(Kind::Reactant, "R".into(), 0.)];
+        let mut path = Vec::new();
+        for index in 0..steps {
+            states.push(state(
+                Kind::TransitionState,
+                format!("TS{}‡", index + 1),
+                20.,
+            ));
+            states.push(state(
+                if index + 1 == steps {
+                    Kind::Product
+                } else {
+                    Kind::Intermediate
+                },
+                "P".into(),
+                energy,
+            ));
+            path.push(EnergyProfileStep {
+                from: index * 2,
+                to: index * 2 + 2,
+                transition: Some(index * 2 + 1),
+                source_key: (index > 0).then(|| "b".repeat(64)),
+                irc: vec![],
+            });
+        }
+        EnergyProfile::new(7, "a".repeat(64), "GFN2-xTB".into(), states, path)
+    }
+
+    #[test]
+    fn single_arrow_refresh_cannot_replace_a_scheme_with_the_same_first_arrow() {
+        let mut doc = Document::default();
+        for (index, profile) in [figure(1, -3.), figure(2, -8.)].into_iter().enumerate() {
+            doc.graphics.push(Graphic::energy_profile(
+                index as u64 + 1,
+                Point::new(0., 0.),
+                Point::new(100., 100.),
+                profile,
+                Default::default(),
+            ));
+        }
+        let scheme = doc.graphics[1].clone();
+        refresh(&mut doc, figure(1, -5.));
+        assert_eq!(
+            doc.graphics[0]
+                .energy_profile
+                .as_deref()
+                .unwrap()
+                .states
+                .last()
+                .unwrap()
+                .energy_kcal,
+            -5.
+        );
+        assert_eq!(doc.graphics[1], scheme);
+    }
 }

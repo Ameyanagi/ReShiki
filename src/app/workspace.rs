@@ -1194,7 +1194,14 @@ impl App {
             });
         }
         commands.extend(self.depth_commands());
-        if xtb
+        if xtb && self.xtb_scheme_selection() {
+            commands.push(RowCommand {
+                label: "Calculate scheme…",
+                menu: "Calculate scheme…",
+                message: super::xtb::ts::scheme::open_message(),
+                enabled: self.xtb_can_open_scheme(),
+            });
+        } else if xtb
             && let Some(arrow) = self
                 .selected_reaction_arrow()
                 .filter(|arrow| super::xtb::ts::review::reaction_arrow(&self.tab.doc, arrow.id))
@@ -3776,7 +3783,18 @@ pub(super) fn accessible_command<'a>(
 /// A checkbox that publishes its id, name and checked state; `message` is
 /// the toggle, or `None` while it is unavailable.
 pub(super) fn accessible_checkbox<'a>(
-    id: &'static str,
+    id: impl Into<String>,
+    label: &'static str,
+    checked: bool,
+    message: Option<Message>,
+) -> reshiki::accessibility::Button<'a, Message> {
+    named_checkbox(id, label, label, checked, message)
+}
+
+/// A repeated field can announce the step or molecule its checkbox edits.
+pub(super) fn named_checkbox<'a>(
+    id: impl Into<String>,
+    name: impl Into<String>,
     label: &'static str,
     checked: bool,
     message: Option<Message>,
@@ -3784,7 +3802,7 @@ pub(super) fn accessible_checkbox<'a>(
     let toggle = message.clone();
     reshiki::accessibility::button(
         id,
-        label,
+        name,
         checkbox(checked)
             .label(label)
             .on_toggle_maybe(toggle.map(|message| move |_| message.clone()))

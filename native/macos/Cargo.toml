@@ -30,6 +30,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "std",
   "NSApplication",
+  "NSAccessibility",
   "NSRunningApplication",
   "objc2-core-foundation",
   "NSGraphicsContext",
@@ -40,6 +41,7 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "NSPrintPanel",
   "NSView",
   "NSWindow",
+  "NSWorkspace",
   "objc2-core-graphics",
   "NSResponder",
 ] }

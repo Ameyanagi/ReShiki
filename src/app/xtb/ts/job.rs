@@ -82,12 +82,63 @@ pub(super) fn start(
     path: SearchPath,
     cancel: Cancel,
 ) -> impl Stream<Item = Event> + Send + 'static {
+    start_with_scope(
+        launch,
+        request,
+        drawn_bonds,
+        path,
+        cancel,
+        ThermoScope::Endpoints,
+    )
+}
+
+/// Scheme minima already have their own isolated-species corrections. Only
+/// the mandatory saddle frequency check contributes new thermochemistry here.
+pub(super) fn start_scheme(
+    launch: Launch,
+    request: super::Request,
+    drawn_bonds: Vec<(u64, u64)>,
+    path: SearchPath,
+    cancel: Cancel,
+) -> impl Stream<Item = Event> + Send + 'static {
+    start_with_scope(
+        launch,
+        request,
+        drawn_bonds,
+        path,
+        cancel,
+        ThermoScope::SaddleOnly,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ThermoScope {
+    Endpoints,
+    SaddleOnly,
+}
+
+fn start_with_scope(
+    launch: Launch,
+    request: super::Request,
+    drawn_bonds: Vec<(u64, u64)>,
+    path: SearchPath,
+    cancel: Cancel,
+    thermo: ThermoScope,
+) -> mpsc::UnboundedReceiver<Event> {
     let (tx, rx) = mpsc::unbounded();
     let events = tx.clone();
     let thread = std::thread::Builder::new()
         .name("xtb-ts-run".into())
         .spawn(move || {
-            let result = run(&launch, &request, &drawn_bonds, path, &cancel, &events);
+            let result = run(
+                &launch,
+                &request,
+                &drawn_bonds,
+                path,
+                &cancel,
+                &events,
+                thermo,
+            );
             let _ = events.unbounded_send(Event::Done(result.map(Arc::new)));
             events.close_channel();
         });
@@ -105,6 +156,7 @@ fn run(
     path: SearchPath,
     cancel: &Cancel,
     tx: &mpsc::UnboundedSender<Event>,
+    thermo: ThermoScope,
 ) -> Result<Report, Failure> {
     let started = Instant::now();
     let plan = &request.plan;
@@ -245,7 +297,7 @@ fn run(
         send(tx, cancel, Event::IrcSkipped)?;
     }
     let mut trace = trace.into_inner();
-    let endpoint_thermo = if request.free_energy {
+    let endpoint_thermo = if request.free_energy && thermo == ThermoScope::Endpoints {
         trace.enter("Endpoint thermochemistry");
         send(tx, cancel, Event::Stage(Stage::Thermochemistry))?;
         let worker = workers
@@ -286,21 +338,22 @@ fn run(
         })
         .collect();
     let engine = engine.ok_or_else(|| Failure::Other("No xTB engine".into()))?;
-    complete(
-        launch,
-        Completion {
-            report,
-            checked,
-            endpoint_thermo,
-            method,
-            engine,
-            changes: changes.in_reaction_direction(plan.start),
-            evaluations,
-            masses,
-            seconds: started.elapsed().as_secs_f64(),
-            trace,
-        },
-    )
+    let done = Completion {
+        report,
+        checked,
+        endpoint_thermo,
+        method,
+        engine,
+        changes: changes.in_reaction_direction(plan.start),
+        evaluations,
+        masses,
+        seconds: started.elapsed().as_secs_f64(),
+        trace,
+    };
+    match thermo {
+        ThermoScope::Endpoints => complete(launch, done),
+        ThermoScope::SaddleOnly => complete_with_thermo(launch, done, request.free_energy),
+    }
 }
 
 /// An independent frequency check must describe the same Hamiltonian as the
@@ -706,6 +759,15 @@ impl SearchTrace {
 }
 
 fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
+    let thermo = done.endpoint_thermo.is_some();
+    complete_with_thermo(launch, done, thermo)
+}
+
+fn complete_with_thermo(
+    launch: &Launch,
+    done: Completion,
+    saddle_thermo: bool,
+) -> Result<Report, Failure> {
     let Completion {
         report,
         checked,
@@ -766,7 +828,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     result.energy_hartree = Some(report.ts.energy);
     // Reuse the existing TS frequency analysis; endpoint corrections and this
     // correction share the same temperature, isotope and symmetry policy.
-    result.thermo = endpoint_thermo.as_ref().and_then(|_| {
+    result.thermo = saddle_thermo.then_some(()).and_then(|_| {
         let vibrations = result.vibrations.as_ref()?;
         super::view::extra_thermo_imaginary(&vibrations.frequencies_cm1)
             .is_none()

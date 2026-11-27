@@ -99,11 +99,13 @@ impl App {
         let height = if self.tab.xtb.palette.collapsed {
             Length::Shrink
         } else {
-            Length::Fixed(if self.tab.xtb.palette.view == View::Path {
-                super::sizing::path_dock_height(self.window_size.height)
-            } else {
-                super::sizing::dock_height(self.window_size.height)
-            })
+            Length::Fixed(
+                if self.tab.xtb.palette.view == View::Path || self.xtb_scheme_palette_visible() {
+                    super::sizing::path_dock_height(self.window_size.height)
+                } else {
+                    super::sizing::dock_height(self.window_size.height)
+                },
+            )
         };
         Some(
             container(content)
@@ -129,6 +131,25 @@ impl App {
             return None;
         }
         let collapsed = self.tab.xtb.palette.collapsed && !inspector;
+        if self.xtb_scheme_palette_visible() {
+            let header = self.xtb_palette_header(
+                "Reaction scheme".into(),
+                vec![View::Path],
+                View::Path,
+                inspector,
+            );
+            return Some(if collapsed {
+                header
+            } else {
+                let path = self.xtb_scheme_path(inspector);
+                let body = if inspector {
+                    path
+                } else {
+                    scrollable(path).height(Length::Fill).into()
+                };
+                column![header, body].spacing(8).into()
+            });
+        }
         if let Some(live) = self.xtb_palette_live_ts() {
             let title = results::title(None, Some(&live.request.context.title));
             let header = self.xtb_palette_header(title, vec![View::Path], View::Path, inspector);

@@ -202,6 +202,8 @@ pub struct EnergyProfile {
     pub rotation: [f32; 4],
 }
 impl EnergyProfile {
+    pub const MAX_STATES: usize = 65;
+
     pub fn new(
         source: u64,
         source_key: String,
@@ -241,21 +243,24 @@ impl EnergyProfile {
     pub fn states_with_labels(
         &self,
     ) -> impl Iterator<Item = (&EnergyProfileState, String, Option<&str>)> {
-        let single_ts = self
-            .states
-            .iter()
-            .filter(|s| s.kind == EnergyProfileStateKind::TransitionState)
-            .count()
-            == 1;
         self.states
             .iter()
-            .scan((0, 0), move |(transitions, intermediates), state| {
+            .enumerate()
+            .scan(0, move |intermediates, (index, state)| {
                 let (role, short) = match state.kind {
                     EnergyProfileStateKind::Reactant => ("R".into(), "R"),
-                    EnergyProfileStateKind::TransitionState if single_ts => ("TS‡".into(), "TS1‡"),
+                    EnergyProfileStateKind::TransitionState if self.steps.len() == 1 => {
+                        ("TS‡".into(), "TS1‡")
+                    }
                     EnergyProfileStateKind::TransitionState => {
-                        *transitions += 1;
-                        (format!("TS{transitions}‡"), "TS‡")
+                        let step = self
+                            .steps
+                            .iter()
+                            .position(|step| step.transition == Some(index));
+                        (
+                            step.map_or_else(|| "TS‡".into(), |step| format!("TS{}‡", step + 1)),
+                            "TS‡",
+                        )
                     }
                     EnergyProfileStateKind::Intermediate => {
                         *intermediates += 1;
@@ -297,7 +302,7 @@ impl EnergyProfile {
             || self.source.is_some_and(|id| id == 0 || id == u64::MAX)
             || self.method.len() > 128
             || self.method.chars().any(char::is_control)
-            || !(2..=65).contains(&self.states.len())
+            || !(2..=Self::MAX_STATES).contains(&self.states.len())
             || self
                 .states
                 .first()

@@ -14,8 +14,7 @@ pub(crate) struct Sample {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Style {
     Line,
-    // The upcoming multistep diagram uses the same labelled figure as levels.
-    #[allow(dead_code)]
+    // The multistep diagram uses the same labelled figure as levels.
     Levels,
 }
 
@@ -619,6 +618,17 @@ impl Profile {
     }
 
     pub(crate) fn draw(&self, frame: &mut Frame, theme: &Theme, layout: &ProfileLayout<'_>) {
+        self.draw_energy(frame, theme, layout, "ΔE");
+    }
+
+    /// Share the profile layout with free-energy figures without relabelling ΔG as ΔE.
+    pub(crate) fn draw_energy(
+        &self,
+        frame: &mut Frame,
+        theme: &Theme,
+        layout: &ProfileLayout<'_>,
+        energy: &str,
+    ) {
         let muted = crate::appearance::muted(theme);
         let ink = if self.stale {
             muted
@@ -647,7 +657,7 @@ impl Profile {
             frame.rotate(-std::f32::consts::FRAC_PI_2);
             label(
                 frame,
-                format!("ΔE ({})", self.unit.label()),
+                format!("{energy} ({})", self.unit.label()),
                 Point::ORIGIN,
                 muted,
                 10.,

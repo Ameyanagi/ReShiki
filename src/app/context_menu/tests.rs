@@ -55,6 +55,10 @@ fn reaction_calculate_command_uses_the_clicked_arrow_and_respects_xtb_availabili
         selected: arrows.into(),
         hit: vec![arrows[1]],
     });
+    assert_eq!(
+        labels(&app, Page::Main).contains(&"Calculate scheme…"),
+        xtb::available()
+    );
     let commands: Vec<_> = app
         .context_entries(Page::Main)
         .into_iter()

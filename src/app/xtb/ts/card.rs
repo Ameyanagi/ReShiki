@@ -173,7 +173,7 @@ fn species_line(species: &[SpeciesLabel], formula: bool, empty: &str) -> String 
         .join(" + ")
 }
 
-fn drawn_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
+pub(super) fn compound_label<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
     reshiki::compound_numbers::label(doc, atoms)
         .and_then(|label| {
             doc.annotations
@@ -181,13 +181,23 @@ fn drawn_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
                 .find(|annotation| annotation.id == label.annotation)
         })
         .and_then(|label| nonempty(&label.text))
-        .or_else(|| {
-            reshiki::linked_properties::caption(doc, atoms)
-                .and_then(|link| nonempty(&link.custom_name))
-        })
+}
+
+pub(super) fn molecule_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
+    reshiki::linked_properties::caption(doc, atoms)
+        .and_then(|link| nonempty(&link.custom_name))
         .or_else(|| {
             reshiki::molecule_names::label(doc, atoms).and_then(|name| nonempty(&name.text))
         })
+        .or_else(|| {
+            reshiki::linked_properties::caption(doc, atoms)
+                .filter(|link| !link.needs_name())
+                .and_then(|link| nonempty(&link.name))
+        })
+}
+
+fn drawn_name<'a>(doc: &'a Document, atoms: &[u64]) -> Option<&'a str> {
+    compound_label(doc, atoms).or_else(|| molecule_name(doc, atoms))
 }
 
 #[derive(Clone)]
@@ -465,13 +475,7 @@ impl App {
     }
 
     fn xtb_reaction_species_name<'a>(&'a self, atoms: &[u64]) -> Option<&'a str> {
-        drawn_name(&self.tab.doc, atoms)
-            .or_else(|| {
-                reshiki::linked_properties::caption(&self.tab.doc, atoms)
-                    .filter(|link| !link.needs_name())
-                    .and_then(|link| nonempty(&link.name))
-            })
-            .or_else(|| self.xtb_existing_molecule_name(atoms))
+        drawn_name(&self.tab.doc, atoms).or_else(|| self.xtb_existing_molecule_name(atoms))
     }
 
     /// Share Properties' naming queue; only the visible card asks for names.

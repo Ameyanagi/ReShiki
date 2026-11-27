@@ -69,7 +69,10 @@ impl Session {
         paths: Vec<Option<ProfileIrc>>,
         preference: Motion,
     ) -> Self {
-        let motion = preference.available(paths.iter().any(Option::is_some));
+        let motion = preference.preferred(
+            paths.iter().any(Option::is_some),
+            crate::platform::reduced_motion(),
+        );
         let timeline = Timeline::new(profile, &paths, motion);
         let mut position = Playback::default();
         position.seek(0, timeline.len());
@@ -165,6 +168,39 @@ impl App {
             && session.speed != self.appearance.playback_speed
         {
             session.start_hold(self.appearance.playback_speed, Instant::now());
+        }
+        if self
+            .profile_animation
+            .as_ref()
+            .is_some_and(|session| session.motion == Motion::Smooth)
+        {
+            self.reduce_profile_animation(crate::platform::reduced_motion());
+        }
+    }
+
+    fn reduce_profile_animation(&mut self, reduced_motion: bool) {
+        if reduced_motion
+            && let Some(session) = &mut self.profile_animation
+            && session.motion == Motion::Smooth
+            && let Some(graphic) = self
+                .tab
+                .doc
+                .graphics
+                .iter()
+                .find(|g| g.id == session.target.graphic)
+            && let Some(profile) = graphic.energy_profile.as_deref()
+        {
+            let state = session
+                .timeline
+                .frame(session.position.frame)
+                .map_or(0, |frame| frame.state);
+            let playing = session.position.playing;
+            session.motion = Motion::Steps;
+            session.timeline = Timeline::new(profile, &session.paths, Motion::Steps);
+            session.position.seek(state, session.timeline.len());
+            session.position.playing = playing && session.timeline.len() > 1;
+            session.start_hold(self.appearance.playback_speed, Instant::now());
+            session.show(&self.tab.doc, graphic);
         }
     }
 
@@ -310,7 +346,10 @@ impl App {
                 restart_hold = session.position.playing;
             }
             Action::Motion(motion) => {
-                if motion == Motion::Steps || session.paths.iter().any(Option::is_some) {
+                if motion == Motion::Steps
+                    || !crate::platform::reduced_motion()
+                        && session.paths.iter().any(Option::is_some)
+                {
                     session.motion = motion;
                     session.timeline = Timeline::new(profile, &session.paths, motion);
                     let playing = session.position.playing;
@@ -381,21 +420,22 @@ impl App {
                 allowed.then_some(Message::GifExport(super::gif_export::Action::OpenProfile)),
             ),
         );
-        let smooth = active.map_or_else(
-            || {
-                self.energy_profile_paths(profile)
-                    .iter()
-                    .any(Option::is_some)
-            },
-            |s| s.paths.iter().any(Option::is_some),
-        );
+        let smooth = !crate::platform::reduced_motion()
+            && active.map_or_else(
+                || {
+                    self.energy_profile_paths(profile)
+                        .iter()
+                        .any(Option::is_some)
+                },
+                |s| s.paths.iter().any(Option::is_some),
+            );
         let motions = if smooth {
             &[Motion::Steps, Motion::Smooth][..]
         } else {
             &[Motion::Steps][..]
         };
         let motion = active.map_or(self.appearance.profile_motion.available(smooth), |s| {
-            s.motion
+            s.motion.available(smooth)
         });
         let repeat = self.appearance.playback_mode;
         let speed = self.appearance.playback_speed;
@@ -451,7 +491,17 @@ impl App {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn profile_export_source(&mut self) -> Option<super::gif_export::Source> {
+        self.profile_export_source_with_motion(crate::platform::reduced_motion())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn profile_export_source_with_motion(
+        &mut self,
+        reduced_motion: bool,
+    ) -> Option<super::gif_export::Source> {
         use super::gif_export::{Motion as ExportMotion, Source};
+        self.sync_profile_animation();
+        self.reduce_profile_animation(reduced_motion);
         if !self.profile_animation_allowed() {
             return None;
         }
@@ -466,7 +516,7 @@ impl App {
                 let motion = self
                     .appearance
                     .profile_motion
-                    .available(paths.iter().any(Option::is_some));
+                    .preferred(paths.iter().any(Option::is_some), reduced_motion);
                 (Timeline::new(profile, &paths, motion), motion, true)
             },
             |s| (s.timeline.clone(), s.motion, s.highlight),

@@ -37,6 +37,70 @@ fn species(product: bool, coefficient: u32) -> Species {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn scheme_reuse_accepts_tight_electronic_minima_but_checks_state_method_and_freshness() {
+    let mut doc = Document::default();
+    let atom = doc.add_atom("O", reshiki::document::Point::default());
+    let (frame, mut result) = result(-1.);
+    result.input_frame = Some(frame.hash());
+    if let qcdata::Settings::Xtb(settings) = &mut result.settings {
+        settings.convergence = Some(qcdata::Convergence::Tight);
+    }
+    let launch = science::Launch {
+        frame: Arc::new(frame),
+        atoms: vec![Some(atom), None, None],
+        baseline: science::baseline(&doc, &[atom]),
+    };
+    science::attach(&mut doc, &launch, Vec::new(), result).unwrap();
+    let method = qcdata::XtbMethod::Gfn2Xtb;
+    assert!(scheme_reusable(&doc, &[atom], 0, 1, method, false).is_some());
+    assert!(scheme_reusable(&doc, &[atom], 0, 1, method, true).is_none());
+    assert!(scheme_reusable(&doc, &[atom], 1, 1, method, false).is_none());
+    assert!(scheme_reusable(&doc, &[atom], 0, 3, method, false).is_none());
+    assert!(scheme_reusable(&doc, &[atom], 0, 1, qcdata::XtbMethod::GXtb, false).is_none());
+    doc.atom_mut(atom).unwrap().isotope = 18;
+    assert!(scheme_reusable(&doc, &[atom], 0, 1, method, false).is_none());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_frequency_request_finds_older_eligible_thermo_before_a_newer_electronic_result() {
+    let mut doc = Document::default();
+    let atom = doc.add_atom("O", reshiki::document::Point::default());
+    let (frame, mut electronic) = result(-0.9);
+    let input = frame.hash();
+    electronic.input_frame = Some(input);
+    let report =
+        crate::app::xtb::tests::optfreq(&frame.positions_angstrom, &frame.positions_angstrom);
+    let mut thermo = report
+        .computed
+        .to_calc_result(
+            &frame,
+            qcdata::Task::Optimize,
+            &crate::app::xtb::run::example_engine(),
+            None,
+        )
+        .unwrap();
+    thermo.input_frame = Some(input);
+    if let qcdata::Settings::Xtb(settings) = &mut thermo.settings {
+        settings.convergence = Some(qcdata::Convergence::Tight);
+    }
+    let launch = science::Launch {
+        frame: Arc::new(frame),
+        atoms: vec![Some(atom), None, None],
+        baseline: science::baseline(&doc, &[atom]),
+    };
+    science::attach(&mut doc, &launch, Vec::new(), thermo).unwrap();
+    science::attach(&mut doc, &launch, Vec::new(), electronic).unwrap();
+    let method = qcdata::XtbMethod::Gfn2Xtb;
+    let (_, electronic, _) = scheme_reusable(&doc, &[atom], 0, 1, method, false).unwrap();
+    assert_eq!(electronic.energy_hartree, Some(-0.9));
+    assert!(electronic.thermo.is_none());
+    let (_, thermo, _) = scheme_reusable(&doc, &[atom], 0, 1, method, true).unwrap();
+    assert!(thermo.thermo.is_some());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn totals_use_products_minus_reactants_and_each_coefficient() {
     let (_, a) = result(-1.);
     let (_, b) = result(-0.75);

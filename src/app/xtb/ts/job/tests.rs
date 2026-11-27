@@ -514,6 +514,26 @@ fn free_energy_uses_optimized_endpoints_and_reuses_the_existing_ts_analysis() {
 }
 
 #[test]
+fn scheme_saddle_thermochemistry_uses_the_mandatory_check_without_endpoint_corrections() {
+    let (launch, done) = completion();
+    assert!(done.endpoint_thermo.is_none());
+    let report = complete_with_thermo(&launch, done, true).unwrap();
+    assert!(report.extras.endpoint_thermo.is_none());
+    assert_eq!(report.extras.endpoint_energies_hartree, [-3., -2.]);
+    let expected = thermochemistry(
+        &report.frames[0],
+        &report.frames[0].positions_angstrom,
+        &report.frames[0].masses_amu,
+        &[-55.],
+    );
+    assert_eq!(report.result.thermo, Some(expected));
+    assert_eq!(report.result.status, qcdata::Status::Converged);
+    // The ordinary electronic-only card keeps its prior behavior.
+    let (launch, done) = completion();
+    assert!(complete(&launch, done).unwrap().result.thermo.is_none());
+}
+
+#[test]
 fn endpoint_frequency_failures_retain_electronic_energies_and_do_not_stop_the_other_end() {
     for failed in 0..2 {
         let (launch, mut done) = completion();

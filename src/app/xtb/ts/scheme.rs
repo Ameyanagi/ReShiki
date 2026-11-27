@@ -1,0 +1,489 @@
+//! Calculate a selected reaction path. The map for each arrow is reviewed on
+//! its own copy so a shared intermediate can have different maps in each step.
+// The setup and result views share types with the optional native worker.
+#![cfg_attr(
+    not(all(feature = "xtb", not(target_arch = "wasm32"))),
+    allow(dead_code)
+)]
+use super::Action as TsAction;
+use crate::app::xtb::{self, Page};
+use crate::app::{App, InspectorTab, Message};
+use iced::Task;
+use iced::keyboard::{Key, Modifiers, key::Named};
+use reshiki::qcdata::XtbMethod;
+use std::cell::Cell;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+pub(super) mod plan;
+pub(super) mod profile;
+pub(super) mod run;
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+mod store;
+mod view;
+
+use plan::Plan;
+use run::{StepOptions, TsInput};
+
+static NEXT_REVIEW: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Quantity {
+    Energy,
+    Barrier,
+    FreeEnergy,
+    FreeBarrier,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum Action {
+    Open,
+    Close,
+    Toggle(usize, Quantity),
+    Method(XtbMethod),
+    Run,
+    Cancel,
+    Retry(usize),
+    Next(u64),
+    Place,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    Event(run::Event),
+}
+
+fn send(action: Action) -> Message {
+    Message::Xtb(xtb::Action::Ts(TsAction::Scheme(action)))
+}
+
+pub(in crate::app) fn open_message() -> Message {
+    send(Action::Open)
+}
+
+pub(in crate::app) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
+    match key {
+        Key::Named(Named::Escape) if modifiers.is_empty() => Some(send(Action::Close)),
+        Key::Named(Named::Enter) if modifiers.command() => Some(send(Action::Run)),
+        _ => None,
+    }
+}
+
+struct MapReviews {
+    id: u64,
+    pending: VecDeque<usize>,
+    active: Option<usize>,
+    inputs: Vec<Result<Option<TsInput>, String>>,
+    retry: Option<usize>,
+}
+
+pub(in crate::app::xtb) struct State {
+    plan: Plan,
+    options: Vec<StepOptions>,
+    method: XtbMethod,
+    sheet: bool,
+    original: Option<(Vec<StepOptions>, XtbMethod)>,
+    reviews: Option<MapReviews>,
+    work: run::State,
+    epoch: u64,
+    revision: u64,
+    checked: Cell<Option<(u64, bool)>>,
+    #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+    pending_save: Option<bool>,
+}
+
+impl State {
+    fn busy(&self) -> bool {
+        self.reviews.is_some() || self.work.running()
+    }
+
+    fn discard_choices(&mut self) {
+        if let Some((options, method)) = self.original.take() {
+            self.options = options;
+            self.method = method;
+        }
+    }
+}
+
+impl App {
+    pub(in crate::app) fn xtb_scheme_current(&self) -> bool {
+        let Some(state) = &self.tab.xtb.scheme else {
+            return false;
+        };
+        if state.epoch != self.tab.file_epoch {
+            return false;
+        }
+        if state.revision == self.tab.revision {
+            return true;
+        }
+        if let Some((revision, current)) = state.checked.get()
+            && revision == self.tab.revision
+        {
+            return current;
+        }
+        let current = state.plan.current(&self.tab.doc);
+        state.checked.set(Some((self.tab.revision, current)));
+        current
+    }
+
+    pub(in crate::app) fn xtb_scheme_selection(&self) -> bool {
+        self.tab
+            .doc
+            .arrows
+            .iter()
+            .filter(|arrow| {
+                self.tab.selected.contains(&arrow.id)
+                    && arrow.purpose.is_chemistry()
+                    && reshiki::arrows::Preset::from_kind(&arrow.kind)
+                        .reaction_role_refusal()
+                        .is_none()
+            })
+            .take(2)
+            .count()
+            == 2
+    }
+
+    pub(in crate::app) fn xtb_scheme_selected(&self) -> bool {
+        let Some(state) = &self.tab.xtb.scheme else {
+            return false;
+        };
+        if state.epoch != self.tab.file_epoch {
+            return false;
+        }
+        state.busy()
+            || state.sheet
+            || (state
+                .plan
+                .arrows
+                .iter()
+                .all(|arrow| self.tab.selected.contains(arrow))
+                && self
+                    .tab
+                    .doc
+                    .arrows
+                    .iter()
+                    .filter(|arrow| self.tab.selected.contains(&arrow.id))
+                    .all(|arrow| state.plan.arrows.contains(&arrow.id)))
+            || self
+                .selected_energy_profile()
+                .and_then(|graphic| graphic.energy_profile.as_deref())
+                .is_some_and(|profile| {
+                    profile.linked
+                        && profile.steps.len() == state.plan.steps.len()
+                        && profile.source == state.plan.arrows.first().copied()
+                        && super::profile::source_reactions(&self.tab.doc, profile).is_some_and(
+                            |steps| {
+                                steps.iter().map(|step| step.arrow).eq(state
+                                    .plan
+                                    .arrows
+                                    .iter()
+                                    .copied())
+                            },
+                        )
+                })
+    }
+
+    pub(in crate::app) fn xtb_can_open_scheme(&self) -> bool {
+        xtb::available()
+            && !self.xtb_running()
+            && !self.ts_review_open()
+            && !self.tab.xtb.energy_state.in_progress()
+            && !self.tab.busy
+            && self.tab.optimization.is_none()
+            && self.tab.model_job.is_none()
+            && !self.tab.drawing_edit_active()
+    }
+
+    pub(in crate::app) fn scheme_sheet_visible(&self) -> bool {
+        self.tab
+            .xtb
+            .scheme
+            .as_ref()
+            .is_some_and(|state| state.sheet)
+    }
+
+    pub(in crate::app::xtb) fn xtb_scheme_running(&self) -> bool {
+        self.tab.xtb.scheme.as_ref().is_some_and(State::busy)
+    }
+
+    fn xtb_open_scheme(&mut self) -> Task<Message> {
+        if self.scheme_sheet_visible() || !self.xtb_can_open_scheme() {
+            return Task::none();
+        }
+        let selection = if self.selected_energy_profile().is_some() && self.xtb_scheme_selected() {
+            self.tab
+                .xtb
+                .scheme
+                .as_ref()
+                .map(|s| s.plan.arrows.as_slice())
+                .unwrap_or_default()
+        } else {
+            &self.tab.selected
+        };
+        let mut plan = match Plan::read(&self.tab.doc, selection) {
+            Ok(plan) => plan,
+            Err(reason) => {
+                self.status = reason;
+                self.error = true;
+                return Task::none();
+            }
+        };
+        plan.resolve_names(&self.tab.doc, |atoms| {
+            self.xtb_existing_molecule_name(atoms).map(str::to_owned)
+        });
+        let state = &mut self.tab.xtb.scheme;
+        if let Some(existing) = state.as_mut()
+            && existing.epoch == self.tab.file_epoch
+            && existing.plan.arrows == plan.arrows
+            && existing.plan.snapshot == plan.snapshot
+        {
+            existing.original = Some((existing.options.clone(), existing.method));
+            existing.plan = plan;
+            existing.sheet = true;
+            existing.revision = self.tab.revision;
+            existing.checked.set(None);
+        } else {
+            let options = vec![StepOptions::default(); plan.steps.len()];
+            *state = Some(State {
+                original: Some((options.clone(), self.xtb.settings.barrier_method)),
+                options,
+                plan,
+                method: self.xtb.settings.barrier_method,
+                sheet: true,
+                reviews: None,
+                work: run::State::default(),
+                epoch: self.tab.file_epoch,
+                revision: self.tab.revision,
+                checked: Cell::default(),
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                pending_save: None,
+            });
+        }
+        self.xtb.page = Page::Xtb;
+        self.error = false;
+        self.show_inspector_tab(InspectorTab::Predict)
+            .unwrap_or_else(Task::none)
+    }
+
+    pub(in crate::app::xtb) fn xtb_scheme_action(&mut self, action: Action) -> Task<Message> {
+        if matches!(action, Action::Open) {
+            return self.xtb_open_scheme();
+        }
+        if matches!(action, Action::Run | Action::Retry(_)) {
+            return self.xtb_prepare_scheme(match action {
+                Action::Retry(i) => Some(i),
+                _ => None,
+            });
+        }
+        let Some(state) = self.tab.xtb.scheme.as_mut() else {
+            return Task::none();
+        };
+        match action {
+            Action::Close if state.sheet => {
+                state.sheet = false;
+                state.discard_choices();
+                return crate::app::focus_drawing();
+            }
+            Action::Toggle(index, quantity) if state.sheet => {
+                if let Some(options) = state.options.get_mut(index) {
+                    let flag = match quantity {
+                        Quantity::Energy => &mut options.reaction_energy,
+                        Quantity::Barrier => &mut options.barrier,
+                        Quantity::FreeEnergy => &mut options.free_energy,
+                        Quantity::FreeBarrier => &mut options.free_barrier,
+                    };
+                    *flag = !*flag;
+                }
+            }
+            Action::Method(method)
+                if state.sheet && matches!(method, XtbMethod::Gfn2Xtb | XtbMethod::GXtb) =>
+            {
+                state.method = method;
+            }
+            Action::Cancel if state.busy() => {
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                let calculating = state.work.running();
+                if state.reviews.take().is_some() {
+                    self.tab.xtb.ts_review = None;
+                    state.discard_choices();
+                }
+                state.work.cancel();
+                self.status = "Scheme calculation canceled · finished results kept".into();
+                self.error = false;
+                #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+                if calculating && self.xtb_scheme_current() {
+                    self.xtb_store_scheme(false);
+                }
+                return crate::app::focus_drawing();
+            }
+            Action::Next(id)
+                if state
+                    .reviews
+                    .as_ref()
+                    .is_some_and(|r| r.id == id && r.active.is_none()) =>
+            {
+                return self.xtb_scheme_next();
+            }
+            Action::Place => self.xtb_place_scheme_profile(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+            Action::Event(event) => {
+                if state.epoch != self.tab.file_epoch
+                    || (state.revision != self.tab.revision && !state.plan.current(&self.tab.doc))
+                {
+                    state.work.cancel();
+                    self.status =
+                        "The scheme changed. Select its arrows and calculate again.".into();
+                    return Task::none();
+                }
+                state.revision = self.tab.revision;
+                let finished = event.finished();
+                if state.work.accept(event) && finished {
+                    self.status = if let Some(reason) = &state.work.error {
+                        reason.clone()
+                    } else {
+                        let done = state
+                            .work
+                            .steps
+                            .iter()
+                            .filter(|s| matches!(s, run::StepStatus::Done))
+                            .count();
+                        let failed = state
+                            .work
+                            .steps
+                            .iter()
+                            .filter(|s| matches!(s, run::StepStatus::Failed(_)))
+                            .count();
+                        if failed == 0 {
+                            format!("Scheme complete · {done} steps calculated")
+                        } else {
+                            format!("Scheme finished · {done} calculated · {failed} failed")
+                        }
+                    };
+                    self.xtb_store_scheme(true);
+                }
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    fn xtb_prepare_scheme(&mut self, retry: Option<usize>) -> Task<Message> {
+        if !self.xtb_can_open_scheme() {
+            return Task::none();
+        }
+        let Some(state) = self.tab.xtb.scheme.as_mut() else {
+            return Task::none();
+        };
+        if !state.options.iter().any(|step| step.any()) || retry.is_none() && !state.sheet {
+            return Task::none();
+        }
+        if let Some(index) = retry
+            && !matches!(
+                state.work.steps.get(index),
+                Some(run::StepStatus::Failed(_) | run::StepStatus::Cancelled)
+            )
+        {
+            return Task::none();
+        }
+        if state.epoch != self.tab.file_epoch || !state.plan.current(&self.tab.doc) {
+            self.status = "The scheme changed. Select its arrows and calculate again.".into();
+            self.error = true;
+            state.sheet = false;
+            return Task::none();
+        }
+        state.sheet = false;
+        state.revision = self.tab.revision;
+        state.reviews = Some(MapReviews {
+            id: NEXT_REVIEW.fetch_add(1, Ordering::Relaxed),
+            pending: state
+                .options
+                .iter()
+                .enumerate()
+                .filter(|(index, option)| {
+                    retry.is_none_or(|i| i == *index) && option.transition_state()
+                })
+                .map(|(index, _)| index)
+                .collect(),
+            active: None,
+            inputs: vec![Ok(None); state.options.len()],
+            retry,
+        });
+        self.xtb_scheme_next()
+    }
+
+    fn xtb_scheme_next(&mut self) -> Task<Message> {
+        let Some(state) = self.tab.xtb.scheme.as_mut() else {
+            return Task::none();
+        };
+        let Some(reviews) = &mut state.reviews else {
+            return Task::none();
+        };
+        if state.epoch != self.tab.file_epoch || state.revision != self.tab.revision {
+            state.reviews = None;
+            self.status = "The drawing changed. Review the scheme again.".into();
+            return Task::none();
+        }
+        if let Some(index) = reviews.pending.pop_front() {
+            reviews.active = Some(index);
+            let Some((step, options)) = state.plan.steps.get(index).zip(state.options.get(index))
+            else {
+                return self.xtb_scheme_action(Action::Cancel);
+            };
+            let arrow = step.arrow;
+            let free = options.free_barrier;
+            return match state.plan.review_document(index, &self.tab.doc) {
+                Ok(doc) => self.xtb_review_scheme_step(index, doc, arrow, free),
+                Err(reason) => self.xtb_scheme_reviewed(index, Err(reason)),
+            };
+        }
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if let Some(reviews) = state.reviews.take() {
+            state.original = None;
+            state
+                .work
+                .seed(&self.tab.doc, &state.plan, state.method, &state.options);
+            let events = state.work.start(
+                &state.plan,
+                &state.options,
+                state.method,
+                reviews.inputs,
+                self.xtb.settings.threads(),
+                reviews.retry,
+            );
+            let palette = &mut self.tab.xtb.palette;
+            palette.open = true;
+            palette.collapsed = false;
+            palette.view = xtb::results::View::Path;
+            self.status = "Calculating reaction scheme…".into();
+            self.error = false;
+            return Task::run(events, |event| send(Action::Event(event)));
+        }
+        state.reviews = None;
+        Task::none()
+    }
+
+    pub(super) fn xtb_scheme_reviewed(
+        &mut self,
+        index: usize,
+        input: Result<TsInput, String>,
+    ) -> Task<Message> {
+        let Some(reviews) = self
+            .tab
+            .xtb
+            .scheme
+            .as_mut()
+            .and_then(|s| s.reviews.as_mut())
+        else {
+            return Task::none();
+        };
+        if reviews.active != Some(index) {
+            return Task::none();
+        }
+        reviews.active = None;
+        let Some(entry) = reviews.inputs.get_mut(index) else {
+            return self.xtb_scheme_action(Action::Cancel);
+        };
+        *entry = input.map(Some);
+        Task::done(send(Action::Next(reviews.id)))
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+mod tests;

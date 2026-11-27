@@ -92,6 +92,17 @@ pub(super) fn profile_geometry(
     let [r, ts, p] = [ends.reactant, result.frame, ends.product]
         .map(|hash| doc.science.frame(&hash).map(AsRef::as_ref));
     let (r, ts, p) = (r?, ts?, p?);
+    profile_geometry_from_frames(result, r, ts, p)
+}
+
+/// The scheme worker retains its own frames until results are stored on the
+/// drawing. Use the same model construction for those detached results.
+pub(in crate::app::xtb) fn profile_geometry_from_frames(
+    result: &CalcResult,
+    r: &Frame,
+    ts: &Frame,
+    p: &Frame,
+) -> Option<([EnergyProfileGeometry; 3], [f32; 4])> {
     if r.numbers != ts.numbers || r.numbers != p.numbers {
         return None;
     }

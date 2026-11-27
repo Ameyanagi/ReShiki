@@ -228,6 +228,7 @@ web-sys = { version = "0.3", features = [
   "InputEvent",
   "KeyboardEvent",
   "KeyboardEventInit",
+  "MediaQueryList",
   "MessageEvent",
   "Navigator",
   "Node",

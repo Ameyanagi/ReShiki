@@ -327,6 +327,67 @@ fn switching_steps_and_smooth_restarts_equal_duration_state_holds() {
     }
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn export_clamps_a_paused_smooth_session_when_reduced_motion_changes_before_the_next_tick() {
+    let (mut app, arrow) = ts::tests::finished_irc();
+    let _ = app.update(Message::Xtb(xtb::Action::Ts(
+        ts::Action::PlaceEnergyProfile(Some(arrow)),
+    )));
+    let _ = app.update(Message::ProfileAnimation(Action::Motion(Motion::Smooth)));
+    assert_eq!(
+        app.current_profile_animation().unwrap().motion,
+        Motion::Smooth
+    );
+    assert!(!app.current_profile_animation().unwrap().position.playing);
+    let source = app.profile_export_source_with_motion(true).unwrap();
+    let crate::app::gif_export::Motion::Profile {
+        timeline, motion, ..
+    } = source.motion
+    else {
+        panic!("Expected profile export");
+    };
+    assert_eq!(motion, Motion::Steps);
+    assert_eq!(timeline.len(), 3);
+    assert_eq!(
+        app.current_profile_animation().unwrap().motion,
+        Motion::Steps
+    );
+    assert_eq!(app.appearance.profile_motion, Motion::Smooth);
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
+fn irc_binding_uses_the_plotted_barrier_reference_instead_of_the_endpoint_complex() {
+    let (mut app, arrow) = ts::tests::finished_irc();
+    let _ = app.update(Message::Xtb(xtb::Action::Ts(
+        ts::Action::PlaceEnergyProfile(Some(arrow)),
+    )));
+    let graphic = app.tab.doc.graphics.last_mut().unwrap();
+    let profile = graphic.energy_profile.as_deref_mut().unwrap();
+    profile.states[1].energy_kcal += 5.;
+    let length = profile.steps[0].irc.len();
+    for point in &mut profile.steps[0].irc[1..length - 1] {
+        point.energy_kcal += 5.;
+    }
+    let profile = profile.clone();
+    let paths = app.energy_profile_paths(&profile);
+    let path = paths[0]
+        .as_ref()
+        .expect("The same IRC binds against the isolated-species reference");
+    assert_eq!(
+        path.samples[1].point.energy_kcal,
+        profile.states[1].energy_kcal
+    );
+    assert_eq!(
+        path.samples
+            .iter()
+            .map(|sample| sample.point)
+            .collect::<Vec<_>>(),
+        profile.steps[0].irc[1..length - 1]
+    );
+}
+
 #[test]
 fn no_op_canvas_move_and_resize_pause_playback_without_desynchronizing_the_overlay() {
     for resize in [false, true] {
@@ -521,6 +582,78 @@ fn readout_numbers_multiple_ts_with_unnumbered_authored_labels() {
         timeline::readout(&data, 3, None, None),
         "TS2‡ · 18.5 kcal/mol"
     );
+}
+
+#[test]
+fn five_state_playback_visits_each_minimum_and_saddle_once_and_keeps_the_drawing_unchanged() {
+    use Kind::{Intermediate as I, Product as P, Reactant as R, TransitionState as Ts};
+    let (mut app, id) = animation_app();
+    let data = profile(&[R, Ts, I, Ts, P]);
+    let graphic = app
+        .tab
+        .doc
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .unwrap();
+    graphic.energy_profile = Some(Box::new(data));
+    app.tab.saved = app.tab.doc.clone();
+    app.appearance.playback_mode = PlaybackMode::Once;
+    app.appearance.profile_motion = Motion::Steps;
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let _ = app.update(Message::ProfileAnimation(Action::Toggle));
+    let mut readouts = Vec::new();
+    for index in 0..5 {
+        let session = app.current_profile_animation().unwrap();
+        let frame = session.timeline.frame(session.position.frame).unwrap();
+        assert_eq!(frame.state, index);
+        readouts.push(
+            frame.readout(
+                before
+                    .graphics
+                    .iter()
+                    .find(|g| g.id == id)
+                    .unwrap()
+                    .energy_profile
+                    .as_deref()
+                    .unwrap(),
+            ),
+        );
+        finish_hold(&mut app);
+    }
+    assert_eq!(
+        readouts,
+        [
+            "Reactant · 0.0 kcal/mol",
+            "TS1‡ · 27.3 kcal/mol",
+            "Intermediate · 4.2 kcal/mol",
+            "TS2‡ · 18.5 kcal/mol",
+            "Product · −8.4 kcal/mol",
+        ]
+    );
+    assert!(!app.current_profile_animation().unwrap().position.playing);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn reduced_motion_uses_discrete_states_without_changing_the_saved_preference() {
+    assert_eq!(Motion::Smooth.preferred(true, true), Motion::Steps);
+    assert_eq!(Motion::Smooth.preferred(true, false), Motion::Smooth);
+    assert_eq!(Motion::Smooth.preferred(false, false), Motion::Steps);
+    assert_eq!(Motion::Steps.preferred(true, true), Motion::Steps);
+    let data = profile(&[
+        Kind::Reactant,
+        Kind::TransitionState,
+        Kind::Intermediate,
+        Kind::TransitionState,
+        Kind::Product,
+    ]);
+    let timeline = Timeline::new(&data, &[], Motion::Smooth.preferred(true, true));
+    assert_eq!(timeline.len(), 5);
+    assert!((0..5).all(|index| timeline.frame(index).unwrap().sample().is_none()));
 }
 
 #[test]

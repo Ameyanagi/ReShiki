@@ -59,10 +59,16 @@ impl App {
         match page {
             Page::Nmr => content = content.push(self.nmr_inspector()),
             Page::Xtb => {
-                content = content.push(match self.xtb_selected_reaction() {
-                    Some(arrow) => self.xtb_reaction_card(arrow),
-                    None => self.xtb_card(),
-                });
+                content = content.push(
+                    if self.xtb_scheme_selection() || self.xtb_scheme_selected() {
+                        self.xtb_scheme_card()
+                    } else {
+                        match self.xtb_selected_reaction() {
+                            Some(arrow) => self.xtb_reaction_card(arrow),
+                            None => self.xtb_card(),
+                        }
+                    },
+                );
                 if let Some(palette) = self.xtb_inspector_palette() {
                     content = content.push(palette);
                 }
@@ -341,6 +347,8 @@ impl App {
             || self.inspector_tab != InspectorTab::Predict
             || self.xtb.page != Page::Xtb
             || self.xtb_selected_reaction().is_some()
+            || self.xtb_scheme_selection()
+            || self.xtb_scheme_selected()
             || self.xtb_running()
             || self.tube_bend_active()
         {

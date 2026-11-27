@@ -772,7 +772,13 @@ fn completion(message: &Message) -> Option<Completion> {
                 #[cfg(not(target_arch = "wasm32"))]
                 Action::Event(..) | Action::Search(..) => Some(Completion::Xtb),
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
-                Action::TsEvent(..) => Some(Completion::Xtb),
+                Action::TsEvent(..)
+                | Action::Ts(super::xtb::ts::Action::Scheme(
+                    super::xtb::ts::scheme::Action::Event(_),
+                )) => Some(Completion::Xtb),
+                Action::Ts(super::xtb::ts::Action::Scheme(
+                    super::xtb::ts::scheme::Action::Next(_),
+                )) => Some(Completion::Mapping),
                 Action::Ts(super::xtb::ts::Action::ReviewSheet(
                     super::xtb::ts::review::Action::Ready(..),
                 )) => Some(Completion::Mapping),

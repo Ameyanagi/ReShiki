@@ -7,7 +7,7 @@ use reshiki::reactions::ts_plan::Side;
 use reshiki::reactions::{self, Participant, Reaction};
 use std::collections::{BTreeMap, HashSet};
 
-type Counts = BTreeMap<(u8, u16), i64>;
+pub(in crate::app::xtb::ts) type Counts = BTreeMap<(u8, u16), i64>;
 
 pub(super) struct Input {
     pub label: String,
@@ -20,6 +20,14 @@ pub(super) struct Input {
 fn counts(doc: &Document, ids: &[u64]) -> Result<Counts, String> {
     let drawing = reshiki::editing::selection(doc, ids);
     let prepared = chemistry::prepare(&drawing).map_err(|error| error.to_string())?;
+    prepared_counts(&prepared)
+}
+
+/// Atom/isotope counts include both bracket and implicit hydrogens. Shared
+/// with scheme balancing so both calculation paths use identical chemistry.
+pub(in crate::app::xtb::ts) fn prepared_counts(
+    prepared: &chemistry::Molecule,
+) -> Result<Counts, String> {
     let mut counts = Counts::new();
     for (atom, valence) in prepared
         .state
@@ -42,7 +50,7 @@ fn counts(doc: &Document, ids: &[u64]) -> Result<Counts, String> {
     Ok(counts)
 }
 
-fn symbol((element, isotope): (u8, u16)) -> String {
+pub(in crate::app::xtb::ts) fn symbol((element, isotope): (u8, u16)) -> String {
     let element = ELEMENTS.get(usize::from(element)).map_or("?", |e| e.symbol);
     if isotope == 0 {
         element.into()
@@ -51,7 +59,7 @@ fn symbol((element, isotope): (u8, u16)) -> String {
     }
 }
 
-fn formula(counts: &Counts) -> String {
+pub(in crate::app::xtb::ts) fn formula(counts: &Counts) -> String {
     let mut terms: Vec<_> = counts
         .iter()
         .map(|(&key, &count)| (key.0, symbol(key), count))
