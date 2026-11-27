@@ -2922,7 +2922,7 @@ fn save_answer_closes_the_tab_only_after_it_is_saved() {
         Ok(None),
     ));
     assert!(app.pending.is_none());
-    let saved = Ok(Some(PathBuf::from("drawing.reshiki")));
+    let saved = Ok(Some(files::Saved::from("drawing.reshiki")));
     let _ = app.update(Message::Saved(
         epoch,
         Box::new(app.tab.doc.clone()),

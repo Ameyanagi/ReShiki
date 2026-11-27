@@ -13,6 +13,7 @@ impl App {
             self.tab.history.redo(&mut self.tab.doc)
         };
         if changed {
+            self.xtb_mo_cancel_pending();
             // The canvas brightness is view state, which history leaves alone.
             self.tab.doc.canvas_theme = before.canvas_theme;
             self.trim_histories(super::tabs::HISTORY_BYTES);

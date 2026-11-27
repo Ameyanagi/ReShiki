@@ -1187,6 +1187,66 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
     }
 }
 
+#[test]
+fn mo_diagram_level_click_requires_an_already_selected_diagram_and_no_drag() {
+    use reshiki::graphics::{Graphic, MoDiagram};
+    use reshiki::orbital_levels::Column;
+    use reshiki::qcdata::Spin;
+    use std::ops::ControlFlow;
+
+    let mut doc = Document::default();
+    let atom = doc.add_atom("C", World::default());
+    let id = doc.next_id();
+    let mo = MoDiagram::new(
+        atom,
+        "result".into(),
+        vec![Column {
+            spin: Spin::Alpha,
+            label: String::new(),
+            energies_ev: vec![-2., 1.],
+            occupations: vec![2., 0.],
+            occupied: Some(1),
+        }],
+    );
+    let (w, h) = mo.natural_size(&doc.drawing_style);
+    doc.graphics.push(Graphic::mo_diagram(
+        id,
+        World::new(50., 0.),
+        World::new(w, h),
+        mo,
+        GraphicStyle::default(),
+    ));
+    let (_, labels) = doc.graphics[0].mo_parts(&doc.drawing_style);
+    let point = labels
+        .iter()
+        .find(|a| a.text.starts_with("HOMO"))
+        .unwrap()
+        .centre();
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    let mut state = State::default();
+    let bounds = Rectangle::with_size(iced::Size::new(800., 600.));
+    let selected = [id];
+    assert!(
+        matches!(canvas.release_move(&mut state, point, vec![id], vec![id], point, bounds), ControlFlow::Continue(Edit::Select(ids)) if ids == selected)
+    );
+    canvas.selected = &selected;
+    assert!(
+        matches!(canvas.release_move(&mut state, point, vec![id], vec![id], point, bounds), ControlFlow::Continue(Edit::MoLevelClick(hit, 0, 0)) if hit == id)
+    );
+    assert!(matches!(
+        canvas.release_move(
+            &mut state,
+            point,
+            vec![id],
+            vec![id],
+            point.offset(30., 0.),
+            bounds
+        ),
+        ControlFlow::Continue(Edit::Move(..))
+    ));
+}
+
 fn tilt_pointer(
     canvas: &MoleculeCanvas<'_>,
     state: &mut State,

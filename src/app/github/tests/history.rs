@@ -87,9 +87,9 @@ fn restoring_the_tracked_github_version_leaves_nothing_to_send() {
         let doc = app.tab.doc.clone();
         let bytes = doc.file_json().unwrap();
         std::fs::write(&path, &bytes).unwrap();
-        app.tab.mark_saved(doc.clone());
+        app.tab.mark_saved(doc);
         app.file_io.saving = false;
-        let task = app.github_saved(true, Some((path.clone(), doc)));
+        let task = app.github_saved(true, Some((path.clone(), Ok(bytes.clone()))));
         land(app, task);
         read_back(app);
         bytes
@@ -144,7 +144,7 @@ fn restoring_another_github_version_stays_unsent() {
     std::fs::write(&path, app.tab.doc.file_json().unwrap()).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
     app.file_io.saving = false;
-    let task = app.github_saved(true, Some((path, app.tab.doc.clone())));
+    let task = app.github_saved(true, Some((path, app.tab.doc.file_json())));
     land(&mut app, task);
     read_back(&mut app);
     assert_eq!(unsent(&app), ["ring.rsk"]);
@@ -161,7 +161,7 @@ fn an_edit_after_restoring_the_tracked_version_is_unsent() {
     std::fs::write(&path, app.tab.doc.file_json().unwrap()).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
     app.file_io.saving = false;
-    let task = app.github_saved(true, Some((path.clone(), app.tab.doc.clone())));
+    let task = app.github_saved(true, Some((path.clone(), app.tab.doc.file_json())));
     land(&mut app, task);
     read_back(&mut app);
     assert!(unsent(&app).is_empty());
@@ -169,7 +169,7 @@ fn an_edit_after_restoring_the_tracked_version_is_unsent() {
     edit(&mut app);
     std::fs::write(&path, app.tab.doc.file_json().unwrap()).unwrap();
     app.tab.mark_saved(app.tab.doc.clone());
-    let task = app.github_saved(true, Some((path, app.tab.doc.clone())));
+    let task = app.github_saved(true, Some((path, app.tab.doc.file_json())));
     land(&mut app, task);
     read_back(&mut app);
     assert_eq!(unsent(&app), ["ring.rsk"]);

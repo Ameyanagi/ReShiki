@@ -571,6 +571,13 @@ impl Graphic {
         if self.kind == GraphicKind::TlcPlate {
             return self.tlc.as_deref().map_or_else(Vec::new, |t| t.parts(self));
         }
+        if self.kind == GraphicKind::MoDiagram {
+            return vec![Part {
+                commands: self.commands(),
+                style: self.style.clone(),
+                filled: false,
+            }];
+        }
         if self.kind == GraphicKind::Piece {
             return crate::equipment::placed::parts(self);
         }

@@ -20,8 +20,12 @@ use reshiki::science::{self, Stored};
 use std::sync::Arc;
 
 mod compute;
+mod diagram;
 mod levels;
 mod view;
+
+pub(crate) use diagram::DiagramEdit;
+use diagram::PendingPicture;
 
 #[cfg(test)]
 mod tests;
@@ -64,6 +68,11 @@ pub(crate) enum Action {
     /// HOMO and LUMO side by side under the molecule, each captioned.
     PlaceFrontier,
     RemoveFrontier,
+    PlaceDiagram {
+        for_selection: bool,
+    },
+    ToggleDiagramPicture(u64, u8, usize),
+    EditDiagram(u64, DiagramEdit),
     /// Show or fold the isovalue, look, opacity and colors.
     Appearance(bool),
     Computed(String, Result<Arc<qcdata::Orbitals>, String>),
@@ -141,6 +150,7 @@ pub(crate) struct Orbitals {
     /// A level chosen for a placed figure while its coefficients are being
     /// computed: applied when they arrive.
     pending: Option<Choice>,
+    pending_pictures: Vec<PendingPicture>,
     /// Orbitals the worker recomputed, by result key.
     computed: Vec<(String, Arc<qcdata::Orbitals>)>,
     computing: Option<Computing>,
@@ -166,6 +176,7 @@ impl Default for Orbitals {
             appearance: false,
             keys: None,
             pending: None,
+            pending_pictures: vec![],
             computed: vec![],
             computing: None,
             building: None,
@@ -177,12 +188,59 @@ impl Default for Orbitals {
     }
 }
 
+impl Orbitals {
+    fn cached_row(
+        &self,
+        key: &str,
+        spin: Spin,
+        index: usize,
+    ) -> Option<(&qcdata::BasisSet, &[f64])> {
+        let (_, orbitals) = self.computed.iter().find(|(k, _)| k == key)?;
+        compute::row(orbitals, spin, index)
+    }
+
+    /// Keep session rows with placed figures in the copy being written.
+    pub(in crate::app) fn save_snapshot(&self, mut doc: Document) -> Document {
+        if self.computed.is_empty() {
+            return doc;
+        }
+        // Resolve all figures before pinning, while they still select the
+        // same results as the drawing in this session.
+        let pins: Vec<_> = doc
+            .orbital_pins_by_result()
+            .filter_map(|(stored_index, orbital)| {
+                let index = orbital.index as usize;
+                let stored = &doc.science.results[stored_index];
+                if stored_row(stored, orbital.spin, index).is_some() {
+                    return None;
+                }
+                let (basis, row) = self.cached_row(&orbital.result, orbital.spin, index)?;
+                Some((stored_index, orbital.spin, orbital.index, basis, row))
+            })
+            .collect();
+        for (stored_index, spin, index, basis, row) in pins {
+            let _ = science::pin_orbital(&mut doc, stored_index, spin, index, basis, row);
+        }
+        doc
+    }
+}
+
+fn stored_row(stored: &Stored, spin: Spin, index: usize) -> Option<(&qcdata::BasisSet, &[f64])> {
+    stored
+        .result
+        .orbitals
+        .as_ref()
+        .and_then(|o| compute::row(o, spin, index))
+}
+
 /// The chosen orbital: a result, a spin column and a level.
 #[derive(Clone, Debug, PartialEq)]
 struct Choice {
     pub result: String,
     pub column: usize,
     pub index: usize,
+    /// A diagram click chooses a tab level without editing the main model.
+    from_diagram: bool,
 }
 
 /// The shown result's storage index and Arc address.
@@ -205,6 +263,7 @@ struct Synced {
     shown: Option<ResultId>,
     choice: Option<Choice>,
     pending: Option<Choice>,
+    pending_pictures: Vec<PendingPicture>,
     iso: u32,
     look: Look,
     building: Option<u64>,
@@ -245,6 +304,7 @@ struct Target {
     pub placed: Option<Figure>,
     /// The model shows this result's frontier figure.
     pub frontier: bool,
+    pub diagram: Option<u64>,
 }
 
 impl App {
@@ -297,6 +357,14 @@ impl App {
         let frontier = atom
             .and_then(|atom| doc.models.iter().find(|m| m.linked_atoms.contains(&atom)))
             .is_some_and(|m| m.panels.iter().any(|p| p.figure.orbital.result == key));
+        let mut diagrams = doc.graphics.iter().filter_map(|g| {
+            let mo = g.mo.as_deref()?;
+            (mo.result == key && shown.atoms.contains(&Some(mo.molecule?))).then_some(g.id)
+        });
+        let diagram = diagrams
+            .clone()
+            .find(|id| self.tab.selected.contains(id))
+            .or_else(|| diagrams.next());
         let problem = if shown.stale {
             Some(
                 "The molecule changed after this calculation. Recalculate to show orbitals.".into(),
@@ -347,6 +415,7 @@ impl App {
             problem,
             placed,
             frontier,
+            diagram,
         })
     }
 
@@ -360,6 +429,9 @@ impl App {
             .choice
             .as_ref()
             .filter(|c| c.result == target.key && c.column < target.columns.len());
+        if let Some(choice) = chosen.filter(|c| c.from_diagram) {
+            return choice.clone();
+        }
         if let Some(figure) = &target.placed {
             // Open shells sharing orbitals show one orbital in both columns:
             // keep the column the user picked.
@@ -382,12 +454,14 @@ impl App {
                 result: target.key.clone(),
                 column,
                 index: (figure.orbital.index as usize).min(last),
+                from_diagram: false,
             };
         }
         chosen.cloned().unwrap_or_else(|| Choice {
             result: target.key.clone(),
             column: 0,
             index: target.columns[0].homo().unwrap_or(0),
+            from_diagram: false,
         })
     }
 
@@ -428,6 +502,7 @@ impl App {
     /// drawing, and start the work the shown figures still need. Cheap when
     /// nothing it reads changed.
     pub(in crate::app) fn xtb_orbitals_sync(&mut self) -> Task<Message> {
+        self.xtb_mo_retire_invalid_pictures();
         let state = &self.tab.xtb.orbitals;
         let visible = self.xtb_orbitals_visible();
         let shown = self.xtb_orbital_result_id();
@@ -437,6 +512,7 @@ impl App {
             shown,
             choice: state.choice.clone(),
             pending: state.pending.clone(),
+            pending_pictures: state.pending_pictures.clone(),
             iso: state.iso.to_bits(),
             look: state.look,
             building: state.building,
@@ -504,13 +580,11 @@ impl App {
             return Task::none();
         }
         let doc = self.display_document();
-        if doc.models.iter().all(|m| m.figures().next().is_none()) {
-            return Task::none();
-        }
-        // Each model with a figure, then the small models of its panels.
+        // The main models, their panels, and the diagram's own small models.
         let models: Vec<std::borrow::Cow<'_, reshiki::models3d::Model3d>> = doc
             .models
             .iter()
+            .filter(|model| model.figures().next().is_some())
             .flat_map(|model| {
                 std::iter::once(std::borrow::Cow::Borrowed(model)).chain(
                     reshiki::models3d::panels(doc, model)
@@ -518,9 +592,14 @@ impl App {
                         .map(|(small, _)| std::borrow::Cow::Owned(small)),
                 )
             })
+            .chain(
+                doc.graphics
+                    .iter()
+                    .flat_map(|g| g.mo_picture_models(doc).map(std::borrow::Cow::Owned)),
+            )
             .collect();
         let state = &self.tab.xtb.orbitals;
-        let mut recompute = None;
+        let mut recompute = self.xtb_mo_recompute();
         let mut build = None;
         let mut failed = vec![];
         for model in &models {
@@ -633,17 +712,12 @@ impl App {
         spin: Spin,
         index: usize,
     ) -> Option<(&'a qcdata::BasisSet, &'a [f64])> {
-        let key = science::result_key(&stored.result);
-        stored
-            .result
-            .orbitals
-            .as_ref()
-            .and_then(|o| compute::row(o, spin, index))
-            .or_else(|| {
-                let state = &self.tab.xtb.orbitals;
-                let (_, orbitals) = state.computed.iter().find(|(k, _)| *k == key)?;
-                compute::row(orbitals, spin, index)
-            })
+        stored_row(stored, spin, index).or_else(|| {
+            self.tab
+                .xtb
+                .orbitals
+                .cached_row(&science::result_key(&stored.result), spin, index)
+        })
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -716,8 +790,12 @@ impl App {
                         if state.computed.len() > COMPUTED {
                             state.computed.remove(0);
                         }
+                        let pending = state.pending.take_if(|p| p.result == key);
+                        // Linked pictures use these cached rows for drawing. Save-time
+                        // snapshots keep their appearance without another history edit.
+                        self.xtb_mo_finish_pictures(&key);
                         // A level chosen for this result while it ran.
-                        if let Some(pending) = state.pending.take_if(|p| p.result == key)
+                        if let Some(pending) = pending
                             && self
                                 .xtb_orbital_target()
                                 .is_some_and(|t| t.key == pending.result)
@@ -727,6 +805,14 @@ impl App {
                     }
                     Err(error) => {
                         state.pending.take_if(|p| p.result == key);
+                        let waiting = state.pending_pictures.len();
+                        state
+                            .pending_pictures
+                            .retain(|p| p.picture.figure.orbital.result != key);
+                        if waiting != state.pending_pictures.len() {
+                            self.status = "Could not compute the orbital".into();
+                            self.error = true;
+                        }
                         state.errors.retain(|(k, _)| *k != key);
                         state
                             .errors
@@ -814,6 +900,11 @@ impl App {
             }
             Action::Place => self.xtb_orbital_place(),
             Action::PlaceFrontier => self.xtb_orbital_place_frontier(),
+            Action::PlaceDiagram { for_selection } => self.xtb_mo_place(for_selection),
+            Action::ToggleDiagramPicture(id, column, index) => {
+                self.xtb_mo_toggle_picture(id, column, index)
+            }
+            Action::EditDiagram(id, edit) => self.xtb_mo_edit(id, edit),
             Action::RemoveFrontier => {
                 // Whatever geometry the model shows now.
                 let atom = self
@@ -870,6 +961,7 @@ impl App {
             result: target.key.clone(),
             column,
             index,
+            from_diagram: false,
         };
         self.status = format!(
             "{} · {:.2} eV",

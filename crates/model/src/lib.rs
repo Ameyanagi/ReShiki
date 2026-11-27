@@ -57,6 +57,7 @@ pub mod line_icons;
 pub mod linked_properties;
 pub mod models3d;
 pub mod molecule_names;
+pub mod orbital_levels;
 pub mod pages;
 pub mod palette;
 pub mod pictures;

@@ -104,6 +104,9 @@ fn drawing_losses(
     }
     if matches!(format, "cdxml" | "cdx") {
         notices.extend(crate::graphics::export_notice(appearance));
+        notices.extend(crate::exchange::drawing::mo_diagram_export_notice(
+            appearance,
+        ));
         notices.extend(chemdraw_lacks(appearance, format));
     }
     // Preparation can change appearance, so rear opacity reads the source document.
