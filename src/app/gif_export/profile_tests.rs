@@ -154,34 +154,3 @@ fn profile_gif_encodes_every_state_at_twenty_frames_per_second() {
     }
     assert_eq!((frames, unique), (24, 3));
 }
-
-#[test]
-#[ignore = "writes sample files to RESHIKI_PROFILE_SAMPLE_DIR"]
-fn write_claisen_samples() {
-    let source = source();
-    let directory = PathBuf::from(std::env::var_os("RESHIKI_PROFILE_SAMPLE_DIR").unwrap());
-    std::fs::create_dir_all(&directory).unwrap();
-    let sequence = source.sequence();
-    for format in Format::available(true) {
-        let path = directory.join(encode::file_name(&source.name, format.extension()));
-        let start = std::time::Instant::now();
-        match render(
-            &source,
-            Options::default(),
-            *format,
-            &sequence,
-            &Work::default(),
-            &path,
-        ) {
-            Ok(true) => eprintln!(
-                "{}: {} bytes, {} frames, {:.2} s at {FPS} fps, encoded in {:.2} s",
-                path.display(),
-                path.metadata().unwrap().len(),
-                sequence.len(),
-                sequence.len() as f64 / FPS as f64,
-                start.elapsed().as_secs_f64(),
-            ),
-            failure => panic!("{}: {failure:?}", path.display()),
-        }
-    }
-}
