@@ -670,12 +670,14 @@ impl Layout {
     fn place_method(&mut self, method: &str, plot_right: f32, stroke: f32) {
         use crate::atom_labels::segment_hits_rect;
 
+        let Some(&axis_top) = self.lines.first().and_then(|line| line.first()) else {
+            return;
+        };
         let em = self.font.size();
         let inset = em * 0.3;
         let clearance = em * 0.12;
         let mut caption = Label::new(method.into(), Point::default(), em * 0.72);
         let (w, h) = caption.half_size(&self.font);
-        let axis_top = self.lines[0][0];
         let is_clear = |centre: Point| {
             let (lo, hi) = (
                 centre.offset(-w - clearance, -h - clearance),
@@ -684,7 +686,9 @@ impl Layout {
             let hits = |a, b| {
                 segment_hits_rect(a, b, lo.offset(-stroke, -stroke), hi.offset(stroke, stroke))
             };
-            let hits_path = |path: &[Point]| path.windows(2).any(|p| hits(p[0], p[1]));
+            let hits_path = |path: &[Point]| {
+                path.windows(2).any(|p| matches!(p, [a, b] if hits(*a, *b)))
+            };
             self.label_and_model_bounds()
                 .all(|(a, b)| a.x >= hi.x || b.x <= lo.x || a.y >= hi.y || b.y <= lo.y)
                 && !self.lines.iter().any(|p| hits_path(p))
