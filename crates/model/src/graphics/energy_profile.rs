@@ -416,9 +416,17 @@ struct Label {
     text: String,
     centre: Point,
     size: f32,
+    angle: f32,
 }
-struct StateSlot {
-    point: Point,
+impl Label {
+    fn new(text: String, centre: Point, size: f32) -> Self {
+        Self {
+            text,
+            centre,
+            size,
+            angle: 0.,
+        }
+    }
 }
 struct PictureSlot {
     state: usize,
@@ -428,7 +436,7 @@ struct Layout {
     width: f32,
     height: f32,
     font: TextStyle,
-    states: Vec<StateSlot>,
+    states: Vec<Point>,
     labels: Vec<Label>,
     pictures: Vec<PictureSlot>,
     lines: Vec<Vec<Point>>,
@@ -459,67 +467,82 @@ impl Layout {
             );
         let (low, high, ticks) = nice_scale(energies);
         let tick_texts: Vec<_> = ticks.iter().map(|&v| tick_text(v)).collect();
-        let axis_title = if profile.method.is_empty() {
-            format!("{} ({})", profile.energy_kind.label(), profile.unit.label())
-        } else {
-            format!(
-                "{} ({}) · {}",
-                profile.energy_kind.label(),
-                profile.unit.label(),
-                profile.method
-            )
-        };
-        let axis = em * 1.4
+        let axis_title = format!("{} ({})", profile.energy_kind.label(), profile.unit.label());
+        let axis = em * 2.4
             + tick_texts
                 .iter()
                 .map(|s| width_of(s, tick_size))
-                .fold(em, f32::max);
-        let names: Vec<_> = profile
+                .fold(0., f32::max);
+        let (mut transitions, mut intermediates) = (0, 0);
+        let captions: Vec<_> = profile
             .states
             .iter()
-            .enumerate()
-            .map(|(i, s)| {
-                if s.label.is_empty() {
-                    default_label(s.kind, i)
-                } else {
-                    s.label.clone()
-                }
+            .map(|s| {
+                let (role, short) = match s.kind {
+                    EnergyProfileStateKind::Reactant => ("R".into(), "R"),
+                    EnergyProfileStateKind::TransitionState => {
+                        transitions += 1;
+                        (format!("TS{transitions}‡"), "TS‡")
+                    }
+                    EnergyProfileStateKind::Intermediate => {
+                        intermediates += 1;
+                        (format!("I{intermediates}"), "I")
+                    }
+                    EnergyProfileStateKind::Product => ("P".into(), "P"),
+                };
+                let name = (s.label != role && s.label != short && !s.label.is_empty())
+                    .then_some(s.label.as_str());
+                (
+                    format!("{role} {}", profile.unit.number(s.energy_kcal)),
+                    name,
+                )
             })
             .collect();
-        let values: Vec<_> = profile
-            .states
+        let value_size = em * 0.9;
+        let slot = captions
             .iter()
-            .map(|s| profile.unit.number(s.energy_kcal))
-            .collect();
-        let picture_side = style.bond_length_world * 2.2;
-        let has_models = profile.models != EnergyProfileModels::Off
-            && profile.states.iter().any(|s| s.geometry.is_some());
-        let bar = names
-            .iter()
-            .chain(&values)
-            .map(|s| width_of(s, em))
-            .fold(em * 2.7, f32::max)
-            .max(if has_models { picture_side } else { 0. })
-            + em * 0.7;
-        // Text and models fit within a level's horizontal span. Connecting
-        // curves only occupy the gaps, so even nearly flat paths stay clear.
-        let slot = bar + em * 2.7;
-        let left = axis + em + bar / 2.;
-        let width = (left + slot * profile.states.len().saturating_sub(1) as f32 + bar / 2. + em)
-            .max(axis + em * 8.)
-            .max(width_of(&axis_title, tick_size) + em * 2.);
-        let row = has_models && profile.models == EnergyProfileModels::RowAbove;
-        let at_levels = has_models && profile.models == EnergyProfileModels::AtLevels;
-        let extra = if at_levels {
-            picture_side + em * 0.6
-        } else {
-            0.
+            .map(|(value, name)| width_of(value, value_size).max(width_of(name.unwrap_or(""), em)))
+            .fold(0., f32::max);
+        let slot = (slot + em * 1.2)
+            .max(em * 9.)
+            .max(style.bond_length_world * 6.);
+        let plot_left = axis + em * 0.3;
+        let plot_width = slot * profile.states.len().max(1) as f32;
+        // Keep a gap even in long, multistep profiles.
+        let bar = (plot_width * 0.11).min(slot * 0.55);
+        let picture_side = bar * 1.5;
+        let width = (plot_left + plot_width + em * 0.4)
+            .max(width_of(&profile.method, tick_size) + em * 1.5);
+        let has_model = |up| {
+            profile.states.iter().any(|s| {
+                s.geometry.is_some() && (s.kind == EnergyProfileStateKind::TransitionState) == up
+            })
         };
-        let row_height = if row { picture_side + em } else { 0. };
-        let header = em * 2.5;
-        let top = header + row_height + em * 2.1 + extra;
-        let bottom = top + em * 9.;
-        let height = bottom + em * 4.3 + extra;
+        let row = profile.models == EnergyProfileModels::RowAbove
+            && (has_model(true) || has_model(false));
+        let at_levels = profile.models == EnergyProfileModels::AtLevels;
+        let header = if profile.method.is_empty() {
+            em * 0.5
+        } else {
+            em * 1.6
+        };
+        let row_height = if row { picture_side + em * 0.4 } else { 0. };
+        let top = header
+            + row_height
+            + em * 2.
+            + if at_levels && has_model(true) {
+                picture_side
+            } else {
+                0.
+            };
+        let bottom = top + (em * 9.).max(width_of(&axis_title, tick_size));
+        let height = bottom
+            + em * 3.4
+            + if at_levels && has_model(false) {
+                picture_side
+            } else {
+                0.
+            };
         let factor = profile.unit.convert_kcal(1.);
         let mut layout = Self {
             width,
@@ -529,7 +552,7 @@ impl Layout {
             labels: vec![],
             pictures: vec![],
             lines: vec![],
-            curves: vec![],
+            curves: vec![vec![]; profile.states.len().saturating_sub(1)],
             bar,
             picture_side,
             low: low / factor,
@@ -537,124 +560,96 @@ impl Layout {
             top,
             bottom,
         };
-        layout.labels.push(Label {
-            text: axis_title.clone(),
-            centre: Point::new(em + width_of(&axis_title, tick_size) / 2., em * 0.75),
-            size: tick_size,
-        });
+        if !profile.method.is_empty() {
+            layout.labels.push(Label::new(
+                profile.method.clone(),
+                Point::new(
+                    em * 0.75 + width_of(&profile.method, tick_size) / 2.,
+                    em * 0.85,
+                ),
+                tick_size,
+            ));
+        }
+        let highest_tick = layout.energy_y(ticks.last().copied().unwrap_or(high) / factor);
+        let lowest_tick = layout.energy_y(ticks.first().copied().unwrap_or(low) / factor);
+        let mut title = Label::new(
+            axis_title,
+            Point::new(em * 0.8, (highest_tick + lowest_tick) / 2.),
+            tick_size,
+        );
+        title.angle = -90.;
+        layout.labels.push(title);
         layout.lines.push(vec![
-            Point::new(axis, header + row_height),
-            Point::new(axis, bottom + extra + em * 2.5),
+            Point::new(axis, highest_tick),
+            Point::new(axis, lowest_tick),
         ]);
         for (&tick, text) in ticks.iter().zip(tick_texts) {
             let y = layout.energy_y(tick / factor);
             layout
                 .lines
                 .push(vec![Point::new(axis - em * 0.25, y), Point::new(axis, y)]);
-            layout.labels.push(Label {
-                centre: Point::new(axis - em * 0.5 - width_of(&text, tick_size) / 2., y),
-                text,
-                size: tick_size,
-            });
+            let x = axis - em * 0.5 - width_of(&text, tick_size) / 2.;
+            layout
+                .labels
+                .push(Label::new(text, Point::new(x, y), tick_size));
         }
-        layout.labels.push(Label {
-            text: "Reaction coordinate".into(),
-            centre: Point::new((axis + width) / 2., height - em * 0.7),
-            size: tick_size,
-        });
-        for (i, state) in profile.states.iter().enumerate() {
-            let x = left + i as f32 * slot;
-            let y = layout.energy_y(state.energy_kcal);
-            let up = state.kind == EnergyProfileStateKind::TransitionState;
-            let sign = if up { -1. } else { 1. };
-            layout.states.push(StateSlot {
-                point: Point::new(x, y),
-            });
-            layout.labels.push(Label {
-                text: names.get(i).cloned().unwrap_or_default(),
-                centre: Point::new(x, y + sign * em * 1.05),
-                size: em,
-            });
-            layout.labels.push(Label {
-                text: values.get(i).cloned().unwrap_or_default(),
-                centre: Point::new(x, y - sign * em * 1.05),
-                size: em * 0.9,
-            });
-            if has_models && state.geometry.is_some() {
-                let cy = if row {
+        layout.labels.push(Label::new(
+            "Reaction coordinate".into(),
+            Point::new(plot_left + plot_width / 2., height - em * 0.75),
+            tick_size,
+        ));
+        layout.states = profile
+            .states
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                Point::new(
+                    plot_left + (i as f32 + 0.5) * slot,
+                    layout.energy_y(s.energy_kcal),
+                )
+            })
+            .collect();
+        for step in &profile.steps {
+            if let Some(ts) = step.transition {
+                layout.connect(step.from, ts, &step.irc, 0., 0.5);
+                layout.connect(ts, step.to, &step.irc, 0.5, 1.);
+            } else {
+                layout.connect(step.from, step.to, &step.irc, 0., 1.);
+            }
+        }
+        for (i, ((state, (value, name)), level)) in profile
+            .states
+            .iter()
+            .zip(captions)
+            .zip(layout.states.iter().copied())
+            .enumerate()
+        {
+            let Point { x, y } = level;
+            let clear = |width, up| layout.clear_y(i, level, width / 2. + em * 0.15, up);
+            let value_y = clear(width_of(&value, value_size), true) - em * 0.9;
+            let name_y = name.map(|name| clear(width_of(name, em), false) + em);
+            if (row || at_levels) && state.geometry.is_some() {
+                let model_y = if row {
                     header + picture_side / 2.
+                } else if state.kind == EnergyProfileStateKind::TransitionState {
+                    (clear(picture_side, true) - em * 0.4).min(value_y - em * 0.8)
+                        - picture_side / 2.
                 } else {
-                    y + sign * (em * 2. + picture_side / 2.)
+                    (clear(picture_side, false) + em * 0.4).max(name_y.map_or(y, |y| y + em * 0.8))
+                        + picture_side / 2.
                 };
                 layout.pictures.push(PictureSlot {
                     state: i,
-                    centre: Point::new(x, cy),
+                    centre: Point::new(x, model_y),
                 });
             }
-        }
-        for step in &profile.steps {
-            if !step.irc.is_empty() {
-                let mut samples = step.irc.clone();
-                // State bars remain exact anchors. Scalar IRC samples between
-                // them keep their assigned (possibly irregular) coordinates.
-                samples.push(EnergyProfileSample {
-                    x: 0.,
-                    energy_kcal: profile.states.get(step.from).map_or(0., |s| s.energy_kcal),
-                });
-                samples.push(EnergyProfileSample {
-                    x: 1.,
-                    energy_kcal: profile.states.get(step.to).map_or(0., |s| s.energy_kcal),
-                });
-                if let Some(ts) = step.transition.and_then(|i| profile.states.get(i)) {
-                    samples.push(EnergyProfileSample {
-                        x: 0.5,
-                        energy_kcal: ts.energy_kcal,
-                    });
-                }
-                samples.sort_by(|a, b| a.x.total_cmp(&b.x));
-                // Prefer the appended exact state when coordinates coincide.
-                samples.reverse();
-                samples.dedup_by(|a, b| a.x == b.x);
-                samples.reverse();
-                let mut path = vec![];
-                for pair in samples.windows(2) {
-                    let [a, b] = pair else { continue };
-                    let second = (a.x + b.x) / 2. > 0.5;
-                    let Some(pa) = layout.irc_point(step, *a, second) else {
-                        continue;
-                    };
-                    let Some(pb) = layout.irc_point(step, *b, second) else {
-                        continue;
-                    };
-                    path.push(PathCommand::Move(pa));
-                    path.push(PathCommand::Line(pb));
-                }
-                layout.curves.push(path);
-            } else {
-                let indices: Vec<_> = std::iter::once(step.from)
-                    .chain(step.transition)
-                    .chain(std::iter::once(step.to))
-                    .collect();
-                let mut path = vec![];
-                for pair in indices.windows(2) {
-                    let [a, b] = pair else { continue };
-                    let Some(a) = layout.states.get(*a) else {
-                        continue;
-                    };
-                    let Some(b) = layout.states.get(*b) else {
-                        continue;
-                    };
-                    let a = a.point.offset(bar / 2., 0.);
-                    let b = b.point.offset(-bar / 2., 0.);
-                    let mx = (a.x + b.x) / 2.;
-                    path.push(PathCommand::Move(a));
-                    path.push(PathCommand::Cubic(
-                        Point::new(mx, a.y),
-                        Point::new(mx, b.y),
-                        b,
-                    ));
-                }
-                layout.curves.push(path);
+            layout
+                .labels
+                .push(Label::new(value, Point::new(x, value_y), value_size));
+            if let Some((name, cy)) = name.zip(name_y) {
+                layout
+                    .labels
+                    .push(Label::new(name.into(), Point::new(x, cy), em));
             }
         }
         layout
@@ -662,33 +657,57 @@ impl Layout {
     fn energy_y(&self, energy: f64) -> f32 {
         self.top + (self.bottom - self.top) * ((self.high - energy) / (self.high - self.low)) as f32
     }
-    fn irc_point(
-        &self,
-        step: &EnergyProfileStep,
-        sample: EnergyProfileSample,
-        second: bool,
-    ) -> Option<Point> {
-        let from = self.states.get(step.from)?.point;
-        let to = self.states.get(step.to)?.point;
-        let energy = sample.energy_kcal;
-        // Reserve the full level spans, including their labels, around the
-        // exact R/TS/P anchors. Each branch is drawn only in the free gap.
-        let (a, b, t) = if let Some(ts) = step.transition.and_then(|i| self.states.get(i)) {
-            if !second {
-                (from, ts.point, sample.x * 2.)
-            } else {
-                (ts.point, to, (sample.x - 0.5) * 2.)
-            }
-        } else {
-            (from, to, sample.x)
+    fn connect(&mut self, from: usize, to: usize, irc: &[EnergyProfileSample], lo: f64, hi: f64) {
+        let (Some(&a), Some(&b)) = (self.states.get(from), self.states.get(to)) else {
+            return;
         };
-        let left = a.x + self.bar / 2.;
-        let right = b.x - self.bar / 2.;
-        let t = t as f32;
-        Some(Point::new(
-            left * (1. - t) + right * t,
-            self.energy_y(energy),
-        ))
+        let a = a.offset(self.bar / 2., 0.);
+        let b = b.offset(-self.bar / 2., 0.);
+        let mut path = vec![PathCommand::Move(a)];
+        if irc.is_empty() {
+            let mx = (a.x + b.x) / 2.;
+            path.push(PathCommand::Cubic(
+                Point::new(mx, a.y),
+                Point::new(mx, b.y),
+                b,
+            ));
+        } else {
+            let trace = irc
+                .iter()
+                .filter(|s| lo < s.x && s.x < hi)
+                .map(|s| ((s.x - lo) / (hi - lo), self.energy_y(s.energy_kcal)));
+            blend_irc_ends(&mut path, a, b, trace);
+        }
+        if let Some(curve) = self.curves.get_mut(from) {
+            *curve = path;
+        }
+    }
+    /// The vertical edge of the curve within a label or model's column.
+    fn clear_y(&self, state: usize, Point { x, y }: Point, half_width: f32, up: bool) -> f32 {
+        if half_width <= self.bar / 2. {
+            return y;
+        }
+        let (left, right) = (x - half_width, x + half_width);
+        let extend: fn(f32, f32) -> f32 = if up { f32::min } else { f32::max };
+        let start = state.saturating_sub(1);
+        let end = (state + 1).min(self.curves.len());
+        self.curves
+            .get(start..end)
+            .unwrap_or_default()
+            .iter()
+            .flat_map(|curve| super::flattened(curve))
+            .fold(y, |edge, path| {
+                path.windows(2).fold(edge, |edge, pair| {
+                    let [a, b] = pair else { return edge };
+                    if b.x < left || a.x > right {
+                        return edge;
+                    }
+                    let y_at = |x| a.y + (b.y - a.y) * ((x - a.x) / (b.x - a.x));
+                    let y_left = if a.x < left { y_at(left) } else { a.y };
+                    let y_right = if b.x > right { y_at(right) } else { b.y };
+                    extend(edge, extend(y_left, y_right))
+                })
+            })
     }
     fn world(&self, g: &Graphic, p: Point) -> Point {
         let (x, y) = (p.x / self.width, p.y / self.height);
@@ -719,7 +738,7 @@ impl Layout {
                 },
                 ..TextFormat::default()
             },
-            angle: text_angle(g.axis_x, g.axis_y),
+            angle: (text_angle(g.axis_x, g.axis_y) + label.angle).rem_euclid(360.),
         };
         let centre = self.world(g, label.centre);
         let (w, h) = a.size();
@@ -743,25 +762,25 @@ impl Layout {
                             }
                         })
                         .collect(),
-                    0.7,
+                    1.,
                 )
             })
             .collect();
-        parts.extend(self.curves.iter().map(|p| {
+        parts.extend(self.curves.iter().filter(|p| !p.is_empty()).map(|p| {
             line_part(
                 g,
                 p.iter().map(|p| p.map(|p| self.world(g, p))).collect(),
-                0.8,
+                1.,
             )
         }));
         parts.extend(self.states.iter().map(|s| {
             let mut part = line_part(
                 g,
                 vec![
-                    PathCommand::Move(self.world(g, s.point.offset(-self.bar / 2., 0.))),
-                    PathCommand::Line(self.world(g, s.point.offset(self.bar / 2., 0.))),
+                    PathCommand::Move(self.world(g, s.offset(-self.bar / 2., 0.))),
+                    PathCommand::Line(self.world(g, s.offset(self.bar / 2., 0.))),
                 ],
-                1.4,
+                2.,
             );
             part.style.flat_caps = true;
             part
@@ -772,12 +791,48 @@ impl Layout {
         )
     }
 }
-fn default_label(kind: EnergyProfileStateKind, index: usize) -> String {
-    match kind {
-        EnergyProfileStateKind::Reactant => "R".into(),
-        EnergyProfileStateKind::TransitionState => format!("TS{}‡", index.div_ceil(2)),
-        EnergyProfileStateKind::Intermediate => format!("I{}", index / 2),
-        EnergyProfileStateKind::Product => "P".into(),
+
+fn blend_irc_ends(
+    path: &mut Vec<PathCommand>,
+    a: Point,
+    b: Point,
+    trace: impl Iterator<Item = (f64, f32)>,
+) {
+    const BLEND: f64 = 0.15;
+    let right = 1. - BLEND;
+    let x_at = |t: f64| a.x + (b.x - a.x) * t as f32;
+    let handle = (b.x - a.x) * (BLEND / 3.) as f32;
+    let mut previous = (0., a.y);
+    for (t1, y1) in trace.chain(std::iter::once((1., b.y))) {
+        let (t0, y0) = previous;
+        previous = (t1, y1);
+        let on_trace = |t| {
+            let y = if t == t1 {
+                y1
+            } else {
+                y0 + (y1 - y0) * ((t - t0) / (t1 - t0)) as f32
+            };
+            Point::new(x_at(t), y)
+        };
+        // The inner handles follow the trace tangent and stay within its segment
+        // so the joins cannot overshoot the sampled energies.
+        if t0 < BLEND && BLEND <= t1 {
+            path.push(PathCommand::Cubic(
+                a.offset(handle, 0.),
+                on_trace(t0.max(BLEND - BLEND / 3.)),
+                on_trace(BLEND),
+            ));
+        }
+        if BLEND < t1 && t0 < right {
+            path.push(PathCommand::Line(on_trace(t1.min(right))));
+        }
+        if t0 <= right && right < t1 {
+            path.push(PathCommand::Cubic(
+                on_trace(t1.min(right + BLEND / 3.)),
+                b.offset(-handle, 0.),
+                b,
+            ));
+        }
     }
 }
 fn line_part(g: &Graphic, commands: Vec<PathCommand>, weight: f32) -> Part {
@@ -785,7 +840,7 @@ fn line_part(g: &Graphic, commands: Vec<PathCommand>, weight: f32) -> Part {
         commands,
         style: GraphicStyle {
             stroke: g.style.stroke,
-            width_pt: g.style.width_pt * weight,
+            width_pt: (g.style.width_pt * weight).min(12.),
             pattern: g.style.pattern,
             flat_caps: g.style.flat_caps,
             ..GraphicStyle::default()

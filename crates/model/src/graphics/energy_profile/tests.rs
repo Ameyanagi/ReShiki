@@ -50,11 +50,14 @@ fn profile(energies: &[f64]) -> EnergyProfile {
         .collect();
     let steps = (0..energies.len().saturating_sub(1))
         .step_by(2)
-        .map(|from| EnergyProfileStep {
-            from,
-            to: from + 2,
-            transition: Some(from + 1),
-            irc: vec![],
+        .map(|from| {
+            let to = (from + 2).min(energies.len() - 1);
+            EnergyProfileStep {
+                from,
+                to,
+                transition: (to == from + 2).then_some(from + 1),
+                irc: vec![],
+            }
         })
         .collect();
     EnergyProfile::new(1, "a".repeat(64), "GFN2-xTB".into(), states, steps)
@@ -74,63 +77,114 @@ fn overlaps((a, b): (Point, Point), (c, d): (Point, Point)) -> bool {
 }
 
 #[test]
-fn three_and_five_states_keep_labels_and_models_clear_of_every_curve() {
+fn labels_and_models_stay_clear_of_each_other_and_every_curve() {
     for energies in [
+        &[0., -60.][..],
         &[0., 18., -8.][..],
         &[0., 18., -5., 14., -12.],
         &[0., 0.00003, 0.00001, 0.00004, 0.00002],
         &[0., -4., -6., -5., -20.],
         &[0., 18., 12.],
     ] {
+        let mut p = profile(energies);
+        p.states[0].label = "3-(ethenyloxy)prop-1-ene + cis-2-butene".into();
+        if energies.len() > 2 {
+            p.states[1].label = "Transition-state conformer".into();
+            p.steps[0].irc = vec![
+                EnergyProfileSample {
+                    x: 0.01,
+                    energy_kcal: -30.,
+                },
+                EnergyProfileSample {
+                    x: 0.98,
+                    energy_kcal: 40.,
+                },
+            ];
+        }
+        for mode in EnergyProfileModels::ALL {
+            p.models = mode;
+            let g = placed(p.clone());
+            let layout = Layout::new(&p, &style::DEFAULT);
+            let (parts, labels) = layout.ink(&g);
+            let pictures: Vec<_> = layout
+                .pictures
+                .iter()
+                .map(|m| {
+                    let c = layout.world(&g, m.centre);
+                    let half = layout.picture_world_side(&g) / 2.;
+                    (c.offset(-half, -half), c.offset(half, half))
+                })
+                .collect();
+            for (i, label) in labels.iter().enumerate() {
+                for other in &labels[i + 1..] {
+                    assert!(
+                        !overlaps(label.bounds(), other.bounds()),
+                        "{} and {}",
+                        label.text,
+                        other.text
+                    );
+                }
+                assert!(
+                    pictures
+                        .iter()
+                        .all(|&model| !overlaps(label.bounds(), model))
+                );
+            }
+            for part in parts.iter().skip(layout.lines.len()) {
+                let half = part.style.width() / 2.;
+                for path in super::super::flattened(&part.commands) {
+                    for pair in path.windows(2) {
+                        let [a, b] = pair else { continue };
+                        let hits = |(lo, hi): (Point, Point)| {
+                            crate::atom_labels::segment_hits_rect(
+                                *a,
+                                *b,
+                                lo.offset(-half, -half),
+                                hi.offset(half, half),
+                            )
+                        };
+                        assert!(labels.iter().all(|l| !hits(l.bounds())), "{energies:?}");
+                        assert!(pictures.iter().all(|&m| !hits(m)), "{energies:?}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn short_equal_bars_and_smooth_connectors_span_evenly_spaced_levels() {
+    for energies in [&[0., -6.][..], &[0., 18., -6.], &[0., 18., -6., 12., -17.]] {
         let p = profile(energies);
         let g = placed(p.clone());
         let layout = Layout::new(&p, &style::DEFAULT);
-        assert_eq!(layout.states.len(), energies.len());
-        let paths: Vec<_> = layout
-            .curves
-            .iter()
-            .flat_map(|p| super::super::flattened(p))
-            .collect();
-        for label in layout.labels.iter().rev().take(p.states.len() * 2) {
-            let a = layout.annotation(&g, label);
-            let (w, h) = a.size();
-            let bounds = (
-                label.centre.offset(-w / 2., -h / 2.),
-                label.centre.offset(w / 2., h / 2.),
-            );
-            for path in &paths {
-                for segment in path.windows(2) {
-                    let [a, b] = segment else { continue };
-                    // All curves live horizontally outside the column occupied by
-                    // this state's text. Thus their bounding boxes cannot meet it.
-                    let line = (
-                        Point::new(a.x.min(b.x), a.y.min(b.y) - 0.01),
-                        Point::new(a.x.max(b.x), a.y.max(b.y) + 0.01),
-                    );
-                    assert!(
-                        !overlaps(bounds, line),
-                        "{} intersects curve for {energies:?}",
-                        label.text
-                    );
-                }
-            }
-            for model in &layout.pictures {
-                let half = layout.picture_side / 2.;
-                assert!(!overlaps(
-                    bounds,
-                    (
-                        model.centre.offset(-half, -half),
-                        model.centre.offset(half, half)
-                    )
-                ));
-            }
-        }
+        let (parts, _) = layout.ink(&g);
+        let (other, bars) = parts.split_at(parts.len() - energies.len());
+        let slot = layout.states[1].x - layout.states[0].x;
+        assert!((0.10..=0.12).contains(&(layout.bar / (slot * energies.len() as f32))));
         assert!(
-            layout
-                .states
-                .windows(2)
-                .all(|s| s[0].point.x + layout.bar / 2. < s[1].point.x - layout.bar / 2.)
+            other
+                .iter()
+                .all(|p| p.style.width_pt == style::DEFAULT.line_width_pt)
         );
+        for bar in bars {
+            let [PathCommand::Move(a), PathCommand::Line(b)] = bar.commands.as_slice() else {
+                panic!("level should be horizontal");
+            };
+            assert!((b.x - a.x - layout.bar).abs() < 1e-3);
+            assert_eq!(a.y, b.y);
+            assert_eq!(bar.style.width_pt, 2. * style::DEFAULT.line_width_pt);
+        }
+        for (pair, gap) in layout.states.windows(2).zip(&layout.curves) {
+            assert!((pair[1].x - pair[0].x - slot).abs() < 1e-3);
+            let a = pair[0].offset(layout.bar / 2., 0.);
+            let b = pair[1].offset(-layout.bar / 2., 0.);
+            let [PathCommand::Move(start), PathCommand::Cubic(c1, c2, end)] = gap.as_slice() else {
+                panic!("connector should be cubic");
+            };
+            assert_eq!((*start, *end), (a, b));
+            assert_eq!((c1.y, c2.y), (a.y, b.y));
+        }
     }
 }
 
@@ -142,13 +196,25 @@ fn model_placement_uses_the_free_side_or_a_shared_top_row() {
     for model in &levels.pictures {
         let state = &levels.states[model.state];
         if p.states[model.state].kind == EnergyProfileStateKind::TransitionState {
-            assert!(model.centre.y + levels.picture_side / 2. < state.point.y);
+            assert!(model.centre.y + levels.picture_side / 2. < state.y);
         } else {
-            assert!(model.centre.y - levels.picture_side / 2. > state.point.y);
+            assert!(model.centre.y - levels.picture_side / 2. > state.y);
         }
     }
+    assert!((1. ..=1.5).contains(&(levels.picture_side / levels.bar)));
+    let picture = geometry_picture(
+        &geometry(),
+        p.rotation,
+        Point::default(),
+        levels.picture_side,
+        &Document::default(),
+    )
+    .unwrap();
+    let (lo, hi) = crate::scene::bounds(&picture);
+    assert!((1. ..=1.5).contains(&((hi.x - lo.x).max(hi.y - lo.y) / levels.bar)));
     p.models = EnergyProfileModels::RowAbove;
     let row = Layout::new(&p, &style::DEFAULT);
+    assert_eq!(row.picture_side, levels.picture_side);
     assert!(
         row.pictures
             .iter()
@@ -178,16 +244,28 @@ fn axes_round_in_the_display_unit_and_flat_or_negative_profiles_remain_finite() 
                     .into_iter()
                     .any(|v| (fraction - v).abs() < 1e-8)
             );
-            for tick in ticks {
-                assert!(layout.labels.iter().any(|l| l.text == tick_text(tick)));
+            let axis = &layout.lines[0];
+            assert_eq!(axis[0], layout.lines.last().unwrap()[1]);
+            assert_eq!(axis[1], layout.lines[1][1]);
+            for (&tick, mark) in ticks.iter().zip(&layout.lines[1..]) {
+                assert_eq!(mark[0].y, mark[1].y);
+                assert_eq!(mark[1].x, axis[0].x);
+                assert!(mark[0].x < mark[1].x);
+                assert!(
+                    layout
+                        .labels
+                        .iter()
+                        .any(|l| l.text == tick_text(tick) && l.centre.y == mark[1].y)
+                );
             }
-            assert!(layout.states.iter().all(|s| s.point.is_finite()));
-            assert!(
-                layout
-                    .labels
-                    .iter()
-                    .any(|l| l.text == format!("ΔE ({}) · GFN2-xTB", unit.label()))
-            );
+            assert!(layout.states.iter().all(|s| s.is_finite()));
+            let title = &layout.labels[1];
+            let caption = &layout.labels[0];
+            assert_eq!(title.text, format!("ΔE ({})", unit.label()));
+            assert_eq!(title.angle, -90.);
+            assert_eq!(caption.text, "GFN2-xTB");
+            assert_eq!(caption.angle, 0.);
+            assert!(caption.centre.y < axis[0].y);
         }
     }
 }
@@ -205,6 +283,7 @@ fn owned_geometries_render_as_vector_models_with_thematic_bond_changes() {
     };
     let (parts, labels, pictures) = g.energy_profile_scene(&doc.drawing_style, &doc);
     assert!(!parts.is_empty() && !labels.is_empty());
+    assert!(labels.iter().any(|l| l.text == "TS1‡ 18.0"));
     assert_eq!(
         pictures
             .iter()
@@ -222,7 +301,7 @@ fn owned_geometries_render_as_vector_models_with_thematic_bond_changes() {
 }
 
 #[test]
-fn irregular_irc_samples_keep_coordinates_and_exact_state_anchors() {
+fn irc_joins_are_continuous_and_tangent_at_exact_state_levels() {
     let mut p = profile(&[0., 20., -8.]);
     p.steps[0].irc = vec![
         EnergyProfileSample {
@@ -230,7 +309,11 @@ fn irregular_irc_samples_keep_coordinates_and_exact_state_anchors() {
             energy_kcal: 9.,
         },
         EnergyProfileSample {
-            x: 0.07,
+            x: 0.04,
+            energy_kcal: 2.,
+        },
+        EnergyProfileSample {
+            x: 0.1,
             energy_kcal: 4.,
         },
         EnergyProfileSample {
@@ -242,25 +325,48 @@ fn irregular_irc_samples_keep_coordinates_and_exact_state_anchors() {
             energy_kcal: -1.,
         },
         EnergyProfileSample {
+            x: 0.96,
+            energy_kcal: -5.,
+        },
+        EnergyProfileSample {
             x: 1.,
             energy_kcal: -7.,
         },
     ];
     let layout = Layout::new(&p, &style::DEFAULT);
-    let path = &layout.curves[0];
-    let pts: Vec<_> = path.iter().flat_map(PathCommand::iter_points).collect();
-    let r = &layout.states[0];
-    let ts = &layout.states[1];
-    let end = &layout.states[2];
-    assert!(pts.contains(&r.point.offset(layout.bar / 2., 0.)));
-    assert!(pts.contains(&ts.point.offset(-layout.bar / 2., 0.)));
-    assert!(pts.contains(&ts.point.offset(layout.bar / 2., 0.)));
-    assert!(pts.contains(&end.point.offset(-layout.bar / 2., 0.)));
-    let expected = r.point.x + layout.bar / 2. + (ts.point.x - r.point.x - layout.bar) * 0.14;
-    assert!(
-        pts.iter()
-            .any(|q| (q.x - expected).abs() < 1e-4 && (q.y - layout.energy_y(4.)).abs() < 1e-4)
-    );
+    for ((path, pair), (fraction, energy)) in layout
+        .curves
+        .iter()
+        .zip(layout.states.windows(2))
+        .zip([(0.2, 4.), (0.68, -1.)])
+    {
+        let [
+            PathCommand::Move(start),
+            PathCommand::Cubic(start_handle, enter_handle, enter),
+            PathCommand::Line(sample),
+            PathCommand::Line(leave),
+            PathCommand::Cubic(leave_handle, end_handle, end),
+        ] = path.as_slice()
+        else {
+            panic!("each gap should contain one continuous branch");
+        };
+        assert_eq!(*start, pair[0].offset(layout.bar / 2., 0.));
+        assert_eq!(*end, pair[1].offset(-layout.bar / 2., 0.));
+        assert_eq!(start_handle.y, start.y);
+        assert_eq!(end_handle.y, end.y);
+        assert!(start.x < start_handle.x && end_handle.x < end.x);
+        for (point, t) in [(enter, 0.15), (sample, fraction), (leave, 0.85)] {
+            assert!((point.x - start.lerp(*end, t).x).abs() < 1e-4);
+        }
+        assert_eq!(sample.y, layout.energy_y(energy));
+        let slope = |a: Point, b: Point| {
+            assert!(a.x < b.x);
+            (b.y - a.y) / (b.x - a.x)
+        };
+        assert!((slope(*enter_handle, *enter) - slope(*enter, *sample)).abs() < 1e-4);
+        assert!((slope(*sample, *leave) - slope(*leave, *leave_handle)).abs() < 1e-4);
+    }
+    assert_eq!(layout.states[1].y, layout.energy_y(20.));
 }
 
 #[test]
@@ -271,10 +377,19 @@ fn affine_frame_keeps_figure_selection_and_labels() {
     g.map_positions(|p| p.turned(origin, 35.));
     let layout = Layout::new(&p, &style::DEFAULT);
     for s in &layout.states {
-        assert!(g.hit(layout.world(&g, s.point), 0.));
+        assert!(g.hit(layout.world(&g, *s), 0.));
     }
-    for label in layout.labels.iter().rev().take(p.states.len() * 2) {
-        assert_eq!(layout.annotation(&g, label).angle, 35.);
+    for label in &layout.labels {
+        let annotation = layout.annotation(&g, label);
+        assert_eq!(
+            annotation.angle,
+            if label.text.starts_with("ΔE") {
+                305.
+            } else {
+                35.
+            }
+        );
+        assert!(annotation.centre().distance(layout.world(&g, label.centre)) < 1e-4);
     }
     assert!(g.edit_points().is_empty());
     let before = g.clone();

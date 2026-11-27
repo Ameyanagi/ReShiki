@@ -80,8 +80,7 @@ fn energy_profile_exports_grouped_vectors_and_labels_through_cdxml_and_cdx() {
         .into_iter()
         .map(|a| a.text)
         .collect();
-    assert!(expected.iter().any(|text| text.contains("TS‡")));
-    assert!(expected.iter().any(|text| text.contains("18.5")));
+    assert!(expected.iter().any(|text| text == "TS1‡ 18.5"));
     // Generated diagram vectors need no caller-supplied geometry.
     let xml = write(&doc, Options::default()).unwrap();
     let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
@@ -138,6 +137,11 @@ fn resized_energy_profile_labels_roundtrip_in_the_strict_cdxml_and_cdx_reader() 
             let source_offset = expected[0].centre();
             for (source, actual) in expected.iter().zip(&back.annotations) {
                 assert_eq!(actual.text, source.text, "{format}");
+                assert!(
+                    (actual.angle - source.angle).abs() < 0.01,
+                    "{format}: {}",
+                    source.text
+                );
                 assert!(
                     (actual.format.style.size_pt - source.format.style.size_pt.clamp(4., 144.))
                         .abs()
@@ -264,8 +268,16 @@ fn assert_figure(format: &str, bytes: &[u8]) {
     match format {
         "svg" => {
             let svg = std::str::from_utf8(bytes).unwrap();
-            assert!(svg.contains("TS‡"));
-            assert!(svg.contains("18.5"));
+            assert!(svg.contains("TS1‡ 18.5"));
+            let tree = roxmltree::Document::parse(svg).unwrap();
+            let title = tree
+                .descendants()
+                .find(|n| n.has_tag_name("text") && n.text() == Some("ΔE (kcal/mol)"))
+                .unwrap();
+            assert!(title.ancestors().any(|n| {
+                n.attribute("transform")
+                    .is_some_and(|t| t.starts_with("rotate(270 "))
+            }));
             assert!(
                 svg.contains("radialGradient"),
                 "owned 3D structure is drawn"
