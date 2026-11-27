@@ -699,28 +699,37 @@ impl<'a> Layout<'a> {
                         }
                     });
                     if n >= 0.5 {
+                        // Electrons cross the bar, centred on it: a pair as ↑ in
+                        // the left half and ↓ in the right, one electron at the
+                        // centre with its column's spin.
                         let pair = self.closed && n >= 1.5;
+                        let width = right - left;
                         let centre = (left + right) / 2.;
-                        let apart = (right - left).min(em) * 0.18;
-                        let arrows = [
-                            (if pair { centre - apart } else { centre }, c.beta),
-                            (centre + apart, true),
-                        ];
-                        for (x, down) in arrows.into_iter().take(if pair { 2 } else { 1 }) {
-                            let stem = y - em * 0.13;
-                            let top = y - em * 0.75;
-                            let (tail, tip) = if down { (top, stem) } else { (stem, top) };
-                            let head = (right - left).min(em) * 0.14 * if down { 1. } else { -1. };
-                            parts.push(line_part(
-                                g,
-                                path(&[
-                                    Point::new(x, tail),
+                        let apart = width * 0.2;
+                        let half = em * 0.38;
+                        let head = (width * 0.09).min(em * 0.2);
+                        let arrows = if pair {
+                            vec![(centre - apart, false), (centre + apart, true)]
+                        } else {
+                            vec![(centre, c.beta)]
+                        };
+                        for (x, down) in arrows {
+                            let (tail, tip) = if down {
+                                (y - half, y + half)
+                            } else {
+                                (y + half, y - half)
+                            };
+                            let back = tip + head * 1.4 * if down { -1. } else { 1. };
+                            for points in [
+                                vec![Point::new(x, tail), Point::new(x, tip)],
+                                vec![
+                                    Point::new(x - head, back),
                                     Point::new(x, tip),
-                                    Point::new(x + head, tip + (tail - tip) * 0.32),
-                                ]),
-                                LinePattern::Solid,
-                                1.,
-                            ));
+                                    Point::new(x + head, back),
+                                ],
+                            ] {
+                                parts.push(line_part(g, path(&points), LinePattern::Solid, 1.));
+                            }
                         }
                     }
                 }
