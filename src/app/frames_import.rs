@@ -17,6 +17,8 @@ use reshiki::qcdata::{
 use reshiki::qcread::{self, Format, QcFile};
 use std::path::PathBuf;
 
+mod calculation_stereo;
+
 /// Geometry used when opening a whole job.
 pub(super) fn job_step(job: &qcread::Job) -> Option<&qcread::Step> {
     job.result_step().or_else(|| job.steps.last())
@@ -1096,7 +1098,7 @@ pub(super) fn drawing(frame: &Frame) -> Result<(reshiki::document::Document, Vec
 /// Keep the XYZ reader's perceived bonds, but fold ordinary bonded hydrogens
 /// into atom labels and keep their original 3D positions.
 pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, frame: &Frame) {
-    use reshiki::chemistry::{document::drawing_graph, hydrogens, kekulize::Direction, ranking};
+    use reshiki::chemistry::{document::drawing_graph, hydrogens};
     use std::collections::{HashMap, HashSet};
 
     if doc.models.len() != 1 || doc.atoms.len() != frame.numbers.len() {
@@ -1128,15 +1130,10 @@ pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, 
                 }),
             )
             .collect();
-    let mut metadata = ranking::Metadata::unspecified(&graph);
-    let mut directions = vec![Direction::None; graph.bonds.len()];
-    if let Some(stereo) = calculation_stereo(&graph, &metadata, &directions, frame) {
-        metadata = stereo.metadata;
-        directions = stereo.directions;
-    }
+    let stereo = calculation_stereo::perceive(&graph, frame);
     let Ok(folded) = hydrogens::remove(&hydrogens::Input {
-        metadata,
-        directions,
+        metadata: stereo.metadata,
+        directions: stereo.directions,
         unknown_atoms: vec![false; graph.atoms.len()],
         graph,
         annotations: hydrogens::Annotations {
@@ -1180,178 +1177,7 @@ pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, 
         model.fold_file_hydrogens(doc, &parents);
         doc.models.push(model);
     }
-    draw_calculation_stereo(doc, &folded.metadata);
-}
-
-/// Use the same spatial and bond-geometry passes as 3D molfile import.
-fn calculation_stereo(
-    graph: &reshiki::chemistry::graph::Graph,
-    metadata: &reshiki::chemistry::ranking::Metadata,
-    directions: &[reshiki::chemistry::kekulize::Direction],
-    frame: &Frame,
-) -> Option<reshiki::chemistry::stereo::BondGeometry> {
-    use reshiki::chemistry::{
-        sanitize,
-        stereo::{
-            self, Point3, SpatialAnnotations, SpatialOptions, perception, wedging::Conformer,
-        },
-    };
-
-    let conformer = Conformer {
-        positions: frame
-            .positions_angstrom
-            .iter()
-            .map(|&[x, y, z]| Point3 { x, y, z })
-            .collect(),
-        is_3d: true,
-    };
-    let spatial = stereo::from_3d(
-        graph,
-        metadata,
-        directions,
-        Some(&conformer),
-        &SpatialAnnotations {
-            non_explicit: vec![None; graph.atoms.len()],
-            done: None,
-        },
-        SpatialOptions {
-            allow_nontetrahedral: false,
-            ..SpatialOptions::default()
-        },
-    )
-    .ok()?;
-    let clean = sanitize::sanitize(graph, &spatial.metadata, directions).ok()?;
-    let geometry = stereo::detect_bond_stereo(
-        &clean.graph,
-        &clean.metadata,
-        &clean.directions,
-        Some(&conformer.positions),
-        &clean.rings,
-    )
-    .ok()?;
-    let state = perception::perceive(
-        &perception::State {
-            properties: perception::Properties::unspecified(&clean.graph),
-            graph: clean.graph,
-            metadata: geometry.metadata,
-            directions: geometry.directions,
-            valences: clean.valences,
-            conjugated: clean.conjugated,
-            hybridizations: clean.hybridizations,
-            rings: perception::RingCache {
-                kind: perception::RingKind::Symmetric,
-                atoms: clean.rings,
-            },
-            conformer: Some(conformer),
-        },
-        perception::Options {
-            clean: true,
-            force: true,
-            flag_possible: false,
-        },
-    )
-    .ok()?;
-    Some(stereo::BondGeometry {
-        metadata: state.metadata,
-        directions: state.directions,
-    })
-}
-
-/// Preserve the folded graph's winding and double-bond controls by drawing ID.
-/// Seed ordinary stereo marks so 2D cleanup can adjust them to its new layout.
-fn draw_calculation_stereo(
-    doc: &mut reshiki::document::Document,
-    metadata: &reshiki::chemistry::ranking::Metadata,
-) {
-    use reshiki::chemistry::{document, kekulize::Direction, stereo::wedging};
-    use reshiki::document::AtomStereo;
-    use std::collections::HashMap;
-
-    let ids: Vec<_> = doc.atoms.iter().map(|atom| atom.id).collect();
-    let mut neighbors = HashMap::<_, Vec<_>>::new();
-    if metadata
-        .atoms
-        .iter()
-        .any(|atom| matches!(atom.chiral_tag, 1 | 2))
-    {
-        for bond in &doc.bonds {
-            neighbors.entry(bond.a).or_default().push(bond.b);
-            neighbors.entry(bond.b).or_default().push(bond.a);
-        }
-        for (atom, metadata) in doc.atoms.iter_mut().zip(&metadata.atoms) {
-            if matches!(metadata.chiral_tag, 1 | 2) {
-                atom.stereo = Some(AtomStereo {
-                    winding: if metadata.chiral_tag == 1 {
-                        "cw"
-                    } else {
-                        "ccw"
-                    }
-                    .into(),
-                    neighbors: neighbors.remove(&atom.id).unwrap_or_default(),
-                });
-            }
-        }
-    }
-    for (bond, metadata) in doc.bonds.iter_mut().zip(&metadata.bonds) {
-        if let (2, &[a, b]) = (bond.order, metadata.stereo_atoms.as_slice())
-            && let (Some(a), Some(b)) = (ids.get(a), ids.get(b))
-        {
-            bond.stereo = match metadata.stereo {
-                2 => Some("z"),
-                3 => Some("e"),
-                4 => Some("cis"),
-                5 => Some("trans"),
-                _ => None,
-            }
-            .map(str::to_owned);
-            if bond.stereo.is_some() {
-                bond.stereo_atoms = vec![*a, *b];
-                bond.stereo_authoritative = true;
-            }
-        }
-    }
-    if !doc.atoms.iter().any(|atom| atom.stereo.is_some()) {
-        return;
-    }
-    let Ok(molecule) = document::prepare(doc) else {
-        return;
-    };
-    let state = molecule.state;
-    let Ok(wedged) = wedging::wedge_molecule(
-        &wedging::WedgeState {
-            graph: state.graph,
-            metadata: state.metadata,
-            directions: state.directions,
-            rings: state.rings,
-        },
-        &wedging::WedgeProperties {
-            valences: state.valences,
-            attachment_points: vec![false; ids.len()],
-        },
-        state.conformer.as_ref(),
-        doc.drawing_style.two_wedge_stereocentres,
-    ) else {
-        return;
-    };
-    for ((bond, wedged), direction) in doc
-        .bonds
-        .iter_mut()
-        .zip(wedged.graph.bonds)
-        .zip(wedged.directions)
-    {
-        let display = match direction {
-            Direction::Wedge => "wedge",
-            Direction::Hash => "hash",
-            _ => continue,
-        };
-        if bond.order == 1
-            && let (Some(a), Some(b)) = (ids.get(wedged.a), ids.get(wedged.b))
-        {
-            bond.a = *a;
-            bond.b = *b;
-            bond.display = display.into();
-        }
-    }
+    calculation_stereo::draw(doc, &folded.graph, &folded.metadata);
 }
 
 /// Keep up to 32 frames of `file`, the lowest in energy first, as an

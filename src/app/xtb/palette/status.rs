@@ -5,7 +5,7 @@ use std::path::PathBuf;
 pub(in crate::app) enum StatusKind {
     Palette,
     Mode,
-    /// Completion feedback belongs to this molecule's drawn atom.
+    /// Calculation feedback belongs to this molecule's drawn atom.
     Molecule(u64),
 }
 
@@ -77,16 +77,26 @@ impl App {
         text: impl Into<String>,
         atoms: &[Option<u64>],
     ) {
+        let mut text = text.into();
+        if let Some((limit, _)) = text.char_indices().nth(60) {
+            let end = text.get(..limit).and_then(|prefix| prefix.rfind(" · "));
+            text.truncate(end.unwrap_or(limit));
+        }
+        self.xtb_set_molecule_feedback(text, atoms);
+    }
+
+    /// Keep detailed review feedback intact while giving it the same owner
+    /// and selection lifetime as brief completion feedback.
+    pub(in crate::app::xtb) fn xtb_set_molecule_feedback(
+        &mut self,
+        text: impl Into<String>,
+        atoms: &[Option<u64>],
+    ) {
         if let Some(&atom) = atoms.iter().flatten().next()
             && self
                 .xtb_target()
                 .is_some_and(|target| target.contains(&atom))
         {
-            let mut text = text.into();
-            if let Some((limit, _)) = text.char_indices().nth(60) {
-                let end = text.get(..limit).and_then(|prefix| prefix.rfind(" · "));
-                text.truncate(end.unwrap_or(limit));
-            }
             self.xtb_set_palette_status(StatusKind::Molecule(atom), text, false);
         }
     }

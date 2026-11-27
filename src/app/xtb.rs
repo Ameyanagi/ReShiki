@@ -1248,8 +1248,10 @@ impl App {
                 reasons.push("An edit was open when the calculation finished.".into());
             }
             if let Some(first) = reasons.first() {
-                self.status = format!("{} · nothing applied", first.trim_end_matches('.'));
-                self.error = false;
+                self.xtb_set_molecule_feedback(
+                    format!("{} · nothing applied", first.trim_end_matches('.')),
+                    &pending.launch.atoms,
+                );
                 self.tab.xtb.outcome = Some(Outcome::Review(Box::new(Review {
                     pending,
                     reasons,
