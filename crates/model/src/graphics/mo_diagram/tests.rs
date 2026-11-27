@@ -653,3 +653,53 @@ fn the_gap_follows_the_summary_rule_for_separate_spins() {
     );
     assert_eq!(gap(h), None);
 }
+
+#[test]
+fn electrons_cross_their_bar_up_left_and_down_right() {
+    let (parts, _) = placed(benzene(), &style::DEFAULT).mo_parts(&style::DEFAULT);
+    let segment = |part: &Part| match part.commands.as_slice() {
+        [PathCommand::Move(a), PathCommand::Line(b)] => Some((*a, *b)),
+        _ => None,
+    };
+    let bars: Vec<_> = parts
+        .iter()
+        .filter(|p| p.style.flat_caps)
+        .filter_map(segment)
+        .filter(|(a, b)| (a.y - b.y).abs() < 1e-3)
+        .collect();
+    let shafts: Vec<_> = parts
+        .iter()
+        .filter_map(segment)
+        .filter(|(a, b)| (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() > 1e-3)
+        // The energy axis is vertical too; electrons lie within a bar.
+        .filter(|(a, _)| bars.iter().any(|(l, r)| a.x > l.x && a.x < r.x))
+        .collect();
+    // Three filled bars, two electrons each.
+    assert_eq!(shafts.len(), 6);
+    for (left, right) in bars {
+        let on: Vec<_> = shafts
+            .iter()
+            .filter(|(tail, tip)| {
+                tail.x > left.x
+                    && tail.x < right.x
+                    && tail.y.min(tip.y) < left.y
+                    && tail.y.max(tip.y) > left.y
+            })
+            .collect();
+        if on.is_empty() {
+            continue;
+        }
+        let centre = (left.x + right.x) / 2.;
+        let [(up_tail, up_tip), (down_tail, down_tip)] = [on[0], on[1]].map(|s| *s);
+        for (tail, tip) in [(up_tail, up_tip), (down_tail, down_tip)] {
+            assert!(
+                ((tail.y + tip.y) / 2. - left.y).abs() < 1e-3,
+                "centred on the bar"
+            );
+        }
+        // Screen y grows downward: ↑ has its tip above its tail.
+        assert!(up_tip.y < up_tail.y && up_tail.x < centre);
+        assert!(down_tip.y > down_tail.y && down_tail.x > centre);
+        assert!(((centre - up_tail.x) - (down_tail.x - centre)).abs() < 1e-3);
+    }
+}
