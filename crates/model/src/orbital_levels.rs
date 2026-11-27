@@ -3,8 +3,8 @@
 use reshiki_qcdata::{Beta, Orbitals, Spin};
 use serde::{Deserialize, Serialize};
 
-/// CODATA 2022, as the worker converts its gap.
-pub const EV_PER_HARTREE: f64 = 27.211386245981;
+/// Hartree to eV, as the worker converts its gap.
+pub use reshiki_qcdata::HARTREE_TO_EV as EV_PER_HARTREE;
 /// Levels closer than this (eV) are one degenerate group.
 pub const DEGENERATE_EV: f64 = 0.005;
 
