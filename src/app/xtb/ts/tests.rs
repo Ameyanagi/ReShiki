@@ -293,11 +293,16 @@ async fn narrow_reaction_card_shows_endpoint_energies_in_the_selected_unit() {
     ] {
         app.appearance.energy_unit = unit;
         let card = ui.inspect(app.xtb_reaction_card(arrow));
-        let displayed = |value| card.texts.iter().position(|text| text == value).unwrap();
-        assert!(displayed("Barrier ΔE‡") < displayed("Recalculate"));
-        assert!(displayed(barrier) < displayed("Recalculate"));
-        assert!(displayed(reaction) < displayed("Recalculate"));
-        assert!(displayed(unit.label()) < displayed("Recalculate"));
+        let displayed = |value: &str| {
+            card.texts
+                .iter()
+                .position(|text| text == value)
+                .unwrap_or_else(|| panic!("missing {value:?} in {:?}", card.texts))
+        };
+        let recalculate = displayed("Recalculate");
+        for value in ["GFN2-xTB Barrier ΔE‡", barrier, reaction, unit.label()] {
+            assert!(displayed(value) < recalculate);
+        }
         assert!(card.semantics.duplicate_ids.is_empty());
     }
 }

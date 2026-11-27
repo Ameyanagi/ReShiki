@@ -120,7 +120,13 @@ fn direct_gxtb_search_keeps_the_selected_method() {
 async fn running_gxtb_search_and_refine_keep_saved_gfn2_rows_labeled() {
     let ui = card::tests::ViewHarness::new().await;
     for refine in [false, true] {
-        let (mut app, arrow) = start();
+        let (doc, arrow) = card::tests::claisen();
+        let mut app = reaction_app(doc, arrow);
+        send(
+            &mut app,
+            XtbAction::Ts(Action::Card(card::Action::FreeEnergy)),
+        );
+        send(&mut app, XtbAction::Ts(Action::Calculate(arrow)));
         finish_model(&mut app);
         let run = app.tab.xtb.run.as_ref().unwrap();
         let serial = run.serial;
@@ -145,7 +151,10 @@ async fn running_gxtb_search_and_refine_keep_saved_gfn2_rows_labeled() {
             &mut app,
             XtbAction::TsEvent(serial, Event::Done(Ok(Arc::new(report)))),
         );
-        let source = app.tab.doc.science.results[0].result.clone();
+        let [stored] = app.tab.doc.science.results.as_slice() else {
+            panic!("expected one saved GFN2-xTB result: {}", app.status);
+        };
+        let source = Arc::clone(&stored.result);
         if refine {
             send(&mut app, XtbAction::Ts(Action::RefineGxtb(arrow, source)));
         } else {
