@@ -1892,7 +1892,7 @@ fn a_propyl_radical_builds_from_propane_and_removes_only_its_extra_hydrogen() {
     let job = app.tab.model_job.as_ref().expect("a strict radical model");
     assert_eq!(job.prepared.mode(), reshiki::geometry::Mode::Strict);
     assert_eq!(job.prepared.ids(), atoms);
-    let radical = &job.prepared.radicals()[..];
+    let radical = job.prepared.radicals();
     assert_eq!((radical[0].atom, radical[0].electrons), (atoms[0], 1));
     assert_eq!(
         subtitle(Some(job), None),
