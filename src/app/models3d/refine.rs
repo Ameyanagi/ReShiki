@@ -425,9 +425,31 @@ pub(super) fn hydrogens_kept(prepared: &Prepared, model: &Model3d, positions: &[
                     }
                 });
                 match (neighbors.next(), neighbors.next()) {
-                    (Some(parent), None) => nearest(at, true) == Some(parent),
+                    // H₂ and bridging hydrogens have no single heavy parent.
+                    (Some(parent), None)
+                        if graph.atoms.get(parent).is_some_and(|a| a.atomic_number != 1) =>
+                    {
+                        nearest(at, true) == Some(parent)
+                    }
                     _ => true,
                 }
+            })
+        // No bond, drawn or to a generated hydrogen, may come apart: the
+        // geometry worker refuses bonds over 4 Å too.
+        && graph
+            .bonds
+            .iter()
+            .map(|bond| (bond.a, bond.b))
+            .chain(
+                model
+                    .hydrogens
+                    .iter()
+                    .enumerate()
+                    .map(|(index, hydrogen)| (graph.atoms.len() + index, hydrogen.parent as usize)),
+            )
+            .all(|(a, b)| match (positions.get(a), positions.get(b)) {
+                (Some(a), Some(b)) => distance(a, b) <= 16.,
+                _ => false,
             })
 }
 

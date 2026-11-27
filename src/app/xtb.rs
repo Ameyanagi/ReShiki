@@ -189,7 +189,8 @@ fn is(weak: &Weak<CalcResult>, result: &Arc<CalcResult>) -> bool {
 pub(crate) struct Request {
     atoms: Vec<u64>,
     config: state::Config,
-    /// Unpaired was explicitly entered for these atoms, including a typed 0.
+    /// The spin is fixed: typed (including 0), saved or reviewed. Only a
+    /// blank Unpaired field in Calculate is inferred from the 3D model.
     spin_typed: bool,
     /// "Keep full results in this file" for the new result.
     keep_full: bool,

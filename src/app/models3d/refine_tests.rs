@@ -349,6 +349,9 @@ fn a_hydrogen_that_moved_to_another_atom_is_caught() {
     let moved = [[0., 0., 0.], [3., 0., 0.], [2.04, 0., 0.]];
     assert!(hydrogens_kept(&prepared, &model, &kept));
     assert!(!hydrogens_kept(&prepared, &model, &moved));
+    // A drawn bond that came apart (C–C 5 Å) is refused like the worker would.
+    let apart = [[0., 0., 0.], [5., 0., 0.], [0.96, 0., 0.]];
+    assert!(!hydrogens_kept(&prepared, &model, &apart));
 }
 
 #[test]
