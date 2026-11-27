@@ -237,6 +237,37 @@ impl EnergyProfile {
         let layout = Layout::new(self, style);
         (layout.width, layout.height)
     }
+    /// States with their plotted role and any additional authored name.
+    pub fn states_with_labels(
+        &self,
+    ) -> impl Iterator<Item = (&EnergyProfileState, String, Option<&str>)> {
+        let single_ts = self
+            .states
+            .iter()
+            .filter(|s| s.kind == EnergyProfileStateKind::TransitionState)
+            .count()
+            == 1;
+        self.states
+            .iter()
+            .scan((0, 0), move |(transitions, intermediates), state| {
+                let (role, short) = match state.kind {
+                    EnergyProfileStateKind::Reactant => ("R".into(), "R"),
+                    EnergyProfileStateKind::TransitionState if single_ts => ("TS‡".into(), "TS1‡"),
+                    EnergyProfileStateKind::TransitionState => {
+                        *transitions += 1;
+                        (format!("TS{transitions}‡"), "TS‡")
+                    }
+                    EnergyProfileStateKind::Intermediate => {
+                        *intermediates += 1;
+                        (format!("I{intermediates}"), "I")
+                    }
+                    EnergyProfileStateKind::Product => ("P".into(), "P"),
+                };
+                let name = (state.label != role && state.label != short && !state.label.is_empty())
+                    .then_some(state.label.as_str());
+                Some((state, role, name))
+            })
+    }
     pub(crate) fn heap_bytes(&self) -> usize {
         self.source_key.len()
             + self.method.len()
@@ -548,34 +579,12 @@ impl Layout {
                 .iter()
                 .map(|s| width_of(s, tick_size))
                 .fold(0., f32::max);
-        let single_ts = profile
-            .states
-            .iter()
-            .filter(|s| s.kind == EnergyProfileStateKind::TransitionState)
-            .count()
-            == 1;
-        let (mut transitions, mut intermediates) = (0, 0);
         let captions: Vec<_> = profile
-            .states
-            .iter()
-            .map(|s| {
-                let (role, short) = match s.kind {
-                    EnergyProfileStateKind::Reactant => ("R".into(), "R"),
-                    EnergyProfileStateKind::TransitionState if single_ts => ("TS‡".into(), "TS1‡"),
-                    EnergyProfileStateKind::TransitionState => {
-                        transitions += 1;
-                        (format!("TS{transitions}‡"), "TS‡")
-                    }
-                    EnergyProfileStateKind::Intermediate => {
-                        intermediates += 1;
-                        (format!("I{intermediates}"), "I")
-                    }
-                    EnergyProfileStateKind::Product => ("P".into(), "P"),
-                };
-                let name = (s.label != role && s.label != short && !s.label.is_empty())
-                    .then_some(s.label.as_str());
+            .states_with_labels()
+            .map(|(state, role, name)| {
                 (
-                    format!("{role} {}", profile.unit.number(s.energy_kcal)),
+                    state,
+                    format!("{role} {}", profile.unit.number(state.energy_kcal)),
                     name,
                 )
             })
@@ -583,7 +592,9 @@ impl Layout {
         let value_size = em * 0.9;
         let slot = captions
             .iter()
-            .map(|(value, name)| width_of(value, value_size).max(width_of(name.unwrap_or(""), em)))
+            .map(|(_, value, name)| {
+                width_of(value, value_size).max(width_of(name.unwrap_or(""), em))
+            })
             .fold(0., f32::max);
         let slots = profile.states.len().max(1) as f32;
         let slot = (slot + em * 1.2)
@@ -680,10 +691,8 @@ impl Layout {
                 Point::new(extent(x), extent(y))
             })
         };
-        for (i, ((state, (value, name)), level)) in profile
-            .states
-            .iter()
-            .zip(captions)
+        for (i, ((state, value, name), level)) in captions
+            .into_iter()
             .zip(layout.states.iter().copied())
             .enumerate()
         {

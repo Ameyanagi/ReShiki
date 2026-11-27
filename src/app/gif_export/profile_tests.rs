@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::profile_animation::tests::claisen;
+use crate::app::profile_animation::tests::{animation_app, claisen};
 
 fn source() -> Source {
     let (doc, id) = claisen();
@@ -14,9 +14,76 @@ fn source() -> Source {
             id,
             timeline,
             motion,
+            highlight: true,
         },
         mode: PlaybackMode::Loop,
         speed: 1.,
+    }
+}
+
+fn highlights_scheme(source: &Source) -> bool {
+    let Motion::Profile { highlight, .. } = &source.motion else {
+        panic!("Expected a profile export")
+    };
+    *highlight
+}
+
+#[test]
+fn profile_export_snapshots_only_the_current_sessions_scheme_highlight_setting() {
+    let (mut app, _) = animation_app();
+    assert!(highlights_scheme(&app.profile_export_source().unwrap()));
+    for highlight in [false, true] {
+        let _ = app.profile_animation_action(profile_animation::Action::Highlight(highlight));
+        let _ = app.gif_export_action(Action::OpenProfile);
+        let source = Arc::clone(&app.gif_export.as_ref().unwrap().source);
+        assert_eq!(highlights_scheme(&source), highlight);
+        let _ = app.profile_animation_action(profile_animation::Action::Highlight(!highlight));
+        assert_eq!(highlights_scheme(&source), highlight);
+        let _ = app.gif_export_action(Action::Cancel);
+    }
+    // The preceding action left highlighting off in a session for an older revision.
+    app.tab.revision = app.tab.revision.wrapping_add(1);
+    assert!(highlights_scheme(&app.profile_export_source().unwrap()));
+}
+
+#[test]
+fn profile_gif_frames_honor_the_playback_scheme_highlight_setting() {
+    let (mut app, _) = animation_app();
+    let directory = tempfile::tempdir().unwrap();
+    let mut exports = Vec::new();
+    for highlight in [false, true] {
+        let _ = app.profile_animation_action(profile_animation::Action::Highlight(highlight));
+        let _ = app.gif_export_action(Action::OpenProfile);
+        let source = Arc::clone(&app.gif_export.as_ref().unwrap().source);
+        let path = directory.path().join(format!("highlight-{highlight}.gif"));
+        assert!(
+            render(
+                &source,
+                Options::default(),
+                Format::Gif,
+                &[0, 1, 2],
+                &Work::default(),
+                &path,
+            )
+            .unwrap()
+        );
+        let bytes = std::fs::read(path).unwrap();
+        let mut decode = gif::DecodeOptions::new();
+        decode.set_color_output(gif::ColorOutput::RGBA);
+        let mut gif = decode.read_info(bytes.as_slice()).unwrap();
+        let mut frames = Vec::new();
+        while let Some(frame) = gif.read_next_frame().unwrap() {
+            frames.push(frame.buffer.to_vec());
+        }
+        assert_eq!(frames.len(), 3);
+        exports.push(frames);
+        let _ = app.gif_export_action(Action::Cancel);
+    }
+    for (state, (plain, highlighted)) in exports[0].iter().zip(&exports[1]).enumerate() {
+        assert_ne!(
+            plain, highlighted,
+            "State {state} ignored the scheme setting"
+        );
     }
 }
 

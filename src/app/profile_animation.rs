@@ -460,16 +460,16 @@ impl App {
         }
         let graphic = self.selected_energy_profile()?;
         let profile = graphic.energy_profile.as_deref()?;
-        let (timeline, motion) = self.current_profile_animation().map_or_else(
+        let (timeline, motion, highlight) = self.current_profile_animation().map_or_else(
             || {
                 let paths = self.energy_profile_paths(profile);
                 let motion = self
                     .appearance
                     .profile_motion
                     .available(paths.iter().any(Option::is_some));
-                (Timeline::new(profile, &paths, motion), motion)
+                (Timeline::new(profile, &paths, motion), motion, true)
             },
-            |s| (s.timeline.clone(), s.motion),
+            |s| (s.timeline.clone(), s.motion, s.highlight),
         );
         Some(Source {
             name: "energy-profile".into(),
@@ -479,6 +479,7 @@ impl App {
                 id: graphic.id,
                 timeline,
                 motion,
+                highlight,
             },
             mode: self.appearance.playback_mode,
             speed: self.appearance.playback_speed.factor(),

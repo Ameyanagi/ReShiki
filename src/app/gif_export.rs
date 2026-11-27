@@ -49,6 +49,7 @@ pub(super) enum Motion {
         id: u64,
         timeline: Timeline,
         motion: profile_animation::Motion,
+        highlight: bool,
     },
     Mode(Vec<Vec<[f32; 3]>>),
     Irc {
@@ -532,7 +533,12 @@ fn render(
         )
     };
     match &source.motion {
-        Motion::Profile { id, timeline, .. } => {
+        Motion::Profile {
+            id,
+            timeline,
+            highlight,
+            ..
+        } => {
             let mut renderer =
                 FrameRenderer::new(&source.doc, *id, options.size, options.transparent)?;
             let render = |_, index| {
@@ -540,7 +546,7 @@ fn render(
                     .frame(index)
                     .ok_or("Missing energy profile frame")?;
                 let geometry = timeline.geometry(frame);
-                renderer.render(frame.state, frame.sample(), geometry.as_ref(), true)
+                renderer.render(frame.state, frame.sample(), geometry.as_ref(), *highlight)
             };
             match format {
                 Format::Gif => encode::save(path, options, source.mode, sequence, work, render),

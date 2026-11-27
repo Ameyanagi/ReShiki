@@ -179,14 +179,14 @@ pub(super) fn readout(
     energy: Option<f64>,
     coordinate: Option<f64>,
 ) -> String {
-    let Some(state) = profile.states.get(index) else {
+    let Some((state, role, _)) = profile.states_with_labels().nth(index) else {
         return String::new();
     };
     let name = match (state.kind, state.label.as_str()) {
         (Kind::Reactant, "" | "R") => "Reactant",
         (Kind::Product, "" | "P") => "Product",
         (Kind::Intermediate, "" | "I") => "Intermediate",
-        (Kind::TransitionState, "") => "TS‡",
+        (Kind::TransitionState, _) => role.as_str(),
         (_, label) => label,
     };
     let mut line = format!(

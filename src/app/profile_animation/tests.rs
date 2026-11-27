@@ -172,7 +172,7 @@ pub(in crate::app) fn claisen() -> (Document, u64) {
     (doc, id)
 }
 
-fn animation_app() -> (App, u64) {
+pub(in crate::app) fn animation_app() -> (App, u64) {
     let (mut doc, id) = claisen();
     let before = doc.clone();
     let _ = reshiki::transaction::reconcile(&mut doc, before).unwrap();
@@ -480,7 +480,7 @@ fn steps_play_the_whole_profile_in_each_repeat_mode() {
 }
 
 #[test]
-fn readout_uses_the_authored_state_and_the_physical_irc_coordinate() {
+fn readout_uses_an_unnumbered_label_for_a_single_ts_and_the_physical_irc_coordinate() {
     let data = profile(&[Kind::Reactant, Kind::TransitionState, Kind::Product]);
     assert_eq!(
         timeline::readout(&data, 0, None, None),
@@ -488,11 +488,28 @@ fn readout_uses_the_authored_state_and_the_physical_irc_coordinate() {
     );
     assert_eq!(
         timeline::readout(&data, 1, None, None),
-        "TS1‡ · 27.3 kcal/mol"
+        "TS‡ · 27.3 kcal/mol"
     );
     assert_eq!(
         timeline::readout(&data, 1, Some(12.34), Some(-2.21)),
-        "TS1‡ · 12.3 kcal/mol · s = −2.2 amu½·bohr"
+        "TS‡ · 12.3 kcal/mol · s = −2.2 amu½·bohr"
+    );
+}
+
+#[test]
+fn readout_numbers_multiple_ts_with_unnumbered_authored_labels() {
+    use Kind::{Intermediate as I, Product as P, Reactant as R, TransitionState as Ts};
+    let mut data = profile(&[R, Ts, I, Ts, P]);
+    for state in data.states.iter_mut().filter(|state| state.kind == Ts) {
+        state.label = "TS‡".into();
+    }
+    assert_eq!(
+        timeline::readout(&data, 1, None, None),
+        "TS1‡ · 27.3 kcal/mol"
+    );
+    assert_eq!(
+        timeline::readout(&data, 3, None, None),
+        "TS2‡ · 18.5 kcal/mol"
     );
 }
 

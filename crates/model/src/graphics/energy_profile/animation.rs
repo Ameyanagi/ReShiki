@@ -39,16 +39,11 @@ impl Graphic {
         let marker = sample
             .and_then(|(step, sample)| layout.sample_point(profile, step, sample.x))
             .unwrap_or(level);
-        let radius = layout.marker_radius(self, marker);
-        let width_pt = (self.style.width_pt * 1.3)
-            .clamp(0.7, 12.)
-            .min(layout.bar_width_pt)
-            .min(style::DEFAULT.points_per_world() * radius * 0.5);
-        if width_pt >= 0.1 {
+        if let Some((radius, width_pt)) = layout.marker_size(self, marker) {
             out.push(Primitive::Path {
                 commands: circle(layout.world(self, marker), radius),
                 style: GraphicStyle {
-                    stroke: Color::Paper,
+                    stroke: if width_pt > 0. { Color::Paper } else { accent },
                     fill: Some(accent),
                     width_pt,
                     ..GraphicStyle::default()
@@ -87,17 +82,25 @@ impl Graphic {
 }
 
 impl Layout {
-    fn marker_radius(&self, g: &Graphic, marker: Point) -> f32 {
-        let Some([x, y]) = frame_projection(g) else {
-            return 0.;
-        };
+    fn marker_size(&self, g: &Graphic, marker: Point) -> Option<(f32, f32)> {
+        let [x, y] = frame_projection(g)?;
         let edge_distance = |t: f32, row: Point| t.min(1. - t) / row.x.hypot(row.y);
         let clearance = edge_distance(marker.x / self.width, x)
             .min(edge_distance((marker.y - self.min_y) / self.height, y));
         let scale = (g.axis_x.x.hypot(g.axis_x.y) / self.width)
             .min(g.axis_y.x.hypot(g.axis_y.y) / self.height);
         // Leave room for an outline whose width is at most half the radius.
-        (self.font.size() * scale * 0.32).min(clearance / 1.25)
+        let radius = (self.font.size() * scale * 0.32).min(clearance / 1.25);
+        let width_pt = (g.style.width_pt * 1.3)
+            .clamp(0.7, 12.)
+            .min(self.bar_width_pt)
+            .min(style::DEFAULT.points_per_world() * radius * 0.5);
+        let width_pt = if width_pt >= 0.1 { width_pt } else { 0. };
+        // Keep the fill visible while leaving room for any outline.
+        let radius = radius
+            .max(style::DEFAULT.world(0.5))
+            .min(clearance - style::DEFAULT.world(width_pt) / 2.);
+        (radius.is_finite() && radius > 0.).then_some((radius, width_pt))
     }
 
     fn replacement_picture(

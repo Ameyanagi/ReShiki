@@ -802,6 +802,44 @@ fn playback_marker(overlay: &[Primitive]) -> Point {
 }
 
 #[test]
+fn playback_draws_a_filled_marker_without_an_outline_at_five_points_high() {
+    let mut data = profile(&[0., 18., -6.]);
+    let sample = EnergyProfileSample {
+        x: 0.4,
+        energy_kcal: 16.,
+    };
+    data.steps[0].irc.push(sample);
+    let mut g = placed(data);
+    g.axis_y.y = style::DEFAULT.world(5.);
+    g.validate().unwrap();
+    let source = Document::default();
+    for (state, sample) in [(0, None), (1, None), (2, None), (1, Some((0, sample)))] {
+        let overlay = g.energy_profile_overlay(&style::DEFAULT, &source, state, sample, None);
+        let [
+            _,
+            Primitive::Path {
+                commands,
+                style: marker_style,
+                filled: true,
+            },
+        ] = overlay.as_slice()
+        else {
+            panic!("Missing filled playback marker")
+        };
+        assert_eq!(
+            marker_style.fill,
+            Some(Color::Palette(Hue::Green, Row::Strong))
+        );
+        assert_eq!(marker_style.width_pt, 0.);
+        let Some(PathCommand::Move(edge)) = commands.first() else {
+            panic!("Missing marker path")
+        };
+        let centre = playback_marker(&overlay);
+        assert!(edge.distance(centre) >= style::DEFAULT.world(0.5) - 0.001);
+    }
+}
+
+#[test]
 fn playback_marker_follows_drawn_irc_blends_and_every_level_after_affine_placement() {
     let mut p = profile(&[0., 18., -6., 12., -17.]);
     for step in &mut p.steps {
