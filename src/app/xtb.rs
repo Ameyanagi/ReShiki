@@ -841,6 +841,21 @@ impl App {
         let Some(&atom) = run.atoms.first() else {
             return Task::none();
         };
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if let Some(live) = &run.ts
+            && let Some(parent) = live.request.refined_from()
+        {
+            return match self.xtb_gxtb_launch(live.request.arrow, parent) {
+                Some(launch) => self.xtb_start(launch),
+                None => {
+                    self.xtb_fail(state::Failure::Other(
+                        "The saved GFN2-xTB calculation changed. Calculate the barrier again."
+                            .into(),
+                    ));
+                    Task::none()
+                }
+            };
+        }
         let launch = |doc: &Document| {
             science::launch(
                 doc,
@@ -1091,8 +1106,9 @@ impl App {
             // An edit during the run retires Retry.
             failed.revision = attempt.revision;
         }
+        let method = failed.ts().map_or("xTB", |request| request.method.label());
         self.status = format!(
-            "xTB calculation failed: {}",
+            "{method} calculation failed: {}",
             failed.explain(self.xtb_can_retry(&failed)).0
         );
         self.error = true;
@@ -1381,7 +1397,7 @@ impl Run {
 
     fn status(&self) -> String {
         if let Some(live) = &self.ts {
-            return format!("xTB · {}", live.line());
+            return format!("{} · {}", live.request.method.label(), live.line());
         }
         if self.launch.is_none() {
             return "xTB · making the 3D model first (MMFF94s)".into();

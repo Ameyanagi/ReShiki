@@ -225,6 +225,8 @@ mod tests {
             finished: None,
             search: None,
             transition_state: Some(Box::new(TransitionStateRun {
+                method: Default::default(),
+                refined_from: None,
                 irc: None,
                 arrow: None,
                 context: None,

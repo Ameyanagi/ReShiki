@@ -99,7 +99,10 @@ const LEFT: f32 = 52.;
 const RIGHT: f32 = 16.;
 const FONT: f32 = 11.;
 const LINE: f32 = 15.;
-const MODEL_SIZE: f32 = 36.;
+const MODEL_SIZE: f32 = 72.;
+const COMPACT_MODEL_SIZE: f32 = 36.;
+const MODEL_GAP: f32 = 8.;
+const MIN_TRACE_HEIGHT: f32 = 36.;
 const RELAXED_LEGEND: &str = "relaxed to the minimum";
 
 fn finite(sample: Sample) -> bool {
@@ -156,6 +159,38 @@ fn nice_scale(lo: f64, hi: f64) -> (f64, f64, Vec<f64>) {
 fn text_width(text: &str) -> f32 {
     // Conservative for the UI font, including the widest digits and TS glyphs.
     text.chars().count() as f32 * FONT * 0.66 + 6.
+}
+
+fn text_line(content: String, position: Point, color: Color, size: f32) -> Text {
+    Text {
+        content,
+        position,
+        color,
+        size: size.into(),
+        align_y: iced::alignment::Vertical::Top,
+        // Layout owns wrapping and row placement. Match the actual rendered
+        // line box to those rows rather than inheriting relative font metrics.
+        line_height: iced::widget::text::LineHeight::Absolute(LINE.into()),
+        ..Text::default()
+    }
+}
+
+/// Labels and models live above or below the plot. Stop their leaders at its
+/// edge so annotation rows stay clear without opaque text backing.
+fn leader_edge(outside: Point, inside: Point, plot: Rectangle) -> Point {
+    let dy = inside.y - outside.y;
+    if dy.abs() < f32::EPSILON {
+        return inside;
+    }
+    let edge_y = outside.y.clamp(plot.y, plot.y + plot.height);
+    let t = ((edge_y - outside.y) / dy).clamp(0., 1.);
+    // Land exactly on the edge row; interpolating y can miss it by an ulp.
+    let y = if t > 0. && t < 1. {
+        edge_y
+    } else {
+        outside.y + dy * t
+    };
+    Point::new(outside.x + (inside.x - outside.x) * t, y)
 }
 
 fn wrap_note(text: &str, width: f32) -> Vec<String> {
@@ -260,35 +295,79 @@ impl Profile {
             vec![]
         };
         let show_models = bounds.width >= 260. && bounds.height >= 140.;
+        // Model artwork can use the energy-axis gutter above the trace. This
+        // also leaves three full-size models inside the 288 px content width
+        // of a 320 px inspector with its horizontal padding.
+        let model_left = 8.;
+        let model_width = (bounds.width - 2. * model_left).max(1.);
         let model_markers: Vec<_> = self
             .markers
             .iter()
             .filter(|marker| show_models && finite(marker.sample))
             .filter_map(|marker| Some((marker, marker.thumbnail?)))
             .collect();
-        let model_markers = if width < model_markers.len() as f32 * (MODEL_SIZE + 6.) {
+        // Keep the normal figure twice the former 36 px thumbnail height.
+        // Small embedded/export figures retain a compact version, while the
+        // dock and inspector reserve enough height for the full-size models.
+        let model_size = if bounds.height >= 240.
+            && model_width >= model_markers.len() as f32 * (MODEL_SIZE + MODEL_GAP)
+        {
+            MODEL_SIZE
+        } else {
+            COMPACT_MODEL_SIZE
+        };
+        let model_markers = if model_width < model_markers.len() as f32 * (model_size + MODEL_GAP) {
             vec![]
         } else {
             model_markers
         };
+        // A narrow normal-size figure gives TS its own row, leaving at least
+        // 128 × 72 px for each endpoint in a padded 288 px inspector.
+        // Short embedded figures keep the compact single-row presentation.
+        let stacked_models = bounds.height >= 316.
+            && matches!(model_markers.as_slice(), [_, (middle, _), _] if middle.transition)
+            && model_width < 3. * (128. + MODEL_GAP);
         let mut models = vec![];
         let model_height = if model_markers.is_empty() {
             0.
         } else {
-            MODEL_SIZE + 2.
+            (model_size + 4.) * if stacked_models { 2. } else { 1. }
         };
         if !model_markers.is_empty() {
-            let slot_width = width / model_markers.len() as f32;
+            let model_count = model_markers.len();
             for (slot, (marker, thumbnail)) in model_markers.into_iter().enumerate() {
-                let size = Size::new((slot_width - 6.).clamp(MODEL_SIZE, 88.), MODEL_SIZE);
-                let ideal = self.x(marker.sample.x, bounds);
+                let (row, slot, slots) = if stacked_models {
+                    if marker.transition {
+                        (0, 0, 1)
+                    } else {
+                        (1, slot / 2, 2)
+                    }
+                } else {
+                    (0, slot, model_count)
+                };
+                let slot_width = model_width / slots as f32;
+                let size = Size::new(
+                    (slot_width - MODEL_GAP).clamp(model_size, model_size * 2.45),
+                    model_size,
+                );
+                let ideal = if stacked_models && marker.transition {
+                    bounds.width / 2.
+                } else {
+                    self.x(marker.sample.x, bounds)
+                };
                 let center = ideal.clamp(
-                    LEFT + slot as f32 * slot_width + size.width / 2.,
-                    LEFT + (slot + 1) as f32 * slot_width - size.width / 2.,
+                    model_left + slot as f32 * slot_width + size.width / 2.,
+                    model_left + (slot + 1) as f32 * slot_width - size.width / 2.,
                 );
                 models.push(ModelBox {
                     thumbnail,
-                    bounds: Rectangle::new(Point::new(center - size.width / 2., 1.), size),
+                    bounds: Rectangle::new(
+                        Point::new(
+                            center - size.width / 2.,
+                            1. + row as f32 * (model_size + 4.),
+                        ),
+                        size,
+                    ),
                     sample: marker.sample,
                 });
             }
@@ -382,7 +461,7 @@ impl Profile {
             };
         // Leave a readable trace when a plan has many forming distances. The
         // accessible figure name retains the entire annotation.
-        let max_lines = ((bounds.height - footer - top - 36.) / LINE)
+        let max_lines = ((bounds.height - footer - top - MIN_TRACE_HEIGHT) / LINE)
             .floor()
             .max(0.) as usize;
         if note_lines.len() > max_lines {
@@ -537,13 +616,12 @@ impl Profile {
                 .with_width(0.8),
         );
         for (index, content) in lines.into_iter().enumerate() {
-            frame.fill_text(Text {
+            frame.fill_text(text_line(
                 content,
-                position: origin + iced::Vector::new(4., 4. + index as f32 * LINE),
-                color: theme.palette().text,
-                size: FONT.into(),
-                ..Text::default()
-            });
+                origin + iced::Vector::new(4., 4. + index as f32 * LINE),
+                theme.palette().text,
+                FONT,
+            ));
         }
     }
 
@@ -567,12 +645,8 @@ impl Profile {
         let grid = Color { a: 0.22, ..muted };
         let label = |frame: &mut Frame, content: String, at: Point, color, size, align| {
             frame.fill_text(Text {
-                content,
-                position: at,
-                color,
-                size: iced::Pixels(size),
                 align_x: align,
-                ..Text::default()
+                ..text_line(content, at, color, size)
             });
         };
         frame.with_save(|frame| {
@@ -717,14 +791,12 @@ impl Profile {
         }
         for model in &layout.models {
             let point = layout.point(model.sample);
+            let start = Point::new(
+                model.bounds.center_x(),
+                model.bounds.y + model.bounds.height,
+            );
             frame.stroke(
-                &Path::line(
-                    Point::new(
-                        model.bounds.center_x(),
-                        model.bounds.y + model.bounds.height,
-                    ),
-                    point,
-                ),
+                &Path::line(leader_edge(start, point, layout.plot), point),
                 Stroke {
                     line_dash: canvas::LineDash {
                         segments: &[2., 3.],
@@ -752,7 +824,7 @@ impl Profile {
                     y,
                 );
                 frame.stroke(
-                    &Path::line(point, end),
+                    &Path::line(point, leader_edge(end, point, layout.plot)),
                     Stroke::default()
                         .with_color(Color { a: 0.5, ..muted })
                         .with_width(0.8),
@@ -790,12 +862,6 @@ impl Profile {
             }
         }
         for annotation in &layout.labels {
-            // Opaque text backing also prevents a thumbnail leader crossing text.
-            frame.fill_rectangle(
-                annotation.bounds.position(),
-                annotation.bounds.size(),
-                theme.palette().background,
-            );
             let color = annotation
                 .marker
                 .map_or(muted, |marker| if marker.transition { amber } else { ink });

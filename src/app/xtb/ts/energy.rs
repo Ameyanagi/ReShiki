@@ -37,6 +37,7 @@ struct Batch {
     arrow: u64,
     species: Vec<Species>,
     task: CalcTask,
+    method: qcdata::XtbMethod,
     snapshot: String,
     barrier_refusal: Option<String>,
     next: usize,
@@ -56,6 +57,7 @@ struct Summary {
     arrow: u64,
     species: Vec<Species>,
     task: CalcTask,
+    method: qcdata::XtbMethod,
     snapshot: String,
     barrier_refusal: Option<String>,
     reused: usize,
@@ -92,13 +94,18 @@ impl Input {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct Totals {
+    pub method: qcdata::XtbMethod,
     pub energy: f64,
     pub gibbs: Option<f64>,
 }
 
 impl Totals {
     fn line(&self, unit: EnergyUnit) -> String {
-        format!("Reaction energy · ΔE {}", unit.format(self.energy))
+        format!(
+            "Reaction energy · ΔE {} · {}",
+            unit.format(self.energy),
+            self.method.label()
+        )
     }
 }
 
@@ -256,16 +263,22 @@ fn matching_thermo(result: &CalcResult, frame: &Frame) -> bool {
         && thermo.gibbs_correction_hartree.is_finite()
 }
 
-/// Keep the entire reaction on the same GFN2 gas-phase Hamiltonian, with
+/// Keep the entire reaction on the selected gas-phase Hamiltonian, with
 /// unconstrained optimized minima. Threads do not change result eligibility.
-fn matching(result: &CalcResult, frame: &Frame, species: &Species, task: CalcTask) -> bool {
+fn matching(
+    result: &CalcResult,
+    frame: &Frame,
+    species: &Species,
+    task: CalcTask,
+    method: qcdata::XtbMethod,
+) -> bool {
     let qcdata::Settings::Xtb(settings) = &result.settings else {
         return false;
     };
     let optimized = result.task == qcdata::Task::Optimize
         && result.status == qcdata::Status::Converged
         && result.energy_hartree.is_some_and(f64::is_finite);
-    let settings_match = settings.method == qcdata::XtbMethod::Gfn2Xtb
+    let settings_match = settings.method == method
         && settings.conventions == qcdata::XtbConventions::Axtb
         && settings.solvent.is_none()
         && settings.electronic_temperature_k.is_none()
@@ -287,42 +300,63 @@ fn matching(result: &CalcResult, frame: &Frame, species: &Species, task: CalcTas
         && frame.multiplicity == species.multiplicity
 }
 
-fn eligible(view: &science::ResultView<'_>, species: &Species, task: CalcTask) -> bool {
+fn eligible(
+    view: &science::ResultView<'_>,
+    species: &Species,
+    task: CalcTask,
+    method: qcdata::XtbMethod,
+) -> bool {
     view.freshness == Freshness::Current
         && view.attachment.atoms.iter().flatten().count() == species.atoms.len()
         && species
             .atoms
             .iter()
             .all(|id| view.attachment.atoms.contains(&Some(*id)))
-        && matching(&view.stored.result, view.frame, species, task)
+        && matching(&view.stored.result, view.frame, species, task, method)
 }
 
-fn reusable(doc: &Document, species: &Species, task: CalcTask) -> Option<Input> {
+fn reusable(
+    doc: &Document,
+    species: &Species,
+    task: CalcTask,
+    method: qcdata::XtbMethod,
+) -> Option<Input> {
     let &atom = species.atoms.first()?;
     science::results_for(doc, atom)
         .into_iter()
         .rev()
-        .find(|view| eligible(view, species, task))
+        .find(|view| eligible(view, species, task, method))
         .map(|view| Input::from_view(&view))
 }
 
 /// Called immediately after ordinary storage. Only that newly stored result
 /// can finish the active term, even if another eligible result exists.
-fn completed(doc: &Document, species: &Species, task: CalcTask) -> Option<Input> {
+fn completed(
+    doc: &Document,
+    species: &Species,
+    task: CalcTask,
+    method: qcdata::XtbMethod,
+) -> Option<Input> {
     let index = doc.science.results.len().checked_sub(1)?;
     science::results_for(doc, *species.atoms.first()?)
         .into_iter()
-        .find(|view| view.index == index && eligible(view, species, task))
+        .find(|view| view.index == index && eligible(view, species, task, method))
         .map(|view| Input::from_view(&view))
 }
 
 fn totals<'a>(
     values: impl IntoIterator<Item = (&'a Species, &'a CalcResult)>,
     task: CalcTask,
+    method: qcdata::XtbMethod,
 ) -> Option<Totals> {
     let mut energy = 0.;
     let mut gibbs = (task == CalcTask::OptFreq).then_some(0.);
     for (species, result) in values {
+        if result.status != qcdata::Status::Converged
+            || !matches!(&result.settings, qcdata::Settings::Xtb(settings) if settings.method == method)
+        {
+            return None;
+        }
         let coefficient = f64::from(species.coefficient) * if species.product { 1. } else { -1. };
         let electronic = result.energy_hartree.filter(|e| e.is_finite())?;
         energy += coefficient * electronic;
@@ -333,7 +367,11 @@ fn totals<'a>(
     }
     let energy = energy * KCAL_PER_HARTREE;
     let gibbs = gibbs.map(|g| g * KCAL_PER_HARTREE);
-    (energy.is_finite() && gibbs.is_none_or(f64::is_finite)).then_some(Totals { energy, gibbs })
+    (energy.is_finite() && gibbs.is_none_or(f64::is_finite)).then_some(Totals {
+        method,
+        energy,
+        gibbs,
+    })
 }
 
 fn input_totals(
@@ -341,6 +379,7 @@ fn input_totals(
     species: &[Species],
     inputs: &[Input],
     task: CalcTask,
+    method: qcdata::XtbMethod,
 ) -> Option<Totals> {
     let science = &doc.science;
     if inputs.len() != species.len()
@@ -360,6 +399,7 @@ fn input_totals(
             .iter()
             .zip(inputs.iter().map(|input| input.result.as_ref())),
         task,
+        method,
     )
 }
 
@@ -470,6 +510,7 @@ impl App {
             arrow,
             species,
             task,
+            method: self.xtb.settings.barrier_method,
             snapshot,
             barrier_refusal,
             next: 0,
@@ -493,9 +534,13 @@ impl App {
                 return Task::none();
             }
             let Some(species) = batch.species.get(batch.next).cloned() else {
-                let Some(totals) =
-                    input_totals(&self.tab.doc, &batch.species, &batch.inputs, batch.task)
-                else {
+                let Some(totals) = input_totals(
+                    &self.tab.doc,
+                    &batch.species,
+                    &batch.inputs,
+                    batch.task,
+                    batch.method,
+                ) else {
                     self.status = "Reaction energy stopped: a species result is stale".into();
                     self.tab.xtb.energy_state.stopped = Some((batch.arrow, self.status.clone()));
                     self.error = false;
@@ -523,6 +568,7 @@ impl App {
                     arrow: batch.arrow,
                     species: batch.species,
                     task: batch.task,
+                    method: batch.method,
                     snapshot: batch.snapshot,
                     barrier_refusal: batch.barrier_refusal,
                     reused: batch.reused,
@@ -531,7 +577,7 @@ impl App {
                 });
                 return Task::none();
             };
-            if let Some(input) = reusable(&self.tab.doc, &species, batch.task) {
+            if let Some(input) = reusable(&self.tab.doc, &species, batch.task, batch.method) {
                 batch.inputs.push(input);
                 batch.next += 1;
                 batch.reused += 1;
@@ -540,7 +586,7 @@ impl App {
             }
             let config = state::Config {
                 task: batch.task,
-                method: qcdata::XtbMethod::Gfn2Xtb,
+                method: batch.method,
                 charge: species.charge,
                 unpaired: species.multiplicity - 1,
                 solvent: None,
@@ -600,7 +646,7 @@ impl App {
                 batch
                     .species
                     .get(batch.next)
-                    .and_then(|species| completed(&self.tab.doc, species, batch.task))
+                    .and_then(|species| completed(&self.tab.doc, species, batch.task, batch.method))
             })
             .flatten();
         let Some(input) = input else {
@@ -642,6 +688,7 @@ impl App {
                 &summary.species,
                 &summary.inputs,
                 summary.task,
+                summary.method,
             )
         });
         let refusal = match state.batch.as_ref().filter(|batch| batch.arrow == arrow) {

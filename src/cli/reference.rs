@@ -1,5 +1,10 @@
 //! Deterministic agent documentation from the live CLI and operation contracts.
-use super::{MCP_USAGE, commands::COMMANDS, help};
+use super::{
+    MCP_USAGE,
+    commands::{self, COMMANDS, CommandSpec, DOCUMENTED_COMMANDS},
+    help,
+};
+use reshiki_agent::stability::NOTICE;
 use reshiki_agent::{
     access::{AccessError, extensions::FILE_FORMATS},
     envelope::Versions,
@@ -15,13 +20,23 @@ use serde_json::Value;
 /// The agent reference, with no application version or host-specific values.
 #[doc(hidden)]
 pub fn agent_reference() -> String {
+    render_reference(COMMANDS)
+}
+
+/// Canonical documentation includes optional commands, regardless of this build.
+#[doc(hidden)]
+pub fn canonical_agent_reference() -> String {
+    render_reference(DOCUMENTED_COMMANDS)
+}
+
+fn render_reference(commands: &'static [CommandSpec]) -> String {
     let mut text = String::from(
         "# Agent reference\n\n\
 <!-- Generated: cargo run --example agent_reference -- docs/agent-reference.md -->\n\n\
 Generated from ReShiki's command help, tool catalog and schemas.\n\n\
 ## Command line\n\n",
     );
-    command_sections(&mut text, "###");
+    command_sections_for(&mut text, "###", commands);
     text.push_str("## MCP\n\n");
     fence(&mut text, "text", &MCP_USAGE);
     text.push_str(&format!("## Tools\n\n{RESULT_CONVENTIONS}\n\n"));
@@ -57,15 +72,19 @@ under `$defs`, and with `sketch` as a plain object whose fields the `schema` too
 
 /// The overview and command help, with headings local to each reference.
 pub(in crate::cli) fn command_sections(text: &mut String, heading: &str) {
+    command_sections_for(text, heading, COMMANDS);
+}
+
+fn command_sections_for(text: &mut String, heading: &str, commands: &'static [CommandSpec]) {
     text.push_str(&format!("{heading} Overview\n\n"));
-    let overview = help(None);
+    let overview = format!("{NOTICE}\n{}", commands::overview_for(commands));
     fence(text, "text", &overview);
-    for spec in COMMANDS {
+    for spec in commands {
         text.push_str(&format!("{heading} reshiki --cli {}\n\n", spec.name));
-        let body = help(Some(spec));
-        if body == overview {
+        if spec.name == "help" {
             text.push_str("Prints the [overview](#overview).\n\n");
         } else {
+            let body = help(Some(spec));
             fence(text, "text", &body);
         }
     }

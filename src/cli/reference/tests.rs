@@ -21,9 +21,20 @@ fn documented_app_version_strips_only_the_nightly_suffix() {
 fn the_agent_reference_is_current() {
     assert_eq!(
         include_str!("../../../docs/agent-reference.md"),
-        agent_reference(),
+        canonical_agent_reference(),
         "run cargo run --example agent_reference -- docs/agent-reference.md"
     );
+}
+
+#[test]
+fn documented_and_compiled_commands_match_the_build() {
+    let documented: Vec<_> = DOCUMENTED_COMMANDS
+        .iter()
+        .filter(|spec| cfg!(feature = "xtb") || !matches!(spec.name, "calc" | "calculate" | "ts"))
+        .map(|spec| spec.name)
+        .collect();
+    let compiled: Vec<_> = COMMANDS.iter().map(|spec| spec.name).collect();
+    assert_eq!(compiled, documented);
 }
 
 #[test]
@@ -50,6 +61,14 @@ fn the_agent_api_versions_are_current() {
 #[test]
 fn help_is_verbatim_and_commands_and_tools_keep_catalog_order() {
     let reference = agent_reference();
+    let headings: Vec<_> = reference
+        .lines()
+        .filter_map(|line| line.strip_prefix("### reshiki --cli "))
+        .collect();
+    assert_eq!(
+        headings,
+        COMMANDS.iter().map(|spec| spec.name).collect::<Vec<_>>()
+    );
     assert!(reference.contains(&format!("```text\n{}```", help(None))));
     assert!(reference.contains(&format!("```text\n{}```", *MCP_USAGE)));
     let mut remaining = reference.as_str();
@@ -145,7 +164,7 @@ fn the_cli_guide_states_every_usage_and_option() {
     let folded = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
     let guide_folded = folded(guide);
     let mut missing = Vec::new();
-    for spec in COMMANDS {
+    for spec in DOCUMENTED_COMMANDS {
         if !guide_folded.contains(&folded(spec.usage)) {
             missing.push(format!("usage: {}", folded(spec.usage)));
         }

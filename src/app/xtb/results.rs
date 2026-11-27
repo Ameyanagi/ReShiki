@@ -103,7 +103,11 @@ pub(crate) struct RunInfo {
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
 pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
-    let method = provenance.method.as_deref().and_then(nonblank);
+    let method = if super::ts::is_ts(result) {
+        Some(super::ts::view::method_name(result))
+    } else {
+        provenance.method.as_deref().and_then(nonblank)
+    };
     let program = program_label(&provenance.program, provenance.program_version.as_deref());
     if let Some(source) = imported_source(result) {
         // Copy table and Export carry the electronic state only here.
@@ -195,7 +199,7 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
             let unit = if kept == 1 { "conformer" } else { "conformers" };
             format!("{kept} {unit} kept")
         }
-        Task::TransitionState if matches!(result.status, Status::Converged) => {
+        Task::TransitionState if super::ts::view::presentation(result, None).reliable() => {
             "Transition state found".into()
         }
         Task::TransitionState => "Transition-state search · no reliable saddle".into(),
@@ -246,10 +250,23 @@ pub(super) fn finished_local(result: &CalcResult) -> Option<chrono::DateTime<chr
 }
 
 pub(super) fn previous_result(result: &CalcResult) -> String {
-    finished_local(result).map_or_else(
+    let label = finished_local(result).map_or_else(
         || "Previous result".into(),
         |date| format!("Previous result ({})", date.format("%-d %b %Y")),
-    )
+    );
+    if super::ts::is_ts(result) {
+        let structure = if super::ts::view::presentation(result, None).reliable() {
+            "transition state"
+        } else {
+            "transition-state candidate"
+        };
+        format!(
+            "{label} · {} {structure}",
+            super::ts::view::method_name(result)
+        )
+    } else {
+        label
+    }
 }
 
 fn solvent(result: &CalcResult) -> String {

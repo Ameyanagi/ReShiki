@@ -103,7 +103,11 @@ impl<'de> Deserialize<'de> for CalcResult {
             .and_then(|run| run.transition_state.as_mut())
             && let Some(irc) = &mut search.irc
         {
-            irc.restore(result.trajectory.as_ref(), search.climbing_image)
+            let band = result
+                .trajectory
+                .as_ref()
+                .filter(|_| search.refined_from.is_none());
+            irc.restore(band, search.climbing_image)
                 .map_err(serde::de::Error::custom)?;
         }
         Ok(result)
@@ -132,6 +136,12 @@ pub struct RunSummary {
 /// Interpretation and audit details of one transition-state search.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransitionStateRun {
+    /// Electronic method used for both endpoints, the saddle and its checks.
+    #[serde(default)]
+    pub method: XtbMethod,
+    /// GFN2-xTB run that supplied the saddle and endpoint geometries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refined_from: Option<TransitionStateId>,
     /// Ordered IRC geometries and scalar profile. Light saves omit only the geometries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub irc: Option<crate::IrcPath>,
@@ -169,6 +179,11 @@ pub struct TransitionStateRun {
     pub diagnostics: Vec<(String, String)>,
 }
 
+/// Digest identifying one saved saddle calculation across light and full saves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TransitionStateId(FrameHash);
+
 /// Saved reaction identity, independent of live drawing labels and atom IDs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransitionStateContext {
@@ -203,6 +218,8 @@ pub struct MappedAtom {
 impl TransitionStateRun {
     fn light(&self) -> Self {
         Self {
+            method: self.method,
+            refined_from: self.refined_from,
             irc: self.irc.as_ref().map(crate::IrcPath::light),
             arrow: self.arrow,
             context: self.context.clone(),
@@ -266,7 +283,10 @@ impl TransitionStateRun {
                         && atom.element.bytes().all(|byte| byte.is_ascii_alphabetic())
                 })
         };
-        if result.task != Task::TransitionState
+        if !self.method.capabilities().transition_state
+            || matches!(&result.settings, Settings::Xtb(settings) if settings.method != self.method)
+            || (self.refined_from.is_some() && self.method != XtbMethod::GXtb)
+            || result.task != Task::TransitionState
             || self.arrow == Some(0)
             || self.endpoint_energies_hartree.is_some_and(|energies| {
                 result.endpoints.is_none() || energies.iter().any(|energy| !energy.is_finite())
@@ -306,10 +326,10 @@ impl TransitionStateRun {
             || self
                 .imaginary_cm1
                 .is_some_and(|value| !value.is_finite() || value >= 0.)
-            || result
-                .trajectory
-                .as_ref()
-                .is_none_or(|path| self.climbing_image >= path.energies_hartree.len())
+            || match &result.trajectory {
+                Some(path) => self.climbing_image >= path.steps(),
+                None => self.refined_from.is_none(),
+            }
             || self
                 .forming_bonds
                 .iter()
@@ -741,6 +761,28 @@ pub enum Source {
 }
 
 impl CalcResult {
+    /// Stable reference to a TS run. Repeated searches can share a saddle geometry.
+    pub fn transition_state_id(&self) -> Option<TransitionStateId> {
+        use sha2::{Digest, Sha256};
+        let endpoints = self.endpoints?;
+        let run = self.run.as_ref()?;
+        let mut digest = Sha256::new();
+        if let Settings::Xtb(settings) = &self.settings {
+            digest.update(settings.method.label().as_bytes());
+        }
+        for frame in [
+            self.input_frame.unwrap_or(self.frame),
+            self.frame,
+            endpoints.reactant,
+            endpoints.product,
+        ] {
+            digest.update(frame.0);
+        }
+        digest.update(run.seconds.to_le_bytes());
+        digest.update(run.finished.as_deref().unwrap_or_default().as_bytes());
+        Some(TransitionStateId(FrameHash(digest.finalize().into())))
+    }
+
     /// Check the frame identity, physical arrays, settings, and size limits.
     pub fn validate(&self, frame: &Frame) -> Result<(), Error> {
         if let Settings::Xtb(settings) = &self.settings {

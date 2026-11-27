@@ -100,6 +100,37 @@ fn ts_source_writes_the_saved_saddle_endpoints_and_hessian() {
 }
 
 #[test]
+fn gxtb_export_source_and_energy_annotations_name_the_saved_method() {
+    let mut source = source();
+    let result = Arc::make_mut(&mut source.result);
+    result.provenance.method = Some("g-xTB".into());
+    result.trajectory = Some(reshiki::qcdata::Trajectory {
+        rmsd_to_best_angstrom: vec![],
+        numbers: vec![1, 1],
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        positions_angstrom: vec![],
+        energies_hartree: vec![-1.1, -1., -1.2],
+        labels: vec![],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
+    });
+    assert_eq!(
+        source.label(),
+        "Saved transition-state candidate · g-xTB · g-xTB Hessian available"
+    );
+    let [template, ..] = qc_input::builtin_templates();
+    let settings = Settings::from_template(&template, Program::Orca, 0, 1, "TS".into());
+    let output = source
+        .output(&settings, "test", "ReShiki test", EnergyUnit::KcalPerMol)
+        .unwrap();
+    assert!(output.main.text.contains("g-xTB · ΔE −62.8 kcal/mol"));
+    assert!(!output.main.text.contains("GFN2-xTB"));
+}
+
+#[test]
 fn ts_export_titles_follow_the_current_app_energy_unit() {
     let mut source = source();
     let energy = |delta| -1. + (delta - 26.5) / 627.509_474_063;
@@ -183,6 +214,8 @@ fn gamess_title_fits_eighty_columns_with_all_energies_and_the_complex_reference(
         finished: None,
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            method: Default::default(),
+            refined_from: None,
             irc: None,
             arrow: None,
             context: None,
@@ -436,6 +469,8 @@ fn late_cached_name_updates_a_fresh_export_stem_and_keeps_the_saved_title() {
         finished: None,
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            method: Default::default(),
+            refined_from: None,
             irc: None,
             arrow: Some(arrow),
             context: Some(context),

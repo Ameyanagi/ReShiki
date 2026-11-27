@@ -73,12 +73,17 @@ pub(crate) enum CalcTask {
 /// `ts`: mapped XYZ endpoints, or one XYZ with directed bond changes.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Ts {
+    pub(crate) method: Method,
+    pub(crate) refine: Option<Method>,
+    pub(crate) ts: Option<PathBuf>,
+    pub(crate) from: Option<PathBuf>,
     pub(crate) reactant: Option<PathBuf>,
     pub(crate) product: Option<PathBuf>,
     /// Pairs are canonicalized and use one-based XYZ atom numbers.
     pub(crate) form: Vec<(usize, usize)>,
     pub(crate) break_: Vec<(usize, usize)>,
     pub(crate) charge: i32,
+    pub(crate) charge_explicit: bool,
     pub(crate) uhf: Option<u32>,
     pub(crate) images: usize,
     pub(crate) workers: usize,
@@ -86,6 +91,29 @@ pub(crate) struct Ts {
     pub(crate) keep_endpoints: bool,
     pub(crate) out_dir: Option<PathBuf>,
     pub(crate) json: Option<PathBuf>,
+}
+
+impl Ts {
+    #[cfg(any(feature = "xtb", test))]
+    pub(crate) fn target_method(&self) -> Method {
+        self.refine.unwrap_or(self.method)
+    }
+
+    #[cfg(feature = "xtb")]
+    pub(crate) fn method_key(&self) -> &'static str {
+        match self.target_method() {
+            Method::Gxtb => "gxtb",
+            _ => "gfn2",
+        }
+    }
+
+    #[cfg(feature = "xtb")]
+    pub(crate) fn method_label(&self) -> &'static str {
+        match self.target_method() {
+            Method::Gxtb => "g-xTB",
+            _ => "GFN2-xTB",
+        }
+    }
 }
 
 /// `calculate`: one XYZ file and the compact calculation tool's settings.
@@ -516,6 +544,29 @@ fn ts(options: &Options) -> Result<Command, String> {
             })
             .transpose()
     };
+    let method = match option_text("--method", options.method.as_deref())? {
+        None | Some("gfn2") => Method::Gfn2,
+        Some("gxtb") => Method::Gxtb,
+        _ => return Err("--method must be gfn2 or gxtb".into()),
+    };
+    let refine = match option_text("--refine", options.refine.as_deref())? {
+        None => None,
+        Some("gxtb") => Some(Method::Gxtb),
+        _ => return Err("--refine must be gxtb".into()),
+    };
+    let ts = path("--ts", options.ts.as_deref())?;
+    let from = path("--from", options.from.as_deref())?;
+    if refine.is_none() && (ts.is_some() || from.is_some()) {
+        return Err("--ts and --from require --refine gxtb".into());
+    }
+    if refine.is_some() && options.method.is_some() {
+        return Err(
+            "--method cannot be combined with --refine; the refinement method is gxtb".into(),
+        );
+    }
+    if refine.is_some() && ts.is_none() == from.is_none() {
+        return Err("--refine gxtb requires exactly one of --ts TS.xyz or --from DIR".into());
+    }
     let reactant = path("--reactant", options.reactant.as_deref())?;
     let product = path("--product", options.product.as_deref())?;
     let has_edits = !options.form.is_empty() || !options.break_.is_empty();
@@ -524,7 +575,23 @@ fn ts(options: &Options) -> Result<Command, String> {
             "--remap-hydrogens requires two XYZ endpoints without --form or --break".into(),
         );
     }
+    if from.is_some()
+        && (reactant.is_some()
+            || product.is_some()
+            || has_edits
+            || options.remap_hydrogens
+            || options.keep_endpoints)
+    {
+        return Err("--from reads source endpoints; do not combine it with endpoint, bond, --keep-endpoints or remapping options".into());
+    }
+    if refine.is_some() && (options.keep_endpoints || options.remap_hydrogens) {
+        return Err("refinement requires relaxed endpoints and the original atom map; omit --keep-endpoints and --remap-hydrogens".into());
+    }
+    if method == Method::Gxtb && options.keep_endpoints {
+        return Err("g-xTB requires relaxed endpoints; omit --keep-endpoints".into());
+    }
     match (&reactant, &product, has_edits) {
+        (None, None, false) if from.is_some() => {}
         (None, None, _) => return Err("ts needs --reactant or --product".into()),
         (Some(_), Some(_), true) => {
             return Err("--form and --break require exactly one XYZ endpoint".into());
@@ -559,11 +626,16 @@ fn ts(options: &Options) -> Result<Command, String> {
         4.min(cpus).min(images - 2)
     });
     Ok(Command::Ts(Ts {
+        method,
+        refine,
+        ts,
+        from,
         reactant,
         product,
         form,
         break_,
         charge: charge(options.charge.as_deref())?,
+        charge_explicit: options.charge.is_some(),
         uhf: uhf(options.uhf.as_deref())?,
         images,
         workers,
@@ -823,7 +895,10 @@ fn help(rest: &[OsString]) -> Result<Command, String> {
         };
     };
     let name = topic.to_string_lossy();
-    let topic = commands::find(&name).ok_or_else(|| unknown_command(&name))?;
+    let topic = commands::COMMANDS
+        .iter()
+        .find(|spec| spec.name == name)
+        .ok_or_else(|| unknown_command(&name))?;
     Ok(Command::Help {
         topic: Some(topic),
         json,
@@ -864,6 +939,8 @@ struct Options {
     job: Option<OsString>,
     template: Option<OsString>,
     method: Option<OsString>,
+    refine: Option<OsString>,
+    ts: Option<OsString>,
     basis: Option<OsString>,
     charge: Option<OsString>,
     multiplicity: Option<OsString>,
@@ -967,6 +1044,8 @@ fn parse_options(
                 "--job" => options.job = Some(value),
                 "--template" => options.template = Some(value),
                 "--method" => options.method = Some(value),
+                "--refine" => options.refine = Some(value),
+                "--ts" => options.ts = Some(value),
                 "--basis" => options.basis = Some(value),
                 "--charge" => options.charge = Some(value),
                 "--multiplicity" => options.multiplicity = Some(value),

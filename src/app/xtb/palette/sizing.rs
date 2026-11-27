@@ -5,10 +5,17 @@ pub(super) const MAX_HEIGHT_FRACTION: f32 = 0.4;
 const SHORT_WINDOW_HEIGHT: f32 = 800.;
 /// The expanded dock in a tall window: about a 150 pt body with its rows.
 const DOCK_HEIGHT: f32 = 360.;
+/// Molecular thumbnails and their annotation rows need a taller Path figure.
+const PATH_DOCK_HEIGHT: f32 = 480.;
+const PATH_MAX_HEIGHT_FRACTION: f32 = 0.55;
 
 /// The expanded bottom dock's height: at most 40 % of the window.
 pub(in crate::app::xtb) fn dock_height(window_height: f32) -> f32 {
     DOCK_HEIGHT.min(window_height * MAX_HEIGHT_FRACTION)
+}
+
+pub(in crate::app::xtb) fn path_dock_height(window_height: f32) -> f32 {
+    PATH_DOCK_HEIGHT.min(window_height * PATH_MAX_HEIGHT_FRACTION)
 }
 
 impl App {
@@ -237,5 +244,14 @@ mod tests {
         assert_eq!(dock_height(1200.), DOCK_HEIGHT);
         assert_eq!(dock_height(900.), DOCK_HEIGHT);
         assert!((dock_height(712.) - 712. * MAX_HEIGHT_FRACTION).abs() < 1e-3);
+    }
+
+    #[test]
+    fn path_dock_reserves_full_size_models_and_annotation_rows_at_startup() {
+        assert_eq!(path_dock_height(1200.), PATH_DOCK_HEIGHT);
+        assert!((path_dock_height(820.) - 451.).abs() < 1e-3);
+        assert!(path_dock_height(820.) - 148. >= 300.);
+        assert!(path_dock_height(712.) - 148. >= 240.);
+        assert!(path_dock_height(820.) > dock_height(820.));
     }
 }

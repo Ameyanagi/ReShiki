@@ -15,7 +15,7 @@ use crate::{
     model_hessian::covalent_radius,
 };
 
-use super::{Minimum, TsError, minimize_with_options, validate_geometry};
+use super::{Minimum, TsError, mapping, minimize_with_options, validate_geometry};
 
 const TS_BOND_FACTOR: f64 = 1.2;
 const RESTRAINT_STIFFNESS: f64 = 0.5; // Eh/bohr², E = k (r - r_target)² / 2.
@@ -68,6 +68,46 @@ pub(super) fn validate_nuclei_separation(positions: &[f64]) -> Result<(), TsErro
                 )));
             }
         }
+    }
+    Ok(())
+}
+
+/// Guard the requested reaction during endpoint preparation. Only the input
+/// mapped bond graphs supply source identity; IRC later uses target endpoints.
+/// Input seeds have already passed search validation.
+pub(super) fn validate_relaxed_identity(
+    numbers: &[u8],
+    source: [&[f64]; 2],
+    target: [&Minimum; 2],
+) -> Result<(), TsError> {
+    for (seed, point, name) in [
+        (source[0], target[0], "reactant"),
+        (source[1], target[1], "product"),
+    ] {
+        validate_geometry(numbers, &point.positions)?;
+        validate_nuclei_separation(&point.positions)?;
+        if bonds_prevalidated(numbers, &point.positions) != bonds_prevalidated(numbers, seed) {
+            return Err(TsError::Failed(format!(
+                "target-method {name} relaxation does not preserve the source reaction endpoint"
+            )));
+        }
+    }
+    // Two minima cannot establish a reaction if their difference is within
+    // twice the Normal optimizer's maximum per-atom Cartesian step. An equal-
+    // atom proper fit also handles rotations and translations of the same end.
+    let weights = vec![1.0; numbers.len()];
+    let fitted = mapping::superpose(&target[0].positions, &target[1].positions, &weights);
+    let rmsd = fitted
+        .iter()
+        .zip(&target[0].positions)
+        .map(|(a, b)| (a - b).powi(2))
+        .sum::<f64>()
+        .sqrt()
+        / (numbers.len() as f64).sqrt();
+    if rmsd <= 2.0 * 3.0_f64.sqrt() * crate::Level::Normal.criteria().max_step {
+        return Err(TsError::Failed(
+            "target-method endpoint relaxations collapsed to the same geometry".into(),
+        ));
     }
     Ok(())
 }

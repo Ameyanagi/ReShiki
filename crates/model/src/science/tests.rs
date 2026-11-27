@@ -1296,6 +1296,8 @@ fn transition_state_drawing() -> (Document, u64) {
         finished: None,
         search: None,
         transition_state: Some(Box::new(TransitionStateRun {
+            method: Default::default(),
+            refined_from: None,
             irc: None,
             arrow: Some(arrow),
             free_energy: false,

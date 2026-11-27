@@ -188,6 +188,63 @@ fn pairs(bonds: &[[MappedAtom; 2]]) -> Vec<String> {
 }
 
 #[test]
+fn barrier_method_is_remembered_independently_of_the_molecule_method() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    assert_eq!(app.xtb.settings.barrier_method, XtbMethod::Gfn2Xtb);
+    let _ = app.xtb_ts_card_action(Action::Method(XtbMethod::GXtb));
+    assert_eq!(app.xtb.settings.barrier_method, XtbMethod::GXtb);
+    assert_eq!(app.xtb.settings.method, XtbMethod::Gfn2Xtb);
+    app.xtb.settings.method = XtbMethod::GfnFf;
+    app.xtb.settings.retarget(Some([1, 0, 42]));
+    assert_eq!(app.xtb.settings.barrier_method, XtbMethod::GXtb);
+    // GFN-FF is never an admitted barrier-method choice.
+    let _ = app.xtb_ts_card_action(Action::Method(XtbMethod::GfnFf));
+    assert_eq!(app.xtb.settings.barrier_method, XtbMethod::GXtb);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[tokio::test]
+#[ignore = "Opt-in renderer check: needs a graphics adapter"]
+async fn barrier_method_controls_name_gxtb_and_its_size_note_at_narrow_width() {
+    let (doc, arrow) = claisen();
+    let mut app = app(doc, arrow);
+    let ui = ViewHarness::new().await.at_width(330.);
+    let initial = ui.inspect(app.xtb_reaction_card(arrow));
+    assert!(initial.semantics.duplicate_ids.is_empty());
+    for id in ["xtb-ts-method-gfn2", "xtb-ts-method-gxtb"] {
+        assert_eq!(
+            initial.semantics.nodes.iter().any(|node| node.id == id),
+            xtb::available()
+        );
+    }
+    if !xtb::available() {
+        return;
+    }
+    let _ = app.xtb_ts_card_action(Action::Barrier);
+    assert!(!app.tab.xtb.ts_card.barrier);
+    let action = ui
+        .activate(app.xtb_reaction_card(arrow), "xtb-ts-method-gxtb")
+        .unwrap();
+    let _ = app.update(action);
+    assert_eq!(app.xtb.settings.barrier_method, XtbMethod::GXtb);
+    let selected = ui.inspect(app.xtb_reaction_card(arrow));
+    assert!(
+        selected
+            .texts
+            .iter()
+            .any(|text| text == "closer to DFT energies; slower for large molecules")
+    );
+    assert!(
+        !selected
+            .texts
+            .iter()
+            .any(|text| text.contains("about 5–10 s"))
+    );
+    assert!(selected.semantics.duplicate_ids.is_empty());
+}
+
+#[test]
 fn reaction_label_uses_names_then_formulas() {
     let (mut doc, arrow) = claisen();
     let atoms = doc.reactions[0].reactants[0].atoms.clone();

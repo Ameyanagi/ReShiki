@@ -23,7 +23,7 @@ mod tests;
 pub use endpoint::{bonds, build_endpoint};
 pub use mapping::least_motion_map;
 pub use reactive_start::{ReactiveStart, prepare_reactive_start};
-pub use recovery::{SaddleCandidate, refine_from_candidate};
+pub use recovery::{SaddleCandidate, refine, refine_from_candidate, refine_with_verification};
 use std::ops::ControlFlow;
 
 use crate::{Accuracy, EvalError, KCAL_PER_HARTREE, Options, Potential, Status, optimize};
@@ -49,6 +49,10 @@ pub struct TsOptions {
     pub images: usize,
     /// Relax both input geometries at the optimizer's Normal level.
     pub optimize_endpoints: bool,
+    /// Reject prepared endpoints whose mapped bond graphs differ from their
+    /// input seeds, or whose geometries collapse together, before NEB.
+    /// Defaults to false; direct geometry refinement always checks identity.
+    pub preserve_endpoint_identity: bool,
     pub neb_max_iterations: usize,
     pub saddle_max_steps: usize,
     /// Energy headroom in kcal/mol above the climbing image. A successful
@@ -59,10 +63,14 @@ pub struct TsOptions {
     /// scheduled builds. Mode tracking, failed secant steps and the final
     /// stationarity check can also request a fresh Hessian.
     pub hessian_every: usize,
-    /// Maximum number of downhill IRC steps in each direction, before relaxation.
+    /// Maximum number of accepted downhill IRC steps in each direction,
+    /// before the separate endpoint relaxation.
     pub irc_max_steps: usize,
-    /// Mass-weighted arc length per IRC step (√amu bohr).
+    /// Maximum mass-weighted arc length per adaptive IRC step (√amu bohr).
     pub irc_step: f64,
+    /// Maximum accumulated mass-weighted IRC arc in each direction (√amu bohr).
+    /// This limits the accepted trace independently of its adaptive step sizes.
+    pub irc_max_length: f64,
 }
 
 impl Default for TsOptions {
@@ -70,12 +78,15 @@ impl Default for TsOptions {
         Self {
             images: 15,
             optimize_endpoints: true,
+            preserve_endpoint_identity: false,
             neb_max_iterations: 300,
             saddle_max_steps: 100,
             saddle_headroom_kcal: 10.0,
             hessian_every: 0,
-            irc_max_steps: 60,
+            irc_max_steps: 499,
             irc_step: 0.15,
+            // More than twice the longest frozen reference IRC (~18.2 √amu bohr).
+            irc_max_length: 40.0,
         }
     }
 }
@@ -192,19 +203,83 @@ pub struct IrcBranch {
     pub energies: Vec<f64>,
     /// Accepted downhill points in bohr, excluding the TS and relaxed end.
     pub path: Vec<Minimum>,
-    /// Whether the downhill trace reached its gradient tolerance before relaxation.
-    pub completed: bool,
+    /// Why the downhill trace stopped, before the separate endpoint relaxation.
+    pub reason: IrcReason,
+    /// Gradient evaluations in the trace, including rejected proposals and the
+    /// initial TS evaluation, excluding the separate endpoint relaxation.
+    pub gradient_calls: usize,
+    /// Accumulated accepted mass-weighted arc (√amu bohr), including the launch
+    /// and the quadratic descent curves between the saved points.
+    pub path_length: f64,
     pub end: Minimum,
     pub reached: Reached,
+}
+
+/// Downhill trace measurements, available even if the subsequent relaxation fails.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IrcTraceDiagnostics {
+    pub reason: IrcReason,
+    pub steps: usize,
+    pub gradient_calls: usize,
+    pub path_length: f64,
+    /// Only a relaxed end can be classified.
+    pub reached: Option<Reached>,
+}
+
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[error("{cause}")]
+pub struct IrcFailure {
+    pub cause: TsError,
+    /// Finished traces in +mode, −mode order. A missing entry never finished tracing.
+    pub traces: [Option<IrcTraceDiagnostics>; 2],
+}
+
+/// Why an IRC branch stopped. Endpoint relaxation does not alter this reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IrcReason {
+    Converged,
+    LengthCap,
+    StepBudget,
+    StepSizeExhausted,
+}
+
+impl std::fmt::Display for IrcReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Converged => "converged",
+            Self::LengthCap => "length cap",
+            Self::StepBudget => "step budget",
+            Self::StepSizeExhausted => "step size exhausted",
+        })
+    }
+}
+
+impl IrcBranch {
+    /// Whether the downhill trace converged before endpoint relaxation.
+    pub fn completed(&self) -> bool {
+        self.reason == IrcReason::Converged
+    }
+
+    fn diagnostics(&self) -> IrcTraceDiagnostics {
+        IrcTraceDiagnostics {
+            reason: self.reason,
+            steps: self.path.len(),
+            gradient_calls: self.gradient_calls,
+            path_length: self.path_length,
+            reached: Some(self.reached),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TsReport {
     pub reactant: Minimum,
     pub product: Minimum,
-    /// Final band including endpoints, in the reactant frame.
+    /// Final band including endpoints, in the reactant frame. Direct geometry
+    /// refinement instead returns its target-method R / TS / P profile.
     pub path: Vec<Minimum>,
     /// Whether the physical band met the force tolerances before refinement.
+    /// False for direct geometry refinement, which does not run NEB.
     pub neb_converged: bool,
     pub climbing_image: usize,
     pub ts: Minimum,
@@ -229,7 +304,7 @@ pub struct TsReport {
     pub irc: Option<[IrcBranch; 2]>,
     /// Failure during IRC verification after characterization. Cancellation is
     /// returned as [`TsError::Cancelled`] instead of being recorded here.
-    pub irc_error: Option<String>,
+    pub irc_error: Option<IrcFailure>,
     /// Whether the two relaxed IRC ends classify as the two requested endpoints.
     pub connects: bool,
     /// All energy/gradient calls, including central differences and minimizations.
@@ -239,6 +314,14 @@ pub struct TsReport {
 }
 
 impl TsReport {
+    pub fn irc_diagnostics(&self) -> [Option<IrcTraceDiagnostics>; 2] {
+        match (&self.irc, &self.irc_error) {
+            (Some(branches), _) => branches.each_ref().map(|b| Some(b.diagnostics())),
+            (_, Some(failure)) => failure.traces,
+            _ => [None; 2],
+        }
+    }
+
     pub fn forward_barrier_kcal(&self) -> f64 {
         (self.ts.energy - self.reactant.energy) * KCAL_PER_HARTREE
     }
@@ -309,6 +392,11 @@ impl Search<'_> {
         if !self.options.irc_step.is_finite() || self.options.irc_step <= 0. {
             return Err(TsError::Invalid(
                 "IRC step must be finite and positive".into(),
+            ));
+        }
+        if !self.options.irc_max_length.is_finite() || self.options.irc_max_length <= 0. {
+            return Err(TsError::Invalid(
+                "IRC maximum length must be finite and positive".into(),
             ));
         }
         Ok(())
@@ -463,6 +551,13 @@ pub fn search_with_verification<P: Potential + Send, T>(
     };
     let reactant = endpoint(false, search.reactant)?;
     let mut product = endpoint(true, search.product)?;
+    if options.preserve_endpoint_identity {
+        endpoint::validate_relaxed_identity(
+            search.numbers,
+            [search.reactant, search.product],
+            [&reactant, &product],
+        )?;
+    }
     product.positions = mapping::superpose(&reactant.positions, &product.positions, masses);
 
     emit(&mut on_event, Event::Stage(Stage::Interpolation))?;
@@ -636,8 +731,8 @@ fn characterize<P: Potential, T>(
             on_event,
         ) {
             Ok(branches) => (Some(branches), None),
-            Err(TsError::Cancelled) => return Err(TsError::Cancelled),
-            Err(error) => (None, Some(error.to_string())),
+            Err(failure) if failure.cause == TsError::Cancelled => return Err(TsError::Cancelled),
+            Err(failure) => (None, Some(failure)),
         }
     } else {
         (None, None)

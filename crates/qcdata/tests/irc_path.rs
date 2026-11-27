@@ -87,6 +87,8 @@ fn fixture() -> (Frame, CalcResult) {
             finished: None,
             search: None,
             transition_state: Some(Box::new(TransitionStateRun {
+                method: Default::default(),
+                refined_from: None,
                 irc: Some(irc),
                 arrow: None,
                 context: None,

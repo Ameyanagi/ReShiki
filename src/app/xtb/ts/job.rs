@@ -19,7 +19,7 @@ use reshiki_optimize::{
 };
 use reshiki_xtb_worker::{
     client::{Cancel, Limits},
-    protocol::{Computed, Conventions, Engine, Method, Open, Units},
+    protocol::{Computed, Conventions, Engine, Open, Units},
 };
 use std::{
     collections::BTreeSet,
@@ -65,14 +65,21 @@ pub(super) enum SearchPath {
         converged: bool,
         candidate: ts::SaddleCandidate,
     },
+    /// Only source-method coordinates cross into a target-method refinement.
+    /// All three geometries use bohr and the original launch's atom order.
+    Refine {
+        parent: qcdata::TransitionStateId,
+        reactant: Vec<f64>,
+        product: Vec<f64>,
+        saddle: Vec<f64>,
+    },
 }
 
 pub(super) fn start(
     launch: Launch,
-    plan: TsPlan,
+    request: super::Request,
     drawn_bonds: Vec<(u64, u64)>,
     path: SearchPath,
-    free_energy: bool,
     cancel: Cancel,
 ) -> impl Stream<Item = Event> + Send + 'static {
     let (tx, rx) = mpsc::unbounded();
@@ -80,15 +87,7 @@ pub(super) fn start(
     let thread = std::thread::Builder::new()
         .name("xtb-ts-run".into())
         .spawn(move || {
-            let result = run(
-                &launch,
-                &plan,
-                &drawn_bonds,
-                path,
-                free_energy,
-                &cancel,
-                &events,
-            );
+            let result = run(&launch, &request, &drawn_bonds, path, &cancel, &events);
             let _ = events.unbounded_send(Event::Done(result.map(Arc::new)));
             events.close_channel();
         });
@@ -101,28 +100,36 @@ pub(super) fn start(
 
 fn run(
     launch: &Launch,
-    plan: &TsPlan,
+    request: &super::Request,
     drawn_bonds: &[(u64, u64)],
     path: SearchPath,
-    free_energy: bool,
     cancel: &Cancel,
     tx: &mpsc::UnboundedSender<Event>,
 ) -> Result<Report, Failure> {
     let started = Instant::now();
+    let plan = &request.plan;
+    let method = request.method;
+    if !matches!(method, qcdata::XtbMethod::Gfn2Xtb | qcdata::XtbMethod::GXtb) {
+        return Err(Failure::Other(
+            "Transition-state calculations require GFN2-xTB or g-xTB".into(),
+        ));
+    }
     let images = match &path {
         SearchPath::New(images) | SearchPath::Finer(images) => *images,
         SearchPath::Saved { points, .. } => points.len(),
+        SearchPath::Refine { .. } => ts::TsOptions::default().images,
     };
     let retry = match &path {
         SearchPath::New(_) => None,
         SearchPath::Finer(_) => Some(Retry::FinerPath),
         SearchPath::Saved { .. } => Some(Retry::RefineHighest),
+        SearchPath::Refine { parent, .. } => Some(Retry::Gxtb(*parent)),
     };
     let mut trace = SearchTrace {
         retry,
         ..Default::default()
     };
-    let refining = retry == Some(Retry::RefineHighest);
+    let refining = matches!(retry, Some(Retry::RefineHighest | Retry::Gxtb(_)));
     trace.enter(if refining {
         "Preparing refinement"
     } else {
@@ -139,20 +146,7 @@ fn run(
     let masses = engine_masses(&launch.frame)?;
     let limits = Limits::default();
     let executable = std::env::current_exe().map_err(|error| Failure::Other(error.to_string()))?;
-    let open = Open {
-        numbers: launch.frame.numbers.clone(),
-        positions: launch.frame.positions_angstrom.clone(),
-        units: Units::Angstrom,
-        charge: launch.frame.charge,
-        uhf: launch.frame.multiplicity.checked_sub(1),
-        method: Method::Gfn2,
-        conventions: Conventions::Axtb,
-        solvent: None,
-        scf: Default::default(),
-        gfnff: None,
-        threads: 1,
-        heap_bytes: limits.heap_bytes,
-    };
+    let open = worker_open(&launch.frame, method, limits);
     let count = if refining {
         1
     } else {
@@ -181,10 +175,14 @@ fn run(
             };
             (reactant.positions.clone(), product.positions.clone())
         }
+        SearchPath::Refine {
+            reactant, product, ..
+        } => (reactant.clone(), product.clone()),
         _ => endpoints(launch, plan.start, &changes, first, cancel, tx, &mut trace)?,
     };
     let options = ts::TsOptions {
         images,
+        preserve_endpoint_identity: method == qcdata::XtbMethod::GXtb,
         ..ts::TsOptions::default()
     };
     let search = ts::Search {
@@ -210,7 +208,8 @@ fn run(
         trace.borrow_mut().enter("Worker check");
         let check = worker
             .checked_hessian(positions, &masses)
-            .map_err(ts::TsError::from);
+            .map_err(ts::TsError::from)
+            .and_then(|computed| checked_method(computed, method));
         if control(cancel, tx).is_break() || matches!(check, Err(ts::TsError::Cancelled)) {
             return Err(ts::TsError::Cancelled);
         }
@@ -229,6 +228,9 @@ fn run(
         } => ts::refine_from_candidate(
             first, &search, &points, converged, &candidate, observe, verify,
         ),
+        SearchPath::Refine { saddle, .. } => {
+            ts::refine_with_verification(first, &search, &saddle, observe, verify)
+        }
         _ => ts::search_with_verification(
             &mut workers,
             &search,
@@ -243,7 +245,7 @@ fn run(
         send(tx, cancel, Event::IrcSkipped)?;
     }
     let mut trace = trace.into_inner();
-    let endpoint_thermo = if free_energy {
+    let endpoint_thermo = if request.free_energy {
         trace.enter("Endpoint thermochemistry");
         send(tx, cancel, Event::Stage(Stage::Thermochemistry))?;
         let worker = workers
@@ -258,7 +260,9 @@ fn run(
                 if control(cancel, tx).is_break() {
                     return Err(ts::TsError::Cancelled);
                 }
-                computed.map_err(ts::TsError::from)
+                computed
+                    .map_err(ts::TsError::from)
+                    .and_then(|computed| checked_method(computed, method))
             })
             .map_err(failed)?;
         if plan.shape != (1, 1) {
@@ -288,6 +292,7 @@ fn run(
             report,
             checked,
             endpoint_thermo,
+            method,
             engine,
             changes: changes.in_reaction_direction(plan.start),
             evaluations,
@@ -296,6 +301,19 @@ fn run(
             trace,
         },
     )
+}
+
+/// An independent frequency check must describe the same Hamiltonian as the
+/// saddle and IRC. Treat a mismatched response as a failed check, never relabel it.
+fn checked_method(computed: Computed, method: qcdata::XtbMethod) -> Result<Computed, ts::TsError> {
+    if computed.method.xtb_method() != method {
+        return Err(ts::TsError::Failed(format!(
+            "the xTB worker returned {} for a {} calculation",
+            computed.method.xtb_method().label(),
+            method.label()
+        )));
+    }
+    Ok(computed)
 }
 
 fn endpoints(
@@ -348,6 +366,24 @@ fn endpoints(
         format!("{distances} ({:+} kcal/mol)", fold.energy_change_kcal)
     });
     Ok((reactant, product))
+}
+
+/// Every potential in the pool retains this method for the lifetime of the search.
+pub(super) fn worker_open(frame: &Frame, method: qcdata::XtbMethod, limits: Limits) -> Open {
+    Open {
+        numbers: frame.numbers.clone(),
+        positions: frame.positions_angstrom.clone(),
+        units: Units::Angstrom,
+        charge: frame.charge,
+        uhf: frame.multiplicity.checked_sub(1),
+        method: reshiki_xtb_jobs::run::worker_method(method),
+        conventions: Conventions::Axtb,
+        solvent: None,
+        scf: Default::default(),
+        gfnff: None,
+        threads: 1,
+        heap_bytes: limits.heap_bytes,
+    }
 }
 
 fn worker_count(images: usize, parallelism: usize) -> usize {
@@ -522,6 +558,7 @@ struct Completion {
     report: TsReport,
     checked: Result<Computed, ts::TsError>,
     endpoint_thermo: Option<EndpointThermo>,
+    method: qcdata::XtbMethod,
     engine: Engine,
     changes: Changes,
     evaluations: Vec<Evaluation>,
@@ -673,6 +710,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         report,
         checked,
         endpoint_thermo,
+        method,
         engine,
         changes,
         evaluations,
@@ -688,19 +726,22 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     let transition = frame(&report.ts.positions);
     let reactant = frame(&report.reactant.positions);
     let product = frame(&report.product.positions);
-    let checked = checked.and_then(|computed| {
-        let frequencies = computed
-            .vibrations
-            .as_ref()
-            .map(|v| v.frequencies_cm1.clone())
-            .ok_or_else(|| {
-                ts::TsError::Failed("The xTB worker returned no vibrational analysis".into())
-            })?;
-        let result = computed
-            .to_calc_result(&transition, qcdata::Task::Hessian, &engine, None)
-            .map_err(|error| ts::TsError::Failed(error.to_string()))?;
-        Ok((result, frequencies, computed))
-    });
+    let method_refinement = matches!(trace.retry, Some(Retry::Gxtb(_)));
+    let checked = checked
+        .and_then(|computed| checked_method(computed, method))
+        .and_then(|computed| {
+            let frequencies = computed
+                .vibrations
+                .as_ref()
+                .map(|v| v.frequencies_cm1.clone())
+                .ok_or_else(|| {
+                    ts::TsError::Failed("The xTB worker returned no vibrational analysis".into())
+                })?;
+            let result = computed
+                .to_calc_result(&transition, qcdata::Task::Hessian, &engine, None)
+                .map_err(|error| ts::TsError::Failed(error.to_string()))?;
+            Ok((result, frequencies, computed))
+        });
     let mut info = RunInfo {
         evaluations,
         ..RunInfo::default()
@@ -715,7 +756,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         }
         Err(ts::TsError::Cancelled) => return Err(failed(ts::TsError::Cancelled)),
         Err(error) => (
-            engine_candidate(&transition, &report, &engine),
+            engine_candidate(&transition, &report, &engine, method),
             Vec::new(),
             Some(format!("worker check failed: {error}")),
         ),
@@ -747,7 +788,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         Some(reason) => qcdata::Status::NotConverged { reason },
         None => qcdata::Status::Converged,
     };
-    result.trajectory = Some(qcdata::Trajectory {
+    result.trajectory = (!method_refinement).then(|| qcdata::Trajectory {
         rmsd_to_best_angstrom: Vec::new(),
         numbers: transition.numbers.clone(),
         isotopes: transition.isotopes.clone(),
@@ -783,10 +824,11 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
             .any(Option::is_some)
             .then_some(analysis.corrections)
     });
-    let irc = ordered_irc(&report, &transition)?;
+    let irc = ordered_irc(&report, &transition, !method_refinement)?;
     let image_positions: Vec<_> = report
         .path
         .iter()
+        .filter(|_| !method_refinement)
         .map(|point| angstroms(&point.positions))
         .collect();
     if irc.is_some()
@@ -806,7 +848,7 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         num_imaginary: report.imaginary,
         diagnostics: diagnostic_rows,
         image_positions,
-        neb_converged: report.neb_converged,
+        neb_converged: !method_refinement && report.neb_converged,
         reached_positions_angstrom: reached_endpoint(&report),
         irc,
         connects: report.connects,
@@ -834,7 +876,11 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
 
 /// Order the negative branch toward the reactant independently of the arbitrary
 /// eigenvector sign used to launch the engine's two branches.
-fn ordered_irc(report: &TsReport, frame: &Frame) -> Result<Option<qcdata::IrcPath>, Failure> {
+fn ordered_irc(
+    report: &TsReport,
+    frame: &Frame,
+    has_neb_band: bool,
+) -> Result<Option<qcdata::IrcPath>, Failure> {
     let Some(branches) = &report.irc else {
         return Ok(None);
     };
@@ -877,7 +923,7 @@ fn ordered_irc(report: &TsReport, frame: &Frame) -> Result<Option<qcdata::IrcPat
         trajectory(&points),
         ordered[0].path.len(),
         reached,
-        ordered.map(|branch| branch.completed),
+        ordered.map(ts::IrcBranch::completed),
         ordered.map(|branch| qcdata::IrcRelaxedEnd {
             energy_hartree: branch.end.energy,
             positions_angstrom: branch
@@ -889,9 +935,11 @@ fn ordered_irc(report: &TsReport, frame: &Frame) -> Result<Option<qcdata::IrcPat
         }),
     )
     .map_err(|error| Failure::Other(error.to_string()))?;
-    let neb = trajectory(&report.path.iter().collect::<Vec<_>>());
-    path.project_neb(&neb, report.climbing_image)
-        .map_err(|error| Failure::Other(error.to_string()))?;
+    if has_neb_band {
+        let neb = trajectory(&report.path.iter().collect::<Vec<_>>());
+        path.project_neb(&neb, report.climbing_image)
+            .map_err(|error| Failure::Other(error.to_string()))?;
+    }
     Ok(Some(path))
 }
 
@@ -927,10 +975,20 @@ fn diagnostics(
         }
     };
     let refining = trace.retry == Some(Retry::RefineHighest);
+    let method_refinement = matches!(trace.retry, Some(Retry::Gxtb(_)));
     let mut rows = vec![
         (
+            "Electronic method".into(),
+            match &result.settings {
+                qcdata::Settings::Xtb(settings) => settings.method.label().into(),
+                _ => "xTB".into(),
+            },
+        ),
+        (
             "Method".into(),
-            if refining {
+            if method_refinement {
+                "Target-method endpoints → fresh Hessian → P-RFO → IRC"
+            } else if refining {
                 "Displaced saddle candidate → P-RFO → IRC"
             } else {
                 "IDPP → CI-NEB → P-RFO → IRC"
@@ -939,26 +997,34 @@ fn diagnostics(
         ),
         (
             "Images".into(),
-            format!(
-                "{} · climbing image {}",
-                report.path.len(),
-                report.climbing_image + 1
-            ),
+            if method_refinement {
+                "No band search · target-method R / TS / P geometries".into()
+            } else {
+                format!(
+                    "{} · climbing image {}",
+                    report.path.len(),
+                    report.climbing_image + 1
+                )
+            },
         ),
         (
             "NEB".into(),
-            format!(
-                "{} · {}",
-                if refining {
-                    "reused the saved path".into()
-                } else {
-                    trace.neb_iterations.map_or_else(
-                        || "iterations unavailable".into(),
-                        |n| format!("{n} iterations"),
-                    )
-                },
-                convergence(report.neb_converged)
-            ),
+            if method_refinement {
+                "not run · refinement from a saved transition state".into()
+            } else {
+                format!(
+                    "{} · {}",
+                    if refining {
+                        "reused the saved path".into()
+                    } else {
+                        trace.neb_iterations.map_or_else(
+                            || "iterations unavailable".into(),
+                            |n| format!("{n} iterations"),
+                        )
+                    },
+                    convergence(report.neb_converged)
+                )
+            },
         ),
         (
             "Saddle".into(),
@@ -980,6 +1046,7 @@ fn diagnostics(
                     "Displaced the saved candidate along an extra imaginary mode".into()
                 }
                 Retry::FinerPath => format!("New search with {} path points", report.path.len()),
+                Retry::Gxtb(_) => "Started from the verified GFN2-xTB saddle with a g-xTB Hessian and g-xTB-relaxed endpoints".into(),
             },
         ));
     }
@@ -1010,27 +1077,28 @@ fn diagnostics(
             )
         },
     ));
-    if let Some(branches) = &report.irc {
-        for (label, branch) in ["IRC +mode", "IRC −mode"].into_iter().zip(branches) {
-            let endpoint = match branch.reached {
-                ts::Reached::Reactant => "reactant",
-                ts::Reached::Product => "product",
-                ts::Reached::Other => "different minimum",
-            };
-            rows.push((
-                label.into(),
-                format!(
-                    "{endpoint} · downhill trace {} · {} points",
-                    convergence(branch.completed),
-                    branch.path.len()
-                ),
-            ));
-        }
-    } else {
+    let traces = report.irc_diagnostics();
+    if traces == [None; 2] {
         rows.push(("IRC".into(), "not completed".into()));
     }
+    for (label, trace) in ["IRC +mode", "IRC −mode"].into_iter().zip(traces) {
+        let Some(trace) = trace else { continue };
+        let endpoint = match trace.reached {
+            Some(ts::Reached::Reactant) => "reactant",
+            Some(ts::Reached::Product) => "product",
+            Some(ts::Reached::Other) => "different minimum",
+            None => "endpoint relaxation failed",
+        };
+        rows.push((
+            label.into(),
+            format!(
+                "{endpoint} · {} · accepted steps: {} · gradient calls: {} · path length: {:.6} amu½·bohr",
+                trace.reason, trace.steps, trace.gradient_calls, trace.path_length
+            ),
+        ));
+    }
     if let Some(error) = &report.irc_error {
-        rows.push(("IRC error".into(), error.clone()));
+        rows.push(("IRC error".into(), error.to_string()));
     }
     rows.push(("Evaluations".into(), report.evaluations.to_string()));
     rows.push(("Hessians".into(), report.hessians.to_string()));
@@ -1055,8 +1123,12 @@ fn diagnostics(
     rows
 }
 
-fn engine_candidate(frame: &Frame, report: &TsReport, engine: &Engine) -> CalcResult {
-    let method = Method::Gfn2.xtb_method();
+fn engine_candidate(
+    frame: &Frame,
+    report: &TsReport,
+    engine: &Engine,
+    method: qcdata::XtbMethod,
+) -> CalcResult {
     CalcResult {
         frame: frame.hash(),
         input_frame: None,

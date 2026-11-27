@@ -7,7 +7,8 @@ use iced::Task;
 use iced::time::Instant;
 use reshiki::document::Document;
 use reshiki::qcdata::{
-    CalcResult, Frame, Task as CalcTask, TransitionStateContext, TransitionStateRun,
+    CalcResult, Frame, Task as CalcTask, TransitionStateContext, TransitionStateId,
+    TransitionStateRun, XtbMethod,
 };
 use reshiki::reactions::ts_plan::{self, TsPlan};
 use reshiki::reactions::{Reaction, Role};
@@ -25,6 +26,7 @@ pub(in crate::app) mod export;
 pub(super) mod irc;
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod job;
+mod refine;
 pub(in crate::app) mod review;
 pub(in crate::app) mod thumbnails;
 pub(super) mod view;
@@ -36,6 +38,7 @@ pub(super) use job::Event;
 pub(crate) enum Action {
     Card(card::Action),
     Calculate(u64),
+    RefineGxtb(u64, Arc<CalcResult>),
     Review(review::Mode, Option<u64>),
     ReviewMap(u64),
     ReviewSheet(review::Action),
@@ -55,10 +58,12 @@ pub(crate) enum Action {
 pub(crate) enum Retry {
     FinerPath,
     RefineHighest,
+    Gxtb(TransitionStateId),
 }
 
 #[derive(Clone)]
 pub(super) struct Request {
+    pub method: XtbMethod,
     pub arrow: u64,
     pub free_energy: bool,
     bonds: card::BondChanges,
@@ -68,6 +73,15 @@ pub(super) struct Request {
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     pub images: usize,
     retry: Option<Retry>,
+}
+
+impl Request {
+    pub(super) fn refined_from(&self) -> Option<TransitionStateId> {
+        match self.retry {
+            Some(Retry::Gxtb(parent)) => Some(parent),
+            _ => None,
+        }
+    }
 }
 
 #[cfg_attr(
@@ -130,7 +144,6 @@ impl Live {
     // These are the engine's default iteration limits.
     const NEB_LIMIT: usize = 300;
     const SADDLE_LIMIT: usize = 100;
-    const IRC_LIMIT: usize = 60;
 
     pub(super) fn new(request: Request) -> Self {
         let reused_path = request.retry == Some(Retry::RefineHighest);
@@ -178,7 +191,9 @@ impl Live {
                         elapsed.unwrap_or_default()
                             + now.saturating_duration_since(self.stage_started),
                     )
-                } else if index == Stage::Irc.step_index() && self.irc_skipped && elapsed.is_none()
+                } else if (index == Stage::Neb.step_index()
+                    && self.request.refined_from().is_some())
+                    || (index == Stage::Irc.step_index() && self.irc_skipped && elapsed.is_none())
                 {
                     StepState::Skipped
                 } else if let Some(elapsed) = elapsed {
@@ -223,7 +238,12 @@ impl Live {
             Stage::Saddle => 0.65 + 0.15 * part(self.step, Self::SADDLE_LIMIT),
             Stage::Irc => {
                 let branch = if self.forward { 0.8 } else { 0.9 };
-                branch + 0.1 * part(self.step, Self::IRC_LIMIT)
+                branch
+                    + 0.1
+                        * part(
+                            self.step,
+                            reshiki_optimize::ts::TsOptions::default().irc_max_steps,
+                        )
             }
             Stage::Thermochemistry => 0.99,
         })
@@ -616,6 +636,7 @@ impl App {
         match action {
             Action::Card(action) => self.xtb_ts_card_action(action),
             Action::Calculate(arrow) => self.xtb_calculate_reaction(arrow),
+            Action::RefineGxtb(arrow, source) => self.xtb_refine_gxtb(arrow, &source),
             Action::Review(mode, arrow) => self.xtb_review_open(mode, arrow),
             Action::ReviewMap(arrow) => {
                 self.xtb_review_show(review::Mode::TransitionState, Some(arrow))
@@ -640,10 +661,10 @@ impl App {
                 {
                     return Task::none();
                 }
-                if self.xtb_show_reaction_path(arrow) {
-                    self.xtb_end_preview();
-                    self.xtb_preview_reached_endpoint();
-                }
+                let result = Arc::clone(result);
+                self.xtb_open_saved_path(&result);
+                self.xtb_end_preview();
+                self.xtb_preview_reached_endpoint();
                 Task::none()
             }
             Action::ReachedEndpoint => {
@@ -739,11 +760,20 @@ impl App {
         if !super::available() || !self.xtb_can_start() {
             return Task::none();
         }
+        let method = match retry {
+            Some(Retry::Gxtb(_)) => XtbMethod::GXtb,
+            Some(_) => match self.xtb_ts_card_result(arrow) {
+                card::ArrowResult::Found(result) => saved_search(result)
+                    .map_or_else(|| self.xtb.settings.barrier_method, |search| search.method),
+                _ => self.xtb.settings.barrier_method,
+            },
+            None => self.xtb.settings.barrier_method,
+        };
         let config = state::Config {
             // The run's electronic state and initial geometry use the
             // ordinary xTB launch. The TS pipeline drives the actual task.
             task: state::Task::Energy,
-            method: reshiki::qcdata::XtbMethod::Gfn2Xtb,
+            method,
             charge,
             unpaired,
             solvent: None,
@@ -756,11 +786,17 @@ impl App {
             fixed: vec![],
         };
         let mut bonds = card::BondChanges::from_plan(&self.tab.doc, &plan);
-        bonds.0.automatic = self
-            .tab
-            .xtb
-            .ts_card
-            .automatic_map((self.tab.file_epoch, arrow), &plan);
+        bonds.0.automatic = match retry {
+            Some(Retry::Gxtb(parent)) => self
+                .xtb_ts_source(arrow, parent)
+                .and_then(|stored| saved_search(&stored.result))
+                .is_some_and(|source| source.mapping.automatic),
+            _ => self
+                .tab
+                .xtb
+                .ts_card
+                .automatic_map((self.tab.file_epoch, arrow), &plan),
+        };
         let Ok(reaction) = reshiki::reaction_mapping::reaction(&self.tab.doc, arrow) else {
             return Task::none();
         };
@@ -780,6 +816,7 @@ impl App {
             search: None,
             reaction: Some(arrow),
             ts: Some(Request {
+                method,
                 arrow,
                 free_energy,
                 bonds,
@@ -803,25 +840,27 @@ impl App {
         &self,
         request: &Request,
         launch: &reshiki::science::Launch,
-    ) -> job::SearchPath {
+    ) -> Option<job::SearchPath> {
         match request.retry {
-            None => return job::SearchPath::New(request.images),
-            Some(Retry::FinerPath) => return job::SearchPath::Finer(request.images),
+            None => return Some(job::SearchPath::New(request.images)),
+            Some(Retry::FinerPath) => return Some(job::SearchPath::Finer(request.images)),
+            Some(Retry::Gxtb(parent)) => return self.xtb_gxtb_path(request.arrow, parent),
             Some(Retry::RefineHighest) => {}
         }
         let card::ArrowResult::Found(result) = self.xtb_ts_card_result(request.arrow) else {
-            return job::SearchPath::Finer(request.images);
+            return Some(job::SearchPath::Finer(request.images));
         };
         let energies = path_energies(result);
         let fallback = || job::SearchPath::Finer((energies.len() + 5).clamp(request.images, 24));
         let Some(session) = self.tab.xtb.ts_sessions.get(result) else {
-            return fallback();
+            return Some(fallback());
         };
         let Some(candidate) = session.refinement_candidate(result) else {
-            return fallback();
+            return Some(fallback());
         };
         let images = &session.extras.image_positions;
-        if result.input_frame != Some(launch.frame.hash())
+        if saved_search(result).is_none_or(|search| search.method != request.method)
+            || result.input_frame != Some(launch.frame.hash())
             || self.xtb_ts_search_stale(result)
             || !(5..=24).contains(&energies.len())
             || images.len() != energies.len()
@@ -829,9 +868,9 @@ impl App {
                 .iter()
                 .any(|image| image.len() != launch.frame.numbers.len())
         {
-            return fallback();
+            return Some(fallback());
         }
-        job::SearchPath::Saved {
+        Some(job::SearchPath::Saved {
             points: images
                 .iter()
                 .zip(energies)
@@ -842,17 +881,21 @@ impl App {
                 .collect(),
             converged: session.extras.neb_converged,
             candidate: candidate.clone(),
-        }
+        })
     }
 
     pub(super) fn xtb_ts_start(&mut self, launch: reshiki::science::Launch) -> Task<Message> {
         let Some(live) = self.xtb_live_ts() else {
             return Task::none();
         };
-        let path = self.xtb_ts_retry_path(&live.request, &launch);
-        let Request {
-            plan, free_energy, ..
-        } = live.request.clone();
+        let Some(path) = self.xtb_ts_retry_path(&live.request, &launch) else {
+            self.xtb_fail(state::Failure::Other(
+                "The saved transition state or its endpoints are unavailable.".into(),
+            ));
+            return Task::none();
+        };
+        let request = live.request.clone();
+        let plan = &request.plan;
         // Hydrogen interactions (order 0) are not covalent bonds.
         let drawn_bonds: Vec<_> = self
             .tab
@@ -880,13 +923,13 @@ impl App {
             }
         }
         let cancel = run.cancel.clone();
-        run.label = "xTB · transition state".into();
+        run.label = format!("{} · transition state", request.method.label());
         run.launch = Some(launch.clone());
         run.revision = (self.tab.file_epoch, self.tab.revision);
         run.started = iced::time::Instant::now();
         let serial = run.serial;
         let events = iced::futures::StreamExt::flatten(iced::futures::stream::once(async move {
-            job::start(launch, plan, drawn_bonds, path, free_energy, cancel)
+            job::start(launch, request, drawn_bonds, path, cancel)
         }));
         let (task, handle) = Task::run(events, move |event| {
             Message::Xtb(XtbAction::TsEvent(serial, event))
@@ -947,6 +990,8 @@ impl App {
                         ));
                     }
                     summary.transition_state = Some(Box::new(TransitionStateRun {
+                        method: request.method,
+                        refined_from: request.refined_from(),
                         arrow: Some(request.arrow),
                         free_energy: request.free_energy,
                         endpoint_energies_hartree: Some(extras.endpoint_energies_hartree),

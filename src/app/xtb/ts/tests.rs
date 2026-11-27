@@ -312,11 +312,14 @@ fn transition_state_status_follows_energy_units_and_clears_on_molecule_selection
     let (mut app, _) = start();
     finish_model(&mut app);
     complete(&mut app);
-    assert_eq!(app.status, "Transition state · ΔE‡ 26.5 kcal/mol");
+    assert_eq!(
+        app.status,
+        "Transition state · GFN2-xTB · ΔE‡ 26.5 kcal/mol"
+    );
     let _ = app.update(Message::Settings(
         crate::app::settings_page::Action::EnergyUnit(EnergyUnit::KjPerMol),
     ));
-    assert_eq!(app.status, "Transition state · ΔE‡ 110.9 kJ/mol");
+    assert_eq!(app.status, "Transition state · GFN2-xTB · ΔE‡ 110.9 kJ/mol");
     let atom = app.tab.doc.reactions[0].reactants[0].atoms[0];
     let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![atom])));
     assert!(!app.status.contains("Transition state"), "{}", app.status);
@@ -338,11 +341,16 @@ async fn narrow_reaction_card_shows_endpoint_energies_in_the_selected_unit() {
     ] {
         app.appearance.energy_unit = unit;
         let card = ui.inspect(app.xtb_reaction_card(arrow));
-        let displayed = |value| card.texts.iter().position(|text| text == value).unwrap();
-        assert!(displayed("Barrier ΔE‡") < displayed("Recalculate"));
-        assert!(displayed(barrier) < displayed("Recalculate"));
-        assert!(displayed(reaction) < displayed("Recalculate"));
-        assert!(displayed(unit.label()) < displayed("Recalculate"));
+        let displayed = |value: &str| {
+            card.texts
+                .iter()
+                .position(|text| text == value)
+                .unwrap_or_else(|| panic!("missing {value:?} in {:?}", card.texts))
+        };
+        let recalculate = displayed("Recalculate");
+        for value in ["GFN2-xTB Barrier ΔE‡", barrier, reaction, unit.label()] {
+            assert!(displayed(value) < recalculate);
+        }
         assert!(card.semantics.duplicate_ids.is_empty());
     }
 }
@@ -1093,7 +1101,7 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
             },
         ),
     );
-    assert_eq!(app.status, "xTB · Finding a path · iteration 120");
+    assert_eq!(app.status, "GFN2-xTB · Finding a path · iteration 120");
     send(
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(report))),
@@ -1107,10 +1115,8 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     let shown = app.xtb_shown().unwrap();
     assert!(!shown.stale);
     assert_eq!(
-        view::presentation(&shown.stored.result, shown.ts)
-            .warning
-            .as_deref(),
-        Some("Reaction-path descent ended before gradient convergence.")
+        view::irc_path_detail(&shown.stored.result, shown.ts, shown.stale).as_deref(),
+        Some("The path stopped after 10 steps on the reactant side.")
     );
     assert_eq!(
         results::View::available(&shown.stored.result),
@@ -1156,8 +1162,8 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
     let presentation = view::presentation(&shown.stored.result, None);
     assert!(presentation.reliable());
     assert_eq!(
-        presentation.warning.as_deref(),
-        Some("Reaction-path descent ended before gradient convergence.")
+        view::irc_path_detail(&shown.stored.result, None, shown.stale).as_deref(),
+        Some("The path stopped after 10 steps on the reactant side.")
     );
     let search = saved_search(&shown.stored.result).unwrap();
     assert_eq!(search.arrow, Some(arrow));
@@ -1233,7 +1239,7 @@ async fn failed_irc_reports_failure_and_opens_the_saved_candidate() {
         &mut app,
         XtbAction::TsEvent(serial, Event::Done(Ok(report))),
     );
-    assert_eq!(app.status, "xTB · No reliable transition state found.");
+    assert_eq!(app.status, "GFN2-xTB · No reliable transition state found.");
 
     let ui = card::tests::ViewHarness::new().await;
     let texts = ui.inspect(app.xtb_reaction_card(arrow)).texts;
@@ -1663,9 +1669,9 @@ fn refine_highest_resumes_current_band_and_reopened_result_uses_a_finer_path() {
     }
     assert_eq!(app.xtb_live_ts().unwrap().energies, energies);
     let run = app.tab.xtb.run.as_ref().unwrap();
-    let job::SearchPath::Saved {
+    let Some(job::SearchPath::Saved {
         candidate: resumed, ..
-    } = app.xtb_ts_retry_path(
+    }) = app.xtb_ts_retry_path(
         &run.ts.as_ref().unwrap().request,
         run.launch.as_ref().unwrap(),
     )
@@ -1683,7 +1689,7 @@ fn refine_highest_resumes_current_band_and_reopened_result_uses_a_finer_path() {
             &run.ts.as_ref().unwrap().request,
             run.launch.as_ref().unwrap()
         ),
-        job::SearchPath::Finer(20)
+        Some(job::SearchPath::Finer(20))
     ));
 }
 
@@ -2298,5 +2304,6 @@ fn cancel_drops_generation_and_a_late_finish_cannot_attach() {
 }
 
 mod irc_profile;
+mod refine;
 pub(super) use irc_profile::finished as finished_irc;
 mod tab_playback;

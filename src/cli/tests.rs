@@ -81,10 +81,12 @@ async fn help_describes_one_command() {
         ("compose", "Usage: reshiki --cli compose "),
         ("analyze", "Usage: reshiki --cli analyze "),
         ("predict-nmr", "Usage: reshiki --cli predict-nmr "),
+        #[cfg(feature = "xtb")]
         ("calculate", "Usage: reshiki --cli calculate "),
         ("read-output", "Usage: reshiki --cli read-output "),
         ("export-input", "Usage: reshiki --cli export-input "),
         ("name", "Usage: reshiki --cli name "),
+        #[cfg(feature = "xtb")]
         ("calc", "Usage: reshiki --cli calc "),
         ("info", "Usage: reshiki --cli info"),
         ("tools", "Usage: reshiki --cli tools"),
@@ -219,7 +221,7 @@ fn discovery_command_lines_parse() {
 #[tokio::test(flavor = "multi_thread")]
 async fn discovery_outputs_match_the_contract_goldens() {
     let tools_golden = include_str!("../../tests/fixtures/agent-contract/cli-tools.json");
-    let help_golden = include_str!("../../tests/fixtures/agent-contract/cli-help.json");
+    let help_golden = JSON_HELP_GOLDEN;
     let schema_golden = include_str!("../../tests/fixtures/agent-contract/proposal-schema.json");
     for (tokens, golden) in [
         (&["tools"][..], tools_golden),
@@ -269,6 +271,35 @@ async fn json_help_lists_every_command_and_option_in_order() {
             assert_eq!(option["help"], spec.help);
             assert_eq!(option["sets"], json!(spec.sets));
             assert_eq!(option["equivalent"], json!(spec.equivalent));
+        }
+    }
+}
+
+#[cfg(not(feature = "xtb"))]
+#[tokio::test]
+async fn featureless_discovery_and_agent_references_hide_xtb_commands() {
+    let (_, overview, _) = call(&["help"]).await;
+    let (_, catalog, _) = call(&["help", "--json"]).await;
+    let catalog: Value = serde_json::from_str(&catalog).unwrap();
+    let reference = agent_reference();
+    for name in ["calc", "calculate", "ts"] {
+        assert!(
+            !overview
+                .lines()
+                .any(|line| line.trim_start().starts_with(&format!("{name} ")))
+        );
+        assert!(
+            catalog["commands"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|command| command["name"] != name)
+        );
+        assert!(!reference.contains(&format!("### reshiki --cli {name}\n")));
+        for query in [vec!["help", name], vec!["help", "--json", name]] {
+            let (code, out, _) = call(&query).await;
+            assert_eq!(code, USAGE);
+            assert!(out.is_empty());
         }
     }
 }
@@ -878,11 +909,16 @@ async fn calc_without_xtb_reports_unavailability_and_no_stdout() {
 fn ts_parses_mapped_endpoints_and_defaults() {
     let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
     let expected = Ts {
+        method: Method::Gfn2,
+        refine: None,
+        ts: None,
+        from: None,
         reactant: Some("r.xyz".into()),
         product: Some("p.xyz".into()),
         form: Vec::new(),
         break_: Vec::new(),
         charge: 0,
+        charge_explicit: false,
         uhf: None,
         images: 15,
         workers: 4.min(cpus),
@@ -908,6 +944,92 @@ fn ts_parses_mapped_endpoints_and_defaults() {
         panic!("ts command");
     };
     assert_eq!(command.workers, 3.min(cpus));
+}
+
+#[test]
+fn ts_selects_one_method_and_accepts_both_refinement_inputs() {
+    for (method, expected) in [("gfn2", Method::Gfn2), ("gxtb", Method::Gxtb)] {
+        let Command::Ts(command) = parsed(&[
+            "ts",
+            "--method",
+            method,
+            "--reactant",
+            "r.xyz",
+            "--product",
+            "p.xyz",
+        ])
+        .unwrap() else {
+            panic!("ts command")
+        };
+        assert_eq!(command.method, expected);
+        assert_eq!(command.target_method(), expected);
+    }
+    for endpoints in [
+        &[
+            "--ts",
+            "ts.xyz",
+            "--reactant",
+            "r.xyz",
+            "--product",
+            "p.xyz",
+        ][..],
+        &["--ts", "ts.xyz", "--reactant", "r.xyz", "--form", "1-2"],
+        &["--from", "previous"],
+        &["--from", "previous", "--charge", "-1", "--uhf", "1"],
+    ] {
+        let Command::Ts(command) =
+            parsed(&[&["ts", "--refine", "gxtb"], endpoints].concat()).unwrap()
+        else {
+            panic!("ts command")
+        };
+        assert_eq!(command.refine, Some(Method::Gxtb));
+        assert_eq!(command.target_method(), Method::Gxtb);
+    }
+}
+
+#[test]
+fn ts_rejects_ambiguous_refinement_and_source_overrides() {
+    for options in [
+        &["--refine", "gfn2", "--from", "previous"][..],
+        &["--refine", "gxtb"],
+        &["--from", "previous"],
+        &["--ts", "ts.xyz"],
+        &["--refine", "gxtb", "--from", "previous", "--ts", "ts.xyz"],
+        &["--refine", "gxtb", "--from", "previous", "--method", "gfn2"],
+        &[
+            "--refine",
+            "gxtb",
+            "--from",
+            "previous",
+            "--reactant",
+            "r.xyz",
+        ],
+        &["--refine", "gxtb", "--from", "previous", "--form", "1-2"],
+        &[
+            "--refine",
+            "gxtb",
+            "--ts",
+            "ts.xyz",
+            "--reactant",
+            "r.xyz",
+            "--product",
+            "p.xyz",
+            "--keep-endpoints",
+        ],
+        &[
+            "--refine",
+            "gxtb",
+            "--ts",
+            "ts.xyz",
+            "--reactant",
+            "r.xyz",
+            "--product",
+            "p.xyz",
+            "--remap-hydrogens",
+        ],
+    ] {
+        assert!(parsed(&[&["ts"], options].concat()).is_err(), "{options:?}");
+    }
 }
 
 #[test]
@@ -940,11 +1062,16 @@ fn ts_parses_repeatable_bond_edits_and_output_paths() {
             "report.json",
         ]),
         Ok(Command::Ts(Ts {
+            method: Method::Gfn2,
+            refine: None,
+            ts: None,
+            from: None,
             reactant: None,
             product: Some("p.xyz".into()),
             form: vec![(3, 7), (3, 5)],
             break_: vec![(1, 3), (2, 3)],
             charge: -1,
+            charge_explicit: true,
             uhf: Some(2),
             images: 24,
             workers: 8,
@@ -1045,7 +1172,8 @@ fn ts_rejects_invalid_options_and_endpoint_combinations() {
         &["--json", "a", "--json", "b"],
         &["--keep-endpoints", "--keep-endpoints"],
         &["--out-dir", ""],
-        &["--method", "gfn2"],
+        &["--method", "gfnff"],
+        &["--method", "gxtb", "--keep-endpoints"],
         &["--alpb", "water"],
         &["--conventions", "xtb-6.8"],
     ] {
@@ -1132,12 +1260,6 @@ fn ts_worker_failure_keeps_characterized_candidate_and_files() {
 #[test]
 fn ts_worker_count_disagreement_fails_with_diagnostics() {
     ts::tests::worker_count_disagreement_fails_with_diagnostics();
-}
-
-#[cfg(feature = "xtb")]
-#[test]
-fn ts_irc_failure_preserves_candidate_and_explains_missing_branches() {
-    ts::tests::irc_failure_preserves_candidate_and_explains_missing_branches();
 }
 
 #[cfg(feature = "xtb")]
@@ -3047,11 +3169,18 @@ async fn binary_output_never_goes_to_a_terminal() {
     }
 }
 
+#[cfg(feature = "xtb")]
+const JSON_HELP_GOLDEN: &str =
+    include_str!("../../tests/fixtures/agent-contract/cli-help-xtb.json");
+#[cfg(not(feature = "xtb"))]
+const JSON_HELP_GOLDEN: &str = include_str!("../../tests/fixtures/agent-contract/cli-help.json");
+#[cfg(feature = "xtb")]
+const HELP_OVERVIEW_GOLDEN: &str = include_str!("../../tests/fixtures/cli-help/help-xtb.txt");
+#[cfg(not(feature = "xtb"))]
+const HELP_OVERVIEW_GOLDEN: &str = include_str!("../../tests/fixtures/cli-help/help.txt");
+
 const HELP_GOLDENS: &[(&str, &str)] = &[
-    (
-        "help",
-        include_str!("../../tests/fixtures/cli-help/help.txt"),
-    ),
+    ("help", HELP_OVERVIEW_GOLDEN),
     (
         "convert",
         include_str!("../../tests/fixtures/cli-help/convert.txt"),
@@ -3080,10 +3209,12 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
         "name",
         include_str!("../../tests/fixtures/cli-help/name.txt"),
     ),
+    #[cfg(feature = "xtb")]
     (
         "calc",
         include_str!("../../tests/fixtures/cli-help/calc.txt"),
     ),
+    #[cfg(feature = "xtb")]
     ("ts", include_str!("../../tests/fixtures/cli-help/ts.txt")),
     (
         "pieces",
@@ -3129,11 +3260,7 @@ fn convert_help_lists_all_label_formats() {
 
 #[test]
 fn help_builders_match_golden_text() {
-    assert_help_golden(
-        &help(None),
-        include_str!("../../tests/fixtures/cli-help/help.txt"),
-        "help",
-    );
+    assert_help_golden(&help(None), HELP_OVERVIEW_GOLDEN, "help");
     for &(name, golden) in HELP_GOLDENS {
         assert_help_golden(&help(commands::find(name)), golden, name);
     }
@@ -3144,11 +3271,7 @@ async fn help_commands_match_golden_stdout() {
     let (code, out, err) = call(&["help"]).await;
     assert_eq!(code, SUCCESS, "help");
     assert!(err.is_empty(), "help: {err}");
-    assert_help_golden(
-        &out,
-        include_str!("../../tests/fixtures/cli-help/help.txt"),
-        "help",
-    );
+    assert_help_golden(&out, HELP_OVERVIEW_GOLDEN, "help");
     for &(name, golden) in HELP_GOLDENS {
         let (code, out, err) = call(&["help", name]).await;
         assert_eq!(code, SUCCESS, "help {name}");

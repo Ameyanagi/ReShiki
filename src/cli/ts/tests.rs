@@ -2,10 +2,10 @@
 
 use super::{finish, output::Summary, worker};
 use crate::cli::args::Ts;
-use reshiki_optimize::ts::{IrcBranch, Minimum, Reached, TsReport};
+use reshiki_optimize::ts::{IrcBranch, IrcReason, Minimum, Reached, TsReport};
 use reshiki_xtb_worker::{
     client::Error,
-    protocol::{Engine, Units},
+    protocol::{Engine, Method, Units},
 };
 
 #[test]
@@ -116,16 +116,20 @@ fn report() -> TsReport {
         transition_mode: vec![0., 0., -1., 0., 0., 1.],
         irc: Some([
             IrcBranch {
-                energies: vec![-1., -3.],
+                energies: vec![-1., -1.5, -3.],
                 path: vec![point(-1.5, 2.5)],
-                completed: true,
+                reason: IrcReason::Converged,
+                path_length: 0.13,
+                gradient_calls: 5,
                 end: reactant,
                 reached: Reached::Reactant,
             },
             IrcBranch {
-                energies: vec![-1., -2.],
+                energies: vec![-1., -1.5, -2.],
                 path: vec![point(-1.5, 3.5)],
-                completed: true,
+                reason: IrcReason::Converged,
+                path_length: 0.15,
+                gradient_calls: 7,
                 end: product,
                 reached: Reached::Product,
             },
@@ -139,11 +143,16 @@ fn report() -> TsReport {
 
 fn command(directory: &std::path::Path) -> Ts {
     Ts {
+        method: Method::Gfn2,
+        refine: None,
+        ts: None,
+        from: None,
         reactant: Some("r.xyz".into()),
         product: Some("p.xyz".into()),
         form: Vec::new(),
         break_: Vec::new(),
         charge: 0,
+        charge_explicit: false,
         uhf: None,
         images: 5,
         workers: 1,
@@ -178,6 +187,7 @@ fn summary<'a>(command: &'a Ts) -> Summary<'a> {
         seconds: 0.,
         moving_hydrogens: Vec::new(),
         reactive_start: None,
+        source_report: None,
     }
 }
 
@@ -216,6 +226,486 @@ fn reactive_start_json_preserves_units_and_one_based_pairs() {
             "energy_change_kcal": 2.1,
         })
     );
+}
+
+#[test]
+fn gxtb_report_labels_every_calculation_and_exports_a_verified_saddle() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut command = command(directory.path());
+    command.method = Method::Gxtb;
+    let summary = summary(&command);
+    let (success, table, _, json) = finish_report(&summary);
+    assert!(success);
+    assert!(table.starts_with("Transition state · g-xTB"), "{table}");
+    assert_eq!(json["verified"], true);
+    assert_eq!(json["settings"]["method"], "gxtb");
+    assert_eq!(json["energies"]["method"], "gxtb");
+    assert_eq!(json["barriers"]["method"], "gxtb");
+    assert!(json["barriers"]["forward"].is_number());
+    for method in json["methods"].as_object().unwrap().values() {
+        assert_eq!(method, "gxtb");
+    }
+    for branch in ["plus", "minus"] {
+        assert_eq!(json["irc"][branch]["method"], "gxtb");
+    }
+    let dir = command.out_dir.as_ref().unwrap();
+    let stored: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("report.json")).unwrap()).unwrap();
+    assert_eq!(stored, json);
+    for file in [
+        "reactant.xyz",
+        "product.xyz",
+        "ts.xyz",
+        "path.xyz",
+        "irc.xyz",
+    ] {
+        let text = std::fs::read_to_string(dir.join(file)).unwrap();
+        assert!(
+            text.lines()
+                .skip(1)
+                .step_by(4)
+                .all(|line| line.contains("method=gxtb verification=verified")),
+            "{file}: {text}"
+        );
+        assert!(!text.contains("Barrier"));
+    }
+}
+
+#[test]
+fn automatic_output_report_can_also_be_the_json_destination() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut command = command(directory.path());
+    command.json = Some(command.out_dir.as_ref().unwrap().join("report.json"));
+    super::output::check_destinations(&command).unwrap();
+    assert!(finish_report(&summary(&command)).0);
+    let files: Vec<_> = std::fs::read_dir(command.out_dir.as_ref().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(files.len(), 7);
+}
+
+#[test]
+fn unverified_gxtb_candidates_never_report_or_export_a_barrier() {
+    for failure in ["saddle", "imaginary", "worker", "irc"] {
+        let directory = tempfile::tempdir().unwrap();
+        let mut command = command(directory.path());
+        command.refine = Some(Method::Gxtb);
+        command.ts = Some("ts.xyz".into());
+        let mut summary = summary(&command);
+        match failure {
+            "saddle" => summary.report.saddle_converged = false,
+            "imaginary" => summary.report.imaginary = 2,
+            "worker" => summary.worker_check = Err("SCF failed".into()),
+            "irc" => summary.report.connects = false,
+            _ => unreachable!(),
+        }
+        let (success, table, _, json) = finish_report(&summary);
+        assert!(!success, "{failure}");
+        let barrier = table
+            .lines()
+            .find(|line| line.starts_with("Barrier"))
+            .unwrap();
+        assert_eq!(
+            barrier,
+            "Barrier       unavailable · g-xTB candidate is unverified"
+        );
+        assert_eq!(json["barriers"]["method"], "gxtb");
+        assert_eq!(json["barriers"]["verified"], false);
+        assert!(json["barriers"]["forward"].is_null());
+        assert!(json["barriers"]["reverse"].is_null());
+        assert_eq!(json["operation"], "refine");
+        assert_eq!(json["neb"]["performed"], false);
+        for file in [
+            "reactant.xyz",
+            "product.xyz",
+            "ts.xyz",
+            "path.xyz",
+            "irc.xyz",
+        ] {
+            let text =
+                std::fs::read_to_string(command.out_dir.as_ref().unwrap().join(file)).unwrap();
+            assert!(
+                text.contains("method=gxtb verification=unverified-candidate"),
+                "{failure}/{file}"
+            );
+            assert!(!text.contains("Barrier"));
+        }
+    }
+}
+
+fn from_command(dir: &std::path::Path) -> Ts {
+    let mut command = command(dir);
+    command.reactant = None;
+    command.product = None;
+    command.refine = Some(Method::Gxtb);
+    command.from = Some(dir.join("structures"));
+    command.out_dir = Some(dir.join("refined"));
+    command.json = None;
+    command
+}
+
+#[test]
+fn connected_early_stopped_traces_explain_the_separate_endpoint_relaxation() {
+    for (reasons, steps, traced) in [
+        (
+            [IrcReason::LengthCap, IrcReason::Converged],
+            [1, 1],
+            "The path stopped after 1 step on the reactant side.",
+        ),
+        (
+            [IrcReason::Converged, IrcReason::StepSizeExhausted],
+            [1, 2],
+            "The path stopped after 2 steps on the product side.",
+        ),
+        (
+            [IrcReason::StepBudget, IrcReason::LengthCap],
+            [1, 2],
+            "The path was followed for 1 step on the reactant side and 2 steps on the product side.",
+        ),
+        (
+            [IrcReason::LengthCap; 2],
+            [1, 1],
+            "The path was followed for 1 step in each direction.",
+        ),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let mut summary = summary(&command);
+        for ((branch, reason), steps) in summary
+            .report
+            .irc
+            .as_mut()
+            .unwrap()
+            .iter_mut()
+            .zip(reasons)
+            .zip(steps)
+        {
+            branch.reason = reason;
+            branch.path = vec![branch.path[0].clone(); steps];
+        }
+        let (success, table, stderr, json) = finish_report(&summary);
+        assert!(success, "{table}\n{stderr}");
+        assert!(stderr.is_empty(), "{stderr}");
+        let expected = format!(
+            "IRC           connects reactant and product · {traced} Both ends were then relaxed to the nearest minimum."
+        );
+        assert_eq!(
+            table.lines().find(|line| line.starts_with("IRC ")),
+            Some(expected.as_str())
+        );
+        assert_eq!(json["connects"], true);
+        assert_eq!(json["verified"], true);
+        for ((mode, reason), steps) in ["plus", "minus"].into_iter().zip(reasons).zip(steps) {
+            assert_eq!(
+                json["irc"][mode]["completed"],
+                reason == IrcReason::Converged
+            );
+            assert_eq!(json["irc"][mode]["stop_reason"], reason.to_string());
+            assert_eq!(json["irc"][mode]["steps"], steps);
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let command = command(directory.path());
+    let (success, table, _, _) = finish_report(&summary(&command));
+    assert!(success);
+    assert_eq!(
+        table.lines().find(|line| line.starts_with("IRC ")),
+        Some("IRC           connects reactant and product")
+    );
+}
+
+#[test]
+fn disconnected_early_stopped_traces_also_explain_the_endpoint_relaxation() {
+    use Reached::{Other, Product, Reactant};
+
+    for (endpoints, direction) in [
+        ([Reactant, Reactant], "negative"),
+        ([Product, Product], "positive"),
+        ([Other, Other], "negative"),
+        ([Other, Reactant], "positive"),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let mut summary = summary(&command);
+        summary.report.connects = false;
+        let branches = summary.report.irc.as_mut().unwrap();
+        branches[0].reason = IrcReason::LengthCap;
+        for (branch, endpoint) in branches.iter_mut().zip(endpoints) {
+            branch.reached = endpoint;
+        }
+        let (success, table, stderr, json) = finish_report(&summary);
+        assert!(!success, "{table}");
+        assert!(stderr.contains("IRC did not connect the reactant and product"));
+        let irc = table.lines().find(|line| line.starts_with("IRC ")).unwrap();
+        assert!(irc.starts_with("IRC           +mode reaches "), "{irc}");
+        assert!(
+            irc.ends_with(&format!(
+                "The path stopped after 1 step in the {direction} direction. Both ends were then relaxed to the nearest minimum."
+            )),
+            "{irc}"
+        );
+        assert_eq!(json["connects"], false);
+        assert_eq!(json["irc"]["plus"]["completed"], false);
+        assert_eq!(json["irc"]["minus"]["completed"], true);
+    }
+}
+
+#[test]
+fn from_requires_verified_gfn2_provenance_and_preserves_the_source() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = command(directory.path());
+    let mut original_summary = summary(&original);
+    // A short trace can still connect after relaxation: completed is diagnostic.
+    original_summary.report.irc.as_mut().unwrap()[0].reason = IrcReason::LengthCap;
+    let (_, table, _, original_json) = finish_report(&original_summary);
+    assert_eq!(
+        table.lines().find(|line| line.starts_with("IRC ")),
+        Some(
+            "IRC           connects reactant and product · The path stopped after 1 step on the reactant side. Both ends were then relaxed to the nearest minimum."
+        )
+    );
+    for (mode, reason, calls, length, converged) in [
+        ("plus", "length cap", 5, 0.13, false),
+        ("minus", "converged", 7, 0.15, true),
+    ] {
+        let branch = &original_json["irc"][mode];
+        assert_eq!(branch["completed"], converged);
+        assert_eq!(branch["stop_reason"], reason);
+        assert_eq!(branch["gradient_calls"], calls);
+        assert_eq!(branch["path_length_sqrt_amu_bohr"], length);
+        assert_eq!(branch["steps"], 1);
+    }
+    let dir = original.out_dir.as_ref().unwrap();
+    let source_ts = std::fs::read(dir.join("ts.xyz")).unwrap();
+    let mut refine = from_command(directory.path());
+    let source = super::source::load(&mut refine)
+        .unwrap()
+        .unwrap()
+        .report
+        .unwrap();
+    assert_eq!(source, original_json);
+    assert_eq!(refine.charge, original.charge);
+    assert_eq!(refine.uhf, Some(1));
+    assert!(refine.ts.is_none());
+    super::output::check_destinations(&refine).unwrap();
+
+    let mut refined = summary(&refine);
+    refined.source_report = Some(&source);
+    refined.report.saddle_converged = false;
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    assert!(!finish(&refined, &mut out, &mut err).unwrap());
+    let table = String::from_utf8(out).unwrap();
+    assert!(table.starts_with("Retained GFN2-xTB · forward"), "{table}");
+    assert!(
+        table.lines().next().unwrap().ends_with("IRC connects reactant and product · The path stopped after 1 step on the reactant side. Both ends were then relaxed to the nearest minimum."),
+        "{table}"
+    );
+    assert!(table.contains("Barrier       unavailable"), "{table}");
+    assert_eq!(std::fs::read(dir.join("ts.xyz")).unwrap(), source_ts);
+    let retained: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(refine.out_dir.as_ref().unwrap().join("report.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(retained["source_result"], original_json);
+    let mut older = original_json;
+    for mode in ["plus", "minus"] {
+        older["irc"][mode].as_object_mut().unwrap().remove("steps");
+    }
+    let mut old_line = Vec::new();
+    super::output::write_retained(&older, &mut old_line).unwrap();
+    assert_eq!(
+        String::from_utf8(old_line).unwrap().trim_end(),
+        table.lines().next().unwrap()
+    );
+
+    let mut clobber = from_command(directory.path());
+    clobber.out_dir = Some(dir.clone());
+    assert!(
+        super::output::check_destinations(&clobber)
+            .unwrap_err()
+            .contains("already exists")
+    );
+}
+
+#[test]
+fn from_rejects_legacy_unverified_mixed_method_and_modified_geometry_sources() {
+    for failure in [
+        "legacy",
+        "gxtb",
+        "worker",
+        "irc",
+        "mixed-method",
+        "energy-method",
+        "barrier-method",
+        "structure-method",
+        "branch-method",
+        "barrier-energy",
+        "missing-null-proof",
+        "scalar-report",
+        "geometry",
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let (_, _, _, mut json) = finish_report(&summary(&command));
+        let dir = command.out_dir.as_ref().unwrap();
+        match failure {
+            "legacy" => {
+                json.as_object_mut().unwrap().remove("schema_version");
+            }
+            "gxtb" => json["settings"]["method"] = "gxtb".into(),
+            "worker" => json["worker_imaginary_count"] = 0.into(),
+            "irc" => json["irc"]["minus"]["reached"] = "Reactant".into(),
+            "mixed-method" => json["methods"]["irc"] = "gxtb".into(),
+            "energy-method" => json["energies"]["method"] = "gxtb".into(),
+            "barrier-method" => json["barriers"]["method"] = "gxtb".into(),
+            "structure-method" => json["structures"]["method"] = "gxtb".into(),
+            "branch-method" => json["irc"]["plus"]["method"] = "gxtb".into(),
+            "barrier-energy" => json["barriers"]["forward"] = 1234.into(),
+            "missing-null-proof" => {
+                json.as_object_mut().unwrap().remove("failure_reason");
+            }
+            "scalar-report" => json = "not a report".into(),
+            "geometry" => {
+                std::fs::write(dir.join("ts.xyz"), "2\nmodified\nC 0 0 0\nH 0 0 9\n").unwrap()
+            }
+            _ => unreachable!(),
+        }
+        std::fs::write(dir.join("report.json"), json.to_string()).unwrap();
+        let error = super::source::load(&mut from_command(directory.path()))
+            .err()
+            .unwrap();
+        assert!(error.contains("--ts TS.xyz"), "{failure}: {error}");
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let error = super::source::load(&mut from_command(directory.path()))
+        .err()
+        .unwrap();
+    assert!(error.contains("reactant.xyz"), "{error}");
+}
+
+#[test]
+fn legacy_directory_without_a_report_is_only_a_geometry_seed() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = command(directory.path());
+    finish_report(&summary(&original));
+    let dir = original.out_dir.as_ref().unwrap();
+    std::fs::remove_file(dir.join("report.json")).unwrap();
+    let mut refine = from_command(directory.path());
+    refine.charge = -1;
+    refine.charge_explicit = true;
+    refine.uhf = Some(2);
+    assert!(
+        super::source::load(&mut refine)
+            .unwrap()
+            .unwrap()
+            .report
+            .is_none()
+    );
+    assert_eq!(refine.charge, -1);
+    assert_eq!(refine.uhf, Some(2));
+    assert!(refine.ts.is_none());
+    let mut refined = summary(&refine);
+    refined.report.saddle_converged = false;
+    refined.write_files().unwrap();
+    let json: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(refine.out_dir.as_ref().unwrap().join("report.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(json["source_result"].is_null());
+    assert_eq!(json["source_seed"]["geometry_only"], true);
+    assert!(json["source_seed"]["method"].is_null());
+    assert!(json["barriers"]["forward"].is_null());
+}
+
+#[test]
+fn verified_source_charge_and_spin_cannot_be_changed() {
+    let directory = tempfile::tempdir().unwrap();
+    let original = command(directory.path());
+    finish_report(&summary(&original));
+    for (charge, uhf) in [(1, None), (0, Some(2))] {
+        let mut refine = from_command(directory.path());
+        refine.charge = charge;
+        refine.charge_explicit = true;
+        refine.uhf = uhf;
+        let error = super::source::load(&mut refine).err().unwrap();
+        assert!(error.contains("disagrees"), "{error}");
+    }
+}
+
+#[test]
+fn from_keeps_admitted_geometries_when_the_source_directory_is_replaced() {
+    for verified in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let original = command(directory.path());
+        let (_, _, _, report) = finish_report(&summary(&original));
+        let dir = original.out_dir.as_ref().unwrap();
+        if !verified {
+            std::fs::remove_file(dir.join("report.json")).unwrap();
+        }
+        let loaded = super::source::load(&mut from_command(directory.path()))
+            .unwrap()
+            .unwrap();
+        std::fs::rename(dir, directory.path().join("admitted")).unwrap();
+        let mut replacement = command(directory.path());
+        replacement.json = None;
+        let mut replacement = summary(&replacement);
+        for geometry in [
+            &mut replacement.report.reactant,
+            &mut replacement.report.product,
+            &mut replacement.report.ts,
+        ] {
+            geometry.positions[5] += 10.;
+        }
+        replacement.write_files().unwrap();
+
+        assert_eq!(loaded.report, verified.then_some(report.clone()));
+        for (name, geometry) in ["reactant", "product", "ts"]
+            .into_iter()
+            .zip(&loaded.geometries)
+        {
+            assert_eq!(geometry.numbers, [6, 1]);
+            let expected: Vec<f64> =
+                serde_json::from_value(report["structures"][name].clone()).unwrap();
+            assert!(
+                super::bohr(geometry)
+                    .iter()
+                    .zip(expected)
+                    .all(|(a, b)| (a - b).abs() < 1e-8)
+            );
+            let replacement = super::geometry::endpoint(&dir.join(format!("{name}.xyz"))).unwrap();
+            assert_ne!(geometry.positions, replacement.positions);
+        }
+    }
+}
+
+#[test]
+fn from_rejects_oversized_and_non_regular_reports() {
+    let directory = tempfile::tempdir().unwrap();
+    let dir = directory.path().join("structures");
+    std::fs::create_dir(&dir).unwrap();
+    let path = dir.join("report.json");
+    let limit = reshiki_agent::ops::budget::Budgets::default().max_text_bytes;
+    std::fs::File::create(&path)
+        .unwrap()
+        .set_len(limit as u64 + 1)
+        .unwrap();
+    let error = super::source::load(&mut from_command(directory.path()))
+        .err()
+        .unwrap();
+    assert!(
+        error.contains(&format!("input exceeds {limit} bytes")),
+        "{error}"
+    );
+    assert!(error.contains("--ts TS.xyz"), "{error}");
+
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    let error = super::source::load(&mut from_command(directory.path()))
+        .err()
+        .unwrap();
+    assert!(error.contains("not a regular file"), "{error}");
+    assert!(error.contains("--ts TS.xyz"), "{error}");
 }
 
 pub(in crate::cli) fn worker_failure_keeps_characterized_candidate_and_files() {
@@ -323,35 +813,55 @@ pub(in crate::cli) fn worker_count_disagreement_fails_with_diagnostics() {
     assert!(json["failure_reason"].is_null());
 }
 
-pub(in crate::cli) fn irc_failure_preserves_candidate_and_explains_missing_branches() {
-    let directory = tempfile::tempdir().unwrap();
-    let command = command(directory.path());
-    let mut summary = summary(&command);
-    summary.report.connects = false;
-    summary.report.irc = None;
-    summary.report.irc_error = Some("-mode relaxation reached its step limit".into());
-    let (success, table, stderr, json) = finish_report(&summary);
-    assert!(!success);
-    assert!(
-        table.contains("failed: -mode relaxation reached its step limit"),
-        "{table}"
-    );
-    assert!(!table.contains("skipped"), "{table}");
-    assert_eq!(
-        stderr,
-        "reshiki: IRC failed: -mode relaxation reached its step limit\n"
-    );
-    assert_eq!(json["irc_error"], "-mode relaxation reached its step limit");
-    assert_eq!(
-        json["failure_reason"],
-        "IRC failed: -mode relaxation reached its step limit"
-    );
-    assert_eq!(json["energies"]["ts"], -1.);
-    assert_eq!(json["frequencies_cm1"], serde_json::json!([-50.1]));
-    assert!(json["irc"].is_null());
-    let irc = std::fs::read_to_string(command.out_dir.as_ref().unwrap().join("irc.xyz")).unwrap();
-    assert_eq!(irc.lines().count(), 4);
-    assert_eq!(irc.lines().nth(1), Some("TS E=-1.00000000 Eh"));
+#[test]
+fn irc_relaxation_failure_preserves_candidate_and_trace_diagnostics() {
+    for (failed_mode, index) in [("+mode", 0), ("-mode", 1)] {
+        let directory = tempfile::tempdir().unwrap();
+        let command = command(directory.path());
+        let mut summary = summary(&command);
+        let mut traces = summary.report.irc_diagnostics();
+        let failed = traces[index].as_mut().unwrap();
+        failed.reason = IrcReason::LengthCap;
+        failed.reached = None;
+        if index == 0 {
+            traces[1] = None;
+        }
+        let message = format!("{failed_mode} relaxation reached its step limit");
+        summary.report.connects = false;
+        summary.report.irc = None;
+        summary.report.irc_error = Some(reshiki_optimize::ts::IrcFailure {
+            cause: reshiki_optimize::ts::TsError::Failed(message.clone()),
+            traces,
+        });
+        let (success, table, stderr, json) = finish_report(&summary);
+        assert!(!success);
+        assert!(table.contains(&format!("failed: {message}")), "{table}");
+        assert!(!table.contains("skipped"), "{table}");
+        assert_eq!(stderr, format!("reshiki: IRC failed: {message}\n"));
+        assert_eq!(json["irc_error"], message);
+        assert_eq!(json["failure_reason"], format!("IRC failed: {message}"));
+        assert_eq!(json["energies"]["ts"], -1.);
+        assert_eq!(json["frequencies_cm1"], serde_json::json!([-50.1]));
+        for (side, trace) in ["plus", "minus"].into_iter().zip(traces) {
+            let branch = &json["irc"][side];
+            if let Some(trace) = trace {
+                assert_eq!(branch["stop_reason"], trace.reason.to_string());
+                assert_eq!(branch["gradient_calls"], trace.gradient_calls);
+                assert_eq!(branch["steps"], trace.steps);
+                assert_eq!(branch["completed"], trace.reason == IrcReason::Converged);
+                assert_eq!(branch["reached"].is_null(), trace.reached.is_none());
+            } else {
+                assert!(branch.is_null());
+            }
+        }
+        let irc =
+            std::fs::read_to_string(command.out_dir.as_ref().unwrap().join("irc.xyz")).unwrap();
+        assert_eq!(irc.lines().count(), 4);
+        assert_eq!(
+            irc.lines().nth(1),
+            Some("TS E=-1.00000000 Eh method=gfn2 verification=unverified-candidate")
+        );
+    }
 }
 
 pub(in crate::cli) fn worker_hessian_uses_engine_masses_and_explicit_symmetry() {
