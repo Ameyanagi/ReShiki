@@ -189,9 +189,17 @@ fn placing_charges_labels_drawn_atoms_in_one_undo_step() {
                 .any(|item| matches!(item, Primitive::Text { text, .. } if text == expected))
         );
     }
+    let placed = app.tab.doc.atoms.clone();
     let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "Undo Place charges");
+    assert!(app.status.chars().count() <= 60);
     assert_eq!(app.tab.doc.atoms, before.atoms);
     assert!(app.xtb_shown().is_some_and(|shown| !shown.stale));
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "Redo Place charges");
+    assert!(app.status.chars().count() <= 60);
+    assert_eq!(app.tab.doc.atoms, placed);
+    let _ = app.update(Message::Undo);
     edit(&mut app, before.atoms[0].id);
     palette(&mut app, Action::PlaceCharges);
     assert!(
@@ -235,6 +243,12 @@ fn placing_charges_preserves_other_labels() {
             "Placed 3 CM5 charges as atom labels · ⌘Z undoes · 1 atom kept its own label"
         );
         assert_eq!(app.tab.doc.atom(carbon).unwrap().display.number, Some(own));
+        let placed = app.tab.doc.atoms.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.status, "Undo Place charges");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.status, "Redo Place charges");
+        assert_eq!(app.tab.doc.atoms, placed);
     }
 }
 
@@ -271,8 +285,123 @@ fn placing_charges_refreshes_previous_charges() {
             })
         );
     }
+    let placed = app.tab.doc.atoms.clone();
     let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "Undo Place charges");
     assert_eq!(app.tab.doc.atoms, before.atoms);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "Redo Place charges");
+    assert_eq!(app.tab.doc.atoms, placed);
+}
+
+#[test]
+fn placing_charges_keeps_its_history_name_when_reconciliation_moves_a_caption() {
+    let (mut app, _) = charged_halocarbon();
+    let atoms: Vec<_> = app
+        .xtb_shown()
+        .unwrap()
+        .atoms
+        .iter()
+        .flatten()
+        .copied()
+        .collect();
+    let identity = reshiki::naming::selected_identity(&app.tab.doc, &atoms)
+        .unwrap()
+        .smiles;
+    let before = app.tab.doc.clone();
+    let caption = reshiki::molecule_names::show(
+        &mut app.tab.doc,
+        &atoms,
+        "Bromochlorofluoromethane".into(),
+        identity,
+        Default::default(),
+        false,
+    )
+    .unwrap();
+    app.changed(before);
+    let before = app.tab.doc.clone();
+
+    palette(&mut app, Action::PlaceCharges);
+    let placed = app.tab.doc.clone();
+    let position = |doc: &Document| {
+        doc.annotations
+            .iter()
+            .find(|a| a.id == caption)
+            .unwrap()
+            .position
+    };
+    assert_ne!(position(&placed), position(&before));
+    assert_eq!(placed.molecule_names, before.molecule_names);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "Undo Place charges");
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "Redo Place charges");
+    assert_eq!(app.tab.doc, placed);
+}
+
+#[test]
+fn manually_restoring_a_calculated_charge_keeps_generic_history_feedback() {
+    let (mut app, carbon) = charged_halocarbon();
+    palette(&mut app, Action::PlaceCharges);
+    let calculated = app.tab.doc.atom(carbon).unwrap().display.number.clone();
+    let before = app.tab.doc.clone();
+    app.tab
+        .doc
+        .atom_mut(carbon)
+        .unwrap()
+        .display
+        .number
+        .as_mut()
+        .unwrap()
+        .text = "+0.21".into();
+    app.changed(before);
+
+    let before = app.tab.doc.clone();
+    app.tab.doc.atom_mut(carbon).unwrap().display.number = calculated.clone();
+    app.changed(before.clone());
+    let restored = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "History restored");
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "History restored");
+    assert_eq!(app.tab.doc, restored);
+    assert_eq!(app.tab.doc.atom(carbon).unwrap().display.number, calculated);
+}
+
+#[test]
+fn placing_unchanged_charges_does_not_rename_the_previous_edit() {
+    let (mut app, carbon) = charged_halocarbon();
+    palette(&mut app, Action::PlaceCharges);
+    let before = app.tab.doc.clone();
+    app.tab.doc.atom_mut(carbon).unwrap().display.highlight =
+        Some(reshiki::palette::Color::Custom([255, 0, 0]));
+    app.changed(before.clone());
+    palette(&mut app, Action::PlaceCharges);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.status, "History restored");
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.status, "History restored");
+}
+
+#[test]
+fn unrelated_atom_labels_with_xtb_results_keep_generic_history_feedback() {
+    for text in ["custom label", "+0.21"] {
+        let (mut app, carbon) = charged_halocarbon();
+        let before = app.tab.doc.clone();
+        app.tab.doc.atom_mut(carbon).unwrap().display.number = Some(Number {
+            text: text.into(),
+            style: shift_label_style(&before),
+            offset: None,
+        });
+        app.changed(before);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.status, "History restored");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.status, "History restored");
+    }
 }
 
 #[test]

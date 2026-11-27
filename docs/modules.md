@@ -90,6 +90,7 @@ explains how the crates and modules fit together.
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
 - `src/app/frames_import.rs`: Choose the job or geometry to open from a calculation or a multi-frame file.
+- `src/app/frames_import/calculation_stereo.rs`: Perceive stereo in the explicit geometry of an opened calculation output.
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/gif_export.rs`: Desktop export for the IRC and normal-mode previews.
@@ -232,6 +233,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/orbitals/levels.rs`: The Orbitals tab's visible range and level diagram.
 - `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
 - `src/app/xtb/palette.rs`: The xTB results palette
+- `src/app/xtb/palette/hover.rs`: Summary row feedback uses the drawing's existing palette highlight paint.
 - `src/app/xtb/palette/sizing.rs`: The bottom dock's window budget and short-window collapse behavior.
 - `src/app/xtb/palette/status.rs`
 - `src/app/xtb/palette/view.rs`: The results palette's widgets

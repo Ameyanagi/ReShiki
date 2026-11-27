@@ -4,6 +4,315 @@ use crate::session::Binding;
 use reshiki::document::{Document, Point};
 use rfd::MessageDialogResult as Answer;
 
+const BUTANOL_ATOMS: &str = "\
+        C 1.25803 -0.24884 -1.03575\n\
+        C 0.71249 0.40000 0.22840\n\
+        O 1.69559 0.24011 1.25103\n\
+        C -0.60148 -0.22109 0.71030\n\
+        C -1.75492 -0.03925 -0.26243\n\
+        H 1.39531 -1.32664 -0.89494\n\
+        H 2.24368 0.16273 -1.27992\n\
+        H 0.59910 -0.08740 -1.89329\n\
+        H 0.58481 1.47497 0.05823\n\
+        H 1.36811 0.69385 2.04631\n\
+        H -0.45617 -1.28893 0.91627\n\
+        H -0.87532 0.22784 1.67349\n\
+        H -1.90477 1.01849 -0.50054\n\
+        H -1.58306 -0.58423 -1.19518\n\
+        H -2.68140 -0.42161 0.17801\n";
+
+const AMMONIUM_HYDROGENS: &str = "\
+    H 10.59 0.59 0.59\n\
+    H 9.41 -0.59 0.59\n\
+    H 9.41 0.59 -0.59\n\
+    H 10.59 -0.59 -0.59\n";
+
+#[test]
+fn calculation_output_draws_the_wedge_from_2_butanol_geometry() {
+    use reshiki::chemistry::document::{for_drawing, prepare};
+    use reshiki::qcread::{self, Format};
+
+    // An S-2-butanol conformer with all ten hydrogens, followed by its mirror.
+    let xyz = format!("15\n2-butanol\n{BUTANOL_ATOMS}");
+    let mut file = qcread::read("butanol.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    for expected in ["S", "R"] {
+        let frame = &file.jobs[0].steps[0].frame;
+        let Prepared::Calculation(batch) = prepare_qc_drawing(file.clone(), 0, None, true).unwrap()
+        else {
+            panic!("expected a calculation output");
+        };
+        let mut doc = batch.drawings.into_iter().next().unwrap();
+        assert_eq!(doc.atoms.len(), 5);
+        assert_eq!(doc.models[0].hydrogens.len(), 10);
+        assert_eq!(
+            doc.models[0].frame_positions(),
+            frame
+                .positions_angstrom
+                .iter()
+                .map(|p| p.map(|v| v as f32))
+                .collect::<Vec<_>>()
+        );
+        let centre = doc.atoms[1].id;
+        assert!(
+            doc.bonds
+                .iter()
+                .any(|bond| bond.a == centre && matches!(bond.display.as_str(), "wedge" | "hash"))
+        );
+        // Read only the visible wedge, without the stored winding or label.
+        doc.atoms[1].stereo = None;
+        doc.atoms[1].cip_label = None;
+        let drawing = for_drawing(&prepare(&doc).unwrap(), &doc).unwrap();
+        assert_eq!(
+            drawing.labels().unwrap().atoms[1].as_deref(),
+            Some(expected)
+        );
+        for point in &mut file.jobs[0].steps[0].frame.positions_angstrom {
+            point[2] = -point[2];
+        }
+    }
+}
+
+#[test]
+fn calculation_output_perceives_butanol_stereo_beside_unsupported_ammonium() {
+    use reshiki::chemistry::document::{for_drawing, prepare};
+    use reshiki::qcread::{self, Format};
+
+    // Interleave the first butanol atom with the ammonium atoms to exercise
+    // both component index mapping and the original 3D frame order.
+    let (first, rest) = BUTANOL_ATOMS.split_once('\n').unwrap();
+    let xyz = format!("20\ncharge=1 mult=1\nN 10 0 0\n{first}\n{AMMONIUM_HYDROGENS}{rest}");
+    let mut file = qcread::read("butanol-ammonium.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    let frame = &file.jobs[0].steps[0].frame;
+    assert_eq!(frame.charge, 1);
+    let positions: Vec<_> = frame
+        .positions_angstrom
+        .iter()
+        .map(|p| p.map(|v| v as f32))
+        .collect();
+    for add_2d in [false, true] {
+        let Prepared::Calculation(batch) =
+            prepare_qc_drawing(file.clone(), 0, None, add_2d).unwrap()
+        else {
+            panic!("expected a calculation output");
+        };
+        let mut doc = batch.drawings.into_iter().next().unwrap();
+        assert_eq!(doc.atoms.len(), 6);
+        assert_eq!(doc.models[0].hydrogens.len(), 14);
+        assert_eq!(doc.models[0].frame_positions(), positions);
+        let nitrogen = &doc.atoms[0];
+        assert_eq!(nitrogen.element, "N");
+        assert_eq!(nitrogen.charge, 0);
+        assert_eq!(nitrogen.explicit_h, 4);
+        assert!(prepare(&doc).is_err());
+        let centre = doc.atoms[2].id;
+        assert!(doc.atoms[2].stereo.is_some());
+        assert!(
+            doc.bonds
+                .iter()
+                .any(|b| b.a == centre && matches!(b.display.as_str(), "wedge" | "hash"))
+        );
+
+        // Recover S from the visible wedge on the supported fragment alone.
+        doc.atoms.remove(0);
+        doc.models.clear();
+        doc.atoms[1].stereo = None;
+        doc.atoms[1].cip_label = None;
+        let drawing = for_drawing(&prepare(&doc).unwrap(), &doc).unwrap();
+        assert_eq!(drawing.labels().unwrap().atoms[1].as_deref(), Some("S"));
+    }
+}
+
+#[test]
+fn calculation_output_leaves_pyramidalized_square_planar_complex_unwedged() {
+    use reshiki::qcread::{self, Format};
+
+    let xyz = "5\nplatinum tetrahalide\n\
+        Pt 0 0 0.05\n\
+        F 1.94 0 0\n\
+        Cl 0 2.30 0\n\
+        Br -2.44 0 0\n\
+        I 0 -2.59 0\n";
+    let mut file = qcread::read("platinum.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    for add_2d in [false, true] {
+        let Prepared::Calculation(batch) =
+            prepare_qc_drawing(file.clone(), 0, None, add_2d).unwrap()
+        else {
+            panic!("expected a calculation output");
+        };
+        let doc = &batch.drawings[0];
+        let platinum = &doc.atoms[0];
+        assert_eq!(platinum.element, "Pt");
+        assert_eq!(
+            doc.bonds
+                .iter()
+                .filter(|b| b.a == platinum.id || b.b == platinum.id)
+                .count(),
+            4
+        );
+        assert!(platinum.stereo.is_none());
+        assert!(
+            doc.bonds
+                .iter()
+                .all(|b| !matches!(b.display.as_str(), "wedge" | "hash"))
+        );
+    }
+}
+
+#[test]
+fn calculation_output_wedges_tetrahedral_tin() {
+    use reshiki::qcread::{self, Format};
+
+    let xyz = "5\ntin tetrahalide\n\
+        Sn 0 0 0\n\
+        F 1.13 1.13 1.13\n\
+        Cl -1.36 -1.36 1.36\n\
+        Br -1.44 1.44 -1.44\n\
+        I 1.57 -1.57 -1.57\n";
+    let mut file = qcread::read("tin.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+        panic!("expected a calculation output");
+    };
+    let doc = &batch.drawings[0];
+    let tin = &doc.atoms[0];
+    assert!(tin.stereo.is_some());
+    assert!(
+        doc.bonds
+            .iter()
+            .any(|b| b.a == tin.id && matches!(b.display.as_str(), "wedge" | "hash"))
+    );
+}
+
+#[test]
+fn calculation_output_leaves_seesaw_sulfur_unwedged() {
+    use reshiki::qcread::{self, Format};
+
+    for (name, f, i) in [
+        ("axial", "0 0 1.65", "0 0 -2.45"),
+        ("distorted", "-0.10 -0.19 1.65", "-0.12 -0.28 -2.45"),
+    ] {
+        // The first three ligands span a nonzero volume about sulfur.
+        let xyz = format!(
+            "5\nseesaw sulfur\n\
+            S 0 0 0\n\
+            F {f}\n\
+            Cl 2.05 0 0\n\
+            Br -1.10 1.90 0\n\
+            I {i}\n"
+        );
+        let mut file = qcread::read("sulfur.xyz", xyz.as_bytes()).unwrap();
+        file.format = Format::OrcaOutput;
+        let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+            panic!("expected a calculation output");
+        };
+        let doc = &batch.drawings[0];
+        let sulfur = &doc.atoms[0];
+        assert_eq!(
+            doc.bonds
+                .iter()
+                .filter(|b| b.a == sulfur.id || b.b == sulfur.id)
+                .count(),
+            4,
+            "{name} seesaw"
+        );
+        assert!(sulfur.stereo.is_none(), "{name} seesaw");
+        assert!(
+            doc.bonds
+                .iter()
+                .all(|b| !matches!(b.display.as_str(), "wedge" | "hash")),
+            "{name} seesaw"
+        );
+    }
+}
+
+#[test]
+fn calculation_output_leaves_inverted_propellane_bridgeheads_unwedged() {
+    use reshiki::qcread::{self, Format};
+
+    // C123C([12CH2]1)([13CH2]2)[14CH2]3 with explicit H, embedded with
+    // RDKit ETKDGv3 (seed 12345) and optimized with MMFF94.
+    let xyz = "11\n[1.1.1]propellane isotopologue\n\
+        C 0.07807 -0.10206 -0.75945\n\
+        C -0.07807 0.10206 0.75945\n\
+        12C 1.22660 -0.31151 0.16796\n\
+        13C -0.89857 -0.90636 0.02943\n\
+        14C -0.32803 1.21787 -0.19739\n\
+        H 1.58905 -1.32150 0.34096\n\
+        H 2.05066 0.39716 0.15745\n\
+        H -1.96207 -0.72605 -0.10415\n\
+        H -0.70427 -1.96343 0.19146\n\
+        H 0.37302 2.04755 -0.23684\n\
+        H -1.34639 1.56628 -0.34889\n";
+    let mut file = qcread::read("propellane.xyz", xyz.as_bytes()).unwrap();
+    file.format = Format::OrcaOutput;
+    let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+        panic!("expected a calculation output");
+    };
+    let doc = &batch.drawings[0];
+    assert_eq!(
+        doc.atoms.iter().map(|a| a.isotope).collect::<Vec<_>>(),
+        [0, 0, 12, 13, 14]
+    );
+    assert_eq!(doc.models[0].hydrogens.len(), 6);
+    assert_eq!(doc.bonds.len(), 7);
+    // Their winding would depend on the file's atom order, so the import
+    // draws them without stereo rather than risk the wrong configuration.
+    for bridgehead in &doc.atoms[..2] {
+        assert!(bridgehead.stereo.is_none());
+    }
+    assert!(
+        doc.bonds
+            .iter()
+            .all(|b| !matches!(b.display.as_str(), "wedge" | "hash"))
+    );
+}
+
+#[test]
+fn calculation_output_retains_alkene_geometry_when_hydrogens_fold() {
+    use reshiki::qcread::{self, Format};
+
+    // E-2-butene with its double bond inclined to the input coordinate plane.
+    let atoms = "\
+        C 1.93881 0.08271 -0.19188\n\
+        C 0.53485 0.30156 0.27016\n\
+        C -0.53485 -0.30156 -0.27017\n\
+        C -1.93881 -0.08271 0.19188\n\
+        H 1.99548 -0.62717 -1.02310\n\
+        H 2.37417 1.03072 -0.52222\n\
+        H 2.54540 -0.30653 0.63149\n\
+        H 0.40429 0.99746 1.09615\n\
+        H -0.40429 -0.99746 -1.09615\n\
+        H -2.37417 -1.03072 0.52221\n\
+        H -1.99548 0.62717 1.02311\n\
+        H -2.54540 0.30653 -0.63148\n";
+    for (xyz, offset, hydrogens) in [
+        (format!("12\n2-butene\n{atoms}"), 0, 8),
+        (
+            format!("17\ncharge=1 mult=1\nN 10 0 0\n{AMMONIUM_HYDROGENS}{atoms}"),
+            1,
+            12,
+        ),
+    ] {
+        let mut file = qcread::read("butene.xyz", xyz.as_bytes()).unwrap();
+        file.format = Format::OrcaOutput;
+        let Prepared::Calculation(batch) = prepare_qc_drawing(file, 0, None, true).unwrap() else {
+            panic!("expected a calculation output");
+        };
+        let doc = batch.drawings.into_iter().next().unwrap();
+        assert_eq!(doc.atoms.len(), offset + 4);
+        assert_eq!(doc.models[0].hydrogens.len(), hydrogens);
+        let bond = doc.bonds.iter().find(|bond| bond.order == 2).unwrap();
+        assert!(matches!(bond.stereo.as_deref(), Some("e" | "trans")));
+        assert_eq!(
+            bond.stereo_atoms,
+            [doc.atoms[offset].id, doc.atoms[offset + 3].id]
+        );
+    }
+}
+
 #[test]
 fn each_office_host_selects_its_save_backend() {
     for (host, expected) in [
@@ -1000,8 +1309,8 @@ fn program_inputs_and_charge_notices_open_without_a_chooser() {
     else {
         panic!("a .molden.input file opens as a drawing");
     };
-    // H      3  1    -0.272880     0.951649     0.000000
-    assert_eq!(batch.drawings[0].atoms.len(), 3);
+    assert_eq!(batch.drawings[0].atoms.len(), 1);
+    assert_eq!(batch.drawings[0].models[0].hydrogens.len(), 2);
     assert!(batch.warnings[0].contains("results in the palette"));
 
     // The anion radical's "-1 2" line: the drawing cannot say which atom carries them.
@@ -1108,7 +1417,11 @@ async fn orca_molden_and_fchk_open_directly_with_their_results() {
         ("molden5.7_dvb_ir.molden", 54, true),
         ("g09_dvb_ir.fchk", 0, true),
     ] {
-        let opened = read(std::path::Path::new(fixtures).join(name)).await;
+        let path = std::path::Path::new(fixtures).join(name);
+        let file = reshiki::qcread::read(name, &std::fs::read(&path).unwrap()).unwrap();
+        let job = &file.jobs[file.default_job().unwrap()];
+        let source = crate::app::frames_import::job_step(job).unwrap();
+        let opened = read(path).await;
         let _ = app.update(Message::FilePrepared(opened));
         assert!(!app.error, "{name}: {}", app.status);
         let doc = &app.tab.doc;
@@ -1146,14 +1459,110 @@ async fn orca_molden_and_fchk_open_directly_with_their_results() {
             "{name}"
         );
         let attachment = doc.science.attachment(stored.attachment).unwrap();
-        assert_eq!(attachment.atoms, doc.models[0].geometry_sources());
+        let frame = doc.science.frame(&stored.result.frame).unwrap();
+        let model = &doc.models[0];
+        assert_eq!(doc.atoms.len(), 10, "{name}");
+        assert!(
+            doc.atoms
+                .iter()
+                .all(|atom| atom.element == "C" && atom.depth == 0.)
+        );
+        assert_eq!(doc.atoms.iter().map(|atom| atom.label_h).sum::<u32>(), 10);
+        assert_eq!(model.hydrogens.len(), 10, "{name}");
+        assert_eq!(
+            model.frame_positions(),
+            source
+                .frame
+                .positions_angstrom
+                .iter()
+                .map(|p| p.map(|x| x as f32))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(frame.as_ref(), &source.frame);
+        assert_eq!(attachment.atoms, model.frame_sources());
+        for (&number, atom) in frame.numbers.iter().zip(&attachment.atoms) {
+            assert_eq!(atom.is_some(), number == 6, "{name}");
+        }
+        if name == "orca60_dvb_ir.out" {
+            assert_eq!(stored.result.energy_hartree, Some(-382.055107107616));
+            assert!(!model.frame_atom_order.is_empty());
+            let reopened: reshiki::document::Document =
+                serde_json::from_str(&serde_json::to_string(doc).unwrap()).unwrap();
+            reopened.validate().unwrap();
+            assert_eq!(
+                reopened.models[0].frame_positions(),
+                model.frame_positions()
+            );
+            let launch = reshiki::science::launch(doc, doc.atoms[0].id, 0, 1).unwrap();
+            assert_eq!(launch.frame.hash(), frame.hash());
+            let parents = reshiki::science::hydrogen_parents(doc, &launch).unwrap();
+            for (i, parent) in parents.iter().enumerate() {
+                assert_eq!(parent.is_some(), frame.numbers[i] == 1);
+                if let Some(parent) = parent {
+                    let hydrogen = &model.hydrogens[model.frame_atom_order[i] - model.atoms.len()];
+                    assert_eq!(hydrogen.parent, *parent);
+                }
+            }
+        }
         assert_eq!(
             attachment.freshness(doc),
             reshiki::science::Freshness::Current
         );
         assert_eq!(app.tab.name(), name);
         assert!(app.xtb_bottom_palette().is_some());
+        if name == "orca60_dvb_ir.out" {
+            let _ = app.update(Message::Xtb(crate::app::xtb::Action::Palette(
+                crate::app::xtb::palette::Action::View(crate::app::xtb::View::Vibrations),
+            )));
+            let _ = app.update(Message::Xtb(crate::app::xtb::Action::Vibrations(
+                crate::app::xtb::VibrationsAction::Play(true),
+            )));
+            assert!(app.tab.xtb.vibrations.playing);
+            assert!(app.xtb_preview().is_some(), "vibration preview for {name}");
+        } else {
+            let _ = app.update(Message::Xtb(crate::app::xtb::Action::Palette(
+                crate::app::xtb::palette::Action::View(crate::app::xtb::View::Orbitals),
+            )));
+            let shown = app.display_document();
+            assert!(
+                reshiki::models3d::surface::draw::figure_ready(shown, &shown.models[0]),
+                "orbital preview for {name}"
+            );
+        }
     }
+}
+
+#[tokio::test]
+async fn opened_calculation_draws_hydroxyl_as_an_atom_label() {
+    use reshiki::scene::{Primitive, primitives};
+    let (mut app, _) = App::new();
+    let molden = b"[Molden Format]\n[Atoms] Angs\n\
+        H 1 1 1.75 0.90 0\nC 2 6 0 0 0\nO 3 8 1.42 0 0\n\
+        H 4 1 -0.36 1.03 0\nH 5 1 -0.36 -0.51 0.89\nH 6 1 -0.36 -0.51 -0.89\n";
+    let opened = prepare_contents("methanol.molden".into(), Ok(molden.to_vec())).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert!(!app.error, "{}", app.status);
+    let doc = &app.tab.doc;
+    assert_eq!(
+        doc.atoms
+            .iter()
+            .map(|a| a.element.as_str())
+            .collect::<Vec<_>>(),
+        ["C", "O"]
+    );
+    assert_eq!(doc.atoms[1].label_h, 1);
+    let labels: Vec<_> = primitives(doc)
+        .into_iter()
+        .filter_map(|p| {
+            if let Primitive::Text { text, .. } = p {
+                Some(text)
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(labels, ["O", "H"]);
+    assert_eq!(doc.models[0].hydrogens[0].parent, doc.atoms[1].id);
 }
 
 #[tokio::test]

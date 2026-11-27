@@ -2110,6 +2110,120 @@ fn reopened_light_and_full_paths_become_stale_after_an_opposite_side_map_edit() 
 }
 
 #[test]
+fn path_previews_update_imported_interleaved_hydrogens_in_frame_order() {
+    let (mut doc, launch) = interleaved_imported_model();
+    let original = doc.models[0].clone();
+    let mut image = (*launch.frame).clone();
+    for (i, xyz) in image.positions_angstrom.iter_mut().enumerate() {
+        xyz[2] += (i + 1) as f64 * 0.1;
+    }
+
+    preview_image(&mut doc, &launch.atoms, &launch.frame, &image).unwrap();
+
+    let model = &doc.models[0];
+    assert_eq!(model.frame_positions(), f32s(&image.positions_angstrom));
+    assert_eq!(model.frame_sources(), launch.atoms);
+    assert_eq!(model.frame_atom_order, original.frame_atom_order);
+    assert_eq!(
+        model.hydrogens.iter().map(|h| h.parent).collect::<Vec<_>>(),
+        original
+            .hydrogens
+            .iter()
+            .map(|h| h.parent)
+            .collect::<Vec<_>>(),
+        "intermediate images retain each imported hydrogen's parent"
+    );
+    assert_eq!(
+        model.atoms[0].xyz,
+        image.positions_angstrom[1].map(|x| x as f32)
+    );
+    assert_eq!(
+        model.atoms[1].xyz,
+        image.positions_angstrom[2].map(|x| x as f32)
+    );
+    assert_eq!(
+        model.hydrogens[0].xyz,
+        image.positions_angstrom[0].map(|x| x as f32)
+    );
+}
+
+fn interleaved_imported_model() -> (Document, Launch) {
+    let frame = Frame {
+        numbers: vec![1, 8, 6, 1, 1, 1],
+        positions_angstrom: vec![
+            [-0.96, 0., 0.],
+            [0., 0., 0.],
+            [1.42, 0., 0.],
+            [1.8, 1., 0.],
+            [1.8, -0.5, 0.866],
+            [1.8, -0.5, -0.866],
+        ],
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let (mut doc, _) = crate::app::frames_import::drawing(&frame).unwrap();
+    crate::app::frames_import::fold_calculation_hydrogens(&mut doc, &frame);
+    assert_eq!(doc.models[0].frame_atom_order, [2, 0, 1, 3, 4, 5]);
+    assert_eq!(doc.models[0].hydrogens.len(), 4);
+    let launch = reshiki::science::launch(&doc, doc.atoms[0].id, 0, 1).unwrap();
+    assert_eq!(launch.frame.numbers, frame.numbers);
+    assert_eq!(
+        launch.atoms,
+        [
+            None,
+            Some(doc.atoms[0].id),
+            Some(doc.atoms[1].id),
+            None,
+            None,
+            None
+        ]
+    );
+    (doc, launch)
+}
+
+#[test]
+fn endpoint_previews_align_imported_sources_elements_positions_and_bonds_in_frame_order() {
+    let (mut doc, launch) = interleaved_imported_model();
+    let mut image = (*launch.frame).clone();
+    image.positions_angstrom[3] = [0., 0.95, 0.];
+
+    for disconnected in [false, true] {
+        if disconnected {
+            image.positions_angstrom[3] = [100.; 3];
+        }
+        preview_endpoint_image(&mut doc, &launch.atoms, &launch.frame, &image).unwrap();
+
+        let model = &doc.models[0];
+        assert!(model.hydrogens.is_empty());
+        assert!(model.frame_atom_order.is_empty());
+        assert_eq!(model.frame_sources(), launch.atoms);
+        assert_eq!(model.frame_positions(), f32s(&image.positions_angstrom));
+        assert_eq!(
+            model.points(&doc).unwrap(),
+            ["H", "O", "C", "H", "H", "H"]
+                .into_iter()
+                .zip(f32s(&image.positions_angstrom))
+                .collect::<Vec<_>>()
+        );
+        let geometry = model.generated.as_ref().unwrap();
+        assert_eq!(geometry.sources, launch.atoms);
+        let expected_bonds: Vec<_> =
+            reshiki_optimize::ts::bonds(&image.numbers, &job::bohr(&image.positions_angstrom))
+                .unwrap()
+                .into_iter()
+                .map(|(a, b)| [a, b])
+                .collect();
+        assert_eq!(geometry.bonds, expected_bonds);
+        assert_eq!(geometry.bonds.contains(&[1, 3]), !disconnected);
+        assert!(!geometry.bonds.contains(&[2, 3]));
+        assert!(!model.is_stale(&doc));
+    }
+}
+
+#[test]
 fn endpoint_previews_perceive_transferred_and_disconnected_hydrogens_without_editing_the_model() {
     let (doc, arrow) = card::tests::hydrogen_transfer();
     let mut app = reaction_app(doc, arrow);

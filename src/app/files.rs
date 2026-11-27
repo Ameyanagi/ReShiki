@@ -620,6 +620,9 @@ pub(super) fn prepare_qc_drawing(
     if frame.multiplicity != 1 {
         omitted.push(format!("spin multiplicity {}", frame.multiplicity));
     }
+    if output {
+        super::frames_import::fold_calculation_hydrogens(&mut drawing, &frame);
+    }
     if add_2d {
         add_qc_structure(&mut drawing);
     }

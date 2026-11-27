@@ -91,7 +91,8 @@ impl Search {
         let parents = science::hydrogen_parents(doc, launch).ok_or_else(|| {
             Failure::Other("The 3D model's hydrogens cannot be matched; update the 3D model".into())
         })?;
-        let bonds = science::frame_bonds(doc, &launch.atoms, &launch.frame.positions_angstrom)
+        let bonds = science::frame_bonds(doc, &launch.atoms)
+            .map_err(|error| Failure::Other(error.to_string()))?
             .into_iter()
             .map(|(a, b, _)| [a, b])
             .collect();

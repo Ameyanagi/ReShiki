@@ -346,6 +346,7 @@ impl App {
         self.xtb_vibrations_leave();
         self.xtb_irc_leave();
         self.xtb_keep_bond_hover(None);
+        self.xtb_clear_bond_hover();
         self.xtb_clear_palette_status(None);
         self.pause_optimization();
         if self.style_menu.is_some() {

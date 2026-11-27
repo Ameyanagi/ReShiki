@@ -1466,6 +1466,7 @@ impl Document {
 struct HistoryFrame {
     document: Document,
     bytes: usize,
+    operation: Option<&'static str>,
 }
 
 #[derive(Default)]
@@ -1512,11 +1513,20 @@ impl SharedPayloads {
     }
 }
 impl HistoryFrames {
-    fn push_back(&mut self, document: Document, shared: &mut SharedPayloads) {
+    fn push_back(
+        &mut self,
+        document: Document,
+        operation: Option<&'static str>,
+        shared: &mut SharedPayloads,
+    ) {
         let bytes = frame_bytes(&document);
         shared.hold(&document);
         self.bytes += bytes;
-        self.frames.push_back(HistoryFrame { document, bytes });
+        self.frames.push_back(HistoryFrame {
+            document,
+            bytes,
+            operation,
+        });
     }
     fn pop_back(&mut self, shared: &mut SharedPayloads) -> Option<HistoryFrame> {
         let frame = self.frames.pop_back()?;
@@ -1681,6 +1691,7 @@ fn frame_bytes(doc: &Document) -> usize {
         .map(|m| {
             bytes(&m.atoms[..])
                 + bytes(&m.hydrogens[..])
+                + bytes(&m.frame_atom_order[..])
                 + bytes(&m.sites[..])
                 + bytes(&m.linked_atoms[..])
                 + m.fingerprint.as_ref().map_or(0, String::len)
@@ -1761,6 +1772,18 @@ impl History {
             self.undo.back()
         }
     }
+    /// The name of the next operation to undo or redo, when recorded.
+    pub fn operation(&self, redo: bool) -> Option<&'static str> {
+        let frames = if redo { &self.redo } else { &self.undo };
+        frames.frames.back()?.operation
+    }
+    /// Name the most recently committed edit. Call only after recording a
+    /// new frame, so an unchanged or rejected edit cannot rename an older one.
+    pub fn set_last_operation(&mut self, operation: &'static str) {
+        if let Some(frame) = self.undo.frames.back_mut() {
+            frame.operation = Some(operation);
+        }
+    }
     /// Undo frames, oldest first; the last is the next undo.
     pub fn undo_frames(
         &self,
@@ -1787,7 +1810,7 @@ impl History {
             return false;
         }
         if !continuing || self.undo.is_empty() {
-            self.undo.push_back(before, &mut self.shared);
+            self.undo.push_back(before, None, &mut self.shared);
         }
         self.redo.clear(&mut self.shared);
         if self.undo.len() > self.limit {
@@ -1855,8 +1878,11 @@ impl History {
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
         if let Some(prev) = self.undo.pop_back(&mut self.shared) {
-            self.redo
-                .push_back(std::mem::replace(doc, prev.document), &mut self.shared);
+            self.redo.push_back(
+                std::mem::replace(doc, prev.document),
+                prev.operation,
+                &mut self.shared,
+            );
             self.cap();
             true
         } else {
@@ -1865,8 +1891,11 @@ impl History {
     }
     pub fn redo(&mut self, doc: &mut Document) -> bool {
         if let Some(next) = self.redo.pop_back(&mut self.shared) {
-            self.undo
-                .push_back(std::mem::replace(doc, next.document), &mut self.shared);
+            self.undo.push_back(
+                std::mem::replace(doc, next.document),
+                next.operation,
+                &mut self.shared,
+            );
             self.cap();
             true
         } else {

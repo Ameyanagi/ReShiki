@@ -578,12 +578,8 @@ impl App {
         let mut models = Vec::with_capacity(positions.len());
         for positions in &positions {
             let model = doc.models.get_mut(index)?;
-            let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
-            for (atom, p) in model.atoms.iter_mut().zip(xyz.by_ref()) {
-                atom.xyz = p;
-            }
-            for (hydrogen, p) in model.hydrogens.iter_mut().zip(xyz) {
-                hydrogen.xyz = p;
+            if !model.set_frame_positions(positions) {
+                return None;
             }
             let reach_now = doc.models.get(index)?.reach(&doc);
             let model = doc.models.get_mut(index)?;

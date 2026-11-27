@@ -72,6 +72,33 @@ fn ethanol() -> (Document, [u64; 3]) {
     (doc, ids)
 }
 
+#[test]
+fn frame_bonds_follow_recorded_parents_in_file_order() {
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", Point::default());
+    let oxygen = doc.add_atom("O", Point::new(28., 0.));
+    let hydrogen = doc.add_atom("H", Point::new(14., 0.));
+    doc.add_bond(carbon, oxygen, 1, "plain");
+    doc.add_bond(carbon, hydrogen, 1, "plain");
+    let positions = [[0., 0., 0.], [1.1, 0., 0.], [1.4, 0., 0.]];
+    let atoms = [carbon, hydrogen, oxygen]
+        .into_iter()
+        .zip(positions)
+        .map(|(id, xyz)| Placed { id, xyz })
+        .collect();
+    let mut model =
+        Model3d::new(&doc, atoms, vec![], ForceField::default()).with_cell(&doc, None, vec![]);
+    doc.atoms.retain(|atom| atom.id != hydrogen);
+    doc.bonds.retain(|bond| bond.b != hydrogen);
+    model.fold_file_hydrogens(&doc, &HashMap::from([(hydrogen, carbon)]));
+    doc.models.push(model);
+
+    let atoms = doc.models[0].frame_sources();
+    assert_eq!(atoms, [Some(carbon), None, Some(oxygen)]);
+    assert_eq!(doc.models[0].frame_positions(), positions);
+    assert_eq!(frame_bonds(&doc, &atoms).unwrap(), [(0, 1, 1), (0, 2, 1)]);
+}
+
 /// A fixed carbon chain, with the atom count also being the scientific frame count.
 fn chain(n: usize) -> (Document, Vec<u64>) {
     let mut doc = Document::default();

@@ -338,6 +338,33 @@ fn capped_history_keeps_chronology_noops_and_continuous_gestures() {
     assert_eq!(doc, before);
 }
 #[test]
+fn history_operation_names_follow_their_frames_through_undo_and_redo() {
+    let mut doc = Document::default();
+    let atom = doc.add_atom("C", Point::default());
+    let mut history = History::default();
+    let before = doc.clone();
+    doc.atom_mut(atom).unwrap().position.x = 10.;
+    assert!(history.commit(before, &doc));
+    history.set_last_operation("Place charges");
+    assert_eq!(history.operation(false), Some("Place charges"));
+
+    let before = doc.clone();
+    doc.atom_mut(atom).unwrap().position.x = 20.;
+    assert!(history.commit(before, &doc));
+    assert_eq!(history.operation(false), None);
+    assert!(history.undo(&mut doc));
+    assert_eq!(history.operation(true), None);
+    assert_eq!(history.operation(false), Some("Place charges"));
+    assert!(history.undo(&mut doc));
+    assert_eq!(history.operation(true), Some("Place charges"));
+    assert!(history.redo(&mut doc));
+    assert_eq!(history.operation(false), Some("Place charges"));
+    assert_eq!(history.operation(true), None);
+    assert!(history.redo(&mut doc));
+    assert_eq!(history.operation(false), None);
+}
+
+#[test]
 fn history_limits_and_exposes_frames_oldest_first() {
     assert_eq!(History::default().limit(), 100);
     assert_eq!(History::with_limit(0).limit(), 1);

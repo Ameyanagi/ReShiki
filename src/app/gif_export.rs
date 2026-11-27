@@ -445,6 +445,8 @@ fn render(
                         .collect()
                 })
                 .collect();
+            let first = geometries.first().ok_or("The animation has no frames")?;
+            renderer.set_irc_topology(&trajectory.numbers, first)?;
             renderer.fit(&frames)?;
             let points: Vec<_> = samples
                 .iter()

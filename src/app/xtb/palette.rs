@@ -7,7 +7,7 @@ use crate::app::{App, Message};
 use iced::Task;
 use reshiki::atom_labels::{Number, shift_label_style};
 use reshiki::document::Document;
-use reshiki::qcdata::{CalcResult, ChargeScheme, Frame, Spin};
+use reshiki::qcdata::{AtomicCharges, CalcResult, ChargeScheme, Frame, Spin};
 use reshiki::science::{self, Freshness, Stored};
 use std::{
     cell::RefCell,
@@ -25,6 +25,8 @@ pub(crate) enum Action {
     /// Move between the bottom dock and the inspector.
     Dock,
     View(View),
+    /// Transient feedback for a Summary bond-order row.
+    HoverBond(BondHover, bool),
     /// Preview this optimization step on the 3D model.
     Step(usize),
     /// Back to the result's own geometry.
@@ -82,6 +84,7 @@ pub(crate) struct Palette {
     size_asked: bool,
     /// File sizes for one document state; serializing is too slow per frame.
     sizes: RefCell<Option<Sizes>>,
+    hovered_bond: Option<hover::Preview>,
 }
 
 struct Step {
@@ -143,6 +146,7 @@ impl Palette {
         self.view = View::Summary;
         self.step = None;
         self.confirm.clear();
+        self.hovered_bond = None;
     }
 
     fn is_showing_ts(&self) -> bool {
@@ -244,19 +248,63 @@ impl Shown<'_> {
             .result
             .charges
             .first()
-            .map(|charges| {
-                self.atoms
-                    .iter()
-                    .zip(&charges.values)
-                    .filter_map(|(atom, q)| {
-                        let id = (*atom)?;
-                        doc.atom_visible(id)
-                            .then(|| (id, results::signed_charge(*q, places)))
-                    })
-                    .collect()
-            })
+            .map(|charges| charge_labels(doc, self.atoms, charges, places))
             .unwrap_or_default()
     }
+}
+
+fn charge_labels(
+    doc: &Document,
+    atoms: &[Option<u64>],
+    charges: &AtomicCharges,
+    places: usize,
+) -> Vec<(u64, String)> {
+    atoms
+        .iter()
+        .zip(&charges.values)
+        .filter_map(|(atom, q)| {
+            let id = (*atom)?;
+            doc.atom_visible(id)
+                .then(|| (id, results::signed_charge(*q, places)))
+        })
+        .collect()
+}
+
+/// The exact labels Place charges writes, including refreshes of earlier charges.
+pub(super) fn placed_charge_labels(
+    doc: &Document,
+    atoms: &[Option<u64>],
+    charges: &AtomicCharges,
+) -> (Vec<(u64, Number)>, usize) {
+    let labels = charge_labels(doc, atoms, charges, 2);
+    let visible = labels.len();
+    let style = shift_label_style(doc);
+    let labels: Vec<_> = labels
+        .into_iter()
+        .filter(|(id, _)| {
+            doc.atom(*id).is_some_and(|atom| {
+                atom.display.number.as_ref().is_none_or(|label| {
+                    label.style == style && label.offset.is_none() && is_charge_label(&label.text)
+                })
+            })
+        })
+        .map(|(id, mut text)| {
+            // Rounded zero stays identifiable as a placed charge.
+            if text.starts_with('0') {
+                text.insert(0, '+');
+            }
+            (
+                id,
+                Number {
+                    text,
+                    style: style.clone(),
+                    offset: None,
+                },
+            )
+        })
+        .collect();
+    let kept = visible - labels.len();
+    (labels, kept)
 }
 
 /// Placed charges are decimals signed with "+" or a real minus sign (U+2212).
@@ -660,12 +708,7 @@ impl App {
             .models
             .iter()
             .find(|m| m.linked_atoms.contains(atom))?;
-        let now: Vec<[f32; 3]> = model
-            .atoms
-            .iter()
-            .map(|a| a.xyz)
-            .chain(model.hydrogens.iter().map(|h| h.xyz))
-            .collect();
+        let now = model.frame_positions();
         if now.is_empty() {
             return None;
         }
@@ -768,18 +811,8 @@ impl App {
             ChargeScheme::Loewdin => "Löwdin",
             ChargeScheme::Other(name) => name,
         };
-        let mut labels = shown.charge_labels(&self.tab.doc, 2);
-        let style = shift_label_style(&self.tab.doc);
-        let visible = labels.len();
-        labels.retain(|(id, _)| {
-            self.tab.doc.atom(*id).is_some_and(|atom| {
-                atom.display.number.as_ref().is_none_or(|label| {
-                    label.style == style && label.offset.is_none() && is_charge_label(&label.text)
-                })
-            })
-        });
+        let (labels, kept) = placed_charge_labels(&self.tab.doc, shown.atoms, charges);
         let n = labels.len();
-        let kept = visible - n;
         let mut status = format!("Placed {n} {scheme} charges as atom labels · ⌘Z undoes");
         if kept > 0 {
             status.push_str(&if kept == 1 {
@@ -789,28 +822,26 @@ impl App {
             });
         }
         let before = self.tab.doc.clone();
-        for (id, mut text) in labels {
+        for (id, label) in labels {
             if let Some(atom) = self.tab.doc.atom_mut(id) {
-                // The results table and preview omit a sign on rounded zero.
-                // Keep placed zero identifiable by the same signed-decimal
-                // rule as every other charge when the user refreshes it.
-                if text.starts_with('0') {
-                    text.insert(0, '+');
-                }
-                atom.display.number = Some(Number {
-                    text,
-                    style: style.clone(),
-                    offset: None,
-                });
+                atom.display.number = Some(label);
             }
         }
+        let revision = self.tab.revision;
         self.changed(before);
+        if self.tab.revision != revision {
+            self.tab.history.set_last_operation("Place charges");
+        }
         self.status = status;
         self.error = false;
     }
 
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
+        if !matches!(action, Action::HoverBond(..)) {
+            self.tab.xtb.palette.hovered_bond = None;
+        }
         match action {
+            Action::HoverBond(bond, entered) => self.xtb_hover_result_bond(bond, entered),
             Action::Show
                 if self.xtb_live_ts().is_some_and(|live| {
                     self.xtb_selected_reaction() == Some(live.request.arrow)
@@ -1202,7 +1233,7 @@ impl App {
                 }
                 _ => format!("Applied xTB geometry of step {index} · ⌘Z undoes"),
             };
-            self.xtb_set_result_status(text, false);
+            self.xtb_set_molecule_status(text, &atoms);
         }
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
@@ -1400,6 +1431,8 @@ pub(in crate::app) fn size_question(
     (title, text)
 }
 
+mod hover;
+pub(crate) use hover::BondHover;
 mod sizing;
 pub(super) use sizing::{dock_height, path_dock_height};
 mod status;

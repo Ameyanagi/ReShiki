@@ -720,16 +720,23 @@ pub(super) fn config_for(
     })
 }
 
+/// The Summary's bond orders, preserving the frame indices for row hover.
+pub(super) fn displayed_bond_orders(
+    result: &CalcResult,
+) -> impl Iterator<Item = &qcdata::BondOrder> {
+    result
+        .bond_orders
+        .iter()
+        .filter(|bond| bond.order >= BOND_ORDER_MIN)
+}
+
 /// "C1–O2" with "1.92": each stored bond order, in the frame's atom order.
 pub(crate) fn bond_orders(result: &CalcResult, frame: &Frame) -> Vec<(String, String)> {
     let atom = |index: u32| {
         let z = frame.numbers.get(index as usize).copied().unwrap_or(0);
         format!("{}{}", symbol(z), index + 1)
     };
-    result
-        .bond_orders
-        .iter()
-        .filter(|bond| bond.order >= BOND_ORDER_MIN)
+    displayed_bond_orders(result)
         .map(|bond| {
             (
                 format!("{}–{}", atom(bond.a), atom(bond.b)),
