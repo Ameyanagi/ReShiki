@@ -75,13 +75,138 @@ fn placed(profile: EnergyProfile) -> Graphic {
 fn overlaps((a, b): (Point, Point), (c, d): (Point, Point)) -> bool {
     a.x < d.x && b.x > c.x && a.y < d.y && b.y > c.y
 }
+fn contains((a, b): (Point, Point), (c, d): (Point, Point)) -> bool {
+    a.x <= c.x && b.x >= d.x && a.y <= c.y && b.y >= d.y
+}
+
+fn assert_no_overlaps(g: &Graphic, layout: &Layout, parts: &[Part], labels: &[Annotation]) {
+    let frame = g.shape_bounds();
+    let half = layout.picture_world_side(g) / 2.;
+    let pictures: Vec<_> = layout
+        .pictures
+        .iter()
+        .map(|m| {
+            let c = layout.world(g, m.centre);
+            (c.offset(-half, -half), c.offset(half, half))
+        })
+        .collect();
+    let labels: Vec<_> = labels.iter().map(|l| (&l.text, l.bounds())).collect();
+    for (i, &(text, bounds)) in labels.iter().enumerate() {
+        assert!(contains(frame, bounds), "{text} outside frame");
+        for &(other, other_bounds) in &labels[i + 1..] {
+            assert!(!overlaps(bounds, other_bounds), "{text} and {other}");
+        }
+        assert!(
+            pictures.iter().all(|&model| !overlaps(bounds, model)),
+            "{text} and model"
+        );
+    }
+    for (i, &model) in pictures.iter().enumerate() {
+        assert!(contains(frame, model));
+        assert!(
+            pictures[i + 1..]
+                .iter()
+                .all(|&other| !overlaps(model, other))
+        );
+    }
+    for part in parts {
+        let half = part.style.width() / 2.;
+        for path in super::super::flattened(&part.commands) {
+            for pair in path.windows(2) {
+                let hits = |(lo, hi): (Point, Point)| {
+                    crate::atom_labels::segment_hits_rect(
+                        pair[0],
+                        pair[1],
+                        lo.offset(-half, -half),
+                        hi.offset(half, half),
+                    )
+                };
+                for &(text, bounds) in &labels {
+                    assert!(!hits(bounds), "{text} and stroke");
+                }
+                assert!(
+                    pictures.iter().all(|&model| !hits(model)),
+                    "model and stroke"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn transition_state_labels_only_use_numbers_for_multiple_transitions() {
+    // The fixture uses the numbered default names found in older saved profiles.
+    for (energies, expected) in [
+        (&[0., 27.3, -7.6][..], &["TS‡ 27.3"][..]),
+        (&[0., 27.3, -7.6, -4.], &["TS‡ 27.3"]),
+        (&[0., 27.3, -7.6, 18., -4.], &["TS1‡ 27.3", "TS2‡ 18.0"]),
+    ] {
+        let (_, labels) = placed(profile(energies)).energy_profile_parts(&style::DEFAULT);
+        let transitions: Vec<_> = labels
+            .iter()
+            .filter(|l| l.text.starts_with("TS"))
+            .map(|l| l.text.as_str())
+            .collect();
+        assert_eq!(transitions, expected);
+    }
+}
+
+#[test]
+fn default_profile_is_compact_with_models_and_a_caption_inside_the_plot() {
+    let mut p = profile(&[0., 27.3, -7.6]);
+    p.states[0].label = "3-(ethenyloxy)prop-1-ene".into();
+    p.states[2].label = "pent-4-enal".into();
+    for method in ["GFN2-xTB", "g-xTB"] {
+        p.method = method.into();
+        let layout = Layout::new(&p, &style::DEFAULT);
+        let g = placed(p.clone());
+        let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
+        assert_no_overlaps(&g, &layout, &parts, &labels);
+        let em = layout.font.size();
+        let axis = &layout.lines[0];
+        let plot = (
+            layout.world(&g, axis[0]),
+            layout.world(&g, Point::new(layout.width - em * 0.4, axis[1].y)),
+        );
+        let caption = labels.iter().find(|l| l.text == method).unwrap().bounds();
+        assert!(contains(plot, caption));
+        assert!(plot.1.x - caption.1.x < em * 0.5 && plot.1.y - caption.1.y < em * 0.5);
+        assert!(layout.height <= layout.width * 0.68);
+
+        let coordinate = labels
+            .iter()
+            .find(|l| l.text == "Reaction coordinate")
+            .unwrap()
+            .bounds();
+        assert!((0. ..em * 0.5).contains(&(coordinate.0.y - plot.1.y)));
+        let ts = &layout.pictures[1];
+        assert_eq!(ts.state, 1);
+        let model_bottom = ts.centre.y + layout.picture_side / 2.;
+        assert!((0. ..em * 1.5).contains(&(layout.top - model_bottom)));
+    }
+}
+
+#[test]
+fn blocked_method_caption_moves_to_the_top_of_the_energy_axis() {
+    let mut p = profile(&[0., 27.3, -7.6]);
+    p.method = "GFN2-xTB + g-xTB".into();
+    let layout = Layout::new(&p, &style::DEFAULT);
+    let g = placed(p.clone());
+    let (parts, labels) = g.energy_profile_parts(&style::DEFAULT);
+    assert_no_overlaps(&g, &layout, &parts, &labels);
+    let caption = labels.iter().find(|l| l.text == p.method).unwrap();
+    let axis_top = layout.world(&g, layout.lines[0][0]);
+    assert!((0. ..layout.font.size() * 0.5).contains(&(caption.bounds().0.x - axis_top.x)));
+    assert!((caption.centre().y - axis_top.y).abs() < 1e-3);
+}
 
 #[test]
 fn labels_and_models_stay_clear_of_each_other_and_every_curve() {
     for energies in [
         &[0., -60.][..],
-        &[0., 18., -8.][..],
+        &[0., 18., -8.],
         &[0., 18., -5., 14., -12.],
+        &[0., 18., -20., 14., -5.],
         &[0., 0.00003, 0.00001, 0.00004, 0.00002],
         &[0., -4., -6., -5., -20.],
         &[0., 18., 12.],
@@ -106,48 +231,7 @@ fn labels_and_models_stay_clear_of_each_other_and_every_curve() {
             let g = placed(p.clone());
             let layout = Layout::new(&p, &style::DEFAULT);
             let (parts, labels) = layout.ink(&g);
-            let pictures: Vec<_> = layout
-                .pictures
-                .iter()
-                .map(|m| {
-                    let c = layout.world(&g, m.centre);
-                    let half = layout.picture_world_side(&g) / 2.;
-                    (c.offset(-half, -half), c.offset(half, half))
-                })
-                .collect();
-            for (i, label) in labels.iter().enumerate() {
-                for other in &labels[i + 1..] {
-                    assert!(
-                        !overlaps(label.bounds(), other.bounds()),
-                        "{} and {}",
-                        label.text,
-                        other.text
-                    );
-                }
-                assert!(
-                    pictures
-                        .iter()
-                        .all(|&model| !overlaps(label.bounds(), model))
-                );
-            }
-            for part in parts.iter().skip(layout.lines.len()) {
-                let half = part.style.width() / 2.;
-                for path in super::super::flattened(&part.commands) {
-                    for pair in path.windows(2) {
-                        let [a, b] = pair else { continue };
-                        let hits = |(lo, hi): (Point, Point)| {
-                            crate::atom_labels::segment_hits_rect(
-                                *a,
-                                *b,
-                                lo.offset(-half, -half),
-                                hi.offset(half, half),
-                            )
-                        };
-                        assert!(labels.iter().all(|l| !hits(l.bounds())), "{energies:?}");
-                        assert!(pictures.iter().all(|&m| !hits(m)), "{energies:?}");
-                    }
-                }
-            }
+            assert_no_overlaps(&g, &layout, &parts, &labels);
         }
     }
 }
@@ -259,13 +343,12 @@ fn axes_round_in_the_display_unit_and_flat_or_negative_profiles_remain_finite() 
                 );
             }
             assert!(layout.states.iter().all(|s| s.is_finite()));
-            let title = &layout.labels[1];
-            let caption = &layout.labels[0];
+            let title = &layout.labels[0];
+            let caption = layout.labels.last().unwrap();
             assert_eq!(title.text, format!("ΔE ({})", unit.label()));
             assert_eq!(title.angle, -90.);
             assert_eq!(caption.text, "GFN2-xTB");
             assert_eq!(caption.angle, 0.);
-            assert!(caption.centre.y < axis[0].y);
         }
     }
 }
@@ -283,7 +366,7 @@ fn owned_geometries_render_as_vector_models_with_thematic_bond_changes() {
     };
     let (parts, labels, pictures) = g.energy_profile_scene(&doc.drawing_style, &doc);
     assert!(!parts.is_empty() && !labels.is_empty());
-    assert!(labels.iter().any(|l| l.text == "TS1‡ 18.0"));
+    assert!(labels.iter().any(|l| l.text == "TS‡ 18.0"));
     assert_eq!(
         pictures
             .iter()

@@ -427,6 +427,15 @@ impl Label {
             angle: 0.,
         }
     }
+    fn half_size(&self, font: &TextStyle) -> (f32, f32) {
+        let w = style::styled_text_width(&self.text, self.size, font) / 2.;
+        let h = self.size * TextFormat::default().line_spacing / 2.;
+        if self.angle == 0. { (w, h) } else { (h, w) }
+    }
+    fn bounds(&self, font: &TextStyle) -> (Point, Point) {
+        let (w, h) = self.half_size(font);
+        (self.centre.offset(-w, -h), self.centre.offset(w, h))
+    }
 }
 struct PictureSlot {
     state: usize,
@@ -435,6 +444,7 @@ struct PictureSlot {
 struct Layout {
     width: f32,
     height: f32,
+    min_y: f32,
     font: TextStyle,
     states: Vec<Point>,
     labels: Vec<Label>,
@@ -473,6 +483,12 @@ impl Layout {
                 .iter()
                 .map(|s| width_of(s, tick_size))
                 .fold(0., f32::max);
+        let single_ts = profile
+            .states
+            .iter()
+            .filter(|s| s.kind == EnergyProfileStateKind::TransitionState)
+            .count()
+            == 1;
         let (mut transitions, mut intermediates) = (0, 0);
         let captions: Vec<_> = profile
             .states
@@ -480,6 +496,7 @@ impl Layout {
             .map(|s| {
                 let (role, short) = match s.kind {
                     EnergyProfileStateKind::Reactant => ("R".into(), "R"),
+                    EnergyProfileStateKind::TransitionState if single_ts => ("TS‡".into(), "TS1‡"),
                     EnergyProfileStateKind::TransitionState => {
                         transitions += 1;
                         (format!("TS{transitions}‡"), "TS‡")
@@ -511,42 +528,20 @@ impl Layout {
         // Keep a gap even in long, multistep profiles.
         let bar = (plot_width * 0.11).min(slot * 0.55);
         let picture_side = bar * 1.5;
-        let width = (plot_left + plot_width + em * 0.4)
-            .max(width_of(&profile.method, tick_size) + em * 1.5);
-        let has_model = |up| {
-            profile.states.iter().any(|s| {
-                s.geometry.is_some() && (s.kind == EnergyProfileStateKind::TransitionState) == up
-            })
-        };
-        let row = profile.models == EnergyProfileModels::RowAbove
-            && (has_model(true) || has_model(false));
-        let at_levels = profile.models == EnergyProfileModels::AtLevels;
-        let header = if profile.method.is_empty() {
-            em * 0.5
-        } else {
-            em * 1.6
-        };
-        let row_height = if row { picture_side + em * 0.4 } else { 0. };
-        let top = header
-            + row_height
-            + em * 2.
-            + if at_levels && has_model(true) {
-                picture_side
-            } else {
+        // Leave room on the right of the final bar for the method caption.
+        let plot_right = plot_left
+            + plot_width
+            + if profile.method.is_empty() {
                 0.
-            };
-        let bottom = top + (em * 9.).max(width_of(&axis_title, tick_size));
-        let height = bottom
-            + em * 3.4
-            + if at_levels && has_model(false) {
-                picture_side
             } else {
-                0.
+                em * 1.4
             };
+        let bottom = (em * 9.).max(width_of(&axis_title, tick_size));
         let factor = profile.unit.convert_kcal(1.);
         let mut layout = Self {
-            width,
-            height,
+            width: plot_right + em * 0.4,
+            height: 0.,
+            min_y: 0.,
             font: font.clone(),
             states: vec![],
             labels: vec![],
@@ -557,19 +552,9 @@ impl Layout {
             picture_side,
             low: low / factor,
             high: high / factor,
-            top,
+            top: 0.,
             bottom,
         };
-        if !profile.method.is_empty() {
-            layout.labels.push(Label::new(
-                profile.method.clone(),
-                Point::new(
-                    em * 0.75 + width_of(&profile.method, tick_size) / 2.,
-                    em * 0.85,
-                ),
-                tick_size,
-            ));
-        }
         let highest_tick = layout.energy_y(ticks.last().copied().unwrap_or(high) / factor);
         let lowest_tick = layout.energy_y(ticks.first().copied().unwrap_or(low) / factor);
         let mut title = Label::new(
@@ -593,11 +578,6 @@ impl Layout {
                 .labels
                 .push(Label::new(text, Point::new(x, y), tick_size));
         }
-        layout.labels.push(Label::new(
-            "Reaction coordinate".into(),
-            Point::new(plot_left + plot_width / 2., height - em * 0.75),
-            tick_size,
-        ));
         layout.states = profile
             .states
             .iter()
@@ -628,14 +608,14 @@ impl Layout {
             let clear = |width, up| layout.clear_y(i, level, width / 2. + em * 0.15, up);
             let value_y = clear(width_of(&value, value_size), true) - em * 0.9;
             let name_y = name.map(|name| clear(width_of(name, em), false) + em);
-            if (row || at_levels) && state.geometry.is_some() {
-                let model_y = if row {
-                    header + picture_side / 2.
+            if profile.models != EnergyProfileModels::Off && state.geometry.is_some() {
+                let model_y = if profile.models == EnergyProfileModels::RowAbove {
+                    layout.top - em * 1.8 - picture_side / 2.
                 } else if state.kind == EnergyProfileStateKind::TransitionState {
-                    (clear(picture_side, true) - em * 0.4).min(value_y - em * 0.8)
+                    (clear(picture_side, true) - em * 0.4).min(value_y - em * 0.75)
                         - picture_side / 2.
                 } else {
-                    (clear(picture_side, false) + em * 0.4).max(name_y.map_or(y, |y| y + em * 0.8))
+                    (clear(picture_side, false) + em * 0.4).max(name_y.map_or(y, |y| y + em * 0.75))
                         + picture_side / 2.
                 };
                 layout.pictures.push(PictureSlot {
@@ -652,7 +632,87 @@ impl Layout {
                     .push(Label::new(name.into(), Point::new(x, cy), em));
             }
         }
+        let gap = em * 0.3;
+        let mut coordinate = Label::new(
+            "Reaction coordinate".into(),
+            Point::new(plot_left + plot_width / 2., bottom),
+            tick_size,
+        );
+        let (lo, hi) = coordinate.bounds(&layout.font);
+        let occupied_bottom = layout
+            .label_and_model_bounds()
+            .filter(|(a, b)| a.x < hi.x + gap && b.x > lo.x - gap)
+            .map(|(_, b)| b.y)
+            .fold(bottom, f32::max);
+        coordinate.centre.y = occupied_bottom + gap + (hi.y - lo.y) / 2.;
+        layout.labels.push(coordinate);
+        if !profile.method.is_empty() {
+            layout.place_method(&profile.method, plot_right, style.line_width());
+        }
+        // Fit the frame to the artwork above and below the plot.
+        let (top, bottom) = layout
+            .label_and_model_bounds()
+            .fold((layout.top, layout.bottom), |(top, bottom), (a, b)| {
+                (top.min(a.y), bottom.max(b.y))
+            });
+        layout.min_y = top - gap;
+        layout.height = bottom + gap - layout.min_y;
         layout
+    }
+    fn label_and_model_bounds(&self) -> impl Iterator<Item = (Point, Point)> {
+        let half = self.picture_side / 2.;
+        self.labels.iter().map(|l| l.bounds(&self.font)).chain(
+            self.pictures
+                .iter()
+                .map(move |m| (m.centre.offset(-half, -half), m.centre.offset(half, half))),
+        )
+    }
+    fn place_method(&mut self, method: &str, plot_right: f32, stroke: f32) {
+        use crate::atom_labels::segment_hits_rect;
+
+        let em = self.font.size();
+        let inset = em * 0.3;
+        let clearance = em * 0.12;
+        let mut caption = Label::new(method.into(), Point::default(), em * 0.72);
+        let (w, h) = caption.half_size(&self.font);
+        let axis_top = self.lines[0][0];
+        let is_clear = |centre: Point| {
+            let (lo, hi) = (
+                centre.offset(-w - clearance, -h - clearance),
+                centre.offset(w + clearance, h + clearance),
+            );
+            let hits = |a, b| {
+                segment_hits_rect(a, b, lo.offset(-stroke, -stroke), hi.offset(stroke, stroke))
+            };
+            let hits_path = |path: &[Point]| path.windows(2).any(|p| hits(p[0], p[1]));
+            self.label_and_model_bounds()
+                .all(|(a, b)| a.x >= hi.x || b.x <= lo.x || a.y >= hi.y || b.y <= lo.y)
+                && !self.lines.iter().any(|p| hits_path(p))
+                && !self
+                    .curves
+                    .iter()
+                    .flat_map(|p| super::flattened(p))
+                    .any(|p| hits_path(&p))
+                && !self
+                    .states
+                    .iter()
+                    .any(|p| hits(p.offset(-self.bar / 2., 0.), p.offset(self.bar / 2., 0.)))
+        };
+        caption.centre = Point::new(plot_right - inset - w, self.bottom - inset - h);
+        if caption.centre.x - w < axis_top.x || !is_clear(caption.centre) {
+            let left = axis_top.x + inset.max(stroke + clearance);
+            caption.centre = Point::new(left + w, axis_top.y);
+            if !is_clear(caption.centre) {
+                let top = self
+                    .label_and_model_bounds()
+                    .filter(|(a, b)| a.x < left + 2. * w + clearance && b.x > left - clearance)
+                    .map(|(a, _)| a.y)
+                    .fold(self.top - stroke, f32::min);
+                caption.centre.y = top - inset - h;
+            }
+            self.width = self.width.max(left + 2. * w + inset);
+        }
+        self.labels.push(caption);
     }
     fn energy_y(&self, energy: f64) -> f32 {
         self.top + (self.bottom - self.top) * ((self.high - energy) / (self.high - self.low)) as f32
@@ -710,7 +770,7 @@ impl Layout {
             })
     }
     fn world(&self, g: &Graphic, p: Point) -> Point {
-        let (x, y) = (p.x / self.width, p.y / self.height);
+        let (x, y) = (p.x / self.width, (p.y - self.min_y) / self.height);
         g.origin.offset(
             x * g.axis_x.x + y * g.axis_y.x,
             x * g.axis_x.y + y * g.axis_y.y,

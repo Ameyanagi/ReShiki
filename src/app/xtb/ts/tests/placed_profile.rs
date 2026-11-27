@@ -61,7 +61,7 @@ fn placed_profile_sits_below_the_model_row_and_skips_an_obstacle() {
         [Kind::Reactant, Kind::TransitionState, Kind::Product]
     );
     assert_eq!(p.states[0].label, "Allyl vinyl ether");
-    assert_eq!(p.states[1].label, "TS1‡");
+    assert_eq!(p.states[1].label, "TS‡");
     assert!(p.states.iter().all(|s| s.geometry.is_some()));
     assert_eq!(p.steps[0].irc.len(), 5);
     assert_eq!(p.steps[0].irc[2].energy_kcal, p.states[1].energy_kcal);

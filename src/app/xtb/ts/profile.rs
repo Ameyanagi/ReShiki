@@ -257,7 +257,7 @@ impl App {
         let mut states = vec![state(Kind::Reactant, reactant, 0.)];
         let mut samples = vec![];
         if let Some(barrier) = presentation.refined_kcal.filter(|e| e.is_finite()) {
-            states.push(state(Kind::TransitionState, "TS1‡".into(), barrier));
+            states.push(state(Kind::TransitionState, "TS‡".into(), barrier));
             if let Some(reference) = optimized_reactant_energy(result)
                 && let Some(path) = irc::saved(result)
             {
