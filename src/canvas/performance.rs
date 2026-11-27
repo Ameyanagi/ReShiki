@@ -757,10 +757,10 @@ fn acene(rings: usize) -> Document {
     planar_model(&heavy, &bonds, &hydrogens)
 }
 
-/// Drag frames of a molecule whose 3D model shows an orbital, beside another
-/// object so the move is partial. `RESHIKI_PERF_ITERATIONS` sets the frames.
+/// Translating and turning a 3D model with an orbital, beside another object
+/// so the move is partial. `RESHIKI_PERF_ITERATIONS` sets the frame count.
 #[tokio::test]
-#[ignore = "Release-mode orbital drag profiling; requires a headless renderer"]
+#[ignore = "Release-mode orbital canvas profiling; requires a headless renderer"]
 async fn manual_orbital_drag() {
     use reshiki::models3d::surface::draw::demo_on_this_thread;
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
@@ -781,6 +781,8 @@ async fn manual_orbital_drag() {
     println!("PERF,workload,iterations,median_ms,p95_ms,mean_ms");
     for (name, mut doc) in [("benzene", acene(1)), ("heptacene", acene(7))] {
         let atoms: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
+        let atom_count = atoms.len() + doc.models[0].hydrogens.len();
+        let rotation = doc.models[0].rotation;
         // A second object far away keeps the move partial.
         let (lo, hi) = doc.bounds();
         doc.add_atom("N", World::new(hi.x + 600., lo.y));
@@ -790,12 +792,7 @@ async fn manual_orbital_drag() {
         let start = doc.atoms[0].position;
         for opacity in [100, 50] {
             demo_on_this_thread(Some(&format!("pi,look=shaded,opacity={opacity}"))).unwrap();
-            let label = |what: &str| {
-                format!(
-                    "{name}_{}atoms_opacity{opacity}_{what}",
-                    doc.atoms.len() + doc.models[0].hydrogens.len() - 1
-                )
-            };
+            let label = |what: &str| format!("{name}_{atom_count}atoms_opacity{opacity}_{what}");
             // The scene of the moved molecule alone, translated each frame.
             let part = reshiki::editing::preserved_expansion_selection(&doc, &atoms).unwrap();
             measure(&label("scene_build"), iterations, |i| {
@@ -822,6 +819,34 @@ async fn manual_orbital_drag() {
                 let cursor = mouse::Cursor::Available(state.cursor.unwrap());
                 black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
             });
+
+            doc.models[0].turning = true;
+            doc.models[0].rotation = rotation;
+            measure(&label("turn_scene_build"), iterations, |_| {
+                let model = &mut doc.models[0];
+                model.rotation = reshiki::models3d::turn(model.rotation, 1., 0.3, false);
+                black_box(reshiki::scene::primitives(&doc));
+            });
+
+            doc.models[0].rotation = rotation;
+            let state = State::default();
+            measure(&label("canvas_turn_frame"), iterations, |_| {
+                let model = &mut doc.models[0];
+                model.rotation = reshiki::models3d::turn(model.rotation, 1., 0.3, false);
+                let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+                canvas.camera = Camera { center, zoom };
+                canvas.tool = Tool::Select;
+                canvas.selected = &atoms;
+                black_box(canvas.draw(
+                    &state,
+                    &renderer,
+                    &Theme::Light,
+                    bounds,
+                    mouse::Cursor::Unavailable,
+                ));
+            });
+            doc.models[0].turning = false;
+            doc.models[0].rotation = rotation;
         }
         demo_on_this_thread(None).unwrap();
     }

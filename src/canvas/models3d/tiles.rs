@@ -70,6 +70,7 @@ thread_local! {
     // Result-panel thumbnails keep their small cache independently.
     static MODEL_IMAGES: RefCell<Cache> = RefCell::default();
     static SAMPLES: std::cell::Cell<f32> = const { std::cell::Cell::new(OVERSAMPLE) };
+    static ROTATING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[cfg(test)]
@@ -147,10 +148,9 @@ impl ModelImage {
 /// turns or morphs, and with no tiled paint the tiles are let go.
 pub(in crate::canvas) fn begin(doc: &reshiki::document::Document) {
     use reshiki::models3d::Display;
-    let moving = doc
-        .models
-        .iter()
-        .any(|m| m.turning || m.morph.is_some_and(|t| t < 1.));
+    let turning = doc.models.iter().any(|m| m.turning);
+    let moving = turning || doc.models.iter().any(|m| m.morph.is_some_and(|t| t < 1.));
+    ROTATING.set(turning);
     SAMPLES.set(if moving { TURNING } else { OVERSAMPLE });
     if doc.models.iter().all(|m| m.display == Display::TwoD)
         && !reshiki::graphics::tiled(doc)
@@ -163,6 +163,7 @@ pub(in crate::canvas) fn begin(doc: &reshiki::document::Document) {
 /// End the paper's frame: other drawings render sharp.
 pub(in crate::canvas) fn end() {
     SAMPLES.set(OVERSAMPLE);
+    ROTATING.set(false);
 }
 
 /// A model primitive, or one fading in during the 2D → 3D morph.
@@ -197,6 +198,61 @@ struct Tile {
     key: u64,
     rect: [i64; 4],
     parts: Vec<Part>,
+}
+
+/// A surface reaches several tiles as a whole. During rotation a bounded
+/// image avoids parsing and painting that full surface for each tile.
+fn turning_tile(tiles: &[Tile]) -> Option<Tile> {
+    let [first, rest @ ..] = tiles else {
+        return None;
+    };
+    if rest.is_empty() {
+        return None;
+    }
+    let mut rect = first.rect;
+    for tile in rest {
+        let [x0, y0, x1, y1] = tile.rect;
+        rect = [
+            rect[0].min(x0),
+            rect[1].min(y0),
+            rect[2].max(x1),
+            rect[3].max(y1),
+        ];
+    }
+    let [x0, y0, x1, y1] = rect;
+    let (width, height) = (x1.saturating_sub(x0), y1.saturating_sub(y0));
+    // Stay within the same upload budget as one ordinary tile, including for
+    // long, narrow models.
+    if !(1..=2 * TILE).contains(&width)
+        || !(1..=2 * TILE).contains(&height)
+        || width * height > TILE * TILE
+    {
+        return None;
+    }
+    let mut parts: Vec<_> = tiles
+        .iter()
+        .flat_map(|tile| tile.parts.iter().copied())
+        .collect();
+    parts.sort_unstable();
+    parts.dedup();
+    let mut hasher = DefaultHasher::new();
+    "turning orbital".hash(&mut hasher);
+    for tile in tiles {
+        tile.key.hash(&mut hasher);
+    }
+    Some(Tile {
+        key: hasher.finish(),
+        rect,
+        parts,
+    })
+}
+
+fn has_orbital(primitive: &Primitive) -> bool {
+    match primitive {
+        Primitive::Opacity { primitive, .. } => has_orbital(primitive),
+        Primitive::Surface { .. } => true,
+        _ => false,
+    }
 }
 
 /// A contour's polygons, also while it fades in.
@@ -527,6 +583,12 @@ fn draw_tiles(
     let oversample = SAMPLES.get();
     let scale = camera.zoom * oversample;
     let theme = frame.canvas_theme();
+    let merged = if ROTATING.get() && run.iter().any(has_orbital) {
+        turning_tile(tiles)
+    } else {
+        None
+    };
+    let tiles = merged.as_ref().map_or(tiles, std::slice::from_ref);
     let Some([ox, oy, ..]) = tiles.first().map(|tile| tile.rect) else {
         return;
     };

@@ -643,6 +643,7 @@ fn mesh_strokes_keep_subunit_runs() {
         }),
         look: Look::new(Fill::None, true, 100).unwrap(),
         tones: vec![0],
+        turning: false,
     };
     let outline = Outline {
         color: [0; 3],
@@ -681,10 +682,38 @@ fn turning_caps_depth_groups_and_tones() {
 
     doc.models[0].turning = true;
     let turning = groups(&doc, "pistar,opacity=60");
-    assert_eq!(turning.len(), 2);
+    assert_eq!(turning.len(), 1);
+    assert_eq!(turning[0].alpha, 0.6);
     for fill in turning.iter().flat_map(|g| &g.fills) {
-        assert!(fill.tones.len() < 16, "the base fill also counts as a tone");
+        assert!(
+            fill.tones.len() < TURNING_TONES,
+            "the base fill also counts as a tone"
+        );
+        assert!(
+            fill.region
+                .iter()
+                .chain(fill.tones.iter().flat_map(|(path, _)| path))
+                .all(|command| !matches!(command, PathCommand::Cubic(..)))
+        );
     }
+}
+
+#[test]
+fn finishing_a_turn_restores_the_same_surface_primitives() {
+    let mut doc = tilted(benzene(), 55.);
+    let spec = "pi,look=shaded,opacity=50";
+    let rotation = doc.models[0].rotation;
+    let before = groups(&doc, spec);
+    assert!(!before.is_empty());
+
+    doc.models[0].turning = true;
+    doc.models[0].rotation = crate::models3d::turn(rotation, 7., 2., false);
+    assert_ne!(groups(&doc, spec), before);
+
+    doc.models[0].rotation = rotation;
+    doc.models[0].turning = false;
+    LIVE.take();
+    assert_eq!(groups(&doc, spec), before);
 }
 
 #[test]

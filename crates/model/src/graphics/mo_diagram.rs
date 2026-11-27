@@ -243,8 +243,6 @@ impl MoDiagram {
         let (mut parts, labels) = layout.ink(g);
         let mut pictures = vec![];
         let side = layout.picture_world_side(g);
-        let angle = text_angle(g.axis_x, g.axis_y).to_radians();
-        let (sin, cos) = angle.sin_cos();
         if side.is_finite() && side > 0. && self.model(source).is_some() {
             for slot in &layout.pictures {
                 let Some(model) = self.picture_model(source, slot.index) else {
@@ -256,13 +254,7 @@ impl MoDiagram {
                 {
                     continue;
                 }
-                let from = layout.world(g, slot.connector);
-                let label_extension = slot.label_width * (layout.text_scale(g) - layout.x_scale(g));
-                let start = from.offset(cos * label_extension, sin * label_extension);
-                let half = side / 2.;
-                let span = g.axis_x.x.abs().max(g.axis_x.y.abs());
-                let left = centre.offset(-g.axis_x.x / span * half, -g.axis_x.y / span * half);
-                if (left.x - start.x) * g.axis_x.x + (left.y - start.y) * g.axis_x.y > 0. {
+                if let Some([start, left]) = layout.picture_connector(g, slot, &labels, side) {
                     parts.push(line_part(
                         g,
                         vec![PathCommand::Move(start), PathCommand::Line(left)],
@@ -384,6 +376,7 @@ struct PictureSlot {
     centre: Point,
     connector: Point,
     label_width: f32,
+    label: Option<usize>,
 }
 
 struct Layout<'a> {
@@ -487,6 +480,8 @@ impl<'a> Layout<'a> {
                 })
                 .count();
             if count > 0 {
+                // Each spin's pictures occupy the lane immediately after its
+                // labels, before the next spin's bars and labels.
                 c.picture_x = width + picture_side / 2.;
                 width += picture_side + em;
                 picture_count = picture_count.max(count);
@@ -519,12 +514,14 @@ impl<'a> Layout<'a> {
 
         let mut labels = vec![];
         let mut label = |text: String, x, y, size, orbital| {
+            let index = labels.len();
             labels.push(Label {
                 text,
                 left: Point::new(x, y),
                 size,
                 orbital,
             });
+            index
         };
         label(
             "eV".into(),
@@ -567,8 +564,15 @@ impl<'a> Layout<'a> {
                 let right = c.bars(g, em).last().map_or(c.left, |(_, _, right)| right);
                 let label_x = right + em * 0.35;
                 let mut label_end = label_x;
+                let mut last_label = None;
                 for (index, text) in &g.labels {
-                    label(text.clone(), label_end, g.y, em, Some((c.index, *index)));
+                    last_label = Some(label(
+                        text.clone(),
+                        label_end,
+                        g.y,
+                        em,
+                        Some((c.index, *index)),
+                    ));
                     label_end += width_of(text, em) + em * 0.35;
                 }
                 for (index, p) in mo.pictures.iter().enumerate() {
@@ -579,6 +583,7 @@ impl<'a> Layout<'a> {
                             centre: Point::new(c.picture_x, g.y),
                             connector: Point::new(label_end + em * 0.28, g.y),
                             label_width: label_end - label_x,
+                            label: last_label,
                         });
                     }
                 }
@@ -655,7 +660,68 @@ impl<'a> Layout<'a> {
         let left = self.world(g, label.left);
         let centre = left.offset(w / 2., 0.).turned(left, angle);
         a.position = centre.offset(-w / 2., -h / 2.);
+        if !self.closed && (label.orbital.is_some() || matches!(label.text.as_str(), "α" | "β")) {
+            let width = style::styled_text_width(&label.text, label.size, &self.font);
+            let (lo, hi) = self.annotation_x_bounds(g, &a);
+            let tolerance = self.font.size() * 1e-4;
+            if lo < label.left.x - tolerance || hi > label.left.x + width + tolerance {
+                // Readable text can follow axis_y after a reflection. Fit
+                // the rendered box within this column's label slot.
+                let fit = (width / (hi - lo)).min(1.);
+                a.format.style.size_pt *= fit;
+                let (w, h) = a.size();
+                let centre = self.world(g, label.left.offset(width / 2., 0.));
+                a.position = centre.offset(-w / 2., -h / 2.);
+            }
+        }
         a
+    }
+
+    fn annotation_x_bounds(&self, g: &Graphic, a: &Annotation) -> (f32, f32) {
+        let det = g.frame_determinant();
+        a.corners()
+            .into_iter()
+            .map(|p| g.world_to_local(p, det).x * self.width)
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), x| {
+                (lo.min(x), hi.max(x))
+            })
+    }
+
+    fn picture_connector(
+        &self,
+        g: &Graphic,
+        slot: &PictureSlot,
+        labels: &[Annotation],
+        side: f32,
+    ) -> Option<[Point; 2]> {
+        let start = if self.closed {
+            let angle = text_angle(g.axis_x, g.axis_y).to_radians();
+            let (sin, cos) = angle.sin_cos();
+            let extension = slot.label_width * (self.text_scale(g) - self.x_scale(g));
+            self.world(g, slot.connector)
+                .offset(cos * extension, sin * extension)
+        } else {
+            let x = slot
+                .label
+                .and_then(|index| labels.get(index))
+                .map_or(slot.connector.x, |a| {
+                    self.annotation_x_bounds(g, a).1 + self.font.size() * 0.63
+                });
+            self.world(g, Point::new(x, slot.connector.y))
+        };
+        let centre = self.world(g, slot.centre);
+        let half = side / 2.;
+        let span = g.axis_x.x.abs().max(g.axis_x.y.abs());
+        let left = centre.offset(-g.axis_x.x / span * half, -g.axis_x.y / span * half);
+        let forward = if self.closed {
+            (left.x - start.x) * g.axis_x.x + (left.y - start.y) * g.axis_x.y > 0.
+        } else {
+            // The clear lane belongs to the local column, including when a
+            // shear makes the picture's vertical displacement project onto x.
+            let det = g.frame_determinant();
+            g.world_to_local(left, det).x > g.world_to_local(start, det).x
+        };
+        forward.then_some([start, left])
     }
 
     fn ink(&self, g: &Graphic) -> (Vec<Part>, Vec<Annotation>) {

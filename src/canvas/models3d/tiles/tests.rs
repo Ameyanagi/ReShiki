@@ -4,6 +4,31 @@ use reshiki::models3d::{Display, ForceField, Model3d, Placed, Style, set_display
 use std::collections::HashMap;
 
 #[test]
+fn turning_tile_keeps_paint_order_and_the_upload_budget() {
+    let first = Tile {
+        key: 1,
+        rect: [0, 0, TILE, 128],
+        parts: vec![(0, None), (1, Some(1)), (2, None)],
+    };
+    let second = Tile {
+        key: 2,
+        rect: [TILE, 0, 2 * TILE, 128],
+        parts: vec![(1, Some(0)), (2, None), (3, None)],
+    };
+    let merged = turning_tile(&[first.clone(), second.clone()]).unwrap();
+    assert_eq!(merged.rect, [0, 0, 2 * TILE, 128]);
+    assert_eq!(
+        merged.parts,
+        [(0, None), (1, Some(0)), (1, Some(1)), (2, None), (3, None)]
+    );
+    let too_large = Tile {
+        rect: [TILE, 0, 2 * TILE, TILE],
+        ..second
+    };
+    assert!(turning_tile(&[first, too_large]).is_none());
+}
+
+#[test]
 fn native_table_tiles_share_export_clips_wrapped_fonts_and_canvas_colors() {
     use reshiki::{
         canvas_theme::CanvasTheme,

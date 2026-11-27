@@ -23,8 +23,8 @@ const FOLD_DEPTH: f64 = 0.5;
 // A fine common grid avoids slivers at T-junctions. Leave five f64 mantissa
 // bits for roundoff when the same intersection is reached by different cuts.
 const UNION_BITS: u32 = f64::MANTISSA_DIGITS - 5;
-const SEGMENTS: usize = 64;
-const RINGS: usize = 12;
+// Subpixel Boolean grid for the turning preview.
+const TURNING_UNION_BITS: u32 = 18;
 
 /// Shadows of the ball discs and half-bond quads actually painted. Radii and
 /// half widths are positive; cap and roof rises are nonnegative.
@@ -138,7 +138,7 @@ struct Volume {
 }
 
 impl Volume {
-    fn new(occluder: Occluder) -> Option<Self> {
+    fn new<const SEGMENTS: usize, const RINGS: usize>(occluder: Occluder) -> Option<Self> {
         match occluder {
             Occluder::Ball {
                 center,
@@ -157,7 +157,7 @@ impl Volume {
                         -c * center[0] as f64 - s * center[1] as f64 - apothem,
                     ]));
                 }
-                // Twelve mid-latitude tangent rings circumscribe the cap. The
+                // Mid-latitude tangent rings circumscribe the cap. The
                 // apex tangent also bounds it at the analytic maximum depth,
                 // making the inexpensive max-Z rejection exact.
                 planes.push(Plane([0., 0., 1., -center[2] as f64 - depth as f64]));
@@ -279,7 +279,11 @@ impl Volume {
         }
     }
 
-    fn clip(&self, vertices: Vec<Vertex>, out: &mut Vec<Vec<Vertex>>) {
+    fn clip<const SEGMENTS: usize, const RINGS: usize>(
+        &self,
+        vertices: Vec<Vertex>,
+        out: &mut Vec<Vec<Vertex>>,
+    ) {
         let b = vertex_bounds(&vertices);
         if !boxes_overlap(b, self.bounds) || vertices.iter().all(|v| v.p[2] > self.top) {
             out.push(vertices);
@@ -818,7 +822,10 @@ pub(super) fn ordered_jobs<T: Send, Scratch>(
     output.into_iter().map(|(_, value)| value).collect()
 }
 
-fn mesh_pieces(input: &Input<'_>, lines_by_triangle: &HashMap<usize, Vec<usize>>) -> Vec<Piece> {
+fn mesh_pieces<const SEGMENTS: usize, const RINGS: usize>(
+    input: &Input<'_>,
+    lines_by_triangle: &HashMap<usize, Vec<usize>>,
+) -> Vec<Piece> {
     let mut back_edges = HashSet::new();
     for (i, triangle) in input.triangles.iter().enumerate() {
         if input.front[i] {
@@ -834,7 +841,7 @@ fn mesh_pieces(input: &Input<'_>, lines_by_triangle: &HashMap<usize, Vec<usize>>
         .occluders
         .iter()
         .copied()
-        .filter_map(Volume::new)
+        .filter_map(Volume::new::<SEGMENTS, RINGS>)
         .collect();
     let mut pieces = Vec::new();
     let mut work = Vec::new();
@@ -881,7 +888,7 @@ fn mesh_pieces(input: &Input<'_>, lines_by_triangle: &HashMap<usize, Vec<usize>>
         for volume in &volumes {
             next.clear();
             for vertices in work.drain(..) {
-                volume.clip(vertices, &mut next);
+                volume.clip::<SEGMENTS, RINGS>(vertices, &mut next);
             }
             std::mem::swap(&mut work, &mut next);
             if work.is_empty() {
@@ -1117,6 +1124,14 @@ fn merge_layers(
 
 /// Resolve coverage counts on the molecule-clipped pieces and their mesh lines.
 pub fn visible(input: &Input<'_>) -> Visible {
+    visible_with_quality(input, false)
+}
+
+pub(super) fn visible_while_turning(input: &Input<'_>) -> Visible {
+    visible_with_quality(input, true)
+}
+
+fn visible_with_quality(input: &Input<'_>, turning: bool) -> Visible {
     #[cfg(not(target_arch = "wasm32"))]
     let started = std::time::Instant::now();
     let groups = input.tones.len();
@@ -1128,7 +1143,13 @@ pub fn visible(input: &Input<'_>) -> Visible {
             lines_by_triangle.entry(triangle).or_default().push(id);
         }
     }
-    let pieces = mesh_pieces(input, &lines_by_triangle);
+    // A coarser cap needs fewer cuts, keeping the contours small enough to
+    // rebuild and paint at each angle. Both paths still clip balls and sticks.
+    let pieces = if turning {
+        mesh_pieces::<16, 4>(input, &lines_by_triangle)
+    } else {
+        mesh_pieces::<64, 12>(input, &lines_by_triangle)
+    };
     let mut result = Visible::default();
     result.stats.front = input.front.iter().filter(|&&front| front).count();
     result.stats.pieces = pieces.len();
@@ -1217,9 +1238,16 @@ pub fn visible(input: &Input<'_>) -> Visible {
         // A common integer grid keeps cuts on adjacent pieces together.
         let adapter = FloatPointAdapter::with_iter_and_coordinate_bits(
             pieces.iter().flat_map(|p| &p.polygon),
-            UNION_BITS,
+            if turning {
+                TURNING_UNION_BITS
+            } else {
+                UNION_BITS
+            },
         );
-        result.layers = merge_layers(&all.shades, &all.regions, &adapter, tolerance);
+        // The turning preview paints polygons directly. Skip thinning and
+        // its pairwise edge checks.
+        let thinning = if turning { 0. } else { tolerance };
+        result.layers = merge_layers(&all.shades, &all.regions, &adapter, thinning);
     }
     result.stats.fragments = all.fragments;
     result.stats.fragment_limit_hits = all.limit_hits;

@@ -2,7 +2,10 @@
 //! Both workloads use synthetic MO rows with active AOs of both signs.
 
 use super::{OrbitalField, orbital_grid};
-use crate::models3d::surface::{draw::DETAIL, mesh};
+use crate::models3d::surface::{
+    draw::{DETAIL, turning_detail},
+    mesh,
+};
 use reshiki_qcdata::{BasisSet, Shell};
 use std::{
     cell::Cell,
@@ -88,7 +91,7 @@ fn measure(name: &str, carbons: usize) {
     let fine = mesh::simplify(&raw, DETAIL[0]);
     let simplify_fine = stage.elapsed();
     let stage = Instant::now();
-    let coarse = mesh::simplify(&fine, DETAIL[1]);
+    let coarse = mesh::simplify(&fine, turning_detail(points.len()));
     let simplify_coarse = stage.elapsed();
     let stage = Instant::now();
     let fine = mesh::refine(&fine, value, ISO, step);
