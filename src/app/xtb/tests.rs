@@ -542,6 +542,16 @@ fn a_uff_starting_model_note_stays_in_the_finished_calculate_card() {
             .iter()
             .any(|note| { note == "UFF used: no MMFF94s parameters for this molecule" })
     );
+    // A later calculation on the same model keeps the build's notes.
+    send(&mut app, Action::Run);
+    assert!(
+        app.tab
+            .xtb
+            .run
+            .as_ref()
+            .is_some_and(|run| run.model_notes.iter().any(|note| note.contains("UFF"))),
+        "a calculation that reuses the model lists its notes"
+    );
 }
 
 #[test]

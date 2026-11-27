@@ -335,7 +335,9 @@ impl App {
                 self.status.push_str(" · ");
                 self.status.push_str(note);
             }
-            self.xtb_model_notes(job.key, notes);
+            if let Some(&atom) = ids.first() {
+                self.xtb_model_notes(job.key, atom, notes);
+            }
             if name_parent {
                 return self.name_parent(&job.prepared);
             }
