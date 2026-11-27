@@ -1840,7 +1840,7 @@ fn radical_subject(radicals: &[Radical]) -> Option<String> {
                 .iter()
                 .map(|radical| radical.label.as_str())
                 .collect();
-            Some(format!("{} are radical centres", labels.join(", ")))
+            Some(format!("{} are radical centers", labels.join(", ")))
         }
     }
 }
