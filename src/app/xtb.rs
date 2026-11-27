@@ -1250,7 +1250,6 @@ impl App {
                     false
                 }
             };
-        let mut relinked_pictures = false;
         if attached.freshness == Freshness::Current
             && !moved
             && (!optimized || applied)
@@ -1267,7 +1266,6 @@ impl App {
                     {
                         mo.relink(key.clone(), columns.clone());
                         mo.alpha_gap = xtb68;
-                        relinked_pictures |= !mo.pictures.is_empty();
                     }
                 }
             }
@@ -1299,12 +1297,6 @@ impl App {
             .last()
             .map(|s| s.result.clone())
         {
-            if relinked_pictures {
-                self.tab.xtb.orbitals.mo_relink = Some((
-                    science::result_key(&result),
-                    (self.tab.file_epoch, self.tab.revision),
-                ));
-            }
             self.tab.xtb.remember(&result, Arc::new(pending.info));
             if let Some(ts) = ts {
                 self.tab.xtb.ts_sessions.remember(&result, ts);

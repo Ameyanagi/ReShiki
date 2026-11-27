@@ -839,8 +839,7 @@ fn rerun_diagram(app: &mut App) -> qcdata::Orbitals {
     new_levels
 }
 
-fn reply_with_rerun_rows(app: &mut App, levels: &qcdata::Orbitals, rows: &[u32]) {
-    let key = science::result_key(&app.tab.doc.science.results.last().unwrap().result);
+fn reply_with_rerun_rows(app: &mut App, key: String, levels: &qcdata::Orbitals, rows: &[u32]) {
     let mut reply = worker_rows(rows);
     reply
         .alpha
@@ -863,7 +862,7 @@ fn rerun_rows(doc: &Document) -> &[u32] {
 }
 
 #[test]
-fn rerunning_relinks_and_pins_linked_pictures_in_one_undo_step() {
+fn rerunning_relinks_only_linked_mo_diagrams_in_the_calculation_edit() {
     let mut app = tab_with_mo_diagram();
     let before_copy = app.tab.doc.clone();
     let mut unlinked = before_copy.graphics[0].clone();
@@ -890,67 +889,98 @@ fn rerunning_relinks_and_pins_linked_pictures_in_one_undo_step() {
     );
     assert_eq!(app.tab.doc.graphics[1], unlinked);
     assert_eq!(app.tab.history.frames(), frames + 1);
-    assert!(rerun_rows(&app.tab.doc).is_empty());
-    let status = app.status.clone();
-    reply_with_rerun_rows(&mut app, &new_levels, &[0, 3]);
-    assert_eq!(rerun_rows(&app.tab.doc), [3]);
-    reply_with_rerun_rows(&mut app, &new_levels, &[1, 4]);
-    assert_eq!(rerun_rows(&app.tab.doc), [3, 4]);
-    assert_eq!(app.status, status);
-    assert_eq!(app.tab.history.frames(), frames + 1);
     let after = app.tab.doc.clone();
-    let reopened = Document::from_json(&after.file_json().unwrap()).unwrap();
-    assert_eq!(rerun_rows(&reopened), [3, 4]);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, after);
 }
 
-#[test]
-fn rerun_picture_rows_are_a_separate_undo_step_after_an_edit() {
+#[tokio::test]
+async fn saving_relinked_pictures_keeps_cached_rows_and_preserves_history() {
+    use iced::futures::StreamExt;
+
     let mut app = tab_with_mo_diagram();
     let new_levels = rerun_diagram(&mut app);
     let relinked = app.tab.doc.clone();
+    let diagram = relinked.graphics[0].mo.as_ref().unwrap();
+    let key = diagram.result.clone();
+    assert_eq!(
+        relinked.orbital_pins()[&key],
+        [(Spin::Alpha, 3), (Spin::Alpha, 4)]
+    );
+    let _ = app.update(Message::Undo);
+    reply_with_rerun_rows(&mut app, key.clone(), &new_levels, &[0, 3, 4]);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, relinked);
+
     let id = relinked.graphics[0].id;
     act(&mut app, Action::EditDiagram(id, DiagramEdit::Below(3)));
     let edited = app.tab.doc.clone();
-    let frames = app.tab.history.frames();
-    let status = "Edited the MO diagram range";
-    app.status = status.into();
-    reply_with_rerun_rows(&mut app, &new_levels, &[3, 4]);
-    assert_eq!(rerun_rows(&app.tab.doc), [3, 4]);
-    assert_eq!(app.status, status);
-    assert_eq!(app.tab.history.frames(), frames + 1);
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, edited);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, relinked);
+    app.tab.mark_saved(relinked.clone());
+    let revision = app.tab.revision;
+    let undo: Vec<_> = app.tab.history.undo_frames().cloned().collect();
+    let redo: Vec<_> = app.tab.history.redo_frames().cloned().collect();
+    assert!(!undo.is_empty());
+    assert_eq!(redo, [edited]);
+    assert!(!app.dirty());
+
+    // Further replies must leave the clean drawing and its redo step intact.
+    reply_with_rerun_rows(&mut app, key, &new_levels, &[1, 3, 4]);
+    assert_eq!(app.tab.doc, relinked);
+    assert!(rerun_rows(&app.tab.doc).is_empty());
+    assert_eq!(app.tab.revision, revision);
+    assert!(app.tab.history.undo_frames().eq(&undo));
+    assert!(app.tab.history.redo_frames().eq(&redo));
+    assert!(!app.dirty());
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("diagram.rsk");
+    app.tab.path = Some(path.clone());
+    let task = app.save_drawing(None);
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    let Some(iced_runtime::Action::Output(message @ Message::Saved(..))) = stream.next().await
+    else {
+        panic!("missing native save result");
+    };
+    let _ = app.update(message);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, relinked);
+    assert_eq!(app.tab.saved, relinked);
+    assert_eq!(app.tab.revision, revision);
+    assert!(app.tab.history.undo_frames().eq(&undo));
+    assert!(app.tab.history.redo_frames().eq(&redo));
+    assert!(!app.dirty());
+
+    let reopened = Document::from_json(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(rerun_rows(&reopened), [3, 4]);
+    let (stored_index, _) = reopened.orbital_pins_by_result().next().unwrap();
+    for (index, orbital) in reopened.orbital_pins_by_result() {
+        assert_eq!(index, stored_index);
+        assert!(
+            stored_row(
+                &reopened.science.results[index],
+                orbital.spin,
+                orbital.index as usize
+            )
+            .is_some()
+        );
+    }
 }
 
 #[test]
-fn rerun_picture_rows_are_skipped_for_unlinked_diagrams_and_stale_results() {
-    for unlink in [true, false] {
-        let mut app = tab_with_mo_diagram();
-        let new_levels = rerun_diagram(&mut app);
-        if unlink {
-            let id = app.tab.doc.graphics[0].id;
-            act(&mut app, Action::EditDiagram(id, DiagramEdit::Unlink));
-        } else {
-            let before = app.tab.doc.clone();
-            app.tab.doc.atoms[0].charge = 1;
-            app.changed(before);
-            let doc = &app.tab.doc;
-            let stored = doc.science.results.last().unwrap();
-            let attachment = doc.science.attachment(stored.attachment).unwrap();
-            assert_eq!(attachment.freshness(doc), science::Freshness::Stale);
-        }
-        let before = app.tab.doc.clone();
-        let frames = app.tab.history.frames();
-        reply_with_rerun_rows(&mut app, &new_levels, &[3, 4]);
-        assert_eq!(app.tab.doc, before, "unlink = {unlink}");
-        assert_eq!(app.tab.history.frames(), frames);
-    }
+fn save_snapshot_keeps_pictures_on_the_result_that_already_has_their_rows() {
+    let mut app = tab_with_mo_diagram();
+    let stored = app.tab.doc.science.results[0].clone();
+    app.tab.doc.science.results.push(Stored {
+        result: Arc::new(stored.result.light(&[])),
+        ..stored
+    });
+    assert!(rerun_rows(&app.tab.doc).is_empty());
+    let snapshot = app.tab.xtb.orbitals.save_snapshot(app.tab.doc.clone());
+    assert_eq!(snapshot, app.tab.doc);
 }
 
 #[test]

@@ -699,28 +699,49 @@ impl Document {
         saved
     }
 
-    fn orbital_figures(&self) -> impl Iterator<Item = &crate::models3d::surface::Figure> {
+    fn orbital_figures(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            Option<&crate::models3d::Model3d>,
+            &crate::models3d::surface::Figure,
+        ),
+    > {
         self.models
             .iter()
-            .flat_map(crate::models3d::Model3d::figures)
+            .flat_map(|model| model.figures().map(move |figure| (Some(model), figure)))
             .chain(
                 self.graphics
                     .iter()
                     .filter_map(|g| g.mo.as_deref())
-                    .flat_map(|mo| mo.pictures.iter().map(|p| &p.figure)),
+                    .flat_map(|mo| {
+                        let model = mo.model(self);
+                        mo.pictures.iter().map(move |p| (model, &p.figure))
+                    }),
             )
     }
 
     /// Orbital rows needed by the drawing, grouped by result key.
     pub fn orbital_pins(&self) -> HashMap<String, Vec<(reshiki_qcdata::Spin, u32)>> {
         let mut pins: HashMap<_, Vec<_>> = HashMap::new();
-        for figure in self.orbital_figures() {
+        for (_, figure) in self.orbital_figures() {
             let orbital = &figure.orbital;
             pins.entry(orbital.result.clone())
                 .or_default()
                 .push((orbital.spin, orbital.index));
         }
         pins
+    }
+
+    /// Orbital pins paired with the stored result each figure uses.
+    pub fn orbital_pins_by_result(
+        &self,
+    ) -> impl Iterator<Item = (usize, &crate::models3d::surface::OrbitalRef)> {
+        self.orbital_figures().filter_map(|(model, figure)| {
+            let orbital = &figure.orbital;
+            let (index, _) = crate::science::figure_result_for(self, model?, orbital)?;
+            Some((index, orbital))
+        })
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {

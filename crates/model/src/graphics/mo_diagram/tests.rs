@@ -656,50 +656,161 @@ fn the_gap_follows_the_summary_rule_for_separate_spins() {
 
 #[test]
 fn electrons_cross_their_bar_up_left_and_down_right() {
-    let (parts, _) = placed(benzene(), &style::DEFAULT).mo_parts(&style::DEFAULT);
-    let segment = |part: &Part| match part.commands.as_slice() {
-        [PathCommand::Move(a), PathCommand::Line(b)] => Some((*a, *b)),
-        _ => None,
-    };
-    let bars: Vec<_> = parts
-        .iter()
-        .filter(|p| p.style.flat_caps)
-        .filter_map(segment)
-        .filter(|(a, b)| (a.y - b.y).abs() < 1e-3)
-        .collect();
-    let shafts: Vec<_> = parts
-        .iter()
-        .filter_map(segment)
-        .filter(|(a, b)| (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() > 1e-3)
-        // The energy axis is vertical too; electrons lie within a bar.
-        .filter(|(a, _)| bars.iter().any(|(l, r)| a.x > l.x && a.x < r.x))
-        .collect();
-    // Three filled bars, two electrons each.
-    assert_eq!(shafts.len(), 6);
-    for (left, right) in bars {
-        let on: Vec<_> = shafts
-            .iter()
-            .filter(|(tail, tip)| {
-                tail.x > left.x
-                    && tail.x < right.x
-                    && tail.y.min(tip.y) < left.y
-                    && tail.y.max(tip.y) > left.y
-            })
-            .collect();
-        if on.is_empty() {
-            continue;
-        }
-        let centre = (left.x + right.x) / 2.;
-        let [(up_tail, up_tip), (down_tail, down_tip)] = [on[0], on[1]].map(|s| *s);
-        for (tail, tip) in [(up_tail, up_tip), (down_tail, down_tip)] {
-            assert!(
-                ((tail.y + tip.y) / 2. - left.y).abs() < 1e-3,
-                "centred on the bar"
+    let open_shell = MoDiagram::new(
+        1,
+        "old".into(),
+        vec![
+            column(Spin::Alpha, "α", &[-12., -10., -8., -3.], 2),
+            column(Spin::Beta, "β", &[-13., -9., -4., -2.], 1),
+        ],
+    );
+    for (name, mo, counts) in [
+        ("closed shell", benzene(), vec![vec![2, 2, 2, 0, 0, 0]]),
+        (
+            "open shell",
+            open_shell,
+            vec![vec![1, 1, 0, 0], vec![1, 0, 0, 0]],
+        ),
+    ] {
+        let layout = Layout::new(&mo, &style::DEFAULT);
+        for transformed in [false, true] {
+            let mut g = placed(mo.clone(), &style::DEFAULT);
+            if transformed {
+                // Rotate both axes, with different horizontal and vertical scales.
+                g.origin = Point::new(-27., 43.);
+                g.axis_x = Point::new(layout.width * 1.2, layout.width * 0.9);
+                g.axis_y = Point::new(-layout.height * 0.45, layout.height * 0.6);
+            }
+            let context = format!("{name}, transformed={transformed}");
+            let (parts, _) = g.mo_parts(&style::DEFAULT);
+            let local = |p| {
+                let p = g.world_to_local(p, g.frame_determinant());
+                Point::new(p.x * layout.width, p.y * layout.height)
+            };
+            let same = |a: Point, b: Point| (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() < 1e-3;
+            let segment = |part: &Part| match part.commands.as_slice() {
+                [PathCommand::Move(a), PathCommand::Line(b)] => Some((local(*a), local(*b))),
+                _ => None,
+            };
+            let bars: Vec<_> = parts
+                .iter()
+                .filter(|p| p.style.flat_caps)
+                .filter_map(segment)
+                .filter(|(a, b)| (a.y - b.y).abs() < 1e-3)
+                .collect();
+            let shafts: Vec<_> = parts
+                .iter()
+                .filter_map(segment)
+                .filter(|(a, b)| (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() > 1e-3)
+                // The energy axis is vertical too; electrons lie within a bar.
+                .filter(|(a, _)| bars.iter().any(|(l, r)| a.x > l.x && a.x < r.x))
+                .collect();
+            let heads: Vec<_> = parts
+                .iter()
+                .filter_map(|part| match part.commands.as_slice() {
+                    [
+                        PathCommand::Move(a),
+                        PathCommand::Line(tip),
+                        PathCommand::Line(b),
+                    ] => Some((local(*a), local(*tip), local(*b))),
+                    _ => None,
+                })
+                .collect();
+            let electrons = counts.iter().flatten().copied().sum::<usize>();
+            assert_eq!(
+                bars.len(),
+                counts.iter().map(Vec::len).sum::<usize>(),
+                "{context}"
             );
+            assert_eq!(shafts.len(), electrons, "{context}: total shafts");
+            assert_eq!(heads.len(), electrons, "{context}: total heads");
+            for c in &layout.columns {
+                for group in &c.groups {
+                    for (index, left, right) in c.bars(group, layout.font.size()) {
+                        let context = format!("{context}, column={}, level={index}", c.index);
+                        let y = group.y;
+                        assert_eq!(
+                            bars.iter()
+                                .filter(|(a, b)| {
+                                    same(*a, Point::new(left, y)) && same(*b, Point::new(right, y))
+                                })
+                                .count(),
+                            1,
+                            "{context}: level bar"
+                        );
+                        let mut on: Vec<_> = shafts
+                            .iter()
+                            .copied()
+                            .filter(|(tail, tip)| {
+                                tail.x > left
+                                    && tail.x < right
+                                    && tail.y.min(tip.y) < y
+                                    && tail.y.max(tip.y) > y
+                            })
+                            .collect();
+                        let expected = counts[usize::from(c.index)][index];
+                        assert_eq!(on.len(), expected, "{context}: shafts on this bar");
+                        assert_eq!(
+                            heads
+                                .iter()
+                                .filter(|(_, tip, _)| on.iter().any(|(_, end)| same(*tip, *end)))
+                                .count(),
+                            expected,
+                            "{context}: heads on this bar"
+                        );
+                        on.sort_by(|(a, _), (b, _)| a.x.total_cmp(&b.x));
+                        let centre = (left + right) / 2.;
+                        for (arrow, (tail, tip)) in on.iter().enumerate() {
+                            assert!(
+                                ((tail.y + tip.y) / 2. - y).abs() < 1e-3,
+                                "{context}: centred on the bar"
+                            );
+                            let down = if expected == 2 {
+                                arrow == 1
+                            } else {
+                                c.index == 1
+                            };
+                            // Local screen y grows downward: ↑ has its tip above its tail.
+                            assert_eq!(tip.y > tail.y, down, "{context}: arrow direction");
+                            if expected == 1 {
+                                assert!(
+                                    (tail.x - centre).abs() < 1e-3,
+                                    "{context}: centred single"
+                                );
+                            } else {
+                                assert_eq!(tail.x > centre, down, "{context}: side of the pair");
+                            }
+                            let attached: Vec<_> = heads
+                                .iter()
+                                .filter(|(_, head_tip, _)| same(*head_tip, *tip))
+                                .collect();
+                            assert_eq!(attached.len(), 1, "{context}: one head at each shaft tip");
+                            let (a, _, b) = attached[0];
+                            assert!(
+                                left < a.x && a.x < tip.x && tip.x < b.x && b.x < right,
+                                "{context}: head flanks its shaft inside the bar"
+                            );
+                            assert!((a.y - b.y).abs() < 1e-3, "{context}: level head wings");
+                            assert!(
+                                ((a.x + b.x) / 2. - tip.x).abs() < 1e-3,
+                                "{context}: symmetric head"
+                            );
+                            for wing in [a, b] {
+                                assert!(
+                                    wing.y > tail.y.min(tip.y) && wing.y < tail.y.max(tip.y),
+                                    "{context}: head wings point back along the shaft"
+                                );
+                            }
+                        }
+                        if let [(up_tail, _), (down_tail, _)] = on.as_slice() {
+                            assert!(
+                                ((centre - up_tail.x) - (down_tail.x - centre)).abs() < 1e-3,
+                                "{context}: symmetric pair"
+                            );
+                        }
+                    }
+                }
+            }
         }
-        // Screen y grows downward: ↑ has its tip above its tail.
-        assert!(up_tip.y < up_tail.y && up_tail.x < centre);
-        assert!(down_tip.y > down_tail.y && down_tail.x > centre);
-        assert!(((centre - up_tail.x) - (down_tail.x - centre)).abs() < 1e-3);
     }
 }

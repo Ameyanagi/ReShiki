@@ -1176,7 +1176,14 @@ pub fn figure_result<'a>(
     doc: &'a Document,
     model: &crate::models3d::Model3d,
 ) -> Option<(usize, &'a Stored)> {
-    let figure = model.surface.as_ref()?;
+    figure_result_for(doc, model, &model.surface.as_ref()?.orbital)
+}
+
+pub(crate) fn figure_result_for<'a>(
+    doc: &'a Document,
+    model: &crate::models3d::Model3d,
+    orbital: &crate::models3d::surface::OrbitalRef,
+) -> Option<(usize, &'a Stored)> {
     let atom = model.linked_atoms.first()?;
     let mut matches = doc
         .science
@@ -1194,7 +1201,7 @@ pub fn figure_result<'a>(
                             .iter()
                             .flatten()
                             .all(|id| model.contains(*id))
-                        && result_key(&stored.result) == figure.orbital.result
+                        && result_key(&stored.result) == orbital.result
                 })
         });
     // A repeated calculation shares the key: the figure stays with the
@@ -1202,11 +1209,11 @@ pub fn figure_result<'a>(
     let newest = matches.next()?;
     let keeps = |stored: &Stored| {
         stored.result.orbitals.as_ref().is_some_and(|orbitals| {
-            let set = match (&orbitals.beta, figure.orbital.spin) {
+            let set = match (&orbitals.beta, orbital.spin) {
                 (Beta::Unrestricted(beta), Spin::Beta) => beta,
                 _ => &orbitals.alpha,
             };
-            set.rows.binary_search(&figure.orbital.index).is_ok()
+            set.rows.binary_search(&orbital.index).is_ok()
         })
     };
     if keeps(newest.1) {
