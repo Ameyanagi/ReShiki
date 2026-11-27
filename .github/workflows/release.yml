@@ -238,7 +238,10 @@ jobs:
   build:
     needs: [validate, images]
     # Intel macOS builds and Windows x64 package checks can exceed 100 minutes.
-    timeout-minutes: ${{ (matrix.artifact == 'macos-x64' || matrix.artifact == 'windows-x64') && 150 || 100 }}
+    # So can macOS arm64 nightlies since the xTB release: a 74-minute build, the
+    # package checks and the release-mode nightly tests (cut off at 100 minutes
+    # while compiling those tests in nightly 46031717178).
+    timeout-minutes: ${{ (startsWith(matrix.artifact, 'macos') || matrix.artifact == 'windows-x64') && 150 || 100 }}
     strategy:
       fail-fast: false
       matrix:
