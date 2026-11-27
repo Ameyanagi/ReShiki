@@ -722,7 +722,7 @@ impl App {
         .abortable();
         // A calculation waiting for a replaced generation stops.
         if let Some(old) = self.tab.model_job.take() {
-            let _ = self.xtb_model_finished(old.key, None);
+            let _ = self.xtb_model_finished(old.key, Some("Another 3D model was started"));
         }
         self.status = if let Some(who) = who {
             format!("{who} · Building the 3D start from its closed-shell parent…")

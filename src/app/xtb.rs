@@ -986,8 +986,11 @@ impl App {
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     pub(super) fn xtb_model_spin(&mut self, key: super::models3d::Key, frame: &Frame) {
         let unpaired = frame.multiplicity - 1;
-        // A typed charge can give Calculate a different electron parity.
-        if let Some(run) = &mut self.tab.xtb.run
+        // Only a blank Unpaired field follows the drawing; a typed value,
+        // including 0, stays. A typed charge can give a different parity.
+        let blank = self.xtb.settings.unpaired.trim().is_empty();
+        if blank
+            && let Some(run) = &mut self.tab.xtb.run
             && run.launch.is_none()
             && run.model == Some(key)
             && let Some(&first) = run.atoms.first()

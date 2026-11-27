@@ -233,7 +233,7 @@ fn an_optional_refinement_that_inverts_a_wedge_keeps_the_uff_model() {
 }
 
 #[test]
-fn a_rough_refinement_with_a_stereo_check_error_names_the_atom_and_applies_nothing() {
+fn a_rough_refinement_with_a_short_reply_names_the_atom_and_applies_nothing() {
     if !xtb::available() {
         return;
     }
@@ -247,8 +247,37 @@ fn a_rough_refinement_with_a_stereo_check_error_names_the_atom_and_applies_nothi
     assert_eq!(app.model_failure_atom(), atoms.first().copied());
     assert_eq!(
         app.status,
-        "Can't build a starting 3D structure for Ce (cerium): g-xTB changed the stereochemistry."
+        "Can't build a starting 3D structure for Ce (cerium): g-xTB returned a different number of atoms."
     );
+}
+
+#[test]
+fn a_hydrogen_that_moved_to_another_atom_is_caught() {
+    use super::refine::hydrogens_kept;
+    let mut model = models3d::Model3d::new(
+        &Document::default(),
+        vec![
+            models3d::Placed {
+                id: 0,
+                xyz: [0., 0., 0.],
+            },
+            models3d::Placed {
+                id: 1,
+                xyz: [3., 0., 0.],
+            },
+        ],
+        vec![models3d::Hydrogen {
+            parent: 0,
+            xyz: [0.96, 0., 0.],
+        }],
+        models3d::ForceField::Uff,
+    );
+    // Generated models index their hydrogens' parents.
+    model.hydrogens[0].parent = 0;
+    let kept = [[0., 0., 0.], [3., 0., 0.], [0.96, 0., 0.]];
+    let moved = [[0., 0., 0.], [3., 0., 0.], [2.04, 0., 0.]];
+    assert!(hydrogens_kept(&model, &kept));
+    assert!(!hydrogens_kept(&model, &moved));
 }
 
 const WATER: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];

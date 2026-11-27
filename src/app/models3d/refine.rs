@@ -242,6 +242,15 @@ impl App {
 
     pub(super) fn model_refined(&mut self, key: Key, event: xtb::RunEvent) -> Task<Message> {
         let current = self.model_key();
+        // An edit made the refinement obsolete: stop its worker now.
+        if self
+            .tab
+            .model_job
+            .take_if(|job| job.key == key && job.current != current)
+            .is_some()
+        {
+            return self.xtb_model_finished(key, Some("Drawing changed"));
+        }
         let Some(job) = self.tab.model_job.as_mut().filter(|job| job.key == key) else {
             return Task::none();
         };
@@ -272,15 +281,13 @@ impl App {
             xtb::RunEvent::Hessian => return Task::none(),
             xtb::RunEvent::Tick => {}
         }
-        if job.current == current {
-            let line = refining.line(&job.prepared);
-            if self.status == refining.status {
-                refining.status = format!("{line} · Esc cancels");
-                self.status.clone_from(&refining.status);
-                self.error = false;
-            }
-            self.xtb_model_stage(key, line);
+        let line = refining.line(&job.prepared);
+        if self.status == refining.status {
+            refining.status = format!("{line} · Esc cancels");
+            self.status.clone_from(&refining.status);
+            self.error = false;
         }
+        self.xtb_model_stage(key, line);
         Task::none()
     }
 
@@ -301,11 +308,22 @@ impl App {
             })
             .and_then(|report| {
                 let frame = &mut refining.frame;
+                if report.positions.len() != frame.numbers.len() {
+                    return Err("returned a different number of atoms".into());
+                }
                 frame.positions_angstrom.clone_from(&report.positions);
-                science::stereo_changes(&self.tab.doc, &frame.drawing_atoms, frame)
-                    .is_ok_and(|changes| changes.is_empty())
-                    .then_some(report)
-                    .ok_or_else(|| "changed the stereochemistry".into())
+                // A drawing ordinary chemistry can't read (KrF₂) defines no
+                // stereo to keep, so only an observed change counts.
+                if science::stereo_changes(&self.tab.doc, &frame.drawing_atoms, frame)
+                    .is_ok_and(|changes| !changes.is_empty())
+                {
+                    return Err("changed the stereochemistry".into());
+                }
+                // Each hydrogen must stay nearest the atom it belongs to.
+                if !hydrogens_kept(&refining.model, &report.positions) {
+                    return Err("moved a hydrogen to another atom".into());
+                }
+                Ok(report)
             });
         let note = match result {
             Ok(report) => {
@@ -347,6 +365,22 @@ impl App {
         }
         named
     }
+}
+
+/// Whether every hydrogen in `positions` (model atoms, then hydrogens) is
+/// nearest its own parent atom, as `science::move_model` requires later.
+pub(super) fn hydrogens_kept(model: &Model3d, positions: &[[f64; 3]]) -> bool {
+    let (heavy, hydrogens) = positions.split_at(model.atoms.len().min(positions.len()));
+    let distance =
+        |a: &[f64; 3], b: &[f64; 3]| a.iter().zip(b).map(|(a, b)| (a - b).powi(2)).sum::<f64>();
+    model.hydrogens.iter().zip(hydrogens).all(|(hydrogen, at)| {
+        let nearest = heavy
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| distance(a, at).total_cmp(&distance(b, at)))
+            .map(|(index, _)| index as u64);
+        nearest == Some(hydrogen.parent)
+    })
 }
 
 fn refined_note(refining: &Refining, report: &xtb::run::Report) -> String {
