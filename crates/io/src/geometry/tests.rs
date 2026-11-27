@@ -448,6 +448,17 @@ fn atom_range_and_parameter_errors_are_typed() {
                 if label == "O3"
         ));
     }
+    // Hydrogens written on the atom count as ligands: [CeH3] is 3-coordinate.
+    let mut source = Document::default();
+    let cerium = source.add_atom("Ce", Point::default());
+    let atom = source.atom_mut(cerium).unwrap();
+    atom.explicit_h = 3;
+    atom.no_implicit = true;
+    assert!(matches!(
+        Prepared::relaxed(&source, &[]).unwrap().check_generation(),
+        Err(Error::Atom { atom, problem: AtomProblem::WrongShape { bonds: 3 }, .. })
+            if atom == cerium
+    ));
     // No force field has Rf; only new geometry is refused, so a file's
     // coordinates can still be flattened.
     let mut source = Document::default();
@@ -480,11 +491,9 @@ fn radical_saturation_is_detached_and_models_drop_only_the_last_caps_for_each_pa
         assert_eq!(prepared.radicals()[0].atom, 41);
         assert_eq!(prepared.radicals()[0].label, "C1");
         assert_eq!(prepared.radicals()[0].electrons, 2);
-        assert_eq!(prepared.radicals()[0].added, 2);
         assert_eq!(prepared.radicals()[1].atom, 89);
         assert_eq!(prepared.radicals()[1].label, "O3");
         assert_eq!(prepared.radicals()[1].electrons, 1);
-        assert_eq!(prepared.radicals()[1].added, 1);
         assert!(
             prepared
                 .molecule()
@@ -549,7 +558,7 @@ fn a_radical_with_a_fixed_hydrogen_count_is_capped_from_that_count() {
         Err(Error::Unsupported("radicals"))
     ));
     let prepared = Prepared::starting(&source, &[], Mode::Strict).unwrap();
-    assert_eq!(prepared.radicals()[0].added, 1);
+    assert_eq!(prepared.radicals()[0].electrons, 1);
     let request = prepared
         .generation_request(ForceField::Mmff94s, DEFAULT_SEED)
         .unwrap();

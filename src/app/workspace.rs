@@ -298,8 +298,8 @@ impl App {
             nmr: self.nmr_canvas(),
             locant_highlight: self
                 .pulse_atoms()
-                .or_else(|| self.model_failure_atom())
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
+            problem_atom: self.model_failure_atom(),
             reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
             tube_bend,

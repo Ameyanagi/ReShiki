@@ -1863,8 +1863,7 @@ fn an_unsupported_cerium_shape_rings_the_atom_and_keeps_the_selection() {
     );
     // The selection stays on the molecule, so Structure keeps its next step.
     assert_eq!(app.tab.selected, atoms);
-    assert_eq!(app.tab.pulse.as_ref().unwrap().0, [cerium]);
-    assert_eq!(app.model_failure_atom(), Some(&[cerium][..]));
+    assert_eq!(app.model_failure_atom(), Some(cerium));
     assert_eq!(app.tab.doc, original);
     assert_eq!(frames(&app), 0);
     let failure = app.tab.model_failure.as_ref().expect("a current failure");
@@ -1952,9 +1951,9 @@ fn a_propyl_radical_builds_from_propane_and_removes_only_its_extra_hydrogen() {
         "{}",
         app.status
     );
-    let serial = app.tab.model_serial;
+    let model = (app.tab.file_epoch, app.tab.model_serial);
     let _ = app.update(Message::Models3d(Action::ParentNamed(
-        serial,
+        model,
         "propane".into(),
     )));
     assert!(!app.error, "{}", app.status);

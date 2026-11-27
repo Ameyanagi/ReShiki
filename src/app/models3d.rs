@@ -48,8 +48,9 @@ pub(crate) enum Action {
     /// The 2D layout that the Structure section's 2D button uses.
     Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
-    /// The closed-shell parent's name for the radical model `serial` built.
-    ParentNamed(u64, String),
+    /// The closed-shell parent's name for the radical model that the tab's
+    /// (file epoch, model serial) built.
+    ParentNamed((u64, u64), String),
     /// Change the selected model; each change is one Undo step, and a slider
     /// drag is one step until [`Action::SlideEnd`].
     Set(Setting),
@@ -166,9 +167,11 @@ impl App {
                 }
                 Task::none()
             }
-            Action::ParentNamed(serial, name) => {
+            Action::ParentNamed(model, name) => {
                 // Only while the status still describes that model.
-                if serial == self.tab.model_serial && self.tab.model_job.is_none() {
+                if model == (self.tab.file_epoch, self.tab.model_serial)
+                    && self.tab.model_job.is_none()
+                {
                     self.status = self.status.replacen(UNNAMED_PARENT, &name, 1);
                 }
                 Task::none()
@@ -237,7 +240,7 @@ impl App {
                         }
                     }
                     Err(failure) => {
-                        self.record_model_failure(job.prepared.ids().to_vec(), failure);
+                        return self.record_model_failure(job.prepared.ids().to_vec(), failure);
                     }
                 }
                 Task::none()
@@ -254,7 +257,9 @@ impl App {
         }
     }
 
-    fn record_model_failure(&mut self, molecule: Vec<u64>, failure: Failure) {
+    /// Show why a 3D start failed: status, a red ring on the named atom and
+    /// the Structure section (scrolled into view) with the next step.
+    fn record_model_failure(&mut self, molecule: Vec<u64>, failure: Failure) -> Task<Message> {
         let failure = ModelFailure {
             epoch: self.tab.file_epoch,
             revision: self.tab.revision,
@@ -262,8 +267,7 @@ impl App {
             message: failure.message,
             atom: failure.atom,
         };
-        // The selection stays, so the Structure section and its next step
-        // stay in view; the atom flashes, then keeps a ring while current.
+        // The selection stays, so Properties keeps the Structure section.
         if let Some(atom) = failure.atom {
             if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &[atom]) {
                 self.reveal_if_clipped(lo, hi);
@@ -273,6 +277,11 @@ impl App {
         self.status = failure.message.clone();
         self.error = true;
         self.tab.model_failure = Some(failure);
+        // Structure is the last section of the molecule's Properties.
+        iced::widget::operation::snap_to(
+            "inspector-content",
+            iced::widget::operation::RelativeOffset::END,
+        )
     }
 
     /// The current failure, if the drawing has not changed since.
@@ -283,38 +292,39 @@ impl App {
     }
 
     /// The atom a current 3D build failure names, ringed on the canvas.
-    pub(super) fn model_failure_atom(&self) -> Option<&[u64]> {
-        self.current_failure()?
-            .atom
-            .as_ref()
-            .map(std::slice::from_ref)
+    pub(super) fn model_failure_atom(&self) -> Option<u64> {
+        self.current_failure()?.atom
     }
 
     /// Name the closed-shell parent of a radical model off the UI thread;
     /// the model itself is already shown.
     fn name_parent(&self, prepared: &Prepared) -> Task<Message> {
+        // Exactly the capped graph the geometry used: each centre's fixed
+        // hydrogen count, no radical.
         let mut parent = self.tab.doc.clone();
-        for radical in prepared.radicals() {
-            if let Some(atom) = parent.atom_mut(radical.atom) {
+        let graph = &prepared.molecule().state.graph.atoms;
+        for (id, capped) in prepared.ids().iter().zip(graph) {
+            if let Some(atom) = parent
+                .atom_mut(*id)
+                .filter(|_| prepared.radicals().iter().any(|r| r.atom == *id))
+            {
                 atom.radical_electrons = 0;
                 atom.singlet = false;
-                // A fixed count, as in imported [CH2]CC, needs the caps too.
-                if atom.no_implicit {
-                    atom.explicit_h = atom.explicit_h.saturating_add(u32::from(radical.electrons));
-                }
+                atom.no_implicit = true;
+                atom.explicit_h = u32::from(capped.explicit_hydrogens);
             }
         }
         let Ok(identity) = reshiki::naming::selected_identity(&parent, prepared.ids()) else {
             return Task::none();
         };
-        let serial = self.tab.model_serial;
+        let model = (self.tab.file_epoch, self.tab.model_serial);
         Task::future(async move {
             reshiki::naming::generate_name(&identity, reshiki::naming::Cancel::default())
                 .await
                 .ok()
                 .and_then(|record| record.systematic_name)
         })
-        .and_then(move |name| Task::done(Message::Models3d(Action::ParentNamed(serial, name))))
+        .and_then(move |name| Task::done(Message::Models3d(Action::ParentNamed(model, name))))
     }
 
     /// The display a still-current generation for these atoms will show.
@@ -540,7 +550,9 @@ impl App {
             self.error = true;
             return Task::none();
         }
-        self.tab.model_failure = None;
+        self.tab
+            .model_failure
+            .take_if(|failure| failure.molecule.iter().any(|id| atoms.contains(id)));
         let prepared = prepare(&self.tab.doc, &atoms).and_then(|(prepared, strict_error)| {
             prepared.check_generation()?;
             Ok((prepared, strict_error))
@@ -550,8 +562,7 @@ impl App {
                 (Arc::new(prepared.without_retained_depth()), strict_error)
             }
             Err(error) => {
-                self.record_model_failure(atoms, build_failure(&error));
-                return Task::none();
+                return self.record_model_failure(atoms, build_failure(&error));
             }
         };
         let who = radical_subject(prepared.radicals());
@@ -744,8 +755,10 @@ impl App {
             doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
             Ok(doc)
         } else {
-            prepare(&self.tab.doc, &atoms)
-                .and_then(|(prepared, _)| prepared.flattened(model))
+            // Existing coordinates: radicals stay as drawn, no cap hydrogens.
+            Prepared::new(&self.tab.doc, &atoms)
+                .or_else(|_| Prepared::relaxed(&self.tab.doc, &atoms))
+                .and_then(|prepared| prepared.flattened(model))
                 .map_err(|error| error.to_string())
         }
         .and_then(|mut doc| {
@@ -1822,7 +1835,7 @@ fn radical_subject(radicals: &[Radical]) -> Option<String> {
                 .iter()
                 .map(|radical| radical.label.as_str())
                 .collect();
-            Some(format!("{} are radicals", labels.join(", ")))
+            Some(format!("{} are radical centres", labels.join(", ")))
         }
     }
 }

@@ -192,13 +192,14 @@ pub struct Optimized {
     pub approximations: Vec<String>,
 }
 
-/// A drawing radical saturated only in the detached force-field input.
+/// A drawn radical centre that [`Prepared::starting`] capped with one
+/// hydrogen per radical electron, on the detached force-field input only.
 #[derive(Clone, Debug)]
 pub struct Radical {
     pub atom: u64,
+    /// Element and 1-based position in the molecule, such as "C1".
     pub label: String,
     pub electrons: u8,
-    added: u8,
 }
 
 #[derive(Clone, Debug)]
@@ -343,8 +344,8 @@ impl Prepared {
         let mut radicals = Vec::new();
         if closed_shell && !fallback {
             let state = &mut molecule.state;
-            for (index, atom) in state.graph.atoms.iter_mut().enumerate() {
-                let drawn = &part.atoms[index];
+            for (index, (atom, drawn)) in state.graph.atoms.iter_mut().zip(&part.atoms).enumerate()
+            {
                 if drawn.radical_electrons == 0 || atom.radical_electrons == 0 {
                     continue;
                 }
@@ -362,7 +363,6 @@ impl Prepared {
                     atom: drawn.id,
                     label: format!("{}{}", drawn.element, index + 1),
                     electrons: added,
-                    added,
                 });
             }
         }
@@ -373,15 +373,16 @@ impl Prepared {
                 limit: capacity.bonds,
             });
         }
-        for (index, atom) in molecule.state.graph.atoms.iter().enumerate() {
-            let problem = |problem| {
-                atom_error(
-                    molecule.ids[index],
-                    &part.atoms[index].element,
-                    index,
-                    problem,
-                )
-            };
+        for (index, ((atom, id), drawn)) in molecule
+            .state
+            .graph
+            .atoms
+            .iter()
+            .zip(&molecule.ids)
+            .zip(&part.atoms)
+            .enumerate()
+        {
+            let problem = |problem| atom_error(*id, &drawn.element, index, problem);
             if mode == Mode::Strict
                 && ![1, 5, 6, 7, 8, 9, 14, 15, 16, 17, 33, 34, 35, 53].contains(&atom.atomic_number)
             {
@@ -530,32 +531,33 @@ impl Prepared {
                 xyz: xyz(p),
             })
             .collect();
-        let mut remaining: HashMap<_, _> = self
+        // Leave out the hydrogens that capped radical centres: the last ones
+        // the worker added to each.
+        let mut caps: HashMap<_, _> = self
             .radicals
             .iter()
-            .map(|radical| (radical.atom, radical.added))
+            .map(|radical| (radical.atom, radical.electrons))
             .collect();
-        // Hydrogens arrive in worker order. Visiting them from the end drops
-        // only the last saturation caps belonging to each radical parent.
-        let mut hydrogens: Vec<_> = conformer
+        let mut hydrogens = Vec::new();
+        for (parent, p) in conformer
             .hydrogen_parents
             .iter()
             .zip(conformer.positions.iter().skip(self.ids.len()))
             .rev()
-            .filter_map(|(&parent, p)| {
-                let parent = self.ids[parent];
-                if let Some(added) = remaining.get_mut(&parent)
-                    && *added > 0
-                {
-                    *added -= 1;
-                    return None;
-                }
-                Some(crate::models3d::Hydrogen {
-                    parent,
-                    xyz: xyz(p),
-                })
-            })
-            .collect();
+        {
+            let parent = *self
+                .ids
+                .get(*parent)
+                .ok_or(Error::Coordinates("Missing hydrogen parent"))?;
+            if let Some(left) = caps.get_mut(&parent).filter(|left| **left > 0) {
+                *left -= 1;
+                continue;
+            }
+            hydrogens.push(crate::models3d::Hydrogen {
+                parent,
+                xyz: xyz(p),
+            });
+        }
         hydrogens.reverse();
         Ok(crate::models3d::Model3d::new(
             &self.source,
@@ -781,7 +783,10 @@ impl Prepared {
             });
         match refusal {
             Some((index, problem)) => {
-                let atom = self.ids[index];
+                let atom = *self
+                    .ids
+                    .get(index)
+                    .ok_or(Error::Coordinates("Missing refused atom"))?;
                 let symbol = self.source.atom(atom).map_or("?", |a| a.element.as_str());
                 Err(atom_error(atom, symbol, index, problem))
             }

@@ -138,7 +138,8 @@ pub struct BondInput {
 /// UFF has only octahedral angle types for the f block and a square planar
 /// xenon type: three- and four-coordinate f-block centres and bonded noble
 /// gases therefore need a different geometry model. Bond orders do not change
-/// the drawn coordination count. Call after validating the bond endpoints.
+/// the drawn coordination count; hydrogens on the atom add to it. Call after
+/// validating the bond endpoints.
 pub fn uff_shape_refusal(atoms: &[AtomInput], bonds: &[BondInput]) -> Option<(usize, usize)> {
     let mut counts = vec![0; atoms.len()];
     for bond in bonds {
@@ -149,7 +150,9 @@ pub fn uff_shape_refusal(atoms: &[AtomInput], bonds: &[BondInput]) -> Option<(us
         .iter()
         .zip(counts)
         .enumerate()
-        .find_map(|(index, (atom, count))| {
+        .find_map(|(index, (atom, bonded))| {
+            // Hydrogens written on the atom, as in [CeH3], are ligands too.
+            let count = bonded + atom.explicit_h as usize;
             let f_block =
                 matches!(atom.atomic_number, 57..=71 | 89..=103) && matches!(count, 3 | 4);
             let noble_gas =
