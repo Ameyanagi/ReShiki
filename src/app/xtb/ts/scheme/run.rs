@@ -144,6 +144,9 @@ impl DiscoveredPath {
 pub(in crate::app) struct StepValue {
     pub arrow: u64,
     pub method: XtbMethod,
+    /// Captured request provenance: a missing TS may be a failed search,
+    /// whereas ordinary energy-only steps never requested a connection check.
+    pub transition_state_requested: bool,
     pub ts: Option<Arc<CalcResult>>,
     pub discovered: Option<DiscoveredPath>,
     pub frames: Vec<Arc<Frame>>,
@@ -161,6 +164,7 @@ impl StepValue {
         Self {
             arrow,
             method,
+            transition_state_requested: false,
             ts: None,
             discovered: None,
             frames: Vec::new(),

@@ -205,6 +205,7 @@ fn endpoint_value(
     minima: &Minima,
 ) -> StepValue {
     let mut value = StepValue::empty(step.arrow, request.method);
+    value.transition_state_requested = options.transition_state();
     let sum = |terms: &[super::super::plan::Term], free| {
         super::super::plan::sum_energy(terms.iter().copied(), |index| {
             species_energy(minima.values.get(&index)?, free)
@@ -330,7 +331,10 @@ fn calculate(
                     free_barrier: false,
                     ..options
                 };
-                let value = endpoint_value(request, step, electronic, minima);
+                let mut value = endpoint_value(request, step, electronic, minima);
+                // Suppressing pending thermal quantities must not erase the
+                // original request to verify a transition-state connection.
+                value.transition_state_requested = options.transition_state();
                 if value.energy.is_some() {
                     emit(EventKind::Endpoints { index, value });
                 }

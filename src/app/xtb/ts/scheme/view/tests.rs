@@ -5,6 +5,7 @@ fn value() -> StepValue {
     StepValue {
         arrow: 1,
         method: XtbMethod::Gfn2Xtb,
+        transition_state_requested: false,
         ts: None,
         discovered: None,
         frames: vec![],

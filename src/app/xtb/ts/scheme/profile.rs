@@ -136,7 +136,19 @@ pub(super) fn build(
         }
         let delta = next_level - level;
         let from = states.len() - 1;
-        let barrier = if gibbs {
+        let verified = value.ts.as_ref().map_or_else(
+            || {
+                [value.barrier, value.free_barrier]
+                    .into_iter()
+                    .flatten()
+                    .any(f64::is_finite)
+            },
+            |result| result.status == reshiki::qcdata::Status::Converged,
+        );
+        let unresolved = (value.transition_state_requested || value.ts.is_some()) && !verified;
+        let barrier = if unresolved {
+            None
+        } else if gibbs {
             value.free_barrier
         } else {
             value.barrier.or_else(|| {
@@ -187,7 +199,7 @@ pub(super) fn build(
         states.push(state);
         let current = preview(doc, step.arrow).ok()?;
         steps.push(EnergyProfileStep {
-            unresolved: false,
+            unresolved,
             from,
             to: states.len() - 1,
             transition,

@@ -469,6 +469,8 @@ fn failed_ts_keeps_its_endpoint_energy_and_the_next_step_runs() {
     .unwrap();
     let values = step_values(&events);
     assert_eq!(values[0].1.energy, Some(0.));
+    assert!(values[0].1.transition_state_requested);
+    assert!(values[0].1.ts.is_none());
     assert!(values[0].1.barrier.is_none());
     assert!(
         values[0]
@@ -753,8 +755,10 @@ fn frequency_failure_only_affects_steps_that_request_free_energy() {
     let values = step_values(&events);
     assert_eq!(values[0].1.energy, Some(0.));
     assert!(values[0].1.error.is_none());
+    assert!(!values[0].1.transition_state_requested);
     assert_eq!(values[1].1.energy, Some(0.));
     assert!(values[1].1.gibbs.is_none());
+    assert!(!values[1].1.transition_state_requested);
     assert!(
         values[1]
             .1
@@ -1104,6 +1108,8 @@ fn missing_ts_review_is_local_and_endpoints_still_complete() {
     let values = step_values(&events);
     assert_eq!(values[0].1.energy, Some(0.));
     assert_eq!(values[0].1.error.as_deref(), Some("Map needs review"));
+    assert!(values[0].1.transition_state_requested);
+    assert!(values[0].1.ts.is_none());
     assert_eq!(fake.transitions, [request.plan.steps[1].arrow]);
 }
 
@@ -1400,4 +1406,44 @@ fn a_chemistry_edit_rejects_the_cancel_drain_without_replacing_the_users_status(
     assert!(work.step(0).is_none());
     assert!(!work.accepts(&partial));
     assert_eq!(app.status, "The user's next action");
+}
+
+#[test]
+fn free_barrier_request_survives_the_partial_electronic_endpoint_event() {
+    let mut request = distinct_request();
+    request.options[0] = StepOptions {
+        reaction_energy: true,
+        barrier: false,
+        free_energy: true,
+        free_barrier: true,
+    };
+    request.options[1] = StepOptions {
+        reaction_energy: false,
+        barrier: false,
+        free_energy: false,
+        free_barrier: false,
+    };
+    let mut fake = Fake {
+        cancel_hessian: Some(1),
+        thermo: true,
+        ..Default::default()
+    };
+    let mut events = Vec::new();
+    assert!(
+        calculate(&request, &mut fake, &Cancel::default(), |event| events
+            .push(event))
+        .is_err()
+    );
+    let value = events
+        .iter()
+        .find_map(|event| match event {
+            EventKind::Endpoints { index: 0, value } => Some(value),
+            _ => None,
+        })
+        .unwrap();
+    assert!(value.transition_state_requested);
+    assert!(value.ts.is_none());
+    assert!(value.energy.is_some());
+    assert!(value.gibbs.is_none());
+    assert!(fake.transitions.is_empty());
 }

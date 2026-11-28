@@ -74,6 +74,7 @@ fn report(path: DiscoveredPath, arrow: u64) -> Report {
         steps: vec![Some(StepValue {
             arrow,
             method: XtbMethod::Gfn2Xtb,
+            transition_state_requested: true,
             ts: None,
             discovered: Some(path),
             frames: vec![],

@@ -89,6 +89,7 @@ fn report(plan: &Plan) -> Report {
             Some(StepValue {
                 arrow: step.arrow,
                 method: XtbMethod::Gfn2Xtb,
+                transition_state_requested: true,
                 ts: None,
                 discovered: None,
                 frames: vec![],
@@ -399,6 +400,7 @@ fn failed_saddle_energy_does_not_create_a_fallback_barrier() {
                 .iter()
                 .all(|state| state.kind != Kind::TransitionState)
         );
+        assert!(figure.steps[0].unresolved);
     }
 }
 
@@ -970,4 +972,142 @@ fn discovered_minimum_splits_an_arrow_and_the_unverified_gap_survives_reopen() {
     let corrected = app.xtb_scheme_profile_for(true).unwrap();
     assert!((corrected.states[2].energy_kcal - expected).abs() < 1e-8);
     assert!(corrected.steps.iter().all(|step| step.irc.is_empty()));
+}
+
+#[test]
+fn failed_or_missing_ts_results_are_gaps_in_both_energy_profiles() {
+    for status in [
+        Some(reshiki::qcdata::Status::NotConverged {
+            reason: "IRC connection unverified".into(),
+        }),
+        Some(reshiki::qcdata::Status::Failed {
+            reason: "Worker failed".into(),
+        }),
+        None,
+    ] {
+        let (doc, plan) = Plan::example();
+        let mut report = report(&plan);
+        let result = report.species[0].result.clone();
+        for value in report.steps.iter_mut().flatten() {
+            value.transition_state_requested = true;
+            value.ts = status.as_ref().map(|status| {
+                let mut result = (*result).clone();
+                result.task = Task::TransitionState;
+                result.status = status.clone();
+                Arc::new(result)
+            });
+            value.error = Some("Transition state could not be verified".into());
+            // A failed result overrides even an old cached scalar barrier.
+            if status.is_none() {
+                value.barrier = None;
+                value.free_barrier = None;
+            }
+        }
+        for gibbs in [false, true] {
+            let figure = build(&doc, &plan, &report, gibbs, EnergyUnit::KcalPerMol).unwrap();
+            assert_eq!(figure.states.len(), 3);
+            assert!(
+                figure.steps.iter().all(|step| step.unresolved
+                    && step.transition.is_none()
+                    && step.irc.is_empty())
+            );
+        }
+    }
+}
+
+#[test]
+fn energy_only_warnings_and_missing_ts_thermochemistry_do_not_invent_connection_failures() {
+    let (doc, plan) = Plan::example();
+    let mut report = report(&plan);
+    for value in report.steps.iter_mut().flatten() {
+        value.transition_state_requested = false;
+        value.barrier = None;
+        value.free_barrier = None;
+        value.error = Some("Minimum free energy is unavailable".into());
+    }
+    let energy_only = build(&doc, &plan, &report, false, EnergyUnit::KcalPerMol).unwrap();
+    assert!(
+        energy_only
+            .steps
+            .iter()
+            .all(|step| !step.unresolved && step.transition.is_none())
+    );
+
+    let mut saddle = (*report.species[0].result).clone();
+    saddle.task = Task::TransitionState;
+    saddle.status = reshiki::qcdata::Status::Converged;
+    saddle.thermo = None;
+    let value = report.steps[0].as_mut().unwrap();
+    value.transition_state_requested = true;
+    value.ts = Some(Arc::new(saddle));
+    value.barrier = Some(10.);
+    value.error = Some("Transition-state free energy is unavailable".into());
+    let electronic = build(&doc, &plan, &report, false, EnergyUnit::KcalPerMol).unwrap();
+    assert!(!electronic.steps[0].unresolved);
+    assert!(electronic.steps[0].transition.is_some());
+    let gibbs = build(&doc, &plan, &report, true, EnergyUnit::KcalPerMol).unwrap();
+    assert!(!gibbs.steps[0].unresolved);
+    assert!(gibbs.steps[0].transition.is_none());
+}
+
+#[test]
+fn unverified_fallback_connections_stay_visibly_separate_after_native_reopen() {
+    use reshiki::graphics::PathCommand;
+    let mut app = app();
+    for value in app
+        .tab
+        .xtb
+        .scheme
+        .as_mut()
+        .unwrap()
+        .work
+        .report
+        .steps
+        .iter_mut()
+        .flatten()
+    {
+        value.transition_state_requested = true;
+        value.ts = None;
+        value.barrier = None;
+        value.free_barrier = None;
+        value.error = Some("Map needs review or the TS worker failed".into());
+    }
+    app.xtb_place_scheme_profile();
+    assert_eq!(
+        app.tab.doc.file_version(),
+        reshiki::document::ELEMENTARY_PROFILE_STEPS
+    );
+    let restored = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
+    let graphic = restored
+        .graphics
+        .iter()
+        .find(|graphic| graphic.energy_profile.is_some())
+        .unwrap();
+    let figure = graphic.energy_profile.as_deref().unwrap();
+    assert!(
+        figure
+            .steps
+            .iter()
+            .all(|step| step.unresolved && step.transition.is_none() && step.irc.is_empty())
+    );
+    assert!(profile::source_current(&restored, figure));
+    let (parts, _) = graphic.energy_profile_parts(&restored.drawing_style);
+    assert!(
+        !parts
+            .iter()
+            .flat_map(|part| &part.commands)
+            .any(|command| matches!(command, PathCommand::Cubic(..)))
+    );
+
+    let mut energy_only = graphic.clone();
+    for step in &mut energy_only.energy_profile.as_deref_mut().unwrap().steps {
+        step.unresolved = false;
+    }
+    let (parts, _) = energy_only.energy_profile_parts(&restored.drawing_style);
+    assert!(
+        parts
+            .iter()
+            .flat_map(|part| &part.commands)
+            .any(|command| matches!(command, PathCommand::Cubic(..)))
+    );
 }
