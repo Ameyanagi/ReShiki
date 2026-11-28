@@ -30,6 +30,7 @@ pub(super) struct SceneCache {
     foreground_orbital: Option<bool>,
     ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
     cycle_hits: HashMap<u64, reshiki::cycles::HitLayout>,
+    bond_target: super::hit::BondTargetCache,
     /// Keyed by the objects a preview redraws itself.
     remainder: Option<(Vec<u64>, Option<Rc<ScenePart>>)>,
     /// The base scene of the objects that move together.
@@ -152,6 +153,7 @@ impl SceneCache {
             self.foreground_orbital = None;
             self.ring_interiors = None;
             self.cycle_hits.clear();
+            self.bond_target = Default::default();
             self.remainder = None;
             self.release_move();
         }
@@ -162,6 +164,20 @@ impl SceneCache {
         self.ring_interiors
             .get_or_insert_with(|| Rc::new(reshiki::editing::RingInteriors::new(doc)))
             .at(point)
+    }
+
+    pub fn bond_target(
+        &mut self,
+        doc: &Document,
+        points: (super::World, super::World),
+        source: (Option<u64>, Option<u64>),
+        radius: f32,
+        drawing: reshiki::chains::BondDrawing,
+        tool: super::Tool,
+    ) -> Result<super::hit::BondTarget, String> {
+        self.document(doc);
+        self.bond_target
+            .resolve(doc, points, source, radius, drawing, tool)
     }
 
     pub fn cycle_hit(

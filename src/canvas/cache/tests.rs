@@ -16,6 +16,47 @@ fn drawing() -> Document {
     doc
 }
 
+#[test]
+fn bond_targets_invalidate_on_edits_undo_and_reused_document_ids() {
+    let mut doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let source = doc.atoms[1].id;
+    let original = doc.clone();
+    let mut history = History::default();
+    let mut cache = SceneCache::default();
+    let cursor = Point::new(100., 50.);
+    let resolve = |cache: &mut SceneCache, doc: &Document| {
+        cache
+            .bond_target(
+                doc,
+                (doc.atom(source).unwrap().position, cursor),
+                (Some(source), None),
+                12.,
+                reshiki::chains::BondDrawing::default(),
+                super::super::Tool::Bond(1),
+            )
+            .unwrap()
+    };
+    let first = resolve(&mut cache, &doc);
+    assert!(first.plane.is_some());
+    assert_eq!(resolve(&mut cache, &doc), first);
+    assert_eq!(cache.bond_target.plane_builds, 1);
+    doc.atoms[3].depth = 20.;
+    assert!(history.commit(original.clone(), &doc));
+    let changed = resolve(&mut cache, &doc);
+    assert_eq!(changed.plane, None);
+    assert_eq!(changed, resolve(&mut SceneCache::default(), &doc));
+    assert!(history.undo(&mut doc));
+    assert_eq!(resolve(&mut cache, &doc), first);
+    assert!(history.redo(&mut doc));
+    assert_eq!(resolve(&mut cache, &doc), changed);
+    doc = reshiki::rings::Preset::Regular.document(42., false);
+    assert_eq!(resolve(&mut cache, &doc).plane, None);
+    assert_eq!(
+        resolve(&mut cache, &doc),
+        resolve(&mut SceneCache::default(), &doc)
+    );
+}
+
 fn check(cache: &mut SceneCache, doc: &Document, ids: &[u64]) {
     let (markers, primitives) = cache.render(doc, ids);
     assert_eq!(

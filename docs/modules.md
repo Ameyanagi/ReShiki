@@ -295,6 +295,7 @@ explains how the crates and modules fit together.
 - `src/canvas/guides.rs`: Canvas-only measuring aids; coordinates share the drawing/export scale.
 - `src/canvas/hit.rs`: Hit testing
 - `src/canvas/hit/table.rs`: Pointer-local table clipping.
+- `src/canvas/hit/target_cache.rs`: One bond drag's target and source plane, invalidated with the scene's document.
 - `src/canvas/input.rs`: Pointer and keyboard events on the molecule canvas.
 - `src/canvas/input/equipment_trial.rs`: Pointer ownership for the disposable test piece, separate from drawing gestures.
 - `src/canvas/input/motion.rs`: Cursor motion

@@ -5,6 +5,8 @@ use iced::Vector;
 use reshiki::chains::BondDrawing;
 mod table;
 use table::CellClips;
+mod target_cache;
+pub(super) use target_cache::{BondTarget, BondTargetCache};
 
 pub(super) fn region_selection(
     doc: &Document,
@@ -119,7 +121,9 @@ pub(super) fn bond_target_with(
     radius: f32,
     drawing: BondDrawing,
 ) -> (World, Option<u64>) {
-    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source, radius, drawing);
+    let plane = source.and_then(|id| plane_endpoint(doc, id, end, drawing));
+    let (snapped, pointer, near_snap) =
+        bond_targets(doc, start, end, source, radius, drawing, plane);
     match pointer.or(near_snap) {
         Some((position, id)) => (position, Some(id)),
         None => (snapped, None),
@@ -135,6 +139,7 @@ fn bond_targets(
     source: Option<u64>,
     radius: f32,
     mut drawing: BondDrawing,
+    plane: Option<reshiki::projection::growth::Endpoint>,
 ) -> BondTargets {
     let clips = CellClips::new(doc);
     let origin = source.and_then(|id| doc.atom(id));
@@ -147,9 +152,9 @@ fn bond_targets(
         doc.atoms
             .iter()
             .filter(|a| {
-                doc.atom_drawn(a.id)
-                    && Some(a.id) != source
+                Some(a.id) != source
                     && a.position.distance(p) < radius
+                    && doc.atom_drawn(a.id)
                     && clips.allows(a.id, p)
                     && clips.point_visible(a.id, a.position)
                     && !origin.is_some_and(|o| {
@@ -161,8 +166,7 @@ fn bond_targets(
             })
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
     };
-    let snapped = source
-        .and_then(|id| plane_endpoint(doc, id, end, drawing))
+    let snapped = plane
         .map(|p| p.position)
         .unwrap_or_else(|| drawing.endpoint(start, end));
     let target = |p: World| nearest(p).map(|atom| (atom.position, atom.id));
@@ -179,6 +183,7 @@ pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
 /// An atom under the pointer wins, then a caption under the pointer, then an
 /// atom at the snapped endpoint: a fixed length never redirects a drop that
 /// lands on caption ink.
+#[cfg(test)]
 pub(super) fn bond_target_with_text(
     doc: &Document,
     start: World,
@@ -188,7 +193,24 @@ pub(super) fn bond_target_with_text(
     drawing: BondDrawing,
     tool: Tool,
 ) -> Result<(World, Option<u64>, Option<u64>), String> {
-    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source.0, radius, drawing);
+    let plane = source
+        .0
+        .and_then(|id| plane_endpoint(doc, id, end, drawing));
+    bond_target_with_plane(doc, (start, end), source, radius, drawing, tool, plane)
+}
+
+fn bond_target_with_plane(
+    doc: &Document,
+    points: (World, World),
+    source: (Option<u64>, Option<u64>),
+    radius: f32,
+    drawing: BondDrawing,
+    tool: Tool,
+    plane: Option<reshiki::projection::growth::Endpoint>,
+) -> Result<(World, Option<u64>, Option<u64>), String> {
+    let (start, end) = points;
+    let (snapped, pointer, near_snap) =
+        bond_targets(doc, start, end, source.0, radius, drawing, plane);
     if pointer.is_none()
         && tool.bonds_from_text()
         && let Some(id) = bond_text_at(doc, end, radius).filter(|id| Some(*id) != source.1)

@@ -1,7 +1,7 @@
 //! Previews that place new structure onto the draft, stroking the conflict when a placement fails.
 
 use super::Draft;
-use crate::canvas::hit::{bond_target_with, bond_target_with_text, plane_endpoint};
+use crate::canvas::hit::BondTarget;
 use crate::canvas::{
     Gesture, MoleculeCanvas, State, Tool, World, delocalized_ring_size, layered, rgb,
 };
@@ -192,8 +192,10 @@ impl MoleculeCanvas<'_> {
             match drawing.place(self.doc, anchor, direction, 10. / self.camera.zoom) {
                 Ok((doc, ids)) => {
                     *preview = Cow::Owned(doc);
+                    let existing: std::collections::HashSet<_> =
+                        self.doc.atoms.iter().map(|atom| atom.id).collect();
                     for b in &mut preview.to_mut().bonds {
-                        if self.doc.atom(b.a).is_none() || self.doc.atom(b.b).is_none() {
+                        if !existing.contains(&b.a) || !existing.contains(&b.b) {
                             b.color = reshiki::palette::Color::Palette(
                                 reshiki::palette::Hue::Teal,
                                 reshiki::palette::Row::Strong,
@@ -539,30 +541,23 @@ impl MoleculeCanvas<'_> {
                 && bounds.contains(cursor)
                 && let Some(origin) = self.doc.atom(*id).map(|a| a.position)
             {
-                let (end, target) = bond_target_with(
-                    self.doc,
-                    origin,
+                let Ok(BondTarget {
                     end,
-                    Some(*id),
+                    atom: target,
+                    plane,
+                    ..
+                }) = state.scene.borrow_mut().bond_target(
+                    self.doc,
+                    (origin, end),
+                    (Some(*id), None),
                     12. / self.camera.zoom,
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
-                );
-                let drawing = self.bond_drawing.unconstrained(state.modifiers.alt());
-                let result = if let Some(endpoint) = target
-                    .is_none()
-                    .then(|| {
-                        plane_endpoint(
-                            self.doc,
-                            *id,
-                            self.camera.world(
-                                Point::new(cursor.x - bounds.x, cursor.y - bounds.y),
-                                bounds,
-                            ),
-                            drawing,
-                        )
-                    })
-                    .flatten()
-                {
+                    self.tool,
+                )
+                else {
+                    return;
+                };
+                let result = if let Some(endpoint) = plane.filter(|_| target.is_none()) {
                     reshiki::projection::growth::place(
                         self.doc,
                         *id,
@@ -626,15 +621,20 @@ impl MoleculeCanvas<'_> {
                 let origin = id
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .unwrap_or(*start);
-                let Ok((end, target, target_text)) = bond_target_with_text(
-                    self.doc,
-                    origin,
+                let Ok(BondTarget {
                     end,
+                    atom: target,
+                    text: target_text,
+                    plane,
+                }) = state.scene.borrow_mut().bond_target(
+                    self.doc,
+                    (origin, end),
                     (*id, *text),
                     12.0 / self.camera.zoom,
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
                     self.tool,
-                ) else {
+                )
+                else {
                     return;
                 };
                 if text.is_some() || target_text.is_some() {
@@ -653,19 +653,8 @@ impl MoleculeCanvas<'_> {
                         .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(self.doc, a, b))
                 {
                     let plane = id
-                        .filter(|_| target.is_none() && target_text.is_none())
-                        .and_then(|id| {
-                            plane_endpoint(
-                                self.doc,
-                                id,
-                                self.camera.world(
-                                    Point::new(cursor.x - bounds.x, cursor.y - bounds.y),
-                                    bounds,
-                                ),
-                                self.bond_drawing.unconstrained(state.modifiers.alt()),
-                            )
-                            .map(|endpoint| (id, endpoint))
-                        });
+                        .zip(plane)
+                        .filter(|_| target.is_none() && target_text.is_none());
                     if let Some((id, endpoint)) = plane {
                         if let Ok((drawing, added)) =
                             reshiki::projection::growth::place(self.doc, id, endpoint, "C", preset)
@@ -695,6 +684,50 @@ impl MoleculeCanvas<'_> {
 #[cfg(test)]
 mod tests {
     use super::chain_badge_text;
+
+    #[test]
+    fn ring_preset_preview_tints_only_bonds_with_new_atom_ids() {
+        use super::*;
+        use crate::canvas::tests::chain_canvas;
+        use reshiki::chains::ChainMode;
+        use reshiki::document::Document;
+        use reshiki::palette::{Color as Paint, Hue, Row};
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-60., 0.));
+        let b = doc.add_atom("C", World::new(-18., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        doc.bonds[0].color = Paint::Palette(Hue::Red, Row::Strong);
+        let original = doc.clone();
+        let bounds = Rectangle::with_size(iced::Size::new(800., 500.));
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::RingPreset(reshiki::rings::Preset::Benzene);
+        // Free placement, atom attachment and bond fusion all preserve the
+        // original ink while tinting every genuinely new bond.
+        for point in [
+            World::new(180., 100.),
+            World::new(-18., 0.),
+            World::new(-39., 0.),
+        ] {
+            let state = State {
+                cursor: Some(canvas.camera.screen(point, bounds)),
+                ..Default::default()
+            };
+            let mut draft = Draft::new(&doc);
+            canvas.preview_ring_preset(&mut draft, &state, bounds);
+            let preview = draft.preview.as_ref();
+            assert!(preview.atoms.len() > doc.atoms.len());
+            for bond in &preview.bonds {
+                let old = doc.atom(bond.a).is_some() && doc.atom(bond.b).is_some();
+                let expected = if old {
+                    doc.bonds[0].color
+                } else {
+                    Paint::Palette(Hue::Teal, Row::Strong)
+                };
+                assert_eq!(bond.color, expected);
+            }
+        }
+        assert_eq!(doc, original);
+    }
 
     #[test]
     fn chain_badge_pluralizes_bonds() {

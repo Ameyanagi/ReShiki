@@ -970,6 +970,83 @@ fn aromatic_drag_carries_the_same_xyz_as_the_live_preview() -> Result<(), String
 }
 
 #[test]
+fn bond_preview_commit_and_cancel_do_not_reuse_another_sources_plane() -> Result<(), String> {
+    let mut doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let ids = doc.all_ids();
+    reshiki::projection::tilt(&mut doc, &ids, 55., false);
+    let source = doc.atoms[1].id;
+    let origin = doc.atoms[1].position;
+    let plane = reshiki::projection::growth::Plane::at(&doc, source).ok_or("Plane")?;
+    let cursor = plane.outward(84.).ok_or("Cursor")?.position;
+    let expected = plane
+        .endpoint(cursor, BondDrawing::default())
+        .ok_or("Endpoint")?;
+    let other = doc.add_atom("C", World::new(120., -50.));
+    let original = doc.clone();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Atom;
+    for cancel in [false, true] {
+        let mut state = State {
+            gesture: Some(Gesture::Draw {
+                start: origin,
+                pressed: origin,
+                id: Some(source),
+                text: None,
+            }),
+            cursor: Some(canvas.camera.screen(cursor, bounds)),
+            ..Default::default()
+        };
+        let preview = canvas.bonded_atom_preview_document(&state, bounds);
+        assert_eq!(
+            preview.atoms.last().ok_or("Preview atom")?.depth,
+            expected.depth
+        );
+        if cancel {
+            state.end_gesture();
+        } else {
+            let edit = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(canvas.camera.screen(cursor, bounds)),
+                )
+                .and_then(|action| action.into_inner().0)
+                .ok_or("Release")?;
+            assert!(
+                matches!(edit, Edit::PlaneBond(id, endpoint) if id == source && endpoint == expected)
+            );
+        }
+        let start = doc.atom(other).ok_or("Other source")?.position;
+        let cursor = World::new(180., -80.);
+        state.gesture = Some(Gesture::Draw {
+            start,
+            pressed: start,
+            id: Some(other),
+            text: None,
+        });
+        state.cursor = Some(canvas.camera.screen(cursor, bounds));
+        let preview = canvas.bonded_atom_preview_document(&state, bounds);
+        assert_eq!(preview.atoms.last().ok_or("Other preview atom")?.depth, 0.);
+        let edit = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(canvas.camera.screen(cursor, bounds)),
+            )
+            .and_then(|action| action.into_inner().0)
+            .ok_or("Other release")?;
+        assert!(matches!(edit, Edit::Bond(_, end, Some(id), None)
+            if id == other && end == BondDrawing::default().endpoint(start, cursor)));
+        assert!(state.gesture.is_none());
+    }
+    assert_eq!(doc, original);
+    Ok(())
+}
+
+#[test]
 fn r_group_drag_previews_the_label_it_places() -> Result<(), String> {
     use reshiki::atom_text::{Mode, apply};
     let mut doc = Document::default();
