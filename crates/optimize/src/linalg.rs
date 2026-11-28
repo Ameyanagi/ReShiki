@@ -399,7 +399,7 @@ mod tests {
             for (strip, tile) in packed.chunks_exact_mut(n * STRIP).enumerate() {
                 let first = strip * STRIP;
                 let width = STRIP.min(n - first);
-                for (i, row) in tile.chunks_exact_mut(STRIP).enumerate() {
+                for (i, row) in tile.as_chunks_mut::<STRIP>().0.iter_mut().enumerate() {
                     row[..width].copy_from_slice(&expected[i * n + first..i * n + first + width]);
                 }
             }
@@ -416,7 +416,7 @@ mod tests {
             for (strip, tile) in packed.chunks_exact(n * STRIP).enumerate() {
                 let first = strip * STRIP;
                 let width = STRIP.min(n - first);
-                for (i, row) in tile.chunks_exact(STRIP).enumerate() {
+                for (i, row) in tile.as_chunks::<STRIP>().0.iter().enumerate() {
                     assert!(
                         row[..width]
                             .iter()
