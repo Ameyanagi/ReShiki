@@ -112,8 +112,11 @@ bridges and gave a Ru–Ru distance of 2.375 Å. The crystal structure gives
 two terminal hydrides. Compare the calculated metal–ligand contacts as well
 as the energy and convergence status. [Experimental structure](https://doi.org/10.1021/om00016a017).
 
-To make an editable drawing, open the optimized XYZ file, rotate the cluster
-so both rings and metals are visible, then select **Show as 2D from the 3D view**.
+To make an editable drawing, open the optimized XYZ file, select the cluster,
+and choose **Show as 2D drawing**. ReShiki chooses a physical tilt and projects
+the coordinates with one scale: the theme bond length represents 1.54 Å.
+Every projected distance follows that same ruler, with tilted bonds
+foreshortened. The stored 3D coordinates stay unchanged.
 The four hydride atoms stay explicit, and each Cp\* ring has a five-carbon
 attachment to Ru. Open either example in ReShiki to inspect the 2D drawing
 and its retained 3D coordinates.
@@ -124,6 +127,12 @@ and its retained 3D coordinates.
 
 [Four bridging hydrides from g-xTB](/examples/diruthenium-gxtb.rsk) ·
 [Two bridging and two terminal hydrides from GFN2-xTB](/examples/diruthenium-gfn2.rsk)
+
+The native `.rsk` files and figure exports retain this appearance. Direct
+CDXML export of these two drawings is currently rejected because CDXML cannot
+yet preserve their non-stereochemical front-bond emphasis safely. The separate
+CDXML topology regression omits that appearance; it checks the multicenter
+attachments and hydride connectivity, not direct export of these examples.
 
 ## When something goes wrong
 

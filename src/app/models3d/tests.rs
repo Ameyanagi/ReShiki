@@ -945,6 +945,219 @@ fn imported_haptic_cluster_flattens_through_the_normal_view_action() {
 }
 
 #[test]
+fn normal_2d_conversion_keeps_imported_geometry_calculations_and_native_editing() {
+    use reshiki::{qcdata, science};
+
+    for (xyz, fixed_length_pt) in [
+        (
+            include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz"),
+            14.4,
+        ),
+        (
+            include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gfn2.xyz"),
+            19.2,
+        ),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+        app.tab.doc.drawing_style.set_bond_length(fixed_length_pt);
+        let atom = app.tab.doc.models[0].linked_atoms[0];
+        app.tab.selected = vec![atom];
+        let launch = science::launch(&app.tab.doc, atom, 0, 1).unwrap();
+        let result: qcdata::CalcResult = serde_json::from_value(serde_json::json!({
+            "frame": launch.frame.hash(), "task": "energy", "settings": {"imported": {}},
+            "provenance": {"program": "test", "source": {"imported": {
+                "format": "xyz", "file_name": "cluster.xyz", "job": 0
+            }}}, "status": "converged", "energy_hartree": -100.0,
+        }))
+        .unwrap();
+        science::attach(&mut app.tab.doc, &launch, vec![], result).unwrap();
+        let before = app.tab.doc.clone();
+        let start = frames(&app);
+        show(&mut app, Display::TwoD);
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(frames(&app), start + 1);
+        assert_eq!(app.tab.doc.models[0].display, Display::TwoD);
+        assert_eq!(app.tab.doc.models[0].layout, Layout::Original);
+        assert!(app.tab.doc.models[0].drawn.is_some());
+        assert_ne!(
+            app.tab.doc.atoms, before.atoms,
+            "normal 2D converts the imported projection"
+        );
+        assert_eq!(
+            app.tab.doc.models[0].frame_positions(),
+            before.models[0].frame_positions()
+        );
+        assert_eq!(
+            science::frame_bonds(&app.tab.doc, &app.tab.doc.models[0].frame_sources()).unwrap(),
+            science::frame_bonds(&before, &before.models[0].frame_sources()).unwrap(),
+        );
+        assert_eq!(app.tab.doc.science.frames, before.science.frames);
+        assert_eq!(app.tab.doc.science.results, before.science.results);
+        assert_eq!(app.tab.doc.science.attachments.len(), 1);
+        assert_eq!(
+            app.tab.doc.science.attachments[0].atoms,
+            app.tab.doc.models[0].frame_sources()
+        );
+        assert_eq!(
+            app.tab.doc.science.attachments[0].freshness(&app.tab.doc),
+            science::Freshness::Current
+        );
+        app.tab.doc.validate().unwrap();
+        let converted = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, converted);
+
+        app.tab.doc = Document::from_native_file(&converted.file_json().unwrap()).unwrap();
+        app.tab.path = Some("converted.rsk".into());
+        assert_eq!(app.tab.doc.drawing_style, before.drawing_style);
+        let doc = &app.tab.doc;
+        let frame = &doc.models[0].atoms;
+        assert_eq!(frame.len(), 26); // Two Ru, four hydrides and twenty ligand carbons.
+        for (index, p) in frame.iter().enumerate() {
+            for q in &frame[index + 1..] {
+                let a = doc.atom(p.id).unwrap();
+                let b = doc.atom(q.id).unwrap();
+                let angstrom = (p.xyz[0] - q.xyz[0])
+                    .hypot(p.xyz[1] - q.xyz[1])
+                    .hypot(p.xyz[2] - q.xyz[2]);
+                let length_pt = a.position.distance(b.position).hypot(a.depth - b.depth)
+                    * doc.drawing_style.points_per_world();
+                let expected_pt = angstrom * fixed_length_pt / 1.54;
+                assert!(
+                    (length_pt - expected_pt).abs() < 0.001,
+                    "{}–{} measures {length_pt} pt including depth, expected {expected_pt}",
+                    a.id,
+                    b.id
+                );
+            }
+        }
+        let diagram = app.tab.doc.atoms.clone();
+        show(&mut app, Display::ThreeD);
+        show(&mut app, Display::TwoD);
+        assert_eq!(
+            app.tab.doc.atoms, diagram,
+            "save/reopen and toggling keep the native drawing"
+        );
+        assert_eq!(
+            app.tab.doc.models[0].frame_positions(),
+            before.models[0].frame_positions()
+        );
+    }
+}
+
+#[test]
+fn normal_2d_keeps_existing_authored_and_legacy_native_positions() {
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    for legacy in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+        app.tab.selected = vec![app.tab.doc.atoms[0].id];
+        if legacy {
+            app.tab.path = Some("authored.rsk".into());
+        } else {
+            show(&mut app, Display::Both);
+        }
+        app.tab.doc.atoms[0].position.x += 72.;
+        let authored = app.tab.doc.atoms.clone();
+        if !legacy {
+            show(&mut app, Display::ThreeD);
+        }
+        show(&mut app, Display::TwoD);
+        assert_eq!(app.tab.doc.atoms, authored);
+    }
+}
+
+#[test]
+fn explicit_camera_flatten_keeps_projected_hydride_positions() {
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+    app.tab.selected = vec![app.tab.doc.atoms[0].id];
+    let model = app.tab.doc.models[0].clone();
+    let mut expected = app.tab.doc.clone();
+    fold_imported_model_hydrogens(&mut expected, 0, &model);
+    let model = expected.models[0].clone();
+    let atoms = model.linked_ids(&expected);
+    let centre = reshiki::editing::center(&expected, &atoms);
+    models3d::lay_out_flat(&mut expected, &model);
+    let projected = reshiki::editing::center(&expected, &atoms);
+    expected.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    for atom in expected.atoms.iter().filter(|atom| atom.element == "H") {
+        let actual = app.tab.doc.atom(atom.id).unwrap();
+        assert_eq!(actual.position, atom.position);
+        assert_eq!(actual.depth, atom.depth);
+    }
+}
+
+#[test]
+#[ignore = "Opt-in XYZ to normal 2D command export; needs RESHIKI_CLUSTER_INPUT/OUTPUT"]
+fn manual_export_imported_cluster_from_normal_2d_action() {
+    use crate::app::command_palette::Action as Commands;
+
+    let input = std::env::var("RESHIKI_CLUSTER_INPUT").expect("RESHIKI_CLUSTER_INPUT");
+    let output = std::env::var("RESHIKI_CLUSTER_OUTPUT").expect("RESHIKI_CLUSTER_OUTPUT");
+    let xyz = std::fs::read_to_string(&input).unwrap();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read("xyz", &xyz).unwrap().0;
+    if let Ok(points) = std::env::var("RESHIKI_CLUSTER_BOND_LENGTH_PT") {
+        app.tab
+            .doc
+            .drawing_style
+            .set_bond_length(points.parse().unwrap());
+    }
+    app.tab.path = Some(input.into());
+    app.tab.selected = vec![app.tab.doc.atoms[0].id];
+    let original_atoms = app.tab.doc.atoms.clone();
+    let original_positions = app.tab.doc.models[0].frame_positions();
+    let start = frames(&app);
+    for action in [
+        Commands::Open,
+        Commands::Query("Show as 2D drawing".into()),
+        Commands::Submit,
+    ] {
+        let _ = app.update(Message::Commands(action));
+    }
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models[0].display, Display::TwoD);
+    assert_eq!(app.tab.doc.models[0].layout, Layout::Original);
+    assert!(
+        app.tab.doc.models[0].drawn.is_some(),
+        "normal action must run the converter"
+    );
+    assert_ne!(app.tab.doc.atoms, original_atoms);
+    assert_eq!(app.tab.doc.models[0].frame_positions(), original_positions);
+    assert_eq!(frames(&app), start + 1);
+    let doc = &app.tab.doc;
+    doc.validate().unwrap();
+    std::fs::create_dir_all(&output).unwrap();
+    std::fs::write(format!("{output}/drawing.rsk"), doc.file_json().unwrap()).unwrap();
+    for format in ["svg", "png"] {
+        let figure = reshiki::export::clipboard_figure_with_drawing(
+            doc,
+            format,
+            reshiki::export::Background::Color([255; 3]),
+            300,
+            None,
+        )
+        .unwrap();
+        std::fs::write(format!("{output}/drawing.{format}"), figure.bytes).unwrap();
+    }
+    println!(
+        "{output}: normal 2D command · {} drawing atoms · {} retained frame atoms",
+        doc.atoms.len(),
+        original_positions.len()
+    );
+}
+
+#[test]
 fn ordinary_imported_molecule_flatten_keeps_the_prepared_stereo_path() {
     let xyz =
         "5\nchiral carbon\nC 0 0 0\nF 0.8 0.8 0.8\nCl -1 -1 1\nBr -1 1 -1\nH 0.63 -0.63 -0.63\n";
@@ -1134,6 +1347,13 @@ fn multinuclear_hydride_models_without_haptic_rings_flatten_directly() {
         let atoms = app.tab.doc.models[0].linked_ids(&app.tab.doc);
         app.tab.selected = atoms;
         let before = app.tab.doc.clone();
+        let mut expected = before.clone();
+        let model = expected.models[0].clone();
+        let atoms = model.linked_ids(&expected);
+        let centre = reshiki::editing::center(&expected, &atoms);
+        models3d::lay_out_flat(&mut expected, &model);
+        let projected = reshiki::editing::center(&expected, &atoms);
+        expected.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
         let _ = app.update(Message::Models3d(Action::Flatten));
         assert!(!app.error, "generated={generated}: {}", app.status);
         let hydrogens: Vec<_> = app
@@ -1143,14 +1363,10 @@ fn multinuclear_hydride_models_without_haptic_rings_flatten_directly() {
             .iter()
             .filter(|a| a.element == "H")
             .collect();
-        let clearance = app.tab.doc.drawing_style.font_size() * 1.6;
-        for (i, atom) in hydrogens.iter().enumerate() {
-            assert!(
-                hydrogens
-                    .iter()
-                    .skip(i + 1)
-                    .all(|other| atom.position.distance(other.position) >= clearance - 1e-4)
-            );
+        for atom in hydrogens {
+            let projected = expected.atom(atom.id).unwrap();
+            assert_eq!(atom.position, projected.position);
+            assert_eq!(atom.depth, projected.depth);
         }
         assert_eq!(app.tab.doc.bonds, before.bonds);
         assert_eq!(
@@ -1272,7 +1488,7 @@ fn duplicated_cluster_flatten_folds_only_selected_model_and_preserves_calculatio
 
 #[test]
 #[ignore = "manual editable import/Flatten/export QA; paths supplied through environment"]
-fn export_imported_cluster_from_normal_flatten_action() {
+fn manual_export_imported_cluster_from_normal_flatten_action() {
     let input = std::env::var("RESHIKI_CLUSTER_INPUT").expect("RESHIKI_CLUSTER_INPUT");
     let output = std::env::var("RESHIKI_CLUSTER_OUTPUT").expect("RESHIKI_CLUSTER_OUTPUT");
     let xyz = std::fs::read_to_string(input).unwrap();

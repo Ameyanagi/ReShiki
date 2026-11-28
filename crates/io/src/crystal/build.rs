@@ -352,7 +352,7 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         let mut hydrogen_contacts: HashMap<usize, Vec<usize>> = HashMap::new();
         for &(a, b) in &arranged.bonds {
             for (hydrogen, neighbour) in [(a, b), (b, a)] {
-                if atoms[hydrogen].element == "H" {
+                if atoms.get(hydrogen).is_some_and(|atom| atom.element == "H") {
                     hydrogen_contacts
                         .entry(hydrogen)
                         .or_default()
@@ -363,8 +363,11 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         let mut hydride_bridges: HashMap<(usize, usize), usize> = HashMap::new();
         for contacts in hydrogen_contacts.values() {
             if let &[a, b] = contacts.as_slice()
-                && elements::metal(&atoms[a].element)
-                && elements::metal(&atoms[b].element)
+                && [a, b].into_iter().all(|id| {
+                    atoms
+                        .get(id)
+                        .is_some_and(|atom| elements::metal(&atom.element))
+                })
             {
                 *hydride_bridges.entry((a.min(b), a.max(b))).or_default() += 1;
             }

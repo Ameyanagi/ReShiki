@@ -15,10 +15,12 @@
 mod bridges;
 mod cell_occlusion;
 mod contact;
+mod coordination;
 pub mod crystal;
 mod ellipsoids;
 mod polish;
 pub use bridges::lay_out_bridges;
+pub use coordination::{can_draw_coordination_diagram, lay_out_coordination_diagram};
 pub mod surface;
 use crate::scene::Contact;
 use crate::{

@@ -127,7 +127,41 @@ python -m pytest crates/python/tests/test_xtb.py -k diruthenium
 
 The [g-xTB drawing](../../../website/public/examples/diruthenium-gxtb.rsk)
 and [GFN2-xTB drawing](../../../website/public/examples/diruthenium-gfn2.rsk)
-come from the two optimized XYZ files. The editor rotated each model by −55°
-about Y and ran **Show as 2D from the 3D view**. Each native file retains the
-56 original atom coordinates. The [previous drawing](../../../docs/images/metal-clusters/diruthenium-baseline.png)
-uses the same g-xTB file, view and export settings.
+come from opening each optimized XYZ file and choosing **Show as 2D drawing**.
+ReShiki selects a physical tilt from the atom coordinates, ring planes and
+projected label sizes. The theme bond length represents 1.54 Å: every atom
+uses that one scale, followed by orthographic projection, with no individual
+bond re-lengthening. Tilted bonds are foreshortened. The figures use the
+default drawing style and the same editable bonds as their native documents.
+Their 56 stored coordinates agree with the XYZ input to within 0.000001 Å.
+The conventional 1.54 Å reference rounds the [1.536 Å ethane C–C distance
+listed by NIST CCCBDB](https://cccbdb.nist.gov/expgeom2x.asp?casno=74840&charge=0).
+Some Ru–H strokes remain short at the default physical scale; the figure
+does not clearly resolve all eight g-xTB contacts. The native topology and
+retained coordinates provide the complete contact information.
+
+The [earlier camera projection](../../../docs/images/metal-clusters/diruthenium-baseline.png)
+uses the same g-xTB XYZ file. That capture used an explicit −55° rotation about
+Y followed by **Show as 2D from the 3D view**. The normal 2D conversion pictured
+above requires no chosen camera angle.
+
+### Editable exchange limit
+
+The pictured `.rsk` files retain the native drawing and original model. Direct
+conversion of either file to CDXML currently fails the strict appearance guard:
+
+```sh
+reshiki --cli convert website/public/examples/diruthenium-gxtb.rsk --to cdxml
+reshiki --cli convert website/public/examples/diruthenium-gfn2.rsk --to cdxml
+```
+
+Both commands report that CDXML cannot yet preserve non-stereochemical
+front-bond emphasis or projected wedge styles. This is an intentional refusal,
+not a verified direct CDXML round trip for these final drawings. Keep `.rsk`
+for native editing and SVG, PNG or PDF for the appearance.
+
+The separate `haptic_cluster_survives_normal_cdxml_drawing_export_and_import`
+regression starts from the imported cluster without the final front-bond
+appearance. It verifies only editable topology: the two multicenter attachments
+and the four-bridge hydride connectivity. It does not exercise direct CDXML
+export of the pictured `.rsk` examples.

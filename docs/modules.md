@@ -941,6 +941,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/models3d/bridges.rs`: Readable editable projections of several hydrogens bridging a metal pair.
 - `crates/model/src/models3d/cell_occlusion.rs`: Cell ink visible past the model's space-filling balls.
 - `crates/model/src/models3d/contact.rs`: Where overlapping 3D-model balls meet.
+- `crates/model/src/models3d/coordination.rs`: Physical tilt and theme-referenced editable drawings of supported haptic dimetal hydride geometries.
 - `crates/model/src/models3d/crystal.rs`: Crystal and periodic structures (#417)
 - `crates/model/src/models3d/ellipsoids.rs`: ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
 - `crates/model/src/models3d/polish.rs`: Persistent generated chemistry, separate from the live source drawing.
