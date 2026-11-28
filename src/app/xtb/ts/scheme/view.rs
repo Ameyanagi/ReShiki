@@ -533,7 +533,7 @@ impl App {
                             format!("I{}.{position}", index + 1)
                         })
                     };
-                    for pair in path.order.windows(2) {
+                    for pair in path.order.array_windows::<2>() {
                         let (Some(from), Some(to)) = (label(pair[0]), label(pair[1])) else {
                             continue;
                         };

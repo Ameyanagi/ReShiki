@@ -782,13 +782,9 @@ impl Document {
             .filter_map(|g| g.energy_profile.as_ref())
             .any(|p| {
                 p.steps.iter().any(|s| s.unresolved)
-                    || p.steps.windows(2).any(|pair| {
-                        let previous = if pair[0].from == 0 {
-                            p.source
-                        } else {
-                            pair[0].source
-                        };
-                        previous.is_some() && previous == pair[1].source
+                    || p.steps.iter().zip(p.steps.iter().skip(1)).any(|(a, b)| {
+                        let previous = if a.from == 0 { p.source } else { a.source };
+                        previous.is_some() && previous == b.source
                     })
             })
         {

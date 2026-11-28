@@ -261,10 +261,15 @@ fn run(
         }
         control(cancel, tx)
     };
+    let check = WorkerCheck {
+        masses: &masses,
+        method,
+        cancel,
+        tx,
+        trace: &trace,
+    };
     let verify = |worker: &mut Worker, positions: &[f64], imaginary: usize| {
-        verify_candidate(
-            worker, positions, imaginary, &masses, method, cancel, tx, &trace,
-        )
+        check.verify(worker, positions, imaginary)
     };
     let (report, checked) = match path {
         SearchPath::Saved {
@@ -352,31 +357,39 @@ fn run(
     }
 }
 
-fn verify_candidate(
-    worker: &mut Worker,
-    positions: &[f64],
-    imaginary: usize,
-    masses: &[f64],
+struct WorkerCheck<'a> {
+    masses: &'a [f64],
     method: qcdata::XtbMethod,
-    cancel: &Cancel,
-    tx: &mpsc::UnboundedSender<Event>,
-    trace: &std::cell::RefCell<SearchTrace>,
-) -> Result<(bool, Result<Computed, ts::TsError>), ts::TsError> {
-    send(tx, cancel, Event::Stage(Stage::Saddle)).map_err(|_| ts::TsError::Cancelled)?;
-    trace.borrow_mut().enter("Worker check");
-    let check = worker
-        .checked_hessian(positions, masses)
-        .map_err(ts::TsError::from)
-        .and_then(|computed| checked_method(computed, method));
-    if control(cancel, tx).is_break() || matches!(check, Err(ts::TsError::Cancelled)) {
-        return Err(ts::TsError::Cancelled);
+    cancel: &'a Cancel,
+    tx: &'a mpsc::UnboundedSender<Event>,
+    trace: &'a std::cell::RefCell<SearchTrace>,
+}
+
+impl WorkerCheck<'_> {
+    fn verify(
+        &self,
+        worker: &mut Worker,
+        positions: &[f64],
+        imaginary: usize,
+    ) -> Result<(bool, Result<Computed, ts::TsError>), ts::TsError> {
+        send(self.tx, self.cancel, Event::Stage(Stage::Saddle))
+            .map_err(|_| ts::TsError::Cancelled)?;
+        self.trace.borrow_mut().enter("Worker check");
+        let check = worker
+            .checked_hessian(positions, self.masses)
+            .map_err(ts::TsError::from)
+            .and_then(|computed| checked_method(computed, self.method));
+        if control(self.cancel, self.tx).is_break() || matches!(check, Err(ts::TsError::Cancelled))
+        {
+            return Err(ts::TsError::Cancelled);
+        }
+        let agrees = check
+            .as_ref()
+            .ok()
+            .and_then(|computed| computed.vibrations.as_ref())
+            .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == imaginary);
+        Ok((agrees, check))
     }
-    let agrees = check
-        .as_ref()
-        .ok()
-        .and_then(|computed| computed.vibrations.as_ref())
-        .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == imaginary);
-    Ok((agrees, check))
 }
 
 /// An independent frequency check must describe the same Hamiltonian as the

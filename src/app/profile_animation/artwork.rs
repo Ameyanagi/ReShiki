@@ -49,7 +49,10 @@ impl Artwork {
         for (index, (step, current)) in profile.steps.iter().zip(&reactions).enumerate() {
             // A discovered minimum between two legs of one arrow has no
             // corresponding molecule in the authored scheme.
-            let from_drawn = index == 0 || reactions[index - 1].arrow != current.arrow;
+            let from_drawn = index
+                .checked_sub(1)
+                .and_then(|i| reactions.get(i))
+                .is_none_or(|previous| previous.arrow != current.arrow);
             let to_drawn = profile
                 .steps
                 .get(index + 1)

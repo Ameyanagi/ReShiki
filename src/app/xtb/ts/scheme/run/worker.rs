@@ -877,12 +877,16 @@ impl Backend for Native {
                     job::Event::Done(result) => {
                         let report = result.map_err(|failure| failure.to_string())?;
                         let result = transition_result(&report, &request, false);
+                        let template = report
+                            .frames
+                            .first()
+                            .ok_or("The transition-state worker returned no geometry")?;
                         let discovered = report.discovered.as_ref().map(|path| DiscoveredPath {
                             minima: path
                                 .minima
                                 .iter()
-                                .enumerate()
-                                .map(|(index, minimum)| DiscoveredMinimum {
+                                .zip(&path.minimum_gibbs_corrections_hartree)
+                                .map(|(minimum, &gibbs_correction_hartree)| DiscoveredMinimum {
                                     frame: Arc::new(Frame {
                                         positions_angstrom: minimum
                                             .positions
@@ -893,11 +897,10 @@ impl Backend for Native {
                                                 xyz.map(|x| x * reshiki_optimize::ANGSTROM_PER_BOHR)
                                             })
                                             .collect(),
-                                        ..report.frames[0].clone()
+                                        ..template.clone()
                                     }),
                                     energy_hartree: minimum.energy,
-                                    gibbs_correction_hartree: path
-                                        .minimum_gibbs_corrections_hartree[index],
+                                    gibbs_correction_hartree,
                                 })
                                 .collect(),
                             order: path.order.clone(),

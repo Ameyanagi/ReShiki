@@ -305,7 +305,10 @@ impl discovery::Backend for Native<'_> {
         let Some(optimized) = self.minimize(seed, &Options::default())? else {
             return Ok(None);
         };
-        let checked = self.workers[0]
+        let checked = self
+            .workers
+            .first_mut()
+            .ok_or_else(|| ts::TsError::Failed("No xTB worker".into()))?
             .checked_hessian(&optimized.positions, self.masses)
             .map_err(ts::TsError::from)
             .and_then(|computed| checked_method(computed, self.method))?;
@@ -316,13 +319,13 @@ impl discovery::Backend for Native<'_> {
             .vibrations
             .as_ref()
             .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == 0);
-        if is_minimum && self.free {
-            if let Some(correction) =
+        if is_minimum
+            && self.free
+            && let Some(correction) =
                 minimum_thermochemistry(self.frame, &optimized.positions, self.masses, &checked)
-            {
-                self.minimum_thermo
-                    .push((optimized.positions.clone(), correction));
-            }
+        {
+            self.minimum_thermo
+                .push((optimized.positions.clone(), correction));
         }
         Ok(is_minimum.then_some(optimized))
     }
@@ -377,23 +380,19 @@ impl discovery::Backend for Native<'_> {
             product: &product.positions,
             options: &options,
         };
+        let check = WorkerCheck {
+            masses: self.masses,
+            method: self.method,
+            cancel: self.cancel,
+            tx: self.tx,
+            trace: &trace,
+        };
         let (report, checked) = ts::search_with_verification(
             self.workers,
             &search,
             observe,
             || control(self.cancel, self.tx),
-            |worker, positions, imaginary| {
-                verify_candidate(
-                    worker,
-                    positions,
-                    imaginary,
-                    self.masses,
-                    self.method,
-                    self.cancel,
-                    self.tx,
-                    &trace,
-                )
-            },
+            |worker, positions, imaginary| check.verify(worker, positions, imaginary),
         )?;
         let mut trace = trace.into_inner();
         trace.finish();
@@ -402,7 +401,7 @@ impl discovery::Backend for Native<'_> {
             .iter()
             .zip(offsets)
             .flat_map(|(worker, offset)| {
-                worker.evaluations[offset..].iter().map(|e| Evaluation {
+                worker.evaluations.iter().skip(offset).map(|e| Evaluation {
                     energy: e.energy,
                     scf_iterations: e.scf_iterations,
                     seconds: e.seconds,
@@ -440,7 +439,9 @@ impl Native<'_> {
             return Err(ts::TsError::Cancelled);
         }
         let optimized = optimize(
-            &mut self.workers[0],
+            self.workers
+                .first_mut()
+                .ok_or_else(|| ts::TsError::Failed("No xTB worker".into()))?,
             self.numbers,
             &seed.positions,
             options,

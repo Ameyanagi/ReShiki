@@ -56,7 +56,7 @@ pub(super) fn build(
             let reaction = preview(doc, step.arrow).ok()?;
             let source_key = profile::source_key(doc, &reaction);
             let mut product = Some(state);
-            for (leg, pair) in path.order.windows(2).enumerate() {
+            for (leg, pair) in path.order.array_windows::<2>().enumerate() {
                 let minimum = path.minima.get(pair[1])?;
                 let to_state = if leg + 2 == path.order.len() {
                     product.take()?
@@ -80,7 +80,7 @@ pub(super) fn build(
                     intermediate
                 };
                 let from = states.len() - 1;
-                let from_level = states[from].energy_kcal;
+                let from_level = states.last()?.energy_kcal;
                 let segment = path
                     .segments
                     .iter()
@@ -163,13 +163,13 @@ pub(super) fn build(
         });
         let mut samples = Vec::new();
         if let Some(result) = &value.ts {
-            if let Some(transition) = transition {
-                if let Some((ts, view)) = saddle_geometry(result, &value.frames) {
-                    let spectators = inventory.spectators(&step.reactants)?;
-                    states.get_mut(transition)?.geometry =
-                        side_geometry(plan, report, spectators.terms(), Some(ts));
-                    rotation.get_or_insert(view);
-                }
+            if let Some(transition) = transition
+                && let Some((ts, view)) = saddle_geometry(result, &value.frames)
+            {
+                let spectators = inventory.spectators(&step.reactants)?;
+                states.get_mut(transition)?.geometry =
+                    side_geometry(plan, report, spectators.terms(), Some(ts));
+                rotation.get_or_insert(view);
             }
             // IRC energies are electronic samples; Gibbs corrections exist at
             // the stationary states only, so they do not define a Gibbs trace.
