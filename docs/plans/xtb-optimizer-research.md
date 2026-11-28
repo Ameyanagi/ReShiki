@@ -286,6 +286,83 @@ both the curvature model and this gradient history contributed to AutoSella-F's
 performance. The benefit in ReShiki still needs a comparable test.
 [Tsypin et al., 2026 preprint, section 4.3](https://arxiv.org/html/2610.06577v2).
 
+### Pure Rust factorization follow-up
+
+The geometry optimizer repeatedly factors small symmetric matrices when
+calculating a step. Up to dimension 256 it now computes one Cholesky pivot and
+the entries below it before moving to the next column. This removes a diagonal
+check from the inner loop and preserves the order of each floating-point dot
+product. Wider matrices use the existing row traversal. Both implementations
+are pure Rust. The ReShiki xTB worker uses the Rust `faer` backend for the
+electronic calculation.
+
+The packaged macOS executable has no direct LAPACK, BLAS or Accelerate
+linkage. The worker removes the `AXTB_LAPACK` and `AXTB_LAPACK_BLAS`
+environment overrides. Supplying a nonexistent LAPACK library path and enabling
+the BLAS override gave the same g-xTB water energy and gradient as a clean
+environment.
+
+On the Apple M4, five alternating runs with the same single-threaded GFN2 worker
+gave the following medians. Optimizer overhead is elapsed time outside calls to
+the potential. These runs start with an open worker and exclude CLI startup.
+
+| Starting geometry   | Optimizer overhead before / after | Complete optimization before / after |
+| ------------------- | --------------------------------: | -----------------------------------: |
+| Glutamine, 29 atoms |                  16.55 / 15.28 ms |                   163.73 / 163.52 ms |
+| Codeine, 43 atoms   |                  46.55 / 43.89 ms |                   433.86 / 430.67 ms |
+
+The gain is measurable in the optimizer itself. The electronic calculation
+dominates both complete runs. Each accepted step and the final outcome
+matched the previous implementation on both GFN2 inputs and on 20 seeded
+MMFF drugs run with and without a fixed atom. Replaying aspirin, propranolol
+and imatinib under MMFF took about 7–9% less time. Factor tests compare
+individual bits around the traversal cutoff, at scales from 1e-250 to 1e250,
+under signed shifts and on rejected pivots.
+
+### g-xTB validation
+
+ReShiki uses the Rust implementation of g-xTB 2.0.1 and its embedded parameter
+tables. The geometry optimizer requests analytic energy gradients from this
+worker. [Pinned Rust implementation](https://github.com/Ameyanagi/axtb/blob/9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91/crates/gxtb/README.md)
+and [upstream 2.0.1 release](https://github.com/grimme-lab/g-xtb/releases/tag/v2.0.1).
+
+Using the upstream program conventions (`--conventions xtb-6.8`) and
+`--accuracy 0.0001`, water, acetate, triplet oxygen and UF₆ matched the
+captured reference energies within 3.2 × 10⁻¹¹ Eh. The largest absolute
+gradient component difference was 3.2 × 10⁻¹² Eh/bohr.
+[Upstream program reference outputs](https://github.com/Ameyanagi/axtb/tree/9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91/crates/gxtb/tests/reference_v2).
+
+The ten CLI optimization comparisons used water, caffeine, caffeine with a
+fixed carbon, and seven additional starting geometries including an anion,
+a radical cation and ferrocene. Each converged with the same accepted steps,
+energy and output XYZ across the original baseline and both PR builds.
+These are comparisons between g-xTB runs. The published reference minima
+for the 53-case GFN2 study use a different potential. The packaged worker
+also preserved a fixed oxygen on water, returned unrestricted orbitals for
+triplet O₂ and an analytic Hessian for water, and reported the expected errors
+for invalid spin and an exhausted SCF iteration limit.
+
+End-to-end g-xTB timings include CLI startup and use one requested thread.
+On the Apple M4 we rotated the order of the three binaries, discarded one
+warm-up and recorded five trials per build. Every timed run produced the same
+endpoint and accepted step count.
+
+| Molecule | Original baseline `e9e69270f` | First seven checkpoints `4abf2ba81` | Follow-up | Steps |
+| -------- | ----------------------------: | ----------------------------------: | --------: | ----: |
+| Water    |                      59.05 ms |                            19.94 ms |  21.39 ms |     3 |
+| Caffeine |                     122.01 ms |                            83.84 ms |  83.76 ms |     6 |
+
+The largest saving here came with the first seven checkpoints. The follow-up
+water median was 1.45 ms higher than the first PR median. A separate 98-atom
+ritonavir run converged in 49 steps and reproduced the previous g-xTB energy
+and geometry. Its runtime was excluded from the table because compilation was
+running concurrently.
+
+```sh
+reshiki --cli calculate --task optimize --method gxtb --threads 1 tests/fixtures/xtb/water.xyz
+reshiki --cli calculate --task optimize --method gxtb --threads 1 --fix 1 tests/fixtures/xtb/caffeine.xyz
+```
+
 ### Earlier 154-start comparison
 
 Test set: 77 molecules, 154 starts (Baker-set molecules rebuilt from SMILES, 20 drugs, 4

@@ -23,8 +23,8 @@ profile with thin LTO, the same viewport and the same headless renderer.
 The bond preview, overlay and release share the aromatic plane for the drag
 source and the resolved endpoint at the current pointer position. Ring
 placement indexes existing atom IDs once when deciding which bonds to tint.
-On this workload, moving a ring preview still takes longer than the 16.7 ms
-frame budget at 60 Hz. Pixel comparisons against full redraws passed.
+At the first seven checkpoints (`4abf2ba81`), moving a ring preview exceeded
+the 16.7 ms frame budget at 60 Hz. Pixel comparisons against full redraws passed.
 
 An xTB coordinate update can reuse the static primitives on either side of
 the model in paint order. With the 24-atom caffeine control and 16 gallery
@@ -40,6 +40,47 @@ These timings measure scene preparation. GPU presentation adds further work.
 ```sh
 cargo test --release --locked --bin reshiki canvas::performance::manual_preview_workloads -- --ignored --exact --nocapture
 cargo test --release --locked --bin reshiki canvas::cache::model_tests::manual_model_coordinate_scene_workloads -- --ignored --exact --nocapture
+```
+
+### Moving previews on caption-heavy drawings
+
+A profile of moving a benzene ring on the 16-copy gallery showed repeated
+caption shaping during pointer picking and three validations of the same host
+drawing inside ring placement. The canvas now retains the dimensions of
+ordinary captions across pointer positions. An edit or a runtime font change
+invalidates the measurements. Table drawings keep their cell-specific wrapping
+and clipping. The ring and template placement code carries a checked borrow of
+the host through the operation and validates the fragment after positioning.
+
+On the Apple M4, free benzene placement alone fell from 14.13 to 6.13 ms on
+the 7,728-atom gallery and from 0.66 to 0.35 ms on a single copy. Each number
+is the median of four run medians with 30 warmed samples each, alternating
+the first PR build (`4abf2ba81`) and the follow-up. The model's 634 ring and
+2,530 template placement cases gave identical resulting documents, selected
+IDs and rejection messages across the two builds.
+
+The full preview benchmark alternated the same two macOS builds twice, with
+30 warmed samples per run. The table gives the median of each build's two
+run medians for CPU preparation with the gallery visible and the pointer moving
+over nearby paper or dragging from a gallery atom.
+
+| Interaction          | First seven checkpoints | Follow-up |
+| -------------------- | ----------------------: | --------: |
+| Move a ring preview  |                25.04 ms |  10.33 ms |
+| Move a template      |                25.37 ms |  10.59 ms |
+| Drag a bond          |                17.82 ms |  11.80 ms |
+| Hold a ring in place |                 7.33 ms |   1.37 ms |
+
+Across the two follow-up runs, the ring preview's 95th percentile was
+10.52–10.54 ms and the bond drag's was 12.00–12.05 ms. GPU presentation and
+display latency are outside these measurements.
+
+To isolate caption measurements, the follow-up binary also ran the same
+pointer queries with and without cached text dimensions. The median fell
+from 6.54 to 0.57 ms for hover and from 6.69 to 0.58 ms for bond targeting.
+
+```sh
+cargo test --release --locked --bin reshiki canvas::hit::caption_tests::manual_caption_hit_workloads -- --ignored --exact --nocapture
 ```
 
 ### Original loaded-canvas workloads
