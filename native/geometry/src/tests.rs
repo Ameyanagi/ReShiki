@@ -460,7 +460,7 @@ fn ensemble_batches_at_the_sequential_seed_ceiling_are_exactly_repeatable() {
 }
 
 #[test]
-fn ensemble_responses_are_byte_identical_across_thread_counts() {
+fn generated_responses_are_byte_identical_across_thread_counts() {
     let mut request = molecule(
         &[6; 5],
         &[(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1)],
@@ -469,11 +469,13 @@ fn ensemble_responses_are_byte_identical_across_thread_counts() {
     request.conformers = 11;
     request.seed = 0x52534b;
     let _guard = SOLVER_OPERATION.lock().unwrap();
-    for mode in [Ensemble::Embedded, Ensemble::Minimized] {
-        request.ensemble = Some(mode);
+    for mode in [None, Some(Ensemble::Embedded), Some(Ensemble::Minimized)] {
+        request.ensemble = mode;
         request.validate().unwrap();
         let serial = solver::solve_with_threads(&request, 1, REFERENCE_HEAP_BYTES).unwrap();
-        assert_eq!(serial.ensemble.len(), request.conformers as usize);
+        if mode.is_some() {
+            assert_eq!(serial.ensemble.len(), request.conformers as usize);
+        }
         let serial = serde_json::to_vec(&serial).unwrap();
         for threads in [2, 3, 8] {
             let parallel =

@@ -873,7 +873,7 @@ fn minimized(
     })
 }
 
-fn ensemble_threads(threads: usize, atoms: usize, heap_bytes: usize) -> usize {
+fn conformer_threads(threads: usize, atoms: usize, heap_bytes: usize) -> usize {
     // Allow two dense (4n)^2 f64 matrices for each concurrent embedding or
     // minimization, using at most half the configured worker heap.
     // Saturation keeps even oversized arithmetic conservative; one worker is
@@ -886,7 +886,7 @@ fn ensemble_threads(threads: usize, atoms: usize, heap_bytes: usize) -> usize {
 }
 
 pub(super) fn solve(request: &Request, heap_bytes: usize) -> Result<Response> {
-    let threads = if request.ensemble.is_some() {
+    let threads = if request.operation == Operation::Generate && request.conformers > 1 {
         std::thread::available_parallelism().map_or(1, |count| count.get().min(8))
     } else {
         1
@@ -901,11 +901,6 @@ pub(super) fn solve_with_threads(
 ) -> Result<Response> {
     let original = molecule(request)?;
     let mol = with_hydrogens(&original, request.atoms.len(), false)?;
-    let threads = if request.ensemble.is_some() {
-        ensemble_threads(threads, mol.num_atoms(), heap_bytes)
-    } else {
-        1
-    };
     let expected = StereoExpectation::new(&mol)?;
     // MMFF types none of these elements, so this is the UFF that generation
     // would fall back to; refuse before typing, which may fail for Og first.
@@ -1058,6 +1053,7 @@ pub(super) fn solve_with_threads(
                 .into(),
             );
         }
+        let threads = conformer_threads(threads, mol.num_atoms(), heap_bytes);
         let (embedded, method) = embed(
             &mol,
             request,
@@ -1154,7 +1150,7 @@ pub(super) fn solve_with_threads(
                 last_failure = error.chars().take(512).collect();
             }
         };
-        if request.ensemble == Some(Ensemble::Minimized) && threads > 1 && conformers.len() > 1 {
+        if request.ensemble != Some(Ensemble::Embedded) && threads > 1 && conformers.len() > 1 {
             let worker_count = threads.min(conformers.len());
             let evaluate_candidate = &evaluate_candidate;
             std::thread::scope(|scope| {

@@ -130,7 +130,10 @@ requested conformers and original atoms must be at most 6,400. The client
 schedules up to 300 starts across sequential batches within a caller deadline.
 
 `Generate` accepts either no coordinates or one XYZ coordinate per original
-atom as a candidate starting geometry. The worker checks physical geometry and
+atom as a candidate starting geometry. When it generates multiple conformers,
+the desktop worker can embed and minimize them in parallel within its heap
+budget. It considers the results in seed order to select a geometry.
+The worker checks physical geometry and
 intrinsic three-dimensionality, adds temporary hydrogen coordinates, then
 validates specified stereo before minimizing. Invalid or planar candidates fall back to
 generation. A conservative fullerene topology check identifies closed carbon
