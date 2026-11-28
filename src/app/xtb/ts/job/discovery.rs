@@ -345,7 +345,10 @@ impl discovery::Backend for Native<'_> {
             if control(self.cancel, self.tx).is_break() {
                 return Err(ts::TsError::Cancelled);
             }
-            let checked = self.workers[0]
+            let checked = self
+                .workers
+                .first_mut()
+                .ok_or_else(|| ts::TsError::Failed("No xTB worker".into()))?
                 .checked_hessian(&current.positions, self.masses)
                 .map_err(ts::TsError::from)
                 .and_then(|computed| checked_method(computed, self.method))?;
@@ -490,7 +493,10 @@ impl Native<'_> {
             return Err(ts::TsError::Cancelled);
         }
         let mut gradient = vec![0.; minimum.positions.len()];
-        self.workers[0].evaluate(&minimum.positions, &mut gradient, Accuracy::Normal)?;
+        self.workers
+            .first_mut()
+            .ok_or_else(|| ts::TsError::Failed("No xTB worker".into()))?
+            .evaluate(&minimum.positions, &mut gradient, Accuracy::Normal)?;
         let residual_rmsd_bohr =
             discovery::minimum_residual_rmsd(self.numbers, minimum, &gradient, &checked.hessian)?;
         let resolved = checked
