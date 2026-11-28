@@ -1,6 +1,13 @@
 //! A run from Run to its finish, with the worker's events written by hand.
 use super::run::{self, Event, Report};
 use super::*;
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn native_calculation_availability_follows_the_bundled_engine() {
+    assert_eq!(available(), reshiki_xtb_worker::INCLUDED);
+    assert_eq!(unavailable().is_none(), reshiki_xtb_worker::INCLUDED);
+}
 use reshiki::document::Point;
 use reshiki::geometry::Point3;
 use reshiki::models3d::Display;

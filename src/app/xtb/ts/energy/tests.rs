@@ -426,7 +426,7 @@ fn optfreq_reuse_requires_all_thermochemistry_settings_and_known_tight_convergen
     ));
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 mod execution {
     use super::*;
     use crate::app::xtb::tests::{MOVED, START, event, optimized, send};

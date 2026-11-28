@@ -379,7 +379,7 @@ fn visible_reaction_names_arrive_from_the_caption_queue_without_editing_the_draw
     );
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn reaction_names_wait_for_the_review_sheet_to_close() {
     let (doc, arrow) = hydrogen_transfer();
@@ -605,7 +605,7 @@ fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
     assert!(bonds.0.broken.is_empty());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[tokio::test]
 #[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn drawn_product_stereo_adds_one_note_to_the_card_and_review() {

@@ -409,6 +409,11 @@ class ReleaseTests(unittest.TestCase):
             binary = root / "target" / target / "dist/reshiki.exe"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(self.pe_image(0xAA64))
+            (root / "Cargo.lock").write_text(
+                "[[package]]\n"
+                + "".join(f'{key} = "{value}"\n' for key, value in AXTB_DRIVER.items()),
+                encoding="utf-8",
+            )
             run = self.package(root, target, "Windows")
             run.assert_called_once_with(
                 [
@@ -421,6 +426,8 @@ class ReleaseTests(unittest.TestCase):
                     "reshiki",
                     "--target",
                     target,
+                    "--features",
+                    "xtb",
                 ],
                 cwd=root,
             )
@@ -435,8 +442,10 @@ class ReleaseTests(unittest.TestCase):
                 metadata = json.loads(stream.read("reshiki-1.2.3-windows-arm64/build.json"))
                 self.assertEqual(metadata["architecture"], "arm64")
                 self.assertEqual(metadata["rust_target"], target)
-                self.assertEqual(metadata["xtb"], {"included": False})
-                self.assertNotIn("axtb", stream.read(f"{package.stem}/README.txt").decode())
+                self.assertTrue(metadata["xtb"]["included"])
+                self.assertEqual(metadata["xtb"]["rev"], AXTB_REV)
+                self.assertEqual(metadata["xtb"]["license"], AXTB_LICENSE)
+                self.assertIn("axtb", stream.read(f"{package.stem}/README.txt").decode())
                 self.assertNotIn("chemistry_architecture", metadata)
                 self.assertFalse(any("chemistry/" in name for name in stream.namelist()))
                 self.assertFalse(

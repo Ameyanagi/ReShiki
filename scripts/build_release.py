@@ -34,7 +34,7 @@ from check_runtime_dependencies import (
 from license_notices import dependency_metadata, write_notices
 
 ROOT = Path(__file__).resolve().parents[1]
-XTB_SYSTEMS = {"macos", "linux"}
+XTB_SYSTEMS = {"macos", "linux", "windows"}
 XTB_FIXTURES = ROOT / "tests/fixtures/xtb"
 XTB_HEADER = struct.Struct("<8sHHI")
 # Must match crates/xtb-worker/src/protocol.rs VERSION.

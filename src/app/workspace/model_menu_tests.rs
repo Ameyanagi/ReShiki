@@ -143,7 +143,7 @@ fn model_menu_actions_keep_order_and_wait_for_busy_work() {
     );
 }
 
-#[cfg(all(feature = "xtb", not(windows), not(target_arch = "wasm32")))]
+#[cfg(all(feature = "xtb", not(target_arch = "wasm32")))]
 #[test]
 fn model_menu_xtb_actions_wait_for_an_existing_xtb_run() {
     use super::super::xtb::Action;

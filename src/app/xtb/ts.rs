@@ -839,7 +839,7 @@ impl App {
     }
 }
 
-#[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "xtb"))]
 pub(in crate::app) mod tests;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]

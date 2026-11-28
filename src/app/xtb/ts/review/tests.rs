@@ -1,7 +1,7 @@
 //! Scheme review through the same messages as the row, menu and palette.
 use super::*;
 use crate::app::xtb::ts::card::tests::claisen;
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 use crate::app::xtb::ts::card::tests::{diels_alder, hydrogen_transfer};
 use reshiki::document::{Arrow, Point};
 use reshiki::reactions::{Participant, Reaction};
@@ -14,7 +14,7 @@ fn app(doc: Document, arrow: u64) -> App {
     app
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 fn open(app: &mut App, mode: Mode) {
     let _ = app.update(Message::Xtb(XtbAction::Ts(TsAction::Review(mode, None))));
 }
@@ -144,7 +144,7 @@ fn reviewed_unpaired_electrons_convert_to_internal_multiplicity_and_check_parity
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn unified_calculate_and_rerun_shortcut_follow_the_same_output_choices() {
     for shortcut in [false, true] {
@@ -191,7 +191,7 @@ fn unified_calculate_and_rerun_shortcut_follow_the_same_output_choices() {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn unsupported_barrier_falls_back_to_energy_and_no_effective_output_blocks_calculate() {
     let (mut doc, arrow) = ions(false);
@@ -231,7 +231,7 @@ fn unsupported_barrier_falls_back_to_energy_and_no_effective_output_blocks_calcu
     assert!(!app.ts_review_open());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn refused_barrier_runs_the_energy_batch_from_calculate_and_rerun() {
     use reshiki::reactions::Role;
@@ -289,7 +289,7 @@ fn refused_barrier_runs_the_energy_batch_from_calculate_and_rerun() {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn failed_automatic_mapping_falls_back_only_when_reaction_energy_is_selected() {
     let (mut doc, arrow) = claisen();
@@ -328,7 +328,7 @@ fn failed_automatic_mapping_falls_back_only_when_reaction_energy_is_selected() {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn automatic_map_refusal_stays_with_the_energy_batch_after_species_storage() {
     use crate::app::xtb::tests::{MOVED, START, event, optimized};
@@ -362,7 +362,7 @@ fn automatic_map_refusal_stays_with_the_energy_batch_after_species_storage() {
     assert_eq!(app.xtb_energy_result(arrow, None).1, None);
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn free_energy_choice_is_kept_while_a_review_waits() {
     let (doc, arrow) = claisen();
@@ -380,12 +380,12 @@ fn free_energy_choice_is_kept_while_a_review_waits() {
     );
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 fn finish_mapping(app: &mut App) {
     finish_mapping_with(app, |_| {});
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 fn finish_mapping_with(app: &mut App, change: impl FnOnce(&mut Proposal)) {
     let dialog = app.tab.xtb.ts_review.as_ref().unwrap();
     assert!(matches!(dialog.mapping, Mapping::Finding));
@@ -400,7 +400,7 @@ fn finish_mapping_with(app: &mut App, change: impl FnOnce(&mut Proposal)) {
     let _ = app.update(send(Action::Ready(dialog.id, Ok(Arc::new(proposal)))));
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn sure_auto_map_starts_silently_and_commits_inferred_roles_and_maps_together() {
     let (doc, arrow) = drawn_claisen();
@@ -473,7 +473,7 @@ fn sure_auto_map_starts_silently_and_commits_inferred_roles_and_maps_together() 
     assert!(!app.tab.history.can_undo());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn edit_map_hands_off_the_inferred_proposal_without_editing_the_drawing() {
     let (doc, arrow) = drawn_claisen();
@@ -495,7 +495,7 @@ fn edit_map_hands_off_the_inferred_proposal_without_editing_the_drawing() {
     assert!(!app.xtb_running());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn an_ambiguous_added_species_map_can_skip_its_barrier_and_keep_the_scheme_open() {
     let (doc, plan) = scheme::plan::Plan::example();
@@ -523,7 +523,7 @@ fn an_ambiguous_added_species_map_can_skip_its_barrier_and_keep_the_scheme_open(
     assert!(!app.tab.history.can_undo());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 async fn next_scheme_review(task: Task<Message>) -> Message {
     use iced::futures::StreamExt;
 
@@ -546,7 +546,7 @@ async fn next_scheme_review(task: Task<Message>) -> Message {
     panic!("a failed map must queue the following step");
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[tokio::test]
 async fn an_unbuildable_added_hydrogen_map_keeps_energy_and_queues_the_next_step() {
     for free_energy in [false, true] {
@@ -623,7 +623,7 @@ async fn an_unbuildable_added_hydrogen_map_keeps_energy_and_queues_the_next_step
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[tokio::test]
 async fn a_failed_map_continues_to_the_next_barrier_review() {
     let (doc, plan) = scheme::plan::Plan::example();
@@ -657,7 +657,7 @@ async fn a_failed_map_continues_to_the_next_barrier_review() {
     assert_eq!(app.tab.doc, doc);
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn a_drawn_only_scheme_map_still_opens_in_the_drawing() {
     let (mut doc, first) = hydrogen_transfer();
@@ -686,7 +686,7 @@ fn a_drawn_only_scheme_map_still_opens_in_the_drawing() {
     assert_eq!(app.tab.doc, before);
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn a_scheme_proposal_handoff_can_auto_map_and_apply_the_full_drawing() {
     use crate::app::reaction_mapping::Action as MapAction;
@@ -739,7 +739,7 @@ fn a_scheme_proposal_handoff_can_auto_map_and_apply_the_full_drawing() {
     assert!(app.tab.history.can_undo());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn complete_map_with_moving_hydrogen_requires_the_sheet() {
     let (doc, arrow) = hydrogen_transfer();
@@ -758,7 +758,7 @@ fn complete_map_with_moving_hydrogen_requires_the_sheet() {
     assert!(!app.tab.history.can_undo());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn proton_transfer_with_barrier_off_reviews_and_runs_reaction_energy() {
     let (doc, arrow) = hydrogen_transfer();
@@ -783,7 +783,7 @@ fn proton_transfer_with_barrier_off_reviews_and_runs_reaction_energy() {
     assert_eq!(run.config.task, CalcTask::Optimize);
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn a_sure_proposal_with_moving_hydrogen_still_waits_for_review() {
     let (mut doc, arrow) = hydrogen_transfer();
@@ -812,7 +812,7 @@ fn a_sure_proposal_with_moving_hydrogen_still_waits_for_review() {
     assert!(dialog.validate().is_ok());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn missing_isotope_maps_open_auto_map_with_an_explanation() {
     let (mut doc, arrow) = claisen();
@@ -847,7 +847,7 @@ fn missing_isotope_maps_open_auto_map_with_an_explanation() {
     assert!(!app.xtb_running());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn mapper_ties_and_unfinished_searches_require_review_before_applying() {
     for tied in [true, false] {
@@ -897,7 +897,7 @@ fn review_picture_and_run_action_describe_the_same_bonds() {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn diels_alder_review_crosses_product_bonds_and_draws_reactant_arcs() {
     let (doc, arrow) = diels_alder();
@@ -931,7 +931,7 @@ fn diels_alder_review_crosses_product_bonds_and_draws_reactant_arcs() {
     assert_eq!(pairs(other, BondChangeKind::Form), [[1, 6], [4, 5]]);
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn review_settings_start_folded_and_the_summary_tracks_edits() {
     let (doc, arrow) = claisen();
@@ -967,7 +967,7 @@ fn review_settings_start_folded_and_the_summary_tracks_edits() {
     );
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[tokio::test]
 async fn accepting_or_canceling_the_review_returns_focus_to_the_drawing() {
     use iced::advanced::widget::operation::Focusable;
@@ -1004,7 +1004,7 @@ async fn accepting_or_canceling_the_review_returns_focus_to_the_drawing() {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[tokio::test]
 #[ignore = "Opt-in renderer check: needs a graphics adapter"]
 async fn review_shows_the_proposal_and_reveals_settings_only_when_opened() {
@@ -1094,7 +1094,7 @@ async fn review_shows_the_proposal_and_reveals_settings_only_when_opened() {
     );
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn explicit_review_waits_even_with_a_complete_sure_map() {
     let (doc, arrow) = claisen();
@@ -1119,7 +1119,7 @@ fn explicit_review_waits_even_with_a_complete_sure_map() {
     assert!(!app.tab.history.can_undo());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn a_complete_sure_map_starts_from_the_sole_target_without_review() {
     let (doc, arrow) = claisen();
@@ -1136,7 +1136,7 @@ fn a_complete_sure_map_starts_from_the_sole_target_without_review() {
     assert!(!app.tab.history.can_undo());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn a_stale_silent_map_never_edits_or_starts_the_changed_drawing() {
     let (doc, arrow) = drawn_claisen();
@@ -1158,7 +1158,7 @@ fn a_stale_silent_map_never_edits_or_starts_the_changed_drawing() {
     assert!(app.tab.doc.reactions.is_empty());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn a_sure_automatic_map_keeps_a_newer_selection() {
     let (doc, arrow) = drawn_claisen();
@@ -1171,7 +1171,7 @@ fn a_sure_automatic_map_keeps_a_newer_selection() {
     assert_eq!(app.tab.selected, [atom]);
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn cancelling_silent_mapping_discards_a_late_proposal() {
     let (doc, arrow) = drawn_claisen();
@@ -1192,7 +1192,7 @@ fn cancelling_silent_mapping_discards_a_late_proposal() {
     assert!(!app.tab.history.can_undo());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn reviewed_charges_set_the_run_state_and_incompatible_unpaired_counts_block_it() {
     let (doc, arrow) = crate::app::xtb::ts::card::tests::hydrogen_transfer();
@@ -1276,7 +1276,7 @@ fn imbalance_names_the_element_and_charge_difference() {
     );
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn imbalance_blocks_accept_and_two_to_two_allows_reaction_energy() {
     let (doc, arrow) = ions(true);

@@ -655,17 +655,30 @@ jobs:
           cargo check --locked -p reshiki-process --all-targets --target ${{ matrix.target }}
           cargo test --locked -p reshiki-process --target ${{ matrix.target }}
   xtb:
-    name: xtb (linux x64)
+    name: xtb (${{ matrix.target }})
     needs: [scope, images]
     if: needs.scope.outputs.native == 'true'
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            msvc_arch: x64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            msvc_arch: arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: read
-    container: ${{ needs.images.outputs.noble }}
+    container: ${{ matrix.os == 'ubuntu-24.04' && needs.images.outputs.noble || '' }}
     defaults:
       run:
-        shell: bash -e {0}
+        shell: ${{ startsWith(matrix.os, 'windows') && 'pwsh' || 'bash -e {0}' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -674,34 +687,104 @@ jobs:
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          shared-key: xtb
+          shared-key: xtb-${{ matrix.target }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
       - name: Check the application with xTB enabled (and the conformer benchmark)
-        run: cargo clippy --locked --features xtb,conformer-bench --bin reshiki --all-targets -- -D warnings
+        run: cargo clippy --locked --target ${{ matrix.target }} --features xtb,conformer-bench --bin reshiki --all-targets -- -D warnings
       - name: Test the xTB worker engine
-        run: cargo test --locked -p reshiki-xtb-worker --features engine
+        run: cargo test --locked --target ${{ matrix.target }} -p reshiki-xtb-worker --features engine
       - name: Test xTB application integration
-        run: cargo test --locked --test it xtb --features xtb
+        run: cargo test --locked --target ${{ matrix.target }} --test it xtb --features xtb
       # The workspace jobs build without xTB, so these unit tests either do not
       # exist there, return early when `xtb::available()` is false, or check
       # menus and commands that change with it. Keep any new test that depends
       # on the engine inside one of these modules. The step above built
-      # target/debug/reshiki, which serves as the InChI and naming helper.
+      # the target's debug/reshiki, which serves as the InChI and naming helper.
       - name: Test the application's xTB code paths
+        env:
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/debug/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/debug/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_REQUIRE_INCHI_HELPER: "1"
         run: |
-          RESHIKI_INCHI_HELPER="$PWD/target/debug/reshiki" \
-          RESHIKI_NAMING_HELPER="$PWD/target/debug/reshiki" \
-          RESHIKI_REQUIRE_INCHI_HELPER=1 \
-          cargo test --locked -p reshiki --features xtb --lib --bin reshiki -- \
-            app::xtb:: app::nmr:: app::context_menu:: app::workspace:: \
-            app::command_palette:: app::models3d:: app::updates:: \
-            app::shortcuts:: app::dispatch app::shortcut_focus app::help:: \
-            app::inspector_pages:: app::document_styles:: app::theme_generator:: \
-            app::github:: app::joining:: app::graphics:: app::compound_numbers:: \
-            cli:: xtb_agent:: launch::mcp
+          cargo test --locked --target ${{ matrix.target }} -p reshiki --features xtb --lib --bin reshiki -- app::xtb:: app::nmr:: app::context_menu:: app::workspace:: app::command_palette:: app::models3d:: app::updates:: app::shortcuts:: app::dispatch app::shortcut_focus app::help:: app::inspector_pages:: app::document_styles:: app::theme_generator:: app::github:: app::joining:: app::graphics:: app::compound_numbers:: app::profile_animation:: cli:: xtb_agent:: launch::mcp
+  xtb-windows-packages:
+    name: Unsigned Windows xTB (${{ matrix.arch }})
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            arch: x64
+            lto: "false"
+            codegen: "16"
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            arch: arm64
+            lto: "fat"
+            codegen: "1"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      RUSTFLAGS: -C target-feature=+crt-static
+      CARGO_PROFILE_DIST_LTO: ${{ matrix.lto }}
+      CARGO_PROFILE_DIST_CODEGEN_UNITS: ${{ matrix.codegen }}
+      CARGO_PROFILE_DIST_STRIP: none
+      CARGO_PROFILE_DIST_SPLIT_DEBUGINFO: packed
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: *native_checkout
+      - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }}
+      - run: rustup default 1.99.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: cpython-3.12.15-windows-x86_64-none
+      - uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Install the release's pinned Inno Setup compiler
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732') { throw 'Inno Setup checksum mismatch' }
+          $directory = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+          $process = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$directory`"") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
+          "RESHIKI_ISCC=$directory\ISCC.exe" >> $env:GITHUB_ENV
+      - name: Build and verify unsigned ZIP and setup.exe without signing credentials
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/build_release.py --target ${{ matrix.target }} --installer
+      - name: Require unsigned application and installer
+        run: |
+          $files = @("target/${{ matrix.target }}/dist/reshiki.exe") + @(Get-ChildItem dist/releases/*-setup.exe | ForEach-Object FullName)
+          if ($files.Count -ne 2) { throw 'Expected the application and one installer' }
+          foreach ($file in $files) {
+            if ((Get-AuthenticodeSignature $file).Status -ne 'NotSigned') { throw "Expected unsigned artifact: $file" }
+          }
+      - name: Calculate with the relocated shipped executable and no companion runtime
+        env:
+          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki.exe
+        run: cargo test --locked -p reshiki --profile dist --target ${{ matrix.target }} --features xtb --test xtb_packaged
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-windows-xtb-${{ matrix.arch }}
+          path: |
+            dist/releases/*.zip
+            dist/releases/*-setup.exe
+            dist/releases/*.sha256
+          if-no-files-found: error
   rust-result:
     name: Rust checks
-    needs: [scope, rust-build, rust, rust-extra, rust-lint-goldens, xtb]
+    needs: [scope, rust-build, rust, rust-extra, rust-lint-goldens, xtb, xtb-windows-packages]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -716,9 +799,10 @@ jobs:
           RUST_EXTRA_RESULT: ${{ needs.rust-extra.result }}
           LINT_GOLDENS_RESULT: ${{ needs.rust-lint-goldens.result }}
           XTB_RESULT: ${{ needs.xtb.result }}
+          XTB_PACKAGES_RESULT: ${{ needs.xtb-windows-packages.result }}
         run: |
           [[ "$SCOPE_RESULT" == success ]] || exit 1
-          for result in "$RUST_BUILD_RESULT" "$RUST_RESULT" "$RUST_EXTRA_RESULT" "$LINT_GOLDENS_RESULT" "$XTB_RESULT"; do
+          for result in "$RUST_BUILD_RESULT" "$RUST_RESULT" "$RUST_EXTRA_RESULT" "$LINT_GOLDENS_RESULT" "$XTB_RESULT" "$XTB_PACKAGES_RESULT"; do
             case "$result" in
               success) ;;
               skipped) [[ "$NATIVE" != true ]] || exit 1 ;;

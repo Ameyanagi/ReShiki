@@ -396,6 +396,11 @@ jobs:
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
         run: cargo test --release --locked --no-default-features -p reshiki-windows --target ${{ matrix.target }}
+      - name: Calculate with the unsigned Windows release before optional signing
+        if: runner.os == 'Windows'
+        env:
+          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki.exe
+        run: cargo test --locked -p reshiki --profile dist --target ${{ matrix.target }} --features xtb --test xtb_packaged
       - name: Check that worker processes do not inherit the MCP client's pipes
         if: runner.os == 'Windows'
         env:
