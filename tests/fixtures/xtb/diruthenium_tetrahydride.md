@@ -122,3 +122,12 @@ installed-wheel check locally:
 ```sh
 python -m pytest crates/python/tests/test_xtb.py -k diruthenium
 ```
+
+## Editable 2D drawings
+
+The [g-xTB drawing](../../../website/public/examples/diruthenium-gxtb.rsk)
+and [GFN2-xTB drawing](../../../website/public/examples/diruthenium-gfn2.rsk)
+come from the two optimized XYZ files. The editor rotated each model by −55°
+about Y and ran **Show as 2D from the 3D view**. Each native file retains the
+56 original atom coordinates. The [previous drawing](../../../docs/images/metal-clusters/diruthenium-baseline.png)
+uses the same g-xTB file, view and export settings.

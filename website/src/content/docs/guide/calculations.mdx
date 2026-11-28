@@ -27,7 +27,7 @@ The results palette repeats this in one line under every result.
 | Method                    | Use it for                                                                          | Not available                                                         |
 | ------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | **GFN2-xTB** (default)    | Most molecules, elements up to radon (Z = 86)                                       | Lanthanide f electrons (they stay in the core)                        |
-| **g-xTB** (version 2.0.1) | Energies closer to DFT; in solvent, the GFN2-xTB solvation energy is added          | Transition-state search (planned for GFN2-xTB only)                   |
+| **g-xTB** (version 2.0.1) | Energies closer to DFT; in solvent, the GFN2-xTB solvation energy is added          | —                                                                     |
 | **GFN-FF**                | Large molecules and metal complexes; a force field, the fastest; closed shells only | Orbitals, bond orders, solvent, SCF settings, transition-state search |
 
 Solvents use the ALPB model: water, methanol, DMSO, chloroform, toluene and others. The card turns off what the chosen method cannot do and says why under the field.
@@ -97,6 +97,34 @@ When an optimization finishes, ReShiki first compares stereocentres and double-b
 
 If you later change the molecule's atoms or bonds, its results stay readable but greyed. **Recalculate** appears when the card can repeat that calculation.
 
+## Metal complexes and bridging hydrides
+
+For a metal cluster, open a 3D structure with all its hydrides and check the
+charge and number of unpaired electrons before optimizing. **Opt + freq**
+also checks the local curvature of the optimized structure.
+
+Suzuki’s diruthenium tetrahydride, (Cp\*Ru)₂(μ-H)₄, has four hydrogens
+bridging the same two Ru atoms. Each pentamethylcyclopentadienyl ring binds
+through all five ring carbons. In a gas-phase tight optimization from an
+asymmetrically distorted model, neutral singlet g-xTB retained all four
+bridges and gave a Ru–Ru distance of 2.375 Å. The crystal structure gives
+2.463 Å. GFN2-xTB converged to a different structure with two bridging and
+two terminal hydrides. Compare the calculated metal–ligand contacts as well
+as the energy and convergence status. [Experimental structure](https://doi.org/10.1021/om00016a017).
+
+To make an editable drawing, open the optimized XYZ file, rotate the cluster
+so both rings and metals are visible, then select **Show as 2D from the 3D view**.
+The four hydride atoms stay explicit, and each Cp\* ring has a five-carbon
+attachment to Ru. Open either example in ReShiki to inspect the 2D drawing
+and its retained 3D coordinates.
+
+![Four hydrides bridge the two ruthenium centers in the g-xTB drawing.](/doc-images/metal-clusters/diruthenium-gxtb.png)
+
+![GFN2-xTB leaves two hydrides bridging the Ru atoms and two attached to a single Ru.](/doc-images/metal-clusters/diruthenium-gfn2.png)
+
+[Four bridging hydrides from g-xTB](/examples/diruthenium-gxtb.rsk) ·
+[Two bridging and two terminal hydrides from GFN2-xTB](/examples/diruthenium-gfn2.rsk)
+
 ## When something goes wrong
 
 Errors appear in the palette, with an action where one helps:
@@ -109,7 +137,7 @@ Errors appear in the palette, with an action where one helps:
 ## Limits
 
 - Energy and optimization: up to 500 atoms.
-- Frequencies and conformer searches: up to 200 atoms. Planned: transition states up to 120.
+- Frequencies and conformer searches: up to 200 atoms. Transition-state searches support up to 120 atoms.
 - One molecule per calculation: selecting some of its atoms calculates the whole molecule. To calculate a fragment, copy it into a separate molecule first.
 
 ## File size
