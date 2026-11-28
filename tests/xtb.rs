@@ -21,6 +21,9 @@ use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::{thread, time::Instant};
 
+#[path = "xtb_metal_clusters.rs"]
+mod metal_clusters;
+
 fn executable() -> &'static Path {
     Path::new(env!("CARGO_BIN_EXE_reshiki"))
 }
