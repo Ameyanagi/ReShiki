@@ -351,6 +351,8 @@ pub const CALCULATIONS: u32 = 42;
 pub const ENERGY_PROFILES: u32 = 43;
 /// Per-step arrow links on reaction scheme energy profiles.
 pub const SCHEME_PROFILE_LINKS: u32 = 44;
+/// Profiles that split a single drawn arrow into elementary steps or preserve an unresolved gap.
+pub const ELEMENTARY_PROFILE_STEPS: u32 = 45;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
@@ -367,6 +369,7 @@ pub const SCHEME_PROFILE_LINKS: u32 = 44;
 /// cycles or equipment pieces require version 40. Custom compression-tube
 /// routes require version 41. Calculation frames and results require version 42.
 /// Reaction energy profiles require version 43 and per-step arrow links require version 44.
+/// Profiles with unresolved gaps or several steps for one drawn arrow require version 45.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 /// Optional per-highlight style overrides belong to version 40's highlight
@@ -412,7 +415,8 @@ pub const SCHEME_PROFILE_LINKS: u32 = 44;
 /// | 42 | Calculation frames and results linked to molecules; orbital surfaces placed on 3D models. |
 /// | 43 | Editable reaction energy profiles. |
 /// | 44 | Per-step arrow links on scheme energy profiles. |
-pub const VERSION: u32 = SCHEME_PROFILE_LINKS;
+/// | 45 | Elementary steps and unresolved gaps within one scheme arrow. |
+pub const VERSION: u32 = ELEMENTARY_PROFILE_STEPS;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
@@ -773,6 +777,23 @@ impl Document {
     pub fn file_version(&self) -> u32 {
         use crate::graphics::{GraphicKind, LinePattern};
         if self
+            .graphics
+            .iter()
+            .filter_map(|g| g.energy_profile.as_ref())
+            .any(|p| {
+                p.steps.iter().any(|s| s.unresolved)
+                    || p.steps.windows(2).any(|pair| {
+                        let previous = if pair[0].from == 0 {
+                            p.source
+                        } else {
+                            pair[0].source
+                        };
+                        previous.is_some() && previous == pair[1].source
+                    })
+            })
+        {
+            ELEMENTARY_PROFILE_STEPS
+        } else if self
             .graphics
             .iter()
             .filter_map(|g| g.energy_profile.as_ref())

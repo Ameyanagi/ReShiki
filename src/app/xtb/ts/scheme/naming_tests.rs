@@ -176,6 +176,7 @@ fn late_names_wait_for_the_drawing_and_update_only_linked_generated_labels() {
         .iter()
         .enumerate()
         .map(|(index, step)| EnergyProfileStep {
+            unresolved: false,
             from: index,
             to: index + 1,
             transition: None,

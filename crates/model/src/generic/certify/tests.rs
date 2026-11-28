@@ -45,6 +45,7 @@ fn prepared_two_variant_expansion_preserves_each_linked_energy_profile() {
             },
         ],
         vec![EnergyProfileStep {
+            unresolved: false,
             from: 0,
             to: 1,
             transition: None,

@@ -190,6 +190,8 @@ struct Fake {
     order: Vec<Job>,
     thermo: bool,
     mock_optimization: Option<(usize, MockOptimization)>,
+    discovered: Option<DiscoveredPath>,
+    cancel_after_ts: bool,
 }
 
 impl Backend for Fake {
@@ -263,7 +265,7 @@ impl Backend for Fake {
     fn transition(
         &mut self,
         job: TransitionJob<'_>,
-        _: &Cancel,
+        cancel: &Cancel,
         progress: &mut dyn FnMut(job::Event),
     ) -> Result<TransitionComputed, String> {
         let TransitionJob {
@@ -288,9 +290,13 @@ impl Backend for Fake {
         let mut result = (*value.result).clone();
         result.task = qcdata::Task::TransitionState;
         result.energy_hartree = Some(-0.9);
+        if self.cancel_after_ts {
+            cancel.cancel();
+        }
         Ok(TransitionComputed {
             result: Arc::new(result),
             frames: vec![Arc::clone(&value.frame)],
+            discovered: self.discovered.take(),
             launch: Launch {
                 frame: value.frame,
                 atoms: vec![Some(1)],
@@ -1189,4 +1195,82 @@ fn native_jobs_check_cancellation_before_any_worker_can_be_spawned() {
         .ordinary(&input.frame, XtbMethod::Gfn2Xtb, true, false, &cancel)
         .unwrap_err();
     assert!(error.contains("canceled"));
+}
+
+fn partial_discovered_path() -> DiscoveredPath {
+    let value = species_value(0, XtbMethod::Gfn2Xtb);
+    DiscoveredPath {
+        minima: (0..3)
+            .map(|index| DiscoveredMinimum {
+                frame: Arc::clone(&value.frame),
+                energy_hartree: -1. + index as f64 * 0.01,
+                gibbs_correction_hartree: None,
+            })
+            .collect(),
+        order: vec![0, 2, 1],
+        segments: Vec::new(),
+        gaps: vec![
+            DiscoveredGap {
+                reactant: 0,
+                product: 2,
+                reason: "The remaining elementary step was not verified".into(),
+            },
+            DiscoveredGap {
+                reactant: 2,
+                product: 1,
+                reason: "The remaining elementary step was not verified".into(),
+            },
+        ],
+        diagnostics: vec!["Relaxed an actual valley image".into()],
+    }
+}
+
+#[test]
+fn discovered_steps_never_reuse_the_global_saddle_as_a_headline_barrier() {
+    let mut request = request();
+    request.retry = Some(0);
+    request.options[0].free_barrier = true;
+    let mut fake = Fake {
+        discovered: Some(partial_discovered_path()),
+        thermo: true,
+        ..Fake::default()
+    };
+    let mut events = Vec::new();
+    calculate(&request, &mut fake, &Cancel::default(), |event| {
+        events.push(event)
+    })
+    .unwrap();
+    let values = step_values(&events);
+    let value = values.last().unwrap().1;
+    assert!(value.ts.is_some());
+    assert!(value.discovered.is_some());
+    assert!(value.barrier.is_none());
+    assert!(value.free_barrier.is_none());
+    assert!(value.error.as_ref().unwrap().contains("unresolved gap"));
+}
+
+#[test]
+fn cancellation_publishes_discovered_minima_and_gaps_before_stopping_the_queue() {
+    let request = request();
+    let mut fake = Fake {
+        discovered: Some(partial_discovered_path()),
+        cancel_after_ts: true,
+        ..Fake::default()
+    };
+    let cancel = Cancel::default();
+    let mut events = Vec::new();
+    let error = calculate(&request, &mut fake, &cancel, |event| events.push(event)).unwrap_err();
+    assert!(error.contains("canceled"));
+    assert_eq!(fake.transitions.len(), 1);
+    let values = step_values(&events);
+    let value = values
+        .iter()
+        .find_map(|(_, value)| value.discovered.as_ref())
+        .unwrap();
+    assert_eq!(value.order, [0, 2, 1]);
+    assert_eq!(value.minima.len(), 3);
+    assert_eq!(
+        value.gaps[0].reason,
+        "The remaining elementary step was not verified"
+    );
 }

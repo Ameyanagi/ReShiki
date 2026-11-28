@@ -22,11 +22,15 @@ use reshiki_xtb_worker::{
     protocol::{Computed, Conventions, Engine, Open, Units},
 };
 use std::{
+    borrow::Borrow,
     collections::BTreeSet,
     ops::ControlFlow,
     sync::Arc,
     time::{Duration, Instant},
 };
+
+mod discovery;
+pub(super) use discovery::Discovered;
 
 const THERMO_TEMPERATURE_K: f64 = 298.15;
 
@@ -55,6 +59,7 @@ pub(crate) struct Report {
     pub(super) result: CalcResult,
     pub(super) extras: Extras,
     pub(super) info: RunInfo,
+    pub(super) discovered: Option<Discovered>,
 }
 
 pub(super) enum SearchPath {
@@ -92,8 +97,9 @@ pub(super) fn start(
     )
 }
 
-/// Scheme minima already have their own isolated-species corrections. Only
-/// the mandatory saddle frequency check contributes new thermochemistry here.
+/// Drawn endpoints use their isolated-species corrections. The native band and
+/// IRC ends can reveal elementary steps; their mandatory minimum and saddle
+/// checks also supply any requested thermal corrections.
 pub(super) fn start_scheme(
     launch: Launch,
     request: super::Request,
@@ -256,21 +262,9 @@ fn run(
         control(cancel, tx)
     };
     let verify = |worker: &mut Worker, positions: &[f64], imaginary: usize| {
-        send(tx, cancel, Event::Stage(Stage::Saddle)).map_err(|_| ts::TsError::Cancelled)?;
-        trace.borrow_mut().enter("Worker check");
-        let check = worker
-            .checked_hessian(positions, &masses)
-            .map_err(ts::TsError::from)
-            .and_then(|computed| checked_method(computed, method));
-        if control(cancel, tx).is_break() || matches!(check, Err(ts::TsError::Cancelled)) {
-            return Err(ts::TsError::Cancelled);
-        }
-        let agrees = check
-            .as_ref()
-            .ok()
-            .and_then(|computed| computed.vibrations.as_ref())
-            .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == imaginary);
-        Ok((agrees, check))
+        verify_candidate(
+            worker, positions, imaginary, &masses, method, cancel, tx, &trace,
+        )
     };
     let (report, checked) = match path {
         SearchPath::Saved {
@@ -352,17 +346,49 @@ fn run(
     };
     match thermo {
         ThermoScope::Endpoints => complete(launch, done),
-        ThermoScope::SaddleOnly => complete_with_thermo(launch, done, request.free_energy),
+        ThermoScope::SaddleOnly => {
+            discovery::complete_scheme(launch, request, done, &mut workers, cancel, tx)
+        }
     }
+}
+
+fn verify_candidate(
+    worker: &mut Worker,
+    positions: &[f64],
+    imaginary: usize,
+    masses: &[f64],
+    method: qcdata::XtbMethod,
+    cancel: &Cancel,
+    tx: &mpsc::UnboundedSender<Event>,
+    trace: &std::cell::RefCell<SearchTrace>,
+) -> Result<(bool, Result<Computed, ts::TsError>), ts::TsError> {
+    send(tx, cancel, Event::Stage(Stage::Saddle)).map_err(|_| ts::TsError::Cancelled)?;
+    trace.borrow_mut().enter("Worker check");
+    let check = worker
+        .checked_hessian(positions, masses)
+        .map_err(ts::TsError::from)
+        .and_then(|computed| checked_method(computed, method));
+    if control(cancel, tx).is_break() || matches!(check, Err(ts::TsError::Cancelled)) {
+        return Err(ts::TsError::Cancelled);
+    }
+    let agrees = check
+        .as_ref()
+        .ok()
+        .and_then(|computed| computed.vibrations.as_ref())
+        .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == imaginary);
+    Ok((agrees, check))
 }
 
 /// An independent frequency check must describe the same Hamiltonian as the
 /// saddle and IRC. Treat a mismatched response as a failed check, never relabel it.
-fn checked_method(computed: Computed, method: qcdata::XtbMethod) -> Result<Computed, ts::TsError> {
-    if computed.method.xtb_method() != method {
+fn checked_method<C: Borrow<Computed>>(
+    computed: C,
+    method: qcdata::XtbMethod,
+) -> Result<C, ts::TsError> {
+    if computed.borrow().method.xtb_method() != method {
         return Err(ts::TsError::Failed(format!(
             "the xTB worker returned {} for a {} calculation",
-            computed.method.xtb_method().label(),
+            computed.borrow().method.xtb_method().label(),
             method.label()
         )));
     }
@@ -607,9 +633,9 @@ fn pair(a: usize, b: usize) -> (usize, usize) {
     (a.min(b), a.max(b))
 }
 
-struct Completion {
+struct Completion<C = Computed> {
     report: TsReport,
-    checked: Result<Computed, ts::TsError>,
+    checked: Result<C, ts::TsError>,
     endpoint_thermo: Option<EndpointThermo>,
     method: qcdata::XtbMethod,
     engine: Engine,
@@ -711,7 +737,7 @@ fn thermochemistry(
 }
 
 /// Search counters and wall times are independent of the visible progress text.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct SearchTrace {
     retry: Option<Retry>,
     reactive_start: Option<String>,
@@ -763,9 +789,9 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
     complete_with_thermo(launch, done, thermo)
 }
 
-fn complete_with_thermo(
+fn complete_with_thermo<C: Borrow<Computed>>(
     launch: &Launch,
-    done: Completion,
+    done: Completion<C>,
     saddle_thermo: bool,
 ) -> Result<Report, Failure> {
     let Completion {
@@ -789,9 +815,15 @@ fn complete_with_thermo(
     let reactant = frame(&report.reactant.positions);
     let product = frame(&report.product.positions);
     let method_refinement = matches!(trace.retry, Some(Retry::Gxtb(_)));
+    // Discovery may identify a local elementary edge inside the original band.
+    // That global band remains search evidence, but is not a local edge profile.
+    let has_neb_band = !method_refinement
+        && report.path.first() == Some(&report.reactant)
+        && report.path.last() == Some(&report.product);
     let checked = checked
         .and_then(|computed| checked_method(computed, method))
         .and_then(|computed| {
+            let computed = computed.borrow();
             let frequencies = computed
                 .vibrations
                 .as_ref()
@@ -802,17 +834,23 @@ fn complete_with_thermo(
             let result = computed
                 .to_calc_result(&transition, qcdata::Task::Hessian, &engine, None)
                 .map_err(|error| ts::TsError::Failed(error.to_string()))?;
-            Ok((result, frequencies, computed))
+            Ok((
+                result,
+                frequencies,
+                computed.homo_lumo_gap_ev,
+                computed.near_degenerate,
+                computed.numerics.clone(),
+            ))
         });
     let mut info = RunInfo {
         evaluations,
         ..RunInfo::default()
     };
     let (mut result, worker_frequencies, reason) = match checked {
-        Ok((result, frequencies, computed)) => {
-            info.gap_ev = computed.homo_lumo_gap_ev;
-            info.near_degenerate = computed.near_degenerate;
-            info.numerics = computed.numerics;
+        Ok((result, frequencies, gap, near_degenerate, numerics)) => {
+            info.gap_ev = gap;
+            info.near_degenerate = near_degenerate;
+            info.numerics = numerics;
             let reason = failure_reason(&report, &frequencies);
             (result, frequencies, reason)
         }
@@ -850,7 +888,7 @@ fn complete_with_thermo(
         Some(reason) => qcdata::Status::NotConverged { reason },
         None => qcdata::Status::Converged,
     };
-    result.trajectory = (!method_refinement).then(|| qcdata::Trajectory {
+    result.trajectory = has_neb_band.then(|| qcdata::Trajectory {
         rmsd_to_best_angstrom: Vec::new(),
         numbers: transition.numbers.clone(),
         isotopes: transition.isotopes.clone(),
@@ -886,11 +924,11 @@ fn complete_with_thermo(
             .any(Option::is_some)
             .then_some(analysis.corrections)
     });
-    let irc = ordered_irc(&report, &transition, !method_refinement)?;
+    let irc = ordered_irc(&report, &transition, has_neb_band)?;
     let image_positions: Vec<_> = report
         .path
         .iter()
-        .filter(|_| !method_refinement)
+        .filter(|_| has_neb_band)
         .map(|point| angstroms(&point.positions))
         .collect();
     if irc.is_some()
@@ -910,7 +948,7 @@ fn complete_with_thermo(
         num_imaginary: report.imaginary,
         diagnostics: diagnostic_rows,
         image_positions,
-        neb_converged: !method_refinement && report.neb_converged,
+        neb_converged: has_neb_band && report.neb_converged,
         reached_positions_angstrom: reached_endpoint(&report),
         irc,
         connects: report.connects,
@@ -933,6 +971,7 @@ fn complete_with_thermo(
         result,
         extras,
         info,
+        discovered: None,
     })
 }
 

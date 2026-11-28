@@ -93,6 +93,7 @@ fn energy_profile_scheme_with_group(
             })
             .collect(),
         vec![EnergyProfileStep {
+            unresolved: false,
             from: 0,
             to: 1,
             transition: None,

@@ -15,6 +15,7 @@ use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+mod drawing;
 pub(super) mod plan;
 pub(super) mod profile;
 pub(super) mod run;
@@ -47,6 +48,7 @@ pub(crate) enum Action {
     Retry(usize),
     Next(u64),
     Place,
+    PlaceDiscovered,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     Event(Box<run::Event>),
 }
@@ -100,12 +102,10 @@ impl State {
     ) -> bool {
         figure.linked
             && figure.source == self.plan.arrows.first().copied()
-            && figure.steps.len() == self.plan.steps.len()
             && super::profile::source_reactions(doc, figure).is_some_and(|steps| {
-                steps
-                    .iter()
-                    .map(|step| step.arrow)
-                    .eq(self.plan.arrows.iter().copied())
+                let mut arrows: Vec<_> = steps.iter().map(|step| step.arrow).collect();
+                arrows.dedup();
+                arrows == self.plan.arrows
             })
     }
 
@@ -497,6 +497,7 @@ impl App {
                 return self.xtb_scheme_next();
             }
             Action::Place => self.xtb_place_scheme_profile(),
+            Action::PlaceDiscovered => self.xtb_place_discovered_scheme(),
             #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
             Action::Event(event) => {
                 if !state.work.accepts(&event) {

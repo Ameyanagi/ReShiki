@@ -92,11 +92,60 @@ pub(in crate::app) struct SpeciesValue {
     pub launch: Option<reshiki::science::Launch>,
 }
 
+/// All frames and energies use this arrow's atom map, charge, spin and method.
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredMinimum {
+    pub frame: Arc<Frame>,
+    pub energy_hartree: f64,
+    pub gibbs_correction_hartree: Option<f64>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredSegment {
+    pub reactant: usize,
+    pub product: usize,
+    pub ts: Arc<CalcResult>,
+    pub frames: Vec<Arc<Frame>>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredGap {
+    pub reactant: usize,
+    pub product: usize,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredPath {
+    pub minima: Vec<DiscoveredMinimum>,
+    pub order: Vec<usize>,
+    pub segments: Vec<DiscoveredSegment>,
+    pub gaps: Vec<DiscoveredGap>,
+    pub diagnostics: Vec<String>,
+}
+
+impl DiscoveredPath {
+    pub(super) fn has_gibbs(&self) -> bool {
+        self.order
+            .iter()
+            .skip(1)
+            .take(self.order.len().saturating_sub(2))
+            .all(|id| {
+                self.minima
+                    .get(*id)
+                    .and_then(|m| m.gibbs_correction_hartree)
+                    .is_some()
+            })
+            && self.segments.iter().all(|s| s.ts.thermo.is_some())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(in crate::app) struct StepValue {
     pub arrow: u64,
     pub method: XtbMethod,
     pub ts: Option<Arc<CalcResult>>,
+    pub discovered: Option<DiscoveredPath>,
     pub frames: Vec<Arc<Frame>>,
     pub launch: Option<reshiki::science::Launch>,
     /// All displayed quantities use kcal/mol. Missing values are never zero.
@@ -113,6 +162,7 @@ impl StepValue {
             arrow,
             method,
             ts: None,
+            discovered: None,
             frames: Vec::new(),
             launch: None,
             energy: None,

@@ -40,6 +40,100 @@ pub(super) fn build(
         let (inventory, level) = levels.get(index)?;
         let (minimum, next_level) = levels.get(index + 1)?;
         let (level, next_level) = (*level, *next_level);
+        let kind = if index + 1 == plan.steps.len() {
+            Kind::Product
+        } else {
+            Kind::Intermediate
+        };
+        let mut state = profile::state(kind, minimum.label(), next_level);
+        state.geometry = side_geometry(plan, report, minimum.terms(), None);
+        if let Some(path) = &value.discovered {
+            let spectators = inventory.spectators(&step.reactants)?;
+            // Use exactly the same separated-species reference as the ordinary scheme barrier.
+            let reference = sum_energy(step.reactants.iter().copied(), |index| {
+                super::run::species_energy(report.species(index)?, gibbs)
+            })? - level / KCAL_PER_HARTREE;
+            let reaction = preview(doc, step.arrow).ok()?;
+            let source_key = profile::source_key(doc, &reaction);
+            let mut product = Some(state);
+            for (leg, pair) in path.order.windows(2).enumerate() {
+                let minimum = path.minima.get(pair[1])?;
+                let to_state = if leg + 2 == path.order.len() {
+                    product.take()?
+                } else {
+                    let mut intermediate = profile::state(
+                        Kind::Intermediate,
+                        format!("I{}.{}", index + 1, leg + 1),
+                        (minimum.energy_hartree
+                            + if gibbs {
+                                minimum.gibbs_correction_hartree?
+                            } else {
+                                0.
+                            }
+                            - reference)
+                            * KCAL_PER_HARTREE,
+                    );
+                    let geometry = thumbnails::profile_side(&[&minimum.frame]);
+                    intermediate.geometry = geometry.and_then(|geometry| {
+                        side_geometry(plan, report, spectators.terms(), Some(geometry))
+                    });
+                    intermediate
+                };
+                let from = states.len() - 1;
+                let from_level = states[from].energy_kcal;
+                let segment = path
+                    .segments
+                    .iter()
+                    .find(|s| [s.reactant, s.product] == *pair);
+                let mut transition = None;
+                let mut samples = Vec::new();
+                if let Some(segment) = segment {
+                    let result = &segment.ts;
+                    let saddle = result.energy_hartree?
+                        + if gibbs {
+                            result.thermo.as_ref()?.gibbs_correction_hartree
+                        } else {
+                            0.
+                        };
+                    let height = (saddle - reference) * KCAL_PER_HARTREE;
+                    let mut state = profile::state(
+                        Kind::TransitionState,
+                        format!("TS{}.{}‡", index + 1, leg + 1),
+                        height,
+                    );
+                    if let Some((geometry, view)) = saddle_geometry(result, &segment.frames) {
+                        state.geometry =
+                            side_geometry(plan, report, spectators.terms(), Some(geometry));
+                        rotation.get_or_insert(view);
+                    }
+                    if !gibbs && let Some(irc) = irc::saved(result) {
+                        samples = profile::irc_samples(
+                            irc,
+                            reference + from_level / KCAL_PER_HARTREE,
+                            height - from_level,
+                            to_state.energy_kcal - from_level,
+                        );
+                        for sample in &mut samples {
+                            sample.energy_kcal += from_level;
+                        }
+                    }
+                    transition = Some(states.len());
+                    states.push(state);
+                }
+                states.push(to_state);
+                let later = !steps.is_empty();
+                steps.push(EnergyProfileStep {
+                    from,
+                    to: states.len() - 1,
+                    transition,
+                    unresolved: segment.is_none(),
+                    source: later.then_some(step.arrow),
+                    source_key: later.then(|| source_key.clone()),
+                    irc: samples,
+                });
+            }
+            continue;
+        }
         let delta = next_level - level;
         let from = states.len() - 1;
         let barrier = if gibbs {
@@ -70,23 +164,7 @@ pub(super) fn build(
         let mut samples = Vec::new();
         if let Some(result) = &value.ts {
             if let Some(transition) = transition {
-                let ends = result.endpoints;
-                let frame = |hash| {
-                    value
-                        .frames
-                        .iter()
-                        .find(|frame| frame.hash() == hash)
-                        .map(AsRef::as_ref)
-                };
-                if let Some(ends) = ends
-                    && let (Some(r), Some(ts), Some(p)) = (
-                        frame(ends.reactant),
-                        frame(result.frame),
-                        frame(ends.product),
-                    )
-                    && let Some(([_, ts, _], view)) =
-                        thumbnails::profile_geometry_from_frames(result, r, ts, p)
-                {
+                if let Some((ts, view)) = saddle_geometry(result, &value.frames) {
                     let spectators = inventory.spectators(&step.reactants)?;
                     states.get_mut(transition)?.geometry =
                         side_geometry(plan, report, spectators.terms(), Some(ts));
@@ -106,16 +184,10 @@ pub(super) fn build(
                 }
             }
         }
-        let kind = if index + 1 == plan.steps.len() {
-            Kind::Product
-        } else {
-            Kind::Intermediate
-        };
-        let mut state = profile::state(kind, minimum.label(), next_level);
-        state.geometry = side_geometry(plan, report, minimum.terms(), None);
         states.push(state);
         let current = preview(doc, step.arrow).ok()?;
         steps.push(EnergyProfileStep {
+            unresolved: false,
             from,
             to: states.len() - 1,
             transition,
@@ -144,7 +216,39 @@ pub(super) fn build(
     Some(figure)
 }
 
+fn saddle_geometry(
+    result: &CalcResult,
+    frames: &[Arc<Frame>],
+) -> Option<(EnergyProfileGeometry, [f32; 4])> {
+    let ends = result.endpoints?;
+    let frame = |hash| {
+        frames
+            .iter()
+            .find(|frame| frame.hash() == hash)
+            .map(AsRef::as_ref)
+    };
+    let ([_, ts, _], view) = thumbnails::profile_geometry_from_frames(
+        result,
+        frame(ends.reactant)?,
+        frame(result.frame)?,
+        frame(ends.product)?,
+    )?;
+    Some((ts, view))
+}
+
 fn profile_levels(plan: &Plan, report: &Report, gibbs: bool) -> Option<Vec<(Level, f64)>> {
+    // The intermediate geometries carry electronic energies. A Gibbs profile
+    // requires a thermal correction for every minimum on the expanded path.
+    if gibbs
+        && report
+            .steps
+            .iter()
+            .flatten()
+            .filter_map(|step| step.discovered.as_ref())
+            .any(|path| !path.has_gibbs())
+    {
+        return None;
+    }
     let mut reference = None;
     energy_levels(plan, report, |level, _| {
         let energy = sum_energy(level.terms(), |index| {
@@ -288,7 +392,13 @@ impl App {
             .steps
             .iter()
             .flatten()
-            .filter_map(|value| value.ts.as_ref().map(Arc::clone))
+            .flat_map(|value| {
+                value.ts.iter().cloned().chain(
+                    value.discovered.iter().flat_map(|path| {
+                        path.segments.iter().map(|segment| Arc::clone(&segment.ts))
+                    }),
+                )
+            })
             .collect()
     }
 

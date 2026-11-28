@@ -166,6 +166,9 @@ pub struct EnergyProfileSample {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnergyProfileStep {
+    /// The calculation found these minima but could not verify a saddle between them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unresolved: bool,
     /// State indices of the two minima, in reaction order.
     pub from: usize,
     pub to: usize,
@@ -353,7 +356,8 @@ impl EnergyProfile {
                 let &[from, to] = pair else {
                     return true;
                 };
-                s.from != from
+                (s.unresolved && (s.transition.is_some() || !s.irc.is_empty()))
+                    || s.from != from
                     || s.to != to
                     || s.source.is_some_and(|id| {
                         id == 0 || id == u64::MAX || s.from == 0 || s.source_key.is_none()
@@ -686,7 +690,7 @@ impl Layout {
                 )
             })
             .collect();
-        for step in &profile.steps {
+        for step in profile.steps.iter().filter(|s| !s.unresolved) {
             if let Some(ts) = step.transition {
                 layout.connect(step.from, ts, &step.irc, 0., 0.5);
                 layout.connect(ts, step.to, &step.irc, 0.5, 1.);

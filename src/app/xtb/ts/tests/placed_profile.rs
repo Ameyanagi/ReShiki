@@ -367,6 +367,7 @@ fn smooth_profile_uses_saved_frames_and_includes_each_state_in_the_movie() {
         .states
         .extend([second_ts, profile.states[2].clone()]);
     multistep.steps.push(reshiki::graphics::EnergyProfileStep {
+        unresolved: false,
         from: 2,
         to: 4,
         transition: Some(3),
