@@ -494,6 +494,9 @@ impl Session {
         deadline: Duration,
         cancel: &Cancel,
     ) -> Result<()> {
+        // Local workers normally exit just after acknowledging Close. Check
+        // promptly at first, then return to the usual supervision interval.
+        let mut interval = Duration::from_micros(100);
         loop {
             self.check_request(started, deadline, cancel)?;
             self.no_more_output()?;
@@ -508,7 +511,8 @@ impl Session {
                 };
             }
             self.check_resources()?;
-            std::thread::sleep(POLL.min(deadline.saturating_sub(started.elapsed())));
+            std::thread::sleep(interval.min(deadline.saturating_sub(started.elapsed())));
+            interval = (2 * interval).min(POLL);
         }
     }
 
