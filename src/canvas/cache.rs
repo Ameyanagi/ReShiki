@@ -14,6 +14,7 @@ use std::{
 pub(super) struct SceneCache {
     document: Option<Document>,
     scene: Option<Rc<[Primitive]>>,
+    model_scene: Option<scene::ModelScene>,
     profile_scene: Option<ProfileScene>,
     stretch: Option<Rc<reshiki::editing::reference::Stretch>>,
     stretch_key: Option<(u64, u64)>,
@@ -48,12 +49,17 @@ pub(super) struct SceneCache {
     pub cycle_hit_layouts: usize,
     #[cfg(test)]
     pub moved_part_builds: usize,
+    #[cfg(test)]
+    pub model_scene_updates: usize,
 }
 
 struct ProfileScene {
     hidden: (u64, usize),
     ink: Rc<[Primitive]>,
 }
+
+#[cfg(test)]
+mod model_tests;
 
 /// One draw of the canvas. It compares the drawing with the cached one as it
 /// begins; the borrowed drawing cannot change before the draw ends.
@@ -136,13 +142,27 @@ impl SceneCache {
         }
         let meshes = reshiki::models3d::surface::draw::generation();
         if self.document.as_ref() != Some(doc) || self.meshes != meshes {
+            let model_update = (self.meshes == meshes)
+                .then(|| {
+                    self.model_scene
+                        .as_ref()?
+                        .update(self.document.as_mut()?, doc)
+                })
+                .flatten();
+            if model_update.is_none() {
+                self.document = Some(doc.clone());
+                self.model_scene = None;
+                self.opacity = None;
+            }
+            #[cfg(test)]
+            if model_update.is_some() {
+                self.model_scene_updates += 1;
+            }
             self.meshes = meshes;
-            self.document = Some(doc.clone());
-            self.scene = None;
+            self.scene = model_update.map(Rc::from);
             self.profile_scene = None;
             self.stretch = None;
             self.stretch_key = None;
-            self.opacity = None;
             self.ids.clear();
             self.selection = None;
             self.markers = None;
@@ -326,10 +346,15 @@ impl SceneCache {
 
     fn scene(&mut self, doc: &Document) -> Rc<[Primitive]> {
         let opacity = &mut self.opacity;
+        let model_scene = &mut self.model_scene;
         self.scene
             .get_or_insert_with(|| {
                 let flat = reshiki::models3d::drawn(doc);
                 let paint = opacity.get_or_insert_with(|| Rc::new(Paint::new(&flat)));
+                if let Some((retained, primitives)) = scene::ModelScene::new(doc, &flat, paint) {
+                    *model_scene = Some(retained);
+                    return primitives;
+                }
                 scene::primitives_with_opacity(doc, &flat, paint).into()
             })
             .clone()

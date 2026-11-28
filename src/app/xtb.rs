@@ -1138,7 +1138,7 @@ impl App {
                 positions,
             } => {
                 run.progress.push(first, &energies);
-                let previous = run.preview.take().filter(|_| run.reaction.is_some());
+                let previous = run.preview.take();
                 run.preview = (run.revision == current)
                     .then(|| {
                         let atom = *run.launch.as_ref()?.atoms.iter().flatten().next()?;
