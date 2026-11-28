@@ -289,10 +289,10 @@ performance. The benefit in ReShiki still needs a comparable test.
 ### Pure Rust factorization follow-up
 
 The geometry optimizer repeatedly factors small symmetric matrices when
-calculating a step. Up to dimension 256 it now computes one Cholesky pivot and
+calculating a step. At `718c88338`, up to dimension 256 it computed one Cholesky pivot and
 the entries below it before moving to the next column. This removes a diagonal
 check from the inner loop and preserves the order of each floating-point dot
-product. Wider matrices use the existing row traversal. Both implementations
+product. Wider matrices at that checkpoint used the original row traversal. Both implementations
 are pure Rust. The ReShiki xTB worker uses the Rust `faer` backend for the
 electronic calculation.
 
@@ -362,6 +362,73 @@ running concurrently.
 reshiki --cli calculate --task optimize --method gxtb --threads 1 tests/fixtures/xtb/water.xyz
 reshiki --cli calculate --task optimize --method gxtb --threads 1 --fix 1 tests/fixtures/xtb/caffeine.xyz
 ```
+
+### Worker shutdown and g-xTB profiling
+
+A one-thread water gradient exposed a delay after the calculation had
+finished. Once the worker acknowledged the close request, the client could
+sleep for a full 5 ms before checking its exit status. The client now starts
+at 100 µs and doubles the interval up to 5 ms if the worker takes longer.
+Each check still enforces the deadline and cancellation, reads trailing output
+and diagnostics, and checks the worker's exit status.
+
+On the Apple M4 we timed the public session API against the same packaged
+worker, alternating clients from `4d1660cbd` and the new build in eight
+rounds. Each round had one warm-up and eight recorded sessions per client.
+The median time inside `Session::close` fell from 6.29 to 0.92 ms.
+The complete start, open, g-xTB water gradient and close sequence fell from
+12.20 to 6.68 ms. Every session returned the same energy bits.
+
+We also timed full CLI optimizations, including process startup and shutdown,
+using one thread and eight interleaved trials per build after warm-up.
+
+| Method   | Molecule | At `4d1660cbd` | New build |
+| -------- | -------- | -------------: | --------: |
+| g-xTB    | Water    |       17.26 ms |  11.74 ms |
+| g-xTB    | Caffeine |       83.37 ms |  78.23 ms |
+| GFN2-xTB | Water    |       17.06 ms |  11.80 ms |
+| GFN2-xTB | Caffeine |       36.94 ms |  31.47 ms |
+
+A separate sample of a one-thread, 98-atom ritonavir optimization shows where
+larger g-xTB jobs spend their time. Of 3,352 stacks sampled on the worker's
+main thread, 3,230 were in the electronic calculation. Of those, 1,627 were
+in the self-consistent field calculation, 1,122 in the analytic gradient
+and 481 in per-geometry setup. The optimization converged in 49 steps.
+These counts describe the sampled part of one run. The analytic gradient
+sample includes repeated zero-filling in the overlap-derivative routine
+`overlap_grad_coeff`. A follow-up experiment could measure how much of that
+initialization each shell pair needs, then check energy, gradient and
+trajectory parity on neutral and open-shell cases.
+
+### Wider geometry optimizer matrices
+
+Four rows can use the same input vector while each row keeps its original
+four partial sums and floating-point operation order. The optimizer uses
+this in matrix-vector products and, above dimension 256, when calculating
+entries below the same Cholesky pivot. The kernels use ordinary Rust on both
+native and WebAssembly targets.
+
+To isolate the math inside a real optimization, we recorded every GFN2
+energy and gradient for ritonavir (98 atoms), then replayed them with the
+original and new optimizers. Each replay checked the requested accuracy and
+every coordinate bit before returning a recorded gradient. The complete
+accepted trajectories and final outcomes matched for free ritonavir, ritonavir
+with its first atom fixed and free codeine. The same checks passed for three
+g-xTB trajectories (water, caffeine and ritonavir).
+[Ritonavir starting geometry, ETKDGv3 seed 42 and MMFF94s](https://github.com/Ameyanagi/ReShiki-evidence/blob/a993daf403648b1da73c2140edf389a13ce30d9d/pr-reviews/pr1452/mols/ritonavir.xyz).
+
+| Trajectory                   | Steps / evaluations | Optimizer replay at `4d1660cbd` | Batched rows |
+| ---------------------------- | ------------------: | ------------------------------: | -----------: |
+| GFN2 ritonavir, free         |             50 / 54 |                       240.81 ms |    206.00 ms |
+| GFN2 ritonavir, atom 1 fixed |             53 / 56 |                       247.14 ms |    212.16 ms |
+| g-xTB ritonavir, free        |             49 / 55 |                       254.43 ms |    220.83 ms |
+
+The timings are medians of five alternating rounds on the Apple M4 and
+exclude electronic calculations. Free codeine changed from 44.95 to 43.81 ms.
+Isolated 600- and 1,200-dimensional factorizations ran 1.43× and 1.64×
+faster on arm64 and 1.45× and 1.43× faster in WebAssembly. Tests compare
+factor bits and cover the 255/256/257 crossover, incomplete groups of four,
+signed shifts, very large and small numbers, and failed pivots.
 
 ### Earlier 154-start comparison
 

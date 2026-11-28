@@ -83,6 +83,53 @@ from 6.54 to 0.57 ms for hover and from 6.69 to 0.58 ms for bond targeting.
 cargo test --release --locked --bin reshiki canvas::hit::caption_tests::manual_caption_hit_workloads -- --ignored --exact --nocapture
 ```
 
+### Overlap checks during bond drags
+
+Profiling the `4d1660cbd` build on the same gallery showed that 916 of 2,084
+sampled stacks were checking whether a moving fragment could paint over
+retained artwork. One frame had 896 bounds for the fragment and 23,810 for
+the surrounding drawing. ReShiki now groups retained bounds in a spatial
+tree. A missed branch skips every rectangle in it. Touching bounds still
+count as an overlap and force a full redraw when paint order matters.
+Drawings with up to 64 retained bounds use the linear scan.
+
+The tree indexes only bounds and preserves scene paint order. On the 16-copy
+case its nodes occupied about 320 KiB, in addition to the existing retained
+rectangles. Constructing the index has a one-time cost. On one gallery copy
+it took roughly 0.01–0.02 ms more to construct and query than the linear
+scan, which subsequent queries recovered. A separate pixel test checks that
+a translucent foreground rectangle still paints over a moving bond on the
+first draw, a repeat draw, an edit and undo.
+
+Extracting the fragment used to copy every atom, bond and caption in the
+drawing before discarding most of them. It now copies only objects that
+pass the existing selection and dependency rules. When at least half the
+object IDs are requested, it reserves room in the output vectors to avoid
+repeated reallocation. This matters when retaining almost the whole drawing
+as well as when copying a small selection.
+
+We compared the public extraction API on 209 drawing fixtures. All 844
+successful selections gave the same document and metadata, including runtime
+canvas IDs and embedded definitions. The other 1,063 selections gave the same
+refusal as the previous build.
+
+On the 7,728-atom gallery, these are median CPU draw times from two
+interleaved 30-frame runs per build on the Apple M4.
+
+| Interaction     | At `4d1660cbd` | With indexed bounds and selected-object copying |
+| --------------- | -------------: | ----------------------------------------------: |
+| Drag a bond     |       11.79 ms |                                         5.35 ms |
+| Move a ring     |       10.31 ms |                                         9.30 ms |
+| Move a template |       10.53 ms |                                         9.64 ms |
+| Move a fragment |        5.53 ms |                                         4.56 ms |
+
+In isolation, extracting a new six-atom ring from this gallery fell from
+1.10 to 0.30 ms. Extracting the entire drawing including the ring rose from
+1.50 to 1.61 ms. The latter is the measured cost of the change for a dense
+selection. A further experiment could translate a prepared ring preview
+across empty paper, then compare pixels and committed coordinates at the
+transition to snapping or fusion.
+
 ### Original loaded-canvas workloads
 
 Use a release build, an otherwise idle machine, and the same renderer on both
