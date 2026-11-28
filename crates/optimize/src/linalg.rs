@@ -36,6 +36,52 @@ pub(crate) fn dot(x: &[f64], y: &[f64]) -> f64 {
     result
 }
 
+/// Dot products of row-major rows with `x`. Four independent rows reuse the
+/// input vector and retain exactly the four partial sums used by [`dot`].
+pub(crate) fn row_dots(rows: &[f64], x: &[f64]) -> Vec<f64> {
+    let width = x.len();
+    let mut result = Vec::with_capacity(rows.len() / width);
+    let mut blocks = rows.chunks_exact(4 * width);
+    for block in &mut blocks {
+        let (a, rest) = block.split_at(width);
+        let (b, rest) = rest.split_at(width);
+        let (c, d) = rest.split_at(width);
+        result.extend(dot_four([a, b, c, d], x));
+    }
+    result.extend(
+        blocks
+            .remainder()
+            .chunks_exact(width)
+            .map(|row| dot(row, x)),
+    );
+    result
+}
+
+fn dot_four([a, b, c, d]: [&[f64]; 4], x: &[f64]) -> [f64; 4] {
+    let (a, ar) = a.as_chunks::<4>();
+    let (b, br) = b.as_chunks::<4>();
+    let (c, cr) = c.as_chunks::<4>();
+    let (d, dr) = d.as_chunks::<4>();
+    let (x, xr) = x.as_chunks::<4>();
+    let mut sums = [[0.; 4]; 4];
+    for ((((x, a), b), c), d) in x.iter().zip(a).zip(b).zip(c).zip(d) {
+        for k in 0..4 {
+            sums[0][k] = multiply_add(a[k], x[k], sums[0][k]);
+            sums[1][k] = multiply_add(b[k], x[k], sums[1][k]);
+            sums[2][k] = multiply_add(c[k], x[k], sums[2][k]);
+            sums[3][k] = multiply_add(d[k], x[k], sums[3][k]);
+        }
+    }
+    let mut result = sums.map(|s| (s[0] + s[1]) + (s[2] + s[3]));
+    for ((((x, a), b), c), d) in xr.iter().zip(ar).zip(br).zip(cr).zip(dr) {
+        result[0] += a * x;
+        result[1] += b * x;
+        result[2] += c * x;
+        result[3] += d * x;
+    }
+    result
+}
+
 /// A scaled Euclidean norm, avoiding overflow or underflow in the squares.
 pub(crate) fn norm(x: &[f64]) -> f64 {
     let mut scale: f64 = 0.0;
@@ -387,8 +433,35 @@ fn independent_chunks(
 #[cfg(test)]
 mod tests {
     use super::{
-        STRIP, apply_rotations, dot, independent_chunks, multiply_add, norm, symmetric_eigen,
+        STRIP, apply_rotations, dot, independent_chunks, multiply_add, norm, row_dots,
+        symmetric_eigen,
     };
+
+    #[test]
+    fn batched_row_dots_match_individual_dots_bitwise_with_partial_rows() {
+        for width in [1_usize, 2, 3, 4, 7, 9, 24, 63, 120, 204, 294, 303] {
+            for count in [0, 1, 3, 4, 5, 8, 9] {
+                for scale in [1e-150, 1., 1e150] {
+                    let rows: Vec<_> = (0..count * width + width - 1)
+                        .map(|i| scale * ((i * 19 + 7) % 101) as f64 * 0.01 - 0.5 * scale)
+                        .collect();
+                    let x: Vec<_> = (0..width)
+                        .map(|i| scale * (((i * 13 + 7) % 31) as f64 * 0.04 - 0.6))
+                        .collect();
+                    let expected: Vec<_> =
+                        rows.chunks_exact(width).map(|row| dot(row, &x)).collect();
+                    let actual = row_dots(&rows, &x);
+                    assert_eq!(actual.len(), expected.len());
+                    assert!(
+                        actual
+                            .iter()
+                            .zip(expected)
+                            .all(|(actual, expected)| actual.to_bits() == expected.to_bits())
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn rotation_strips_match_scalar_columns_and_leave_padding_untouched() {

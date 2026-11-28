@@ -109,11 +109,11 @@ pub(super) fn step(hessian: &[f64], gradient: &[f64]) -> Option<Vec<f64>> {
 }
 
 fn product(hessian: &[f64], x: &[f64], shift: f64) -> Vec<f64> {
-    hessian
-        .chunks_exact(x.len())
-        .zip(x)
-        .map(|(row, xi)| dot(row, x) + shift * xi)
-        .collect()
+    let mut product = crate::linalg::row_dots(hessian, x);
+    for (value, xi) in product.iter_mut().zip(x) {
+        *value += shift * xi;
+    }
+    product
 }
 
 // Golub & Van Loan, Matrix Computations [Golub2013Matrix]: symmetric Krylov projection with
