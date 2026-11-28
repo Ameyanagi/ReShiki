@@ -329,12 +329,15 @@ fn diagonalize_tridiagonal(
 
 /// Apply a batch to narrow column strips, retaining the active strip in cache.
 fn apply_rotations(vectors: &mut [f64], n: usize, rotations: &[(usize, f64, f64)]) {
-    independent_chunks(vectors, n * STRIP, n, |group, _| {
-        for tile in group.chunks_exact_mut(n * STRIP) {
+    independent_chunks(vectors, n * STRIP, n, |group, first| {
+        for (strip, tile) in group.chunks_exact_mut(n * STRIP).enumerate() {
+            // Padding is never copied back. Tiny fragment fits and Krylov
+            // models have only 4–9 real columns, rather than a full strip.
+            let width = STRIP.min(n - (first + strip) * STRIP);
             for &(k, cosine, sine) in rotations {
                 let (before, after) = tile.split_at_mut((k + 1) * STRIP);
-                let left = &mut before[k * STRIP..];
-                let right = &mut after[..STRIP];
+                let left = &mut before[k * STRIP..k * STRIP + width];
+                let right = &mut after[..width];
                 for (u, v) in left.iter_mut().zip(right) {
                     let old_u = *u;
                     let old_v = *v;
@@ -383,7 +386,48 @@ fn independent_chunks(
 
 #[cfg(test)]
 mod tests {
-    use super::{dot, independent_chunks, norm, symmetric_eigen};
+    use super::{
+        STRIP, apply_rotations, dot, independent_chunks, multiply_add, norm, symmetric_eigen,
+    };
+
+    #[test]
+    fn rotation_strips_match_scalar_columns_and_leave_padding_untouched() {
+        for n in [4_usize, 9, 47, 64, 65, 769] {
+            let mut expected: Vec<_> = (0..n * n).map(|i| (i % 29) as f64 * 0.03 - 0.4).collect();
+            let padding = -0.375;
+            let mut packed = vec![padding; n.div_ceil(STRIP) * n * STRIP];
+            for (strip, tile) in packed.chunks_exact_mut(n * STRIP).enumerate() {
+                let first = strip * STRIP;
+                let width = STRIP.min(n - first);
+                for (i, row) in tile.chunks_exact_mut(STRIP).enumerate() {
+                    row[..width].copy_from_slice(&expected[i * n + first..i * n + first + width]);
+                }
+            }
+            let rotations = [(0, 0.8, 0.6), (n / 2, 0.6, -0.8), (n - 2, 0., 1.)];
+            for &(k, cosine, sine) in &rotations {
+                for column in 0..n {
+                    let u = expected[k * n + column];
+                    let v = expected[(k + 1) * n + column];
+                    expected[k * n + column] = multiply_add(cosine, u, sine * v);
+                    expected[(k + 1) * n + column] = multiply_add(cosine, v, -sine * u);
+                }
+            }
+            apply_rotations(&mut packed, n, &rotations);
+            for (strip, tile) in packed.chunks_exact(n * STRIP).enumerate() {
+                let first = strip * STRIP;
+                let width = STRIP.min(n - first);
+                for (i, row) in tile.chunks_exact(STRIP).enumerate() {
+                    assert!(
+                        row[..width]
+                            .iter()
+                            .zip(&expected[i * n + first..i * n + first + width])
+                            .all(|(actual, expected)| actual.to_bits() == expected.to_bits())
+                    );
+                    assert!(row[width..].iter().all(|value| *value == padding));
+                }
+            }
+        }
+    }
 
     fn check_eigenpairs(matrix: &[f64], n: usize, tolerance: f64) {
         let (values, vectors) = symmetric_eigen(matrix.to_vec(), n).unwrap();
