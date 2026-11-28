@@ -5,7 +5,7 @@ Component:  axtb, an implementation of the xTB methods (GFN2-xTB, GFN-FF, g-xTB)
 License:    LGPL-3.0-or-later (COPYING.LESSER, with the GPL-3.0 text in COPYING)
 Upstream:   https://github.com/atomsforhumanity/axtb (Colton Hicks)
 Fork:       https://github.com/Ameyanagi/axtb, branch reshiki
-Revision:   9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91
+Revision:   648ca6fe0beea6d3c429a8f6b17f9da85d98692e
 Version:    0.2.0
 Crates:     axtb, axtb-base, axtb-d4, axtb-driver, axtb-gfnff, axtb-gxtb,
             axtb-solvation; with the fork's patched copies of the MIT crates
@@ -18,7 +18,7 @@ permission for its g-xTB parts. CHANGES-reshiki.md is the fork's notice of
 modification: what changed relative to upstream commit
 65d0f64a9a8211f73b0738ff908b7a414975f50b (axtb 0.2.0), and when.
 
-The macOS and Linux desktop releases contain axtb through the Cargo feature
+The Windows, macOS and Linux desktop releases contain axtb through the Cargo feature
 `xtb`. The separate Python package `reshiki-xtb` also contains axtb. The base
 Python package `reshiki` excludes it. Each release that contains
 axtb publishes reshiki-<version>-source.tar.gz on the GitHub release of the

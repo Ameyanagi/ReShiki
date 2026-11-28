@@ -323,7 +323,8 @@ under signed shifts and on rejected pivots.
 
 ReShiki uses the Rust implementation of g-xTB 2.0.1 and its embedded parameter
 tables. The geometry optimizer requests analytic energy gradients from this
-worker. [Pinned Rust implementation](https://github.com/Ameyanagi/axtb/blob/9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91/crates/gxtb/README.md)
+worker. The measurements below used the
+[implementation at revision 9d0388c9](https://github.com/Ameyanagi/axtb/blob/9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91/crates/gxtb/README.md)
 and [upstream 2.0.1 release](https://github.com/grimme-lab/g-xtb/releases/tag/v2.0.1).
 
 Using the upstream program conventions (`--conventions xtb-6.8`) and

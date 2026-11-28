@@ -58,7 +58,7 @@ g-xTB (https://github.com/grimme-lab/g-xtb), GPL-3.0
 
 gemm (https://github.com/sarah-quinones/gemm, https://github.com/sarah-quinones/gemm-x64-v2), MIT
   third_party/gemm-common (0.18.2) and third_party/private-gemm-x86 (0.1.22) are copies of
-  these crates, dependencies of faer, with a patch to their cache-size detection
-  (third_party/README.md). They keep their own LICENSE files. The patch applies to builds of
+  these crates, dependencies of faer, with patches to cache-size detection and x86 matrix-packing
+  storage (third_party/README.md). They keep their own LICENSE files. The patch applies to builds of
   this repository (the axtb program and the Python wheels), not to crates that depend on axtb
   from crates.io.

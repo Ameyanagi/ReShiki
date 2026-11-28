@@ -60,6 +60,16 @@ sources the fork validated (other dependency versions follow ReShiki's own
 lockfile). Only the xtb graph uses `gemm`. The copies are MIT and keep their own
 `LICENSE` files, which the notices include with the fork as their source.
 
+The fork's x86 packing buffers are allocated lazily and bounded by both the
+matrix dimensions and the existing cache-based limit. This keeps a small
+calculation from reserving a whole large last-level cache for each operand.
+The packaged water probe retains its 256 MiB allocator budget; the ordinary
+worker's runtime memory policy, numerical settings and thread counts are unchanged.
+
+Captured numerical fixtures retain the revision that produced them. A pin
+update checks the new engine against those values without relabelling the
+historical calculation provenance.
+
 ## License texts and notices
 
 - `LICENSE` scopes ReShiki's MIT OR Apache-2.0 grant to original ReShiki code

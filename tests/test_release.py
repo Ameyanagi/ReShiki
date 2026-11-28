@@ -808,6 +808,7 @@ while data := sys.stdin.buffer.read(header.size):
             [request["op"] for request in requests], ["hello", "open", "compute", "close"]
         )
         self.assertEqual(requests[1]["conventions"], "axtb")
+        self.assertEqual(requests[1]["heap_bytes"], 256 * 1024 * 1024)
         self.assertIn("xTB worker axtb 0.2.0: water -5.070222289327834 Eh, gradient OK.", summary)
 
     def test_stub_reports_protocol_without_opening_a_session(self):
