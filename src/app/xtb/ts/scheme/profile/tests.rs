@@ -862,7 +862,7 @@ fn rerun_upgrades_old_inference_keys_in_place_without_placing_a_second_figure() 
     assert_eq!(app.tab.doc.graphics.len(), 1);
 }
 
-#[cfg(all(feature = "xtb"))]
+#[cfg(feature = "xtb")]
 #[test]
 fn reopening_a_reordered_drawing_keeps_species_indices_for_retained_energies() {
     let mut app = app();
