@@ -47,6 +47,68 @@ fn actual_termination_reaps_direct_child() {
     assert!(!child.wait().unwrap().success());
     assert!(child.try_wait().unwrap().is_some());
 }
+
+#[cfg(unix)]
+#[test]
+fn output_readiness_wakes_for_both_pipes_and_ignores_drained_eof() {
+    fn chunk(child: &mut Child, errors: bool, expected: &[u8]) {
+        let started = Instant::now();
+        let mut captured = Vec::new();
+        let mut bytes = [0_u8; 128];
+        while captured.len() < expected.len() {
+            child.wait_for_output(Duration::from_secs(3)).unwrap();
+            let result = if errors {
+                child.read_errors(&mut bytes)
+            } else {
+                child.read_output(&mut bytes)
+            };
+            match result {
+                Ok(0) => panic!("Child closed a pipe before its gated output"),
+                Ok(count) => captured.extend_from_slice(&bytes[..count]),
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => (),
+                Err(error) => panic!("Could not read gated output: {error}"),
+            }
+            assert!(started.elapsed() < Duration::from_secs(3));
+        }
+        assert_eq!(captured, expected);
+    }
+
+    let mut command = Command::new("/bin/sh");
+    command.args([
+        "-c",
+        "printf ready >&2; IFS= read -r signal; printf first; IFS= read -r signal; printf second >&2; exec 2>&-; IFS= read -r signal; printf last",
+    ]);
+    let mut child = spawn_session(&mut command, limits()).unwrap();
+    chunk(&mut child, true, b"ready");
+    assert_eq!(child.write_input(b"1\n").unwrap(), 2);
+    chunk(&mut child, false, b"first");
+    assert_eq!(child.write_input(b"2\n").unwrap(), 2);
+    chunk(&mut child, true, b"second");
+    let started = Instant::now();
+    loop {
+        child.wait_for_output(Duration::from_secs(3)).unwrap();
+        match child.read_errors(&mut [0_u8; 1]) {
+            Ok(0) => break,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => (),
+            result => panic!("Unexpected closed diagnostics pipe: {result:?}"),
+        }
+        assert!(started.elapsed() < Duration::from_secs(3));
+    }
+    // stderr has reached EOF while stdout is connected but empty. Its HUP
+    // must not turn every subsequent bounded wait into an immediate wakeup.
+    let started = Instant::now();
+    child.wait_for_output(Duration::from_millis(20)).unwrap();
+    assert!(started.elapsed() >= Duration::from_millis(10));
+    assert!(started.elapsed() < Duration::from_secs(1));
+    assert_eq!(
+        child.read_output(&mut [0_u8; 1]).unwrap_err().kind(),
+        io::ErrorKind::WouldBlock
+    );
+    assert_eq!(child.write_input(b"3\n").unwrap(), 2);
+    chunk(&mut child, false, b"last");
+    child.close_input();
+    assert!(child.wait().unwrap().success());
+}
 #[cfg(target_os = "macos")]
 #[test]
 fn observer_closes_more_than_one_descriptor_batch_and_failed_exec_pipe() {

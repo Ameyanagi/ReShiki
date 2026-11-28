@@ -1,6 +1,6 @@
 //! Pointer releases: finish the active gesture as one edit.
 
-use crate::canvas::hit::{bond_target_with_text, hit_object, plane_endpoint, region_selection};
+use crate::canvas::hit::{BondTarget, hit_object, region_selection};
 use crate::canvas::pick::{CLICK_SLOP_PX, DRAG_SLOP_PX, HANDLE_PICK_PX};
 use crate::canvas::snapping::arrow_endpoint;
 use crate::canvas::{
@@ -470,27 +470,32 @@ impl MoleculeCanvas<'_> {
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .unwrap_or(start);
                 let target = if self.tool == Tool::Arrow {
-                    Ok((
-                        arrow_endpoint(
+                    Ok(BondTarget {
+                        end: arrow_endpoint(
                             start,
                             p,
                             self.bond_drawing.fixed_angles && !state.modifiers.alt(),
                         ),
-                        None,
-                        None,
-                    ))
+                        atom: None,
+                        text: None,
+                        plane: None,
+                    })
                 } else {
-                    bond_target_with_text(
+                    state.scene.borrow_mut().bond_target(
                         self.doc,
-                        origin,
-                        p,
+                        (origin, p),
                         (id, text),
                         12.0 / self.camera.zoom,
                         self.bond_drawing.unconstrained(state.modifiers.alt()),
                         self.tool,
                     )
                 };
-                let (end, target, target_text) = match target {
+                let BondTarget {
+                    end,
+                    atom: target,
+                    text: target_text,
+                    plane,
+                } = match target {
                     Ok(target) => target,
                     Err(reason) => return ControlFlow::Continue(Edit::TextBondRefused(reason)),
                 };
@@ -505,15 +510,7 @@ impl MoleculeCanvas<'_> {
                     }
                 } else if self.tool != Tool::Arrow
                     && target.is_none()
-                    && let Some((id, endpoint)) = id.and_then(|id| {
-                        plane_endpoint(
-                            self.doc,
-                            id,
-                            p,
-                            self.bond_drawing.unconstrained(state.modifiers.alt()),
-                        )
-                        .map(|endpoint| (id, endpoint))
-                    })
+                    && let Some((id, endpoint)) = id.zip(plane)
                 {
                     Edit::PlaneBond(id, endpoint)
                 } else {

@@ -14,7 +14,9 @@ mod charge_placement;
 pub(crate) mod depth_field;
 pub(crate) mod graph;
 mod group_labels;
+mod model_preview;
 pub(crate) use group_labels::clearer_orientation;
+pub use model_preview::ModelScene;
 mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
@@ -2503,6 +2505,7 @@ fn primitives_in_cell(
 struct SceneGraphics<'a> {
     tables: Option<&'a std::collections::HashMap<u64, Vec<Primitive>>>,
     hidden_picture: Option<(u64, usize)>,
+    model_range: Option<&'a std::cell::Cell<(usize, usize)>>,
 }
 
 fn primitives_with_tables(
@@ -2576,7 +2579,11 @@ fn primitives_with_tables(
     push_atom_labels(&mut out, doc, runs, opacity, &halos);
     push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
     out.extend(cells.above);
+    let model_start = out.len();
     out.extend(crate::models3d::primitives(raw));
+    if let Some(range) = options.model_range {
+        range.set((model_start, out.len()));
+    }
     push_arrows_and_annotations(&mut out, doc, cell_text);
     let held: std::collections::HashMap<_, _> = doc
         .graphics

@@ -8,7 +8,7 @@ mod placement_parity_tests;
 mod porphine;
 mod steroids;
 use crate::document::{Atom, Document, Point};
-use crate::editing;
+use crate::editing::{self, PlacementHost};
 pub(crate) use aromatic::show_circles;
 pub use layouts::GROUP as FIGURE_LAYOUTS;
 use serde::{Deserialize, Serialize};
@@ -49,9 +49,9 @@ impl Template {
         doc: &Document,
         point: Point,
     ) -> Result<(Document, Vec<u64>), &'static str> {
-        check_connect_inputs(doc, &self.document, point, None, 1., Anchor::Auto)?;
+        let host = check_connect_inputs(doc, &self.document, point, None, 1., Anchor::Auto)?;
         place_free(
-            doc,
+            host,
             &self.document,
             point,
             None,
@@ -191,7 +191,7 @@ fn place_with_mode_scaled(
     mode: Connection,
 ) -> Result<(Document, Vec<u64>), &'static str> {
     let (part, free_scale) = source;
-    check_connect_inputs(doc, part, point, direction, radius, anchor)?;
+    let host = check_connect_inputs(doc, part, point, direction, radius, anchor)?;
     if mode == Connection::Coordinate {
         return Err(
             "Coordinate in place requires existing atoms; select a donor in the drawing first.",
@@ -200,7 +200,7 @@ fn place_with_mode_scaled(
     let target = doc.nearest(point, radius);
     let bond = target.is_none() && editing::nearest_bond(doc, point, radius).is_some();
     if mode == Connection::Auto || (target.is_none() && !bond) {
-        return place_anchored_scaled(doc, part, point, direction, radius, anchor, free_scale);
+        return place_anchored_scaled(host, part, point, direction, radius, anchor, free_scale);
     }
     match mode {
         Connection::ShareAtom if target.is_none() => {
@@ -211,7 +211,7 @@ fn place_with_mode_scaled(
             return Err("Connect with a bond: choose a template atom and point to a drawing atom.");
         }
         Connection::ShareAtom | Connection::FuseBond => {
-            return place_anchored(doc, part, point, direction, radius, anchor);
+            return place_anchored_scaled(host, part, point, direction, radius, anchor, 1.);
         }
         _ => {}
     }
@@ -236,16 +236,16 @@ fn place_with_mode_scaled(
         .ok_or("The chosen template atom has no available valence for a new bond.")
 }
 
-fn check_connect_inputs(
-    doc: &Document,
+fn check_connect_inputs<'a>(
+    doc: &'a Document,
     part: &Document,
     point: Point,
     direction: Option<Point>,
     radius: f32,
     anchor: Anchor,
-) -> Result<(), &'static str> {
-    if doc.validate().is_err()
-        || part.validate().is_err()
+) -> Result<PlacementHost<'a>, &'static str> {
+    let host = PlacementHost::new(doc).map_err(|_| "Invalid template or attachment geometry.")?;
+    if part.validate().is_err()
         || !point.x.is_finite()
         || !point.y.is_finite()
         || !radius.is_finite()
@@ -255,7 +255,7 @@ fn check_connect_inputs(
     {
         return Err("Invalid template or attachment geometry.");
     }
-    Ok(())
+    Ok(host)
 }
 
 fn eligible(d: &Document, a: &Atom) -> bool {
@@ -635,11 +635,12 @@ pub fn place_anchored(
     radius: f32,
     anchor: Anchor,
 ) -> Result<(Document, Vec<u64>), &'static str> {
-    place_anchored_scaled(doc, part, point, direction, radius, anchor, 1.)
+    let host = PlacementHost::new(doc).map_err(|_| "The drawing or template is invalid.")?;
+    place_anchored_scaled(host, part, point, direction, radius, anchor, 1.)
 }
 
-fn place_anchored_scaled(
-    doc: &Document,
+pub(crate) fn place_anchored_scaled(
+    host: PlacementHost<'_>,
     part: &Document,
     point: Point,
     direction: Option<Point>,
@@ -647,10 +648,11 @@ fn place_anchored_scaled(
     anchor: Anchor,
     free_scale: f32,
 ) -> Result<(Document, Vec<u64>), &'static str> {
-    check_attachment(doc, part, point, direction, radius, anchor)?;
+    check_attachment(part, point, direction, radius, anchor)?;
+    let doc = host.document();
     let (atom, bond) = attachment_target(doc, part, point, radius);
     if atom.is_none() && bond.is_none() {
-        return place_free(doc, part, point, direction, radius, anchor, free_scale);
+        return place_free(host, part, point, direction, radius, anchor, free_scale);
     }
     let mut targets: Vec<_> = atom.into_iter().collect();
     if let Some(index) = bond {
@@ -725,14 +727,13 @@ fn reject_generic_join(
 }
 
 fn check_attachment(
-    doc: &Document,
     part: &Document,
     point: Point,
     direction: Option<Point>,
     radius: f32,
     anchor: Anchor,
 ) -> Result<(), &'static str> {
-    if doc.validate().is_err() || part.validate().is_err() {
+    if part.validate().is_err() {
         return Err("The drawing or template is invalid.");
     }
     if !point.x.is_finite()
@@ -770,7 +771,7 @@ pub(crate) fn attachment_target(
 }
 
 fn place_free(
-    doc: &Document,
+    host: PlacementHost<'_>,
     part: &Document,
     point: Point,
     direction: Option<Point>,
@@ -778,7 +779,6 @@ fn place_free(
     anchor: Anchor,
     free_scale: f32,
 ) -> Result<(Document, Vec<u64>), &'static str> {
-    let mut result = doc.clone();
     let center = anchor
         .point(part)
         .ok_or("The source attachment point is unavailable")?;
@@ -795,8 +795,7 @@ fn place_free(
         let ids = positioned.all_ids();
         editing::transform_about(&mut positioned, &ids, center, free_scale, angle);
     }
-    let ids = editing::append(
-        &mut result,
+    let (result, ids) = host.append(
         &positioned,
         Point::new(point.x - center.x, point.y - center.y),
     );

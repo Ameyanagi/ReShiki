@@ -192,6 +192,53 @@ fn an_optimization_moves_a_preview_then_applies_as_one_undo_step() {
 }
 
 #[test]
+fn consecutive_optimization_steps_reuse_the_preview_and_keep_committed_document() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    let original = app.tab.doc.clone();
+    event(
+        &mut app,
+        Event::Steps {
+            first: 0,
+            energies: vec![-5.06],
+            positions: MOVED.to_vec(),
+        },
+    );
+    let pointer = app
+        .tab
+        .xtb
+        .run
+        .as_ref()
+        .unwrap()
+        .preview
+        .as_deref()
+        .unwrap() as *const Document;
+    event(
+        &mut app,
+        Event::Steps {
+            first: 1,
+            energies: vec![-5.07],
+            positions: START.to_vec(),
+        },
+    );
+    assert_eq!(
+        app.tab
+            .xtb
+            .run
+            .as_ref()
+            .unwrap()
+            .preview
+            .as_deref()
+            .unwrap() as *const Document,
+        pointer,
+    );
+    assert_eq!(model(app.display_document()), f32s(&START));
+    assert_eq!(app.tab.doc, original);
+    let _ = app.update(Message::Escape);
+    assert!(app.xtb_preview().is_none());
+    assert_eq!(app.tab.doc, original);
+}
+
+#[test]
 fn optfreq_stores_the_vibrations_and_applies_geometry_as_one_undo_step() {
     let (mut app, _) = water(CalcTask::OptFreq);
     event(

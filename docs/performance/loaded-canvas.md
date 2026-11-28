@@ -8,6 +8,130 @@ content outside the viewport as well as visible content.
 
 ## Reproduction
 
+### November 2026 desktop update
+
+On the Apple M4 with the 16-copy gallery (7,728 atoms), 30 warmed samples
+of the on-screen preview gave the following CPU preparation times. The
+baseline was `e9e69270f`. Both builds used the arm64 desktop distribution
+profile with thin LTO, the same viewport and the same headless renderer.
+
+| Moving pointer | Baseline median / p95 | Optimized median / p95 |
+| -------------- | --------------------: | ---------------------: |
+| Bond drag      |    111.32 / 112.04 ms |       17.86 / 18.02 ms |
+| Ring preview   |      49.39 / 49.69 ms |       25.04 / 26.06 ms |
+
+The bond preview, overlay and release share the aromatic plane for the drag
+source and the resolved endpoint at the current pointer position. Ring
+placement indexes existing atom IDs once when deciding which bonds to tint.
+At the first seven checkpoints (`4abf2ba81`), moving a ring preview exceeded
+the 16.7 ms frame budget at 60 Hz. Pixel comparisons against full redraws passed.
+
+An xTB coordinate update can reuse the static primitives on either side of
+the model in paint order. With the 24-atom caffeine control and 16 gallery
+copies arranged in a grid, the same build took 41.00 ms median to prepare a
+fresh scene and 0.96 ms with the retained scene. With caffeine alone those
+times were 0.035 and 0.028 ms. Replaying the audit's original caffeine model
+with 16 galleries in a single row took 146.80 ms for full primitive generation
+and 0.60 ms for the coordinate-only update (20 warmed samples).
+Tables, crystals and model-linked diagrams
+use the full scene path because they can paint geometry outside the model.
+These timings measure scene preparation. GPU presentation adds further work.
+
+```sh
+cargo test --release --locked --bin reshiki canvas::performance::manual_preview_workloads -- --ignored --exact --nocapture
+cargo test --release --locked --bin reshiki canvas::cache::model_tests::manual_model_coordinate_scene_workloads -- --ignored --exact --nocapture
+```
+
+### Moving previews on caption-heavy drawings
+
+A profile of moving a benzene ring on the 16-copy gallery showed repeated
+caption shaping during pointer picking and three validations of the same host
+drawing inside ring placement. The canvas now retains the dimensions of
+ordinary captions across pointer positions. An edit or a runtime font change
+invalidates the measurements. Table drawings keep their cell-specific wrapping
+and clipping. The ring and template placement code carries a checked borrow of
+the host through the operation and validates the fragment after positioning.
+
+On the Apple M4, free benzene placement alone fell from 14.13 to 6.13 ms on
+the 7,728-atom gallery and from 0.66 to 0.35 ms on a single copy. Each number
+is the median of four run medians with 30 warmed samples each, alternating
+the first PR build (`4abf2ba81`) and the follow-up. The model's 634 ring and
+2,530 template placement cases gave identical resulting documents, selected
+IDs and rejection messages across the two builds.
+
+The full preview benchmark alternated the same two macOS builds twice, with
+30 warmed samples per run. The table gives the median of each build's two
+run medians for CPU preparation with the gallery visible and the pointer moving
+over nearby paper or dragging from a gallery atom.
+
+| Interaction          | First seven checkpoints | Follow-up |
+| -------------------- | ----------------------: | --------: |
+| Move a ring preview  |                25.04 ms |  10.33 ms |
+| Move a template      |                25.37 ms |  10.59 ms |
+| Drag a bond          |                17.82 ms |  11.80 ms |
+| Hold a ring in place |                 7.33 ms |   1.37 ms |
+
+Across the two follow-up runs, the ring preview's 95th percentile was
+10.52–10.54 ms and the bond drag's was 12.00–12.05 ms. GPU presentation and
+display latency are outside these measurements.
+
+To isolate caption measurements, the follow-up binary also ran the same
+pointer queries with and without cached text dimensions. The median fell
+from 6.54 to 0.57 ms for hover and from 6.69 to 0.58 ms for bond targeting.
+
+```sh
+cargo test --release --locked --bin reshiki canvas::hit::caption_tests::manual_caption_hit_workloads -- --ignored --exact --nocapture
+```
+
+### Overlap checks during bond drags
+
+Profiling the `4d1660cbd` build on the same gallery showed that 916 of 2,084
+sampled stacks were checking whether a moving fragment could paint over
+retained artwork. One frame had 896 bounds for the fragment and 23,810 for
+the surrounding drawing. ReShiki now groups retained bounds in a spatial
+tree. A missed branch skips every rectangle in it. Touching bounds still
+count as an overlap and force a full redraw when paint order matters.
+Drawings with up to 64 retained bounds use the linear scan.
+
+The tree indexes only bounds and preserves scene paint order. On the 16-copy
+case its nodes occupied about 320 KiB, in addition to the existing retained
+rectangles. Constructing the index has a one-time cost. On one gallery copy
+it took roughly 0.01–0.02 ms more to construct and query than the linear
+scan, which subsequent queries recovered. A separate pixel test checks that
+a translucent foreground rectangle still paints over a moving bond on the
+first draw, a repeat draw, an edit and undo.
+
+Extracting the fragment used to copy every atom, bond and caption in the
+drawing before discarding most of them. It now copies only objects that
+pass the existing selection and dependency rules. When at least half the
+object IDs are requested, it reserves room in the output vectors to avoid
+repeated reallocation. This matters when retaining almost the whole drawing
+as well as when copying a small selection.
+
+We compared the public extraction API on 209 drawing fixtures. All 844
+successful selections gave the same document and metadata, including runtime
+canvas IDs and embedded definitions. The other 1,063 selections gave the same
+refusal as the previous build.
+
+On the 7,728-atom gallery, these are median CPU draw times from two
+interleaved 30-frame runs per build on the Apple M4.
+
+| Interaction     | At `4d1660cbd` | With indexed bounds and selected-object copying |
+| --------------- | -------------: | ----------------------------------------------: |
+| Drag a bond     |       11.79 ms |                                         5.35 ms |
+| Move a ring     |       10.31 ms |                                         9.30 ms |
+| Move a template |       10.53 ms |                                         9.64 ms |
+| Move a fragment |        5.53 ms |                                         4.56 ms |
+
+In isolation, extracting a new six-atom ring from this gallery fell from
+1.10 to 0.30 ms. Extracting the entire drawing including the ring rose from
+1.50 to 1.61 ms. The latter is the measured cost of the change for a dense
+selection. A further experiment could translate a prepared ring preview
+across empty paper, then compare pixels and committed coordinates at the
+transition to snapping or fusion.
+
+### Original loaded-canvas workloads
+
 Use a release build, an otherwise idle machine, and the same renderer on both
 revisions. The canvas benchmark warms each operation three times, then reports median,
 p95, and mean over 20 iterations. Set `RESHIKI_PERF_ITERATIONS` to change that
@@ -92,7 +216,7 @@ the drag measurements cover preview updates, not the mouse-release commit.
 - Glyph outlines were regenerated while panning and dragging. Position-independent
   outlines are keyed by text, font, size, zoom, weight, slant, and color. The cache
   has an eight MiB accounting budget for keys and path events, plus a 2,048-entry
-  cap. It clears when either limit is reached. Oversize entries render without
+  cap. The current cache evicts the least recently used outlines as it fills. Oversize entries render without
   being retained. Bounds conservatively include Bézier control points and an
   antialiasing margin for viewport culling. Underlines remain separate geometry.
 - A whole-document translation preserves relative geometry, so its preview uses
@@ -258,10 +382,9 @@ Milliseconds, the median over runs of each run's median of 20 iterations:
 | Pan at 50%                 |      2.06 |     0.10 |      2.58 |     0.57 |       8.12 |      5.32 |
 | Unchanged redraw, onscreen |      0.86 |     0.83 |      5.58 |     5.47 |       27.8 |      26.9 |
 
-Each workload's run medians stayed within 8% of each other, most within 3%. The preview rows still grow
-with the drawing, because every frame builds the preview document and checks
-it against the whole drawing (see [Remaining cost](#remaining-cost)). "Still"
-redraws the same pointer position, and costs as much as a moving pointer. In
+Each workload's run medians stayed within 8% of each other, most within 3%. In
+this revision every frame built and checked the preview document. Redrawing
+the same pointer position cost as much as a moving pointer. In
 `loaded_canvas_workloads` (two runs each), partial drags fell from 4.81 to
 0.64 ms at 1× and from 21.1 to 2.59 ms at 4×, dragging everything from 0.96 to
 0.36 ms at 1× and 2.55 to 1.82 ms at 4×, and its pan from 1.06 to 0.44 ms at 1×.
@@ -269,12 +392,13 @@ Draws, hits and zoom stayed within 4%.
 
 ### Remaining cost
 
-A preview frame still builds the preview document and checks it against the
-drawing, even when the pointer has not moved since the last frame. An earlier
+The current canvas reuses completed ring, template, bond, equipment and move
+previews while their inputs stay the same. Moving the pointer still requires
+a new preview. An earlier
 profile at 16× on this Mac, taken while other builds ran, found placing the
 benzene ring took about 40 ms (12 ms of it validating the whole drawing),
 copying the drawing about 3 ms, and the editor markers about 6 ms. A bond drag
-still costs about 170 ms at 16×. The first frame
+took about 170 ms at 16× in that revision. The first frame
 of a preview that changes an existing molecule builds the scene of the rest once.
 
 Inserting polyalanine-200 (1,001 atoms) from SMILES, measured with

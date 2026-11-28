@@ -404,6 +404,12 @@ impl Child {
     pub fn read_errors(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         read(&mut self.errors, bytes)
     }
+    /// Synchronous PIPE_NOWAIT handles have no output-readiness event. Retain
+    /// the caller's bounded polling interval on this transport.
+    pub fn wait_for_output(&self, timeout: std::time::Duration) -> io::Result<()> {
+        std::thread::sleep(timeout);
+        Ok(())
+    }
     pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         if self.status.is_none() {
             // SAFETY: owned process handle remains live; zero timeout cannot block.

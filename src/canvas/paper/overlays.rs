@@ -1,8 +1,6 @@
 //! Editing aids drawn over the document: handles, notices and badges, gesture outlines and hover, the erase cursor, the selection box and tilt bounds.
 
-use crate::canvas::hit::{
-    bond_target_with, bond_target_with_text, bond_text_at, hit_selection_cached,
-};
+use crate::canvas::hit::{bond_target_with, bond_text_at, hit_selection_cached};
 use crate::canvas::overlay::{ACCENT, ACCENT_STRONG, ACCENT_TINT};
 use crate::canvas::{
     Camera, Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers,
@@ -1155,21 +1153,20 @@ impl MoleculeCanvas<'_> {
                 let origin = id
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .unwrap_or(*start);
-                let target = bond_target_with_text(
+                let target = state.scene.borrow_mut().bond_target(
                     self.doc,
-                    origin,
-                    self.camera.world(p, bounds),
+                    (origin, self.camera.world(p, bounds)),
                     (*id, *text),
                     12. / self.camera.zoom,
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
                     self.tool,
                 );
-                let Ok((_, _, target_text)) = target else {
+                let Ok(target) = target else {
                     // A refused caption owns the drop: do not draw a fallback
                     // snapped bond through it or toward a different atom.
                     return ControlFlow::Break(());
                 };
-                if let Some(text) = target_text {
+                if let Some(text) = target.text {
                     markers::Markers::text_hover(self.doc, text, frame, self.camera, bounds);
                 }
             }

@@ -286,6 +286,12 @@ fn wrapped_caption_rows_use_the_same_turned_layout_as_the_scene() {
     let before = doc.annotations.clone();
     assert_eq!(hit_object(&doc, point, 0.), Some(1));
     assert_eq!(bond_text_at(&doc, point, 0.), Some(1));
+    let mut cache = crate::canvas::cache::SceneCache::default();
+    assert!(cache.caption_sizes(&doc).is_none());
+    assert_eq!(
+        crate::canvas::hit::hit_selection_cached(&doc, point, 0., &mut cache),
+        vec![1]
+    );
     assert_eq!(doc.annotations, before);
 }
 
@@ -445,6 +451,7 @@ fn no_table_and_distant_candidate_checks_leave_the_ownership_index_unbuilt() {
             8.,
             false,
             &clips,
+            None,
         ),
         None
     );

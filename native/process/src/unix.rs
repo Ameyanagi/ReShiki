@@ -66,6 +66,8 @@ pub(super) fn spawn(command: &mut Command, limits: Limits, _persistent: bool) ->
     let mut child = Child {
         raw,
         limits,
+        output_closed: false,
+        errors_closed: false,
         terminated: false,
         status: None,
     };
@@ -226,6 +228,8 @@ unsafe fn close_observer_descriptors(queue: i32, ack: i32, max_fd: i32) -> bool 
 pub struct Child {
     raw: std::process::Child,
     limits: Limits,
+    output_closed: bool,
+    errors_closed: bool,
     terminated: bool,
     status: Option<ExitStatus>,
 }
@@ -244,18 +248,68 @@ impl Child {
         self.raw.stdin.take();
     }
     pub fn read_output(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
-        self.raw
+        let count = self
+            .raw
             .stdout
             .as_mut()
             .ok_or_else(|| io::Error::other("Output closed"))?
-            .read(bytes)
+            .read(bytes)?;
+        self.output_closed |= count == 0 && !bytes.is_empty();
+        Ok(count)
     }
     pub fn read_errors(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
-        self.raw
+        let count = self
+            .raw
             .stderr
             .as_mut()
             .ok_or_else(|| io::Error::other("Diagnostics closed"))?
-            .read(bytes)
+            .read(bytes)?;
+        self.errors_closed |= count == 0 && !bytes.is_empty();
+        Ok(count)
+    }
+    /// Wait for output or diagnostics, bounded by the caller's supervision
+    /// interval. Pipes already drained to EOF do not cause repeated wakeups.
+    pub fn wait_for_output(&self, timeout: std::time::Duration) -> io::Result<()> {
+        let mut descriptors = [
+            libc::pollfd {
+                fd: self
+                    .raw
+                    .stdout
+                    .as_ref()
+                    .filter(|_| !self.output_closed)
+                    .map_or(-1, AsRawFd::as_raw_fd),
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: self
+                    .raw
+                    .stderr
+                    .as_ref()
+                    .filter(|_| !self.errors_closed)
+                    .map_or(-1, AsRawFd::as_raw_fd),
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+        // Round down so readiness waiting cannot extend a request deadline.
+        let milliseconds = timeout.as_millis().min(i32::MAX as u128) as i32;
+        // SAFETY: both descriptors borrow this owned child for the duration of
+        // poll; its fixed-size writable array remains live and correctly sized.
+        let result = unsafe {
+            libc::poll(
+                descriptors.as_mut_ptr(),
+                descriptors.len() as libc::nfds_t,
+                milliseconds,
+            )
+        };
+        if result < 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::Interrupted {
+                return Err(error);
+            }
+        }
+        Ok(())
     }
     pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         if self.status.is_some() {

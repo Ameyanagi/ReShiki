@@ -167,6 +167,7 @@ explains how the crates and modules fit together.
 - `src/app/object_toolbar.rs`: Align, distribute, order, flip and rotate at the right end of the Select context row.
 - `src/app/office.rs`: An Office save target belongs to its document tab, not to the whole window.
 - `src/app/optimization.rs`: Detached, single-flight 3D optimization sessions.
+- `src/app/optimization/bench.rs`: Opt-in comparison of the production live-relaxation schedule and fixed-20 requests, using the packaged geometry worker and identical seeded starts.
 - `src/app/pages.rs`
 - `src/app/palettes.rs`: Compact visual flyouts for toolbar families.
 - `src/app/performance.rs`: Opt-in, release-mode timings of editing work on the event-loop thread.
@@ -295,6 +296,7 @@ explains how the crates and modules fit together.
 - `src/canvas/guides.rs`: Canvas-only measuring aids; coordinates share the drawing/export scale.
 - `src/canvas/hit.rs`: Hit testing
 - `src/canvas/hit/table.rs`: Pointer-local table clipping.
+- `src/canvas/hit/target_cache.rs`: One bond drag's target and source plane, invalidated with the scene's document.
 - `src/canvas/input.rs`: Pointer and keyboard events on the molecule canvas.
 - `src/canvas/input/equipment_trial.rs`: Pointer ownership for the disposable test piece, separate from drawing gestures.
 - `src/canvas/input/motion.rs`: Cursor motion
@@ -999,6 +1001,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/scene/depth_field.rs`: Depth interpolation for scene ink and view-occlusion geometry.
 - `crates/model/src/scene/graph.rs`: Atom and bond lookups by atom ID, built once per scene stage instead of scanning the whole drawing for every atom or bond.
 - `crates/model/src/scene/group_labels.rs`: Decisions made when a chemical label is placed, using its actual glyph ink.
+- `crates/model/src/scene/model_preview.rs`: Keep the drawing's expensive bond and label scene while a molecular model moves.
 - `crates/model/src/scene/occlusion.rs`: Vector ink sources for chemical depth occlusion.
 - `crates/model/src/scene/performance.rs`: Opt-in release-mode measurements of how model queries grow with the drawing.
 - `crates/model/src/scene/projected_bonds.rs`: Secondary rails in a retained ring face, projected without rescaling XY.

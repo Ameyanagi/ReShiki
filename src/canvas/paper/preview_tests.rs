@@ -313,6 +313,63 @@ async fn preview_fragments_match_whole_previews() {
     };
     let ((fragment, _), (whole, _)) = (shot(&canvas, &state, true), shot(&canvas, &state, false));
     assert!(fragment == whole, "the attached number stayed where it was");
+
+    // A translucent foreground shape must still paint over a moving molecule.
+    // Reuse one canvas state through redraws, an ink edit and undo so the retained
+    // index cannot make the preview use a stale separation decision.
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-240., 0.));
+    let b = doc.add_atom("N", World::new(-200., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    for i in 0..80 {
+        doc.add_atom("*", World::new(2000. + i as f32 * 40., 2000.));
+    }
+    let mut foreground = reshiki::graphics::Graphic::dragged(
+        doc.next_id(),
+        reshiki::graphics::GraphicKind::Rectangle,
+        World::new(-20., -40.),
+        World::new(80., 40.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    foreground.layer = 1;
+    foreground.style.fill = Some(reshiki::palette::Color::Custom([220, 70, 40]));
+    foreground.style.effects.opacity = Some(0.4);
+    doc.graphics.push(foreground);
+    let original = doc.clone();
+    let selected = [a, b];
+    let camera = Camera {
+        center: World::default(),
+        zoom: 1.25,
+    };
+    let mut state = State {
+        gesture: Some(Gesture::Move {
+            start: World::new(-240., 0.),
+            ids: selected.to_vec(),
+            clicked: selected.to_vec(),
+        }),
+        ..Default::default()
+    };
+    for stage in 0..5 {
+        match stage {
+            3 => doc.graphics[0].origin = doc.graphics[0].origin.offset(0., 200.),
+            4 => doc = original.clone(),
+            _ => {}
+        }
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.camera = camera;
+        canvas.tool = Tool::Select;
+        canvas.smart_guides = false;
+        canvas.selected = &selected;
+        let target = World::new(if stage == 0 { -140. } else { 0. }, 0.);
+        state.cursor = Some(camera.screen(target, bounds));
+        let (cold, _) = shot(&canvas, &state, true);
+        let (warm, _) = shot(&canvas, &state, true);
+        let (whole, _) = shot(&canvas, &state, false);
+        assert!(cold == whole, "foreground stage {stage}, first draw");
+        assert!(warm == whole, "foreground stage {stage}, retained redraw");
+    }
 }
 
 #[tokio::test]

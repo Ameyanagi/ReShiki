@@ -1226,6 +1226,7 @@ fn write_fake_worker(dir: &Path, body: &str) -> (std::path::PathBuf, std::path::
 fn write_scripted_worker(
     dir: &Path,
     responses: &[&[u8]],
+    finish: &str,
 ) -> (std::path::PathBuf, std::path::PathBuf) {
     use std::fmt::Write;
 
@@ -1249,7 +1250,7 @@ read_request() {
         )
         .expect("write script");
     }
-    body.push_str("exec sleep 30\n");
+    body.push_str(finish);
     write_fake_worker(dir, &body)
 }
 
@@ -1302,7 +1303,11 @@ fn fake_opened(open: &Open, basis_functions: Option<u32>) -> Opened {
 
 #[cfg(unix)]
 fn open_scripted_worker(dir: &Path, open: &Open, opened: &Opened, next: &[u8]) -> Session {
-    let (script, _) = write_scripted_worker(dir, &[&hello_frame(), &ok_frame(2, opened), next]);
+    let (script, _) = write_scripted_worker(
+        dir,
+        &[&hello_frame(), &ok_frame(2, opened), next],
+        "exec sleep 30",
+    );
     let cancel = Cancel::default();
     let (mut session, _) = Session::start(&script, limits(), &cancel).expect("fake worker hello");
     session.open(open, &cancel).expect("open fake worker");
@@ -1343,7 +1348,7 @@ fn cancel_after_request(
 #[test]
 fn cancellation_during_hello_kills_and_reaps_the_worker() {
     let dir = tempfile::tempdir().expect("fake worker folder");
-    let (script, pid_file) = write_scripted_worker(dir.path(), &[&[]]);
+    let (script, pid_file) = write_scripted_worker(dir.path(), &[&[]], "exec sleep 30");
     let watchdog_pid = pid_file.clone();
     let watchdog = PidWatchdog::from_pid(
         move || fake_worker_pid(&watchdog_pid),
@@ -1395,9 +1400,42 @@ fn cancellation_during_close_kills_and_reaps_the_worker() {
 
 #[cfg(unix)]
 #[test]
+fn close_checks_trailing_output_and_exit_status_after_the_acknowledgement() {
+    for (case, finish) in [
+        ("normal", "sleep 0.02; exit 0"),
+        ("extra output", "sleep 0.02; printf x"),
+        ("failed exit", "sleep 0.02; echo 'close failed' >&2; exit 7"),
+    ] {
+        let dir = tempfile::tempdir().expect("fake worker folder");
+        let (script, _) = write_scripted_worker(
+            dir.path(),
+            &[&hello_frame(), &ok_frame(2, &protocol::Closed {})],
+            finish,
+        );
+        let cancel = Cancel::default();
+        let (session, _) = Session::start(&script, limits(), &cancel).expect("fake worker hello");
+        let pid = session.pid();
+        let watchdog = PidWatchdog::from_pid(move || Some(pid), Duration::from_secs(5));
+        let result = session.close(&cancel);
+        watchdog.finish();
+        match case {
+            "normal" => result.expect("clean exit"),
+            "extra output" => assert!(matches!(result, Err(Error::Protocol(_))), "{result:?}"),
+            _ => assert!(
+                matches!(result, Err(Error::Exited { status, ref stderr })
+                    if status.code() == Some(7) && stderr.contains("close failed")),
+                "{result:?}"
+            ),
+        }
+        assert_pid_gone(pid);
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn cancellation_before_hello_skips_spawning_the_worker() {
     let dir = tempfile::tempdir().expect("fake worker folder");
-    let (script, pid_file) = write_scripted_worker(dir.path(), &[&hello_frame()]);
+    let (script, pid_file) = write_scripted_worker(dir.path(), &[&hello_frame()], "exec sleep 30");
     let cancel = Cancel::default();
     cancel.cancel();
     for executable in [script, dir.path().join("missing-worker")] {

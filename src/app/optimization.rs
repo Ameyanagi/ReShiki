@@ -12,10 +12,12 @@ use reshiki::geometry::{
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 const BATCH_ITERATIONS: u32 = 20;
-const MAX_RELAXATION_BATCHES: u32 = 50;
-const MAX_STAGNANT_BATCHES: u32 = 8;
+const MAX_RELAXATION_ITERATIONS: u32 = 1000;
+const RELAXATION_BATCH_TARGET: Duration = Duration::from_millis(200);
+const MAX_STAGNANT_ITERATIONS: u32 = 160;
 const ENERGY_PROGRESS_ABSOLUTE: f64 = 1e-6;
 const ENERGY_PROGRESS_RELATIVE: f64 = 1e-8;
 
@@ -136,9 +138,10 @@ impl RelaxationPause {
 struct Relaxation {
     field: Option<ForceField>,
     pins: Vec<Pin>,
-    batches: u32,
+    iterations: u32,
+    next_iterations: u32,
     best_energy: Option<f64>,
-    stagnant_batches: u32,
+    stagnant_iterations: u32,
     paused: Option<RelaxationPause>,
 }
 
@@ -163,24 +166,50 @@ impl Relaxation {
         true
     }
 
-    fn completed(&mut self, result: &Optimized) -> Option<RelaxationPause> {
+    fn begin_batch(&mut self, dragging: bool) -> u32 {
+        // Each call starts a new BFGS history. Give stable constraints longer
+        // continuous runs, while moving targets keep the short interactive batch.
+        let iterations = if dragging {
+            BATCH_ITERATIONS
+        } else {
+            self.next_iterations.max(BATCH_ITERATIONS)
+        };
+        let iterations = iterations
+            .min(MAX_RELAXATION_ITERATIONS.saturating_sub(self.iterations))
+            .min(MAX_STAGNANT_ITERATIONS.saturating_sub(self.stagnant_iterations));
+        self.iterations += iterations;
+        iterations
+    }
+
+    fn completed(
+        &mut self,
+        result: &Optimized,
+        iterations: u32,
+        elapsed: Duration,
+    ) -> Option<RelaxationPause> {
         if result.converged {
             return None;
         }
+        // Wall time includes worker startup and preparation. Grow at most 2x
+        // per completed request; expensive molecules stay at the original size.
+        let timed_iterations = (u128::from(iterations) * RELAXATION_BATCH_TARGET.as_nanos()
+            / elapsed.as_nanos().max(1))
+        .min(u128::from(MAX_STAGNANT_ITERATIONS)) as u32;
+        self.next_iterations = timed_iterations.min(iterations * 2).max(BATCH_ITERATIONS);
         let best = self.best_energy.unwrap_or(result.initial_energy);
         let tolerance = ENERGY_PROGRESS_ABSOLUTE + ENERGY_PROGRESS_RELATIVE * best.abs();
         if result.energy < best - tolerance {
             self.best_energy = Some(result.energy);
-            self.stagnant_batches = 0;
+            self.stagnant_iterations = 0;
         } else {
             // Compare against the best energy, so small improvements can add
             // up across batches instead of repeatedly resetting the baseline.
             self.best_energy = Some(best);
-            self.stagnant_batches = self.stagnant_batches.saturating_add(1);
+            self.stagnant_iterations = self.stagnant_iterations.saturating_add(iterations);
         }
-        if self.batches >= MAX_RELAXATION_BATCHES {
+        if self.iterations >= MAX_RELAXATION_ITERATIONS {
             Some(RelaxationPause::Limit)
-        } else if self.stagnant_batches >= MAX_STAGNANT_BATCHES {
+        } else if self.stagnant_iterations >= MAX_STAGNANT_ITERATIONS {
             Some(RelaxationPause::Stalled)
         } else {
             None
@@ -195,6 +224,8 @@ struct Flight {
     drag: Option<(u64, Point3)>,
     pins: Vec<Pin>,
     field: ForceField,
+    iterations: u32,
+    started: iced::time::Instant,
 }
 
 #[derive(Clone, Copy)]
@@ -465,6 +496,11 @@ impl Session {
         let pins = self.constraints();
         let fixed = pins.clone();
         let drag = self.drag.map(|drag| (drag.atom, drag.target));
+        let iterations = if work == Work::Relax {
+            self.relaxation.begin_batch(self.drag.is_some())
+        } else {
+            0
+        };
         self.pending = false;
         let task = Task::perform(
             async move {
@@ -473,7 +509,7 @@ impl Session {
                     (Work::Generate, _) => client.generate(&prepared, field).await,
                     (Work::Relax, Some(conformer)) => {
                         client
-                            .relax(&prepared, conformer, field, &pins, BATCH_ITERATIONS)
+                            .relax(&prepared, conformer, field, &pins, iterations)
                             .await
                     }
                     (Work::Apply, Some(conformer)) => {
@@ -495,10 +531,9 @@ impl Session {
             drag,
             pins: fixed,
             field,
+            iterations,
+            started: iced::time::Instant::now(),
         });
-        if work == Work::Relax {
-            self.relaxation.batches = self.relaxation.batches.saturating_add(1);
-        }
         task
     }
 
@@ -526,7 +561,7 @@ impl Session {
             && self.running
             && (!self.converged || self.pending)
         {
-            if self.flight.is_none() && self.relaxation.batches >= MAX_RELAXATION_BATCHES {
+            if self.flight.is_none() && self.relaxation.iterations >= MAX_RELAXATION_ITERATIONS {
                 self.pause_relaxation(RelaxationPause::Limit);
                 return Task::none();
             }
@@ -872,7 +907,11 @@ impl App {
             session.sync_relaxation();
             if flight.work == Work::Relax
                 && session.relaxation.matches(flight.field, &flight.pins)
-                && let Some(reason) = session.relaxation.completed(&result)
+                && let Some(reason) = session.relaxation.completed(
+                    &result,
+                    flight.iterations,
+                    flight.started.elapsed(),
+                )
             {
                 session.pause_relaxation(reason);
                 self.status = reason.status().into();
@@ -969,6 +1008,9 @@ impl App {
                 return Task::batch([session.dispatch(Work::Apply), super::focus_drawing()]);
             }
             Action::Field(field) => {
+                if field == session.field {
+                    return Task::none();
+                }
                 session.abort();
                 session.field = field;
                 session.energy = None;
@@ -1376,3 +1418,6 @@ impl App {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod bench;

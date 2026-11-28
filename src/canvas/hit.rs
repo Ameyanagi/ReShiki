@@ -5,6 +5,11 @@ use iced::Vector;
 use reshiki::chains::BondDrawing;
 mod table;
 use table::CellClips;
+mod target_cache;
+pub(super) use target_cache::{BondTarget, BondTargetCache};
+pub(super) type CaptionSizes = [std::cell::OnceCell<(f32, f32)>];
+#[cfg(test)]
+mod caption_tests;
 
 pub(super) fn region_selection(
     doc: &Document,
@@ -19,7 +24,7 @@ pub(super) fn region_selection(
 /// Bonds are manipulated through their two endpoint atoms; they have no separate ID.
 pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
     hit_selection_with_object(doc, p, r, |clips| {
-        hit_object_in_cells(doc, p, r, foreground_orbital(doc), clips)
+        hit_object_in_cells(doc, p, r, foreground_orbital(doc), clips, None)
     })
 }
 
@@ -31,7 +36,7 @@ pub(super) fn hit_selection_with_orbital(
     foreground_orbital: bool,
 ) -> Vec<u64> {
     hit_selection_with_object(doc, p, r, |clips| {
-        hit_object_in_cells(doc, p, r, foreground_orbital, clips)
+        hit_object_in_cells(doc, p, r, foreground_orbital, clips, None)
     })
 }
 
@@ -43,10 +48,17 @@ pub(super) fn hit_selection_cached(
     cache: &mut super::cache::SceneCache,
 ) -> Vec<u64> {
     let foreground_orbital = cache.foreground_orbital(doc);
+    let captions = cache.caption_sizes(doc);
     hit_selection_with_object(doc, p, r, |clips| {
-        hit_object_with_cycles(doc, p, r, foreground_orbital, clips, |graphic| {
-            cache.cycle_hit(doc, graphic, p, r)
-        })
+        hit_object_with_cycles(
+            doc,
+            p,
+            r,
+            foreground_orbital,
+            clips,
+            captions.as_deref(),
+            |graphic| cache.cycle_hit(doc, graphic, p, r),
+        )
     })
 }
 
@@ -119,7 +131,9 @@ pub(super) fn bond_target_with(
     radius: f32,
     drawing: BondDrawing,
 ) -> (World, Option<u64>) {
-    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source, radius, drawing);
+    let plane = source.and_then(|id| plane_endpoint(doc, id, end, drawing));
+    let (snapped, pointer, near_snap) =
+        bond_targets(doc, start, end, source, radius, drawing, plane);
     match pointer.or(near_snap) {
         Some((position, id)) => (position, Some(id)),
         None => (snapped, None),
@@ -135,6 +149,7 @@ fn bond_targets(
     source: Option<u64>,
     radius: f32,
     mut drawing: BondDrawing,
+    plane: Option<reshiki::projection::growth::Endpoint>,
 ) -> BondTargets {
     let clips = CellClips::new(doc);
     let origin = source.and_then(|id| doc.atom(id));
@@ -147,9 +162,9 @@ fn bond_targets(
         doc.atoms
             .iter()
             .filter(|a| {
-                doc.atom_drawn(a.id)
-                    && Some(a.id) != source
+                Some(a.id) != source
                     && a.position.distance(p) < radius
+                    && doc.atom_drawn(a.id)
                     && clips.allows(a.id, p)
                     && clips.point_visible(a.id, a.position)
                     && !origin.is_some_and(|o| {
@@ -161,8 +176,7 @@ fn bond_targets(
             })
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
     };
-    let snapped = source
-        .and_then(|id| plane_endpoint(doc, id, end, drawing))
+    let snapped = plane
         .map(|p| p.position)
         .unwrap_or_else(|| drawing.endpoint(start, end));
     let target = |p: World| nearest(p).map(|atom| (atom.position, atom.id));
@@ -170,8 +184,16 @@ fn bond_targets(
 }
 /// A caption must own the hit and the pointer must be on its ink, without padding.
 pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
+    bond_text_at_with_captions((doc, None), p, radius)
+}
+
+fn bond_text_at_with_captions(
+    (doc, captions): (&Document, Option<&CaptionSizes>),
+    p: World,
+    radius: f32,
+) -> Option<u64> {
     let clips = CellClips::new(doc);
-    let id = hit_object_in_cells(doc, p, radius, foreground_orbital(doc), &clips)?;
+    let id = hit_object_in_cells(doc, p, radius, foreground_orbital(doc), &clips, captions)?;
     let annotation = doc.annotations.iter().find(|a| a.id == id)?;
     clips.annotation_ink_contains(annotation, p).then_some(id)
 }
@@ -179,6 +201,7 @@ pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
 /// An atom under the pointer wins, then a caption under the pointer, then an
 /// atom at the snapped endpoint: a fixed length never redirects a drop that
 /// lands on caption ink.
+#[cfg(test)]
 pub(super) fn bond_target_with_text(
     doc: &Document,
     start: World,
@@ -188,10 +211,36 @@ pub(super) fn bond_target_with_text(
     drawing: BondDrawing,
     tool: Tool,
 ) -> Result<(World, Option<u64>, Option<u64>), String> {
-    let (snapped, pointer, near_snap) = bond_targets(doc, start, end, source.0, radius, drawing);
+    let plane = source
+        .0
+        .and_then(|id| plane_endpoint(doc, id, end, drawing));
+    bond_target_with_plane(
+        (doc, None),
+        (start, end),
+        source,
+        radius,
+        drawing,
+        tool,
+        plane,
+    )
+}
+
+fn bond_target_with_plane(
+    (doc, captions): (&Document, Option<&CaptionSizes>),
+    points: (World, World),
+    source: (Option<u64>, Option<u64>),
+    radius: f32,
+    drawing: BondDrawing,
+    tool: Tool,
+    plane: Option<reshiki::projection::growth::Endpoint>,
+) -> Result<(World, Option<u64>, Option<u64>), String> {
+    let (start, end) = points;
+    let (snapped, pointer, near_snap) =
+        bond_targets(doc, start, end, source.0, radius, drawing, plane);
     if pointer.is_none()
         && tool.bonds_from_text()
-        && let Some(id) = bond_text_at(doc, end, radius).filter(|id| Some(*id) != source.1)
+        && let Some(id) = bond_text_at_with_captions((doc, captions), end, radius)
+            .filter(|id| Some(*id) != source.1)
     {
         if let Some(reason) = reshiki::atom_text::text_atom_refusal(doc, id) {
             return Err(reason);
@@ -230,7 +279,7 @@ fn hit_object_with_orbital(
     r: f32,
     foreground_orbital: bool,
 ) -> Option<u64> {
-    hit_object_in_cells(doc, p, r, foreground_orbital, &CellClips::new(doc))
+    hit_object_in_cells(doc, p, r, foreground_orbital, &CellClips::new(doc), None)
 }
 
 fn hit_object_in_cells(
@@ -239,8 +288,9 @@ fn hit_object_in_cells(
     r: f32,
     foreground_orbital: bool,
     clips: &CellClips<'_>,
+    captions: Option<&CaptionSizes>,
 ) -> Option<u64> {
-    hit_object_with_cycles(doc, p, r, foreground_orbital, clips, |g| {
+    hit_object_with_cycles(doc, p, r, foreground_orbital, clips, captions, |g| {
         reshiki::cycles::hit(doc, g, p, r)
     })
 }
@@ -251,6 +301,7 @@ fn hit_object_with_cycles(
     r: f32,
     foreground_orbital: bool,
     clips: &CellClips<'_>,
+    captions: Option<&CaptionSizes>,
     mut cycle_hit: impl FnMut(&reshiki::graphics::Graphic) -> bool,
 ) -> Option<u64> {
     let mark = || {
@@ -345,9 +396,18 @@ fn hit_object_with_cycles(
         .or_else(|| {
             doc.annotations
                 .iter()
+                .enumerate()
                 .rev()
-                .find(|a| clips.annotation_contains(a, p))
-                .map(|a| a.id)
+                .find(|(i, a)| {
+                    clips.annotation_contains_with_size(
+                        a,
+                        p,
+                        captions
+                            .and_then(|sizes| sizes.get(*i))
+                            .map(|size| *size.get_or_init(|| a.size())),
+                    )
+                })
+                .map(|(_, a)| a.id)
         })
         .or_else(|| {
             doc.arrows

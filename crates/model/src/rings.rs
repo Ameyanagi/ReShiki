@@ -124,9 +124,7 @@ impl Drawing {
         if !self.length.is_finite() || self.length <= 0. {
             return Err("Ring bond length must be positive and finite.");
         }
-        if doc.validate().is_err() {
-            return Err("The drawing is invalid.");
-        }
+        let host = editing::PlacementHost::new(doc).map_err(|_| "The drawing is invalid.")?;
         let part = self.preset.document(self.length, self.alternate);
         // A nonpositive radius falls through to the attachment checks, which reject it.
         if let Some(toward) = direction.filter(|p| p.distance(point) > radius)
@@ -134,9 +132,19 @@ impl Drawing {
             && doc.nearest(point, radius).is_none()
             && editing::nearest_bond(doc, point, radius).is_none()
         {
-            return dragged(doc, part, point, toward);
+            return dragged(host, part, point, toward);
         }
-        let attach = |part: &Document| templates::place(doc, part, point, direction, radius);
+        let attach = |part: &Document| {
+            templates::place_anchored_scaled(
+                host,
+                part,
+                point,
+                direction,
+                radius,
+                templates::Anchor::Auto,
+                1.,
+            )
+        };
         if !self.connect {
             // Like the atom shortcut, share a terminal carbon when it has room
             // for the ring. Otherwise attach the complete phenyl by one bond.
@@ -228,9 +236,7 @@ impl Drawing {
         let dest = target
             .position
             .offset(length * angle.cos(), length * angle.sin());
-        let mut result = doc.clone();
-        let ids = editing::append(
-            &mut result,
+        let (mut result, ids) = host.append(
             &positioned,
             Point::new(dest.x - origin.x, dest.y - origin.y),
         );
@@ -254,7 +260,7 @@ impl Drawing {
 /// lies counter-clockwise of it on screen, starts at `start` and points at
 /// `toward`. Only the orientation follows the pointer; the size never changes.
 fn dragged(
-    doc: &Document,
+    host: editing::PlacementHost<'_>,
     mut part: Document,
     start: Point,
     toward: Point,
@@ -289,8 +295,7 @@ fn dragged(
     let angle = (toward.y - start.y).atan2(toward.x - start.x) - (b.y - a.y).atan2(b.x - a.x);
     let ids = part.all_ids();
     editing::transform_about(&mut part, &ids, a, 1., angle.to_degrees());
-    let mut result = doc.clone();
-    let added = editing::append(&mut result, &part, Point::new(start.x - a.x, start.y - a.y));
+    let (result, added) = host.append(&part, Point::new(start.x - a.x, start.y - a.y));
     if added.len() != ids.len() {
         return Err("The ring could not be inserted.");
     }

@@ -300,10 +300,13 @@ out, ReShiki may retry with a single conformer. This reduces sampling rather
 than changing the chosen force field. Retries remain bounded. The preview
 identifies existing 3D geometry, cage or alternate starting geometry, and
 single-conformer recovery.
-Subsequent dragging performs bounded local minimization. An unchanged set of
-targets and pins pauses after 50 batches or eight batches without meaningful
-energy improvement. The preview stays editable; moving a target or changing
-pins resumes live calculation, and **Start** deliberately retries. **Stop**
+Subsequent dragging performs bounded local minimization. Held drags use short
+requests. Unchanged constraints allow longer continuous runs, targeting about
+200 ms between updates when the molecule permits it. An unchanged set of
+targets and pins pauses after 1,000 requested iterations or 160 requested
+iterations without meaningful energy improvement. Moving a target or changing
+pins resumes live calculation on the editable preview, and **Start**
+deliberately retries. **Stop**
 keeps calculation stopped until Start. This searches nearby
 conformations rather than guaranteeing a global minimum. The displayed energy
 is in kcal/mol; compare it within the same molecule and force field.
