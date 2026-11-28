@@ -350,7 +350,7 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | Cmd/Ctrl+P                | Print                                                                       |
 | Cmd/Ctrl+I                | Import                                                                      |
 | Cmd/Ctrl+Shift+E          | Open Export                                                                 |
-| Cmd/Ctrl+R                | Run the last xTB calculation on the selected molecule (macOS and Linux)     |
+| Cmd/Ctrl+R                | Run the last xTB calculation on the selected molecule (requires xTB)        |
 | Cmd/Ctrl+C / X / V        | Copy / cut / paste editable selection                                       |
 | Cmd/Ctrl+Shift+C          | Copy as an image                                                            |
 | Cmd/Ctrl+D                | Copy CDXML text                                                             |

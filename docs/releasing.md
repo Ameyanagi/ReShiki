@@ -24,10 +24,11 @@ as a secondary path for testers.
 
 ## xTB and corresponding source
 
-macOS and Linux release builds, including nightlies, enable the `xtb` feature and
-contain axtb under LGPL-3.0-or-later. Windows releases keep the default features
-and report that xTB is not included. Archive verification exercises `--xtb-worker`
-on every platform, including a water energy and gradient when xTB is included.
+Desktop release and nightly builds enable `xtb` on Windows, macOS and Linux.
+Their executables contain axtb under LGPL-3.0-or-later. On Windows, the portable
+ZIP and Inno Setup installer contain the same xTB-enabled application. A signed
+release can be requested independently. Unsigned builds also run calculations.
+Archive verification exercises the packaged worker on a water molecule.
 The [xTB licensing guide](xtb-licensing.md) describes the notices and source terms.
 
 Each release publishes `reshiki-<version>-source.tar.gz` and its `.sha256` on the

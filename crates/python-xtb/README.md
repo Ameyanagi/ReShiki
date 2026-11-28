@@ -2,8 +2,8 @@
 
 `reshiki-xtb` provides the **axtb** engine, licensed under LGPL-3.0-or-later,
 for calculations through `reshiki.xtb`. Install both packages with
-`pip install "reshiki[xtb]"`. Wheels support macOS arm64 and x86_64, and Linux
-x86_64 and aarch64. Windows is not supported yet.
+`pip install "reshiki[xtb]"`. The engine wheel targets Windows x64 and ARM64, macOS arm64 and x86_64, and
+Linux x86_64 and aarch64. On Windows the wheel supplies `reshiki-xtb-worker.exe`.
 
 The wheel carries the complete `COPYING` and `COPYING.LESSER` license texts,
 axtb's `NOTICE`, `CHANGES-reshiki.md`, and `SOURCE` in its consolidated notices.

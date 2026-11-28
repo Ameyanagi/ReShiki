@@ -127,7 +127,7 @@ Results are saved in the `.rsk` file with the molecule and kept small on purpose
 
 ## Platforms and licence
 
-xTB calculations are in the macOS and Linux downloads. Windows builds do not include them yet; they will once Windows code signing covers the calculation engine.
+Windows x64 and ARM64 builds with xTB can calculate from either the portable ZIP or the installed app. Run `reshiki.exe --version` to check for “xTB: included”. Windows releases through 0.17.1 omit the engine. Windows code signing is optional for calculations.
 
 The engine is [axtb](https://github.com/atomsforhumanity/axtb), a Rust implementation of the xTB methods, used through ReShiki's fork. axtb is licensed under the GNU Lesser General Public License, version 3 or later (LGPL-3.0-or-later); ReShiki's own code stays MIT OR Apache-2.0. See [Licence and source](/guide/calculation-scripts/#licence-and-source).
 
