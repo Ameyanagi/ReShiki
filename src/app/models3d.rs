@@ -228,8 +228,22 @@ impl App {
                         .models
                         .get(index)
                         .is_some_and(|model| model.layout == Layout::View);
+                    let drawn = before
+                        .models
+                        .get(index)
+                        .filter(|model| {
+                            model.layout == Layout::Original
+                                && layout == Layout::View
+                                && model.drawn.is_some()
+                        })
+                        .map(|model| models3d::Drawn::of(&before, model));
                     if let Some(model) = self.tab.doc.models.get_mut(index) {
                         model.layout = layout;
+                        if let Some(drawn) = drawn {
+                            // Original is the editable drawing, so its cached
+                            // snapshot must include edits since conversion.
+                            model.drawn = Some(drawn);
+                        }
                     }
                     // Original drawing always means the drawn layout is in
                     // place, so a flattened drawing comes back in this step.

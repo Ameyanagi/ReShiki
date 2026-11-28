@@ -1090,6 +1090,72 @@ fn ordinary_file_projection_uses_the_same_theme_ruler_with_or_without_carbon() {
 }
 
 #[test]
+fn layout_choices_keep_native_edits_without_flattening() {
+    for reopen in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = reshiki::crystal::read(
+            "xyz",
+            include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz"),
+        )
+        .unwrap()
+        .0;
+        app.tab.selected = vec![app.tab.doc.atoms[0].id];
+        show(&mut app, Display::TwoD);
+        assert!(app.tab.doc.models[0].drawn.is_some());
+        if reopen {
+            app.tab.doc = Document::from_native_file(&app.tab.doc.file_json().unwrap()).unwrap();
+            app.tab.path = Some("converted.rsk".into());
+        }
+        let methyl = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .find(|atom| {
+                atom.element == "C"
+                    && app
+                        .tab
+                        .doc
+                        .bonds
+                        .iter()
+                        .filter(|bond| bond.a == atom.id || bond.b == atom.id)
+                        .count()
+                        == 1
+            })
+            .unwrap()
+            .id;
+        app.tab.selected = vec![methyl];
+        let _ = app.update(Message::Canvas(Edit::Move(vec![methyl], 8., -6.)));
+        assert!(!app.model_stale(0), "a drawing edit keeps its 3D model");
+        let edited = app.tab.doc.clone();
+        let expected = edited.atom(methyl).unwrap().position;
+        let start = frames(&app);
+        let _ = app.update(Message::Models3d(Action::Layout(Layout::View)));
+        assert_eq!(app.tab.doc.atoms, edited.atoms);
+        let from_view = app.tab.doc.clone();
+        let _ = app.update(Message::Models3d(Action::Layout(Layout::Original)));
+        assert_eq!(
+            app.tab.doc.atom(methyl).unwrap().position,
+            expected,
+            "choosing layouts without flattening preserves the fresh edit"
+        );
+        assert_eq!(app.tab.doc.atoms, edited.atoms);
+        assert_eq!(app.tab.doc.bonds, edited.bonds);
+        assert_eq!(
+            app.tab.doc.models[0].frame_positions(),
+            edited.models[0].frame_positions()
+        );
+        assert_eq!(frames(&app), start + 2);
+        let original = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, from_view);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, original);
+    }
+}
+
+#[test]
 fn normal_2d_keeps_existing_authored_and_legacy_native_positions() {
     let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
     for legacy in [false, true] {
