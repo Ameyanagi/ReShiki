@@ -8,6 +8,42 @@ content outside the viewport as well as visible content.
 
 ## Reproduction
 
+### November 2026 desktop update
+
+On the Apple M4 with the 16-copy gallery (7,728 atoms), 30 warmed samples
+of the on-screen preview gave the following CPU preparation times. The
+baseline was `e9e69270f`. Both builds used the arm64 desktop distribution
+profile with thin LTO, the same viewport and the same headless renderer.
+
+| Moving pointer | Baseline median / p95 | Optimized median / p95 |
+| -------------- | --------------------: | ---------------------: |
+| Bond drag      |    111.32 / 112.04 ms |       17.86 / 18.02 ms |
+| Ring preview   |      49.39 / 49.69 ms |       25.04 / 26.06 ms |
+
+The bond preview, overlay and release share the aromatic plane for the drag
+source and the resolved endpoint at the current pointer position. Ring
+placement indexes existing atom IDs once when deciding which bonds to tint.
+On this workload, moving a ring preview still takes longer than the 16.7 ms
+frame budget at 60 Hz. Pixel comparisons against full redraws passed.
+
+An xTB coordinate update can reuse the static primitives on either side of
+the model in paint order. With the 24-atom caffeine control and 16 gallery
+copies arranged in a grid, the same build took 41.00 ms median to prepare a
+fresh scene and 0.96 ms with the retained scene. With caffeine alone those
+times were 0.035 and 0.028 ms. Replaying the audit's original caffeine model
+with 16 galleries in a single row took 146.80 ms for full primitive generation
+and 0.60 ms for the coordinate-only update (20 warmed samples).
+Tables, crystals and model-linked diagrams
+use the full scene path because they can paint geometry outside the model.
+These timings measure scene preparation. GPU presentation adds further work.
+
+```sh
+cargo test --release --locked --bin reshiki canvas::performance::manual_preview_workloads -- --ignored --exact --nocapture
+cargo test --release --locked --bin reshiki canvas::cache::model_tests::manual_model_coordinate_scene_workloads -- --ignored --exact --nocapture
+```
+
+### Original loaded-canvas workloads
+
 Use a release build, an otherwise idle machine, and the same renderer on both
 revisions. The canvas benchmark warms each operation three times, then reports median,
 p95, and mean over 20 iterations. Set `RESHIKI_PERF_ITERATIONS` to change that
@@ -92,7 +128,7 @@ the drag measurements cover preview updates, not the mouse-release commit.
 - Glyph outlines were regenerated while panning and dragging. Position-independent
   outlines are keyed by text, font, size, zoom, weight, slant, and color. The cache
   has an eight MiB accounting budget for keys and path events, plus a 2,048-entry
-  cap. It clears when either limit is reached. Oversize entries render without
+  cap. The current cache evicts the least recently used outlines as it fills. Oversize entries render without
   being retained. Bounds conservatively include Bézier control points and an
   antialiasing margin for viewport culling. Underlines remain separate geometry.
 - A whole-document translation preserves relative geometry, so its preview uses
@@ -258,10 +294,9 @@ Milliseconds, the median over runs of each run's median of 20 iterations:
 | Pan at 50%                 |      2.06 |     0.10 |      2.58 |     0.57 |       8.12 |      5.32 |
 | Unchanged redraw, onscreen |      0.86 |     0.83 |      5.58 |     5.47 |       27.8 |      26.9 |
 
-Each workload's run medians stayed within 8% of each other, most within 3%. The preview rows still grow
-with the drawing, because every frame builds the preview document and checks
-it against the whole drawing (see [Remaining cost](#remaining-cost)). "Still"
-redraws the same pointer position, and costs as much as a moving pointer. In
+Each workload's run medians stayed within 8% of each other, most within 3%. In
+this revision every frame built and checked the preview document. Redrawing
+the same pointer position cost as much as a moving pointer. In
 `loaded_canvas_workloads` (two runs each), partial drags fell from 4.81 to
 0.64 ms at 1× and from 21.1 to 2.59 ms at 4×, dragging everything from 0.96 to
 0.36 ms at 1× and 2.55 to 1.82 ms at 4×, and its pan from 1.06 to 0.44 ms at 1×.
@@ -269,12 +304,13 @@ Draws, hits and zoom stayed within 4%.
 
 ### Remaining cost
 
-A preview frame still builds the preview document and checks it against the
-drawing, even when the pointer has not moved since the last frame. An earlier
+The current canvas reuses completed ring, template, bond, equipment and move
+previews while their inputs stay the same. Moving the pointer still requires
+a new preview. An earlier
 profile at 16× on this Mac, taken while other builds ran, found placing the
 benzene ring took about 40 ms (12 ms of it validating the whole drawing),
 copying the drawing about 3 ms, and the editor markers about 6 ms. A bond drag
-still costs about 170 ms at 16×. The first frame
+took about 170 ms at 16× in that revision. The first frame
 of a preview that changes an existing molecule builds the scene of the rest once.
 
 Inserting polyalanine-200 (1,001 atoms) from SMILES, measured with

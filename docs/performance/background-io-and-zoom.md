@@ -57,8 +57,9 @@ The existing scene cache now retains selection markers and caption rectangles in
 world coordinates. Exact document and selected-ID comparisons invalidate them;
 pan/zoom reuse them and offscreen decorations are culled.
 
-A separate glyph cache shares Iced's hinted outlines across text strings. It keeps
-the exact font-size key instead of scaling an outline from another zoom. Shaping,
+A separate glyph cache shares Iced's hinted outlines across text strings. The
+build measured here keyed outlines at the exact font size. Current builds outline
+at quarter-octave zoom steps and scale to the displayed size. Shaping,
 glyph paths, color and bitmap fallback match Iced. Retention is bounded by 2 MiB of
 accounted glyph data and 4,096 entries, in addition to the previous 8 MiB/2,048-entry
 text-outline cache. These accounting limits are not a process-RSS guarantee;

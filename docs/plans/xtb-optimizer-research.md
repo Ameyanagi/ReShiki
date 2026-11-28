@@ -219,6 +219,75 @@ Recorded after each round: its predictions, proposals, and which won or lost.
 
 ## Results
 
+### Desktop follow-up, 28 November 2026
+
+The desktop optimizer sends a gradient request at each trial geometry. The
+electronic calculation already restarts from the preceding wavefunction in the
+same worker. The client used to sleep for up to 5 ms whenever a nonblocking
+read found no data. On macOS and Linux it now wakes when the worker writes its
+reply. This particularly helps small molecules whose gradients finish inside
+one polling interval. The maximum wait between cancellation checks stays 5 ms.
+
+We timed `--cli calculate --task optimize` end to end on an Apple M4.
+
+| Workload                    | Baseline `e9e69270f` | Optimized | Accepted steps, both |
+| --------------------------- | -------------------: | --------: | -------------------: |
+| GFN2 water                  |              64.2 ms |   18.3 ms |                    4 |
+| GFN2 caffeine               |              78.1 ms |   35.1 ms |                    6 |
+| GFN2 caffeine, atom 1 fixed |              78.1 ms |   35.3 ms |                    6 |
+| GFN-FF caffeine             |              80.4 ms |   24.7 ms |                    6 |
+| GFN2 ritonavir (98 atoms)   |              1.814 s |   1.622 s |                   50 |
+
+Each number is the median of five runs after warm-up, alternating builds
+at four requested threads. Every pair produced the same final energy and XYZ,
+including the fixed carbon. The QR eigensolver also skips rotations of unused
+columns. Isolated 4×4 eigensolves fell from 0.97 to 0.84 µs and 9×9 solves
+from 4.19 to 3.60 µs, with identical eigenvalues and eigenvectors. The whole-job timings
+measure both changes together.
+
+Upstream xTB uses an approximate normal-coordinate optimizer for molecules.
+Wang and Song's TRIC includes fragment translations and rotations, which is
+relevant to flexible molecules and complexes. In the 154-start ReShiki
+comparison below, TRIC with the existing stopping rule recovered the tight
+reference energy on 143 starts. The faster energy-and-gradient stopping rule
+recovered it on 113. This follow-up therefore targets time per step and keeps
+the numerical stopping rule. [xTB geometry optimization](https://xtb-docs.readthedocs.io/en/latest/optimization.html)
+and [Wang and Song, 2016](https://doi.org/10.1063/1.4952956).
+
+To check endpoint quality independently, we selected the median-size starting
+geometry from each of the 53 groups in Marek Sierka’s gas-phase GFN2
+benchmark, sorting atom-count ties by case name. The groups cover covalent,
+flexible, open-shell, charged, noncovalent and metal-containing systems.
+Both builds used the manifest charge and low-spin multiplicity consistent
+with the electron count. Five selected cases required one unpaired electron
+although the manifest lists zero, including neutral C₂H₅O (`g55_rse43__P10`).
+The baseline and optimized application converged on all 53 with identical
+accepted step counts, energies and output XYZ at CLI precision (eight decimal
+places in Å). After rigid alignment, 50 of 53 endpoints in each build were
+within 0.1 Å heavy-atom RMSD of the published Hessian-verified geometry.
+[Sierka benchmark, version 3.0](https://zenodo.org/records/21135676).
+
+We also ran a separate trust-radius experiment on one median-size starting
+geometry from each of the dataset's 53 groups. Both settings used the same
+single-threaded GFN2 worker, Normal convergence and low-spin multiplicity
+consistent with electron parity. Increasing the initial/maximum global radius
+from 0.3/0.5 to 0.5/1.0 reduced total gradient calls from 1,887 to 1,812.
+The median stayed at 29. The wider radius improved 32 cases, tied on six and
+cost more calls on 15. All 53 converged under both settings, and 50 of 53
+endpoints under each setting were within 0.1 Å heavy-atom RMSD of the reference.
+
+Individual endpoints explain why the default stays at 0.3/0.5. On
+`g55_alk8__li3_me`, the wider setting finished 326 µEh higher and moved from
+0.0008 to 0.0556 Å RMSD against the reference. On `tm_tmg145__tc_VICLIC` it
+improved the RMSD but needed 113 evaluations compared with 84. A future
+trial could instead adjust the curvature model when fragments move and reuse
+earlier gradient differences in that updated model. Tsypin et al. found that
+both the curvature model and this gradient history contributed to AutoSella-F's
+performance. The benefit in ReShiki still needs a comparable test.
+[Tsypin et al., 2026 preprint, section 4.3](https://arxiv.org/html/2610.06577v2).
+
+### Earlier 154-start comparison
+
 Test set: 77 molecules, 154 starts (Baker-set molecules rebuilt from SMILES, 20 drugs, 4
 floppy chains, 5 rings/macrocycles, 11 ions and radicals, 8 metal complexes; ETKDG and
 ETKDG+MMFF94 starts for SMILES cases, given and noised (σ = 0.1 Å) starts for XYZ cases).
