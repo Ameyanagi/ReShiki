@@ -1,5 +1,5 @@
 //! One bond drag's target and source plane, invalidated with the scene's document.
-use super::{BondDrawing, Document, Tool, World};
+use super::{BondDrawing, CaptionSizes, Document, Tool, World};
 use reshiki::projection::growth::{Endpoint, Plane};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,13 +35,14 @@ pub(in crate::canvas) struct BondTargetCache {
 impl BondTargetCache {
     pub fn resolve(
         &mut self,
-        doc: &Document,
+        context: (&Document, Option<&CaptionSizes>),
         points: (World, World),
         source: (Option<u64>, Option<u64>),
         radius: f32,
         drawing: BondDrawing,
         tool: Tool,
     ) -> Result<BondTarget, String> {
+        let (doc, _) = context;
         let (start, end) = points;
         let key = Key {
             start,
@@ -74,15 +75,14 @@ impl BondTargetCache {
             .plane
             .as_ref()
             .and_then(|plane| plane.endpoint(end, drawing));
-        let target = super::bond_target_with_plane(
-            doc, points, source, radius, drawing, tool, plane,
-        )
-        .map(|(end, atom, text)| BondTarget {
-            end,
-            atom,
-            text,
-            plane,
-        });
+        let target =
+            super::bond_target_with_plane(context, points, source, radius, drawing, tool, plane)
+                .map(|(end, atom, text)| BondTarget {
+                    end,
+                    atom,
+                    text,
+                    plane,
+                });
         #[cfg(test)]
         {
             self.target_builds += 1;
@@ -110,7 +110,7 @@ mod tests {
         ] {
             let resolved = cache
                 .resolve(
-                    &doc,
+                    (&doc, None),
                     (World::default(), end),
                     (Some(start), None),
                     12.,
@@ -155,7 +155,7 @@ mod tests {
             for end in [cursor, target] {
                 let resolved = cache
                     .resolve(
-                        &doc,
+                        (&doc, None),
                         (origin, end),
                         (Some(source), None),
                         12.,
@@ -207,7 +207,7 @@ mod tests {
         for end in [World::new(80., 20.), World::new(90., 30.)] {
             let resolved = cache
                 .resolve(
-                    &doc,
+                    (&doc, None),
                     (World::default(), end),
                     (Some(source), None),
                     12.,

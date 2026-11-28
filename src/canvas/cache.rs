@@ -31,6 +31,7 @@ pub(super) struct SceneCache {
     foreground_orbital: Option<bool>,
     ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
     cycle_hits: HashMap<u64, reshiki::cycles::HitLayout>,
+    caption_sizes: Option<(usize, Option<Rc<super::hit::CaptionSizes>>)>,
     bond_target: super::hit::BondTargetCache,
     /// Keyed by the objects a preview redraws itself.
     remainder: Option<(Vec<u64>, Option<Rc<ScenePart>>)>,
@@ -173,6 +174,7 @@ impl SceneCache {
             self.foreground_orbital = None;
             self.ring_interiors = None;
             self.cycle_hits.clear();
+            self.caption_sizes = None;
             self.bond_target = Default::default();
             self.remainder = None;
             self.release_move();
@@ -195,9 +197,44 @@ impl SceneCache {
         drawing: reshiki::chains::BondDrawing,
         tool: super::Tool,
     ) -> Result<super::hit::BondTarget, String> {
+        let captions = self.caption_sizes(doc);
+        self.bond_target.resolve(
+            (doc, captions.as_deref()),
+            points,
+            source,
+            radius,
+            drawing,
+            tool,
+        )
+    }
+
+    /// Ordinary captions keep the same measured box across pointer positions.
+    /// Table drawings retain their wrapped/clipped hit-testing path.
+    pub fn caption_sizes(&mut self, doc: &Document) -> Option<Rc<super::hit::CaptionSizes>> {
         self.document(doc);
-        self.bond_target
-            .resolve(doc, points, source, radius, drawing, tool)
+        let fonts = reshiki::style::font_generation();
+        if self
+            .caption_sizes
+            .as_ref()
+            .is_some_and(|(seen, _)| *seen != fonts)
+        {
+            self.caption_sizes = None;
+            self.bond_target = Default::default();
+        }
+        self.caption_sizes
+            .get_or_insert_with(|| {
+                (
+                    fonts,
+                    (!doc.graphics.iter().any(|g| g.table.is_some())).then(|| {
+                        doc.annotations
+                            .iter()
+                            .map(|_| std::cell::OnceCell::new())
+                            .collect()
+                    }),
+                )
+            })
+            .1
+            .clone()
     }
 
     pub fn cycle_hit(
