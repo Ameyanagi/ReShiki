@@ -151,7 +151,7 @@ Each release has a validation record, `docs/changes/release-<version>-validation
 1. Update the application and workspace versions in `Cargo.toml`, the corresponding entries in `Cargo.lock`, and the app version in the [agent API version table](agent-api.md#versioning). Update the `reshiki-xtb==<version>` pin in `crates/python/pyproject.toml` to the PEP 440 form of the workspace version (`0.17.1-rc.1` becomes `0.17.1rc1`), then run `uv lock --project crates/python` to update its lockfile. Update the corresponding-source release link in `crates/python-xtb/README.md` to the new Cargo version. Repository tests check both values. Record the release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
 3. In the release build, run Clean up from the toolbar and close its ▾ menu with Esc, and close 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal, cycle layout review and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. Make catalytic cycle and Clean up ▾ → Clean up cycle must apply immediately as one Undo step and return the keys to the drawing. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
-4. Until the matching `reshiki-xtb` version is on PyPI, keep any `reshiki` wheel that declares the `xtb` extra off PyPI, or accept that `pip install "reshiki[xtb]"` fails to resolve.
+4. A version tag publishes `reshiki-xtb` before `reshiki`, so `pip install "reshiki[xtb]"` resolves once the tag's run finishes. A manual `pypi_only` run publishes only `reshiki`; its `xtb` extra resolves after that version's tag has published `reshiki-xtb`.
 5. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.16.0` for version `0.16.0`.
 
 ```sh
@@ -191,10 +191,12 @@ CI installs the matching base and engine wheels from a local wheelhouse with
 `--no-index --find-links dist`, checks that
 the worker is executable, and runs the calculation and file tests. The base wheel
 tests use only the `excel` and `pandas` extras, so they do not build the engine.
-The owner has deferred publishing `reshiki-xtb` to TestPyPI and PyPI. The
-**xtb_wheels_check** job runs a publish dry run only, after the version-tag run
-has published its GitHub release with corresponding source and built the
-wheels. Trusted publishing will be set up when publishing starts.
+The **pypi_xtb** job publishes `reshiki-xtb` to PyPI, but only from a version
+tag: after the tag's GitHub release has published the corresponding source that
+each engine wheel's notices link to. It checks those links and the wheel
+metadata before uploading. The **pypi** job then publishes the base `reshiki`
+wheels, so the `xtb` extra resolves. A manual `pypi_only` run never publishes
+`reshiki-xtb`, because it has no release with the corresponding source.
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
@@ -260,6 +262,8 @@ The **pypi** job publishes with [PyPI trusted publishing](https://docs.pypi.org/
 | Repository name   | `ReShiki`     |
 | Workflow name     | `release.yml` |
 | Environment name  | `pypi`        |
+
+The **pypi_xtb** job uses a second trusted publisher with the PyPI project name `reshiki-xtb` and the environment name `pypi-xtb`; the owner, repository and workflow are the same. Until its first upload, it is a pending publisher on the account that owns `reshiki` (**Your account → Publishing**). The separate environment matters: PyPI matches a pending publisher before an existing one, so with a shared environment a `pypi_only` run would create an empty `reshiki-xtb` project and fail its own upload.
 
 PyPI has every release since 0.14.0, and each version tag publishes like any release. Each version must match its tag's code, so the manual `pypi_only` run refuses to publish when `v<version>` is already tagged at another commit: once `v0.16.0` is tagged, later main commits cannot publish as 0.16.0. A `pypi_only` run is for publishing right after a version bump on main, before that version is tagged:
 

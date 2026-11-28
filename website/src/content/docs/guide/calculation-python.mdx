@@ -4,7 +4,7 @@ description: Run xTB energies, optimizations, frequencies and conformer searches
 ---
 
 :::caution[Not released yet]
-The Python calculation API is on the `xtb/next` branch. The `reshiki` and `reshiki-xtb` packages with it are not on PyPI yet; [build them from source](#build-from-source).
+The Python calculation API is on `main` and comes with the next release. Until that release is on PyPI, [build the `reshiki` and `reshiki-xtb` packages from source](#build-from-source).
 :::
 
 The `reshiki` package reads quantum-chemistry output files and writes DFT inputs. Calculations need the separate `reshiki-xtb` package, which holds the xTB engine (its licence is LGPL-3.0-or-later, so it is kept out of `reshiki` itself). Once both are published, one command installs them:
@@ -73,7 +73,7 @@ qc.write_input("CH2O_opt.inp", job.geometry, program="orca", job="opt-freq")
 
 ## Build from source
 
-Until the packages are on PyPI, build both wheels from a checkout of the `xtb/next` branch, on macOS or Linux with Rust and uv installed:
+Until the packages are on PyPI, build both wheels from a checkout of `main`, on macOS or Linux with Rust and uv installed:
 
 ```sh
 uv run --no-project python scripts/license_notices.py
