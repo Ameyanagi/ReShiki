@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import sys
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Literal, Sequence, cast
 
@@ -122,8 +121,6 @@ class ConformerSearch:
 
 
 def _worker_path() -> str:
-    if sys.platform == "win32":
-        raise XtbNotInstalled("xTB calculations are not available on Windows yet.")
     try:
         distribution = importlib.import_module("reshiki_xtb")
     except ImportError as error:

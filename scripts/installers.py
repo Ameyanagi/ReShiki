@@ -21,6 +21,7 @@ from build_release import (
     run,
     verify_binary,
     verify_inchi_worker,
+    verify_xtb_cli,
     verify_xtb_worker,
     xtb_readme,
 )
@@ -344,6 +345,8 @@ def verify_windows_installer(installer, source):
             binary = destination / "reshiki.exe"
             verify_binary(binary, "windows", metadata["architecture"])
             verify_inchi_worker(binary, INCHI_VERSION)
+            verify_xtb_worker(binary, metadata)
+            verify_xtb_cli(binary, metadata)
             verify_runtime(destination / "reshiki.exe", destination, user_data=user_data)
             verify_agent_api(destination / "reshiki.exe", destination)
         finally:

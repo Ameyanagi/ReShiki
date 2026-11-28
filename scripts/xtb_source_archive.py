@@ -63,6 +63,18 @@ DIST_ENV = {
         "CARGO_PROFILE_DIST_STRIP": "none",
         "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "off",
     },
+    "Windows x64": {
+        "CARGO_PROFILE_DIST_LTO": "false",
+        "CARGO_PROFILE_DIST_CODEGEN_UNITS": "16",
+        "CARGO_PROFILE_DIST_STRIP": "none",
+        "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "packed",
+    },
+    "Windows arm64": {
+        "CARGO_PROFILE_DIST_LTO": "fat",
+        "CARGO_PROFILE_DIST_CODEGEN_UNITS": "1",
+        "CARGO_PROFILE_DIST_STRIP": "none",
+        "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "packed",
+    },
 }
 
 
@@ -304,10 +316,16 @@ def build_instructions(root):
     wheel_command = (" \\" + "\n  ").join(wheel_lines)
     settings = []
     for platform, environment in DIST_ENV.items():
-        exports = "\n".join(
-            f"export {name}={shlex.quote(value)}" for name, value in environment.items()
-        )
-        settings.append(f"**{platform}**\n\n```sh\n{exports}\n```")
+        if platform.startswith("Windows"):
+            exports = "\n".join(f"$env:{name} = '{value}'" for name, value in environment.items())
+            exports += "\n$env:RUSTFLAGS = '-C target-feature=+crt-static'"
+            shell = "powershell"
+        else:
+            exports = "\n".join(
+                f"export {name}={shlex.quote(value)}" for name, value in environment.items()
+            )
+            shell = "sh"
+        settings.append(f"**{platform}**\n\n```{shell}\n{exports}\n```")
     dist_environment = "\n\n".join(settings)
     exclusions = " and ".join(f"`{directory}**`" for directory in EXCLUDED_MEDIA)
     return f"""# Rebuilding ReShiki with xTB
@@ -333,6 +351,10 @@ used by the website are excluded. Use the full repository to build the website.
   ```
 
 - On macOS, run `xcode-select --install` to install Xcode Command Line Tools.
+- On Windows, install Visual Studio Build Tools with Desktop development with
+  C++ and the Windows SDK. Use Developer PowerShell for the desired x64 or
+  ARM64 target, including the ARM64 MSVC tools for ARM64 builds. No LAPACK,
+  BLAS, Fortran compiler, signing certificate or signing secrets are required.
 
 ## Release profile settings
 
@@ -349,6 +371,7 @@ cargo build --profile dist --locked --offline --features xtb --bin reshiki
 
 The executable is `target/dist/reshiki`. Check its application and engine
 versions with `target/dist/reshiki --version`.
+On Windows the executable is `target/dist/reshiki.exe`; it can run unsigned.
 
 ## Rebuild with a modified axtb
 
@@ -359,6 +382,12 @@ settings. Cargo updates `Cargo.lock` for the path patches while offline.
 
 ```sh
 {command}
+```
+
+In Windows Developer PowerShell use the same arguments on one line:
+
+```powershell
+{shlex.join(arguments)}
 ```
 
 Check the result with `target/dist/reshiki --version` (or

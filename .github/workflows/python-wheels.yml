@@ -197,7 +197,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     env:
-      UV_PYTHON: "3.12.15"
+      UV_PYTHON: ${{ matrix.python || '3.12.15' }}
+      RUSTFLAGS: ${{ startsWith(matrix.os, 'windows') && '-C target-feature=+crt-static' || '' }}
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -208,6 +209,7 @@ jobs:
             /*
             !/*/
             /.cargo/
+            /.github/actions/
             /assets/
             /crates/
             /data/
@@ -222,9 +224,14 @@ jobs:
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "0.13.5"
-          python-version: "3.12.15"
+          python-version: ${{ matrix.python || '3.12.15' }}
           enable-cache: false
       - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }} && rustup default 1.99.1
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
       - name: Generate xTB wheel license notices
         run: uv run --no-project --python 3.12.15 python scripts/license_notices.py --manifest-path crates/xtb-worker/Cargo.toml --features engine --destination crates/python-xtb/wheel-licenses --target ${{ matrix.target }}
       - name: Build the manylinux xTB wheel
@@ -243,6 +250,10 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         working-directory: crates/python-xtb
         run: uvx maturin@1.15.0 build --release --locked --target ${{ matrix.target }} --out ../../dist
+      - name: Build the unsigned Windows xTB wheel
+        if: runner.os == 'Windows'
+        working-directory: crates/python-xtb
+        run: uvx maturin@1.15.0 build --release --locked --target ${{ matrix.target }} --out ../../dist
       - name: Check xTB wheel license notices
         run: uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py --xtb "dist/*.whl"
       - name: Download the matching base wheel
@@ -253,16 +264,22 @@ jobs:
           pattern: python-wheel-${{ matrix.artifact }}
           merge-multiple: true
           path: base-dist
+      - name: Locate the candidate pair's native Python executable
+        if: matrix.test
+        run: uv run --no-project python -c "import os; open(os.environ['GITHUB_ENV'], 'a').write('PAIR_PYTHON=.venv-xtb-pair/' + ('Scripts/python.exe' if os.name == 'nt' else 'bin/python') + '\n')"
       - name: Test the candidate wheel pair
         if: matrix.test
         shell: bash
+        env:
+          AXTB_LAPACK: not-a-shipped-lapack-library
+          AXTB_LAPACK_BLAS: not-a-shipped-blas-library
         run: |
           uv venv --clear .venv-xtb-pair
-          uv pip install --python .venv-xtb-pair/bin/python "numpy>=1.24" "pytest>=8,<10"
+          uv pip install --python "$PAIR_PYTHON" "numpy>=1.24" "pytest>=8,<10"
           EXPECTED_VERSION=$(uv run --no-project python -c 'from pathlib import Path; print(next(Path("base-dist").glob("reshiki-*.whl")).name.split("-")[1])')
           export EXPECTED_VERSION
-          uv pip install --python .venv-xtb-pair/bin/python --no-index --find-links dist --find-links base-dist "reshiki[xtb]==$EXPECTED_VERSION"
-          uv run --no-project --python .venv-xtb-pair/bin/python python - <<'PY'
+          uv pip install --python "$PAIR_PYTHON" --no-index --find-links dist --find-links base-dist "reshiki[xtb]==$EXPECTED_VERSION"
+          uv run --no-project --python "$PAIR_PYTHON" python - <<'PY'
           import os
           import subprocess
           from importlib.metadata import version
@@ -279,8 +296,19 @@ jobs:
           assert worker.is_file() and os.access(worker, os.X_OK), worker
           subprocess.run([str(worker), "--version"], check=True)
           print(xtb.engine())
+          water = reshiki.qc.Geometry.from_xyz(open("tests/fixtures/xtb/water.xyz").read())
+          for method in ("gfn2", "gxtb", "gfnff"):
+              result = xtb.energy(water, method=method, gradient=True)
+              assert result.gradient.shape == (3, 3)
+              print(method, result.energy)
           PY
-          uv run --no-project --python .venv-xtb-pair/bin/python pytest crates/python/tests/test_xtb.py crates/python/tests/test_qc.py
+          uv run --no-project --python "$PAIR_PYTHON" pytest crates/python/tests/test_xtb.py crates/python/tests/test_qc.py
+      - name: Require an unsigned installed Windows worker
+        if: runner.os == 'Windows'
+        run: |
+          $worker = & $env:PAIR_PYTHON -c 'import reshiki_xtb; print(reshiki_xtb.worker_path())'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot locate installed worker' }
+          if ((Get-AuthenticodeSignature $worker).Status -ne 'NotSigned') { throw 'Expected an unsigned wheel worker' }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-xtb-wheel-${{ matrix.artifact }}

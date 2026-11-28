@@ -18,17 +18,18 @@ class XtbPackageTests(unittest.TestCase):
         self.package = importlib.util.module_from_spec(specification)
         with patch("importlib.metadata.version", return_value="0.17.1"):
             specification.loader.exec_module(self.package)
+        self.executable = "reshiki-xtb-worker" + (".exe" if sys.platform == "win32" else "")
 
     def test_version_comes_from_distribution_metadata(self):
         self.assertEqual(self.package.__version__, "0.17.1")
 
     def test_worker_is_found_through_the_distribution_file_record(self):
         with tempfile.TemporaryDirectory() as temporary:
-            worker = Path(temporary) / "bin/reshiki-xtb-worker"
+            worker = Path(temporary) / "bin" / self.executable
             worker.parent.mkdir()
             worker.write_bytes(b"#!/bin/sh\n")
             worker.chmod(0o755)
-            file = PackagePath("../../../bin/reshiki-xtb-worker")
+            file = PackagePath(f"../../../bin/{self.executable}")
             installed = Mock(files=[PackagePath("reshiki_xtb/__init__.py"), file])
             installed.locate_file.return_value = worker
             with patch.object(self.package, "distribution", return_value=installed) as lookup:
@@ -38,7 +39,7 @@ class XtbPackageTests(unittest.TestCase):
 
     def test_relative_distribution_location_returns_an_absolute_path(self):
         with tempfile.TemporaryDirectory() as temporary:
-            worker = Path(temporary).resolve() / "reshiki-xtb-worker"
+            worker = Path(temporary).resolve() / self.executable
             worker.write_bytes(b"#!/bin/sh\n")
             worker.chmod(0o755)
             installed = Mock(files=[PackagePath(worker.name)])
@@ -51,17 +52,17 @@ class XtbPackageTests(unittest.TestCase):
 
     def test_missing_or_nonexecutable_worker_has_reinstall_instructions(self):
         with tempfile.TemporaryDirectory() as temporary:
-            worker = Path(temporary) / "reshiki-xtb-worker"
+            worker = Path(temporary) / self.executable
             for files, mode in (
                 (None, 0o755),
                 ([], 0o755),
                 ([PackagePath("other/reshiki-xtb-worker-copy")], 0o755),
-                ([PackagePath("bin/reshiki-xtb-worker")], None),
-                # Windows has no execute bit (and no reshiki-xtb wheel).
+                ([PackagePath(f"bin/{self.executable}")], None),
+                # Windows has no execute bit.
                 *(
                     ()
                     if sys.platform == "win32"
-                    else (([PackagePath("bin/reshiki-xtb-worker")], 0o644),)
+                    else (([PackagePath(f"bin/{self.executable}")], 0o644),)
                 ),
             ):
                 worker.unlink(missing_ok=True)
@@ -80,6 +81,21 @@ class XtbPackageTests(unittest.TestCase):
                     ),
                 ):
                     self.package.worker_path()
+
+    def test_windows_finds_only_the_recorded_exe_even_in_a_path_with_spaces(self):
+        with tempfile.TemporaryDirectory(prefix="ReShiki wheel ") as temporary:
+            worker = Path(temporary) / "reshiki-xtb-worker.exe"
+            worker.write_bytes(b"MZ")
+            worker.chmod(0o755)
+            file = PackagePath("../../../Scripts/reshiki-xtb-worker.exe")
+            installed = Mock(files=[PackagePath("bin/reshiki-xtb-worker"), file])
+            installed.locate_file.return_value = worker
+            with (
+                patch.object(self.package, "distribution", return_value=installed),
+                patch.object(self.package.sys, "platform", "win32"),
+            ):
+                self.assertEqual(self.package.worker_path(), worker.resolve())
+            installed.locate_file.assert_called_once_with(file)
 
 
 if __name__ == "__main__":

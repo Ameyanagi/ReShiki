@@ -56,8 +56,12 @@ class PythonWheelWorkflowTests(unittest.TestCase):
             engine.index("scripts/check_python_wheel_notices.py --xtb"),
             engine.index("name: Download the matching base wheel"),
         )
-        # Both builds must read python-xtb/pyproject.toml, which selects bin bindings.
-        self.assertEqual(engine.count("working-directory: crates/python-xtb"), 2)
+        # Every build must read python-xtb/pyproject.toml, which selects bin bindings.
+        self.assertEqual(engine.count("working-directory: crates/python-xtb"), 3)
+        self.assertIn("if: runner.os == 'Windows'", engine)
+        self.assertIn("./.github/actions/setup-msvc", engine)
+        self.assertIn("-C target-feature=+crt-static", engine)
+        self.assertIn("Get-AuthenticodeSignature $worker", engine)
         self.assertIn("manylinux: auto", engine)
 
     def test_macos_wheels_share_the_documented_deployment_floor(self):
@@ -81,7 +85,7 @@ class PythonWheelWorkflowTests(unittest.TestCase):
         self.assertIn("path: base-dist", engine)
         self.assertIn("uv venv --clear .venv-xtb-pair", engine)
         self.assertIn(
-            'uv pip install --python .venv-xtb-pair/bin/python "numpy>=1.24" "pytest>=8,<10"',
+            'uv pip install --python "$PAIR_PYTHON" "numpy>=1.24" "pytest>=8,<10"',
             engine,
         )
         install = next(
@@ -96,7 +100,7 @@ class PythonWheelWorkflowTests(unittest.TestCase):
                 "pip",
                 "install",
                 "--python",
-                ".venv-xtb-pair/bin/python",
+                "$PAIR_PYTHON",
                 "--no-index",
                 "--find-links",
                 "dist",
@@ -110,7 +114,8 @@ class PythonWheelWorkflowTests(unittest.TestCase):
         self.assertIn('assert version("reshiki-xtb") == expected', engine)
         self.assertIn("assert reshiki.__version__ == reshiki_xtb.__version__ == expected", engine)
         self.assertNotIn("uv sync --project", engine)
-        self.assertIn("uv run --no-project --python .venv-xtb-pair/bin/python pytest", engine)
+        self.assertIn('uv run --no-project --python "$PAIR_PYTHON" pytest', engine)
+        self.assertIn("Scripts/python.exe", engine)
         self.assertIn("os.access(worker, os.X_OK)", engine)
         self.assertIn("print(xtb.engine())", engine)
         self.assertIn(

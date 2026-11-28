@@ -187,6 +187,38 @@ XTB_WATER_ENERGY = json.loads((XTB_FIXTURES / "reference.json").read_text(encodi
 ]["water"]["energy"]
 
 
+def verify_xtb_cli(binary, metadata):
+    """Exercise the installed/relocated application's ordinary calculation path."""
+    if not metadata["xtb"]["included"]:
+        return
+    with tempfile.TemporaryDirectory(prefix="ReShiki xTB CLI check ") as temporary:
+        geometry = Path(temporary) / "water input.xyz"
+        geometry.write_bytes((XTB_FIXTURES / "water.xyz").read_bytes())
+        result = subprocess.run(
+            [Path(binary).resolve(), "--cli", "calculate", "--threads", "1", geometry],
+            cwd=temporary,
+            env=dict(
+                os.environ,
+                AXTB_LAPACK="not-a-shipped-lapack-library",
+                AXTB_LAPACK_BLAS="not-a-shipped-blas-library",
+            ),
+            capture_output=True,
+            text=True,
+            timeout=XTB_VERIFY_TIMEOUT_SECONDS,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(f"Packaged xTB CLI failed ({result.returncode}): {result.stderr}")
+        value = json.loads(result.stdout)["value"]
+        if (
+            value["method"] != "gfn2"
+            or value["engine"]["rev"] != metadata["xtb"]["rev"]
+            or not math.isclose(value["energy_hartree"], XTB_WATER_ENERGY, rel_tol=0, abs_tol=1e-9)
+        ):
+            raise ValueError("Packaged xTB CLI returned the wrong method, engine or water energy")
+    print("Packaged xTB CLI: water energy verified through the application's own worker.")
+
+
 def verify_xtb_worker(binary, metadata):
     """Evaluate water through the packaged app's framed xTB worker protocol."""
     xtb = metadata["xtb"]
@@ -814,6 +846,7 @@ def verify_archive(archive_path, signed=False):
         verify_binary(binary, metadata["platform"], metadata["architecture"])
         verify_inchi_worker(binary, metadata["inchi"]["version"])
         verify_xtb_worker(binary, metadata)
+        verify_xtb_cli(binary, metadata)
         verify_single_executable(binary, folder)
         verify_runtime(binary, folder)
         verify_agent_api(binary, folder, quarantine=signed and platform.system() == "Darwin")

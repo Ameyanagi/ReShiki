@@ -6,6 +6,7 @@ https://github.com/Ameyanagi/axtb.
 """
 
 import os
+import sys
 from importlib.metadata import distribution, version
 from pathlib import Path
 
@@ -18,8 +19,9 @@ def worker_path() -> Path:
     Raise ``FileNotFoundError`` if the installation needs repair.
     """
     installed = distribution("reshiki-xtb")
+    executable = "reshiki-xtb-worker" + (".exe" if sys.platform == "win32" else "")
     for file in installed.files or ():
-        if file.name == "reshiki-xtb-worker":
+        if file.name == executable:
             path = Path(str(installed.locate_file(file))).resolve()
             if path.is_file() and os.access(path, os.X_OK):
                 return path
