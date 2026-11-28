@@ -191,7 +191,10 @@ def test_missing_worker_keeps_os_error(monkeypatch, tmp_path):
             __version__=reshiki.__version__, worker_path=lambda: tmp_path / "missing-worker"
         ),
     )
-    with pytest.raises(xtb.XtbError, match=r"Could not start bounded xTB worker: .*\(os error 2\)"):
+    native_code = "0x80070002" if sys.platform == "win32" else "os error 2"
+    with pytest.raises(
+        xtb.XtbError, match=rf"Could not start bounded xTB worker: .*\({native_code}\)"
+    ):
         xtb.energy(geometry("water"))
 
 
