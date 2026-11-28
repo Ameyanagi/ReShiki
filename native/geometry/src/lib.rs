@@ -357,12 +357,12 @@ impl Request {
 
 /// Execute one bounded operation using COSMolKit's Rust force fields and
 /// distance geometry, using the historical 256 MiB heap allowance to cap
-/// ensemble concurrency. Only owned data leaves the disposable worker.
+/// conformer concurrency. Only owned data leaves the disposable worker.
 pub fn solve(request: &Request) -> Result<Response, String> {
     solve_with_heap_budget(request, REFERENCE_HEAP_BYTES)
 }
 
-/// Execute one operation with ensemble concurrency limited by the configured
+/// Execute one operation with conformer concurrency limited by the configured
 /// worker heap budget. The caller must enforce the allocation budget itself.
 pub fn solve_with_heap_budget(request: &Request, heap_bytes: usize) -> Result<Response, String> {
     request.validate()?;

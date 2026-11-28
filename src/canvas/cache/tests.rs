@@ -16,6 +16,152 @@ fn drawing() -> Document {
     doc
 }
 
+#[test]
+fn caption_hit_sizes_invalidate_on_edits_undo_reordering_and_font_changes() {
+    let mut doc = drawing();
+    let mut cache = SceneCache::default();
+    let first = cache.caption_sizes(&doc).unwrap();
+    let mut history = History::default();
+    let before = doc.clone();
+    doc.annotations[0].text = "A wider edited caption\nwith a second line".into();
+    doc.annotations[0].format.style.size_pt = 24.;
+    doc.annotations[0].format.width_pt = Some(50.);
+    doc.annotations[0].angle = 43.;
+    assert!(history.commit(before, &doc));
+    let changed = cache.caption_sizes(&doc).unwrap();
+    assert!(!Rc::ptr_eq(&first, &changed));
+    for point in [
+        Point::new(0., 60.),
+        Point::new(30., 100.),
+        Point::new(300., 300.),
+    ] {
+        assert_eq!(
+            super::super::hit::hit_selection_cached(&doc, point, 12., &mut cache),
+            super::super::hit::hit_selection(&doc, point, 12.),
+        );
+    }
+    assert!(history.undo(&mut doc));
+    assert!(!Rc::ptr_eq(&changed, &cache.caption_sizes(&doc).unwrap()));
+    assert!(history.redo(&mut doc));
+    doc.annotations.push(Annotation {
+        id: 200,
+        text: "Top".into(),
+        ..doc.annotations[0].clone()
+    });
+    let ordered = cache.caption_sizes(&doc).unwrap();
+    doc.annotations.reverse();
+    assert!(!Rc::ptr_eq(&ordered, &cache.caption_sizes(&doc).unwrap()));
+    let fonts = reshiki::style::font_generation();
+    cache.caption_sizes.as_mut().unwrap().0 = fonts.wrapping_sub(1);
+    let stale = cache
+        .caption_sizes
+        .as_ref()
+        .unwrap()
+        .1
+        .as_ref()
+        .unwrap()
+        .clone();
+    assert!(!Rc::ptr_eq(&stale, &cache.caption_sizes(&doc).unwrap()));
+    // A load may reuse every ID, but its caption dimensions still change.
+    let loaded = cache.caption_sizes(&doc).unwrap();
+    doc.annotations[0].text = "Different loaded text".into();
+    assert!(!Rc::ptr_eq(&loaded, &cache.caption_sizes(&doc).unwrap()));
+}
+
+#[test]
+fn caption_hit_font_change_refreshes_bond_targets_before_the_next_draw() {
+    let mut doc = Document::default();
+    let source = doc.add_atom("C", Point::default());
+    let mut caption = Annotation {
+        id: 10,
+        text: "O".into(),
+        position: Point::new(200., 20.),
+        angle: 0.,
+        format: Default::default(),
+    };
+    caption.format.style.family = "ReShiki Font Export Fixture".into();
+    doc.annotations.push(caption);
+    let pointer = reshiki::atom_text::text_first_glyph_center(&doc.annotations[0]).unwrap();
+    let mut cache = SceneCache::default();
+    let resolve = |cache: &mut SceneCache, point| {
+        cache.bond_target(
+            &doc,
+            (Point::default(), point),
+            (Some(source), None),
+            12.,
+            reshiki::chains::BondDrawing::default(),
+            super::super::Tool::Bond(1),
+        )
+    };
+    resolve(&mut cache, pointer).unwrap();
+    resolve(&mut cache, pointer.offset(100., 100.)).unwrap();
+    resolve(&mut cache, pointer).unwrap();
+    assert_eq!(cache.bond_target.target_builds, 3);
+    let old_sizes = cache.caption_sizes(&doc).unwrap();
+    let before = reshiki::style::font_generation();
+    reshiki::style::add_font(
+        include_bytes!("../../../tests/fixtures/font-export-103/cff-static-400.subset.otf")
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(reshiki::style::font_generation() > before);
+    // No Program::draw occurs between adding the font and resolving this hit.
+    let actual = resolve(&mut cache, pointer).map(|target| (target.end, target.atom, target.text));
+    assert_eq!(cache.bond_target.target_builds, 1);
+    assert!(!Rc::ptr_eq(&old_sizes, &cache.caption_sizes(&doc).unwrap()));
+    let expected = super::super::hit::bond_target_with_text(
+        &doc,
+        Point::default(),
+        pointer,
+        (Some(source), None),
+        12.,
+        reshiki::chains::BondDrawing::default(),
+        super::super::Tool::Bond(1),
+    );
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn bond_targets_invalidate_on_edits_undo_and_reused_document_ids() {
+    let mut doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let source = doc.atoms[1].id;
+    let original = doc.clone();
+    let mut history = History::default();
+    let mut cache = SceneCache::default();
+    let cursor = Point::new(100., 50.);
+    let resolve = |cache: &mut SceneCache, doc: &Document| {
+        cache
+            .bond_target(
+                doc,
+                (doc.atom(source).unwrap().position, cursor),
+                (Some(source), None),
+                12.,
+                reshiki::chains::BondDrawing::default(),
+                super::super::Tool::Bond(1),
+            )
+            .unwrap()
+    };
+    let first = resolve(&mut cache, &doc);
+    assert!(first.plane.is_some());
+    assert_eq!(resolve(&mut cache, &doc), first);
+    assert_eq!(cache.bond_target.plane_builds, 1);
+    doc.atoms[3].depth = 20.;
+    assert!(history.commit(original.clone(), &doc));
+    let changed = resolve(&mut cache, &doc);
+    assert_eq!(changed.plane, None);
+    assert_eq!(changed, resolve(&mut SceneCache::default(), &doc));
+    assert!(history.undo(&mut doc));
+    assert_eq!(resolve(&mut cache, &doc), first);
+    assert!(history.redo(&mut doc));
+    assert_eq!(resolve(&mut cache, &doc), changed);
+    doc = reshiki::rings::Preset::Regular.document(42., false);
+    assert_eq!(resolve(&mut cache, &doc).plane, None);
+    assert_eq!(
+        resolve(&mut cache, &doc),
+        resolve(&mut SceneCache::default(), &doc)
+    );
+}
+
 fn check(cache: &mut SceneCache, doc: &Document, ids: &[u64]) {
     let (markers, primitives) = cache.render(doc, ids);
     assert_eq!(

@@ -405,6 +405,7 @@ pub(super) fn primitives_with_profile_view(
         super::SceneGraphics {
             tables: Some(&tables),
             hidden_picture,
+            ..Default::default()
         },
         super::Resolve::Scene,
         lines,

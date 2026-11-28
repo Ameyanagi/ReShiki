@@ -1,6 +1,6 @@
 //! Scaled Cholesky factorization and triangular solves.
 
-use super::dot;
+use super::{dot, dot_four};
 
 /// A + shift I = scale L Lᵀ. The normalized lower triangle is stored row-major;
 /// entries above the diagonal are zero. Golub & Van Loan, Matrix Computations.
@@ -36,24 +36,41 @@ impl Cholesky {
             return None;
         }
         let mut lower = vec![0.; matrix.len()];
-        for i in 0..dimension {
-            for j in 0..=i {
-                let mut value = matrix[i * dimension + j] / scale
+        for j in 0..dimension {
+            let diagonal = j * dimension + j;
+            let prefix = &lower[j * dimension..diagonal];
+            let mut value = matrix[diagonal] / scale - dot(prefix, prefix);
+            if shift != 0. {
+                value += shift / scale;
+            }
+            if !value.is_finite() || value <= minimum_pivot {
+                return None;
+            }
+            let pivot = value.sqrt();
+            lower[diagonal] = pivot;
+            let mut i = j + 1;
+            if dimension > 256 {
+                // Independent rows share this pivot's prefix while retaining
+                // each dot product's four accumulators and summation order.
+                while i + 4 <= dimension {
+                    let rows = std::array::from_fn(|r| {
+                        &lower[(i + r) * dimension..(i + r) * dimension + j]
+                    });
+                    let products = dot_four(rows, &lower[j * dimension..diagonal]);
+                    for (r, product) in products.into_iter().enumerate() {
+                        let index = (i + r) * dimension + j;
+                        lower[index] = (matrix[index] / scale - product) / pivot;
+                    }
+                    i += 4;
+                }
+            }
+            for i in i..dimension {
+                let value = matrix[i * dimension + j] / scale
                     - dot(
                         &lower[i * dimension..i * dimension + j],
-                        &lower[j * dimension..j * dimension + j],
+                        &lower[j * dimension..diagonal],
                     );
-                if i == j {
-                    if shift != 0. {
-                        value += shift / scale;
-                    }
-                    if !value.is_finite() || value <= minimum_pivot {
-                        return None;
-                    }
-                    lower[i * dimension + j] = value.sqrt();
-                } else {
-                    lower[i * dimension + j] = value / lower[j * dimension + j];
-                }
+                lower[i * dimension + j] = value / pivot;
             }
         }
         Some(Self {
@@ -117,9 +134,107 @@ impl Cholesky {
     }
 }
 
+// The original traversal supplies an independent arithmetic reference.
+#[cfg(test)]
+fn factor_rows(
+    matrix: &[f64],
+    lower: &mut [f64],
+    dimension: usize,
+    scale: f64,
+    shift: f64,
+    minimum_pivot: f64,
+) -> Option<()> {
+    for i in 0..dimension {
+        for j in 0..=i {
+            let mut value = matrix[i * dimension + j] / scale
+                - dot(
+                    &lower[i * dimension..i * dimension + j],
+                    &lower[j * dimension..j * dimension + j],
+                );
+            if i == j {
+                if shift != 0. {
+                    value += shift / scale;
+                }
+                if !value.is_finite() || value <= minimum_pivot {
+                    return None;
+                }
+                lower[i * dimension + j] = value.sqrt();
+            } else {
+                lower[i * dimension + j] = value / lower[j * dimension + j];
+            }
+        }
+    }
+    Some(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn column_traversal_matches_original_factor_bits_and_pivot_decisions() {
+        // The original row traversal is a reference for entry-wise arithmetic,
+        // independent of the order in which columns become available.
+        let reference = |matrix: &[f64], n: usize, shift: f64, minimum_pivot: f64| {
+            let scale = matrix.iter().fold(shift.abs(), |a, b| a.max(b.abs()));
+            let mut lower = vec![0.; n * n];
+            factor_rows(matrix, &mut lower, n, scale, shift, minimum_pivot).map(|()| lower)
+        };
+        for n in [
+            1_usize, 2, 3, 9, 24, 63, 120, 204, 255, 256, 257, 294, 295, 300,
+        ] {
+            for scale in [1e-250, 1., 1e250] {
+                let mut matrix = vec![0.; n * n];
+                for i in 0..n {
+                    for j in 0..=i {
+                        let value = scale * (((i * 19 + j * 43 + 7) % 101) as f64 * 1e-6);
+                        matrix[i * n + j] = value;
+                        matrix[j * n + i] = value;
+                    }
+                    matrix[i * n + i] = scale * (1. + 0.03 * (i % 7) as f64);
+                }
+                for shift in [-0.25 * scale, 0., 0.5 * scale] {
+                    let expected = reference(&matrix, n, shift, 0.).unwrap();
+                    let factor = Cholesky::new(&matrix, n, shift, 0.).unwrap();
+                    assert!(
+                        factor
+                            .lower()
+                            .iter()
+                            .zip(expected)
+                            .all(|(actual, expected)| actual.to_bits() == expected.to_bits())
+                    );
+                }
+            }
+        }
+        for (matrix, shift, minimum_pivot) in [
+            ([1., 1., 1., 1.], 0., 0.),
+            ([1., 2., 2., 1.], 0., 0.),
+            ([1., 0., 0., 32. * f64::EPSILON], 0., 64. * f64::EPSILON),
+            ([1., 0., 0., 1.], -1., 0.),
+        ] {
+            assert_eq!(
+                Cholesky::new(&matrix, 2, shift, minimum_pivot).map(|factor| factor.lower),
+                reference(&matrix, 2, shift, minimum_pivot),
+            );
+        }
+        for n in [257, 300] {
+            for (diagonal, value, minimum_pivot) in [
+                (1, -1., 0.),
+                (n - 1, 0., 0.),
+                (n - 1, 32. * f64::EPSILON, 64. * f64::EPSILON),
+            ] {
+                let mut matrix = vec![0.; n * n];
+                for i in 0..n {
+                    matrix[i * n + i] = 1.;
+                }
+                matrix[diagonal * n + diagonal] = value;
+                assert_eq!(
+                    Cholesky::new(&matrix, n, 0., minimum_pivot).map(|factor| factor.lower),
+                    reference(&matrix, n, 0., minimum_pivot),
+                );
+            }
+        }
+    }
 
     #[test]
     fn signed_shift_and_scaled_triangle_solve_the_requested_matrix() {

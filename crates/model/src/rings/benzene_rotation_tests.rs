@@ -270,3 +270,28 @@ fn dragged_presets_start_at_the_press_and_keep_their_size() {
         );
     }
 }
+
+#[test]
+fn free_ring_placement_checks_each_host_and_the_positioned_fragment() {
+    let mut doc = Document::default();
+    doc.add_atom("O", Point::default());
+    let free = Point::new(200., 200.);
+    let (_, added) = benzene().place(&doc, free, None, 5.).unwrap();
+    assert_eq!(added.len(), 6);
+    assert_eq!(doc.atoms.len(), 1);
+
+    let host = editing::PlacementHost::new(&doc).unwrap();
+    let mut fragment = Preset::Benzene.document(42., false);
+    fragment.atoms[0].position.x = f32::NAN;
+    let (copy, ids) = host.append(&fragment, free);
+    assert!(ids.is_empty());
+    assert_eq!(copy, doc);
+
+    doc.atoms[0].position.x = f32::INFINITY;
+    for direction in [None, Some(Point::new(250., 200.))] {
+        assert_eq!(
+            benzene().place(&doc, free, direction, 5.).unwrap_err(),
+            "The drawing is invalid."
+        );
+    }
+}

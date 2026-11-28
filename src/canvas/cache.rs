@@ -14,6 +14,7 @@ use std::{
 pub(super) struct SceneCache {
     document: Option<Document>,
     scene: Option<Rc<[Primitive]>>,
+    model_scene: Option<scene::ModelScene>,
     profile_scene: Option<ProfileScene>,
     stretch: Option<Rc<reshiki::editing::reference::Stretch>>,
     stretch_key: Option<(u64, u64)>,
@@ -30,6 +31,8 @@ pub(super) struct SceneCache {
     foreground_orbital: Option<bool>,
     ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
     cycle_hits: HashMap<u64, reshiki::cycles::HitLayout>,
+    caption_sizes: Option<(usize, Option<Rc<super::hit::CaptionSizes>>)>,
+    bond_target: super::hit::BondTargetCache,
     /// Keyed by the objects a preview redraws itself.
     remainder: Option<(Vec<u64>, Option<Rc<ScenePart>>)>,
     /// The base scene of the objects that move together.
@@ -47,12 +50,17 @@ pub(super) struct SceneCache {
     pub cycle_hit_layouts: usize,
     #[cfg(test)]
     pub moved_part_builds: usize,
+    #[cfg(test)]
+    pub model_scene_updates: usize,
 }
 
 struct ProfileScene {
     hidden: (u64, usize),
     ink: Rc<[Primitive]>,
 }
+
+#[cfg(test)]
+mod model_tests;
 
 /// One draw of the canvas. It compares the drawing with the cached one as it
 /// begins; the borrowed drawing cannot change before the draw ends.
@@ -135,13 +143,27 @@ impl SceneCache {
         }
         let meshes = reshiki::models3d::surface::draw::generation();
         if self.document.as_ref() != Some(doc) || self.meshes != meshes {
+            let model_update = (self.meshes == meshes)
+                .then(|| {
+                    self.model_scene
+                        .as_ref()?
+                        .update(self.document.as_mut()?, doc)
+                })
+                .flatten();
+            if model_update.is_none() {
+                self.document = Some(doc.clone());
+                self.model_scene = None;
+                self.opacity = None;
+            }
+            #[cfg(test)]
+            if model_update.is_some() {
+                self.model_scene_updates += 1;
+            }
             self.meshes = meshes;
-            self.document = Some(doc.clone());
-            self.scene = None;
+            self.scene = model_update.map(Rc::from);
             self.profile_scene = None;
             self.stretch = None;
             self.stretch_key = None;
-            self.opacity = None;
             self.ids.clear();
             self.selection = None;
             self.markers = None;
@@ -152,6 +174,8 @@ impl SceneCache {
             self.foreground_orbital = None;
             self.ring_interiors = None;
             self.cycle_hits.clear();
+            self.caption_sizes = None;
+            self.bond_target = Default::default();
             self.remainder = None;
             self.release_move();
         }
@@ -162,6 +186,55 @@ impl SceneCache {
         self.ring_interiors
             .get_or_insert_with(|| Rc::new(reshiki::editing::RingInteriors::new(doc)))
             .at(point)
+    }
+
+    pub fn bond_target(
+        &mut self,
+        doc: &Document,
+        points: (super::World, super::World),
+        source: (Option<u64>, Option<u64>),
+        radius: f32,
+        drawing: reshiki::chains::BondDrawing,
+        tool: super::Tool,
+    ) -> Result<super::hit::BondTarget, String> {
+        let captions = self.caption_sizes(doc);
+        self.bond_target.resolve(
+            (doc, captions.as_deref()),
+            points,
+            source,
+            radius,
+            drawing,
+            tool,
+        )
+    }
+
+    /// Ordinary captions keep the same measured box across pointer positions.
+    /// Table drawings retain their wrapped/clipped hit-testing path.
+    pub fn caption_sizes(&mut self, doc: &Document) -> Option<Rc<super::hit::CaptionSizes>> {
+        self.document(doc);
+        let fonts = reshiki::style::font_generation();
+        if self
+            .caption_sizes
+            .as_ref()
+            .is_some_and(|(seen, _)| *seen != fonts)
+        {
+            self.caption_sizes = None;
+            self.bond_target = Default::default();
+        }
+        self.caption_sizes
+            .get_or_insert_with(|| {
+                (
+                    fonts,
+                    (!doc.graphics.iter().any(|g| g.table.is_some())).then(|| {
+                        doc.annotations
+                            .iter()
+                            .map(|_| std::cell::OnceCell::new())
+                            .collect()
+                    }),
+                )
+            })
+            .1
+            .clone()
     }
 
     pub fn cycle_hit(
@@ -310,10 +383,15 @@ impl SceneCache {
 
     fn scene(&mut self, doc: &Document) -> Rc<[Primitive]> {
         let opacity = &mut self.opacity;
+        let model_scene = &mut self.model_scene;
         self.scene
             .get_or_insert_with(|| {
                 let flat = reshiki::models3d::drawn(doc);
                 let paint = opacity.get_or_insert_with(|| Rc::new(Paint::new(&flat)));
+                if let Some((retained, primitives)) = scene::ModelScene::new(doc, &flat, paint) {
+                    *model_scene = Some(retained);
+                    return primitives;
+                }
                 scene::primitives_with_opacity(doc, &flat, paint).into()
             })
             .clone()

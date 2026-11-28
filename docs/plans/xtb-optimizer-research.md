@@ -219,6 +219,219 @@ Recorded after each round: its predictions, proposals, and which won or lost.
 
 ## Results
 
+### Desktop follow-up, 28 November 2026
+
+The desktop optimizer sends a gradient request at each trial geometry. The
+electronic calculation already restarts from the preceding wavefunction in the
+same worker. The client used to sleep for up to 5 ms whenever a nonblocking
+read found no data. On macOS and Linux it now wakes when the worker writes its
+reply. This particularly helps small molecules whose gradients finish inside
+one polling interval. The maximum wait between cancellation checks stays 5 ms.
+
+We timed `--cli calculate --task optimize` end to end on an Apple M4.
+
+| Workload                    | Baseline `e9e69270f` | Optimized | Accepted steps, both |
+| --------------------------- | -------------------: | --------: | -------------------: |
+| GFN2 water                  |              64.2 ms |   18.3 ms |                    4 |
+| GFN2 caffeine               |              78.1 ms |   35.1 ms |                    6 |
+| GFN2 caffeine, atom 1 fixed |              78.1 ms |   35.3 ms |                    6 |
+| GFN-FF caffeine             |              80.4 ms |   24.7 ms |                    6 |
+| GFN2 ritonavir (98 atoms)   |              1.814 s |   1.622 s |                   50 |
+
+Each number is the median of five runs after warm-up, alternating builds
+at four requested threads. Every pair produced the same final energy and XYZ,
+including the fixed carbon. The QR eigensolver also skips rotations of unused
+columns. Isolated 4×4 eigensolves fell from 0.97 to 0.84 µs and 9×9 solves
+from 4.19 to 3.60 µs, with identical eigenvalues and eigenvectors. The whole-job timings
+measure both changes together.
+
+Upstream xTB uses an approximate normal-coordinate optimizer for molecules.
+Wang and Song's TRIC includes fragment translations and rotations, which is
+relevant to flexible molecules and complexes. In the 154-start ReShiki
+comparison below, TRIC with the existing stopping rule recovered the tight
+reference energy on 143 starts. The faster energy-and-gradient stopping rule
+recovered it on 113. This follow-up therefore targets time per step and keeps
+the numerical stopping rule. [xTB geometry optimization](https://xtb-docs.readthedocs.io/en/latest/optimization.html)
+and [Wang and Song, 2016](https://doi.org/10.1063/1.4952956).
+
+To check endpoint quality independently, we selected the median-size starting
+geometry from each of the 53 groups in Marek Sierka’s gas-phase GFN2
+benchmark, sorting atom-count ties by case name. The groups cover covalent,
+flexible, open-shell, charged, noncovalent and metal-containing systems.
+Both builds used the manifest charge and low-spin multiplicity consistent
+with the electron count. Five selected cases required one unpaired electron
+although the manifest lists zero, including neutral C₂H₅O (`g55_rse43__P10`).
+The baseline and optimized application converged on all 53 with identical
+accepted step counts, energies and output XYZ at CLI precision (eight decimal
+places in Å). After rigid alignment, 50 of 53 endpoints in each build were
+within 0.1 Å heavy-atom RMSD of the published Hessian-verified geometry.
+[Sierka benchmark, version 3.0](https://zenodo.org/records/21135676).
+
+We also ran a separate trust-radius experiment on one median-size starting
+geometry from each of the dataset's 53 groups. Both settings used the same
+single-threaded GFN2 worker, Normal convergence and low-spin multiplicity
+consistent with electron parity. Increasing the initial/maximum global radius
+from 0.3/0.5 to 0.5/1.0 reduced total gradient calls from 1,887 to 1,812.
+The median stayed at 29. The wider radius improved 32 cases, tied on six and
+cost more calls on 15. All 53 converged under both settings, and 50 of 53
+endpoints under each setting were within 0.1 Å heavy-atom RMSD of the reference.
+
+Individual endpoints explain why the default stays at 0.3/0.5. On
+`g55_alk8__li3_me`, the wider setting finished 326 µEh higher and moved from
+0.0008 to 0.0556 Å RMSD against the reference. On `tm_tmg145__tc_VICLIC` it
+improved the RMSD but needed 113 evaluations compared with 84. A future
+trial could instead adjust the curvature model when fragments move and reuse
+earlier gradient differences in that updated model. Tsypin et al. found that
+both the curvature model and this gradient history contributed to AutoSella-F's
+performance. The benefit in ReShiki still needs a comparable test.
+[Tsypin et al., 2026 preprint, section 4.3](https://arxiv.org/html/2610.06577v2).
+
+### Pure Rust factorization follow-up
+
+The geometry optimizer repeatedly factors small symmetric matrices when
+calculating a step. At `718c88338`, up to dimension 256 it computed one Cholesky pivot and
+the entries below it before moving to the next column. This removes a diagonal
+check from the inner loop and preserves the order of each floating-point dot
+product. Wider matrices at that checkpoint used the original row traversal. Both implementations
+are pure Rust. The ReShiki xTB worker uses the Rust `faer` backend for the
+electronic calculation.
+
+The packaged macOS executable has no direct LAPACK, BLAS or Accelerate
+linkage. The worker removes the `AXTB_LAPACK` and `AXTB_LAPACK_BLAS`
+environment overrides. Supplying a nonexistent LAPACK library path and enabling
+the BLAS override gave the same g-xTB water energy and gradient as a clean
+environment.
+
+On the Apple M4, five alternating runs with the same single-threaded GFN2 worker
+gave the following medians. Optimizer overhead is elapsed time outside calls to
+the potential. These runs start with an open worker and exclude CLI startup.
+
+| Starting geometry   | Optimizer overhead before / after | Complete optimization before / after |
+| ------------------- | --------------------------------: | -----------------------------------: |
+| Glutamine, 29 atoms |                  16.55 / 15.28 ms |                   163.73 / 163.52 ms |
+| Codeine, 43 atoms   |                  46.55 / 43.89 ms |                   433.86 / 430.67 ms |
+
+The gain is measurable in the optimizer itself. The electronic calculation
+dominates both complete runs. Each accepted step and the final outcome
+matched the previous implementation on both GFN2 inputs and on 20 seeded
+MMFF drugs run with and without a fixed atom. Replaying aspirin, propranolol
+and imatinib under MMFF took about 7–9% less time. Factor tests compare
+individual bits around the traversal cutoff, at scales from 1e-250 to 1e250,
+under signed shifts and on rejected pivots.
+
+### g-xTB validation
+
+ReShiki uses the Rust implementation of g-xTB 2.0.1 and its embedded parameter
+tables. The geometry optimizer requests analytic energy gradients from this
+worker. [Pinned Rust implementation](https://github.com/Ameyanagi/axtb/blob/9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91/crates/gxtb/README.md)
+and [upstream 2.0.1 release](https://github.com/grimme-lab/g-xtb/releases/tag/v2.0.1).
+
+Using the upstream program conventions (`--conventions xtb-6.8`) and
+`--accuracy 0.0001`, water, acetate, triplet oxygen and UF₆ matched the
+captured reference energies within 3.2 × 10⁻¹¹ Eh. The largest absolute
+gradient component difference was 3.2 × 10⁻¹² Eh/bohr.
+[Upstream program reference outputs](https://github.com/Ameyanagi/axtb/tree/9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91/crates/gxtb/tests/reference_v2).
+
+The ten CLI optimization comparisons used water, caffeine, caffeine with a
+fixed carbon, and seven additional starting geometries including an anion,
+a radical cation and ferrocene. Each converged with the same accepted steps,
+energy and output XYZ across the original baseline and both PR builds.
+These are comparisons between g-xTB runs. The published reference minima
+for the 53-case GFN2 study use a different potential. The packaged worker
+also preserved a fixed oxygen on water, returned unrestricted orbitals for
+triplet O₂ and an analytic Hessian for water, and reported the expected errors
+for invalid spin and an exhausted SCF iteration limit.
+
+End-to-end g-xTB timings include CLI startup and use one requested thread.
+On the Apple M4 we rotated the order of the three binaries, discarded one
+warm-up and recorded five trials per build. Every timed run produced the same
+endpoint and accepted step count.
+
+| Molecule | Original baseline `e9e69270f` | First seven checkpoints `4abf2ba81` | Follow-up | Steps |
+| -------- | ----------------------------: | ----------------------------------: | --------: | ----: |
+| Water    |                      59.05 ms |                            19.94 ms |  21.39 ms |     3 |
+| Caffeine |                     122.01 ms |                            83.84 ms |  83.76 ms |     6 |
+
+The largest saving here came with the first seven checkpoints. The follow-up
+water median was 1.45 ms higher than the first PR median. A separate 98-atom
+ritonavir run converged in 49 steps and reproduced the previous g-xTB energy
+and geometry. Its runtime was excluded from the table because compilation was
+running concurrently.
+
+```sh
+reshiki --cli calculate --task optimize --method gxtb --threads 1 tests/fixtures/xtb/water.xyz
+reshiki --cli calculate --task optimize --method gxtb --threads 1 --fix 1 tests/fixtures/xtb/caffeine.xyz
+```
+
+### Worker shutdown and g-xTB profiling
+
+A one-thread water gradient exposed a delay after the calculation had
+finished. Once the worker acknowledged the close request, the client could
+sleep for a full 5 ms before checking its exit status. The client now starts
+at 100 µs and doubles the interval up to 5 ms if the worker takes longer.
+Each check still enforces the deadline and cancellation, reads trailing output
+and diagnostics, and checks the worker's exit status.
+
+On the Apple M4 we timed the public session API against the same packaged
+worker, alternating clients from `4d1660cbd` and the new build in eight
+rounds. Each round had one warm-up and eight recorded sessions per client.
+The median time inside `Session::close` fell from 6.29 to 0.92 ms.
+The complete start, open, g-xTB water gradient and close sequence fell from
+12.20 to 6.68 ms. Every session returned the same energy bits.
+
+We also timed full CLI optimizations, including process startup and shutdown,
+using one thread and eight interleaved trials per build after warm-up.
+
+| Method   | Molecule | At `4d1660cbd` | New build |
+| -------- | -------- | -------------: | --------: |
+| g-xTB    | Water    |       17.26 ms |  11.74 ms |
+| g-xTB    | Caffeine |       83.37 ms |  78.23 ms |
+| GFN2-xTB | Water    |       17.06 ms |  11.80 ms |
+| GFN2-xTB | Caffeine |       36.94 ms |  31.47 ms |
+
+A separate sample of a one-thread, 98-atom ritonavir optimization shows where
+larger g-xTB jobs spend their time. Of 3,352 stacks sampled on the worker's
+main thread, 3,230 were in the electronic calculation. Of those, 1,627 were
+in the self-consistent field calculation, 1,122 in the analytic gradient
+and 481 in per-geometry setup. The optimization converged in 49 steps.
+These counts describe the sampled part of one run. The analytic gradient
+sample includes repeated zero-filling in the overlap-derivative routine
+`overlap_grad_coeff`. A follow-up experiment could measure how much of that
+initialization each shell pair needs, then check energy, gradient and
+trajectory parity on neutral and open-shell cases.
+
+### Wider geometry optimizer matrices
+
+Four rows can use the same input vector while each row keeps its original
+four partial sums and floating-point operation order. The optimizer uses
+this in matrix-vector products and, above dimension 256, when calculating
+entries below the same Cholesky pivot. The kernels use ordinary Rust on both
+native and WebAssembly targets.
+
+To isolate the math inside a real optimization, we recorded every GFN2
+energy and gradient for ritonavir (98 atoms), then replayed them with the
+original and new optimizers. Each replay checked the requested accuracy and
+every coordinate bit before returning a recorded gradient. The complete
+accepted trajectories and final outcomes matched for free ritonavir, ritonavir
+with its first atom fixed and free codeine. The same checks passed for three
+g-xTB trajectories (water, caffeine and ritonavir).
+[Ritonavir starting geometry, ETKDGv3 seed 42 and MMFF94s](https://github.com/Ameyanagi/ReShiki-evidence/blob/a993daf403648b1da73c2140edf389a13ce30d9d/pr-reviews/pr1452/mols/ritonavir.xyz).
+
+| Trajectory                   | Steps / evaluations | Optimizer replay at `4d1660cbd` | Batched rows |
+| ---------------------------- | ------------------: | ------------------------------: | -----------: |
+| GFN2 ritonavir, free         |             50 / 54 |                       240.81 ms |    206.00 ms |
+| GFN2 ritonavir, atom 1 fixed |             53 / 56 |                       247.14 ms |    212.16 ms |
+| g-xTB ritonavir, free        |             49 / 55 |                       254.43 ms |    220.83 ms |
+
+The timings are medians of five alternating rounds on the Apple M4 and
+exclude electronic calculations. Free codeine changed from 44.95 to 43.81 ms.
+Isolated 600- and 1,200-dimensional factorizations ran 1.43× and 1.64×
+faster on arm64 and 1.45× and 1.43× faster in WebAssembly. Tests compare
+factor bits and cover the 255/256/257 crossover, incomplete groups of four,
+signed shifts, very large and small numbers, and failed pivots.
+
+### Earlier 154-start comparison
+
 Test set: 77 molecules, 154 starts (Baker-set molecules rebuilt from SMILES, 20 drugs, 4
 floppy chains, 5 rings/macrocycles, 11 ions and radicals, 8 metal complexes; ETKDG and
 ETKDG+MMFF94 starts for SMILES cases, given and noised (σ = 0.1 Å) starts for XYZ cases).
