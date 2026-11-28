@@ -743,11 +743,7 @@ impl Model3d {
     /// Face the opening view and size the frame at the drawing's scale.
     fn fit(&mut self, doc: &Document) {
         self.rotation = self.initial_view(doc);
-        let units = if self.cell.is_some() {
-            flat_scale(doc, self)
-        } else {
-            doc.drawing_style.bond_length_world / 1.5
-        };
+        let units = flat_scale(doc, self);
         self.size = (self.reach(doc) * units / 0.44).max(1.);
     }
 
@@ -2491,20 +2487,24 @@ fn initial_basis(points: &[[f32; 3]]) -> [[f64; 3]; 3] {
     [x, y, cross(x, y)]
 }
 
-/// Drawing units per ångström of a crystal's 2D drawing: the drawing's own
-/// scale (1.5 Å per bond length), or larger for a small cell or close
-/// labelled atoms, so the shortest cell edge is [`CELL_EDGE`] label heights
+/// Drawing units per ångström for a molecular or periodic 2D projection.
+/// All physical projections start with the drawing’s fixed bond length per
+/// 1.54 Å. Periodic diagrams can enlarge a small cell or close labelled atoms
+/// so the shortest cell edge is [`CELL_EDGE`] label heights
 /// and a bond between two labels other than H, as CO₂'s C=O,
 /// [`LABELLED_BOND`].
 pub fn flat_scale(doc: &Document, model: &Model3d) -> f32 {
     let style = &doc.drawing_style;
+    let units = style.molecular_units_per_angstrom();
+    let Some(cell) = &model.cell else {
+        return units;
+    };
     let font = style.font_size();
-    let edge = model.cell.as_ref().map_or(f32::INFINITY, |cell| {
-        cell.vectors
-            .iter()
-            .map(|v| length(*v))
-            .fold(f32::INFINITY, f32::min)
-    });
+    let edge = cell
+        .vectors
+        .iter()
+        .map(|v| length(*v))
+        .fold(f32::INFINITY, f32::min);
     let labelled: HashMap<u64, [f32; 3]> = model
         .labelled(doc)
         .into_iter()
@@ -2516,7 +2516,7 @@ pub fn flat_scale(doc: &Document, model: &Model3d) -> f32 {
         .filter(|b| !hydrogen(doc, b.a) && !hydrogen(doc, b.b))
         .filter_map(|b| Some(length(sub(*labelled.get(&b.a)?, *labelled.get(&b.b)?))))
         .fold(f32::INFINITY, f32::min);
-    (style.bond_length_world / 1.5)
+    units
         .max(CELL_EDGE * font / edge.max(1e-3))
         .max(LABELLED_BOND * font / bond.max(1e-3))
 }

@@ -14,8 +14,6 @@ const SAME_SITE: f64 = 0.25;
 /// Fractional coordinates within this of 1 wrap to 0, so atoms on a cell
 /// face are kept once, on the origin's side.
 const WRAP: f64 = 1e-4;
-/// Drawing units per ångström, as MOL import scales 3D coordinates.
-const UNITS: f32 = 28.;
 /// The closest two lattice planes of a cell may be, in ångström.
 const MIN_SPACING: f64 = 0.5;
 /// The farthest cell a bond may reach, as a model stores bonds that leave it.
@@ -496,8 +494,7 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         Model3d::new(&doc, placed, vec![], ForceField::default()).with_cell(&doc, cell, sites);
     model.linked_atoms.extend(anchors);
     model.notes = warnings;
-    lay_out(&mut doc, &model);
-    models3d::lay_out_attachments(&mut doc, &model);
+    models3d::lay_out_flat(&mut doc, &model);
     doc.models.push(model);
     models3d::require_version(&mut doc);
     if doc.models.iter().any(|m| m.cell.is_some()) {
@@ -661,31 +658,4 @@ fn fill(
         }
     }
     false
-}
-
-/// Place each 2D atom where the opening view shows it, keeping its depth, as
-/// MOL import keeps 3D coordinates: for a crystal at its 2D scale (see
-/// [`models3d::lay_out_flat`]), else at [`UNITS`] per ångström.
-fn lay_out(doc: &mut Document, model: &Model3d) {
-    if model.cell.is_some() {
-        models3d::lay_out_flat(doc, model);
-        return;
-    }
-    let positions: HashMap<u64, [f32; 3]> = models3d::viewed(doc, model).into_iter().collect();
-    let linear: HashSet<u64> = model
-        .atoms
-        .iter()
-        .map(|a| a.id)
-        .filter(|id| models3d::linear_carbon(doc, model, *id))
-        .collect();
-    for atom in &mut doc.atoms {
-        if let Some([x, y, z]) = positions.get(&atom.id) {
-            atom.position = Point::new(x * UNITS, -y * UNITS);
-            atom.depth = z * UNITS;
-        }
-        // A linear carbon, as CO₂'s, shows its C in 2D too.
-        if linear.contains(&atom.id) {
-            atom.display.carbons = Some(crate::atom_labels::Carbons::All);
-        }
-    }
 }

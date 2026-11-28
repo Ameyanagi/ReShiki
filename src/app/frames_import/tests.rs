@@ -522,6 +522,58 @@ fn records_split_on_their_delimiters() {
 }
 
 #[test]
+fn a_3d_sdf_ensemble_uses_the_theme_scale_and_keeps_physical_coordinates() {
+    let record = |index: usize, z: f64, energy: f64| {
+        let atoms = [
+            ("C", [0., 0., 0.]),
+            ("C", [1.54, 0., z]),
+            ("H", [-0.36, 1.03, 0.]),
+            ("H", [-0.36, -0.51, 0.89]),
+            ("H", [-0.36, -0.51, -0.89]),
+            ("H", [1.90, -1.03, 0.]),
+            ("H", [1.90, 0.51, 0.89]),
+            ("H", [1.90, 0.51, -0.89]),
+        ]
+        .into_iter()
+        .map(|(element, [x, y, z])| {
+            format!("{x:10.4}{y:10.4}{z:10.4} {element:<3} 0  0  0  0  0  0  0  0  0  0  0  0\n")
+        })
+        .collect::<String>();
+        let bonds = [(1, 2), (1, 3), (1, 4), (1, 5), (2, 6), (2, 7), (2, 8)]
+            .into_iter()
+            .map(|(a, b)| format!("{a:3}{b:3}  1  0\n"))
+            .collect::<String>();
+        format!(
+            "ethane conformer {index}\n{:<20}3D\n\n  8  7  0  0  0  0  0  0  0  0999 V2000\n\
+             {atoms}{bonds}M  END\n> <ENERGY_HARTREE>\n{energy}\n\n$$$$\n",
+            "  ReShiki"
+        )
+    };
+    let conformers = record(1, 0., -2.) + &record(2, 0.1, -1.);
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    open(&mut app, "ethane.sdf", &conformers);
+    send(&mut app, Action::Choose(Choice::Lowest));
+    send(&mut app, Action::Keep(true));
+    send(&mut app, Action::Import);
+    assert!(!app.error, "{}", app.status);
+    assert!(app.frames_import.is_none());
+    assert_eq!(&model(&app)[..2], &[[0., 0., 0.], [1.54, 0., 0.]]);
+    let doc = &app.tab.doc;
+    let [a, b] = [&doc.atoms[0], &doc.atoms[1]];
+    let projected = a.position.distance(b.position).hypot(a.depth - b.depth);
+    assert!((projected - doc.drawing_style.bond_length_world).abs() < 1e-4);
+    let result = &doc.science.results[0].result;
+    assert_eq!(result.task, QcTask::Conformers);
+    let trajectory = result.trajectory.as_ref().unwrap();
+    assert_eq!(trajectory.energies_hartree, [-2., -1.]);
+    assert_eq!(
+        &trajectory.positions_angstrom[..6],
+        &[0., 0., 0., 1.54, 0., 0.]
+    );
+}
+
+#[test]
 fn an_sd_file_asks_only_for_3d_records_of_one_molecule() {
     let ethanol = include_str!("../../../tests/fixtures/ethanol.mol");
     let flat = format!("{ethanol}$$$$\n{ethanol}$$$$\n");

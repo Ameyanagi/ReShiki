@@ -835,7 +835,7 @@ fn physical_scale_tracks_style_and_retained_y_depth() {
         source.atoms[2].depth = 18.;
         let prepared = Prepared::new(&source, &[]).unwrap();
         assert!(
-            (prepared.drawing_positions[1].x - prepared.drawing_positions[0].x - 1.5).abs() < 1e-6
+            (prepared.drawing_positions[1].x - prepared.drawing_positions[0].x - 1.54).abs() < 1e-6
         );
         assert!(prepared.drawing_positions[2].y > prepared.drawing_positions[0].y);
         let conf = conformer(&prepared);
@@ -844,6 +844,128 @@ fn physical_scale_tracks_style_and_retained_y_depth() {
         for (a, b) in projected.atoms.iter().zip(&source.atoms) {
             assert!(a.position.distance(b.position) < 0.001);
             assert!((a.depth - b.depth).abs() < 0.001);
+        }
+    }
+}
+
+#[test]
+fn custom_theme_physical_seed_optimize_frame_and_pin_inverse_share_the_same_units() {
+    for points in [14.4, 18., 28.8] {
+        let mut source = ethanol();
+        source.drawing_style.set_bond_length(points);
+        let length = source.drawing_style.bond_length_world;
+        source.atoms[0].position = Point::new(173., -81.);
+        source.atoms[1].position = source.atoms[0].position.offset(length, 0.);
+        source.atoms[2].position = source.atoms[1].position.offset(length * 0.8, length * 0.6);
+        source.atoms[0].depth = 9.;
+        source.atoms[1].depth = 19.;
+        source.atoms[2].depth = 14.;
+        let before = source.clone();
+        let prepared = Prepared::new(&source, &[]).unwrap();
+        assert!(
+            (prepared.drawing_positions[1].x - prepared.drawing_positions[0].x - 1.54).abs() < 1e-6
+        );
+        let conf = conformer(&prepared);
+        let generation = prepared
+            .generation_request(ForceField::Mmff94s, DEFAULT_SEED)
+            .unwrap();
+        assert_eq!(generation.coordinates.len(), 3);
+        for (coordinates, id) in generation.coordinates.iter().zip(prepared.ids()) {
+            let atom = source.atom(*id).unwrap();
+            let physical = [atom.position.x, -atom.position.y, atom.depth];
+            for (&coordinate, world) in coordinates.iter().zip(physical) {
+                assert!((coordinate - f64::from(world) * 1.54 / f64::from(length)).abs() < 1e-5);
+            }
+        }
+        // Optimization starts fitted to the authored frame, preserving its
+        // translated XY and depth centre while using the physical scale.
+        let mut frame = prepared.view_frame(&conf).unwrap();
+        assert!((frame.units_per_angstrom - f64::from(length) / 1.54).abs() < 1e-5);
+        let initial = prepared.document(&conf, &frame).unwrap();
+        for (atom, authored) in initial.atoms.iter().zip(&source.atoms) {
+            assert!(atom.position.distance(authored.position) < 1e-3);
+            assert!((atom.depth - authored.depth).abs() < 1e-3);
+        }
+        frame.rotate(23., -41.);
+        frame.roll(17.);
+        let projected = prepared.document(&conf, &frame).unwrap();
+        let pins: Vec<_> = prepared
+            .ids()
+            .iter()
+            .enumerate()
+            .map(|(atom, id)| {
+                let drawn = projected.atom(*id).unwrap();
+                Pin {
+                    atom,
+                    position: frame.unproject(drawn.position, drawn.depth),
+                }
+            })
+            .collect();
+        let relax = prepared
+            .native_request(
+                ForceField::Mmff94s,
+                reshiki_geometry::Operation::Relax,
+                Some(&conf),
+                &pins,
+                20,
+            )
+            .unwrap();
+        for (coordinates, physical) in relax.coordinates.iter().zip(&conf.positions) {
+            assert!((coordinates[0] - physical.x).abs() < 1e-6);
+            assert!((coordinates[1] - physical.y).abs() < 1e-6);
+            assert!((coordinates[2] - physical.z).abs() < 1e-6);
+        }
+        assert_eq!(projected.bonds, source.bonds);
+        assert_eq!(source, before);
+    }
+}
+
+#[test]
+fn physical_model_flattening_preserves_explicit_camera_at_default_and_custom_theme_scale() {
+    let quarter = std::f32::consts::FRAC_1_SQRT_2;
+    for points in [14.4, 18., 28.8] {
+        let mut source = carbon_chain(2);
+        source.drawing_style.set_bond_length(points);
+        let length = source.drawing_style.bond_length_world;
+        source.atoms[0].position = Point::new(173., -81.);
+        source.atoms[1].position = source.atoms[0].position.offset(length, 0.);
+        let prepared = Prepared::new(&source, &[]).unwrap();
+        let mut result = optimized(&prepared, vec![]);
+        result.conformer.positions[1].x = 1.54;
+        let mut model = prepared.model(&result).unwrap();
+        let geometry = model.atoms.clone();
+        let center = Point::new(173. + length / 2., -81.);
+        for (rotation, expected) in [
+            ([1., 0., 0., 0.], [length, 0., 0.]),
+            ([quarter, 0., 0., quarter], [0., -length, 0.]),
+            ([quarter, 0., quarter, 0.], [0., 0., -length]),
+            (
+                [3_f32.sqrt() / 2., 0., 0.5, 0.],
+                [length / 2., 0., -length * 3_f32.sqrt() / 2.],
+            ),
+        ] {
+            model.rotation = rotation;
+            let flat = prepared.flattened(&model).unwrap();
+            let a = flat.atom(prepared.ids()[0]).unwrap();
+            let b = flat.atom(prepared.ids()[1]).unwrap();
+            let vector = [
+                b.position.x - a.position.x,
+                b.position.y - a.position.y,
+                b.depth - a.depth,
+            ];
+            for (actual, expected) in vector.into_iter().zip(expected) {
+                assert!(
+                    (actual - expected).abs() < 2e-4,
+                    "{rotation:?}: {actual} != {expected}"
+                );
+            }
+            let distance = vector.into_iter().map(|v| v * v).sum::<f32>().sqrt();
+            assert!((distance - length).abs() < 2e-4);
+            assert!((a.position.x + b.position.x - 2. * center.x).abs() < 2e-4);
+            assert!((a.position.y + b.position.y - 2. * center.y).abs() < 2e-4);
+            assert!((a.depth + b.depth).abs() < 2e-4);
+            assert_eq!(flat.bonds, source.bonds);
+            assert_eq!(model.atoms, geometry);
         }
     }
 }
@@ -1290,7 +1412,7 @@ fn flattening_a_model_projects_its_view_at_the_drawing_centre_and_scale() {
     let doc = ethanol();
     let prepared = Prepared::new(&doc, &[3]).unwrap();
     let mut model = prepared.model(&optimized(&prepared, vec![])).unwrap();
-    let units = doc.drawing_style.bond_length_world / 1.5;
+    let units = doc.drawing_style.molecular_units_per_angstrom();
     let center = |doc: &Document| {
         let n = doc.atoms.len() as f32;
         doc.atoms.iter().fold(Point::default(), |c, a| {

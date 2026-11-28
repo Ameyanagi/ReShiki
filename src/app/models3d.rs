@@ -593,7 +593,7 @@ impl App {
                 && model.is_file_derived()
                 && !native_file
                 && !self.model_stale(index)
-                && models3d::can_draw_coordination_diagram(&before, model)
+                && model.cell.is_none()
             {
                 self.convert_imported_drawing(index);
                 return Task::none();
@@ -1043,16 +1043,17 @@ impl App {
         };
         let origin = models3d::frame_origin(&before, model);
         let mut doc = before.clone();
-        fold_imported_model_hydrogens(&mut doc, index, model);
+        let coordination = models3d::can_draw_coordination_diagram(&before, model);
+        if coordination {
+            fold_imported_model_hydrogens(&mut doc, index, model);
+        }
         let Some(model) = doc.models.get(index).cloned() else {
             return;
         };
         let atoms = model.linked_ids(&doc);
         let centre = reshiki::editing::center(&doc, &atoms);
-        if !models3d::lay_out_coordination_diagram(&mut doc, &model) {
-            self.status = "The model could not be converted to a 2D drawing".into();
-            self.error = true;
-            return;
+        if !coordination || !models3d::lay_out_coordination_diagram(&mut doc, &model) {
+            models3d::lay_out_flat(&mut doc, &model);
         }
         let arranged = reshiki::editing::center(&doc, &atoms);
         doc.translate(&atoms, centre.x - arranged.x, centre.y - arranged.y);
@@ -1060,8 +1061,7 @@ impl App {
             models3d::keep_place(&mut doc, index, origin);
         }
         models3d::set_display(&mut doc, index, Display::TwoD);
-        // This one-shot edit becomes the current native drawing. Returning
-        // from 3D restores it; Undo retains the previous authored layout.
+        // Future display toggles restore this drawing, including native edits.
         let drawn = doc
             .models
             .get(index)

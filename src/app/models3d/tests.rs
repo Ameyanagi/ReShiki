@@ -1050,6 +1050,46 @@ fn normal_2d_conversion_keeps_imported_geometry_calculations_and_native_editing(
 }
 
 #[test]
+fn ordinary_file_projection_uses_the_same_theme_ruler_with_or_without_carbon() {
+    for (xyz, distance) in [
+        ("2\nC–C reference\nC 0 0 0\nC 1.54 0 0\n", 1.54_f32),
+        ("2\nhydrogen chloride\nH 0 0 0\nCl 1.27 0 0\n", 1.27),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.path = Some("original.xyz".into());
+        app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+        app.tab.doc.drawing_style.set_bond_length(19.2);
+        app.tab.selected = vec![app.tab.doc.atoms[0].id];
+        let model = &mut app.tab.doc.models[0];
+        model.rotation = models3d::turn(model.rotation, 32., 24., false);
+        let before = app.tab.doc.clone();
+
+        for action in [Action::Show(Display::TwoD), Action::Flatten] {
+            let _ = app.update(Message::Models3d(action));
+            assert!(!app.error, "{}", app.status);
+            let doc = &app.tab.doc;
+            let [a, b] = doc.atoms.as_slice() else {
+                panic!("expected the two imported atoms")
+            };
+            let in_plane = a.position.distance(b.position);
+            let expected = distance * doc.drawing_style.bond_length_world / 1.54;
+            assert!(
+                in_plane < expected - 0.01,
+                "the camera tilt should foreshorten the bond"
+            );
+            assert!((in_plane.hypot(a.depth - b.depth) - expected).abs() < 0.001);
+            assert_eq!(
+                doc.models[0].frame_positions(),
+                before.models[0].frame_positions()
+            );
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+        }
+    }
+}
+
+#[test]
 fn normal_2d_keeps_existing_authored_and_legacy_native_positions() {
     let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
     for legacy in [false, true] {
