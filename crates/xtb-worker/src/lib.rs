@@ -14,7 +14,7 @@ mod worker;
 
 pub use worker::serve;
 
-pub const AXTB_REV: &str = "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91";
+pub const AXTB_REV: &str = "648ca6fe0beea6d3c429a8f6b17f9da85d98692e";
 pub const AXTB_SOURCE: &str = "https://github.com/Ameyanagi/axtb";
 pub const AXTB_LICENSE: &str = "LGPL-3.0-or-later";
 pub const INCLUDED: bool = cfg!(feature = "engine");

@@ -24,6 +24,8 @@ macOS arm64, with one thread, built from the fork's workspace with its `gemm`
 patches. For the original `axtb` set, upstream revision
 `65d0f64a9a8211f73b0738ff908b7a414975f50b` gives the same bits. The source CLI
 reports numerics identity `gfn2:1` and the `faer` eigensolver for both sets.
+Later engine pins are compared against these captured values. The revision in
+`reference.json` identifies the reference runs, not the currently built worker.
 
 The `axtb` set preserves the original energy and every gradient component,
 with gaps added from the same CLI reference outputs. The commands below use

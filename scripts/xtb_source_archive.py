@@ -42,6 +42,7 @@ AXTB_CRATES = {
     "axtb-gxtb": "gxtb",
     "axtb-solvation": "solvation",
 }
+GEMM_CRATES = ("gemm-common", "private-gemm-x86")
 EXCLUDED_MEDIA = ("docs/images/", "website/public/media/")
 DIST_ENV = {
     "macOS (Apple Silicon and Intel)": {
@@ -91,8 +92,12 @@ def patch_arguments(source):
     if AXTB_CRATES.keys() != AXTB_PACKAGES:
         raise ValueError("The source patches must cover exactly the audited axtb crates")
     arguments = []
-    for name, directory in AXTB_CRATES.items():
-        manifest = source / "crates" / directory / "Cargo.toml"
+    crates = [(AXTB_SOURCE, name, f"crates/{directory}") for name, directory in AXTB_CRATES.items()]
+    # These replace registry crates in ReShiki's manifest; patching the Git
+    # source again would leave its vendored GEMM copies in use.
+    crates.extend(("crates-io", name, f"third_party/{name}") for name in GEMM_CRATES)
+    for registry, name, directory in crates:
+        manifest = source / directory / "Cargo.toml"
         if not manifest.is_file():
             raise ValueError(f"Missing axtb crate manifest: {manifest}")
         package = tomllib.loads(manifest.read_text(encoding="utf-8"))["package"]
@@ -101,7 +106,7 @@ def patch_arguments(source):
         arguments.extend(
             [
                 "--config",
-                f'patch."{AXTB_SOURCE}".{name}.path="axtb-source/crates/{directory}"',
+                f'patch."{registry}".{name}.path="axtb-source/{directory}"',
             ]
         )
     return arguments
@@ -375,8 +380,9 @@ On Windows the executable is `target/dist/reshiki.exe`; it can run unsigned.
 
 ## Rebuild with a modified axtb
 
-Edit the files in `axtb-source/`. This command patches all seven fork crates
-to those local sources. The staged ReShiki manifest excludes `axtb-source/`
+Edit the files in `axtb-source/`. This command patches all seven engine crates
+and both GEMM crates in `axtb-source/third_party/` to those local sources.
+The staged ReShiki manifest excludes `axtb-source/`
 from the ReShiki workspace so the fork crates inherit their own workspace
 settings. Cargo updates `Cargo.lock` for the path patches while offline.
 
@@ -403,7 +409,7 @@ CARGO_NET_OFFLINE=true python3 scripts/license_notices.py --manifest-path crates
 ```
 
 Build the worker wheel from `crates/python-xtb`. Maturin forwards each
-`--config` to Cargo. These are the same seven patches as the desktop build,
+`--config` to Cargo. These are the same nine patches as the desktop build,
 with paths relative to `crates/python-xtb`. Omit `--locked` so Cargo can update
 the lockfile for the local sources.
 

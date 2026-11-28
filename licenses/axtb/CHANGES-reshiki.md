@@ -8,6 +8,18 @@ version (COPYING, COPYING.LESSER, NOTICE). This file is the notice of modificati
 section 5(a) of the GNU GPL v3, incorporated by the LGPL v3, asks for. Every change is a
 separate commit on this branch; `git log 65d0f64..reshiki` lists them.
 
+## 2026-11-28
+
+- **Bounded x86 matrix-packing storage.** The MIT-licensed vendored
+  `private-gemm-x86` kernel sizes each packing buffer by the smaller of its existing cache
+  tile bound and its padded whole matrix panel. A tiny matrix no longer reserves two complete
+  L3 caches per calling thread. Cache detection, kernel arithmetic, numerical thresholds and
+  thread counts are unchanged. A focused CI regression supplies a synthetic 260 MiB L3 cache
+  in a temporary source copy and checks the real kernel under a 256 MiB heap budget, without
+  BLAS or LAPACK development dependencies. Files: `third_party/private-gemm-x86/src/{lib,packing}.rs`,
+  its standalone regression, `scripts/check_packing_budget.py`, `.github/workflows/ci.yml` and
+  the third-party notices.
+
 ## 2026-11-25
 
 - **Optional g-xTB (cargo feature `gxtb`, on by default).** `axtb-gxtb` becomes an optional

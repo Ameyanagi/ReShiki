@@ -60,6 +60,16 @@ sources the fork validated (other dependency versions follow ReShiki's own
 lockfile). Only the xtb graph uses `gemm`. The copies are MIT and keep their own
 `LICENSE` files, which the notices include with the fork as their source.
 
+The fork's x86 packing buffers are allocated lazily and bounded by both the
+matrix dimensions and the existing cache-based limit. This keeps a small
+calculation from reserving a whole large last-level cache for each operand.
+The packaged water probe retains its 256 MiB allocator budget; the ordinary
+worker's runtime memory policy, numerical settings and thread counts are unchanged.
+
+Captured numerical fixtures retain the revision that produced them. A pin
+update checks the new engine against those values without relabelling the
+historical calculation provenance.
+
 ## License texts and notices
 
 - `LICENSE` scopes ReShiki's MIT OR Apache-2.0 grant to original ReShiki code
@@ -152,9 +162,13 @@ archive and its binaries disappear together:
 - **Rebuild as shipped:**
   `cargo build --profile dist --locked --offline --features xtb --bin reshiki`.
 - **Rebuild with a modified axtb:** edit files under `axtb-source/`, then build
-  with the fork's crates patched to those paths
+  with all seven engine crates and both GEMM crates patched to those paths
   (`--config 'patch."https://github.com/Ameyanagi/axtb".axtb-driver.path="axtb-source/crates/driver"'`,
-  one entry per fork crate, written out in the file) and without `--locked`.
+  plus `--config 'patch.crates-io.gemm-common.path="axtb-source/third_party/gemm-common"'`
+  and the corresponding `private-gemm-x86` override; all nine entries are
+  written out in the file) and without `--locked`. The GEMM overrides replace
+  the root manifest's registry patches, so edits under `third_party/` take
+  effect instead of compiling the untouched copies in `vendored-crates/`.
   The result is a `reshiki` executable that uses the modified library. On
   macOS, sign it ad hoc (`codesign --force --sign - …`) or wrap it as described
   in the file; the system may ask once before running an unsigned app.

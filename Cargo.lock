@@ -392,7 +392,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "axtb"
 version = "0.2.0"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "axtb-base",
  "axtb-d4",
@@ -404,7 +404,7 @@ dependencies = [
 [[package]]
 name = "axtb-base"
 version = "0.2.0"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "faer",
  "rayon",
@@ -413,7 +413,7 @@ dependencies = [
 [[package]]
 name = "axtb-d4"
 version = "0.2.0"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "axtb-base",
  "rayon",
@@ -422,7 +422,7 @@ dependencies = [
 [[package]]
 name = "axtb-driver"
 version = "0.2.0"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "axtb",
  "axtb-gfnff",
@@ -434,7 +434,7 @@ dependencies = [
 [[package]]
 name = "axtb-gfnff"
 version = "0.2.0"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "axtb-base",
  "axtb-d4",
@@ -444,7 +444,7 @@ dependencies = [
 [[package]]
 name = "axtb-gxtb"
 version = "0.2.0"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "axtb",
  "axtb-base",
@@ -456,7 +456,7 @@ dependencies = [
 [[package]]
 name = "axtb-solvation"
 version = "0.2.0"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "axtb-base",
 ]
@@ -1841,7 +1841,7 @@ dependencies = [
 [[package]]
 name = "gemm-common"
 version = "0.18.2"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "bytemuck",
  "dyn-stack",
@@ -4164,7 +4164,7 @@ checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 [[package]]
 name = "private-gemm-x86"
 version = "0.1.22"
-source = "git+https://github.com/Ameyanagi/axtb?rev=9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91#9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"
+source = "git+https://github.com/Ameyanagi/axtb?rev=648ca6fe0beea6d3c429a8f6b17f9da85d98692e#648ca6fe0beea6d3c429a8f6b17f9da85d98692e"
 dependencies = [
  "crossbeam",
  "defer",

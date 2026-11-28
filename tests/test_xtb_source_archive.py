@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -50,15 +51,19 @@ CRATES = {
     "axtb-gxtb": "gxtb",
     "axtb-solvation": "solvation",
 }
+GEMM_VERSIONS = {"gemm-common": "0.18.2", "private-gemm-x86": "0.1.22"}
 
 
 def fork_fixture(root):
-    for name, directory in CRATES.items():
-        path = root / "crates" / directory / "Cargo.toml"
+    crates = [(name, f"crates/{directory}", "0.2.0") for name, directory in CRATES.items()]
+    crates.extend((name, f"third_party/{name}", version) for name, version in GEMM_VERSIONS.items())
+    for name, directory, version in crates:
+        path = root / directory / "Cargo.toml"
         path.parent.mkdir(parents=True)
-        path.write_text(f'[package]\nname = "{name}"\nversion = "0.2.0"\n', encoding="utf-8")
+        path.write_text(f'[package]\nname = "{name}"\nversion = "{version}"\n', encoding="utf-8")
+        (path.parent / "src").mkdir()
+        (path.parent / "src/lib.rs").write_text("", encoding="utf-8")
     response = root / "crates/driver/src/response.rs"
-    response.parent.mkdir()
     response.write_text('pub const VERSION: &str = env!("CARGO_PKG_VERSION");\n', encoding="utf-8")
 
 
@@ -141,12 +146,12 @@ class XtbSourceArchiveTests(unittest.TestCase):
         ]
         self.assertEqual(offenders, [], "release assets must only be deleted with their release")
 
-    def test_patch_arguments_cover_exactly_seven_real_crate_paths(self):
+    def test_patch_arguments_cover_seven_engine_and_two_gemm_crate_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary) / "axtb-source"
             fork_fixture(source)
             arguments = patch_arguments(source)
-            self.assertEqual(arguments[::2], ["--config"] * 7)
+            self.assertEqual(arguments[::2], ["--config"] * 9)
             document = tomllib.loads("\n".join(arguments[1::2]))
             patches = document["patch"]["https://github.com/Ameyanagi/axtb"]
             self.assertEqual(set(patches), set(CRATES))
@@ -154,18 +159,105 @@ class XtbSourceArchiveTests(unittest.TestCase):
                 expected = f"axtb-source/crates/{directory}"
                 self.assertEqual(patches[name], {"path": expected})
                 self.assertTrue((source.parent / expected / "Cargo.toml").is_file())
+            patches = document["patch"]["crates-io"]
+            self.assertEqual(set(patches), set(GEMM_VERSIONS))
+            for name in GEMM_VERSIONS:
+                expected = f"axtb-source/third_party/{name}"
+                self.assertEqual(patches[name], {"path": expected})
+                self.assertTrue((source.parent / expected / "Cargo.toml").is_file())
 
     def test_patch_arguments_reject_missing_or_wrong_crate(self):
+        for name, directory in (
+            ("axtb-base", "crates/base"),
+            ("gemm-common", "third_party/gemm-common"),
+            ("private-gemm-x86", "third_party/private-gemm-x86"),
+        ):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                source = Path(temporary)
+                fork_fixture(source)
+                manifest = source / directory / "Cargo.toml"
+                manifest.write_text('[package]\nname = "wrong-crate"\n', encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, f"Expected crate {name}"):
+                    patch_arguments(source)
+                manifest.unlink()
+                with self.assertRaisesRegex(ValueError, "Missing axtb crate manifest"):
+                    patch_arguments(source)
+
+    def test_offline_metadata_uses_modified_gemm_sources_instead_of_vendored_copies(self):
+        """Exercise Cargo's registry-patch precedence in an empty offline Cargo home."""
         with tempfile.TemporaryDirectory() as temporary:
-            source = Path(temporary)
+            root = Path(temporary)
+            source = root / "axtb-source"
             fork_fixture(source)
-            manifest = source / "crates/base/Cargo.toml"
-            manifest.write_text('[package]\nname = "wrong-crate"\n', encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "Expected crate axtb-base"):
-                patch_arguments(source)
-            manifest.unlink()
-            with self.assertRaisesRegex(ValueError, "Missing axtb crate manifest"):
-                patch_arguments(source)
+            url = "https://github.com/Ameyanagi/axtb"
+            revision = "a" * 40
+            (root / "src").mkdir()
+            (root / "src/lib.rs").write_text("", encoding="utf-8")
+            (root / "Cargo.toml").write_text(
+                '[package]\nname = "rebuild-probe"\nversion = "0.1.0"\n[dependencies]\n'
+                + "".join(f'{name} = "={version}"\n' for name, version in GEMM_VERSIONS.items())
+                + "[patch.crates-io]\n"
+                + "".join(
+                    f'{name} = {{ git = "{url}", rev = "{revision}" }}\n' for name in GEMM_VERSIONS
+                ),
+                encoding="utf-8",
+            )
+            (root / "Cargo.lock").write_text(
+                'version = 4\n[[package]]\nname = "rebuild-probe"\nversion = "0.1.0"\n'
+                'dependencies = ["gemm-common", "private-gemm-x86"]\n'
+                + "".join(
+                    f'[[package]]\nname = "{name}"\nversion = "{version}"\n'
+                    f'source = "git+{url}?rev={revision}#{revision}"\n'
+                    for name, version in GEMM_VERSIONS.items()
+                ),
+                encoding="utf-8",
+            )
+            for name in GEMM_VERSIONS:
+                vendored = root / "vendored-crates" / name
+                (vendored / "src").mkdir(parents=True)
+                (vendored / "Cargo.toml").write_bytes(
+                    (source / "third_party" / name / "Cargo.toml").read_bytes()
+                )
+                (vendored / "src/lib.rs").write_text("", encoding="utf-8")
+                (vendored / ".cargo-checksum.json").write_text(
+                    json.dumps({"files": {}, "package": None}), encoding="utf-8"
+                )
+            (root / ".cargo").mkdir()
+            (root / ".cargo/config.toml").write_text(
+                '[source.crates-io]\nreplace-with = "vendored-sources"\n'
+                f'[source."git+{url}?rev={revision}"]\ngit = "{url}"\nrev = "{revision}"\n'
+                'replace-with = "vendored-sources"\n'
+                '[source.vendored-sources]\ndirectory = "vendored-crates"\n',
+                encoding="utf-8",
+            )
+            cargo_home = root / "empty-cargo-home"
+            cargo_home.mkdir()
+            environment = {
+                **os.environ,
+                "CARGO_HOME": str(cargo_home),
+                "CARGO_NET_OFFLINE": "true",
+            }
+            for extra, directory in (
+                (["--locked"], "vendored-crates"),
+                (patch_arguments(source), "axtb-source/third_party"),
+            ):
+                with self.subTest(directory=directory):
+                    metadata = json.loads(
+                        output(
+                            ["cargo", "metadata", "--offline", "--format-version", "1", *extra],
+                            cwd=root,
+                            env=environment,
+                            stderr=subprocess.PIPE,
+                        )
+                    )
+                    packages = {package["name"]: package for package in metadata["packages"]}
+                    for name in GEMM_VERSIONS:
+                        self.assertEqual(
+                            Path(packages[name]["manifest_path"]).resolve(),
+                            (root / directory / name / "Cargo.toml").resolve(),
+                        )
+                        if directory == "axtb-source/third_party":
+                            self.assertIsNone(packages[name]["source"])
 
     def test_staged_workspace_excludes_the_entire_fork(self):
         with tempfile.TemporaryDirectory() as temporary:

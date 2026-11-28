@@ -231,6 +231,37 @@ fn worker_and_cli_match_reference_energies_gradients_and_gaps() {
 
 #[cfg(feature = "xtb")]
 #[test]
+fn water_energy_and_gradient_fit_the_packaging_heap_budget() {
+    // Keep the release probe's budget independent of the normal runtime limit.
+    // Tiny GEMM operands must not reserve whole last-level-cache-sized buffers.
+    let budget = Limits {
+        heap_bytes: 256 * 1024 * 1024,
+        ..limits()
+    };
+    let cancel = Cancel::default();
+    let (mut session, hello) =
+        Session::start(executable(), budget, &cancel).expect("start budgeted xTB worker");
+    assert_eq!(hello.engine.unwrap().rev, reshiki_xtb_worker::AXTB_REV);
+    session
+        .open(&molecule("water"), &cancel)
+        .expect("open water within the packaging heap budget");
+    let result = session
+        .compute(&compute(None, true), &cancel)
+        .expect("water energy and gradient within the packaging heap budget");
+    let reference: Reference = serde_json::from_str(include_str!("fixtures/xtb/reference.json"))
+        .expect("historical xTB reference JSON");
+    assert_reference(
+        "256 MiB packaging budget/water",
+        result.energy,
+        result.homo_lumo_gap_ev.expect("HOMO-LUMO gap"),
+        result.gradient.as_deref().expect("requested gradient"),
+        &reference.axtb["water"],
+    );
+    session.close(&cancel).expect("close budgeted worker");
+}
+
+#[cfg(feature = "xtb")]
+#[test]
 fn calc_prints_the_near_degenerate_warning_and_preserves_success() {
     let dir = tempfile::tempdir().expect("CLI working folder");
     std::fs::write(
