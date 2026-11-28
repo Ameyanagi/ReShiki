@@ -118,9 +118,23 @@ independent ceilings of 640 atoms, 4,096 bonds and 4,096 all-atom coordinates.
 Legacy requests without `capacity` retain the 512-atom / 2,048-bond envelope,
 intersected with their heap budget. Conformers (32), iterations (10,000), frame
 size, aggregate memory reservations and process deadlines also bound each
-detached calculation. Admission does not guarantee convergence. Live relaxation also
-pauses after 50 batches for unchanged physical constraints or eight batches
-without meaningful energy improvement; the preview remains editable.
+detached calculation. Admission does not guarantee convergence. Live relaxation
+starts with 20-iteration requests and lengthens continuous runs toward a 200-ms
+request time when constraints stay unchanged. Held drags retain short requests.
+It pauses after 1,000 requested iterations for unchanged physical constraints or
+160 requested iterations without meaningful energy improvement. The preview
+remains editable. Worker deadlines, cancellation and geometry checks apply to
+every request. Selecting the active force field again keeps the current request
+and its iteration budget. Switching fields starts a new request. After a failed
+request the Start or Generate 3D control retries the current field.
+
+With one displaced pin on aspirin, MMFF94s took 31 short worker requests
+(167 ms median) to converge on an Apple M4. Adaptive batches took three
+(17 ms). On propranolol and imatinib the old schedule used all 1,000 requested
+iterations without converging. Adaptive batches converged within the same
+budget for both MMFF94s and UFF. These measurements use the packaged worker
+and three paired starts per case. The benchmark checks the pin and
+independently recomputes the final energy and analytic gradient.
 
 An optional `ensemble` on a strict `Generate` request returns every valid
 conformer from a fresh seeded batch. Use `Minimized` for force-field-minimized
@@ -130,7 +144,10 @@ requested conformers and original atoms must be at most 6,400. The client
 schedules up to 300 starts across sequential batches within a caller deadline.
 
 `Generate` accepts either no coordinates or one XYZ coordinate per original
-atom as a candidate starting geometry. The worker checks physical geometry and
+atom as a candidate starting geometry. When it generates multiple conformers,
+the desktop worker can embed and minimize them in parallel within its heap
+budget. It considers the results in seed order to select a geometry.
+The worker checks physical geometry and
 intrinsic three-dimensionality, adds temporary hydrogen coordinates, then
 validates specified stereo before minimizing. Invalid or planar candidates fall back to
 generation. A conservative fullerene topology check identifies closed carbon

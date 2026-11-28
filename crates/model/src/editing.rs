@@ -5,6 +5,8 @@ use std::collections::{HashMap, HashSet};
 mod arrange_tests;
 #[cfg(test)]
 mod nearest_tests;
+#[cfg(test)]
+mod preserved_selection_tests;
 mod rotation;
 mod table_captions;
 pub use rotation::center as rotation_center;
@@ -245,13 +247,83 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
     {
         return Err(unsupported());
     }
-    let mut part = doc.clone();
-    part.atoms.retain(|a| ids.contains(&a.id));
-    part.bonds
-        .retain(|b| ids.contains(&b.a) && ids.contains(&b.b));
-    part.annotations.retain(|a| ids.contains(&a.id));
-    part.arrows.retain(|a| ids.contains(&a.id));
-    part.graphics.retain(|g| ids.contains(&g.id));
+    // Reserve source-sized buffers for a dense selection; sparse previews keep
+    // storage proportional to the objects they retain. Unknown selection IDs
+    // affect this allocation hint only, never the inclusion predicates.
+    let object_count =
+        doc.atoms.len() + doc.annotations.len() + doc.arrows.len() + doc.graphics.len();
+    let dense = ids.len() >= object_count.div_ceil(2);
+    fn filtered_clone<T: Clone>(
+        items: &[T],
+        dense: bool,
+        mut keep: impl FnMut(&T) -> bool,
+    ) -> Vec<T> {
+        let chosen = items.iter().filter(|item| keep(item)).cloned();
+        if dense {
+            let mut result = Vec::with_capacity(items.len());
+            result.extend(chosen);
+            result
+        } else {
+            chosen.collect()
+        }
+    }
+
+    // A preview usually extracts one small component from a large drawing.
+    // Clone only retained objects, rather than cloning and dropping the rest.
+    let mut part = Document {
+        atoms: filtered_clone(&doc.atoms, dense, |a| ids.contains(&a.id)),
+        bonds: filtered_clone(&doc.bonds, dense, |b| {
+            ids.contains(&b.a) && ids.contains(&b.b)
+        }),
+        annotations: filtered_clone(&doc.annotations, dense, |a| ids.contains(&a.id)),
+        arrows: filtered_clone(&doc.arrows, dense, |a| ids.contains(&a.id)),
+        graphics: filtered_clone(&doc.graphics, dense, |g| ids.contains(&g.id)),
+        generic: doc.generic.clone(),
+        canvas_theme: doc.canvas_theme,
+        color_theme: doc.color_theme,
+        custom_theme: doc.custom_theme.clone(),
+        drawing_style: doc.drawing_style.clone(),
+        page_layout: doc.page_layout.clone(),
+        abbreviations: filtered_clone(&doc.abbreviations, dense, |g| {
+            g.members.iter().all(|id| ids.contains(id))
+        }),
+        atom_labels: doc.atom_labels.clone(),
+        ring_fills: filtered_clone(&doc.ring_fills, dense, |g| {
+            g.atoms.iter().all(|id| ids.contains(id))
+        }),
+        highlight_style: doc.highlight_style,
+        depth_appearance: filtered_clone(&doc.depth_appearance, dense, |g| {
+            g.atoms.iter().all(|id| ids.contains(id))
+        }),
+        version: doc.version,
+        molecule_names: filtered_clone(&doc.molecule_names, dense, |n| {
+            ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id))
+        }),
+        property_captions: filtered_clone(&doc.property_captions, dense, |n| {
+            n.annotation.is_none_or(|id| ids.contains(&id))
+                && n.atoms.iter().all(|id| ids.contains(id))
+        }),
+        compound_numbers: filtered_clone(&doc.compound_numbers, dense, |n| {
+            ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id))
+        }),
+        arrow_labels: filtered_clone(&doc.arrow_labels, dense, |l| {
+            ids.contains(&l.arrow) && ids.contains(&l.annotation)
+        }),
+        groups: filtered_clone(&doc.groups, dense, |g| {
+            g.members.iter().all(|id| ids.contains(id))
+        }),
+        reactions: filtered_clone(&doc.reactions, dense, |r| {
+            r.ids().iter().all(|id| ids.contains(id))
+        }),
+        models: filtered_clone(&doc.models, dense, |m| {
+            m.linked_ids(doc).iter().all(|id| ids.contains(id))
+        }),
+        recent_colors: doc.recent_colors.clone(),
+        piece_definitions: doc.piece_definitions.clone(),
+        on_other_canvas: doc.on_other_canvas.clone(),
+        seats: doc.seats.clone(),
+        science: doc.science.clone(),
+    };
     for mo in part.graphics.iter_mut().filter_map(|g| g.mo.as_deref_mut()) {
         if mo.molecule.is_some_and(|id| !ids.contains(&id)) {
             mo.molecule = None;
@@ -267,27 +339,6 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
             profile.unlink();
         }
     }
-    part.groups
-        .retain(|g| g.members.iter().all(|id| ids.contains(id)));
-    part.abbreviations
-        .retain(|g| g.members.iter().all(|id| ids.contains(id)));
-    part.depth_appearance
-        .retain(|g| g.atoms.iter().all(|id| ids.contains(id)));
-    part.ring_fills
-        .retain(|g| g.atoms.iter().all(|id| ids.contains(id)));
-    part.reactions
-        .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
-    part.molecule_names
-        .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
-    part.property_captions.retain(|n| {
-        n.annotation.is_none_or(|id| ids.contains(&id)) && n.atoms.iter().all(|id| ids.contains(id))
-    });
-    part.compound_numbers
-        .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
-    part.arrow_labels
-        .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
-    part.models
-        .retain(|m| m.linked_ids(doc).iter().all(|id| ids.contains(id)));
     crate::science::prune(&mut part);
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
@@ -443,11 +494,41 @@ fn append_in_mode(
     offset: Point,
     mode: AppendMode,
 ) -> Vec<u64> {
-    if doc.validate().is_err()
-        || source.validate().is_err()
-        || !offset.x.is_finite()
-        || !offset.y.is_finite()
-    {
+    if doc.validate().is_err() {
+        return vec![];
+    }
+    append_to_valid_host(doc, source, offset, mode)
+}
+
+/// A borrowed host drawing checked at the start of ring or template placement.
+/// A posed fragment still needs its own validation after scaling or rotation.
+#[derive(Clone, Copy)]
+pub(crate) struct PlacementHost<'a>(&'a Document);
+
+impl<'a> PlacementHost<'a> {
+    pub(crate) fn new(doc: &'a Document) -> Result<Self, String> {
+        doc.validate()?;
+        Ok(Self(doc))
+    }
+
+    pub(crate) fn document(self) -> &'a Document {
+        self.0
+    }
+
+    pub(crate) fn append(self, source: &Document, offset: Point) -> (Document, Vec<u64>) {
+        let mut result = self.0.clone();
+        let ids = append_to_valid_host(&mut result, source, offset, AppendMode::Ordinary);
+        (result, ids)
+    }
+}
+
+fn append_to_valid_host(
+    doc: &mut Document,
+    source: &Document,
+    offset: Point,
+    mode: AppendMode,
+) -> Vec<u64> {
+    if source.validate().is_err() || !offset.x.is_finite() || !offset.y.is_finite() {
         return vec![];
     }
     let Some((part, _mapping, ids)) = mapped_append_part(doc, source, offset, mode) else {

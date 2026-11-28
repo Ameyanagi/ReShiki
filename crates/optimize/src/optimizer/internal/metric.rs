@@ -1,14 +1,14 @@
 //! Dense Wilson matrices. Eigenvectors and Cartesian derivatives occupy rows.
 
 use crate::linalg::cholesky::Cholesky;
-use crate::linalg::{dot, norm, symmetric_eigen};
+use crate::linalg::{norm, symmetric_eigen};
 
 /// Retain λ > 10⁻¹⁰ λmax in the Wilson metric (singular values above 10⁻⁵ σmax).
 /// Use the same cutoff when inverting a trial-geometry metric in the frozen DLC basis.
 const RELATIVE_CUTOFF: f64 = 1e-10;
 
 pub(super) fn apply(rows: &[f64], x: &[f64]) -> Vec<f64> {
-    rows.chunks_exact(x.len()).map(|r| dot(r, x)).collect()
+    crate::linalg::row_dots(rows, x)
 }
 
 /// Weighted sum of matrix rows, i.e. Mᵀ w.

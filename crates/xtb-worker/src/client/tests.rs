@@ -94,6 +94,68 @@ fn cancel_is_shared_and_sticky() {
     assert!(copy.cancelled());
 }
 
+/// Isolate warm gradient round trips from startup and optimizer work. Run the
+/// same probe against the packaged engine used by the before/after CLI runs:
+/// RESHIKI_XTB_BENCH_APP=/absolute/path/to/reshiki cargo test -p
+/// reshiki-xtb-worker manual_profile_warm_gradient_roundtrips -- --ignored --nocapture
+#[test]
+#[ignore = "manual packaged-worker latency measurement; use --nocapture"]
+fn manual_profile_warm_gradient_roundtrips() -> std::result::Result<(), Box<dyn std::error::Error>>
+{
+    let executable = std::env::var_os("RESHIKI_XTB_BENCH_APP")
+        .ok_or("Set RESHIKI_XTB_BENCH_APP to the packaged executable")?;
+    let limits = Limits::default();
+    let open = Open {
+        numbers: vec![8, 1, 1],
+        positions: vec![[0., 0., 0.], [0.7586, 0., 0.5043], [-0.7586, 0., 0.5043]],
+        units: protocol::Units::Angstrom,
+        charge: 0,
+        uhf: Some(0),
+        method: Method::Gfn2,
+        conventions: Conventions::Axtb,
+        solvent: None,
+        scf: Default::default(),
+        gfnff: None,
+        threads: 1,
+        heap_bytes: limits.heap_bytes,
+    };
+    let request = Compute {
+        gradient: true,
+        ..Compute::default()
+    };
+    for repeat in 0..3 {
+        let cancel = Cancel::default();
+        let (mut session, _) = Session::start(Path::new(&executable), limits, &cancel)?;
+        session.open(&open, &cancel)?;
+        let mut computed = session.compute(&request, &cancel)?;
+        let mut wall = Duration::ZERO;
+        let mut engine = 0.;
+        let mut scf_iterations = 0;
+        for _ in 0..100 {
+            let started = Instant::now();
+            computed = session.compute(&request, &cancel)?;
+            wall += started.elapsed();
+            engine += computed.seconds;
+            scf_iterations += computed.scf.as_ref().map_or(0, |scf| scf.iterations);
+        }
+        session.close(&cancel)?;
+        println!(
+            "{}",
+            json!({
+                "repeat": repeat,
+                "requests": 100,
+                "request_wall_ms": wall.as_secs_f64() * 1000.,
+                "engine_ms": engine * 1000.,
+                "non_engine_ms": (wall.as_secs_f64() - engine) * 1000.,
+                "scf_iterations": scf_iterations,
+                "energy_hartree": computed.energy,
+                "gradient_hartree_per_bohr": computed.gradient,
+            })
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn worker_command_removes_lapack_overrides() {
     let command = worker_command(Path::new("reshiki"));

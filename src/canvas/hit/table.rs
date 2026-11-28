@@ -180,19 +180,25 @@ impl<'a> CellClips<'a> {
     }
 
     pub(super) fn annotation_contains(&self, annotation: &Annotation, p: World) -> bool {
+        self.annotation_contains_with_size(annotation, p, None)
+    }
+
+    pub(super) fn annotation_contains_with_size(
+        &self,
+        annotation: &Annotation,
+        p: World,
+        size: Option<(f32, f32)>,
+    ) -> bool {
         if !self.allows(annotation.id, p) {
             return false;
         }
-        let Some(layout) = self.layout(annotation) else {
-            return annotation.contains(p);
-        };
-        let origin = annotation.position;
-        let p = p.turned(
-            origin.offset(layout.width / 2., layout.height / 2.),
-            -annotation.angle,
+        let (width, height) = self.layout(annotation).map_or_else(
+            || size.unwrap_or_else(|| annotation.size()),
+            |layout| (layout.width, layout.height),
         );
-        (origin.x..origin.x + layout.width).contains(&p.x)
-            && (origin.y..origin.y + layout.height).contains(&p.y)
+        let origin = annotation.position;
+        let p = p.turned(origin.offset(width / 2., height / 2.), -annotation.angle);
+        (origin.x..origin.x + width).contains(&p.x) && (origin.y..origin.y + height).contains(&p.y)
     }
 
     pub(super) fn held_annotation_contains(&self, annotation: &Annotation, p: World) -> bool {
