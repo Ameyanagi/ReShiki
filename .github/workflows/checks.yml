@@ -770,10 +770,13 @@ jobs:
           foreach ($file in $files) {
             if ((Get-AuthenticodeSignature $file).Status -ne 'NotSigned') { throw "Expected unsigned artifact: $file" }
           }
+      - name: Stage the exact executable from the shipped ZIP
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/stage_xtb_smoke.py "dist/releases/*-windows-${{ matrix.arch }}.zip"
       - name: Calculate with the relocated shipped executable and no companion runtime
-        env:
-          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki.exe
-        run: cargo test --locked -p reshiki --profile dist --target ${{ matrix.target }} --features xtb --test xtb_packaged
+        run: |
+          cargo run --locked -p reshiki-xtb-worker --target ${{ matrix.target }} --example packaged_app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash $env:RESHIKI_TEST_PACKAGED_APP -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:RESHIKI_TEST_PACKAGED_APP_SHA256) { throw 'Smoke check modified the shipped ZIP executable' }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-windows-xtb-${{ matrix.arch }}

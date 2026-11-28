@@ -399,11 +399,15 @@ jobs:
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
         run: cargo test --release --locked --no-default-features -p reshiki-windows --target ${{ matrix.target }}
+      - name: Stage the exact Windows executable from the shipped ZIP
+        if: runner.os == 'Windows'
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/stage_xtb_smoke.py "dist/releases/*-${{ matrix.artifact }}.zip"
       - name: Calculate with the unsigned Windows release before optional signing
         if: runner.os == 'Windows'
-        env:
-          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/dist/reshiki.exe
-        run: cargo test --locked -p reshiki --profile dist --target ${{ matrix.target }} --features xtb --test xtb_packaged
+        run: |
+          cargo run --locked -p reshiki-xtb-worker --target ${{ matrix.target }} --example packaged_app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash $env:RESHIKI_TEST_PACKAGED_APP -Algorithm SHA256).Hash.ToLowerInvariant() -ne $env:RESHIKI_TEST_PACKAGED_APP_SHA256) { throw 'Smoke check modified the shipped ZIP executable' }
       - name: Check that worker processes do not inherit the MCP client's pipes
         if: runner.os == 'Windows'
         env:
