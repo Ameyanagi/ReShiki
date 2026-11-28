@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 #[cfg(unix)]
 use std::{thread, time::Instant};
 
-#[path = "xtb_metal_clusters.rs"]
+#[path = "xtb/metal_clusters.rs"]
 mod metal_clusters;
 
 fn executable() -> &'static Path {
