@@ -263,6 +263,14 @@ impl Plan {
         snapshot(doc, &self.arrows).as_ref() == Ok(&self.snapshot)
     }
 
+    pub fn refresh_calculations(&mut self, doc: &Document) {
+        for species in &mut self.species {
+            if !species.atoms.is_empty() {
+                species.calculation = chemistry::calculation(doc, &species.atoms);
+            }
+        }
+    }
+
     /// Resolve names shared with the reaction card as its naming queue runs.
     /// Instance numbers and authored names keep their established precedence;
     /// cached labels are presentation only and never enter the source snapshot.

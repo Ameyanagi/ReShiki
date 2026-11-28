@@ -713,23 +713,8 @@ impl Native {
                 cancel,
             )?;
             let (frame, result) = optimize(&launch.frame)?;
-            let drawing = &species.calculation;
-            let changes =
-                science::stereo_changes(drawing, &launch.atoms, &frame).map_err(|error| {
-                    SpeciesFailure::Stereo(format!("The stereo check could not run: {error}."))
-                })?;
-            if !changes.is_empty() {
-                let reason = changes
-                    .iter()
-                    .map(|change| {
-                        state::describe(change, |id| {
-                            state::stereo_atom_name(drawing, &launch.atoms, id)
-                        })
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                return Err(SpeciesFailure::Stereo(reason));
-            }
+            check_species_stereo(&species.calculation, &launch.atoms, &frame)
+                .map_err(SpeciesFailure::Stereo)?;
             SpeciesValue {
                 species: index,
                 method,

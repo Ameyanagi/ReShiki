@@ -566,6 +566,10 @@ impl App {
             state.sheet = false;
             return Task::none();
         }
+        if retry.is_some() {
+            // A replacement conformer leaves the scheme's chemistry snapshot current.
+            state.plan.refresh_calculations(&self.tab.doc);
+        }
         state.sheet = false;
         state.revision = self.tab.revision;
         state.reviews = Some(MapReviews {

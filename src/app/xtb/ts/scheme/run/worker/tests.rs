@@ -172,6 +172,7 @@ enum Job {
 
 #[derive(Clone, Copy)]
 enum MockOptimization {
+    Unchanged,
     InvertedCentre,
     IncompleteFrame,
 }
@@ -475,12 +476,11 @@ fn failed_ts_keeps_its_endpoint_energy_and_the_next_step_runs() {
     assert_eq!(fake.transitions.len(), 2);
 }
 
-fn chiral_drawing() -> Document {
-    let mut doc = Document::default();
-    let carbon = doc.add_atom("C", Point::default());
-    let fluorine = doc.add_atom("F", Point::new(0., -28.));
-    let chlorine = doc.add_atom("Cl", Point::new(-28., 14.));
-    let bromine = doc.add_atom("Br", Point::new(28., 14.));
+fn add_chiral_molecule(doc: &mut Document, x: f32) -> Vec<u64> {
+    let carbon = doc.add_atom("C", Point::new(x, 0.));
+    let fluorine = doc.add_atom("F", Point::new(x, -28.));
+    let chlorine = doc.add_atom("Cl", Point::new(x - 28., 14.));
+    let bromine = doc.add_atom("Br", Point::new(x + 28., 14.));
     doc.add_bond(carbon, fluorine, 1, "wedge");
     doc.add_bond(carbon, chlorine, 1, "plain");
     doc.add_bond(carbon, bromine, 1, "plain");
@@ -494,13 +494,170 @@ fn chiral_drawing() -> Document {
         xyz: [0., 0., -1.],
     }];
     doc.models.push(Model3d::new(
-        &doc,
+        doc,
         atoms,
         hydrogens,
         models3d::ForceField::Mmff94s,
     ));
+    vec![carbon, fluorine, chlorine, bromine]
+}
+
+fn chiral_drawing() -> Document {
+    let mut doc = Document::default();
+    add_chiral_molecule(&mut doc, 0.);
     models3d::require_version(&mut doc);
     doc
+}
+
+fn chiral_scheme() -> (Document, Plan) {
+    let mut doc = Document::default();
+    let molecules: Vec<_> = [0., 240., 480.]
+        .into_iter()
+        .map(|x| add_chiral_molecule(&mut doc, x))
+        .collect();
+    let mut arrows = Vec::new();
+    for index in 0..2 {
+        let arrow = doc.next_id();
+        doc.arrows.push(Arrow::new(
+            arrow,
+            Point::new(80. + index as f32 * 240., 0.),
+            Point::new(160. + index as f32 * 240., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+        let mut reaction = Reaction::new(arrow);
+        reaction.reactants = vec![Participant {
+            atoms: molecules[index].clone(),
+            coefficient: 1,
+        }];
+        reaction.products = vec![Participant {
+            atoms: molecules[index + 1].clone(),
+            coefficient: 1,
+        }];
+        doc.reactions.push(reaction);
+        arrows.push(arrow);
+    }
+    models3d::require_version(&mut doc);
+    let plan = Plan::read(&doc, &arrows).unwrap();
+    assert_eq!(plan.species.len(), 1);
+    (doc, plan)
+}
+
+fn store_chiral_seed(doc: &mut Document, atoms: &[u64], inverted: bool) {
+    let launch = science::launch(doc, atoms[0], 0, 1).unwrap();
+    let mut frame = (*launch.frame).clone();
+    if inverted {
+        for xyz in &mut frame.positions_angstrom {
+            xyz[0] = -xyz[0];
+        }
+    }
+    let mut result = xtb::run::example_computed(-2., 1.)
+        .to_calc_result(
+            &frame,
+            qcdata::Task::Optimize,
+            &xtb::run::example_engine(),
+            None,
+        )
+        .unwrap();
+    result.input_frame = Some(launch.frame.hash());
+    result.status = qcdata::Status::Converged;
+    if let qcdata::Settings::Xtb(settings) = &mut result.settings {
+        settings.convergence = Some(qcdata::Convergence::Tight);
+    }
+    science::attach(doc, &launch, vec![frame], result).unwrap();
+    assert!(
+        transition::energy::scheme_reusable(doc, atoms, 0, 1, XtbMethod::Gfn2Xtb, false).is_some(),
+        "the fixture must pass the ordinary cache eligibility rules"
+    );
+}
+
+#[test]
+fn seeded_stereo_uses_the_original_drawn_copy_before_reusing_its_energy() {
+    for inverted in [false, true] {
+        let (mut doc, plan) = chiral_scheme();
+        let second = &plan.species[0].instances[1];
+        store_chiral_seed(&mut doc, second, inverted);
+        let mut state = State::default();
+        state.seed(
+            &doc,
+            &plan,
+            XtbMethod::Gfn2Xtb,
+            &[StepOptions::default(); 2],
+        );
+        assert_eq!(state.cache.len(), usize::from(!inverted));
+        let mut request = request();
+        request.plan = plan;
+        request.cache = state.request_cache(&request.plan, request.method, false);
+        let mut fake = Fake {
+            mock_optimization: Some((0, MockOptimization::Unchanged)),
+            ..Default::default()
+        };
+        let mut events = Vec::new();
+        calculate(&request, &mut fake, &Cancel::default(), |event| {
+            events.push(event)
+        })
+        .unwrap();
+        assert_eq!(fake.species.len(), usize::from(inverted));
+        let value = events
+            .iter()
+            .find_map(|event| match event {
+                EventKind::Species { value, .. } => Some(value),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(
+            value.result.energy_hartree,
+            Some(if inverted { -1. } else { -2. })
+        );
+        assert!(step_values(&events).iter().all(|(_, value)| {
+            value.energy == Some(0.) && value.barrier.is_some() && value.error.is_none()
+        }));
+    }
+}
+
+#[test]
+fn rejected_seed_cannot_supply_energy_when_the_fresh_optimization_also_changes_stereo() {
+    let (mut doc, plan) = chiral_scheme();
+    store_chiral_seed(&mut doc, &plan.species[0].instances[1], true);
+    let mut state = State::default();
+    state.seed(
+        &doc,
+        &plan,
+        XtbMethod::Gfn2Xtb,
+        &[StepOptions::default(); 2],
+    );
+    assert!(state.cache.is_empty());
+    let mut request = request();
+    request.plan = plan;
+    request.cache = state.request_cache(&request.plan, request.method, false);
+    let mut fake = Fake {
+        mock_optimization: Some((0, MockOptimization::InvertedCentre)),
+        ..Default::default()
+    };
+    let mut events = Vec::new();
+    calculate(&request, &mut fake, &Cancel::default(), |event| {
+        events.push(event)
+    })
+    .unwrap();
+    assert_eq!(fake.species, [(0, false)]);
+    assert!(fake.transitions.is_empty());
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, EventKind::Species { .. }))
+    );
+    let values = step_values(&events);
+    assert_eq!(values.len(), 2);
+    for (_, value) in values {
+        assert!(value.energy.is_none() && value.gibbs.is_none() && value.barrier.is_none());
+        assert!(
+            value
+                .error
+                .as_ref()
+                .unwrap()
+                .ends_with("Optimization changed the configuration at C1 (inverted).")
+        );
+    }
 }
 
 #[test]

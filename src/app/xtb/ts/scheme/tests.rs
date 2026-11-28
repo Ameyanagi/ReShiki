@@ -160,3 +160,68 @@ fn a_late_event_after_cancel_cannot_replace_status_after_a_chemistry_edit() {
     let _ = app.update(send(Action::Event(Box::new(late))));
     assert_eq!(app.status, "The user's next action");
 }
+
+#[test]
+fn retry_after_a_stereo_failure_recaptures_the_replacement_conformer() {
+    use reshiki::models3d::{ForceField, Hydrogen, Model3d, Placed};
+    use reshiki::science;
+
+    let (mut doc, plan) = Plan::example();
+    let index = plan.steps[0].products[0].species;
+    let [left, right] = plan.species[index].atoms[..] else {
+        panic!("expected the shared ethene intermediate");
+    };
+    let model = Model3d::new(
+        &doc,
+        vec![
+            Placed {
+                id: left,
+                xyz: [0., 0., 0.],
+            },
+            Placed {
+                id: right,
+                xyz: [1.3, 0., 0.],
+            },
+        ],
+        [(left, -0.5), (right, 1.8)]
+            .into_iter()
+            .flat_map(|(parent, x)| {
+                [-0.9, 0.9].map(|y| Hydrogen {
+                    parent,
+                    xyz: [x, y, 0.],
+                })
+            })
+            .collect(),
+        ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    reshiki::models3d::require_version(&mut doc);
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = doc;
+    app.tab.selected = plan.arrows;
+    let _ = app.update(send(Action::Open));
+    let state = app.tab.xtb.scheme.as_mut().unwrap();
+    let launch = |state: &State| {
+        science::launch(&state.plan.species[index].calculation, left, 0, 1).unwrap()
+    };
+    let old = launch(state);
+    state.sheet = false;
+    state.work.steps =
+        vec![
+            run::StepStatus::Failed("Optimization changed the drawing's stereochemistry".into());
+            2
+        ];
+
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].hydrogens[0].xyz[1] = -1.1;
+    app.changed(before);
+    let current = science::launch(&app.tab.doc, left, 0, 1).unwrap();
+    assert_ne!(old.frame.hash(), current.frame.hash());
+    assert!(app.xtb_scheme_current());
+
+    let _ = app.update(send(Action::Retry(0)));
+    let state = app.tab.xtb.scheme.as_ref().unwrap();
+    assert_eq!(state.reviews.as_ref().unwrap().retry, Some(0));
+    assert_eq!(launch(state).frame.hash(), current.frame.hash());
+}

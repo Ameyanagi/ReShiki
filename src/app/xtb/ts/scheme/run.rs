@@ -217,8 +217,9 @@ impl State {
         self.report.steps.get(index)?.as_ref()
     }
 
-    /// Original document results are admitted with the exact eligibility rules
-    /// of single-arrow reaction energies. Detached copies carry no attachments.
+    /// Original document results must satisfy the single-arrow eligibility
+    /// rules and reproduce the drawing's stereo. Detached copies carry no
+    /// attachments, so check each result with its original drawing atom map.
     pub fn seed(
         &mut self,
         doc: &Document,
@@ -238,6 +239,9 @@ impl State {
                         method,
                         frequencies,
                     )
+                    .filter(|(frame, _, launch)| {
+                        check_species_stereo(doc, &launch.atoms, frame).is_ok()
+                    })
                 })
             };
             let cached = frequencies
@@ -444,6 +448,27 @@ impl State {
         }
         cache
     }
+}
+
+fn check_species_stereo(
+    drawing: &Document,
+    atoms: &[Option<u64>],
+    frame: &Frame,
+) -> Result<(), String> {
+    let changes = reshiki::science::stereo_changes(drawing, atoms, frame)
+        .map_err(|error| format!("The stereo check could not run: {error}."))?;
+    if changes.is_empty() {
+        return Ok(());
+    }
+    Err(changes
+        .iter()
+        .map(|change| {
+            crate::app::xtb::state::describe(change, |id| {
+                crate::app::xtb::state::stereo_atom_name(drawing, atoms, id)
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" "))
 }
 
 pub(super) fn species_energy(value: &SpeciesValue, free: bool) -> Option<f64> {

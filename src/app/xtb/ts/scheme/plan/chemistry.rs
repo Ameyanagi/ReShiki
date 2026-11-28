@@ -89,7 +89,7 @@ pub(super) fn labels(doc: &Document, atoms: &[u64], formula: &str) -> (String, S
     (number.unwrap_or(name).to_owned(), name.to_owned())
 }
 
-fn calculation(doc: &Document, atoms: &[u64]) -> Document {
+pub(super) fn calculation(doc: &Document, atoms: &[u64]) -> Document {
     let source = reshiki::editing::selection(doc, atoms);
     Document {
         atoms: source.atoms,
