@@ -4,6 +4,8 @@ use reshiki_model::{attachments::Kind, science};
 
 const CLUSTER: &str =
     include_str!("../../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+const GFN2_CLUSTER: &str =
+    include_str!("../../../../tests/fixtures/xtb/diruthenium_tetrahydride_gfn2.xyz");
 const FERROCENE: &str = include_str!("../../../../tests/fixtures/xtb/ferrocene.xyz");
 
 #[test]
@@ -48,7 +50,7 @@ fn diruthenium_xyz_retains_four_bridges_haptic_rings_and_the_atomic_frame() {
         );
     }
     assert!(
-        doc.bonds
+        !doc.bonds
             .iter()
             .any(|b| b.a == original[0] && b.b == original[1])
     );
@@ -80,6 +82,7 @@ fn diruthenium_xyz_retains_four_bridges_haptic_rings_and_the_atomic_frame() {
             .all(|(a, b)| a.map(|x| x as f32) == b.map(|x| x as f32))
     );
     let bonds = science::frame_bonds(&doc, &launch.atoms).unwrap();
+    assert!(!bonds.iter().any(|(a, b, _)| *a < 2 && *b < 2));
     assert_eq!(bonds.iter().filter(|(a, b, _)| (*a < 2 && (52..56).contains(b))
         || (*b < 2 && (52..56).contains(a))).count(), 8);
     assert_eq!(
@@ -131,10 +134,129 @@ fn diruthenium_xyz_retains_four_bridges_haptic_rings_and_the_atomic_frame() {
 }
 
 #[test]
+fn both_optimized_hydride_cores_keep_their_contacts_without_inventing_a_direct_metal_edge() {
+    for (source, bridges, terminal) in [(CLUSTER, 4, 0), (GFN2_CLUSTER, 2, 2)] {
+        let (doc, _) = read("xyz", source).unwrap();
+        let ids: Vec<_> = doc.models[0]
+            .frame_sources()
+            .into_iter()
+            .flatten()
+            .collect();
+        let metals = &ids[..2];
+        let hydride_contacts: Vec<_> = ids[52..]
+            .iter()
+            .map(|hydrogen| {
+                assert_eq!(doc.atom(*hydrogen).unwrap().element, "H");
+                doc.bonds
+                    .iter()
+                    .filter(|bond| {
+                        (bond.a == *hydrogen && metals.contains(&bond.b))
+                            || (bond.b == *hydrogen && metals.contains(&bond.a))
+                    })
+                    .count()
+            })
+            .collect();
+        assert_eq!(
+            hydride_contacts.iter().filter(|&&count| count == 2).count(),
+            bridges
+        );
+        assert_eq!(
+            hydride_contacts.iter().filter(|&&count| count == 1).count(),
+            terminal
+        );
+        assert_eq!(
+            hydride_contacts.iter().sum::<usize>(),
+            2 * bridges + terminal
+        );
+        assert!(
+            !doc.bonds
+                .iter()
+                .any(|bond| metals.contains(&bond.a) && metals.contains(&bond.b))
+        );
+        assert_eq!(
+            doc.atoms
+                .iter()
+                .filter(|atom| atom.attachment == Some(Kind::MultiCenter))
+                .count(),
+            2
+        );
+        let (original, _) = crate::qcread::read_xyz_geometry(source).unwrap();
+        let actual: Vec<_> = doc.models[0].atoms.iter().map(|atom| atom.xyz).collect();
+        assert_eq!(
+            actual,
+            original
+                .positions_angstrom
+                .iter()
+                .map(|point| point.map(|value| value as f32))
+                .collect::<Vec<_>>()
+        );
+        let distance = |points: &[[f64; 3]]| {
+            (0..3)
+                .map(|axis| (points[0][axis] - points[1][axis]).powi(2))
+                .sum::<f64>()
+                .sqrt()
+        };
+        let actual: Vec<_> = actual.iter().map(|point| point.map(f64::from)).collect();
+        assert!((distance(&actual) - distance(&original.positions_angstrom)).abs() < 1e-6);
+    }
+}
+
+#[test]
+fn haptic_metal_proximity_rule_is_preserved_below_two_shared_hydrides() {
+    let lines: Vec<_> = CLUSTER.lines().skip(2).collect();
+    for hydrides in 0..=4 {
+        let text = format!(
+            "{}\nbridge-count control\n{}\n",
+            52 + hydrides,
+            lines[..52 + hydrides].join("\n")
+        );
+        let (doc, _) = read("xyz", &text).unwrap();
+        let metals: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter(|atom| atom.element == "Ru")
+            .map(|atom| atom.id)
+            .collect();
+        assert_eq!(
+            doc.atoms
+                .iter()
+                .filter(|atom| atom.attachment == Some(Kind::MultiCenter))
+                .count(),
+            2
+        );
+        assert_eq!(
+            doc.bonds
+                .iter()
+                .filter(|bond| metals.contains(&bond.a) && metals.contains(&bond.b))
+                .count(),
+            usize::from(hydrides < 2)
+        );
+        let hydrogens: Vec<_> = doc.models[0]
+            .frame_sources()
+            .into_iter()
+            .flatten()
+            .skip(52)
+            .collect();
+        assert_eq!(hydrogens.len(), hydrides);
+        assert!(hydrogens.iter().all(|hydrogen| {
+            doc.bonds
+                .iter()
+                .filter(|bond| {
+                    (bond.a == *hydrogen && metals.contains(&bond.b))
+                        || (bond.b == *hydrogen && metals.contains(&bond.a))
+                })
+                .count()
+                == 2
+        }));
+    }
+}
+
+#[test]
 fn haptic_recognition_does_not_create_hydride_or_ring_contacts() {
     for (xyz, bonds) in [
         ("3\nterminal hydride\nRu 0 0 0\nH 1.7 0 0\nRu 5 0 0\n", 1),
         ("2\nordinary C-H\nC 0 0 0\nH 1.09 0 0\n", 1),
+        ("2\nbare alloy control\nFe 0 0 0\nCu 2.5 0 0\n", 1),
     ] {
         let (doc, _) = read("xyz", xyz).unwrap();
         assert_eq!(doc.bonds.len(), bonds);
@@ -225,6 +347,11 @@ async fn haptic_cluster_survives_normal_cdxml_drawing_export_and_import() {
         .map(|a| a.id)
         .collect();
     assert_eq!(metals.len(), 2);
+    assert!(
+        !doc.bonds
+            .iter()
+            .any(|bond| metals.contains(&bond.a) && metals.contains(&bond.b))
+    );
     let bridges = doc
         .atoms
         .iter()
@@ -239,6 +366,62 @@ async fn haptic_cluster_survives_normal_cdxml_drawing_export_and_import() {
         .count();
     assert_eq!(bridges, 4);
     doc.validate().unwrap();
+}
+
+#[tokio::test]
+async fn an_explicit_direct_metal_bond_survives_drawing_export_and_import() {
+    use crate::engine::{LocalEngine, Request};
+    let (mut doc, _) = read("xyz", CLUSTER).unwrap();
+    let metals: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.element == "Ru")
+        .map(|atom| atom.id)
+        .collect();
+    doc.add_bond(metals[0], metals[1], 1, "plain");
+    models3d::set_display(&mut doc, 0, Display::TwoD);
+    let engine = LocalEngine::default();
+    let mut request = Request::molecule("export", doc);
+    request.format = Some("cdxml".into());
+    let output = engine.request(request).await.unwrap().output.unwrap();
+    let doc = engine
+        .request(Request::import("cdxml", &output))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let metals: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.element == "Ru")
+        .map(|atom| atom.id)
+        .collect();
+    assert_eq!(
+        doc.bonds
+            .iter()
+            .filter(|bond| metals.contains(&bond.a) && metals.contains(&bond.b) && bond.order == 1)
+            .count(),
+        1
+    );
+    assert_eq!(
+        doc.atoms
+            .iter()
+            .filter(|atom| atom.attachment == Some(Kind::MultiCenter))
+            .count(),
+        2
+    );
+    assert_eq!(
+        doc.atoms
+            .iter()
+            .filter(|atom| atom.element == "H"
+                && metals.iter().all(|metal| doc
+                    .bonds
+                    .iter()
+                    .any(|bond| (bond.a == atom.id && bond.b == *metal)
+                        || (bond.b == atom.id && bond.a == *metal))))
+            .count(),
+        4
+    );
 }
 
 #[test]

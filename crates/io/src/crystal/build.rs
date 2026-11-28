@@ -349,6 +349,26 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         vec![]
     };
     if !haptic.is_empty() {
+        let mut hydrogen_contacts: HashMap<usize, Vec<usize>> = HashMap::new();
+        for &(a, b) in &arranged.bonds {
+            for (hydrogen, neighbour) in [(a, b), (b, a)] {
+                if atoms[hydrogen].element == "H" {
+                    hydrogen_contacts
+                        .entry(hydrogen)
+                        .or_default()
+                        .push(neighbour);
+                }
+            }
+        }
+        let mut hydride_bridges: HashMap<(usize, usize), usize> = HashMap::new();
+        for contacts in hydrogen_contacts.values() {
+            if let &[a, b] = contacts.as_slice()
+                && elements::metal(&atoms[a].element)
+                && elements::metal(&atoms[b].element)
+            {
+                *hydride_bridges.entry((a.min(b), a.max(b))).or_default() += 1;
+            }
+        }
         let metals: Vec<_> = atoms
             .iter()
             .enumerate()
@@ -360,7 +380,13 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
             for &(b, pb) in &metals {
                 // The salt rule must not erase the metal core of a molecular
                 // sandwich/half-sandwich cluster merely because it contains C.
-                if a == b || !seen.insert((a.min(b), a.max(b))) {
+                // Multiple explicit mu2 hydride contacts already establish a
+                // bridged core; proximity alone does not justify another edge.
+                let pair = (a.min(b), a.max(b));
+                if a == b
+                    || hydride_bridges.get(&pair).is_some_and(|&count| count >= 2)
+                    || !seen.insert(pair)
+                {
                     continue;
                 }
                 let d = length(sub(pa.xyz, pb.xyz));
