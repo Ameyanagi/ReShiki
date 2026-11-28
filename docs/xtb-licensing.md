@@ -162,9 +162,13 @@ archive and its binaries disappear together:
 - **Rebuild as shipped:**
   `cargo build --profile dist --locked --offline --features xtb --bin reshiki`.
 - **Rebuild with a modified axtb:** edit files under `axtb-source/`, then build
-  with the fork's crates patched to those paths
+  with all seven engine crates and both GEMM crates patched to those paths
   (`--config 'patch."https://github.com/Ameyanagi/axtb".axtb-driver.path="axtb-source/crates/driver"'`,
-  one entry per fork crate, written out in the file) and without `--locked`.
+  plus `--config 'patch.crates-io.gemm-common.path="axtb-source/third_party/gemm-common"'`
+  and the corresponding `private-gemm-x86` override; all nine entries are
+  written out in the file) and without `--locked`. The GEMM overrides replace
+  the root manifest's registry patches, so edits under `third_party/` take
+  effect instead of compiling the untouched copies in `vendored-crates/`.
   The result is a `reshiki` executable that uses the modified library. On
   macOS, sign it ad hoc (`codesign --force --sign - …`) or wrap it as described
   in the file; the system may ask once before running an unsigned app.
