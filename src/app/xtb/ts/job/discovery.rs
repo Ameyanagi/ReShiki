@@ -2,7 +2,8 @@
 
 use super::*;
 use reshiki_optimize::{
-    Convergence, InitialHessian, Level, Options, Status, optimize, ts::discovery,
+    Accuracy, Convergence, InitialHessian, Level, Options, Potential, Status, optimize,
+    ts::discovery,
 };
 use std::cell::RefCell;
 
@@ -298,12 +299,23 @@ struct Native<'a> {
     minimum_thermo: Vec<(Vec<f64>, f64)>,
 }
 
+struct MinimumCheck {
+    resolved: bool,
+    gradient_norm: f64,
+    residual_rmsd_bohr: Option<f64>,
+}
+
 impl discovery::Backend for Native<'_> {
     type Verification = Analysis;
 
     fn relax(&mut self, seed: &ts::Minimum) -> Result<Option<ts::Minimum>, ts::TsError> {
-        let Some(optimized) = self.minimize(seed, &Options::default())? else {
+        let outcome = self.minimize(seed, &Options::default())?;
+        if outcome.status != Status::Converged {
             return Ok(None);
+        }
+        let optimized = ts::Minimum {
+            positions: outcome.positions,
+            energy: outcome.energy,
         };
         let checked = self
             .workers
@@ -315,34 +327,63 @@ impl discovery::Backend for Native<'_> {
         if control(self.cancel, self.tx).is_break() {
             return Err(ts::TsError::Cancelled);
         }
-        let is_minimum = checked
-            .vibrations
-            .as_ref()
-            .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == 0);
-        if is_minimum
-            && self.free
-            && let Some(correction) =
-                minimum_thermochemistry(self.frame, &optimized.positions, self.masses, &checked)
-        {
-            self.minimum_thermo
-                .push((optimized.positions.clone(), correction));
+        let is_minimum = self.resolved_minimum(&optimized, &checked)?.resolved;
+        if is_minimum {
+            self.retain_minimum_thermochemistry(&optimized, &checked);
         }
         Ok(is_minimum.then_some(optimized))
     }
 
     fn canonicalize(&mut self, seed: &ts::Minimum) -> Result<Option<ts::Minimum>, ts::TsError> {
-        self.minimize(
-            seed,
-            &Options {
-                level: Level::Tight,
-                initial_hessian: InitialHessian::Potential,
-                convergence: Convergence::EnergyGradient {
-                    gradient_norm: 1e-10,
+        let mut current = seed.clone();
+        let mut remaining_steps = 100;
+        // Each pass tightens its force target relative to the measured force.
+        // Acceptance always uses a fresh target Hessian and geometric residual,
+        // including the final budget-limited point; no universal force floor
+        // substitutes for resolved geometry.
+        for pass in 0..=8 {
+            if control(self.cancel, self.tx).is_break() {
+                return Err(ts::TsError::Cancelled);
+            }
+            let checked = self.workers[0]
+                .checked_hessian(&current.positions, self.masses)
+                .map_err(ts::TsError::from)
+                .and_then(|computed| checked_method(computed, self.method))?;
+            let measurement = self.resolved_minimum(&current, &checked)?;
+            if measurement.resolved {
+                self.retain_minimum_thermochemistry(&current, &checked);
+                return Ok(Some(current));
+            }
+            let Some(residual) = measurement.residual_rmsd_bohr else {
+                return Ok(None);
+            };
+            if remaining_steps == 0 || pass == 8 || measurement.gradient_norm == 0. {
+                return Ok(None);
+            }
+            let force_reduction =
+                (discovery::minimum_resolution_rmsd_bohr() / residual).min(0.5) * 0.5;
+            let outcome = self.minimize(
+                &current,
+                &Options {
+                    level: Level::Tight,
+                    initial_hessian: InitialHessian::Potential,
+                    convergence: Convergence::EnergyGradient {
+                        gradient_norm: measurement.gradient_norm * force_reduction,
+                    },
+                    max_steps: remaining_steps,
+                    ..Options::default()
                 },
-                max_steps: 100,
-                ..Options::default()
-            },
-        )
+            )?;
+            if outcome.steps == 0 {
+                return Ok(None);
+            }
+            remaining_steps -= outcome.steps;
+            current = ts::Minimum {
+                positions: outcome.positions,
+                energy: outcome.energy,
+            };
+        }
+        Ok(None)
     }
 
     fn search(
@@ -430,11 +471,50 @@ impl discovery::Backend for Native<'_> {
 }
 
 impl Native<'_> {
+    fn retain_minimum_thermochemistry(&mut self, minimum: &ts::Minimum, checked: &Computed) {
+        if self.free
+            && let Some(correction) =
+                minimum_thermochemistry(self.frame, &minimum.positions, self.masses, checked)
+        {
+            self.minimum_thermo
+                .push((minimum.positions.clone(), correction));
+        }
+    }
+
+    fn resolved_minimum(
+        &mut self,
+        minimum: &ts::Minimum,
+        checked: &Computed,
+    ) -> Result<MinimumCheck, ts::TsError> {
+        if control(self.cancel, self.tx).is_break() {
+            return Err(ts::TsError::Cancelled);
+        }
+        let mut gradient = vec![0.; minimum.positions.len()];
+        self.workers[0].evaluate(&minimum.positions, &mut gradient, Accuracy::Normal)?;
+        let residual_rmsd_bohr =
+            discovery::minimum_residual_rmsd(self.numbers, minimum, &gradient, &checked.hessian)?;
+        let resolved = checked
+            .vibrations
+            .as_ref()
+            .is_some_and(|v| imaginary_count(&v.frequencies_cm1) == 0)
+            && residual_rmsd_bohr
+                .is_some_and(|residual| residual <= discovery::minimum_resolution_rmsd_bohr());
+        Ok(MinimumCheck {
+            resolved,
+            gradient_norm: gradient
+                .iter()
+                .map(|value| value * value)
+                .sum::<f64>()
+                .sqrt(),
+            residual_rmsd_bohr,
+        })
+    }
+
     fn minimize(
         &mut self,
         seed: &ts::Minimum,
         options: &Options,
-    ) -> Result<Option<ts::Minimum>, ts::TsError> {
+    ) -> Result<reshiki_optimize::Outcome, ts::TsError> {
         if control(self.cancel, self.tx).is_break() {
             return Err(ts::TsError::Cancelled);
         }
@@ -447,14 +527,10 @@ impl Native<'_> {
             options,
             |_| control(self.cancel, self.tx),
         );
-        match optimized.status {
-            Status::Converged => Ok(Some(ts::Minimum {
-                positions: optimized.positions,
-                energy: optimized.energy,
-            })),
-            Status::MaxSteps => Ok(None),
-            Status::ScfFailure(reason) => Err(ts::TsError::Scf(reason)),
-            Status::Failed(reason) => Err(ts::TsError::Failed(reason)),
+        match &optimized.status {
+            Status::Converged | Status::MaxSteps => Ok(optimized),
+            Status::ScfFailure(reason) => Err(ts::TsError::Scf(reason.clone())),
+            Status::Failed(reason) => Err(ts::TsError::Failed(reason.clone())),
             Status::Cancelled => Err(ts::TsError::Cancelled),
         }
     }
@@ -480,3 +556,6 @@ fn minimum_thermochemistry(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod evidence;

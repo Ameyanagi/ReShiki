@@ -1,0 +1,116 @@
+{
+  "description": "Real GFN2-xTB discovery from the existing 14-atom Claisen fixture; computed model evidence, not experimental activation barriers.",
+  "source_fixture": "crates/qcdata/tests/fixtures/claisen-irc.json",
+  "source_sha256": "646a9a3a2e5a09611762fa02f18051e335afa0c58c11c424421c97db8296cd9c",
+  "reproduction_test": "app::xtb::ts::job::discovery::evidence::captured_claisen_retains_the_unexpected_conformer_and_searches_its_gap",
+  "recorded_date": "2026-11-28",
+  "platform": "macOS arm64",
+  "engine": {
+    "license": "LGPL-3.0-or-later",
+    "name": "axtb",
+    "rev": "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91",
+    "source": "https://github.com/Ameyanagi/axtb",
+    "version": "0.2.0"
+  },
+  "method": "GFN2-xTB",
+  "conventions": "axtb",
+  "charge": 0,
+  "multiplicity": 1,
+  "solvent": null,
+  "threads": 1,
+  "scf_settings": "worker defaults",
+  "numbers": [6, 6, 8, 6, 6, 6, 1, 1, 1, 1, 1, 1, 1, 1],
+  "masses_amu": [
+    12.011, 12.011, 15.999, 12.011, 12.011, 12.011, 1.008, 1.008, 1.008, 1.008, 1.008, 1.008, 1.008,
+    1.008
+  ],
+  "calculation": "Reevaluate 15 captured NEB images; public saved-band saddle refinement and IRC; independently check the target saddle Hessian; production Native discovery backend searches the missing conformer gap; independently check all final minimum and saddle Hessians.",
+  "search_budget_including_initial": 2,
+  "canonicalization_budget": "At most 8 optimizer batches and 100 accepted steps per cached identity normalization; fresh target Hessian and equal-atom Cartesian Newton residual check after each batch.",
+  "minimum_newton_rmsd_limit_bohr": 0.0015588457268119894,
+  "complete": true,
+  "route": [0, 2, 1],
+  "minima": [
+    {
+      "id": 0,
+      "label": "requested reactant conformer A",
+      "energy_hartree": -18.776917986769348,
+      "lowest_frequencies_cm1": [62.07710153700686, 77.50629869496979, 178.9514569151412],
+      "significant_imaginary_modes": 0
+    },
+    {
+      "id": 1,
+      "label": "product",
+      "energy_hartree": -18.789944301681313,
+      "lowest_frequencies_cm1": [83.18133371854348, 102.94121145051542, 123.30187773260644],
+      "significant_imaginary_modes": 0
+    },
+    {
+      "id": 2,
+      "label": "unexpected relaxed reactant conformer B",
+      "energy_hartree": -18.7781405906861,
+      "lowest_frequencies_cm1": [70.05480956327419, 110.46942690260501, 170.30483150456251],
+      "significant_imaginary_modes": 0
+    }
+  ],
+  "edges": [
+    {
+      "reactant": 0,
+      "product": 2,
+      "character": "same mapped bond graph: reactant conformer interconversion",
+      "saddle_energy_hartree": -18.77378274262141,
+      "forward_barrier_kcal_mol": 1.9673954063315189,
+      "reverse_barrier_kcal_mol": 2.7345909471196492,
+      "lowest_worker_frequencies_cm1": [-78.52804816781925, 56.51655004795734, 160.5879829122108],
+      "significant_imaginary_modes": 1,
+      "both_irc_branches_converged": true
+    },
+    {
+      "reactant": 2,
+      "product": 1,
+      "character": "Claisen rearrangement bond changes",
+      "saddle_energy_hartree": -18.734696752488667,
+      "forward_barrier_kcal_mol": 27.261420058549337,
+      "reverse_barrier_kcal_mol": 34.668360537147336,
+      "lowest_worker_frequencies_cm1": [
+        -386.55064142690907, 156.33340454140316, 324.69404739851785
+      ],
+      "significant_imaginary_modes": 1,
+      "both_irc_branches_converged": true
+    }
+  ],
+  "initial_minimum_residuals": [
+    {
+      "energy_hartree": -18.776917986769348,
+      "gradient_norm": 7.735864445540344e-5,
+      "label": "requested reactant",
+      "newton_residual_rmsd_bohr": 0.00019388622824439495
+    },
+    {
+      "energy_hartree": -18.789944301681313,
+      "gradient_norm": 1.8108666720753652e-5,
+      "label": "requested product",
+      "newton_residual_rmsd_bohr": 0.00028235664015020215
+    },
+    {
+      "energy_hartree": -18.77814056033707,
+      "gradient_norm": 1.74384981084521e-5,
+      "label": "IRC +mode end",
+      "newton_residual_rmsd_bohr": 0.0028479747341906567
+    },
+    {
+      "energy_hartree": -18.789944272110084,
+      "gradient_norm": 3.5743587873123025e-5,
+      "label": "IRC -mode end",
+      "newton_residual_rmsd_bohr": 0.0017129622497004645
+    }
+  ],
+  "elapsed_seconds_excluding_build_and_startup": 5.076830625,
+  "limitations": [
+    "Electronic GFN2-xTB energies; no Gibbs free-energy or experimental claim.",
+    "First elementary edge is a conformational transition, not a new covalent intermediate.",
+    "This reuses a captured NEB; only the missing conformer gap runs a fresh NEB.",
+    "SCF and Hessian numerical noise can change the final digits; these values are attributable evidence, not bitwise golden assertions.",
+    "Unresolved physical flat modes or exhausted budgets remain explicit gaps; completeness is established for this bounded fixture only."
+  ]
+}

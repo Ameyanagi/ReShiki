@@ -259,6 +259,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/irc/focus.rs`: Arrow-key stepping belongs to the focused path, never a document shortcut.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
 - `src/app/xtb/ts/job/discovery.rs`: Scheme-only discovery on the geometries evaluated by the native TS search.
+- `src/app/xtb/ts/job/discovery/evidence.rs`: Opt-in numerical evidence using the production worker and discovery backend.
 - `src/app/xtb/ts/profile.rs`: Place a reaction result on the drawing and keep its linked figure current.
 - `src/app/xtb/ts/refine.rs`: Resolve a saved saddle and its endpoint frames on the originating reaction.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.

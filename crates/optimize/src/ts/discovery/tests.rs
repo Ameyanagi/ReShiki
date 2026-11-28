@@ -1,7 +1,10 @@
 use std::collections::VecDeque;
 
 use super::*;
-use crate::ts::{IrcBranch, IrcReason, SaddleReason};
+use crate::{
+    Potential,
+    ts::{IrcBranch, IrcReason, SaddleReason},
+};
 
 const NUMBERS: [u8; 2] = [6, 8];
 
@@ -91,6 +94,7 @@ struct Mock {
     relaxation_error: Option<TsError>,
     normalizations: Vec<f64>,
     normalization_unresolved: bool,
+    canonical_targets: Vec<(f64, Minimum)>,
 }
 
 impl Backend for Mock {
@@ -98,7 +102,12 @@ impl Backend for Mock {
 
     fn canonicalize(&mut self, seed: &Minimum) -> Result<Option<Minimum>, TsError> {
         self.normalizations.push(coordinate(seed));
-        Ok((!self.normalization_unresolved).then(|| seed.clone()))
+        Ok((!self.normalization_unresolved).then(|| {
+            self.canonical_targets
+                .iter()
+                .find(|(q, _)| *q == coordinate(seed))
+                .map_or_else(|| seed.clone(), |(_, minimum)| minimum.clone())
+        }))
     }
 
     fn relax(&mut self, seed: &Minimum) -> Result<Option<Minimum>, TsError> {
@@ -610,35 +619,74 @@ struct NumericalBackend<P> {
     relaxations: usize,
 }
 
+impl<P: Potential> NumericalBackend<P> {
+    fn resolved(&mut self, minimum: &Minimum) -> Result<bool, TsError> {
+        let mut hessian = vec![0.; minimum.positions.len().pow(2)];
+        self.potential
+            .hessian(&minimum.positions, &mut hessian)
+            .unwrap()?;
+        let mut gradient = vec![0.; minimum.positions.len()];
+        self.potential
+            .evaluate(&minimum.positions, &mut gradient, crate::Accuracy::Normal)?;
+        minimum_is_resolved(&[6; 2], minimum, &gradient, &hessian)
+    }
+}
+
 impl<P: crate::Potential + Send> Backend for NumericalBackend<P> {
     type Verification = ();
 
     fn canonicalize(&mut self, seed: &Minimum) -> Result<Option<Minimum>, TsError> {
-        let outcome = crate::optimize(
-            &mut self.potential,
-            &[6; 2],
-            &seed.positions,
-            &crate::Options {
-                level: crate::Level::Tight,
-                convergence: crate::Convergence::EnergyGradient {
-                    gradient_norm: 1e-10,
+        let mut current = seed.clone();
+        let mut remaining_steps = 100;
+        for pass in 0..=8 {
+            if self.resolved(&current)? {
+                return Ok(Some(current));
+            }
+            if remaining_steps == 0 || pass == 8 {
+                return Ok(None);
+            }
+            let mut gradient = vec![0.; current.positions.len()];
+            self.potential
+                .evaluate(&current.positions, &mut gradient, crate::Accuracy::Normal)?;
+            let gradient_norm = gradient
+                .iter()
+                .map(|value| value * value)
+                .sum::<f64>()
+                .sqrt();
+            if gradient_norm == 0. {
+                return Ok(None);
+            }
+            let outcome = crate::optimize(
+                &mut self.potential,
+                &[6; 2],
+                &current.positions,
+                &crate::Options {
+                    level: crate::Level::Tight,
+                    convergence: crate::Convergence::EnergyGradient {
+                        gradient_norm: gradient_norm * 0.1,
+                    },
+                    initial_hessian: crate::InitialHessian::Potential,
+                    max_steps: remaining_steps,
+                    ..crate::Options::default()
                 },
-                initial_hessian: crate::InitialHessian::Potential,
-                max_steps: 100,
-                ..crate::Options::default()
-            },
-            |_| ControlFlow::Continue(()),
-        );
-        match outcome.status {
-            crate::Status::Converged => Ok(Some(Minimum {
+                |_| ControlFlow::Continue(()),
+            );
+            match outcome.status {
+                crate::Status::Converged | crate::Status::MaxSteps => {}
+                crate::Status::ScfFailure(reason) => return Err(TsError::Scf(reason)),
+                crate::Status::Failed(reason) => return Err(TsError::Failed(reason)),
+                crate::Status::Cancelled => return Err(TsError::Cancelled),
+            }
+            if outcome.steps == 0 {
+                return Ok(None);
+            }
+            remaining_steps -= outcome.steps;
+            current = Minimum {
                 positions: outcome.positions,
                 energy: outcome.energy,
-            })),
-            crate::Status::MaxSteps => Ok(None),
-            crate::Status::ScfFailure(reason) => Err(TsError::Scf(reason)),
-            crate::Status::Failed(reason) => Err(TsError::Failed(reason)),
-            crate::Status::Cancelled => Err(TsError::Cancelled),
+            };
         }
+        Ok(None)
     }
 
     fn relax(&mut self, seed: &Minimum) -> Result<Option<Minimum>, TsError> {
@@ -647,16 +695,7 @@ impl<P: crate::Potential + Send> Backend for NumericalBackend<P> {
             crate::ts::minimize(&mut self.potential, &[6; 2], &seed.positions, |_, _| {
                 ControlFlow::Continue(())
             })?;
-        let mut hessian = vec![0.; 36];
-        self.potential
-            .hessian(&minimum.positions, &mut hessian)
-            .unwrap()?;
-        let (frequencies, _) =
-            crate::ts::modes::frequencies(&minimum.positions, &hessian, &[12.; 2])?;
-        Ok(frequencies
-            .iter()
-            .all(|&f| f >= -crate::ts::IMAGINARY_CM1)
-            .then_some(minimum))
+        Ok(self.resolved(&minimum)?.then_some(minimum))
     }
 
     fn search(&mut self, a: &Minimum, b: &Minimum) -> Result<(TsReport, ()), TsError> {
@@ -859,4 +898,226 @@ fn undecided_soft_geometry_is_a_gap_and_not_a_certified_intermediate() {
     assert!(report.edges.is_empty());
     assert_eq!(report.gaps.len(), 1);
     assert!(backend.searches.is_empty());
+}
+
+#[test]
+fn distinct_certified_irc_minimum_and_its_edge_survive_a_normalization_floor() {
+    // The real GFN2-xTB Claisen replay reaches a reactant conformer 0.767
+    // kcal/mol below its requested conformer. Both Hessians are positive, but
+    // fixed-SCF gradients cannot meet the optional 1e-10 normalization target.
+    let [a, actual, b] = [point(0., 0.), point(0.5, -0.767), point(2., -3.)];
+    let initial = candidate(
+        a.clone(),
+        b.clone(),
+        vec![a, point(1., 10.), b.clone()],
+        Some([actual, b]),
+    );
+    let mut backend = Mock::default();
+    let options = Options {
+        max_searches: 1,
+        ..Options::default()
+    };
+    let report = discover(&NUMBERS, (initial, 0), &options, &mut backend).unwrap();
+    assert_eq!(report.minima.len(), 3);
+    assert_eq!(report.order, [0, 2, 1]);
+    assert_eq!(report.edges.len(), 1);
+    assert_eq!((report.edges[0].reactant, report.edges[0].product), (2, 1));
+    assert_eq!(report.gaps.len(), 1);
+    assert_eq!((report.gaps[0].reactant, report.gaps[0].product), (0, 2));
+    assert_eq!(backend.relaxations, [0.5]);
+    assert!(!backend.normalizations.is_empty());
+}
+
+#[test]
+fn a_distinct_energy_irc_seed_still_cannot_change_basin_when_reoptimized() {
+    let [a, actual, b] = [point(0., 0.), point(0.5, -0.767), point(2., -3.)];
+    let initial = candidate(
+        a.clone(),
+        b.clone(),
+        vec![a, point(1., 10.), b.clone()],
+        Some([actual, b]),
+    );
+    let mut backend = Mock {
+        collapse: Some(point(1.5, -0.767)),
+        ..Mock::default()
+    };
+    let report = discover(&NUMBERS, (initial, 0), &Options::default(), &mut backend).unwrap();
+    assert_eq!(report.minima.len(), 2);
+    assert!(report.edges.is_empty());
+    assert_eq!(report.gaps.len(), 1);
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|text| text.contains("changed basin"))
+    );
+}
+
+struct SoftBond;
+
+impl Potential for SoftBond {
+    fn evaluate(
+        &mut self,
+        x: &[f64],
+        g: &mut [f64],
+        _: crate::Accuracy,
+    ) -> Result<f64, crate::EvalError> {
+        let axis: [f64; 3] = std::array::from_fn(|i| x[i + 3] - x[i]);
+        let radius = axis.iter().map(|v| v * v).sum::<f64>().sqrt();
+        for i in 0..3 {
+            g[i + 3] = 1e-4 * (radius - 1.) * axis[i] / radius;
+            g[i] = -g[i + 3];
+        }
+        Ok(0.5e-4 * (radius - 1.).powi(2))
+    }
+
+    fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), crate::EvalError>> {
+        let axis: [f64; 3] = std::array::from_fn(|i| x[i + 3] - x[i]);
+        let radius = axis.iter().map(|v| v * v).sum::<f64>().sqrt();
+        let transverse = 1e-4 * (radius - 1.) / radius;
+        for i in 0..3 {
+            for j in 0..3 {
+                let value = (1e-4 - transverse) * axis[i] * axis[j] / radius.powi(2)
+                    + if i == j { transverse } else { 0. };
+                h[6 * i + j] = value;
+                h[6 * (i + 3) + j + 3] = value;
+                h[6 * i + j + 3] = -value;
+                h[6 * (i + 3) + j] = -value;
+            }
+        }
+        Some(Ok(()))
+    }
+}
+
+#[test]
+fn positive_soft_strain_above_the_energy_window_is_not_a_resolved_minimum() {
+    let first = crate::optimize(
+        &mut SoftBond,
+        &[6; 2],
+        &point(2., 0.).positions,
+        &crate::Options::default(),
+        |_| ControlFlow::Continue(()),
+    );
+    assert_eq!(first.status, crate::Status::Converged);
+    let repeated = crate::optimize(
+        &mut SoftBond,
+        &[6; 2],
+        &first.positions,
+        &crate::Options::default(),
+        |_| ControlFlow::Continue(()),
+    );
+    assert_eq!(repeated.status, crate::Status::Converged);
+    assert!(repeated.energy * KCAL_PER_HARTREE > 0.1);
+    assert!(rmsd(&first.positions, &repeated.positions) < identity_tolerance());
+    let minimum = Minimum {
+        positions: repeated.positions,
+        energy: repeated.energy,
+    };
+    let mut hessian = vec![0.; 36];
+    SoftBond
+        .hessian(&minimum.positions, &mut hessian)
+        .unwrap()
+        .unwrap();
+    let (frequencies, _) =
+        crate::ts::modes::frequencies(&minimum.positions, &hessian, &[12.; 2]).unwrap();
+    assert!(frequencies.iter().all(|&frequency| frequency > 0.));
+    assert!(!minimum_is_resolved(&[6; 2], &minimum, &repeated.gradient, &hessian).unwrap());
+}
+
+#[test]
+fn a_small_geometric_residual_does_not_require_a_universal_tiny_force() {
+    let mut minimum = point(1e-4, 0.);
+    let mut gradient = vec![0.; 6];
+    minimum.energy = SoftBond
+        .evaluate(&minimum.positions, &mut gradient, crate::Accuracy::Normal)
+        .unwrap();
+    assert!(gradient.iter().map(|g| g * g).sum::<f64>().sqrt() > 1e-10);
+    let mut hessian = vec![0.; 36];
+    SoftBond
+        .hessian(&minimum.positions, &mut hessian)
+        .unwrap()
+        .unwrap();
+    assert!(minimum_is_resolved(&[6; 2], &minimum, &gradient, &hessian).unwrap());
+}
+
+#[test]
+fn nonpositive_or_undecidable_physical_curvature_is_unresolved() {
+    let minimum = point(1., 0.);
+    assert!(!minimum_is_resolved(&[6; 2], &minimum, &[0.; 6], &[0.; 36]).unwrap());
+    let mut hessian = vec![0.; 36];
+    SoftDoubleWell {
+        stiffness: 0.02,
+        epsilon: 1.,
+    }
+    .hessian(&minimum.positions, &mut hessian)
+    .unwrap()
+    .unwrap();
+    assert!(!minimum_is_resolved(&[6; 2], &minimum, &[0.; 6], &hessian).unwrap());
+}
+
+#[test]
+fn a_high_strain_registered_endpoint_is_resolved_before_claiming_a_new_basin() {
+    let [strained, actual, product] = [point(2., 0.125), point(0., 0.), point(5., -1.)];
+    let initial = candidate(
+        strained.clone(),
+        product.clone(),
+        vec![strained.clone(), point(3., 10.), product.clone()],
+        Some([actual.clone(), product]),
+    );
+    let mut backend = Mock {
+        canonical_targets: vec![(2., actual.clone())],
+        ..Mock::default()
+    };
+    let report = discover(&NUMBERS, (initial, 11), &Options::default(), &mut backend).unwrap();
+    assert!(report.complete());
+    assert_eq!(report.minima.len(), 2);
+    assert_eq!(report.minima[0], actual);
+    assert_eq!(report.edges.len(), 1);
+    let corrected = &report.attempts[report.edges[0].attempt].report;
+    assert_eq!(corrected.reactant, report.minima[0]);
+    assert_eq!(corrected.path.first(), Some(&strained));
+    assert!((corrected.forward_barrier_kcal() - 10.).abs() < 1e-12);
+    assert!(backend.normalizations.contains(&2.));
+}
+
+#[test]
+fn resolving_a_later_reference_cannot_change_an_already_verified_edge() {
+    let [strained, actual, middle, product] = [
+        point(2., 0.125),
+        point(0., 0.),
+        point(4., -1.),
+        point(6., -3.),
+    ];
+    let initial = candidate(
+        strained.clone(),
+        product.clone(),
+        vec![strained.clone(), point(3., 10.), product.clone()],
+        Some([strained.clone(), middle.clone()]),
+    );
+    let gap = candidate(
+        middle.clone(),
+        product.clone(),
+        vec![middle, point(5., 8.), product.clone()],
+        Some([actual.clone(), product]),
+    );
+    let mut backend = Mock {
+        canonical_targets: vec![(2., actual)],
+        reports: VecDeque::from([gap]),
+        ..Mock::default()
+    };
+    let report = discover(&NUMBERS, (initial, 11), &Options::default(), &mut backend).unwrap();
+    assert!(!report.complete());
+    assert_eq!(report.minima[0], strained);
+    assert_eq!(report.edges.len(), 1);
+    let retained = &report.attempts[report.edges[0].attempt];
+    assert_eq!(retained.verification, 11);
+    assert_eq!(retained.report.reactant, strained);
+    assert!((retained.report.forward_barrier_kcal() - 9.875).abs() < 1e-12);
+    assert_eq!(report.gaps.len(), 1);
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|text| text.contains("already linked minimum"))
+    );
 }

@@ -5,8 +5,11 @@
 
 use std::{collections::BTreeMap, ops::ControlFlow};
 
-use super::{Minimum, Reached, TsError, TsReport, endpoint, mapping, validate_geometry};
-use crate::KCAL_PER_HARTREE;
+use super::{Minimum, Reached, TsError, TsReport, endpoint, mapping, modes, validate_geometry};
+use crate::{
+    KCAL_PER_HARTREE,
+    linalg::{dot, projected_eigen},
+};
 
 /// Independent limits for the complete discovery, including the initial search.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,14 +54,16 @@ pub enum Event {
 pub trait Backend {
     type Verification;
 
-    /// Relax and independently certify a minimum. `None` means the candidate
-    /// did not converge to a stationary point without significant imaginary modes.
+    /// Relax and independently certify a minimum, including a small residual
+    /// geometric displacement in soft modes (see [`minimum_is_resolved`]).
+    /// `None` means its stationarity or minimum spectrum remains unresolved.
     fn relax(&mut self, seed: &Minimum) -> Result<Option<Minimum>, TsError>;
 
-    /// Normalize an already relaxed minimum within its basin using stringent
-    /// stationarity/displacement convergence. These coordinates are identity
-    /// evidence only. Return `None` when soft modes or numerical precision leave
-    /// the basin undecided; ordinary force convergence alone is insufficient.
+    /// Certify and, when needed, normalize an already relaxed minimum within
+    /// its basin using a target Hessian/residual displacement check. Return
+    /// `None` when soft modes or numerical precision leave identity undecided;
+    /// ordinary force convergence alone is insufficient. Validated normalized
+    /// representations may replace edge-free references in the result.
     fn canonicalize(&mut self, seed: &Minimum) -> Result<Option<Minimum>, TsError>;
 
     /// Search the supplied, already relaxed endpoints without preparing or
@@ -166,6 +171,75 @@ fn validate_report(numbers: &[u8], report: &TsReport) -> Result<(), TsError> {
     Ok(())
 }
 
+/// Resolve minimum stationarity from its target-method gradient and Cartesian
+/// Hessian, in Eh/bohr and Eh/bohr². Remove only global translations/rotations
+/// with an equal-atom Cartesian projection, consistently with minimum identity.
+///
+/// Every physical curvature must be positive. The returned Newton residual is
+/// `sqrt(sum((g·mode / eigenvalue)²) / atoms)` in bohr. The
+/// [`minimum_is_resolved`] certificate requires it below one quarter of the
+/// strict identity RMSD tolerance (currently 1.56e-3 bohr). This checks geometric
+/// precision rather than a universal force threshold: a soft strained geometry
+/// can meet ordinary force tolerances while remaining far from its minimum.
+/// Nonpositive/undecidable physical curvature is conservatively unresolved,
+/// including additional flat modes of separated noninteracting fragments.
+pub fn minimum_residual_rmsd(
+    numbers: &[u8],
+    minimum: &Minimum,
+    gradient: &[f64],
+    hessian: &[f64],
+) -> Result<Option<f64>, TsError> {
+    validate_minimum(numbers, minimum)?;
+    let dimensions = minimum.positions.len();
+    if gradient.len() != dimensions
+        || hessian.len() != dimensions * dimensions
+        || !gradient
+            .iter()
+            .chain(hessian)
+            .all(|value| value.is_finite())
+    {
+        return Err(TsError::Invalid(
+            "minimum residual requires a finite Cartesian gradient and Hessian".into(),
+        ));
+    }
+    let (values, vectors) = projected_eigen(
+        hessian.to_vec(),
+        dimensions,
+        &modes::rigid_basis(&minimum.positions, None),
+    )
+    .map_err(TsError::Failed)?;
+    if values.iter().any(|&value| value <= 0.) {
+        return Ok(None);
+    }
+    let residual_squared = values
+        .iter()
+        .zip(vectors.chunks_exact(dimensions))
+        .map(|(&value, mode)| (dot(gradient, mode) / value).powi(2))
+        .sum::<f64>()
+        / numbers.len() as f64;
+    let residual = residual_squared.sqrt();
+    Ok(residual.is_finite().then_some(residual))
+}
+
+/// Whether the target Hessian resolves the minimum's geometry to one quarter
+/// of the strict identity tolerance; see [`minimum_residual_rmsd`] for units,
+/// projection and treatment of physical flat modes.
+pub fn minimum_is_resolved(
+    numbers: &[u8],
+    minimum: &Minimum,
+    gradient: &[f64],
+    hessian: &[f64],
+) -> Result<bool, TsError> {
+    Ok(minimum_residual_rmsd(numbers, minimum, gradient, hessian)?
+        .is_some_and(|residual| residual <= minimum_resolution_rmsd_bohr()))
+}
+
+/// Required equal-atom Newton residual RMSD, derived from the stricter
+/// minimum-identity tolerance rather than a method-independent force cutoff.
+pub fn minimum_resolution_rmsd_bohr() -> f64 {
+    identity_tolerance() / 4.
+}
+
 fn rmsd(reference: &[f64], mobile: &[f64]) -> f64 {
     let weights = vec![1.; reference.len() / 3];
     mapping::superpose(reference, mobile, &weights)
@@ -180,14 +254,20 @@ fn rmsd(reference: &[f64], mobile: &[f64]) -> f64 {
 /// Discovery uses a much stricter identity test than endpoint classification:
 /// a labeled graph alone must never merge conformers or separated complexes.
 fn same_minimum(numbers: &[u8], a: &Minimum, b: &Minimum) -> bool {
-    let tolerance = 2.0 * 3.0_f64.sqrt() * crate::Level::Normal.criteria().max_step;
-    plausible_identity(numbers, a, b) && rmsd(&a.positions, &b.positions) <= tolerance
+    plausible_identity(numbers, a, b) && rmsd(&a.positions, &b.positions) <= identity_tolerance()
+}
+
+fn identity_tolerance() -> f64 {
+    2.0 * 3.0_f64.sqrt() * crate::Level::Normal.criteria().max_step
 }
 
 fn plausible_identity(numbers: &[u8], a: &Minimum, b: &Minimum) -> bool {
-    (a.energy - b.energy).abs() * KCAL_PER_HARTREE <= 0.1
-        && endpoint::bonds_prevalidated(numbers, &a.positions)
-            == endpoint::bonds_prevalidated(numbers, &b.positions)
+    (a.energy - b.energy).abs() * KCAL_PER_HARTREE <= 0.1 && same_graph(numbers, a, b)
+}
+
+fn same_graph(numbers: &[u8], a: &Minimum, b: &Minimum) -> bool {
+    endpoint::bonds_prevalidated(numbers, &a.positions)
+        == endpoint::bonds_prevalidated(numbers, &b.positions)
 }
 
 fn known_minimum(numbers: &[u8], minima: &[Minimum], point: &Minimum) -> Option<usize> {
@@ -283,7 +363,7 @@ struct Planner<'a, T> {
     options: &'a Options,
     result: Report<T>,
     relaxations: usize,
-    /// Tight normalization is cached and never replaces a certified geometry.
+    /// Certified same-basin representations are cached; linked minima never move.
     canonical: BTreeMap<usize, Option<Minimum>>,
 }
 
@@ -392,15 +472,30 @@ impl<T> Planner<'_, T> {
             .minima
             .iter()
             .enumerate()
-            .filter(|(_, minimum)| {
-                plausible_identity(self.numbers, seed, minimum)
-                    || plausible_identity(self.numbers, canonical, minimum)
-            })
+            .filter(|(_, minimum)| same_graph(self.numbers, seed, minimum))
             .map(|(id, minimum)| (id, minimum.clone()))
             .collect();
         let mut matched = None;
         for (id, reference) in references {
             let normalized = self.canonicalize(&reference, Some(id), backend)?;
+            if reference != normalized {
+                let linked = self
+                    .result
+                    .edges
+                    .iter()
+                    .any(|edge| edge.reactant == id || edge.product == id);
+                if linked && !same_minimum(self.numbers, &reference, &normalized) {
+                    self.result.diagnostics.push(format!(
+                        "normalization changes already linked minimum {id}; its verified edge is retained and the new gap remains unresolved"
+                    ));
+                    return None;
+                }
+                // A certified same-basin representation can correct an
+                // underresolved Normal endpoint before any edge uses it.
+                if !linked {
+                    self.result.minima[id] = normalized.clone();
+                }
+            }
             if same_minimum(self.numbers, canonical, &normalized) {
                 if matched.is_some() {
                     self.result.diagnostics.push("minimum normalization matches multiple registered minima; identity is unresolved".into());
@@ -424,8 +519,9 @@ impl<T> Planner<'_, T> {
         if let Some(id) = known_minimum(self.numbers, &self.result.minima, seed) {
             return Some(id);
         }
-        // An IRC end is already relaxed. Establish its basin before any extra
-        // minimization, which must not silently move it into another basin.
+        // Resolve both the observed end and every same-graph reference before
+        // deciding they are distinct. Total soft strain can exceed the energy
+        // identity window on either side despite ordinary force convergence.
         let mut canonical = if image.is_none() {
             let normalized = self.canonicalize(seed, None, backend)?;
             if let Some(id) = self.canonical_match(seed, &normalized, backend)? {
@@ -438,7 +534,10 @@ impl<T> Planner<'_, T> {
         if !self.relaxation_event(image, backend) {
             return None;
         }
-        let minimum = match backend.relax(seed) {
+        // Preserve the resolved same-basin representation instead of handing
+        // an underresolved Normal IRC geometry back to the loose minimizer.
+        let relaxation_seed = canonical.as_ref().unwrap_or(seed);
+        let minimum = match backend.relax(relaxation_seed) {
             Ok(Some(minimum)) => minimum,
             Ok(None) => {
                 self.result
@@ -465,15 +564,27 @@ impl<T> Planner<'_, T> {
             self.fail(error);
             return None;
         }
-        if let Some(before) = &canonical {
-            if !same_minimum(self.numbers, seed, &minimum) {
-                let after = self.canonicalize(&minimum, None, backend)?;
-                if !same_minimum(self.numbers, before, &after) {
-                    self.result.diagnostics.push("additional IRC endpoint relaxation changed basin; the branch is unresolved".into());
-                    return None;
-                }
+        if image.is_none()
+            && !same_minimum(self.numbers, seed, &minimum)
+            && !canonical
+                .as_ref()
+                .is_some_and(|before| same_minimum(self.numbers, before, &minimum))
+        {
+            let before = match canonical {
+                Some(normalized) => normalized,
+                None => self.canonicalize(seed, None, backend)?,
+            };
+            let after = self.canonicalize(&minimum, None, backend)?;
+            if !same_minimum(self.numbers, &before, &after) {
+                self.result.diagnostics.push(
+                    "additional IRC endpoint relaxation changed basin; the branch is unresolved"
+                        .into(),
+                );
+                return None;
             }
-        } else {
+            canonical = Some(before);
+        }
+        if canonical.is_none() {
             if let Some(id) = known_minimum(self.numbers, &self.result.minima, &minimum) {
                 return Some(id);
             }
@@ -481,7 +592,7 @@ impl<T> Planner<'_, T> {
                 .result
                 .minima
                 .iter()
-                .any(|reference| plausible_identity(self.numbers, &minimum, reference))
+                .any(|reference| same_graph(self.numbers, &minimum, reference))
             {
                 let normalized = self.canonicalize(&minimum, None, backend)?;
                 if let Some(id) = self.canonical_match(&minimum, &normalized, backend)? {
