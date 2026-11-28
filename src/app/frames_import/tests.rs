@@ -435,6 +435,24 @@ fn haptic_cluster_folds_only_methyl_hydrogens_and_keeps_the_source_frame() {
 }
 
 #[test]
+fn selected_model_hydrogen_folding_preserves_boundary_bonds_and_other_objects() {
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    let (frame, _) = qcread::read_xyz_geometry(xyz).unwrap();
+    let (mut doc, _) = drawing(&frame).unwrap();
+    let source = doc.models[0].frame_sources()[7].unwrap();
+    let outside = doc.add_atom("O", reshiki::document::Point::new(500., 0.));
+    doc.add_bond(source, outside, 1, "plain");
+    let boundary = doc.bonds.last().unwrap().clone();
+    let other = doc.atom(outside).unwrap().clone();
+    fold_model_hydrogens(&mut doc, 0, &frame);
+    assert_eq!(doc.models[0].hydrogens.len(), 30);
+    assert_eq!(doc.atom(outside), Some(&other));
+    assert_eq!(doc.bonds.last(), Some(&boundary));
+    assert!(doc.atom(source).is_some());
+    doc.validate().unwrap();
+}
+
+#[test]
 fn ensemble_uses_file_order_with_folded_hydrogens() {
     let text = "3\n -5.100000\nH 0.97 0 0\nO 0 0 0\nH -0.30 0.90 0\n\
                 3\n -5.000000\nH 0.96 0 0\nO 0 0 0\nH -0.24 0.93 0\n";

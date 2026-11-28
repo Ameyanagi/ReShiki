@@ -945,6 +945,211 @@ fn imported_haptic_cluster_flattens_through_the_normal_view_action() {
 }
 
 #[test]
+fn ordinary_imported_molecule_flatten_keeps_the_prepared_stereo_path() {
+    let xyz =
+        "5\nchiral carbon\nC 0 0 0\nF 0.8 0.8 0.8\nCl -1 -1 1\nBr -1 1 -1\nH 0.63 -0.63 -0.63\n";
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+    let atoms = app.tab.doc.models[0].linked_ids(&app.tab.doc);
+    app.tab.selected = atoms.clone();
+    let model = &mut app.tab.doc.models[0];
+    assert!(model.is_file_derived());
+    model.rotation = models3d::turn(model.rotation, 31., -19., false);
+    let prepared = Prepared::new(&app.tab.doc, &atoms)
+        .or_else(|_| Prepared::relaxed(&app.tab.doc, &atoms))
+        .unwrap();
+    let expected = prepared.flattened(&app.tab.doc.models[0]).unwrap();
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        app.tab.doc.atoms.len(),
+        5,
+        "ordinary explicit H is not folded by cluster policy"
+    );
+    assert!(app.tab.doc.models[0].hydrogens.is_empty());
+    for (atom, expected) in app.tab.doc.atoms.iter().zip(&expected.atoms) {
+        assert_eq!(
+            (atom.id, atom.position, atom.depth, &atom.stereo),
+            (
+                expected.id,
+                expected.position,
+                expected.depth,
+                &expected.stereo
+            )
+        );
+    }
+    assert_eq!(app.tab.doc.bonds, expected.bonds);
+    assert_eq!(
+        app.tab.doc.models[0].frame_positions(),
+        before.models[0].frame_positions()
+    );
+    app.tab.doc.validate().unwrap();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn multinuclear_hydride_models_without_haptic_rings_flatten_directly() {
+    let xyz = "6\nmetal hydride core\nRu -1.2 0 0\nRu 1.2 0 0\nH 0 -1.1 0\nH 0 1.1 0\nH 0 0 -1.1\nH 0 0 1.1\n";
+    for generated in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+        assert!(app.tab.doc.atoms.iter().all(|a| a.attachment.is_none()));
+        if generated {
+            let placed = app.tab.doc.models[0].atoms.clone();
+            app.tab.doc.models[0] = models3d::Model3d::new(
+                &app.tab.doc,
+                placed,
+                vec![],
+                models3d::ForceField::default(),
+            );
+            assert!(!app.tab.doc.models[0].is_file_derived());
+        }
+        app.tab.doc.models[0].rotation = [1., 0., 0., 0.];
+        models3d::set_display(&mut app.tab.doc, 0, Display::ThreeD);
+        let atoms = app.tab.doc.models[0].linked_ids(&app.tab.doc);
+        app.tab.selected = atoms;
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Models3d(Action::Flatten));
+        assert!(!app.error, "generated={generated}: {}", app.status);
+        let hydrogens: Vec<_> = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| a.element == "H")
+            .collect();
+        let clearance = app.tab.doc.drawing_style.font_size() * 1.6;
+        for (i, atom) in hydrogens.iter().enumerate() {
+            assert!(
+                hydrogens
+                    .iter()
+                    .skip(i + 1)
+                    .all(|other| atom.position.distance(other.position) >= clearance - 1e-4)
+            );
+        }
+        assert_eq!(app.tab.doc.bonds, before.bonds);
+        assert_eq!(
+            app.tab.doc.models[0].frame_positions(),
+            before.models[0].frame_positions()
+        );
+        app.tab.doc.validate().unwrap();
+    }
+}
+
+#[test]
+fn duplicated_cluster_flatten_folds_only_selected_model_and_preserves_calculations() {
+    use reshiki::{qcdata, science};
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+    app.tab.selected = app.tab.doc.models[0].linked_ids(&app.tab.doc);
+    app.duplicate_selection();
+    assert_eq!(app.tab.doc.models.len(), 2);
+    assert!(!app.error, "{}", app.status);
+    let shifted: Vec<_> = app.tab.doc.models[1]
+        .frame_positions()
+        .into_iter()
+        .map(|p| p.map(f64::from))
+        .map(|[x, y, z]| [x + 0.25, y, z])
+        .collect();
+    assert!(app.tab.doc.models[1].set_frame_positions(&shifted));
+    for index in 0..2 {
+        let atom = app.tab.doc.models[index].linked_atoms[0];
+        let launch = science::launch(&app.tab.doc, atom, 0, 1).unwrap();
+        assert_eq!(launch.atoms, app.tab.doc.models[index].frame_sources());
+        let result: qcdata::CalcResult = serde_json::from_value(serde_json::json!({
+            "frame": launch.frame.hash(), "task": "energy", "settings": {"imported": {}},
+            "provenance": {"program": "test", "source": {"imported": {
+                "format": "xyz", "file_name": "cluster.xyz", "job": index
+            }}}, "status": "converged", "energy_hartree": -100.0 - index as f64,
+        }))
+        .unwrap();
+        science::attach(&mut app.tab.doc, &launch, vec![], result).unwrap();
+    }
+    assert_ne!(
+        app.tab.doc.science.attachments[0].frame,
+        app.tab.doc.science.attachments[1].frame
+    );
+    app.tab.selected = app.tab.doc.models[1].linked_ids(&app.tab.doc);
+    let before = app.tab.doc.clone();
+    let untouched: std::collections::HashSet<_> =
+        before.models[0].linked_atoms.iter().copied().collect();
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models.len(), 2);
+    assert_eq!(app.tab.doc.models[0], before.models[0]);
+    assert_eq!(app.tab.doc.models[1].atoms.len(), 26);
+    assert_eq!(app.tab.doc.models[1].hydrogens.len(), 30);
+    assert_eq!(app.tab.doc.atoms.len(), 86);
+    let original_atoms: Vec<_> = before
+        .atoms
+        .iter()
+        .filter(|a| untouched.contains(&a.id))
+        .collect();
+    let remaining_atoms: Vec<_> = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .filter(|a| untouched.contains(&a.id))
+        .collect();
+    assert_eq!(remaining_atoms, original_atoms);
+    let original_bonds: Vec<_> = before
+        .bonds
+        .iter()
+        .filter(|b| untouched.contains(&b.a))
+        .collect();
+    let remaining_bonds: Vec<_> = app
+        .tab
+        .doc
+        .bonds
+        .iter()
+        .filter(|b| untouched.contains(&b.a))
+        .collect();
+    assert_eq!(remaining_bonds, original_bonds);
+    assert_eq!(
+        app.tab.doc.science.attachments[0],
+        before.science.attachments[0]
+    );
+    assert_eq!(
+        app.tab.doc.science.attachments[1].atoms,
+        app.tab.doc.models[1].frame_sources()
+    );
+    for (current, prior) in app
+        .tab
+        .doc
+        .science
+        .results
+        .iter()
+        .zip(&before.science.results)
+    {
+        assert!(Arc::ptr_eq(&current.result, &prior.result));
+    }
+    for attachment in &app.tab.doc.science.attachments {
+        assert_eq!(
+            attachment.freshness(&app.tab.doc),
+            science::Freshness::Current
+        );
+    }
+    let selected = app.tab.doc.models[1].linked_atoms[0];
+    let launch = science::launch(&app.tab.doc, selected, 0, 1).unwrap();
+    assert_eq!(launch.atoms, app.tab.doc.science.attachments[1].atoms);
+    assert_eq!(launch.frame.hash(), before.science.attachments[1].frame);
+    assert_eq!(
+        app.tab.doc.models[1].frame_positions(),
+        before.models[1].frame_positions()
+    );
+    app.tab.doc.validate().unwrap();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 #[ignore = "manual editable import/Flatten/export QA; paths supplied through environment"]
 fn export_imported_cluster_from_normal_flatten_action() {
     let input = std::env::var("RESHIKI_CLUSTER_INPUT").expect("RESHIKI_CLUSTER_INPUT");

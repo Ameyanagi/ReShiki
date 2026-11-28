@@ -908,16 +908,30 @@ impl App {
             .drawn
             .clone()
             .unwrap_or_else(|| models3d::Drawn::of(&self.tab.doc, model));
-        let flat = if model.is_file_derived() {
-            // Imported distances are drawing data, not chemical stereo.
-            // Flatten its retained coordinates directly, keeping the drawing
-            // centre instead of preparing a molecular identity.
+        let direct_projection = model.cell.is_some() || {
+            let linked: std::collections::HashSet<_> = model.linked_atoms.iter().copied().collect();
+            let mut metals = 0;
+            self.tab
+                .doc
+                .atoms
+                .iter()
+                .filter(|a| linked.contains(&a.id))
+                .any(|a| {
+                    metals += usize::from(reshiki::joining::coordination_metal(a));
+                    metals >= 2 || a.attachment == Some(reshiki::attachments::Kind::MultiCenter)
+                })
+        };
+        let flat = if direct_projection {
+            // Crystals, haptic complexes and multinuclear metal cores retain
+            // their coordinate topology instead of preparing an ordinary
+            // molecular identity. Organic molecules keep stereo preparation.
             let mut doc = self.tab.doc.clone();
-            if model.cell.is_none()
+            if model.is_file_derived()
+                && model.cell.is_none()
                 && let Some(&atom) = model.linked_atoms.first()
                 && let Ok(launch) = reshiki::science::launch(&doc, atom, 0, 1)
             {
-                super::frames_import::fold_calculation_hydrogens(&mut doc, &launch.frame);
+                super::frames_import::fold_model_hydrogens(&mut doc, index, &launch.frame);
             }
             if let Some(imported) = doc.models.get_mut(index) {
                 // Import-time folding refits the opening view. Flatten uses
@@ -934,7 +948,9 @@ impl App {
                 atoms = model.linked_ids(&doc);
                 let centre = reshiki::editing::center(&doc, &atoms);
                 models3d::lay_out_flat(&mut doc, &model);
-                models3d::lay_out_bridges(&mut doc, &model);
+                if model.cell.is_none() {
+                    models3d::lay_out_bridges(&mut doc, &model);
+                }
                 let projected = reshiki::editing::center(&doc, &atoms);
                 doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
                 doc
