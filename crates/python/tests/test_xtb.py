@@ -183,7 +183,6 @@ def test_version_mismatch(worker, monkeypatch):
     assert not xtb.available()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="The xTB worker is unavailable on Windows")
 def test_missing_worker_keeps_os_error(monkeypatch, tmp_path):
     monkeypatch.setitem(
         sys.modules,
