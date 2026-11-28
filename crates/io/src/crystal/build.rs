@@ -340,7 +340,40 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         warnings,
     } = structure;
     let links = links(&atoms, lattice.as_ref())?;
-    let arranged = arrange(&atoms, &links, lattice.as_ref());
+    let mut arranged = arrange(&atoms, &links, lattice.as_ref());
+    // Periodic drawings retain their distance-derived contact graph. A
+    // molecular haptic ligand uses the existing semantic attachment format.
+    let haptic = if lattice.is_none() {
+        super::haptic::contacts(&atoms, &arranged.xyz, &arranged.bonds)
+    } else {
+        vec![]
+    };
+    if !haptic.is_empty() {
+        let metals: Vec<_> = atoms
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| elements::metal(&a.element))
+            .collect();
+        let attached: HashSet<_> = haptic.iter().map(|h| h.metal).collect();
+        let mut seen: HashSet<_> = arranged.bonds.iter().copied().collect();
+        for &(a, pa) in metals.iter().filter(|(a, _)| attached.contains(a)) {
+            for &(b, pb) in &metals {
+                // The salt rule must not erase the metal core of a molecular
+                // sandwich/half-sandwich cluster merely because it contains C.
+                if a == b || !seen.insert((a.min(b), a.max(b))) {
+                    continue;
+                }
+                let d = length(sub(pa.xyz, pb.xyz));
+                if d > 0.4
+                    && d < elements::covalent_radius(&pa.element)
+                        + elements::covalent_radius(&pb.element)
+                        + TOLERANCE
+                {
+                    arranged.bonds.push((a.min(b), a.max(b)));
+                }
+            }
+        }
+    }
     let mut doc = Document::default();
     let ids: Vec<u64> = atoms
         .iter()
@@ -364,6 +397,24 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         if a != b && bonded.insert((a.min(b), a.max(b))) {
             doc.add_bond(a, b, order, "plain");
         }
+    }
+    let mut anchors = Vec::new();
+    for contact in haptic {
+        let Some(metal) = id(contact.metal) else {
+            continue;
+        };
+        let members: Vec<_> = contact.ring.iter().filter_map(|&i| id(i)).collect();
+        doc.bonds.retain(|b| {
+            !((b.a == metal && members.contains(&b.b)) || (b.b == metal && members.contains(&b.a)))
+        });
+        let anchor = doc.add_atom("*", Point::default());
+        if let Some(atom) = doc.atom_mut(anchor) {
+            atom.no_implicit = true;
+            atom.centroid = members;
+            atom.attachment = Some(crate::attachments::Kind::MultiCenter);
+        }
+        doc.add_bond(anchor, metal, 1, "plain");
+        anchors.push(anchor);
     }
     let narrow = |v: i32| i8::try_from(v).unwrap_or(0);
     let mut crossing: Vec<Crossing> = arranged
@@ -414,8 +465,10 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
     });
     let mut model =
         Model3d::new(&doc, placed, vec![], ForceField::default()).with_cell(&doc, cell, sites);
+    model.linked_atoms.extend(anchors);
     model.notes = warnings;
     lay_out(&mut doc, &model);
+    models3d::lay_out_attachments(&mut doc, &model);
     doc.models.push(model);
     models3d::require_version(&mut doc);
     if doc.models.iter().any(|m| m.cell.is_some()) {

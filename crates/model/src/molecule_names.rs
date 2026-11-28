@@ -139,9 +139,9 @@ pub fn component(doc: &Document, seed: u64) -> Vec<u64> {
         return vec![];
     }
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
-    for bond in &doc.bonds {
-        adjacent.entry(bond.a).or_default().push(bond.b);
-        adjacent.entry(bond.b).or_default().push(bond.a);
+    for (a, b) in crate::attachments::edges(doc) {
+        adjacent.entry(a).or_default().push(b);
+        adjacent.entry(b).or_default().push(a);
     }
     let mut found = HashSet::from([seed]);
     let mut pending = vec![seed];

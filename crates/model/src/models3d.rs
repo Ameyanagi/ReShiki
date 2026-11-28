@@ -12,11 +12,13 @@
 //!
 //! A model read from a crystal file (#417) may hold several molecules, or an
 //! extended network, with its unit cell: see [`crystal`].
+mod bridges;
 mod cell_occlusion;
 mod contact;
 pub mod crystal;
 mod ellipsoids;
 mod polish;
+pub use bridges::lay_out_bridges;
 pub mod surface;
 use crate::scene::Contact;
 use crate::{
@@ -353,11 +355,15 @@ impl Drawn {
     }
 
     /// This layout, kept while `model`'s molecule is drawn as it is now.
-    pub fn kept(self, doc: &Document, model: &Model3d) -> Self {
-        Self {
-            at: layout_center(doc, model),
-            ..self
-        }
+    pub fn kept(mut self, doc: &Document, model: &Model3d) -> Self {
+        let linked = model.ids();
+        self.atoms.retain(|a| linked.contains(&a.0));
+        self.bonds
+            .retain(|b| linked.contains(&b.0) && linked.contains(&b.1));
+        let mapping: HashMap<_, _> = linked.iter().map(|id| (*id, *id)).collect();
+        self.depth_appearance = crate::depth_appearance::remap(&self.depth_appearance, &mapping);
+        self.at = layout_center(doc, model);
+        self
     }
 
     /// Combine replaced models' saved layouts in the current drawing frame.
@@ -2223,12 +2229,10 @@ fn prune_sources(model: &mut Model3d, present: &HashSet<u64>) {
 /// differences in the chemical fields. A wildcard or free text is not an
 /// element substitution, and changing a bond's stereo source is not exempt.
 fn crystal_substitution(before: &Document, doc: &Document, ids: &HashSet<u64>) -> bool {
-    if doc
-        .atoms
-        .iter()
-        .filter(|a| ids.contains(&a.id))
-        .any(|a| !crate::editing::ELEMENTS.contains(&a.element.as_str()))
-    {
+    if doc.atoms.iter().filter(|a| ids.contains(&a.id)).any(|a| {
+        !crate::editing::ELEMENTS.contains(&a.element.as_str())
+            && a.attachment != Some(crate::attachments::Kind::MultiCenter)
+    }) {
         return false;
     }
     let normalized = |doc: &Document| {
@@ -4925,6 +4929,41 @@ pub fn lay_out_flat(doc: &mut Document, model: &Model3d) {
         }
         if linear.contains(&atom.id) {
             atom.display.carbons = Some(crate::atom_labels::Carbons::All);
+        }
+    }
+    lay_out_attachments(doc, model);
+}
+
+/// Project fixed haptic anchors from their real member atoms without adding
+/// dummy atoms to the retained model or its calculation frame.
+pub fn lay_out_attachments(doc: &mut Document, model: &Model3d) {
+    let anchors: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| {
+            model.contains(a.id) && a.attachment == Some(crate::attachments::Kind::MultiCenter)
+        })
+        .filter_map(|a| {
+            let members = a
+                .centroid
+                .iter()
+                .map(|&id| doc.atom(id))
+                .collect::<Option<Vec<_>>>()?;
+            let n = members.len() as f32;
+            Some((
+                a.id,
+                Point::new(
+                    members.iter().map(|a| a.position.x).sum::<f32>() / n,
+                    members.iter().map(|a| a.position.y).sum::<f32>() / n,
+                ),
+                members.iter().map(|a| a.depth).sum::<f32>() / n,
+            ))
+        })
+        .collect();
+    for (id, position, depth) in anchors {
+        if let Some(a) = doc.atom_mut(id) {
+            a.position = position;
+            a.depth = depth;
         }
     }
 }

@@ -889,7 +889,7 @@ impl App {
         if !self.idle() {
             return;
         }
-        let Some((atoms, Some(index))) = self.selected_model() else {
+        let Some((mut atoms, Some(index))) = self.selected_model() else {
             self.status = "Select a molecule with a 3D model to flatten it".into();
             self.error = true;
             return;
@@ -908,16 +908,37 @@ impl App {
             .drawn
             .clone()
             .unwrap_or_else(|| models3d::Drawn::of(&self.tab.doc, model));
-        let flat = if model.cell.is_some() {
-            // A crystal's distances are drawing data, not chemical stereo.
+        let flat = if model.is_file_derived() {
+            // Imported distances are drawing data, not chemical stereo.
             // Flatten its retained coordinates directly, keeping the drawing
             // centre instead of preparing a molecular identity.
             let mut doc = self.tab.doc.clone();
-            let centre = reshiki::editing::center(&doc, &atoms);
-            models3d::lay_out_flat(&mut doc, model);
-            let projected = reshiki::editing::center(&doc, &atoms);
-            doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
-            Ok(doc)
+            if model.cell.is_none()
+                && let Some(&atom) = model.linked_atoms.first()
+                && let Ok(launch) = reshiki::science::launch(&doc, atom, 0, 1)
+            {
+                super::frames_import::fold_calculation_hydrogens(&mut doc, &launch.frame);
+            }
+            if let Some(imported) = doc.models.get_mut(index) {
+                // Import-time folding refits the opening view. Flatten uses
+                // the view the user has already turned and resized.
+                imported.rotation = model.rotation;
+                imported.size = model.size;
+            }
+            let model = doc
+                .models
+                .get(index)
+                .cloned()
+                .ok_or("Missing imported model".to_owned());
+            model.map(|model| {
+                atoms = model.linked_ids(&doc);
+                let centre = reshiki::editing::center(&doc, &atoms);
+                models3d::lay_out_flat(&mut doc, &model);
+                models3d::lay_out_bridges(&mut doc, &model);
+                let projected = reshiki::editing::center(&doc, &atoms);
+                doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
+                doc
+            })
         } else {
             // Existing coordinates: radicals stay as drawn, no cap hydrogens.
             Prepared::new(&self.tab.doc, &atoms)

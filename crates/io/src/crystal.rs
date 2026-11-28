@@ -12,6 +12,9 @@ use crate::models3d::Adp;
 mod build;
 mod cif;
 mod elements;
+mod haptic;
+#[cfg(test)]
+mod haptic_tests;
 mod pdb;
 mod poscar;
 pub(crate) mod xyz;

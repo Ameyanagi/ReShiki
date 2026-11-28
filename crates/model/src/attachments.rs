@@ -44,6 +44,21 @@ pub fn present(doc: &Document) -> bool {
     doc.atoms.iter().any(|a| a.attachment.is_some())
 }
 
+/// Real endpoint pairs of a fixed multi-center bond. Semantic anchors never
+/// become geometry atoms; a variable attachment has no such expansion.
+pub(crate) fn bond_pairs<'a>(
+    doc: &'a Document,
+    bond: &'a crate::document::Bond,
+) -> impl Iterator<Item = (u64, u64)> + 'a {
+    let members = |id: &'a u64| {
+        doc.atom(*id)
+            .filter(|a| a.attachment == Some(Kind::MultiCenter))
+            .map_or_else(|| std::slice::from_ref(id), |a| a.centroid.as_slice())
+    };
+    let (a, b) = (members(&bond.a), members(&bond.b));
+    a.iter().flat_map(move |a| b.iter().map(move |b| (*a, *b)))
+}
+
 pub fn add(doc: &mut Document, ids: &[u64], kind: Kind) -> Result<u64, String> {
     doc.validate()?;
     if ids.len() < 2

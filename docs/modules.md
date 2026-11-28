@@ -685,6 +685,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/crystal/build.rs`: From atoms and a lattice to a drawing
 - `crates/io/src/crystal/cif.rs`: CIF
 - `crates/io/src/crystal/elements.rs`: Element symbols as crystal files write them, and covalent radii for perceiving bonds.
+- `crates/io/src/crystal/haptic.rs`: Recognize complete face-bound carbon rings in molecular coordinate files.
 - `crates/io/src/crystal/pdb.rs`: PDB
 - `crates/io/src/crystal/poscar.rs`: VASP 5 POSCAR and CONTCAR
 - `crates/io/src/crystal/xyz.rs`: Plain XYZ (a molecule without a cell) and extended XYZ, whose comment line gives the cell as `Lattice="ax ay az bx by bz cx cy cz"` and the columns as `Properties=species:S:1:pos:R:3:…`.
@@ -935,6 +936,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/line_icons.rs`: Line icons placed with the Icons tool.
 - `crates/model/src/linked_properties.rs`: Property captions linked to a molecule
 - `crates/model/src/models3d.rs`: 3D models of structures (#386)
+- `crates/model/src/models3d/bridges.rs`: Readable editable projections of several hydrogens bridging a metal pair.
 - `crates/model/src/models3d/cell_occlusion.rs`: Cell ink visible past the model's space-filling balls.
 - `crates/model/src/models3d/contact.rs`: Where overlapping 3D-model balls meet.
 - `crates/model/src/models3d/crystal.rs`: Crystal and periodic structures (#417)
@@ -1106,6 +1108,7 @@ explains how the crates and modules fit together.
 - `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
 - `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
 - `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
+- `crates/qcdata/src/structure.rs`: Conservative geometry observations, independent of numerical convergence.
 - `crates/qcdata/src/vibrational.rs`
 - `crates/qcdata/src/vibrational/symmetry.rs`
 

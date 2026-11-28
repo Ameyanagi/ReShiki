@@ -894,6 +894,99 @@ fn from_the_3d_view_flattens_the_turned_model_in_one_step() {
 }
 
 #[test]
+fn imported_haptic_cluster_flattens_through_the_normal_view_action() {
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+    let model = &app.tab.doc.models[0];
+    let rotation = models3d::turn(model.rotation, 37., -24., false);
+    let atoms = model.linked_ids(&app.tab.doc);
+    app.edit(Edit::ModelView { atoms, rotation });
+    assert_eq!(
+        app.tab.doc.models.len(),
+        1,
+        "turning preserves the imported model"
+    );
+    app.tab.doc.models[0].size *= 1.4;
+    app.tab.selected = vec![app.tab.doc.atoms[0].id];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models[0].display, Display::TwoD);
+    assert_eq!(app.tab.doc.models[0].layout, Layout::View);
+    assert_eq!(app.tab.doc.models[0].rotation, before.models[0].rotation);
+    assert_eq!(app.tab.doc.models[0].size, before.models[0].size);
+    assert_eq!(
+        app.tab.doc.models[0].frame_positions(),
+        before.models[0].frame_positions()
+    );
+    assert_eq!(app.tab.doc.atoms.len(), 28);
+    assert_eq!(app.tab.doc.models[0].hydrogens.len(), 30);
+    assert_eq!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| a.element == "H")
+            .count(),
+        4
+    );
+    let sources = app.tab.doc.models[0].frame_sources();
+    assert_eq!(
+        reshiki::science::frame_bonds(&app.tab.doc, &sources).unwrap(),
+        reshiki::science::frame_bonds(&before, &before.models[0].frame_sources()).unwrap()
+    );
+    assert_ne!(app.tab.doc.atoms, before.atoms);
+    app.tab.doc.validate().unwrap();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms, before.atoms);
+    assert_eq!(app.tab.doc.models, before.models);
+}
+
+#[test]
+#[ignore = "manual editable import/Flatten/export QA; paths supplied through environment"]
+fn export_imported_cluster_from_normal_flatten_action() {
+    let input = std::env::var("RESHIKI_CLUSTER_INPUT").expect("RESHIKI_CLUSTER_INPUT");
+    let output = std::env::var("RESHIKI_CLUSTER_OUTPUT").expect("RESHIKI_CLUSTER_OUTPUT");
+    let xyz = std::fs::read_to_string(input).unwrap();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read("xyz", &xyz).unwrap().0;
+    if let Ok(camera) = std::env::var("RESHIKI_CLUSTER_QUATERNION") {
+        let values: Vec<f32> = camera.split(',').map(|v| v.parse().unwrap()).collect();
+        let rotation: [f32; 4] = values.try_into().expect("four quaternion values");
+        let atoms = app.tab.doc.models[0].linked_ids(&app.tab.doc);
+        app.edit(Edit::ModelView { atoms, rotation });
+        assert!(!app.error, "{}", app.status);
+    }
+    app.tab.selected = vec![app.tab.doc.atoms[0].id];
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert!(!app.error, "{}", app.status);
+    let doc = &app.tab.doc;
+    doc.validate().unwrap();
+    std::fs::create_dir_all(&output).unwrap();
+    std::fs::write(format!("{output}/drawing.rsk"), doc.file_json().unwrap()).unwrap();
+    for format in ["svg", "png", "pdf"] {
+        let figure = reshiki::export::clipboard_figure_with_drawing(
+            doc,
+            format,
+            reshiki::export::Background::Color([255; 3]),
+            300,
+            None,
+        )
+        .unwrap();
+        std::fs::write(format!("{output}/drawing.{format}"), figure.bytes).unwrap();
+    }
+    println!(
+        "{output}: {} drawing atoms, {} model atoms, {} model H",
+        doc.atoms.len(),
+        doc.models[0].atoms.len(),
+        doc.models[0].hydrogens.len()
+    );
+}
+
+#[test]
 fn the_frame_keeps_its_place_through_2d_and_back() {
     let (mut app, atoms) = with_model(Display::ThreeD);
     let frame = |app: &App| reshiki::models3d::frame(&app.tab.doc, &app.tab.doc.models[0]);

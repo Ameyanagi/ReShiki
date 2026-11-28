@@ -372,6 +372,69 @@ fn hydrogens_on_metals_bridges_and_isotopes_stay_explicit() {
 }
 
 #[test]
+fn haptic_cluster_folds_only_methyl_hydrogens_and_keeps_the_source_frame() {
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    let (mut frame, _) = qcread::read_xyz_geometry(xyz).unwrap();
+    frame.isotopes = vec![0; frame.numbers.len()];
+    frame.isotopes[52] = 2;
+    let (mut doc, _) = drawing(&frame).unwrap();
+    let sources = doc.models[0].frame_sources();
+    let ids: Vec<_> = sources.iter().flatten().copied().collect();
+    let baseline = reshiki::science::baseline(&doc, &ids);
+    doc.science.frames.push(std::sync::Arc::new(frame.clone()));
+    for (id, baseline) in [(1, baseline.clone()), (2, format!("{baseline}/stale"))] {
+        doc.science.attachments.push(reshiki::science::Attachment {
+            id,
+            frame: frame.hash(),
+            atoms: sources.clone(),
+            baseline,
+        });
+    }
+    fold_calculation_hydrogens(&mut doc, &frame);
+    assert_eq!(doc.atoms.len(), 28, "26 real atoms and two haptic anchors");
+    assert_eq!(doc.models[0].atoms.len(), 26);
+    assert_eq!(doc.models[0].hydrogens.len(), 30);
+    assert_eq!(
+        doc.science.attachments[0].freshness(&doc),
+        reshiki::science::Freshness::Current
+    );
+    assert_eq!(
+        doc.science.attachments[1].freshness(&doc),
+        reshiki::science::Freshness::Stale
+    );
+    assert_eq!(
+        doc.science.attachments[0].atoms,
+        doc.models[0].frame_sources()
+    );
+    assert_eq!(doc.science.frames[0].hash(), frame.hash());
+    for (index, source) in sources.iter().enumerate().skip(52).take(4) {
+        let id = source.unwrap();
+        assert_eq!(doc.models[0].frame_sources()[index], Some(id));
+        assert_eq!(
+            doc.bonds.iter().filter(|b| b.a == id || b.b == id).count(),
+            2
+        );
+    }
+    assert_eq!(doc.atom(sources[52].unwrap()).unwrap().isotope, 2);
+    assert_eq!(
+        doc.atoms.iter().filter(|a| a.attachment.is_some()).count(),
+        2
+    );
+    let launch = reshiki::science::launch(&doc, sources[0].unwrap(), 0, 1).unwrap();
+    assert_eq!(launch.frame.numbers, frame.numbers);
+    assert_eq!(launch.frame.isotopes, frame.isotopes);
+    assert!(
+        launch
+            .frame
+            .positions_angstrom
+            .iter()
+            .zip(&frame.positions_angstrom)
+            .all(|(a, b)| a.map(|x| x as f32) == b.map(|x| x as f32))
+    );
+    doc.validate().unwrap();
+}
+
+#[test]
 fn ensemble_uses_file_order_with_folded_hydrogens() {
     let text = "3\n -5.100000\nH 0.97 0 0\nO 0 0 0\nH -0.30 0.90 0\n\
                 3\n -5.000000\nH 0.96 0 0\nO 0 0 0\nH -0.24 0.93 0\n";

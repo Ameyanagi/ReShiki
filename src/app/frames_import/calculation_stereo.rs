@@ -15,7 +15,6 @@ use reshiki::chemistry::{
     },
 };
 use reshiki::document::{AtomStereo, Document};
-use reshiki::qcdata::Frame;
 
 #[derive(Clone, Copy)]
 struct Neighbor {
@@ -179,17 +178,17 @@ fn alkene_candidate(graph: &Graph, adjacent: &[Vec<Neighbor>], index: usize) -> 
         })
 }
 
-pub(super) fn perceive(graph: &Graph, frame: &Frame) -> BondGeometry {
+pub(super) fn perceive(graph: &Graph, positions: &[[f64; 3]]) -> BondGeometry {
     let mut result = BondGeometry {
         metadata: Metadata::unspecified(graph),
         directions: vec![Direction::None; graph.bonds.len()],
     };
-    if frame.positions_angstrom.len() != graph.atoms.len() {
+    if positions.len() != graph.atoms.len() {
         return result;
     }
     let adjacent = adjacency(graph);
     let tetrahedral: Vec<_> = (0..graph.atoms.len())
-        .map(|i| tetrahedral_candidate(graph, &adjacent, &frame.positions_angstrom, i))
+        .map(|i| tetrahedral_candidate(graph, &adjacent, positions, i))
         .collect();
     let alkenes: Vec<_> = (0..graph.bonds.len())
         .map(|i| alkene_candidate(graph, &adjacent, i))
@@ -230,7 +229,7 @@ pub(super) fn perceive(graph: &Graph, frame: &Frame) -> BondGeometry {
                 .atoms
                 .iter()
                 .map(|&i| {
-                    let [x, y, z] = frame.positions_angstrom[i];
+                    let [x, y, z] = positions[i];
                     Point3 { x, y, z }
                 })
                 .collect(),
