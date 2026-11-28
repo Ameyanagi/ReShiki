@@ -1008,6 +1008,9 @@ impl App {
                 return Task::batch([session.dispatch(Work::Apply), super::focus_drawing()]);
             }
             Action::Field(field) => {
+                if field == session.field {
+                    return Task::none();
+                }
                 session.abort();
                 session.field = field;
                 session.energy = None;

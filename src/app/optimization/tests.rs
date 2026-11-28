@@ -294,6 +294,161 @@ fn slow_continuation_and_changed_pins_restore_short_interactive_calls() {
 }
 
 #[test]
+fn selecting_current_field_preserves_adaptive_work_and_a_real_switch_restarts_it() {
+    let (mut app, _, _, original) = prepared_preview();
+    let _ = app.optimization_action(Action::Start);
+    for energy in [10., 9.] {
+        let _ = complete_live_after(&mut app, energy, false, Duration::from_millis(20));
+    }
+    let session = app.tab.optimization.as_ref().unwrap();
+    let flight = session.flight.as_ref().unwrap();
+    assert!(flight.iterations > BATCH_ITERATIONS);
+    let (key, budget, iterations, started, energy) = (
+        flight.key,
+        session.relaxation.iterations,
+        flight.iterations,
+        flight.started,
+        session.energy,
+    );
+    let late_result = Arc::new(result(session));
+    let status = app.status.clone();
+    for _ in 0..10 {
+        assert_eq!(
+            app.optimization_action(Action::Field(ForceField::Mmff94s))
+                .units(),
+            0
+        );
+        let session = app.tab.optimization.as_ref().unwrap();
+        let flight = session.flight.as_ref().unwrap();
+        assert_eq!(flight.key, key);
+        assert_eq!(flight.started, started);
+        assert_eq!(flight.iterations, iterations);
+        assert_eq!(session.relaxation.iterations, budget);
+        assert_eq!(session.energy, energy);
+        assert_eq!(session.phase, Phase::Running);
+        assert!(!session.pending);
+        assert_eq!(app.status, status);
+    }
+
+    assert!(
+        app.optimization_action(Action::Field(ForceField::Uff))
+            .units()
+            > 0
+    );
+    let session = app.tab.optimization.as_ref().unwrap();
+    let switched = session.flight.as_ref().unwrap().key;
+    assert_ne!(switched, key);
+    assert_eq!(session.field, ForceField::Uff);
+    assert_eq!(session.flight.as_ref().unwrap().field, ForceField::Uff);
+    assert_eq!(
+        session.flight.as_ref().unwrap().iterations,
+        BATCH_ITERATIONS
+    );
+    assert_eq!(session.relaxation.iterations, BATCH_ITERATIONS);
+    assert!(session.energy.is_none());
+    // A late result from the old field cannot replace the real switch.
+    let _ = app.optimization_action(Action::WorkerDone(key, Ok(late_result)));
+    assert_eq!(
+        app.tab
+            .optimization
+            .as_ref()
+            .unwrap()
+            .flight
+            .as_ref()
+            .unwrap()
+            .key,
+        switched
+    );
+    finish(&mut app);
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.field, ForceField::Uff);
+    assert!(session.converged);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn selecting_current_field_preserves_generation_and_another_field_regenerates() {
+    let (mut app, _, _, original) = drawing();
+    let _ = app.optimization_action(Action::Begin);
+    let session = app.tab.optimization.as_ref().unwrap();
+    let key = session.flight.as_ref().unwrap().key;
+    let status = app.status.clone();
+    assert_eq!(
+        app.optimization_action(Action::Field(ForceField::Mmff94s))
+            .units(),
+        0
+    );
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.flight.as_ref().unwrap().key, key);
+    assert_eq!(session.flight.as_ref().unwrap().work, Work::Generate);
+    assert_eq!(session.phase, Phase::Preparing);
+    assert_eq!(app.status, status);
+    assert!(
+        app.optimization_action(Action::Field(ForceField::Uff))
+            .units()
+            > 0
+    );
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_ne!(session.flight.as_ref().unwrap().key, key);
+    assert_eq!(session.flight.as_ref().unwrap().work, Work::Generate);
+    assert_eq!(session.flight.as_ref().unwrap().field, ForceField::Uff);
+    finish(&mut app);
+    assert_eq!(
+        app.tab.optimization.as_ref().unwrap().field,
+        ForceField::Uff
+    );
+    assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn explicit_start_retries_failed_generation_and_relaxation_in_the_current_field() {
+    for work in [Work::Generate, Work::Relax] {
+        let (mut app, _, _, original) = drawing();
+        let _ = app.optimization_action(Action::Begin);
+        if work == Work::Relax {
+            finish(&mut app);
+            let _ = app.optimization_action(Action::Start);
+        }
+        let key = app
+            .tab
+            .optimization
+            .as_ref()
+            .unwrap()
+            .flight
+            .as_ref()
+            .unwrap()
+            .key;
+        let _ = app.optimization_action(Action::WorkerDone(
+            key,
+            Err("Retry this calculation".into()),
+        ));
+        assert_eq!(
+            app.optimization_action(Action::Field(ForceField::Mmff94s))
+                .units(),
+            0
+        );
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert_eq!(session.phase, Phase::Failed);
+        assert!(session.flight.is_none());
+        assert_eq!(session.notice.as_deref(), Some("Retry this calculation"));
+        assert!(app.error);
+        assert!(app.optimization_action(Action::Start).units() > 0);
+        let session = app.tab.optimization.as_ref().unwrap();
+        let flight = session.flight.as_ref().unwrap();
+        assert_ne!(flight.key, key);
+        assert_eq!(flight.work, work);
+        assert_eq!(flight.field, ForceField::Mmff94s);
+        finish(&mut app);
+        let session = app.tab.optimization.as_ref().unwrap();
+        assert!(session.notice.is_none());
+        assert!(session.converged);
+        assert!(!app.error);
+        assert_eq!(app.tab.doc, original);
+    }
+}
+
+#[test]
 fn held_drag_targets_keep_short_calls_and_release_allows_continuation() {
     let (mut app, _, b, _) = prepared_preview();
     let id = app.tab.optimization.as_ref().unwrap().id;

@@ -124,7 +124,9 @@ request time when constraints stay unchanged. Held drags retain short requests.
 It pauses after 1,000 requested iterations for unchanged physical constraints or
 160 requested iterations without meaningful energy improvement. The preview
 remains editable. Worker deadlines, cancellation and geometry checks apply to
-every request.
+every request. Selecting the active force field again keeps the current request
+and its iteration budget. Switching fields starts a new request. After a failed
+request the Start or Generate 3D control retries the current field.
 
 With one displaced pin on aspirin, MMFF94s took 31 short worker requests
 (167 ms median) to converge on an Apple M4. Adaptive batches took three
