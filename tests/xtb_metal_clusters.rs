@@ -84,22 +84,21 @@ fn diruthenium_fixtures_preserve_atomic_state_and_record_the_hydride_isomers() {
     debug_assertions,
     ignore = "Run with --release: full metal optimization and Hessian need an optimized engine"
 )]
-fn diruthenium_cluster_calculates_both_methods_and_checks_the_gxtb_minimum() {
+fn diruthenium_cluster_calculates_and_checks_both_local_minima() {
     let source = fixtures().join("diruthenium_tetrahydride_asymmetric_seed.xyz");
     let input = std::fs::read_to_string(&source).expect("cluster seed");
     let (symbols, _) = xyz(&input);
 
-    for (method, task, expected_energy) in [
-        ("gfn2", "optimize", -66.7269150),
-        ("gxtb", "opt+freq", -972.2711498),
-    ] {
+    for (method, expected_energy, expected_bridges) in
+        [("gfn2", -66.7269150, 2), ("gxtb", -972.2711498, 4)]
+    {
         let dir = tempfile::tempdir().expect("cluster calculation folder");
         let output = headless::run_cli(
             dir.path(),
             &[
                 "calculate",
                 "--task",
-                task,
+                "opt+freq",
                 "--method",
                 method,
                 "--charge",
@@ -152,28 +151,30 @@ fn diruthenium_cluster_calculates_both_methods_and_checks_the_gxtb_minimum() {
                 assert!((1.35..1.50).contains(&c_c), "{method}: ring C–C {c_c} Å");
             }
         }
+        let mut bridges = 0;
         for hydride in 52..56 {
             let contacts = [
                 distance(&positions, 0, hydride),
                 distance(&positions, 1, hydride),
             ];
             assert!(contacts.iter().any(|&r| (1.4..1.9).contains(&r)));
-            if method == "gxtb" {
+            if contacts.iter().all(|&r| (1.6..1.9).contains(&r)) {
+                bridges += 1;
+            } else {
                 assert!(
-                    contacts.iter().all(|&r| (1.6..1.9).contains(&r)),
-                    "g-xTB bridge H{}: {contacts:?}",
+                    contacts.iter().any(|&r| r > 2.4),
+                    "{method}: ambiguous terminal H{}: {contacts:?}",
                     hydride + 1
                 );
             }
         }
-        if method == "gxtb" {
-            let frequencies = value["frequencies"]["frequencies_cm1"]
-                .as_array()
-                .expect("g-xTB Hessian frequencies");
-            assert_eq!(frequencies.len(), 3 * 56 - 6);
-            // The two torsions are only about 1–3 cm⁻¹. Do not make their
-            // cross-platform numerical signs a prerequisite for a minimum.
-            assert!(frequencies.iter().all(|v| v.as_f64().unwrap() > -10.0));
-        }
+        assert_eq!(bridges, expected_bridges, "{method}");
+        let frequencies = value["frequencies"]["frequencies_cm1"]
+            .as_array()
+            .expect("cluster Hessian frequencies");
+        assert_eq!(frequencies.len(), 3 * 56 - 6);
+        // The lowest g-xTB torsions are only about 1–3 cm⁻¹. Allow small
+        // numerical shifts of these modes across platforms.
+        assert!(frequencies.iter().all(|v| v.as_f64().unwrap() > -10.0));
     }
 }

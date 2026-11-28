@@ -66,7 +66,7 @@ The two methods use different absolute energy scales.
 
 **GFN2 changes the hydride connectivity.** H53 and H55 become terminal.
 Their nearest Ru is about 1.563 Å away and their other Ru about 2.825 Å.
-H54 and H56 remain bridging at about 1.705 Å to both metals. The optimized GFN2 isomer is stored in `diruthenium_tetrahydride_gfn2.xyz`.
+H54 and H56 remain bridging at about 1.705 Å to both metals. The optimized GFN2 isomer is stored in `diruthenium_tetrahydride_gfn2.xyz`. Its projected Hessian has 162 vibrational modes, with no imaginary frequencies. The lowest are 7.93, 35.70 and 44.31 cm⁻¹.
 
 The g-xTB result, `diruthenium_tetrahydride_gxtb.xyz`, preserves all four
 bridges (eight Ru–H contacts 1.7411–1.7434 Å). The computed Ru–Ru distance is 0.088 Å shorter than the experimental distance, and the computed Ru–H distances span a narrower range. Its analytic Hessian has
@@ -88,14 +88,14 @@ two tested multiplicities.
 From the repository root, use an executable built with the `xtb` feature:
 
 ```sh
-reshiki --cli calculate --task optimize --method gfn2 --convergence tight \
+reshiki --cli calculate --task opt+freq --method gfn2 --convergence tight \
   --charge 0 --uhf 0 --threads 1 \
   tests/fixtures/xtb/diruthenium_tetrahydride_asymmetric_seed.xyz
 reshiki --cli calculate --task opt+freq --method gxtb --convergence tight \
   --charge 0 --uhf 0 --threads 1 \
   tests/fixtures/xtb/diruthenium_tetrahydride_asymmetric_seed.xyz
 cargo test --release --features xtb --test it \
-  xtb::metal_clusters::diruthenium_cluster_calculates_both_methods_and_checks_the_gxtb_minimum
+  xtb::metal_clusters::diruthenium_cluster_calculates_and_checks_both_local_minima
 ```
 
 The full native calculation regression runs in optimized builds. Debug builds
@@ -106,7 +106,7 @@ state, finite coordinates, and stored two- versus four-bridge geometries.
 
 The optimized integration test runs these real calculations, checks atomic identity,
 neutral singlet metadata, finite energies, physical metal/ring distances,
-all four g-xTB hydride bridges, and the Hessian mode count. Its −10 cm⁻¹
+two GFN2 and four g-xTB hydride bridges, and both Hessian mode counts. Its −10 cm⁻¹
 cutoff avoids requiring the numerical sign of sub-3 cm⁻¹ torsions to be
 identical on every computer. This regression checks the calculation and
 geometry pipeline. The crystal distances give an independent comparison.
