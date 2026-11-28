@@ -113,7 +113,7 @@ impl State {
         self.reviews.is_some() || self.work.running()
     }
 
-    #[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+    #[cfg(all(test, not(target_arch = "wasm32"), feature = "xtb"))]
     pub(super) fn reviewed_step(&self, index: usize) -> Option<(StepOptions, &[String])> {
         Some((
             *self.options.get(index)?,
@@ -753,7 +753,7 @@ impl App {
     }
 }
 
-#[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "xtb"))]
 mod naming_tests;
-#[cfg(all(test, not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(test, not(target_arch = "wasm32"), feature = "xtb"))]
 mod tests;

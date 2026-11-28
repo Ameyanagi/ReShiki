@@ -409,9 +409,9 @@ fn levels_follow_the_spin_columns_of_an_open_shell() {
 }
 
 // Waiting needs a build that can recompute xTB orbitals. Builds without the
-// engine (Windows) leave it out rather than ignore it: the real-renderer job
+// engine leave it out rather than ignore it: the real-renderer job
 // runs ignored tests.
-#[cfg(all(feature = "xtb", not(windows)))]
+#[cfg(feature = "xtb")]
 #[test]
 fn a_reopened_placed_orbital_waits_for_its_new_level() {
     let mut app = tab();
@@ -670,7 +670,7 @@ fn orbitals_controls_follow_the_selected_matching_mo_diagram() {
     assert_eq!(app.tab.doc.graphics, [first]);
 }
 
-#[cfg(all(feature = "xtb", not(windows)))]
+#[cfg(feature = "xtb")]
 #[test]
 fn place_mo_diagram_command_opens_matching_orbitals_and_requests_frontier_rows() {
     let mut app = tab();
@@ -731,7 +731,7 @@ fn mo_diagram_places_and_selects_beta_when_alpha_levels_are_missing() {
     assert_eq!(mo.pictures.len(), 1);
 }
 
-#[cfg(all(feature = "xtb", not(windows)))]
+#[cfg(feature = "xtb")]
 #[test]
 fn an_empty_mo_diagram_waits_for_multiple_requested_rows_and_pins_each_on_arrival() {
     let mut app = tab();
@@ -1243,7 +1243,7 @@ fn an_mo_picture_requires_its_spin_level_in_the_resolved_result() {
     }
 }
 
-#[cfg(all(feature = "xtb", not(windows)))]
+#[cfg(feature = "xtb")]
 #[test]
 fn a_pending_mo_picture_retires_when_its_result_loses_the_requested_spin_level() {
     for column in 0..=1 {
@@ -1363,7 +1363,7 @@ fn adding_an_mo_picture_uses_the_renderers_geometry_tolerance() {
     assert_eq!(app.tab.history.frames(), frames + 1);
 }
 
-#[cfg(all(feature = "xtb", not(windows)))]
+#[cfg(feature = "xtb")]
 #[test]
 fn a_pending_mo_picture_retires_when_its_source_geometry_changes() {
     let mut app = tab();

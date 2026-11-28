@@ -115,10 +115,7 @@ MATRICES: dict[str, list[dict[str, Any]]] = {
     ],
 }
 # Engine pair tests do not need RDKit, so every supported target runs them.
-# Windows does not yet have an xTB engine distribution.
-MATRICES["xtb_wheel"] = [
-    {**row, "test": True} for row in MATRICES["wheel"] if not row["os"].startswith("windows")
-]
+MATRICES["xtb_wheel"] = [{**row, "test": True} for row in MATRICES["wheel"]]
 
 
 def matrices(macos):

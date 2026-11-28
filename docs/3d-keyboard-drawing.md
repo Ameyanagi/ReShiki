@@ -41,7 +41,7 @@ bonds the wrong shape.", that atom flashes and keeps a ring until the drawing
 changes, and **Properties → Structure** repeats the message with **Open a 3D
 file…** to use geometry from a file instead.
 
-In builds with xTB (macOS and Linux), a start the force field can't be trusted
+In desktop builds with xTB, a start the force field can't be trusted
 for is refined with xTB as part of building the model: a molecule MMFF can't
 type (O₂, CO, UF₆), a metal complex built with relaxed checks, a radical, a
 saved UFF model being regenerated, and the shapes UFF gets wrong. For those

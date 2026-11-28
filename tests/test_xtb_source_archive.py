@@ -310,11 +310,18 @@ directory = "vendored-crates"
             self.assertIn("libxkbcommon-dev", instructions)
             self.assertIn("libudev-dev", instructions)
             self.assertIn("xcode-select --install", instructions)
-            for environment in DIST_ENV.values():
+            for platform, environment in DIST_ENV.items():
+                lines = (
+                    (f"$env:{key} = '{value}'" for key, value in environment.items())
+                    if platform.startswith("Windows")
+                    else (f"export {key}={value}" for key, value in environment.items())
+                )
                 self.assertIn(
-                    "\n".join(f"export {key}={value}" for key, value in environment.items()),
+                    "\n".join(lines),
                     instructions,
                 )
+            self.assertIn("$env:RUSTFLAGS = '-C target-feature=+crt-static'", instructions)
+            self.assertIn("signing certificate or signing secrets are required", instructions)
             self.assertIn(
                 "cargo build --profile dist --locked --offline --features xtb --bin reshiki",
                 instructions,
@@ -369,9 +376,11 @@ directory = "vendored-crates"
             "macos-x64": "macOS (Apple Silicon and Intel)",
             "linux-arm64": "Linux arm64",
             "linux-x64": "Linux x64",
+            "windows-x64": "Windows x64",
+            "windows-arm64": "Windows arm64",
         }
         self.assertEqual(
-            set(re.findall(r'"artifact": "((?:macos|linux)-[^"]+)"', job)), platforms.keys()
+            set(re.findall(r'"artifact": "((?:macos|linux|windows)-[^"]+)"', job)), platforms.keys()
         )
         self.assertEqual(set(platforms.values()), DIST_ENV.keys())
         for artifact, platform in platforms.items():

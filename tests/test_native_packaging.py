@@ -147,6 +147,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 patch("build_release.verify_binary"),
                 patch("build_release.verify_inchi_worker") as helper,
                 patch("build_release.verify_xtb_worker") as xtb,
+                patch("build_release.verify_xtb_cli") as xtb_cli,
                 patch(
                     "build_release.verify_runtime", side_effect=lambda *_: order.append("runtime")
                 ) as check,
@@ -159,6 +160,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 build_release.verify_archive(archive)
             self.assertEqual(helper.call_args.args[0].name, "reshiki.exe")
             xtb.assert_called_once_with(helper.call_args.args[0], metadata)
+            xtb_cli.assert_called_once_with(helper.call_args.args[0], metadata)
             self.assertEqual(check.call_args.args[0].parent, check.call_args.args[1])
             self.assertEqual(check.call_count, 1)
             self.assertEqual(order, ["runtime", "agent"])
@@ -193,6 +195,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 patch("build_release.verify_binary"),
                 patch("build_release.verify_inchi_worker"),
                 patch("build_release.verify_xtb_worker") as xtb,
+                patch("build_release.verify_xtb_cli"),
                 patch(
                     "build_release.verify_runtime", side_effect=lambda *_: order.append("runtime")
                 ) as check,
@@ -238,7 +241,9 @@ class NativeRuntimeTests(unittest.TestCase):
             source.mkdir()
             for name in ("reshiki.exe",):
                 (source / name).touch()
-            (source / "build.json").write_text(json.dumps({"architecture": "arm64"}))
+            (source / "build.json").write_text(
+                json.dumps({"architecture": "arm64", "xtb": {"included": False}})
+            )
             for fault in (
                 "retained_worker",
                 "retained_helper",
@@ -298,6 +303,8 @@ class NativeRuntimeTests(unittest.TestCase):
                         patch("installers.run", side_effect=run),
                         patch("installers.verify_binary"),
                         patch("installers.verify_inchi_worker"),
+                        patch("installers.verify_xtb_worker"),
+                        patch("installers.verify_xtb_cli"),
                         patch("installers.verify_runtime"),
                         patch("installers.verify_agent_api"),
                     ):

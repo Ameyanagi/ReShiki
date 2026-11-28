@@ -14,7 +14,7 @@ foreign targets without installing them, so one host covers all release targets.
 
 The xTB audit rejects copyleft licenses and the axtb fork in default production
 graphs for release targets and WebAssembly. It requires exactly the pinned LGPL
-fork crates as the copyleft packages in macOS and Linux xTB builds. All other
+fork crates as the copyleft packages in every native xTB build. All other
 xTB dependencies face the existing license check. The lock, worker revision,
 source notice and upstream license files must agree.
 """
@@ -431,12 +431,11 @@ def verify(root=ROOT, metadata=None):
         features = production_features(root, target)
         problems += feature_problems(target, features, serde_json_allowed, rmcp_allowed)
         problems += network_problems(target, rmcp_packages(root, target))
-        # The xtb build must not drift either (macOS and Linux releases).
-        if RELEASE_TARGETS[target][0] in {"macos", "linux"}:
-            features = production_features(root, target, "--features", "xtb")
-            problems += feature_problems(
-                f"{target} with xtb", features, serde_json_allowed, rmcp_allowed
-            )
+        # Every native release includes xtb, including unsigned Windows builds.
+        features = production_features(root, target, "--features", "xtb")
+        problems += feature_problems(
+            f"{target} with xtb", features, serde_json_allowed, rmcp_allowed
+        )
     if metadata is None:
         metadata = json.loads(run(root, "cargo", "metadata", "--locked", "--format-version", "1"))
     lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
@@ -448,7 +447,7 @@ def verify(root=ROOT, metadata=None):
     revision = axtb_revision(root)
     for target in (*RELEASE_TARGETS, "wasm32-unknown-unknown"):
         problems += default_copyleft_problems(target, license_tree(root, target, "--workspace"))
-        if target in RELEASE_TARGETS and RELEASE_TARGETS[target][0] in {"macos", "linux"}:
+        if target in RELEASE_TARGETS:
             entries = license_tree(root, target, "-p", "reshiki", "--features", "xtb")
             problems += xtb_copyleft_problems(target, entries, revision)
 

@@ -38,7 +38,7 @@ Issues = "https://github.com/Ameyanagi/ReShiki/issues"
 excel = ["openpyxl>=3.1,<4", "pillow>=10"]
 pandas = ["pandas>=2.0,<4"]
 xtb = [
-  "reshiki-xtb==0.17.1; sys_platform == 'darwin' or (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64'))",
+  "reshiki-xtb==0.17.1; sys_platform == 'darwin' or (sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'ARM64' or platform_machine == 'x86_64' or platform_machine == 'aarch64'))",
   "numpy>=1.24",
 ]
 

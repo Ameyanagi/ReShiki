@@ -1,6 +1,8 @@
 """Keep the xTB extra pinned to the corresponding worker wheel."""
 
 import re
+import shutil
+import subprocess
 import tomllib
 import unittest
 from pathlib import Path
@@ -34,6 +36,39 @@ class PythonXtbPinTests(unittest.TestCase):
             f"(https://github.com/Ameyanagi/ReShiki/releases/tag/v{workspace_version()})",
             readme,
         )
+
+    @unittest.skipUnless(shutil.which("uv"), "uv is required to resolve project extras")
+    def test_locked_extra_resolves_the_worker_on_both_windows_architectures(self):
+        for target, included in (
+            ("x86_64-pc-windows-msvc", True),
+            ("aarch64-pc-windows-msvc", True),
+            ("i686-pc-windows-msvc", False),
+        ):
+            with self.subTest(target=target):
+                result = subprocess.run(
+                    [
+                        "uv",
+                        "tree",
+                        "--project",
+                        str(ROOT / "crates/python"),
+                        "--locked",
+                        "--offline",
+                        "--no-dev",
+                        "--python-version",
+                        "3.12",
+                        "--python-platform",
+                        target,
+                        "--package",
+                        "reshiki",
+                        "--depth",
+                        "1",
+                    ],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertEqual("reshiki-xtb (extra: xtb)" in result.stdout, included)
 
     @staticmethod
     def _prerelease(match):

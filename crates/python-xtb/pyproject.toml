@@ -28,6 +28,7 @@ classifiers = [
   "Programming Language :: Rust",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
   "Typing :: Typed",
   "Topic :: Scientific/Engineering :: Chemistry",
 ]

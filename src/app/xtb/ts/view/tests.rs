@@ -146,7 +146,7 @@ fn irc_markers_show_the_actual_reached_ends_and_refined_saddle() {
     assert!(!reached.accessible_name().contains("P −8.4"));
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn irc_chart_ts_label_matches_the_card_barrier_and_relaxed_r_is_off_zero() {
     let (mut app, _) = super::super::tests::finished_irc();

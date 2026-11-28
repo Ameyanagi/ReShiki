@@ -409,6 +409,11 @@ class ReleaseTests(unittest.TestCase):
             binary = root / "target" / target / "dist/reshiki.exe"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(self.pe_image(0xAA64))
+            (root / "Cargo.lock").write_text(
+                "[[package]]\n"
+                + "".join(f'{key} = "{value}"\n' for key, value in AXTB_DRIVER.items()),
+                encoding="utf-8",
+            )
             run = self.package(root, target, "Windows")
             run.assert_called_once_with(
                 [
@@ -421,6 +426,8 @@ class ReleaseTests(unittest.TestCase):
                     "reshiki",
                     "--target",
                     target,
+                    "--features",
+                    "xtb",
                 ],
                 cwd=root,
             )
@@ -435,8 +442,10 @@ class ReleaseTests(unittest.TestCase):
                 metadata = json.loads(stream.read("reshiki-1.2.3-windows-arm64/build.json"))
                 self.assertEqual(metadata["architecture"], "arm64")
                 self.assertEqual(metadata["rust_target"], target)
-                self.assertEqual(metadata["xtb"], {"included": False})
-                self.assertNotIn("axtb", stream.read(f"{package.stem}/README.txt").decode())
+                self.assertTrue(metadata["xtb"]["included"])
+                self.assertEqual(metadata["xtb"]["rev"], AXTB_REV)
+                self.assertEqual(metadata["xtb"]["license"], AXTB_LICENSE)
+                self.assertIn("axtb", stream.read(f"{package.stem}/README.txt").decode())
                 self.assertNotIn("chemistry_architecture", metadata)
                 self.assertFalse(any("chemistry/" in name for name in stream.namelist()))
                 self.assertFalse(
@@ -934,6 +943,57 @@ while data := sys.stdin.buffer.read(header.size):
         with self.assertRaisesRegex(ValueError, "did not complete within 1 seconds"):
             self.verify_fixture(mode="no_reply", portable=True)
         self.assertLess(self.verification_elapsed, 3)
+
+
+class XtbReleaseCliTests(unittest.TestCase):
+    def test_cli_checks_the_installed_executable_own_worker_and_pinned_energy(self):
+        from build_release import XTB_WATER_ENERGY, verify_xtb_cli
+
+        value = {
+            "method": "gfn2",
+            "engine": {"rev": AXTB_REV},
+            "energy_hartree": XTB_WATER_ENERGY,
+        }
+        for energy in (XTB_WATER_ENERGY, XTB_WATER_ENERGY + 0.01):
+            response = {"value": {**value, "energy_hartree": energy}}
+
+            def calculate(command, **kwargs):
+                self.assertEqual(
+                    command[:5],
+                    [
+                        Path("installed/reshiki.exe").resolve(),
+                        "--cli",
+                        "calculate",
+                        "--threads",
+                        "1",
+                    ],
+                )
+                self.assertTrue(command[5].is_file())
+                self.assertIn(" ", kwargs["cwd"])
+                self.assertIn("AXTB_LAPACK", kwargs["env"])
+                return subprocess.CompletedProcess(command, 0, json.dumps(response), "")
+
+            with patch("build_release.subprocess.run", side_effect=calculate):
+                if energy == XTB_WATER_ENERGY:
+                    verify_xtb_cli(
+                        Path("installed/reshiki.exe"), {"xtb": {"included": True, "rev": AXTB_REV}}
+                    )
+                else:
+                    with self.assertRaisesRegex(ValueError, "wrong method, engine or water energy"):
+                        verify_xtb_cli(
+                            Path("installed/reshiki.exe"),
+                            {"xtb": {"included": True, "rev": AXTB_REV}},
+                        )
+
+    def test_unavailable_cli_prints_its_error_and_engine_free_packages_skip_it(self):
+        from build_release import verify_xtb_cli
+
+        with patch("build_release.subprocess.run") as run:
+            verify_xtb_cli(Path("reshiki.exe"), {"xtb": {"included": False}})
+            run.assert_not_called()
+            run.return_value = subprocess.CompletedProcess([], 1, "", "worker could not start")
+            with self.assertRaisesRegex(ValueError, "worker could not start"):
+                verify_xtb_cli(Path("reshiki.exe"), {"xtb": {"included": True}})
 
 
 class MacXtbDiskImageTests(unittest.TestCase):

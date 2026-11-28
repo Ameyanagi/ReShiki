@@ -290,7 +290,7 @@ fn changing_speed_restarts_the_current_state_hold() {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn switching_steps_and_smooth_restarts_equal_duration_state_holds() {
     let (mut app, arrow) = ts::tests::finished_irc();
@@ -330,7 +330,7 @@ fn switching_steps_and_smooth_restarts_equal_duration_state_holds() {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn export_clamps_a_paused_smooth_session_when_reduced_motion_changes_before_the_next_tick() {
     let (mut app, arrow) = ts::tests::finished_irc();
@@ -361,7 +361,7 @@ fn export_clamps_a_paused_smooth_session_when_reduced_motion_changes_before_the_
     assert_eq!(app.appearance.profile_motion, Motion::Smooth);
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn reduced_motion_blocks_smooth_playback_actions_without_replacing_the_saved_choice() {
     let (mut app, arrow) = ts::tests::finished_irc();
@@ -383,7 +383,7 @@ fn reduced_motion_blocks_smooth_playback_actions_without_replacing_the_saved_cho
     assert!(session.timeline.frame(1).unwrap().sample().is_none());
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn irc_binding_uses_the_plotted_barrier_reference_instead_of_the_endpoint_complex() {
     let (mut app, arrow) = ts::tests::finished_irc();
@@ -462,7 +462,7 @@ fn no_op_canvas_move_and_resize_pause_playback_without_desynchronizing_the_overl
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
 #[test]
 fn moving_and_resizing_a_profile_preserves_the_smooth_session() {
     let (mut app, arrow) = ts::tests::finished_irc();

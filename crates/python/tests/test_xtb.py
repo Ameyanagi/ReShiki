@@ -24,7 +24,6 @@ def worker():
     return pytest.importorskip("reshiki_xtb", reason="the optional reshiki-xtb wheel is missing")
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Windows has a separate availability message")
 def test_missing_engine(monkeypatch):
     monkeypatch.setitem(sys.modules, "reshiki_xtb", None)
     with pytest.raises(xtb.XtbNotInstalled, match=r'pip install "reshiki\[xtb\]"') as caught:
@@ -35,12 +34,12 @@ def test_missing_engine(monkeypatch):
     assert not xtb.available()
 
 
-def test_windows_availability(monkeypatch):
-    water = geometry("water")
+def test_windows_uses_the_installed_engine_worker(monkeypatch):
     monkeypatch.setattr(sys, "platform", "win32")
-    with pytest.raises(xtb.XtbNotInstalled, match="not available on Windows"):
-        xtb.energy(water)
-    assert not xtb.available()
+    executable = Path("C:/Program Files/ReShiki/reshiki-xtb-worker.exe")
+    installed = SimpleNamespace(__version__=reshiki.__version__, worker_path=lambda: executable)
+    monkeypatch.setitem(sys.modules, "reshiki_xtb", installed)
+    assert xtb._worker_path() == str(executable)
 
 
 def test_unknown_method(monkeypatch, tmp_path):
@@ -184,7 +183,6 @@ def test_version_mismatch(worker, monkeypatch):
     assert not xtb.available()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="The xTB worker is unavailable on Windows")
 def test_missing_worker_keeps_os_error(monkeypatch, tmp_path):
     monkeypatch.setitem(
         sys.modules,
@@ -193,7 +191,10 @@ def test_missing_worker_keeps_os_error(monkeypatch, tmp_path):
             __version__=reshiki.__version__, worker_path=lambda: tmp_path / "missing-worker"
         ),
     )
-    with pytest.raises(xtb.XtbError, match=r"Could not start bounded xTB worker: .*\(os error 2\)"):
+    native_code = "0x80070002" if sys.platform == "win32" else "os error 2"
+    with pytest.raises(
+        xtb.XtbError, match=rf"Could not start bounded xTB worker: .*\({native_code}\)"
+    ):
         xtb.energy(geometry("water"))
 
 

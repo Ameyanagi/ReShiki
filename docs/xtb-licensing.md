@@ -17,15 +17,14 @@ g-xTB is on: the fork's `gxtb` feature is on by default and ReShiki keeps it.
 
 ## Which builds contain axtb
 
-| Product                                          | axtb inside | How                                             |
-| ------------------------------------------------ | ----------- | ----------------------------------------------- |
-| macOS and Linux desktop releases (and nightlies) | yes         | `build_release.py` builds with `--features xtb` |
-| Windows desktop releases                         | no          | until Windows code signing works                |
-| `cargo build` / `cargo run` (default features)   | no          | the `xtb` feature is off by default             |
-| Python wheel `reshiki`                           | no          | `crates/python` never enables it                |
-| npm packages and the web editor (WebAssembly)    | no          | the web crates never enable it                  |
-| Nix flake                                        | no          | builds default features                         |
-| Python package `reshiki-xtb`                     | yes         | separate LGPL distribution, see below           |
+| Product                                         | axtb inside | How                                             |
+| ----------------------------------------------- | ----------- | ----------------------------------------------- |
+| Windows, macOS and Linux desktops and nightlies | yes         | `build_release.py` builds with `--features xtb` |
+| `cargo build` / `cargo run` (default features)  | no          | the `xtb` feature is off by default             |
+| Python wheel `reshiki`                          | no          | `crates/python` never enables it                |
+| npm packages and the web editor (WebAssembly)   | no          | the web crates never enable it                  |
+| Nix flake                                       | no          | builds default features                         |
+| Python package `reshiki-xtb`                    | yes         | separate LGPL distribution, see below           |
 
 Only the root application crate has the Cargo feature `xtb`. It turns on the
 `engine` feature of `crates/xtb-worker`, the only crate that calls axtb. Library
@@ -90,7 +89,7 @@ lockfile). Only the xtb graph uses `gemm`. The copies are MIT and keep their own
    precedence (`WITH`, then `AND`, then `OR`, parentheses respected): an `AND`
    with a GPL-family part fails;
 2. the set of GPL-family packages in the application's `--features xtb` graph
-   for the macOS and Linux release targets differs from the seven fork crates
+   for any native release target differs from the seven fork crates
    at the pinned revision (`axtb`, `axtb-base`, `axtb-d4`, `axtb-driver`,
    `axtb-gfnff`, `axtb-gxtb`, `axtb-solvation`), or any of those declares a
    license other than LGPL-3.0-or-later;
@@ -148,8 +147,7 @@ archive and its binaries disappear together:
   `--clobber`, `gh release delete-asset`, and the REST `releases/assets`
   endpoint from the shell or Python.
 
-`BUILD-WITH-XTB.md` lists the release profile settings for macOS, Linux arm64,
-and Linux x64, and gives two offline procedures:
+`BUILD-WITH-XTB.md` lists the desktop release profile settings, and gives two offline procedures:
 
 - **Rebuild as shipped:**
   `cargo build --profile dist --locked --offline --features xtb --bin reshiki`.
@@ -201,8 +199,8 @@ require the matching `reshiki-xtb` wheel.
   It checks the package version and verifies the worker's protocol handshake
   before starting a calculation.
 - The `xtb` extra pins `reshiki-xtb==<same version>`.
-- Wheels support macOS 14 or later on Apple Silicon and Intel, and manylinux
-  x86_64 and aarch64. CI checks that the installed worker is executable.
+- Wheels target Windows x64 and ARM64, macOS 14 or later on Apple Silicon and Intel,
+  and manylinux x86_64 and aarch64. CI checks that the installed worker is executable.
 - Version tags publish `reshiki-xtb` to PyPI after the tag's GitHub release
   carries the corresponding source, and before the base `reshiki` wheels. CI
   tests the wheel pair from a local wheelhouse (`--no-index --find-links`). See
@@ -219,5 +217,5 @@ require the matching `reshiki-xtb` wheel.
   fork.
 - The source archive is built, checked (`xtb_source_archive.py check`) and
   uploaded before any binary.
-- The packaged macOS and Linux executables answer a water energy through
-  `--xtb-worker`; the Windows executable answers that xTB is not included.
+- Packaged Windows, macOS and Linux executables calculate a water energy through
+  `--xtb-worker`. Windows qualification runs the unsigned executable.

@@ -9,7 +9,7 @@ The command line and agent tools below are in nightly builds and not in a releas
 
 ## Command line
 
-The macOS and Linux `reshiki` executables calculate one molecule from the first frame of an XYZ file (ångströms) and print the result as one JSON line:
+Desktop builds with xTB calculate one molecule from the first frame of an XYZ file (ångströms) and print the result as one JSON line:
 
 ```sh
 reshiki --cli calculate water.xyz                             # GFN2-xTB energy
@@ -50,8 +50,7 @@ The xTB engine is [axtb](https://github.com/atomsforhumanity/axtb), used through
 
 | Download                            | Contains axtb                            |
 | ----------------------------------- | ---------------------------------------- |
-| macOS and Linux apps                | yes, built into the `reshiki` executable |
-| Windows app                         | no, not yet                              |
+| Windows, macOS and Linux apps       | yes, built into the ReShiki executable   |
 | Python `reshiki`                    | no                                       |
 | Python `reshiki-xtb`                | yes, as the `reshiki-xtb-worker` program |
 | npm packages, web editor, Nix flake | no                                       |

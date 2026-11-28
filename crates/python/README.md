@@ -45,7 +45,7 @@ CDXML and CDX output keep.
 
 ## Calculations (xTB)
 
-Install with `pip install "reshiki[xtb]"` on macOS or Linux. Geometry positions
+Install with `pip install "reshiki[xtb]"` on Windows, macOS or Linux with a matching engine wheel. Geometry positions
 are in ångströms, energies in hartree and frequencies in cm⁻¹.
 
 ```python

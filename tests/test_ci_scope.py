@@ -108,7 +108,7 @@ class CheckScopeTests(unittest.TestCase):
         self.assertIn("x86_64-apple-darwin", [row["target"] for row in full["geometry"]])
         self.assertEqual(len(full["geometry"]), 5)
 
-    def test_xtb_wheels_pair_with_the_four_supported_base_targets(self):
+    def test_xtb_wheels_pair_with_all_six_native_base_targets(self):
         full = matrices(True)
         base = {row["target"]: row for row in full["wheel"]}
         xtb = {row["target"]: row for row in full["xtb_wheel"]}
@@ -119,6 +119,8 @@ class CheckScopeTests(unittest.TestCase):
                 "x86_64-apple-darwin",
                 "x86_64-unknown-linux-gnu",
                 "aarch64-unknown-linux-gnu",
+                "x86_64-pc-windows-msvc",
+                "aarch64-pc-windows-msvc",
             },
         )
         for target, row in xtb.items():
@@ -128,7 +130,12 @@ class CheckScopeTests(unittest.TestCase):
         self.assertFalse(base["x86_64-apple-darwin"].get("test", False))
         self.assertEqual(
             {row["target"] for row in matrices(False)["xtb_wheel"]},
-            {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"},
+            {
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "x86_64-pc-windows-msvc",
+                "aarch64-pc-windows-msvc",
+            },
         )
 
     def test_engine_pair_tests_do_not_import_rdkit(self):

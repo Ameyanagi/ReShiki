@@ -421,9 +421,6 @@ pub(super) fn is_progress(message: &Message) -> bool {
 
 /// Why this build cannot calculate, if it cannot.
 pub(super) fn unavailable() -> Option<&'static str> {
-    if cfg!(windows) {
-        return Some("xTB calculations are coming to Windows once code signing is in place.");
-    }
     #[cfg(target_arch = "wasm32")]
     return Some("xTB calculations run in the desktop app.");
     #[cfg(not(target_arch = "wasm32"))]

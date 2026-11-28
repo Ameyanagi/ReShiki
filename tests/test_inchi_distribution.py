@@ -547,7 +547,8 @@ class HelperTests(unittest.TestCase):
             header[60:64] = (64).to_bytes(4, "little")
             header += b"PE\0\0" + (0xAA64).to_bytes(2, "little")
             (source / "reshiki.exe").write_bytes(header)
-            (source / "build.json").write_text(json.dumps({"architecture": "arm64"}))
+            metadata = {"architecture": "arm64", "xtb": {"included": True}}
+            (source / "build.json").write_text(json.dumps(metadata))
             installed = []
 
             def run(command, **_kwargs):
@@ -599,11 +600,15 @@ class HelperTests(unittest.TestCase):
                 patch.dict(sys.modules, {"winreg": registry}),
                 patch("installers.run", side_effect=run),
                 patch("installers.verify_inchi_worker", side_effect=helper),
+                patch("installers.verify_xtb_worker") as xtb,
+                patch("installers.verify_xtb_cli") as xtb_cli,
                 patch("installers.verify_runtime") as runtime,
                 patch("installers.verify_agent_api") as agent,
             ):
                 installers.verify_windows_installer(Path("setup.exe"), source)
             self.assertEqual(runtime.call_args.args, (installed[-1] / "reshiki.exe", installed[-1]))
+            xtb.assert_called_once_with(installed[-1] / "reshiki.exe", metadata)
+            xtb_cli.assert_called_once_with(installed[-1] / "reshiki.exe", metadata)
             agent.assert_called_once_with(*runtime.call_args.args)
             self.assertEqual(
                 runtime.call_args.kwargs["user_data"], installed[-1].parent / "User data"

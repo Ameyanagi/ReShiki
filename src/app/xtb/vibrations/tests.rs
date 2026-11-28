@@ -1639,7 +1639,7 @@ fn light_result(frequency: f64) -> (App, Arc<CalcResult>) {
 }
 
 /// Answer the pending recompute; only engine builds start one.
-#[cfg(all(not(windows), feature = "xtb"))]
+#[cfg(feature = "xtb")]
 fn recomputed(app: &mut App, frequency: f64) {
     let mut report = optfreq(&MOVED, &MOVED);
     *report
@@ -1658,7 +1658,7 @@ fn recomputed(app: &mut App, frequency: f64) {
 }
 
 #[test]
-#[cfg(all(not(windows), feature = "xtb"))]
+#[cfg(feature = "xtb")]
 fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
     let (mut app, light) = light_result(1590.13);
     assert!(app.tab.xtb.vibrations.recomputing(&light));
@@ -1673,7 +1673,7 @@ fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
 }
 
 #[test]
-#[cfg(all(not(windows), feature = "xtb"))]
+#[cfg(feature = "xtb")]
 fn recomputed_modes_require_matching_frequency_signs_and_values() {
     for (saved, fresh, drift) in [(-0.5, 0.5, "1.0"), (1590.13, 1593.13, "3.0")] {
         let (mut app, light) = light_result(saved);
@@ -1700,7 +1700,7 @@ fn recomputed_modes_require_matching_frequency_signs_and_values() {
 }
 
 #[test]
-#[cfg(all(not(windows), feature = "xtb"))]
+#[cfg(feature = "xtb")]
 fn a_recompute_reply_from_a_previous_file_epoch_is_ignored() {
     let (mut app, light) = light_result(1590.13);
     app.tab.file_epoch += 1;
@@ -1710,7 +1710,7 @@ fn a_recompute_reply_from_a_previous_file_epoch_is_ignored() {
 }
 
 #[test]
-#[cfg(all(not(windows), feature = "xtb"))]
+#[cfg(feature = "xtb")]
 fn switching_away_from_docked_vibrations_cancels_recomputation() {
     let (mut app, light) = light_result(1590.13);
     send(&mut app, XtbAction::Palette(palette::Action::Dock));
@@ -1721,7 +1721,7 @@ fn switching_away_from_docked_vibrations_cancels_recomputation() {
 }
 
 #[test]
-#[cfg(all(not(windows), feature = "xtb"))]
+#[cfg(feature = "xtb")]
 fn undoing_the_result_cancels_recomputation() {
     let (mut app, light) = light_result(1590.13);
     let _ = app.update(Message::Undo);
@@ -1738,10 +1738,10 @@ fn animation_ticks_leave_the_view_and_style_choosers_open() {
     assert!(app.view_open && app.status_style_open);
 }
 
-/// A build without the engine (or Windows, until code signing) keeps the
+/// A build without the engine keeps the
 /// saved frequencies and explains why nothing animates.
 #[test]
-#[cfg(any(windows, not(feature = "xtb")))]
+#[cfg(not(feature = "xtb"))]
 fn without_the_engine_a_light_result_does_not_recompute() {
     let (app, light) = light_result(1590.13);
     assert!(!app.tab.xtb.vibrations.recomputing(&light));

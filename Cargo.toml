@@ -20,7 +20,7 @@ rdkit-reference = [
 ]
 # Opt-in state observation for disposable compositor integration tests.
 wayland-qa = ["reshiki-linux/wayland-qa"]
-# Off by default. Only macOS and Linux releases enable it. Library crates never enable it.
+# Off by default. Native desktop releases enable it. Library crates never enable it.
 xtb = ["reshiki-xtb-worker/engine"]
 # Developer-only: `reshiki --conformer-bench` times the app's conformer search (docs/benchmarks/xtb-timings.md).
 conformer-bench = ["xtb"]
@@ -408,6 +408,11 @@ path = "tests/it.rs"
 [[test]]
 name = "agent_api_windows_pipes"
 path = "tests/agent_api_windows_pipes.rs"
+
+[[test]]
+name = "xtb_packaged"
+path = "tests/xtb_packaged.rs"
+required-features = ["xtb"]
 
 [[test]]
 name = "metafile_worker"

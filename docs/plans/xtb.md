@@ -15,7 +15,7 @@ behind every method and algorithm, and what to cite for each feature, are in
 | Engine           | A fork of axtb (LGPL-3.0-or-later) pinned by revision: `Ameyanagi/axtb`, branch `reshiki`.                                                                                                                                                 |
 | Linking          | The `reshiki` executable links the fork only under the Cargo feature `xtb`. The feature is off by default and exists only on the root application crate; library crates never enable it.                                                   |
 | Process          | Calculations run in a child process of the same executable (`reshiki --xtb-worker`), like `--geometry-worker`. There is no separate helper executable on the desktop.                                                                      |
-| Desktop builds   | macOS and Linux desktop releases include xTB. Windows desktop releases do not until code signing for them works.                                                                                                                           |
+| Desktop builds   | Windows, macOS and Linux desktop builds ship xTB. Windows packages can run it unsigned.                                                                                                                                                    |
 | Packages         | Python, npm and crates stay MIT OR Apache-2.0 and calculate nothing unless a package opts in. The Python opt-in package is `reshiki-xtb` (TestPyPI first). Web/WebAssembly calculations come later.                                        |
 | Methods          | GFN2-xTB (default), GFN-FF and g-xTB. Each method supports a different set of tasks; the table is data in `reshiki-qcdata` ([capabilities](xtb-data.md#method--task-capabilities)).                                                        |
 | Limits           | Energy, gradient and optimization up to 500 atoms; Hessians and conformer re-ranking up to 200 atoms; transition states up to 120 atoms; trajectories up to 1000 frames; orbital surfaces simplified to about 20,000 triangles for export. |
@@ -49,7 +49,7 @@ request before packaging depends on it, and user interface after file support.
 ### Phase 0: engine check
 
 - Fork and pin axtb; build and run its own test structures on macOS (Apple silicon), Ubuntu arm64
-  and Arch Linux x64; Windows x64 is checked but not shipped.
+  and Arch Linux x64. Windows package checks run on native x64 and ARM64 runners.
 - Compare against reference programs per method (xtb 6.8.0 for GFN2-xTB and GFN-FF, tblite in its
   matching GFN2 conventions, the g-xTB release for g-xTB), with pinned binary hashes, recorded
   units, SCF settings, spin and solvent states, case counts and explicit expected failures. A
@@ -62,7 +62,7 @@ request before packaging depends on it, and user interface after file support.
 
 - Notices for builds with and without `xtb`; a dependency audit that fails when an LGPL crate
   enters the default dependency graph of any ReShiki crate or a default artifact.
-- Release builds for macOS and Linux turn `xtb` on; the release check runs a real GFN2-xTB water
+- Desktop release builds turn `xtb` on; the release check runs a real GFN2-xTB water
   energy through `reshiki --xtb-worker`.
 - The About window and `reshiki --version` report whether xTB is included and link its source.
 - Python opt-in package `reshiki-xtb` on TestPyPI first.
@@ -184,7 +184,7 @@ relaxation, Q-Chem and Turbomole writers.
 - Design and user interface are written first by the lane lead; bounded backend work is
   delegated; every diff gets an independent adversarial review before its pull request.
 - Checks run locally on macOS, Ubuntu arm64 and Arch Linux x64 before pushing; CI covers
-  Windows x64.
+  Windows x64 and ARM64.
 - Visible changes carry before/after screenshots of the real app; numerical work carries tables.
 
 ## Risks
