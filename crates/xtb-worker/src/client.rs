@@ -448,7 +448,11 @@ impl Session {
                 return Err(self.exited());
             }
             if !progress {
-                std::thread::sleep(POLL.min(deadline.saturating_sub(started.elapsed())));
+                self.child_mut()?
+                    .wait_for_output(POLL.min(deadline.saturating_sub(started.elapsed())))
+                    .map_err(|error| {
+                        self.protocol_error(format!("Could not wait for worker output: {error}"))
+                    })?;
             }
         }
     }
