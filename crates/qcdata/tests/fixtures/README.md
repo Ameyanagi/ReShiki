@@ -26,7 +26,7 @@ cargo build --locked --release --features xtb --bin reshiki
 RESHIKI_XTB_EXECUTABLE="$PWD/target/release/reshiki" \
 RESHIKI_DISCOVERY_EVIDENCE=/tmp/claisen-discovery.json \
 cargo test --locked --features xtb --bin reshiki \
-  app::xtb::ts::job::discovery::evidence::captured_claisen_retains_the_unexpected_conformer_and_searches_its_gap \
+  app::xtb::ts::job::discovery::evidence::manual_captured_claisen_retains_the_unexpected_conformer_and_searches_its_gap \
   -- --ignored --exact --nocapture
 ```
 

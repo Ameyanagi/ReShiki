@@ -441,7 +441,7 @@ impl App {
             {
                 self.pan_to_show(lo, hi);
             }
-            self.status = "Placed an editable copy of the expanded scheme · Bonds inferred from calculated geometries · ⌘Z removes it".into();
+            self.status = "Placed editable scheme · Inferred bonds · ⌘Z to undo".into();
             if !placed.warnings.is_empty() {
                 self.status
                     .push_str(&format!(" · {}", placed.warnings.join(" · ")));

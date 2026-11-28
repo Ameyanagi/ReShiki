@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::mpsc as std_mpsc, thread};
 
 #[test]
 #[ignore = "requires RESHIKI_XTB_EXECUTABLE pointing to an xTB-enabled ReShiki worker; about 35 seconds"]
-fn captured_claisen_retains_the_unexpected_conformer_and_searches_its_gap() {
+fn manual_captured_claisen_retains_the_unexpected_conformer_and_searches_its_gap() {
     let executable = PathBuf::from(
         std::env::var_os("RESHIKI_XTB_EXECUTABLE")
             .expect("set RESHIKI_XTB_EXECUTABLE to an xTB-enabled ReShiki executable"),
