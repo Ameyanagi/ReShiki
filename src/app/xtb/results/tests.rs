@@ -591,6 +591,52 @@ fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
 }
 
 #[test]
+fn converged_metal_optimizations_show_connectivity_changes_in_reopened_results() {
+    let input = reshiki::qc_input::parse_xyz(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/xtb/diruthenium_tetrahydride_seed.xyz"
+    )))
+    .unwrap();
+    let output = reshiki::qc_input::parse_xyz(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/xtb/diruthenium_tetrahydride_gfn2.xyz"
+    )))
+    .unwrap();
+    let mut result = optimized(false);
+    result.input_frame = Some(input.hash());
+    result.frame = output.hash();
+    result.gradient_hartree_per_bohr = vec![1e-4; output.numbers.len() * 3];
+    result.trajectory.as_mut().unwrap().numbers = output.numbers.clone();
+    result.validate(&output).unwrap();
+    let mut result = result.light(&[]);
+    let warning = structure_warning(&result, &input, &output).unwrap();
+    assert!(
+        warning.contains("2 hydrogens lost a bridging metal contact"),
+        "{warning}"
+    );
+    assert!(warning.contains("0 hydrogens gained one"), "{warning}");
+    assert!(headline(&result, &output).starts_with("Converged"));
+    let rows = summary_rows(&result, &input, &output, None);
+    assert!(rows.contains(&("Connectivity".into(), warning.clone())));
+    assert!(tsv("GFN2-xTB", &rows).contains(&warning));
+    assert!(
+        log_with_ts(
+            &result,
+            &input,
+            &output,
+            None,
+            "GFN2-xTB",
+            None,
+            EnergyUnit::default(),
+        )
+        .contains(&warning)
+    );
+
+    result.task = Task::Energy;
+    assert_eq!(structure_warning(&result, &input, &output), None);
+}
+
+#[test]
 fn near_degenerate_gaps_warn() {
     let result = optimized(false);
     assert_eq!(warning(&result, Some(&info(0.05))), Some(NEAR_DEGENERATE));

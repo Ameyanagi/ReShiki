@@ -262,6 +262,11 @@ impl App {
         if let Some(warning) = results::warning(&shown.stored.result, shown.info) {
             content = content.push(alert(true, warning.into(), String::new(), vec![]));
         }
+        if let Some(warning) =
+            results::structure_warning(&shown.stored.result, shown.input, shown.frame)
+        {
+            content = content.push(alert(true, warning, String::new(), vec![]));
+        }
         let body = match view {
             View::Summary => summary(&shown, inspector, false),
             View::Vibrations => self.xtb_vibrations(&shown, inspector),
@@ -998,6 +1003,7 @@ fn log<'a>(
 ) -> Element<'a, Message> {
     let log = results::log_with_ts(
         &shown.stored.result,
+        shown.input,
         shown.frame,
         shown.info,
         method,

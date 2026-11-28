@@ -448,6 +448,9 @@ pub(super) fn summary_grid_rows(
             outcome.push_str(&format!(" · RMSD from start {rmsd:.2} Å"));
         }
         rows.push(("Optimization".into(), outcome));
+        if let Some(warning) = structure_warning(result, input, output) {
+            rows.push(("Connectivity".into(), warning));
+        }
     }
     if result.task == Task::Conformers {
         let kept = energies(result).len();
@@ -538,6 +541,19 @@ pub(crate) fn warning(result: &CalcResult, info: Option<&RunInfo>) -> Option<&'s
     (info.is_some_and(|info| info.near_degenerate)
         || gap_ev(result, info).is_some_and(|gap| gap < NEAR_DEGENERATE_EV))
     .then_some(NEAR_DEGENERATE)
+}
+
+/// Observed connectivity changes remain relevant when the optimizer converged,
+/// and can be reconstructed after reopening a light result from its two frames.
+pub(crate) fn structure_warning(
+    result: &CalcResult,
+    input: &Frame,
+    output: &Frame,
+) -> Option<String> {
+    (result.task == Task::Optimize)
+        .then(|| qcdata::hydride_bridge_changes(input, output))
+        .flatten()
+        .map(qcdata::HydrideBridgeChanges::warning)
 }
 
 /// A partial charge with a sign, except when it rounds to zero.
@@ -768,11 +784,20 @@ pub(crate) fn log(
     info: Option<&RunInfo>,
     method: &str,
 ) -> String {
-    log_with_ts(result, frame, info, method, None, EnergyUnit::default())
+    log_with_ts(
+        result,
+        frame,
+        frame,
+        info,
+        method,
+        None,
+        EnergyUnit::default(),
+    )
 }
 
 pub(super) fn log_with_ts(
     result: &CalcResult,
+    input: &Frame,
     frame: &Frame,
     info: Option<&RunInfo>,
     method: &str,
@@ -897,6 +922,9 @@ pub(super) fn log_with_ts(
             Status::NotConverged { reason } => format!("optimization not converged: {reason}"),
             Status::Failed { reason } => format!("failed: {reason}"),
         });
+        if let Some(warning) = structure_warning(result, input, frame) {
+            lines.push(warning);
+        }
     }
     if let Some(vibrations) = &result.vibrations {
         lines.push("frequencies (cm⁻¹)".into());

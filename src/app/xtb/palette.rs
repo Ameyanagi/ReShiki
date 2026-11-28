@@ -950,6 +950,7 @@ impl App {
                 if matches!(action, Action::CopyLog) {
                     let log = results::log_with_ts(
                         &shown.stored.result,
+                        shown.input,
                         shown.frame,
                         shown.info,
                         &method,
