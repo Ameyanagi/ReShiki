@@ -136,9 +136,12 @@ default drawing style and the same editable bonds as their native documents.
 Their 56 stored coordinates agree with the XYZ input to within 0.000001 Å.
 The conventional 1.54 Å reference rounds the [1.536 Å ethane C–C distance
 listed by NIST CCCBDB](https://cccbdb.nist.gov/expgeom2x.asp?casno=74840&charge=0).
-Some Ru–H strokes remain short at the default physical scale; the figure
-does not clearly resolve all eight g-xTB contacts. The native topology and
-retained coordinates provide the complete contact information.
+At the default 14.4 pt theme length, the actual SVG draws four of eight g-xTB
+Ru–H contacts (2.233–5.711 pt of ink per visible contact) and four of six GFN2
+contacts (1.642–3.237 pt). Both GFN2 terminal-hydride strokes are clipped away
+by labels. The native topology and retained coordinates preserve every contact.
+A separate 19.2 pt g-xTB theme capture draws all eight contacts
+(1.369–11.113 pt per contact), using the same physical ruler and unchanged XYZ.
 
 The [earlier camera projection](../../../docs/images/metal-clusters/diruthenium-baseline.png)
 uses the same g-xTB XYZ file. That capture used an explicit −55° rotation about
