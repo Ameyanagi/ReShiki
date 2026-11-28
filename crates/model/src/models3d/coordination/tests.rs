@@ -277,3 +277,190 @@ fn coincident_metals_are_rejected_without_partial_drawing_changes() {
     assert!(!lay_out_coordination_diagram(&mut doc, &model));
     assert_eq!(doc, before);
 }
+
+#[test]
+fn unobscured_view_selection_matches_actual_renderer_clipping() {
+    for bridging in [true, false] {
+        let (mut doc, model) = system(bridging);
+        let diagram = recognize(&doc, &model).unwrap();
+        let selected = projection(&doc, &model, &diagram).unwrap();
+        assert_eq!(selected.score.0, 0, "glyph/stroke overlaps must be avoided");
+        assert!(lay_out_coordination_diagram(&mut doc, &model));
+        doc.models[0].display = super::super::Display::TwoD;
+        let mut visible = 0;
+        let mut practical = 0;
+        let mut total = 0;
+        for bond in &doc.bonds {
+            if diagram.bridges.contains(&bond.a)
+                || diagram.bridges.contains(&bond.b)
+                || diagram
+                    .terminals
+                    .iter()
+                    .flatten()
+                    .any(|id| *id == bond.a || *id == bond.b)
+            {
+                total += 1;
+                if let Some((a, b)) = crate::scene::bond_segment(&doc, bond, None) {
+                    visible += 1;
+                    practical +=
+                        usize::from(a.distance(b) + 0.001 >= doc.drawing_style.line_width() * 2.);
+                }
+            }
+        }
+        assert!(visible >= practical);
+        assert_eq!(
+            practical,
+            total - selected.score.1,
+            "scorer must match the actual renderer clipping"
+        );
+        check_uniform_projection(&doc, &model);
+    }
+}
+
+#[test]
+fn native_2d_tilt_refreshes_complete_ligand_outlines_without_changing_chemistry() {
+    // The source Cp* helper already uses a valid Kekule ring. Also exercise
+    // all-single imported distance graphs and aromatic-order ring notation.
+    for ring_order in [None, Some(1), Some(4)] {
+        let (mut doc, original_model) = system(true);
+        let original_diagram = recognize(&doc, &original_model).unwrap();
+        for bond in &mut doc.bonds {
+            if original_diagram
+                .ligands
+                .iter()
+                .any(|ligand| ligand.ring.contains(&bond.a) && ligand.ring.contains(&bond.b))
+            {
+                if let Some(order) = ring_order {
+                    bond.order = order;
+                }
+                bond.stereo_authoritative = bond.order == 2;
+            }
+        }
+        if ring_order == Some(4) {
+            for atom in &mut doc.atoms {
+                if original_diagram
+                    .ligands
+                    .iter()
+                    .any(|ligand| ligand.ring.contains(&atom.id))
+                {
+                    atom.aromatic = true;
+                }
+            }
+        }
+        let mut model = Model3d::new(
+            &doc,
+            original_model.atoms.clone(),
+            vec![],
+            ForceField::default(),
+        )
+        .with_cell(&doc, None, vec![]);
+        model.linked_atoms = original_model.linked_atoms;
+        model.display = super::super::Display::TwoD;
+        doc.models[0] = model.clone();
+        let scientific = doc.models.clone();
+        assert!(lay_out_coordination_diagram(&mut doc, &model));
+        let diagram = recognize(&doc, &model).unwrap();
+        let ring_edges: HashSet<_> = diagram
+            .ligands
+            .iter()
+            .flat_map(|ligand| {
+                ligand
+                    .ring
+                    .iter()
+                    .zip(ligand.ring.iter().cycle().skip(1))
+                    .map(|(&a, &b)| (a.min(b), a.max(b)))
+            })
+            .collect();
+        for bond in &doc.bonds {
+            assert_eq!(
+                bond.projection,
+                ring_edges.contains(&(bond.a.min(bond.b), bond.a.max(bond.b)))
+            );
+            bond.validate_appearance().unwrap();
+        }
+        let chemical_bonds: HashMap<_, _> = doc
+            .bonds
+            .iter()
+            .map(|bond| {
+                (
+                    (bond.a.min(bond.b), bond.a.max(bond.b)),
+                    (
+                        bond.order,
+                        bond.stereo.clone(),
+                        bond.stereo_atoms.clone(),
+                        bond.stereo_authoritative,
+                    ),
+                )
+            })
+            .collect();
+        let before = doc.clone();
+        // Native save/reopen must retain plain rear edges as part of the same
+        // projection outline, rather than relying on transient layout state.
+        doc = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+        let ids: Vec<_> = diagram.ids.iter().copied().collect();
+        for degrees in [180., -180.] {
+            crate::projection::tilt(&mut doc, &ids, degrees, true);
+            for ligand in &diagram.ligands {
+                let mean = ligand
+                    .ring
+                    .iter()
+                    .map(|id| doc.atom(*id).unwrap().depth)
+                    .sum::<f32>()
+                    / 5.;
+                for bond in doc
+                    .bonds
+                    .iter()
+                    .filter(|bond| ligand.ring.contains(&bond.a) && ligand.ring.contains(&bond.b))
+                {
+                    assert!(bond.projection);
+                    let (a, b) = (
+                        doc.atom(bond.a).unwrap().depth - mean,
+                        doc.atom(bond.b).unwrap().depth - mean,
+                    );
+                    let expected = if bond.order == 2 {
+                        if (a + b) / 2. > 0.01 { "bold" } else { "plain" }
+                    } else if (a > 0.01) == (b > 0.01) {
+                        if a > 0.01 { "bold" } else { "plain" }
+                    } else {
+                        "wedge"
+                    };
+                    assert_eq!(
+                        bond.display, expected,
+                        "complete ring must use its own near/far plane"
+                    );
+                    if bond.order == 2 {
+                        assert_eq!(bond.secondary_display.as_deref(), Some("plain"));
+                    }
+                    bond.validate_appearance().unwrap();
+                }
+            }
+            assert_eq!(doc.models, scientific);
+            assert_eq!(
+                doc.bonds
+                    .iter()
+                    .map(|bond| (
+                        (bond.a.min(bond.b), bond.a.max(bond.b)),
+                        (
+                            bond.order,
+                            bond.stereo.clone(),
+                            bond.stereo_atoms.clone(),
+                            bond.stereo_authoritative
+                        )
+                    ))
+                    .collect::<HashMap<_, _>>(),
+                chemical_bonds
+            );
+            assert!(
+                doc.atoms
+                    .iter()
+                    .all(|atom| atom.stereo.is_none() && atom.stereo_group.is_none())
+            );
+            doc.validate().unwrap();
+        }
+        for atom in &before.atoms {
+            let after = doc.atom(atom.id).unwrap();
+            assert!(after.position.distance(atom.position) < 0.001);
+            assert!((after.depth - atom.depth).abs() < 0.001);
+        }
+    }
+}

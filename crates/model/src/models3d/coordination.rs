@@ -265,7 +265,9 @@ fn cross([a, b, c]: Vector, [d, e, f]: Vector) -> Vector {
 
 struct Projection {
     points: HashMap<u64, (Point, f32)>,
-    score: f32,
+    // Obscured ink, insufficient hydride spans, shortest span, then
+    // nonincident clearances and deterministic view preferences.
+    score: (usize, usize, f32, usize, f32),
 }
 
 fn crosses(a: Point, b: Point, c: Point, d: Point) -> bool {
@@ -290,7 +292,7 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
     // Ordinary molecular single C--C reference, independent of this geometry.
     // The same factor applies to every coordinate; rings and spokes retain
     // their true projected shortening and calculated length ratios.
-    let units = doc.drawing_style.bond_length_world / 1.54;
+    let units = doc.drawing_style.molecular_units_per_angstrom();
     let center_2d = doc.atom(a)?.position.lerp(doc.atom(b)?.position, 0.5);
     let labels: Vec<_> = diagram
         .metals
@@ -326,7 +328,7 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
         })
         .collect::<Option<_>>()?;
     let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
-    let font = doc.drawing_style.font_size();
+    let minimum_visible = 2. * doc.drawing_style.line_width();
     let mut best: Option<Projection> = None;
     // Choose a physical tilt with open ligand faces. Score the resulting
     // fixed-scale drawing against rendered glyph extents; do not enlarge it.
@@ -412,7 +414,8 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
                         ))
                     })
                     .collect::<Option<_>>()?;
-                let mut collisions = 0_f32;
+                let mut label_overlaps = 0;
+                let mut collisions = 0;
                 for (i, &(id, lo, hi)) in labels.iter().enumerate() {
                     let at = points.get(&id)?.0;
                     for &(other, other_lo, other_hi) in labels.iter().skip(i + 1) {
@@ -422,11 +425,29 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
                         let height = (at.y + hi.y).min(other.y + other_hi.y)
                             - (at.y + lo.y).max(other.y + other_lo.y);
                         if width > 0. && height > 0. {
-                            collisions += 100. + width * height / (font * font);
+                            label_overlaps += 1;
+                        }
+                    }
+                }
+                let mut obscured_ink = label_overlaps;
+                // Carbon vertices have no glyph to trim or protect them. A
+                // visible ring/spoke vertex must not sit inside a core label.
+                for boxes in placed_ink.values() {
+                    for carbon in diagram
+                        .ligands
+                        .iter()
+                        .flat_map(|ligand| ligand.ring.iter().chain(&ligand.methyls))
+                    {
+                        let p = points.get(carbon)?.0;
+                        if boxes.iter().any(|(lo, hi)| {
+                            p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y
+                        }) {
+                            obscured_ink += 1;
                         }
                     }
                 }
                 let mut shortest = f32::INFINITY;
+                let mut insufficient = 0;
                 for bond in doc
                     .bonds
                     .iter()
@@ -436,9 +457,20 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
                     else {
                         continue;
                     };
+                    let hydride = diagram.bridges.contains(&bond.a)
+                        || diagram.bridges.contains(&bond.b)
+                        || diagram
+                            .terminals
+                            .iter()
+                            .flatten()
+                            .any(|id| *id == bond.a || *id == bond.b);
                     let length = a.distance(b);
                     if length < 1e-5 {
-                        collisions += 100.;
+                        if hydride {
+                            shortest = shortest.min(0.);
+                            insufficient += 1;
+                        }
+                        collisions += 1;
                         continue;
                     }
                     let (ux, uy) = ((b.x - a.x) / length, (b.y - a.y) / length);
@@ -446,24 +478,44 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
                     let start = crate::scene::label_end(a, ux, uy, boxes(bond.a), length, margin);
                     let end = crate::scene::label_end(b, -ux, -uy, boxes(bond.b), length, margin);
                     let visible = (end.x - start.x) * ux + (end.y - start.y) * uy;
-                    if diagram.bridges.contains(&bond.a)
-                        || diagram.bridges.contains(&bond.b)
-                        || diagram
-                            .terminals
-                            .iter()
-                            .flatten()
-                            .any(|id| *id == bond.a || *id == bond.b)
-                    {
+                    if hydride {
                         shortest = shortest.min(visible);
+                        insufficient += usize::from(visible < minimum_visible);
                     }
                     if visible <= 0. {
                         continue;
                     }
+                    let ring_front = bond.order == 1
+                        && diagram.ligands.iter().any(|ligand| {
+                            ligand.ring.contains(&bond.a)
+                                && ligand.ring.contains(&bond.b)
+                                && (points.get(&bond.a).map(|p| p.1).unwrap_or_default()
+                                    + points.get(&bond.b).map(|p| p.1).unwrap_or_default())
+                                    / 2.
+                                    > points.get(&ligand.anchor).map(|p| p.1).unwrap_or_default()
+                        });
+                    let half_stroke = if ring_front {
+                        doc.drawing_style.world(doc.drawing_style.bold_width_pt) / 2.
+                    } else {
+                        doc.drawing_style.line_width() / 2.
+                    };
                     for (&id, boxes) in &placed_ink {
                         if id == bond.a || id == bond.b {
                             continue;
                         }
+                        // Actual stroke/glyph overlap has priority over edge
+                        // visibility. The surrounding label margin is only a
+                        // lower-priority preference and cannot erase an edge.
                         if boxes.iter().any(|&(lo, hi)| {
+                            crate::atom_labels::segment_hits_rect(
+                                start,
+                                end,
+                                lo.offset(-half_stroke, -half_stroke),
+                                hi.offset(half_stroke, half_stroke),
+                            )
+                        }) {
+                            obscured_ink += 1;
+                        } else if boxes.iter().any(|&(lo, hi)| {
                             crate::atom_labels::segment_hits_rect(
                                 start,
                                 end,
@@ -471,15 +523,14 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
                                 hi.offset(margin, margin),
                             )
                         }) {
-                            collisions += 1.;
+                            collisions += 1;
                         }
                     }
                 }
                 if !shortest.is_finite() {
                     continue;
                 }
-                let mut score = collisions * 20. - shortest / font
-                    + 0.01 * (0.6 - face).max(0.)
+                let mut preference = 0.01 * (0.6 - face).max(0.)
                     + (degrees - 55.).abs() * 0.00001
                     + step.unsigned_abs() as f32 * 0.000001
                     + roll.unsigned_abs() as f32 * 0.0000001;
@@ -502,16 +553,25 @@ fn projection(doc: &Document, model: &Model3d, diagram: &Diagram) -> Option<Proj
                                 (points.get(&bond.a), points.get(&bond.b))
                                 && crosses(at, end, a, b)
                             {
-                                score += 0.02;
+                                preference += 0.02;
                             }
                         }
                         if let Some(other) = diagram.metals.iter().find(|id| *id != metal) {
                             let other = points.get(other)?.0;
-                            score += 0.01 * ((end.x - at.x) * (other.x - at.x)).max(0.)
+                            preference += 0.01 * ((end.x - at.x) * (other.x - at.x)).max(0.)
                                 / at.distance(other).powi(2);
                         }
                     }
                 }
+                // A small nonincident-margin improvement must never erase
+                // an otherwise visible metal--hydride contact.
+                let score = (
+                    obscured_ink,
+                    insufficient,
+                    -shortest,
+                    collisions,
+                    preference,
+                );
                 if best.as_ref().is_none_or(|best| score < best.score) {
                     for (point, _) in points.values_mut() {
                         *point = center_2d.offset(point.x, point.y);
@@ -596,6 +656,16 @@ pub fn lay_out_coordination_diagram(doc: &mut Document, model: &Model3d) -> bool
             || front_hydrogens.contains(&bond.a)
             || front_hydrogens.contains(&bond.b);
         bond.z_order = i16::from(front);
+        let ring_edge = diagram
+            .ligands
+            .iter()
+            .any(|ligand| ligand.ring.contains(&bond.a) && ligand.ring.contains(&bond.b));
+        if ring_edge || bond.order == 1 {
+            // The native tilt refresher needs the complete connected outline,
+            // including initially plain rear edges and retained double/aromatic
+            // edges. Initial width is independent of this non-stereo marker.
+            bond.projection = ring_edge;
+        }
         if bond.order == 1 {
             let hydride = diagram.bridges.contains(&bond.a)
                 || diagram.bridges.contains(&bond.b)
@@ -605,7 +675,6 @@ pub fn lay_out_coordination_diagram(doc: &mut Document, model: &Model3d) -> bool
                     .flatten()
                     .any(|id| *id == bond.a || *id == bond.b);
             bond.display = if front && !hydride { "bold" } else { "plain" }.into();
-            bond.projection = front && !hydride;
         }
     }
     crate::depth_appearance::clear(doc, &diagram.ids.into_iter().collect::<Vec<_>>());
