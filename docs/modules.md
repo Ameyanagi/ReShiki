@@ -167,6 +167,7 @@ explains how the crates and modules fit together.
 - `src/app/object_toolbar.rs`: Align, distribute, order, flip and rotate at the right end of the Select context row.
 - `src/app/office.rs`: An Office save target belongs to its document tab, not to the whole window.
 - `src/app/optimization.rs`: Detached, single-flight 3D optimization sessions.
+- `src/app/optimization/bench.rs`: Opt-in comparison of the production live-relaxation schedule and fixed-20 requests, using the packaged geometry worker and identical seeded starts.
 - `src/app/pages.rs`
 - `src/app/palettes.rs`: Compact visual flyouts for toolbar families.
 - `src/app/performance.rs`: Opt-in, release-mode timings of editing work on the event-loop thread.

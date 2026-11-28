@@ -1,6 +1,9 @@
 use super::*;
 use reshiki::document::Point;
 
+const STAGNANT_SHORT_BATCHES: u32 = MAX_STAGNANT_ITERATIONS / BATCH_ITERATIONS;
+const SHORT_BATCH_LIMIT: u32 = MAX_RELAXATION_ITERATIONS / BATCH_ITERATIONS;
+
 fn drawing() -> (App, u64, u64, Document) {
     let (mut app, _) = App::new();
     app.tab.busy = false;
@@ -192,6 +195,17 @@ fn switching_modes_regenerates_and_keeps_mmff_for_organic_molecules() {
 }
 
 fn complete_live(app: &mut App, energy: f64, converged: bool) -> Task<Message> {
+    complete_live_after(app, energy, converged, RELAXATION_BATCH_TARGET)
+}
+
+fn complete_live_after(
+    app: &mut App,
+    energy: f64,
+    converged: bool,
+    elapsed: Duration,
+) -> Task<Message> {
+    let session = app.tab.optimization.as_mut().unwrap();
+    session.flight.as_mut().unwrap().started = iced::time::Instant::now() - elapsed;
     let session = app.tab.optimization.as_ref().unwrap();
     let flight = session.flight.as_ref().unwrap();
     assert_eq!(flight.work, Work::Relax);
@@ -200,11 +214,151 @@ fn complete_live(app: &mut App, energy: f64, converged: bool) -> Task<Message> {
     computed.initial_energy = energy + 1.;
     computed.energy = energy;
     computed.converged = converged;
+    computed.iterations = flight.iterations;
     app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(computed))))
 }
 
+#[test]
+fn uninterrupted_relaxation_grows_continuous_calls_without_exceeding_the_iteration_budget() {
+    let (mut app, _, _, original) = prepared_preview();
+    let _ = app.optimization_action(Action::Start);
+    let mut requested = Vec::new();
+    while let Some(flight) = &app.tab.optimization.as_ref().unwrap().flight {
+        requested.push(flight.iterations);
+        let energy = 1000. - requested.len() as f64;
+        let _ = complete_live_after(&mut app, energy, false, Duration::from_millis(20));
+    }
+    assert_eq!(requested[0], BATCH_ITERATIONS);
+    assert!(
+        requested
+            .iter()
+            .any(|&iterations| iterations > BATCH_ITERATIONS)
+    );
+    assert!(
+        requested
+            .iter()
+            .all(|&iterations| iterations <= MAX_STAGNANT_ITERATIONS)
+    );
+    assert_eq!(requested.iter().sum::<u32>(), MAX_RELAXATION_ITERATIONS);
+    assert!(requested.len() < SHORT_BATCH_LIMIT as usize / 2);
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.relaxation.paused, Some(RelaxationPause::Limit));
+    assert!(!session.running);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn slow_continuation_and_changed_pins_restore_short_interactive_calls() {
+    let (mut app, _, b, _) = prepared_preview();
+    let _ = app.optimization_action(Action::Start);
+    for energy in [10., 9., 8.] {
+        let _ = complete_live_after(&mut app, energy, false, Duration::from_millis(20));
+    }
+    assert!(
+        app.tab
+            .optimization
+            .as_ref()
+            .unwrap()
+            .flight
+            .as_ref()
+            .unwrap()
+            .iterations
+            > BATCH_ITERATIONS
+    );
+    let _ = complete_live_after(&mut app, 7., false, Duration::from_secs(2));
+    assert_eq!(
+        app.tab
+            .optimization
+            .as_ref()
+            .unwrap()
+            .flight
+            .as_ref()
+            .unwrap()
+            .iterations,
+        BATCH_ITERATIONS
+    );
+    let _ = complete_live_after(&mut app, 6., false, Duration::from_millis(20));
+    app.tab.selected = vec![b];
+    let _ = app.optimization_action(Action::PinSelected);
+    // A result for the previous pins must not teach the new constraints a
+    // large budget, even when that old request completed very quickly.
+    let _ = complete_live_after(&mut app, 5., false, Duration::from_millis(20));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(
+        session.flight.as_ref().unwrap().iterations,
+        BATCH_ITERATIONS
+    );
+    assert_eq!(session.relaxation.iterations, BATCH_ITERATIONS);
+    assert!(session.relaxation.best_energy.is_none());
+}
+
+#[test]
+fn held_drag_targets_keep_short_calls_and_release_allows_continuation() {
+    let (mut app, _, b, _) = prepared_preview();
+    let id = app.tab.optimization.as_ref().unwrap().id;
+    let _ = app.optimization_edit(Edit::RelaxDragStart {
+        session: id,
+        atom: b,
+    });
+    let _ = app.optimization_action(Action::Start);
+    for energy in [10., 9., 8., 7.] {
+        let _ = complete_live_after(&mut app, energy, false, Duration::from_millis(20));
+        assert_eq!(
+            app.tab
+                .optimization
+                .as_ref()
+                .unwrap()
+                .flight
+                .as_ref()
+                .unwrap()
+                .iterations,
+            BATCH_ITERATIONS
+        );
+    }
+    let _ = app.optimization_edit(Edit::RelaxDragEnd {
+        session: id,
+        atom: b,
+        target: None,
+    });
+    let _ = complete_live_after(&mut app, 6., false, Duration::from_millis(20));
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert!(session.drag.is_none());
+    assert_eq!(
+        session.flight.as_ref().unwrap().iterations,
+        BATCH_ITERATIONS
+    );
+    let _ = complete_live_after(&mut app, 5., false, Duration::from_millis(20));
+    assert!(
+        app.tab
+            .optimization
+            .as_ref()
+            .unwrap()
+            .flight
+            .as_ref()
+            .unwrap()
+            .iterations
+            > BATCH_ITERATIONS
+    );
+}
+
+#[test]
+fn adaptive_stall_detection_retains_the_original_no_progress_iteration_budget() {
+    let (mut app, _, _, _) = prepared_preview();
+    let _ = app.optimization_action(Action::Start);
+    let _ = complete_live_after(&mut app, 1., false, Duration::from_millis(20));
+    while app.tab.optimization.as_ref().unwrap().flight.is_some() {
+        let _ = complete_live_after(&mut app, 1., false, Duration::from_millis(20));
+    }
+    let session = app.tab.optimization.as_ref().unwrap();
+    assert_eq!(session.relaxation.paused, Some(RelaxationPause::Stalled));
+    assert!(session.relaxation.stagnant_iterations >= MAX_STAGNANT_ITERATIONS);
+    assert!(session.relaxation.iterations < MAX_RELAXATION_ITERATIONS);
+    assert!(!session.converged);
+}
+
 fn stall_live(app: &mut App) {
-    for _ in 0..=MAX_STAGNANT_BATCHES {
+    for _ in 0..=STAGNANT_SHORT_BATCHES {
         let _ = complete_live(app, 1., false);
     }
     let session = app.tab.optimization.as_ref().unwrap();
@@ -624,12 +778,12 @@ fn improving_nonconverged_batches_stop_at_the_budget_and_apply_is_one_undoable_e
         .as_ref()
         .unwrap()
         .accessibility_context();
-    for batch in 1..=MAX_RELAXATION_BATCHES {
+    for batch in 1..=SHORT_BATCH_LIMIT {
         let task = complete_live(&mut app, 1000. - f64::from(batch), false);
         let session = app.tab.optimization.as_ref().unwrap();
         assert_eq!(app.tab.doc, original);
         assert!(!app.tab.history.can_undo());
-        if batch < MAX_RELAXATION_BATCHES {
+        if batch < SHORT_BATCH_LIMIT {
             assert!(task.units() > 0);
             assert!(session.running);
             assert!(session.flight.is_some());
@@ -668,14 +822,17 @@ fn stalled_nonconverged_batches_pause_after_multiple_batches_and_cancel_keeps_th
     let (mut app, _, _, original) = prepared_preview();
     let _ = app.optimization_action(Action::Start);
     assert!(complete_live(&mut app, 1., false).units() > 0);
-    for _ in 1..MAX_STAGNANT_BATCHES {
+    for _ in 1..STAGNANT_SHORT_BATCHES {
         assert!(complete_live(&mut app, 1., false).units() > 0);
     }
     assert_eq!(complete_live(&mut app, 1., false).units(), 0);
     let session = app.tab.optimization.as_ref().unwrap();
     assert_eq!(session.phase, Phase::Paused);
     assert_eq!(session.relaxation.paused, Some(RelaxationPause::Stalled));
-    assert_eq!(session.relaxation.batches, MAX_STAGNANT_BATCHES + 1);
+    assert_eq!(
+        session.relaxation.iterations,
+        MAX_STAGNANT_ITERATIONS + BATCH_ITERATIONS
+    );
     assert!(app.status.contains("no further energy improvement"));
     assert!(session.notice.is_none());
     assert!(!app.error);
@@ -691,7 +848,7 @@ fn small_cumulative_energy_improvements_keep_live_relaxation_active() {
     let (mut app, _, _, original) = prepared_preview();
     let _ = app.optimization_action(Action::Start);
     let _ = complete_live(&mut app, 1., false);
-    for batch in 1..=2 * MAX_STAGNANT_BATCHES {
+    for batch in 1..=2 * STAGNANT_SHORT_BATCHES {
         // Each step is below the progress threshold, but two successive
         // steps make meaningful progress against the retained baseline.
         assert!(complete_live(&mut app, 1. - f64::from(batch) * 6e-7, false).units() > 0);
@@ -724,7 +881,10 @@ fn real_pin_and_field_changes_resume_a_paused_budget_while_noop_edits_and_rotati
         assert_eq!(app.optimization_action(Action::PinSelected).units(), 0);
         let session = app.tab.optimization.as_ref().unwrap();
         assert!(!session.running);
-        assert_eq!(session.relaxation.batches, MAX_STAGNANT_BATCHES + 1);
+        assert_eq!(
+            session.relaxation.iterations,
+            MAX_STAGNANT_ITERATIONS + BATCH_ITERATIONS
+        );
         if matches!(action, Action::PinSelected) {
             app.tab.selected = vec![b];
         }
@@ -732,8 +892,8 @@ fn real_pin_and_field_changes_resume_a_paused_budget_while_noop_edits_and_rotati
         let session = app.tab.optimization.as_ref().unwrap();
         assert!(session.running);
         assert_eq!(session.phase, Phase::Running);
-        assert_eq!(session.relaxation.batches, 1);
-        assert_eq!(session.relaxation.stagnant_batches, 0);
+        assert_eq!(session.relaxation.iterations, BATCH_ITERATIONS);
+        assert_eq!(session.relaxation.stagnant_iterations, 0);
         assert!(session.relaxation.best_energy.is_none());
         assert!(session.relaxation.paused.is_none());
         assert!(session.flight.is_some());
@@ -762,13 +922,13 @@ fn changed_drag_targets_resume_and_an_older_flight_does_not_consume_the_new_budg
         target: Point::new(10., 15.),
     });
     let session = app.tab.optimization.as_ref().unwrap();
-    assert_eq!(session.relaxation.batches, 0);
+    assert_eq!(session.relaxation.iterations, 0);
     assert_eq!(session.flight.as_ref().unwrap().key, key);
     let task = app.optimization_action(Action::WorkerDone(key, Ok(Arc::new(older))));
     assert!(task.units() > 0);
     let session = app.tab.optimization.as_ref().unwrap();
-    assert_eq!(session.relaxation.batches, 1);
-    assert_eq!(session.relaxation.stagnant_batches, 0);
+    assert_eq!(session.relaxation.iterations, BATCH_ITERATIONS);
+    assert_eq!(session.relaxation.stagnant_iterations, 0);
     assert!(session.relaxation.best_energy.is_none());
     stall_live(&mut app);
     let task = app
@@ -779,7 +939,10 @@ fn changed_drag_targets_resume_and_an_older_flight_does_not_consume_the_new_budg
         })
         .unwrap();
     assert!(task.units() > 0);
-    assert_eq!(app.tab.optimization.as_ref().unwrap().relaxation.batches, 1);
+    assert_eq!(
+        app.tab.optimization.as_ref().unwrap().relaxation.iterations,
+        BATCH_ITERATIONS
+    );
     let _ = app.optimization_action(Action::Stop);
     let _ = app.optimization_edit(Edit::RelaxDragStart {
         session: id,
@@ -871,8 +1034,8 @@ fn a_converged_running_session_idles_without_polling_and_relaxes_the_next_drag()
     assert!(task.units() > 0);
     let session = app.tab.optimization.as_ref().unwrap();
     assert!(session.flight.is_some());
-    assert_eq!(session.relaxation.batches, 1);
-    assert_eq!(session.relaxation.stagnant_batches, 0);
+    assert_eq!(session.relaxation.iterations, BATCH_ITERATIONS);
+    assert_eq!(session.relaxation.stagnant_iterations, 0);
 }
 
 #[test]
