@@ -771,8 +771,12 @@ jobs:
             if ((Get-AuthenticodeSignature $file).Status -ne 'NotSigned') { throw "Expected unsigned artifact: $file" }
           }
       - name: Stage the exact executable from the shipped ZIP
+        id: xtb-zip
         run: uv run --no-project --isolated --python 3.12.15 python scripts/stage_xtb_smoke.py "dist/releases/*-windows-${{ matrix.arch }}.zip"
       - name: Calculate with the relocated shipped executable and no companion runtime
+        env:
+          RESHIKI_TEST_PACKAGED_APP: ${{ steps.xtb-zip.outputs.application }}
+          RESHIKI_TEST_PACKAGED_APP_SHA256: ${{ steps.xtb-zip.outputs.sha256 }}
         run: |
           cargo run --locked -p reshiki-xtb-worker --target ${{ matrix.target }} --example packaged_app
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

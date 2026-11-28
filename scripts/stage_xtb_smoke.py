@@ -36,10 +36,10 @@ def main(argv=None):
         tempfile.mkdtemp(prefix="ReShiki xTB ZIP check ", dir=os.environ.get("RUNNER_TEMP"))
     )
     binary, digest = stage_application(archives[0], directory)
-    if github_env := os.environ.get("GITHUB_ENV"):
-        with Path(github_env).open("a", encoding="utf-8") as stream:
-            stream.write(f"RESHIKI_TEST_PACKAGED_APP={binary}\n")
-            stream.write(f"RESHIKI_TEST_PACKAGED_APP_SHA256={digest}\n")
+    if github_output := os.environ.get("GITHUB_OUTPUT"):
+        with Path(github_output).open("a", encoding="utf-8") as stream:
+            stream.write(f"application={binary}\n")
+            stream.write(f"sha256={digest}\n")
     print(f"Shipped ZIP: {archives[0]}\nStaged executable: {binary}\nSHA256: {digest}")
     return 0
 

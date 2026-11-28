@@ -48,18 +48,17 @@ class PackagedSmokeTests(unittest.TestCase):
             contents = b"MZ shipped application"
             with zipfile.ZipFile(archive, "w") as stream:
                 stream.writestr("release/reshiki.exe", contents)
-            github_env = root / "github-env"
+            github_output = root / "github-output"
             with (
-                patch.dict(os.environ, GITHUB_ENV=str(github_env), RUNNER_TEMP=str(root)),
+                patch.dict(os.environ, GITHUB_OUTPUT=str(github_output), RUNNER_TEMP=str(root)),
                 contextlib.redirect_stdout(io.StringIO()),
             ):
                 self.assertEqual(main([str(root / "*-windows-x64.zip")]), 0)
-            values = dict(line.split("=", 1) for line in github_env.read_text().splitlines())
-            binary = Path(values["RESHIKI_TEST_PACKAGED_APP"])
+            values = dict(line.split("=", 1) for line in github_output.read_text().splitlines())
+            self.assertEqual(set(values), {"application", "sha256"})
+            binary = Path(values["application"])
             self.assertEqual(binary.read_bytes(), contents)
-            self.assertEqual(
-                values["RESHIKI_TEST_PACKAGED_APP_SHA256"], hashlib.sha256(contents).hexdigest()
-            )
+            self.assertEqual(values["sha256"], hashlib.sha256(contents).hexdigest())
 
     def test_cli_rejects_an_ambiguous_archive_glob(self):
         with tempfile.TemporaryDirectory() as temporary:
