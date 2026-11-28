@@ -79,6 +79,7 @@ fn fixture() -> (Document, u64, Vec<u64>, Vec<u64>) {
         "GFN2-xTB".into(),
         states,
         vec![EnergyProfileStep {
+            unresolved: false,
             from: 0,
             to: 2,
             transition: Some(1),
@@ -239,6 +240,7 @@ fn five_state_fixture() -> (Document, u64, [Vec<u64>; 3]) {
         },
     ]);
     profile.steps.push(EnergyProfileStep {
+        unresolved: false,
         from: 2,
         to: 4,
         transition: Some(3),
@@ -549,4 +551,22 @@ fn table_owned_profile_keeps_its_clip_without_exporting_other_cells() {
         renderer.render(1, None, None, false).unwrap().len(),
         480 * 480 * 4
     );
+}
+
+#[test]
+fn elementary_steps_highlight_only_the_original_drawn_endpoints() {
+    let (mut doc, _, [reactant, product, _]) = five_state_fixture();
+    let profile = doc.graphics[0].energy_profile.as_deref_mut().unwrap();
+    profile.steps[1].source = profile.source;
+    profile.steps[1].source_key = Some(profile.source_key.clone());
+
+    let artwork = Artwork::new(&doc, &doc.graphics[0]);
+    assert_eq!(artwork.species[0][0].owner, reactant[0]);
+    assert_eq!(artwork.species[4][0].owner, product[0]);
+    for &index in &[1usize, 2, 3] {
+        assert!(artwork.species[index].is_empty());
+        assert!(
+            artwork.changes[index].breaking.is_empty() && artwork.changes[index].forming.is_empty()
+        );
+    }
 }

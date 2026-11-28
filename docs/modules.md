@@ -258,12 +258,16 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/irc/controls.rs`: Reusable transport controls for reaction-path animations.
 - `src/app/xtb/ts/irc/focus.rs`: Arrow-key stepping belongs to the focused path, never a document shortcut.
 - `src/app/xtb/ts/job.rs`: A desktop transition-state search using thread-affine, isolated xTB workers.
+- `src/app/xtb/ts/job/discovery.rs`: Scheme-only discovery on the geometries evaluated by the native TS search.
+- `src/app/xtb/ts/job/discovery/evidence.rs`: Opt-in numerical evidence using the production worker and discovery backend.
 - `src/app/xtb/ts/profile.rs`: Place a reaction result on the drawing and keep its linked figure current.
 - `src/app/xtb/ts/refine.rs`: Resolve a saved saddle and its endpoint frames on the originating reaction.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
 - `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
 - `src/app/xtb/ts/review/view.rs`: Review both reaction sides while keeping uncommon calculation settings folded.
 - `src/app/xtb/ts/scheme.rs`: Calculate a selected reaction path.
+- `src/app/xtb/ts/scheme/drawing.rs`: Detached, editable copies of the minima and confirmed connections in a search.
+- `src/app/xtb/ts/scheme/drawing/evidence.rs`: Opt-in rendering fixture, not a scientific transition-state assertion.
 - `src/app/xtb/ts/scheme/plan.rs`: Read the selected, drawn reaction path without changing the drawing.
 - `src/app/xtb/ts/scheme/plan/chemistry.rs`: Exact atom/isotope/charge accounting and single-molecule inputs.
 - `src/app/xtb/ts/scheme/profile.rs`: The scheme's common-reference figure uses the same native graphic, model placement, link editing and undo path as a single-arrow energy profile.
@@ -1070,6 +1074,7 @@ explains how the crates and modules fit together.
 - `crates/optimize/src/optimizer/rfo/positive.rs`: The unique negative RFO root for a positive-definite physical Hessian.
 - `crates/optimize/src/optimizer/trust.rs`: Trust-region acceptance and radius adjustment shared by both RFO coordinate models.
 - `crates/optimize/src/ts.rs`: Transition-state searches on mapped Cartesian geometries in atomic units.
+- `crates/optimize/src/ts/discovery.rs`: Bounded discovery of elementary steps from an actual mapped NEB profile.
 - `crates/optimize/src/ts/endpoint.rs`: Distance-restrained endpoint construction and covalent connectivity.
 - `crates/optimize/src/ts/idpp.rs`: Image-dependent pair-potential interpolation
 - `crates/optimize/src/ts/irc.rs`: Mass-weighted steepest descent on a local quadratic surface (Page & McIver, J.

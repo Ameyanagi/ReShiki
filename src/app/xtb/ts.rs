@@ -982,6 +982,7 @@ impl App {
                     frames,
                     mut extras,
                     info,
+                    ..
                 } = Arc::unwrap_or_clone(report);
                 result.keep_full = run.keep_full;
                 if let Some(summary) = &mut result.run {

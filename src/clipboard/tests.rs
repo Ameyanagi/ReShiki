@@ -33,6 +33,7 @@ async fn native_copy_preserves_profiles_that_carry_their_source_arrows() {
             })
             .collect(),
         vec![EnergyProfileStep {
+            unresolved: false,
             from: 0,
             to: 1,
             transition: None,

@@ -295,7 +295,7 @@ fn ts_report() -> TsReport {
     }
 }
 
-fn completion() -> (Launch, Completion) {
+pub(super) fn completion() -> (Launch, Completion) {
     let launch = Launch {
         frame: Arc::new(Frame {
             numbers: vec![3, 17],

@@ -40,6 +40,7 @@ fn profile(kinds: &[Kind]) -> EnergyProfile {
                 return None;
             };
             Some(EnergyProfileStep {
+                unresolved: false,
                 source: None,
                 source_key: None,
                 from,

@@ -46,30 +46,46 @@ impl Artwork {
             ..Self::default()
         };
         let reactions = source_reaction_prefix(doc, profile);
-        for (index, (step, current)) in profile.steps.iter().zip(reactions).enumerate() {
+        for (index, (step, current)) in profile.steps.iter().zip(&reactions).enumerate() {
+            // A discovered minimum between two legs of one arrow has no
+            // corresponding molecule in the authored scheme.
+            let from_drawn = index
+                .checked_sub(1)
+                .and_then(|i| reactions.get(i))
+                .is_none_or(|previous| previous.arrow != current.arrow);
+            let to_drawn = profile
+                .steps
+                .get(index + 1)
+                .is_none_or(|next| next.source != Some(current.arrow));
             artwork.matched_steps.insert(index);
             artwork.selection.extend(current.ids());
             // Implicit atoms can leave some or all of the saddle's changes off the drawing.
-            let boxed_transition = step.transition.filter(|&state| {
-                let (Some(transition), Some(changes)) =
-                    (profile.states.get(state), artwork.changes.get_mut(state))
-                else {
-                    return false;
-                };
-                let Some(geometry) = transition.geometry.as_ref() else {
-                    return true;
-                };
-                *changes = scheme_changes(doc, &current, geometry);
-                for pairs in [&mut changes.forming, &mut changes.breaking] {
-                    pairs.retain(|&[a, b]| doc.atom_drawn(a) && doc.atom_drawn(b));
-                }
-                let drawn = changes.forming.len() + changes.breaking.len();
-                drawn == 0 || drawn < geometry.forming.len() + geometry.breaking.len()
-            });
-            for (state, participants) in [
-                (step.from, &current.reactants),
-                (step.to, &current.products),
+            let boxed_transition =
+                step.transition
+                    .filter(|_| from_drawn && to_drawn)
+                    .filter(|&state| {
+                        let (Some(transition), Some(changes)) =
+                            (profile.states.get(state), artwork.changes.get_mut(state))
+                        else {
+                            return false;
+                        };
+                        let Some(geometry) = transition.geometry.as_ref() else {
+                            return true;
+                        };
+                        *changes = scheme_changes(doc, current, geometry);
+                        for pairs in [&mut changes.forming, &mut changes.breaking] {
+                            pairs.retain(|&[a, b]| doc.atom_drawn(a) && doc.atom_drawn(b));
+                        }
+                        let drawn = changes.forming.len() + changes.breaking.len();
+                        drawn == 0 || drawn < geometry.forming.len() + geometry.breaking.len()
+                    });
+            for (state, participants, drawn) in [
+                (step.from, &current.reactants, from_drawn),
+                (step.to, &current.products, to_drawn),
             ] {
+                if !drawn {
+                    continue;
+                }
                 let atoms: Vec<_> = participants.iter().map(|p| p.atoms.clone()).collect();
                 let boxes = scene::selections_ink_bounds(doc, &atoms);
                 for (bounds, atoms) in boxes.into_iter().zip(atoms) {

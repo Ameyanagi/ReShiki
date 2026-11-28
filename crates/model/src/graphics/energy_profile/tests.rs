@@ -53,6 +53,7 @@ fn profile(energies: &[f64]) -> EnergyProfile {
         .map(|from| {
             let to = (from + 2).min(energies.len() - 1);
             EnergyProfileStep {
+                unresolved: false,
                 from,
                 to,
                 transition: (to == from + 2).then_some(from + 1),
@@ -999,4 +1000,23 @@ fn playback_replaces_only_the_requested_picture_without_changing_the_profile() {
             < 0.001
     );
     assert_eq!(serde_json::to_string(&g).unwrap(), before);
+}
+
+#[test]
+fn unresolved_gap_is_visible_as_two_separate_levels_and_round_trips() {
+    let mut p = profile(&[0., -4.]);
+    p.steps[0].unresolved = true;
+    let graphic = placed(p.clone());
+    assert!(p.validate(&graphic).is_ok());
+    let layout = Layout::new(&p, &DrawingStyle::default());
+    assert_eq!(layout.states.len(), 2);
+    assert!(layout.curves.iter().all(Vec::is_empty));
+    let roundtrip: EnergyProfile =
+        serde_json::from_slice(&serde_json::to_vec(&p).unwrap()).unwrap();
+    assert!(roundtrip.steps[0].unresolved);
+    p.steps[0].irc = vec![EnergyProfileSample {
+        x: 0.,
+        energy_kcal: 0.,
+    }];
+    assert!(p.validate(&graphic).is_err());
 }

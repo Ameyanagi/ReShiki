@@ -140,7 +140,7 @@ pub(in crate::app) fn source_reaction_prefix(
             let Some(reaction) = preview(id, key) else {
                 break;
             };
-            if !visited.insert(id) {
+            if !visited.insert(id) && reactions.last().is_some_and(|last| last.arrow != id) {
                 break;
             }
             reactions.push(reaction);
@@ -420,6 +420,7 @@ impl App {
     ) -> EnergyProfile {
         let to = states.len() - 1;
         let step = EnergyProfileStep {
+            unresolved: false,
             from: 0,
             to,
             transition: (to == 2).then_some(1),
@@ -765,6 +766,7 @@ mod tests {
                 energy,
             ));
             path.push(EnergyProfileStep {
+                unresolved: false,
                 from: index * 2,
                 to: index * 2 + 2,
                 transition: Some(index * 2 + 1),
