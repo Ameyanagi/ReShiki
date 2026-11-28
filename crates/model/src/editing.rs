@@ -443,11 +443,41 @@ fn append_in_mode(
     offset: Point,
     mode: AppendMode,
 ) -> Vec<u64> {
-    if doc.validate().is_err()
-        || source.validate().is_err()
-        || !offset.x.is_finite()
-        || !offset.y.is_finite()
-    {
+    if doc.validate().is_err() {
+        return vec![];
+    }
+    append_to_valid_host(doc, source, offset, mode)
+}
+
+/// A borrowed host drawing checked at the start of ring or template placement.
+/// A posed fragment still needs its own validation after scaling or rotation.
+#[derive(Clone, Copy)]
+pub(crate) struct PlacementHost<'a>(&'a Document);
+
+impl<'a> PlacementHost<'a> {
+    pub(crate) fn new(doc: &'a Document) -> Result<Self, String> {
+        doc.validate()?;
+        Ok(Self(doc))
+    }
+
+    pub(crate) fn document(self) -> &'a Document {
+        self.0
+    }
+
+    pub(crate) fn append(self, source: &Document, offset: Point) -> (Document, Vec<u64>) {
+        let mut result = self.0.clone();
+        let ids = append_to_valid_host(&mut result, source, offset, AppendMode::Ordinary);
+        (result, ids)
+    }
+}
+
+fn append_to_valid_host(
+    doc: &mut Document,
+    source: &Document,
+    offset: Point,
+    mode: AppendMode,
+) -> Vec<u64> {
+    if source.validate().is_err() || !offset.x.is_finite() || !offset.y.is_finite() {
         return vec![];
     }
     let Some((part, _mapping, ids)) = mapped_append_part(doc, source, offset, mode) else {
