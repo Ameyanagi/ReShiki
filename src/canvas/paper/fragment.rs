@@ -15,7 +15,60 @@ use reshiki::scene::{self, Primitive};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::ops::Range;
 use std::rc::Rc;
+
+#[cfg(test)]
+mod tests;
+
+type Bounds = (World, World);
+
+/// A broad phase for retained ink. Sorting these boxes never changes the scene's
+/// paint order; leaves still use the same inclusive rectangle comparisons.
+struct BoundsTree {
+    bounds: Bounds,
+    contents: BoundsContents,
+}
+
+enum BoundsContents {
+    Leaf(Range<usize>),
+    Branch(Box<[BoundsTree; 2]>),
+}
+
+impl BoundsTree {
+    fn new(boxes: &mut [Bounds], start: usize) -> Self {
+        let bounds = enclosing(boxes).unwrap_or_default();
+        let contents = if boxes.len() <= 8 {
+            BoundsContents::Leaf(start..start + boxes.len())
+        } else {
+            let x = bounds.1.x - bounds.0.x >= bounds.1.y - bounds.0.y;
+            let coordinate = |b: &Bounds| if x { b.0.x } else { b.0.y };
+            let middle = boxes.len() / 2;
+            boxes.select_nth_unstable_by(middle, |a, b| coordinate(a).total_cmp(&coordinate(b)));
+            let (left, right) = boxes.split_at_mut(middle);
+            BoundsContents::Branch(Box::new([
+                Self::new(left, start),
+                Self::new(right, start + middle),
+            ]))
+        };
+        Self { bounds, contents }
+    }
+
+    fn overlaps(&self, boxes: &[Bounds], fragment: &Bounds, all: &Bounds) -> bool {
+        overlap(&self.bounds, fragment)
+            && match &self.contents {
+                BoundsContents::Leaf(range) => boxes
+                    .split_at(range.start)
+                    .1
+                    .iter()
+                    .take(range.len())
+                    .any(|rest| overlap(rest, all) && overlap(rest, fragment)),
+                BoundsContents::Branch(children) => children
+                    .iter()
+                    .any(|child| child.overlaps(boxes, fragment, all)),
+            }
+    }
+}
 
 #[cfg(test)]
 thread_local! {
@@ -28,17 +81,36 @@ pub(in crate::canvas) struct ScenePart {
     pub scene: Rc<[Primitive]>,
     /// Empty: the preview draws its own selection markers below both parts.
     pub markers: Rc<Markers>,
-    layout: Vec<(World, World)>,
+    layout: Vec<Bounds>,
+    index: Option<BoundsTree>,
 }
 
 impl ScenePart {
     pub fn new(doc: &Document) -> Self {
         let scene: Rc<[Primitive]> = scene::primitives(doc).into();
+        Self::from_scene(doc, scene)
+    }
+
+    fn from_scene(doc: &Document, scene: Rc<[Primitive]>) -> Self {
         Self {
             layout: layout(doc, &scene),
+            index: None,
             markers: Rc::default(),
             scene,
         }
+    }
+
+    fn apart(&self, fragment: &[Bounds]) -> bool {
+        enclosing(fragment).is_none_or(|all| match &self.index {
+            Some(index) => fragment
+                .iter()
+                .all(|f| !index.overlaps(&self.layout, f, &all)),
+            None => self
+                .layout
+                .iter()
+                .filter(|rest| overlap(rest, &all))
+                .all(|rest| !fragment.iter().any(|f| overlap(rest, f))),
+        })
     }
 
     /// `doc` without the sorted `excluded` objects, or `None` when an object
@@ -66,11 +138,13 @@ impl ScenePart {
             let scene = scene::primitives(&part).into();
             (Cow::Owned(part), scene)
         };
-        Some(Self {
-            layout: layout(&part, &scene),
-            markers: Rc::default(),
-            scene,
-        })
+        let mut part = Self::from_scene(&part, scene);
+        // Only retained ink needs an index. Tiny drawings are faster without
+        // one; larger drawings reuse it across the frames of a drag.
+        if part.layout.len() > 64 {
+            part.index = Some(BoundsTree::new(&mut part.layout, 0));
+        }
+        Some(part)
     }
 }
 
@@ -166,20 +240,7 @@ impl Fragment {
             *lo = lo.offset(delta.x, delta.y).offset(-margin, -margin);
             *hi = hi.offset(delta.x, delta.y).offset(margin, margin);
         }
-        let all = fragment.iter().copied().reduce(|(a, b), (c, d)| {
-            (
-                World::new(a.x.min(c.x), a.y.min(c.y)),
-                World::new(b.x.max(d.x), b.y.max(d.y)),
-            )
-        });
-        let apart = all.is_none_or(|all| {
-            remainder
-                .layout
-                .iter()
-                .filter(|rest| overlap(rest, &all))
-                .all(|rest| !fragment.iter().any(|f| overlap(rest, f)))
-        });
-        apart.then_some(Self {
+        remainder.apart(&fragment).then_some(Self {
             remainder,
             scene,
             shift,
@@ -410,4 +471,13 @@ fn push_ink(p: &Primitive, ink: &mut Vec<(World, World)>) {
 
 fn overlap(a: &(World, World), b: &(World, World)) -> bool {
     a.0.x <= b.1.x && b.0.x <= a.1.x && a.0.y <= b.1.y && b.0.y <= a.1.y
+}
+
+fn enclosing(boxes: &[Bounds]) -> Option<Bounds> {
+    boxes.iter().copied().reduce(|(a, b), (c, d)| {
+        (
+            World::new(a.x.min(c.x), a.y.min(c.y)),
+            World::new(b.x.max(d.x), b.y.max(d.y)),
+        )
+    })
 }
