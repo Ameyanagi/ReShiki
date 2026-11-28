@@ -522,6 +522,78 @@ impl App {
                         .spacing(8),
                     );
                 }
+                if let Some(path) = &value.discovered {
+                    let label = |node| {
+                        let position = path.order.iter().position(|id| *id == node)?;
+                        Some(if position == 0 {
+                            "Reactant".to_owned()
+                        } else if position + 1 == path.order.len() {
+                            "Product".to_owned()
+                        } else {
+                            format!("I{}.{position}", index + 1)
+                        })
+                    };
+                    for pair in path.order.array_windows::<2>() {
+                        let (Some(from), Some(to)) = (label(pair[0]), label(pair[1])) else {
+                            continue;
+                        };
+                        if let Some(segment) = path
+                            .segments
+                            .iter()
+                            .find(|s| [s.reactant, s.product] == *pair)
+                            && let Some(saddle) = segment.ts.energy_hartree
+                            && let Some(minimum) = path.minima.get(pair[0])
+                        {
+                            let reference = |free| {
+                                if Some(&pair[0]) == path.order.first() {
+                                    let reactants = &state.plan.steps.get(index)?.reactants;
+                                    super::plan::sum_energy(reactants.iter().copied(), |id| {
+                                        super::run::species_energy(
+                                            state.work.report.species(id)?,
+                                            free,
+                                        )
+                                    })
+                                } else if free {
+                                    Some(minimum.energy_hartree + minimum.gibbs_correction_hartree?)
+                                } else {
+                                    Some(minimum.energy_hartree)
+                                }
+                            };
+                            let mut detail = format!("{from} → {to} · IRC verified");
+                            if let Some(origin) = reference(false) {
+                                let barrier = (saddle - origin) * reshiki::qcdata::KCAL_PER_HARTREE;
+                                detail.push_str(&format!(" · ΔE‡ {}", unit.format(barrier)));
+                            }
+                            if let Some(origin) = reference(true)
+                                && let Some(thermo) = &segment.ts.thermo
+                            {
+                                let barrier = (saddle + thermo.gibbs_correction_hartree - origin)
+                                    * reshiki::qcdata::KCAL_PER_HARTREE;
+                                detail.push_str(&format!(" · ΔG‡ {}", unit.format(barrier)));
+                            }
+                            step = step.push(line(detail, Tone::Good));
+                        }
+                    }
+                    for gap in &path.gaps {
+                        if let (Some(from), Some(to)) = (label(gap.reactant), label(gap.product)) {
+                            step = step.push(line(
+                                format!("{from} → {to} · unresolved · {}", gap.reason),
+                                Tone::Warning,
+                            ));
+                        }
+                    }
+                    for note in &path.diagnostics {
+                        step = step.push(line(note, Tone::Muted));
+                    }
+                    if !path.has_gibbs()
+                        && state
+                            .options
+                            .get(index)
+                            .is_some_and(|option| option.free_barrier || option.free_energy)
+                    {
+                        step = step.push(line("The expanded path shows electronic energies. Gibbs corrections are incomplete.", Tone::Muted));
+                    }
+                }
                 if let Some(error) = &value.error {
                     step = step.push(line(error, Tone::Error));
                 }
@@ -588,8 +660,20 @@ impl App {
                 )
                 .on_press(send(Action::Cancel)),
             );
-        } else if has_profile && current {
-            content = content.push(self.xtb_scheme_place_button("xtb-scheme-place"));
+        } else if current {
+            if has_profile {
+                content = content.push(self.xtb_scheme_place_button("xtb-scheme-place"));
+            }
+            if super::drawing::available(&state.work.report) {
+                content = content.push(
+                    accessible_command(
+                        "xtb-scheme-place-discovered",
+                        "Place a separate editable drawing of the discovered reaction steps",
+                        "Place discovered scheme",
+                    )
+                    .on_press(send(Action::PlaceDiscovered)),
+                );
+            }
         }
         content.into()
     }
@@ -717,6 +801,9 @@ fn step_traces(
     let mut traces = vec![];
     let mut untraced = vec![];
     for (index, step) in profile.steps.iter().enumerate() {
+        if step.unresolved {
+            continue;
+        }
         let trace: Vec<_> = step
             .irc
             .iter()

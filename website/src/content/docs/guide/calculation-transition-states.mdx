@@ -124,3 +124,40 @@ reshiki --cli export-input --program orca --job neb-ts --reactant results/reacta
 - GAMESS: `RUNTYP=SADPOINT`.
 
 The app's [export dialog](/guide/calculation-files/) writes the transition-state and IRC inputs from a 3D model; after a search, **Export TS input…** on the reaction card also writes QST2, QST3 and NEB-TS inputs.
+
+## Multiple elementary steps in Calculate scheme
+
+When a drawn arrow covers more than one elementary reaction, **Calculate scheme**
+can split its electronic energy profile. It relaxes valleys between distinct
+NEB peaks and checks vibrations before retaining a new minimum. When an IRC
+reaches an unexpected minimum, the search keeps the geometry and attempts to
+connect the missing side to the drawn reactant or product. It can continue
+from either end of the reaction.
+
+The **Path** tab labels each new intermediate and shows which connections have
+a verified transition state. Each verified connection has a first-order saddle
+and a downhill IRC to its two assigned minima. A gap stays open if the search
+cannot verify a connection, reaches its search limit, or is canceled. The
+highest image in the original band does not supply a barrier across that gap.
+A local minimum on this path alone cannot establish the dominant resting
+state under experimental conditions.
+
+<Screenshot
+  src="/doc-images/reaction-paths/discovered-minimum.png"
+  alt="An analytic three-minimum benchmark with two verified electronic barriers of 1.86 kcal/mol on either side of the recovered intermediate."
+/>
+
+**Place energy profile** includes the new stationary points. **Place discovered
+scheme** puts editable copies of supported structures and their confirmed
+arrows in the drawing. Undo removes the placement in one step. Gibbs energies
+require valid thermal corrections at the intermediate minima and saddles.
+The IRC trace and its sampled energies are electronic.
+
+<Screenshot
+  src="/doc-images/reaction-paths/editable-path-gap.png"
+  alt="Editable scheme drawn using simulated results on mapped 2-butanol structures. The verified step has an arrow and the unresolved gap has none."
+/>
+
+For background on determining which minima a saddle connects, see
+[Fukui’s reaction-coordinate definition](https://doi.org/10.1021/j100717a029)
+and [Carr, Trygubenko and Wales on missing connections](https://www-wales.ch.cam.ac.uk/pdf/JCP.122.234903.2005.pdf).

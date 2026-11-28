@@ -92,11 +92,63 @@ pub(in crate::app) struct SpeciesValue {
     pub launch: Option<reshiki::science::Launch>,
 }
 
+/// All frames and energies use this arrow's atom map, charge, spin and method.
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredMinimum {
+    pub frame: Arc<Frame>,
+    pub energy_hartree: f64,
+    pub gibbs_correction_hartree: Option<f64>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredSegment {
+    pub reactant: usize,
+    pub product: usize,
+    pub ts: Arc<CalcResult>,
+    pub frames: Vec<Arc<Frame>>,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredGap {
+    pub reactant: usize,
+    pub product: usize,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::app) struct DiscoveredPath {
+    pub minima: Vec<DiscoveredMinimum>,
+    pub order: Vec<usize>,
+    pub segments: Vec<DiscoveredSegment>,
+    pub gaps: Vec<DiscoveredGap>,
+    pub diagnostics: Vec<String>,
+}
+
+impl DiscoveredPath {
+    pub(super) fn has_gibbs(&self) -> bool {
+        self.order
+            .iter()
+            .skip(1)
+            .take(self.order.len().saturating_sub(2))
+            .all(|id| {
+                self.minima
+                    .get(*id)
+                    .and_then(|m| m.gibbs_correction_hartree)
+                    .is_some()
+            })
+            && self.segments.iter().all(|s| s.ts.thermo.is_some())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(in crate::app) struct StepValue {
     pub arrow: u64,
     pub method: XtbMethod,
+    /// Captured request provenance: a missing TS may be a failed search,
+    /// whereas ordinary energy-only steps never requested a connection check.
+    pub transition_state_requested: bool,
     pub ts: Option<Arc<CalcResult>>,
+    pub discovered: Option<DiscoveredPath>,
     pub frames: Vec<Arc<Frame>>,
     pub launch: Option<reshiki::science::Launch>,
     /// All displayed quantities use kcal/mol. Missing values are never zero.
@@ -112,7 +164,9 @@ impl StepValue {
         Self {
             arrow,
             method,
+            transition_state_requested: false,
             ts: None,
+            discovered: None,
             frames: Vec::new(),
             launch: None,
             energy: None,
@@ -196,6 +250,7 @@ pub(in crate::app) struct State {
     cache: Vec<Cached>,
     serial: u64,
     running: bool,
+    draining: bool,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     cancel: Option<Cancel>,
 }
@@ -281,13 +336,15 @@ impl State {
         });
     }
 
-    pub fn cancel(&mut self) {
+    /// Stop execution while retaining this run's final completed data. Progress
+    /// cannot restart the UI, and Finished closes the remaining event window.
+    pub fn stop(&mut self) {
         #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
         if let Some(cancel) = self.cancel.take() {
             cancel.cancel();
         }
+        self.draining |= self.running;
         self.running = false;
-        self.serial = self.serial.wrapping_add(1);
         self.progress = None;
         for status in &mut self.steps {
             if matches!(status, StepStatus::Pending | StepStatus::Running) {
@@ -296,9 +353,17 @@ impl State {
         }
     }
 
-    /// Check before document freshness so canceled work cannot change status.
+    /// Invalidate a replaced run or stale document, including any pending drain.
+    pub fn cancel(&mut self) {
+        self.stop();
+        self.draining = false;
+        self.serial = self.serial.wrapping_add(1);
+    }
+
+    /// Check before document freshness so events from replaced work cannot act.
     pub fn accepts(&self, event: &Event) -> bool {
-        event.serial == self.serial && self.running
+        event.serial == self.serial
+            && (self.running || (self.draining && !matches!(event.kind, EventKind::Progress(_))))
     }
 
     #[cfg(test)]
@@ -340,7 +405,9 @@ impl State {
                 }
             }
             EventKind::Step { index, value } => {
-                if let Some(status) = self.steps.get_mut(index) {
+                if !self.draining
+                    && let Some(status) = self.steps.get_mut(index)
+                {
                     *status = value.error.as_ref().map_or(StepStatus::Done, |reason| {
                         StepStatus::Failed(reason.clone())
                     });
@@ -351,8 +418,9 @@ impl State {
             }
             EventKind::Finished(result) => {
                 self.running = false;
+                let draining = std::mem::take(&mut self.draining);
                 self.progress = None;
-                self.error = result.err();
+                self.error = if draining { None } else { result.err() };
                 if let Some(reason) = &self.error {
                     for status in &mut self.steps {
                         if matches!(status, StepStatus::Pending | StepStatus::Running) {

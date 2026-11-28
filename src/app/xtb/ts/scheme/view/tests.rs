@@ -5,7 +5,9 @@ fn value() -> StepValue {
     StepValue {
         arrow: 1,
         method: XtbMethod::Gfn2Xtb,
+        transition_state_requested: false,
         ts: None,
+        discovered: None,
         frames: vec![],
         launch: None,
         energy: Some(4.2),
@@ -93,6 +95,7 @@ fn profile() -> EnergyProfile {
     .into();
     let steps = vec![
         EnergyProfileStep {
+            unresolved: false,
             from: 0,
             to: 1,
             transition: Some(2),
@@ -101,6 +104,7 @@ fn profile() -> EnergyProfile {
             irc: vec![],
         },
         EnergyProfileStep {
+            unresolved: false,
             from: 1,
             to: 3,
             transition: None,

@@ -190,6 +190,8 @@ struct Fake {
     order: Vec<Job>,
     thermo: bool,
     mock_optimization: Option<(usize, MockOptimization)>,
+    discovered: Option<DiscoveredPath>,
+    cancel_after_ts: bool,
 }
 
 impl Backend for Fake {
@@ -263,7 +265,7 @@ impl Backend for Fake {
     fn transition(
         &mut self,
         job: TransitionJob<'_>,
-        _: &Cancel,
+        cancel: &Cancel,
         progress: &mut dyn FnMut(job::Event),
     ) -> Result<TransitionComputed, String> {
         let TransitionJob {
@@ -288,9 +290,13 @@ impl Backend for Fake {
         let mut result = (*value.result).clone();
         result.task = qcdata::Task::TransitionState;
         result.energy_hartree = Some(-0.9);
+        if self.cancel_after_ts {
+            cancel.cancel();
+        }
         Ok(TransitionComputed {
             result: Arc::new(result),
             frames: vec![Arc::clone(&value.frame)],
+            discovered: self.discovered.take(),
             launch: Launch {
                 frame: value.frame,
                 atoms: vec![Some(1)],
@@ -463,6 +469,8 @@ fn failed_ts_keeps_its_endpoint_energy_and_the_next_step_runs() {
     .unwrap();
     let values = step_values(&events);
     assert_eq!(values[0].1.energy, Some(0.));
+    assert!(values[0].1.transition_state_requested);
+    assert!(values[0].1.ts.is_none());
     assert!(values[0].1.barrier.is_none());
     assert!(
         values[0]
@@ -747,8 +755,10 @@ fn frequency_failure_only_affects_steps_that_request_free_energy() {
     let values = step_values(&events);
     assert_eq!(values[0].1.energy, Some(0.));
     assert!(values[0].1.error.is_none());
+    assert!(!values[0].1.transition_state_requested);
     assert_eq!(values[1].1.energy, Some(0.));
     assert!(values[1].1.gibbs.is_none());
+    assert!(!values[1].1.transition_state_requested);
     assert!(
         values[1]
             .1
@@ -1098,6 +1108,8 @@ fn missing_ts_review_is_local_and_endpoints_still_complete() {
     let values = step_values(&events);
     assert_eq!(values[0].1.energy, Some(0.));
     assert_eq!(values[0].1.error.as_deref(), Some("Map needs review"));
+    assert!(values[0].1.transition_state_requested);
+    assert!(values[0].1.ts.is_none());
     assert_eq!(fake.transitions, [request.plan.steps[1].arrow]);
 }
 
@@ -1189,4 +1201,249 @@ fn native_jobs_check_cancellation_before_any_worker_can_be_spawned() {
         .ordinary(&input.frame, XtbMethod::Gfn2Xtb, true, false, &cancel)
         .unwrap_err();
     assert!(error.contains("canceled"));
+}
+
+fn partial_discovered_path() -> DiscoveredPath {
+    let value = species_value(0, XtbMethod::Gfn2Xtb);
+    DiscoveredPath {
+        minima: (0..3)
+            .map(|index| DiscoveredMinimum {
+                frame: Arc::clone(&value.frame),
+                energy_hartree: -1. + index as f64 * 0.01,
+                gibbs_correction_hartree: None,
+            })
+            .collect(),
+        order: vec![0, 2, 1],
+        segments: Vec::new(),
+        gaps: vec![
+            DiscoveredGap {
+                reactant: 0,
+                product: 2,
+                reason: "The remaining elementary step was not verified".into(),
+            },
+            DiscoveredGap {
+                reactant: 2,
+                product: 1,
+                reason: "The remaining elementary step was not verified".into(),
+            },
+        ],
+        diagnostics: vec!["Relaxed an actual valley image".into()],
+    }
+}
+
+#[test]
+fn discovered_steps_never_reuse_the_global_saddle_as_a_headline_barrier() {
+    let mut request = request();
+    request.retry = Some(0);
+    request.options[0].free_barrier = true;
+    let mut fake = Fake {
+        discovered: Some(partial_discovered_path()),
+        thermo: true,
+        ..Fake::default()
+    };
+    let mut events = Vec::new();
+    calculate(&request, &mut fake, &Cancel::default(), |event| {
+        events.push(event)
+    })
+    .unwrap();
+    let values = step_values(&events);
+    let value = values.last().unwrap().1;
+    assert!(value.ts.is_some());
+    assert!(value.discovered.is_some());
+    assert!(value.barrier.is_none());
+    assert!(value.free_barrier.is_none());
+    assert!(value.error.as_ref().unwrap().contains("unresolved gap"));
+}
+
+#[test]
+fn cancellation_publishes_discovered_minima_and_gaps_before_stopping_the_queue() {
+    let request = request();
+    let mut fake = Fake {
+        discovered: Some(partial_discovered_path()),
+        cancel_after_ts: true,
+        ..Fake::default()
+    };
+    let cancel = Cancel::default();
+    let mut events = Vec::new();
+    let error = calculate(&request, &mut fake, &cancel, |event| events.push(event)).unwrap_err();
+    assert!(error.contains("canceled"));
+    assert_eq!(fake.transitions.len(), 1);
+    let values = step_values(&events);
+    let value = values
+        .iter()
+        .find_map(|(_, value)| value.discovered.as_ref())
+        .unwrap();
+    assert_eq!(value.order, [0, 2, 1]);
+    assert_eq!(value.minima.len(), 3);
+    assert_eq!(
+        value.gaps[0].reason,
+        "The remaining elementary step was not verified"
+    );
+}
+
+fn running_scheme_app() -> (crate::app::App, Plan) {
+    use crate::app::xtb::ts::scheme::{self, Action};
+
+    let (doc, plan) = Plan::example();
+    let (mut app, _) = crate::app::App::new();
+    app.tab.doc = doc;
+    app.tab.selected = plan.arrows.clone();
+    app.tab.busy = false;
+    let _ = app.update(scheme::send(Action::Open));
+    let work = &mut app.tab.xtb.scheme.as_mut().unwrap().work;
+    work.serial = 14;
+    work.running = true;
+    work.cancel = Some(Cancel::default());
+    work.steps = vec![StepStatus::Running, StepStatus::Pending];
+    work.report.steps = vec![None, None];
+    (app, plan)
+}
+
+#[test]
+fn cancel_action_drains_the_current_arrows_partial_discoveries() {
+    use crate::app::xtb::ts::scheme::{self, Action};
+
+    let (mut app, plan) = running_scheme_app();
+    let mut value = StepValue::empty(plan.steps[0].arrow, XtbMethod::Gfn2Xtb);
+    let mut path = partial_discovered_path();
+    let saddle = species_value(0, XtbMethod::Gfn2Xtb);
+    path.segments.push(DiscoveredSegment {
+        reactant: 0,
+        product: 2,
+        ts: saddle.result,
+        frames: vec![saddle.frame],
+    });
+    path.gaps.retain(|gap| gap.reactant != 0);
+    value.discovered = Some(path);
+    let partial = Event {
+        serial: 14,
+        kind: EventKind::Step { index: 0, value },
+    };
+    let _ = app.update(scheme::send(Action::Cancel));
+    assert!(!app.xtb_scheme_running());
+    assert!(app.status.contains("canceled"));
+    let _ = app.update(scheme::send(Action::Event(Box::new(partial.clone()))));
+    let work = &app.tab.xtb.scheme.as_ref().unwrap().work;
+    let discovered = work.step(0).unwrap().discovered.as_ref().unwrap();
+    assert_eq!(discovered.minima.len(), 3);
+    assert_eq!(discovered.segments.len(), 1);
+    assert_eq!(discovered.gaps.len(), 1);
+    assert_eq!(work.steps, [StepStatus::Cancelled, StepStatus::Cancelled]);
+    assert!(!work.accepts(&Event {
+        serial: 14,
+        kind: EventKind::Progress(Progress {
+            step: 0,
+            species: None,
+            label: "late progress".into(),
+            completed_species: 0,
+            total_species: 0,
+            stage: None,
+        }),
+    }));
+    app.status = "The user's next action".into();
+    let _ = app.update(scheme::send(Action::Event(Box::new(Event {
+        serial: 14,
+        kind: EventKind::Finished(Err("Scheme calculation canceled".into())),
+    }))));
+    let work = &app.tab.xtb.scheme.as_ref().unwrap().work;
+    assert!(work.step(0).unwrap().discovered.is_some());
+    assert!(
+        work.error.is_none(),
+        "a user cancellation is not a failed run"
+    );
+    assert!(!work.accepts(&partial), "finishing closes the drain window");
+    assert_eq!(app.status, "The user's next action");
+}
+
+#[test]
+fn a_new_run_invalidates_the_canceled_runs_pending_results() {
+    let mut work = State::default();
+    work.serial = 14;
+    work.running = true;
+    work.steps = vec![StepStatus::Running];
+    work.report.steps = vec![None];
+    let stale = Event {
+        serial: 14,
+        kind: EventKind::Step {
+            index: 0,
+            value: StepValue::empty(10, XtbMethod::Gfn2Xtb),
+        },
+    };
+    work.stop();
+    assert!(work.accepts(&stale));
+    // start() invalidates the previous serial before installing its new run.
+    work.cancel();
+    work.running = true;
+    let current = Event {
+        serial: work.serial,
+        kind: EventKind::Step {
+            index: 0,
+            value: StepValue::empty(11, XtbMethod::Gfn2Xtb),
+        },
+    };
+    assert!(work.accept(current));
+    assert!(!work.accept(stale));
+    assert_eq!(work.step(0).unwrap().arrow, 11);
+}
+
+#[test]
+fn a_chemistry_edit_rejects_the_cancel_drain_without_replacing_the_users_status() {
+    use crate::app::xtb::ts::scheme::{self, Action};
+
+    let (mut app, plan) = running_scheme_app();
+    let mut value = StepValue::empty(plan.steps[0].arrow, XtbMethod::Gfn2Xtb);
+    value.discovered = Some(partial_discovered_path());
+    let partial = Event {
+        serial: 14,
+        kind: EventKind::Step { index: 0, value },
+    };
+    let _ = app.update(scheme::send(Action::Cancel));
+    app.tab.doc.atoms[0].charge += 1;
+    app.tab.revision += 1;
+    app.status = "The user's next action".into();
+    let _ = app.update(scheme::send(Action::Event(Box::new(partial.clone()))));
+    let work = &app.tab.xtb.scheme.as_ref().unwrap().work;
+    assert!(work.step(0).is_none());
+    assert!(!work.accepts(&partial));
+    assert_eq!(app.status, "The user's next action");
+}
+
+#[test]
+fn free_barrier_request_survives_the_partial_electronic_endpoint_event() {
+    let mut request = distinct_request();
+    request.options[0] = StepOptions {
+        reaction_energy: true,
+        barrier: false,
+        free_energy: true,
+        free_barrier: true,
+    };
+    request.options[1] = StepOptions {
+        reaction_energy: false,
+        barrier: false,
+        free_energy: false,
+        free_barrier: false,
+    };
+    let mut fake = Fake {
+        cancel_hessian: Some(1),
+        thermo: true,
+        ..Default::default()
+    };
+    let mut events = Vec::new();
+    assert!(
+        calculate(&request, &mut fake, &Cancel::default(), |event| events
+            .push(event))
+        .is_err()
+    );
+    let value = events
+        .iter()
+        .find_map(|event| match event {
+            EventKind::Endpoints { index: 0, value } => Some(value),
+            _ => None,
+        })
+        .unwrap();
+    assert!(value.transition_state_requested);
+    assert!(value.ts.is_none());
+    assert!(value.energy.is_some());
+    assert!(value.gibbs.is_none());
+    assert!(fake.transitions.is_empty());
 }

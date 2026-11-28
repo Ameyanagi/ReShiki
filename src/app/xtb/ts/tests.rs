@@ -268,6 +268,7 @@ fn example_report(launch: &Launch) -> Arc<job::Report> {
         breaking: vec![],
     };
     Arc::new(job::Report {
+        discovered: None,
         frames: vec![transition, reactant, product],
         result,
         extras,

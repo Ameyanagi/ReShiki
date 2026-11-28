@@ -132,10 +132,15 @@ impl App {
                 .chain(&reaction.products)
                 .flat_map(|participant| reshiki::reactions::molecules(doc, &participant.atoms))
                 .find(|atoms| same_atoms(&launch.atoms, atoms));
-            if let Some(atoms) = drawn
-                && let Err(reason) = save(doc, &atoms, Some(launch), ts, &step.frames)
-            {
-                errors.push(format!("Step {} · {reason}", index + 1));
+            if let Some(atoms) = drawn {
+                let segments = step.discovered.iter().flat_map(|path| &path.segments);
+                for (result, frames) in std::iter::once((ts, &step.frames))
+                    .chain(segments.map(|segment| (&segment.ts, &segment.frames)))
+                {
+                    if let Err(reason) = save(doc, &atoms, Some(launch), result, frames) {
+                        errors.push(format!("Step {} · {reason}", index + 1));
+                    }
+                }
             }
         }
         let save_error = (!errors.is_empty()).then(|| {

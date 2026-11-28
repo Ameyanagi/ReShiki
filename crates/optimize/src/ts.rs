@@ -7,6 +7,7 @@
 //! Bracketed keys such as \[Henkelman2000CINEB\] name the full citations in
 //! docs/references/xtb.md.
 
+pub mod discovery;
 mod endpoint;
 mod idpp;
 mod irc;

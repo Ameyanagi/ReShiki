@@ -89,6 +89,7 @@ struct TransitionComputed {
     result: Arc<CalcResult>,
     frames: Vec<Arc<Frame>>,
     launch: Launch,
+    discovered: Option<DiscoveredPath>,
 }
 
 struct SpeciesJob<'a> {
@@ -204,6 +205,7 @@ fn endpoint_value(
     minima: &Minima,
 ) -> StepValue {
     let mut value = StepValue::empty(step.arrow, request.method);
+    value.transition_state_requested = options.transition_state();
     let sum = |terms: &[super::super::plan::Term], free| {
         super::super::plan::sum_energy(terms.iter().copied(), |index| {
             species_energy(minima.values.get(&index)?, free)
@@ -329,7 +331,10 @@ fn calculate(
                     free_barrier: false,
                     ..options
                 };
-                let value = endpoint_value(request, step, electronic, minima);
+                let mut value = endpoint_value(request, step, electronic, minima);
+                // Suppressing pending thermal quantities must not erase the
+                // original request to verify a transition-state connection.
+                value.transition_state_requested = options.transition_state();
                 if value.energy.is_some() {
                     emit(EventKind::Endpoints { index, value });
                 }
@@ -498,10 +503,33 @@ fn calculate(
                         emit(EventKind::Progress(progress.clone()));
                     },
                 );
-                checked(cancel)?;
                 match result {
                     Ok(ts) => {
-                        if ts.result.status == qcdata::Status::Converged {
+                        if let Some(discovered) = &ts.discovered {
+                            if !discovered.gaps.is_empty() {
+                                reasons.push(format!(
+                                    "Discovered path has {} unresolved gap{}",
+                                    discovered.gaps.len(),
+                                    if discovered.gaps.len() == 1 { "" } else { "s" },
+                                ));
+                            }
+                            if options.free_barrier
+                                && (discovered.order.iter().any(|&id| {
+                                    id > 1
+                                        && discovered.minima.get(id).is_none_or(|minimum| {
+                                            minimum.gibbs_correction_hartree.is_none()
+                                        })
+                                }) || discovered
+                                    .segments
+                                    .iter()
+                                    .any(|segment| segment.ts.thermo.is_none()))
+                            {
+                                reasons.push(
+                                    "Some discovered elementary-step free energies are unavailable"
+                                        .into(),
+                                );
+                            }
+                        } else if ts.result.status == qcdata::Status::Converged {
                             if options.barrier {
                                 value.barrier = reactant
                                     .zip(ts.result.energy_hartree)
@@ -526,6 +554,7 @@ fn calculate(
                             reasons.push(reason.into());
                         }
                         value.ts = Some(ts.result);
+                        value.discovered = ts.discovered;
                         value.frames = ts.frames;
                         value.launch = Some(ts.launch);
                     }
@@ -535,6 +564,7 @@ fn calculate(
         }
         value.error = (!reasons.is_empty()).then(|| reasons.join("; "));
         emit(EventKind::Step { index, value });
+        checked(cancel)?;
     }
     checked(cancel)
 }
@@ -850,42 +880,66 @@ impl Backend for Native {
                 match event {
                     job::Event::Done(result) => {
                         let report = result.map_err(|failure| failure.to_string())?;
-                        let mut result = report.result.clone();
-                        let extras = &report.extras;
-                        if let Some(run) = &mut result.run {
-                            run.transition_state = Some(Box::new(qcdata::TransitionStateRun {
-                                method,
-                                refined_from: None,
-                                arrow: Some(arrow),
-                                free_energy: free,
-                                endpoint_energies_hartree: Some(extras.endpoint_energies_hartree),
-                                endpoint_thermo: extras.endpoint_thermo.clone(),
-                                reached_positions_angstrom: extras
-                                    .reached_positions_angstrom
-                                    .clone(),
-                                saddle_converged: extras.saddle_converged,
-                                imaginary: extras.num_imaginary,
-                                imaginary_cm1: extras.engine_imaginary,
-                                climbing_image: extras.climbing,
-                                irc: extras.irc.clone(),
-                                forming_bonds: extras.forming.clone(),
-                                breaking_bonds: extras.breaking.clone(),
-                                mapping: request.bonds.0.clone(),
-                                diagnostics: {
-                                    let mut rows = extras.diagnostics.clone();
-                                    if free {
-                                        rows.push(("Free-energy convention".into(),
-                                        "Barrier uses separately optimized reactant species; endpoint-complex frequencies were not calculated.".into()));
-                                    }
-                                    rows
-                                },
-                                context: Some(request.context.clone()),
-                            }));
-                        }
+                        let result = transition_result(&report, &request, false);
+                        let template = report
+                            .frames
+                            .first()
+                            .ok_or("The transition-state worker returned no geometry")?;
+                        let discovered = report.discovered.as_ref().map(|path| DiscoveredPath {
+                            minima: path
+                                .minima
+                                .iter()
+                                .zip(&path.minimum_gibbs_corrections_hartree)
+                                .map(|(minimum, &gibbs_correction_hartree)| DiscoveredMinimum {
+                                    frame: Arc::new(Frame {
+                                        positions_angstrom: minimum
+                                            .positions
+                                            .as_chunks::<3>()
+                                            .0
+                                            .iter()
+                                            .map(|xyz| {
+                                                xyz.map(|x| x * reshiki_optimize::ANGSTROM_PER_BOHR)
+                                            })
+                                            .collect(),
+                                        ..template.clone()
+                                    }),
+                                    energy_hartree: minimum.energy,
+                                    gibbs_correction_hartree,
+                                })
+                                .collect(),
+                            order: path.order.clone(),
+                            segments: path
+                                .edges
+                                .iter()
+                                .map(|edge| DiscoveredSegment {
+                                    reactant: edge.reactant,
+                                    product: edge.product,
+                                    ts: Arc::new(transition_result(&edge.report, &request, true)),
+                                    frames: edge
+                                        .report
+                                        .frames
+                                        .iter()
+                                        .cloned()
+                                        .map(Arc::new)
+                                        .collect(),
+                                })
+                                .collect(),
+                            gaps: path
+                                .gaps
+                                .iter()
+                                .map(|gap| DiscoveredGap {
+                                    reactant: gap.reactant,
+                                    product: gap.product,
+                                    reason: gap.reason.clone(),
+                                })
+                                .collect(),
+                            diagnostics: path.diagnostics.clone(),
+                        });
                         return Ok(TransitionComputed {
                             result: Arc::new(result),
                             frames: report.frames.iter().cloned().map(Arc::new).collect(),
                             launch,
+                            discovered,
                         });
                     }
                     event => progress(event),
@@ -894,6 +948,61 @@ impl Backend for Native {
             Err("The transition-state worker ended before returning a result".into())
         })
     }
+}
+
+/// A local saddle retains its actual endpoint frames and IRC, without claiming
+/// that it connects the original drawing arrow's complete reaction.
+fn transition_result(
+    report: &job::Report,
+    request: &transition::Request,
+    local: bool,
+) -> CalcResult {
+    let mut result = report.result.clone();
+    let extras = &report.extras;
+    if let Some(run) = &mut result.run {
+        run.transition_state = Some(Box::new(qcdata::TransitionStateRun {
+            method: request.method,
+            refined_from: None,
+            arrow: (!local).then_some(request.arrow),
+            free_energy: request.free_energy,
+            endpoint_energies_hartree: Some(extras.endpoint_energies_hartree),
+            endpoint_thermo: extras.endpoint_thermo.clone(),
+            reached_positions_angstrom: extras.reached_positions_angstrom.clone(),
+            saddle_converged: extras.saddle_converged,
+            imaginary: extras.num_imaginary,
+            imaginary_cm1: extras.engine_imaginary,
+            climbing_image: extras.climbing,
+            irc: extras.irc.clone(),
+            forming_bonds: extras.forming.clone(),
+            breaking_bonds: extras.breaking.clone(),
+            mapping: if local {
+                qcdata::TransitionStateMapping {
+                    formed: Vec::new(),
+                    broken: Vec::new(),
+                    hydrogen_moves: Vec::new(),
+                    automatic: true,
+                }
+            } else {
+                request.bonds.0.clone()
+            },
+            diagnostics: {
+                let mut rows = extras.diagnostics.clone();
+                if request.free_energy {
+                    rows.push((
+                        "Free-energy convention".into(),
+                        if local {
+                            "Thermal corrections use the independently checked saddle and the exact certified minimum geometries."
+                        } else {
+                            "Barrier uses separately optimized reactant species; endpoint-complex frequencies were not calculated."
+                        }.into(),
+                    ));
+                }
+                rows
+            },
+            context: (!local).then(|| request.context.clone()),
+        }));
+    }
+    result
 }
 
 #[cfg(test)]
