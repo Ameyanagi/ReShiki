@@ -991,6 +991,127 @@ fn ordinary_imported_molecule_flatten_keeps_the_prepared_stereo_path() {
 }
 
 #[test]
+fn imported_multifragment_and_monoatomic_files_flatten_from_their_retained_frame() {
+    for (name, xyz, assembly, charges) in [
+        (
+            "paired waters",
+            "6\ntwo separate water molecules\nO 0 0 0\nH 0.9572 0 0\nH -0.239987 0.926627 0\nO 5 0.5 1.2\nH 5.9572 0.5 1.2\nH 4.760013 1.426627 1.2\n",
+            true,
+            vec![],
+        ),
+        (
+            "ammonium counterion",
+            "6\nammonium and chloride\nN 0 0 0\nH 0.63 0.63 0.63\nH -0.63 -0.63 0.63\nH -0.63 0.63 -0.63\nH 0.63 -0.63 -0.63\nCl 5 0 0\n",
+            true,
+            vec![(0, 1), (5, -1)],
+        ),
+        (
+            "separate ions",
+            "2\nsodium and chloride\nNa 0 0 0\nCl 5 0 0\n",
+            true,
+            vec![(0, 1), (1, -1)],
+        ),
+        ("helium atom", "1\nhelium\nHe 3.2 -0.6 0.8\n", false, vec![]),
+        (
+            "chloride ion",
+            "1\nchloride\nCl 3.2 -0.6 0.8\n",
+            false,
+            vec![(0, -1)],
+        ),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+        // XYZ has no formal-charge column; imported sites can be charged in
+        // the editor without replacing their retained geometry.
+        for (index, charge) in charges {
+            app.tab.doc.atoms[index].charge = charge;
+        }
+        assert_eq!(app.tab.doc.models.len(), 1);
+        assert!(app.tab.doc.models[0].is_file_derived());
+        let atoms = app.tab.doc.models[0].linked_ids(&app.tab.doc);
+        app.tab.selected = atoms.clone();
+        let model = &mut app.tab.doc.models[0];
+        model.rotation = models3d::turn(model.rotation, 31., -19., false);
+        let prepared = Prepared::new(&app.tab.doc, &atoms)
+            .or_else(|_| Prepared::relaxed(&app.tab.doc, &atoms));
+        let expected = if assembly {
+            assert!(
+                matches!(prepared, Err(geometry::Error::Selection(_))),
+                "{name}"
+            );
+            None
+        } else {
+            Some(prepared.unwrap().flattened(&app.tab.doc.models[0]).unwrap())
+        };
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Models3d(Action::Flatten));
+        assert!(!app.error, "{name}: {}", app.status);
+        assert_eq!(app.tab.doc.atoms.len(), before.atoms.len(), "{name}");
+        assert_eq!(app.tab.doc.bonds, before.bonds, "{name}");
+        assert_eq!(
+            app.tab.doc.models[0].frame_positions(),
+            before.models[0].frame_positions(),
+            "{name}"
+        );
+        assert_eq!(
+            app.tab.doc.models[0].frame_sources(),
+            before.models[0].frame_sources(),
+            "{name}"
+        );
+        assert_eq!(app.tab.doc.models[0].display, Display::TwoD);
+        assert_eq!(app.tab.doc.models[0].layout, Layout::View);
+        for (atom, source) in app.tab.doc.atoms.iter().zip(&before.atoms) {
+            assert_eq!(
+                (atom.id, &atom.element, atom.charge),
+                (source.id, &source.element, source.charge)
+            );
+            assert!(atom.position.is_finite() && atom.depth.is_finite());
+        }
+        if let Some(expected) = expected {
+            for (atom, expected) in app.tab.doc.atoms.iter().zip(&expected.atoms) {
+                assert_eq!(
+                    (atom.position, atom.depth, &atom.stereo),
+                    (expected.position, expected.depth, &expected.stereo),
+                    "{name}"
+                );
+            }
+        }
+        app.tab.doc.validate().unwrap();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before, "{name}");
+    }
+}
+
+#[test]
+fn generated_multifragment_models_keep_the_prepared_selection_rejection() {
+    let xyz = "2\ntwo separate oxygens\nO 0 0 0\nO 5 0 0\n";
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read("xyz", xyz).unwrap().0;
+    let placed = app.tab.doc.models[0].atoms.clone();
+    app.tab.doc.models[0] = models3d::Model3d::new(
+        &app.tab.doc,
+        placed,
+        vec![],
+        models3d::ForceField::default(),
+    );
+    models3d::set_display(&mut app.tab.doc, 0, Display::ThreeD);
+    assert!(!app.tab.doc.models[0].is_file_derived());
+    app.tab.selected = app.tab.doc.models[0].linked_ids(&app.tab.doc);
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert!(app.error);
+    assert!(
+        app.status
+            .contains("Select atoms or a bond in one molecule"),
+        "{}",
+        app.status
+    );
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn multinuclear_hydride_models_without_haptic_rings_flatten_directly() {
     let xyz = "6\nmetal hydride core\nRu -1.2 0 0\nRu 1.2 0 0\nH 0 -1.1 0\nH 0 1.1 0\nH 0 0 -1.1\nH 0 0 1.1\n";
     for generated in [false, true] {

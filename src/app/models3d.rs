@@ -921,10 +921,31 @@ impl App {
                     metals >= 2 || a.attachment == Some(reshiki::attachments::Kind::MultiCenter)
                 })
         };
-        let flat = if direct_projection {
-            // Crystals, haptic complexes and multinuclear metal cores retain
-            // their coordinate topology instead of preparing an ordinary
-            // molecular identity. Organic molecules keep stereo preparation.
+        let prepared = if direct_projection {
+            None
+        } else {
+            match Prepared::new(&self.tab.doc, &atoms) {
+                // These are validated, nonempty source links. A selection
+                // failure means the imported frame spans separate molecules;
+                // relaxed preparation has the same one-component requirement.
+                Err(error @ geometry::Error::Selection(_)) => {
+                    if model.is_file_derived() {
+                        None
+                    } else {
+                        Some(Err(error))
+                    }
+                }
+                result => Some(result.or_else(|_| Prepared::relaxed(&self.tab.doc, &atoms))),
+            }
+        };
+        let flat = if let Some(prepared) = prepared {
+            // Connected molecules retain ordinary stereo preparation.
+            prepared
+                .and_then(|prepared| prepared.flattened(model))
+                .map_err(|error| error.to_string())
+        } else {
+            // Crystals, coordination complexes and imported assemblies retain
+            // their coordinate topology without an ordinary molecular identity.
             let mut doc = self.tab.doc.clone();
             if model.is_file_derived()
                 && model.cell.is_none()
@@ -955,12 +976,6 @@ impl App {
                 doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
                 doc
             })
-        } else {
-            // Existing coordinates: radicals stay as drawn, no cap hydrogens.
-            Prepared::new(&self.tab.doc, &atoms)
-                .or_else(|_| Prepared::relaxed(&self.tab.doc, &atoms))
-                .and_then(|prepared| prepared.flattened(model))
-                .map_err(|error| error.to_string())
         }
         .and_then(|mut doc| {
             // The model keeps its place for showing it in 3D again.
