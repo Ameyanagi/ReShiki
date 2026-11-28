@@ -241,3 +241,91 @@ fn late_names_wait_for_the_drawing_and_update_only_linked_generated_labels() {
     app.inspector_open = false;
     assert!(app.xtb_scheme_name_request().is_none());
 }
+
+#[test]
+fn late_names_follow_drawn_arrow_boundaries_in_an_expanded_profile() {
+    let (doc, plan) = Plan::example();
+    let mut app = open(doc, plan.arrows.clone());
+    let levels = plan.levels().unwrap();
+    let states = vec![
+        energy_profile::state(Kind::Reactant, levels[0].label(), 0.),
+        energy_profile::state(Kind::Intermediate, "I1.1".into(), 0.),
+        energy_profile::state(Kind::Intermediate, levels[1].label(), 0.),
+        energy_profile::state(Kind::Intermediate, "I2.1".into(), 0.),
+        energy_profile::state(Kind::Product, levels[2].label(), 0.),
+    ];
+    let steps = (0..4)
+        .map(|index| {
+            let arrow = plan.arrows[index / 2];
+            EnergyProfileStep {
+                unresolved: false,
+                from: index,
+                to: index + 1,
+                transition: None,
+                source: (index > 0).then_some(arrow),
+                source_key: (index > 0).then(|| {
+                    energy_profile::source_key(
+                        &app.tab.doc,
+                        &plan::preview(&app.tab.doc, arrow).unwrap(),
+                    )
+                }),
+                irc: Vec::new(),
+            }
+        })
+        .collect();
+    let figure = EnergyProfile::new(
+        plan.arrows[0],
+        energy_profile::source_key(
+            &app.tab.doc,
+            &plan::preview(&app.tab.doc, plan.arrows[0]).unwrap(),
+        ),
+        "GFN2-xTB".into(),
+        states,
+        steps,
+    );
+    for index in 0..3 {
+        let mut figure = figure.clone();
+        if index == 1 {
+            figure.states[2].label = "Custom endpoint".into();
+        } else if index == 2 {
+            figure.unlink();
+        }
+        let id = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::energy_profile(
+            id,
+            Point::new(20., 100. + index as f32 * 150.),
+            Point::new(500., 120.),
+            figure,
+            GraphicStyle::default(),
+        ));
+    }
+    let unlinked = app.tab.doc.graphics[2].clone();
+    let frames = app.tab.history.frames();
+    let revision = app.tab.revision;
+    for name in ["ethanol", "ethene", "ethane"] {
+        name_next(&mut app, name);
+    }
+    let updated = app.tab.xtb.scheme.as_ref().unwrap().plan.levels().unwrap();
+    let labels: Vec<_> = updated
+        .iter()
+        .map(|level| energy_profile::state(Kind::Reactant, level.label(), 0.).label)
+        .collect();
+    let generated = app.tab.doc.graphics[0].energy_profile.as_ref().unwrap();
+    assert_eq!(generated.states[0].label, labels[0]);
+    assert_eq!(generated.states[2].label, labels[1]);
+    assert_eq!(generated.states[4].label, labels[2]);
+    assert_eq!(generated.states[1].label, "I1.1");
+    assert_eq!(generated.states[3].label, "I2.1");
+    assert_eq!(
+        app.tab.doc.graphics[1]
+            .energy_profile
+            .as_ref()
+            .unwrap()
+            .states[2]
+            .label,
+        "Custom endpoint"
+    );
+    assert_eq!(app.tab.doc.graphics[2], unlinked);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert_eq!(app.tab.revision, revision);
+}

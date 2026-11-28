@@ -325,13 +325,31 @@ impl App {
             .enumerate()
             .filter_map(|(index, graphic)| {
                 let figure = graphic.energy_profile.as_deref()?;
-                state.follows(&self.tab.doc, figure).then_some(index)
+                if !state.follows(&self.tab.doc, figure) {
+                    return None;
+                }
+                let reactions = super::profile::source_reactions(&self.tab.doc, figure)?;
+                let minima = figure
+                    .steps
+                    .first()
+                    .map(|step| step.from)
+                    .into_iter()
+                    .chain(figure.steps.iter().zip(&reactions).enumerate().filter_map(
+                        |(leg, (step, reaction))| {
+                            reactions
+                                .get(leg + 1)
+                                .is_none_or(|next| next.arrow != reaction.arrow)
+                                .then_some(step.to)
+                        },
+                    ))
+                    .collect::<Vec<_>>();
+                Some((index, minima))
             })
             .collect();
         // Like automatic property captions, a late presentation name belongs
         // to the existing figure's edit. Keep its geometry, energies and style.
         let mut changed = false;
-        for index in linked {
+        for (index, minima) in linked {
             let Some(figure) = self
                 .tab
                 .doc
@@ -341,13 +359,6 @@ impl App {
             else {
                 continue;
             };
-            let minima: Vec<_> = figure
-                .steps
-                .first()
-                .map(|step| step.from)
-                .into_iter()
-                .chain(figure.steps.iter().map(|step| step.to))
-                .collect();
             for ((index, old), new) in minima.into_iter().zip(&previous).zip(&labels) {
                 if let Some(state) = figure.states.get_mut(index)
                     && state.label == *old
@@ -479,7 +490,7 @@ impl App {
                     self.tab.xtb.ts_review = None;
                     state.discard_choices();
                 }
-                state.work.cancel();
+                state.work.stop();
                 self.status = "Scheme calculation canceled · finished results kept".into();
                 self.error = false;
                 #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
@@ -503,38 +514,43 @@ impl App {
                 if !state.work.accepts(&event) {
                     return Task::none();
                 }
+                let draining = !state.work.running();
                 if state.epoch != self.tab.file_epoch
                     || (state.revision != self.tab.revision && !state.plan.current(&self.tab.doc))
                 {
                     state.work.cancel();
-                    self.status =
-                        "The scheme changed. Select its arrows and calculate again.".into();
+                    if !draining {
+                        self.status =
+                            "The scheme changed. Select its arrows and calculate again.".into();
+                    }
                     return Task::none();
                 }
                 state.revision = self.tab.revision;
                 let finished = event.finished();
                 if state.work.accept(*event) && finished {
-                    self.status = if let Some(reason) = &state.work.error {
-                        reason.clone()
-                    } else {
-                        let done = state
-                            .work
-                            .steps
-                            .iter()
-                            .filter(|s| matches!(s, run::StepStatus::Done))
-                            .count();
-                        let failed = state
-                            .work
-                            .steps
-                            .iter()
-                            .filter(|s| matches!(s, run::StepStatus::Failed(_)))
-                            .count();
-                        if failed == 0 {
-                            format!("Scheme complete · {done} steps calculated")
+                    if !draining {
+                        self.status = if let Some(reason) = &state.work.error {
+                            reason.clone()
                         } else {
-                            format!("Scheme finished · {done} calculated · {failed} failed")
-                        }
-                    };
+                            let done = state
+                                .work
+                                .steps
+                                .iter()
+                                .filter(|s| matches!(s, run::StepStatus::Done))
+                                .count();
+                            let failed = state
+                                .work
+                                .steps
+                                .iter()
+                                .filter(|s| matches!(s, run::StepStatus::Failed(_)))
+                                .count();
+                            if failed == 0 {
+                                format!("Scheme complete · {done} steps calculated")
+                            } else {
+                                format!("Scheme finished · {done} calculated · {failed} failed")
+                            }
+                        };
+                    }
                     self.xtb_store_scheme(true);
                 }
             }

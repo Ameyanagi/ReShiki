@@ -246,6 +246,7 @@ pub(in crate::app) struct State {
     cache: Vec<Cached>,
     serial: u64,
     running: bool,
+    draining: bool,
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     cancel: Option<Cancel>,
 }
@@ -331,13 +332,15 @@ impl State {
         });
     }
 
-    pub fn cancel(&mut self) {
+    /// Stop execution while retaining this run's final completed data. Progress
+    /// cannot restart the UI, and Finished closes the remaining event window.
+    pub fn stop(&mut self) {
         #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
         if let Some(cancel) = self.cancel.take() {
             cancel.cancel();
         }
+        self.draining |= self.running;
         self.running = false;
-        self.serial = self.serial.wrapping_add(1);
         self.progress = None;
         for status in &mut self.steps {
             if matches!(status, StepStatus::Pending | StepStatus::Running) {
@@ -346,9 +349,17 @@ impl State {
         }
     }
 
-    /// Check before document freshness so canceled work cannot change status.
+    /// Invalidate a replaced run or stale document, including any pending drain.
+    pub fn cancel(&mut self) {
+        self.stop();
+        self.draining = false;
+        self.serial = self.serial.wrapping_add(1);
+    }
+
+    /// Check before document freshness so events from replaced work cannot act.
     pub fn accepts(&self, event: &Event) -> bool {
-        event.serial == self.serial && self.running
+        event.serial == self.serial
+            && (self.running || (self.draining && !matches!(event.kind, EventKind::Progress(_))))
     }
 
     #[cfg(test)]
@@ -390,7 +401,9 @@ impl State {
                 }
             }
             EventKind::Step { index, value } => {
-                if let Some(status) = self.steps.get_mut(index) {
+                if !self.draining
+                    && let Some(status) = self.steps.get_mut(index)
+                {
                     *status = value.error.as_ref().map_or(StepStatus::Done, |reason| {
                         StepStatus::Failed(reason.clone())
                     });
@@ -401,8 +414,9 @@ impl State {
             }
             EventKind::Finished(result) => {
                 self.running = false;
+                let draining = std::mem::take(&mut self.draining);
                 self.progress = None;
-                self.error = result.err();
+                self.error = if draining { None } else { result.err() };
                 if let Some(reason) = &self.error {
                     for status in &mut self.steps {
                         if matches!(status, StepStatus::Pending | StepStatus::Running) {

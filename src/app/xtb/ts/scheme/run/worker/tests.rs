@@ -1274,3 +1274,130 @@ fn cancellation_publishes_discovered_minima_and_gaps_before_stopping_the_queue()
         "The remaining elementary step was not verified"
     );
 }
+
+fn running_scheme_app() -> (crate::app::App, Plan) {
+    use crate::app::xtb::ts::scheme::{self, Action};
+
+    let (doc, plan) = Plan::example();
+    let (mut app, _) = crate::app::App::new();
+    app.tab.doc = doc;
+    app.tab.selected = plan.arrows.clone();
+    app.tab.busy = false;
+    let _ = app.update(scheme::send(Action::Open));
+    let work = &mut app.tab.xtb.scheme.as_mut().unwrap().work;
+    work.serial = 14;
+    work.running = true;
+    work.cancel = Some(Cancel::default());
+    work.steps = vec![StepStatus::Running, StepStatus::Pending];
+    work.report.steps = vec![None, None];
+    (app, plan)
+}
+
+#[test]
+fn cancel_action_drains_the_current_arrows_partial_discoveries() {
+    use crate::app::xtb::ts::scheme::{self, Action};
+
+    let (mut app, plan) = running_scheme_app();
+    let mut value = StepValue::empty(plan.steps[0].arrow, XtbMethod::Gfn2Xtb);
+    let mut path = partial_discovered_path();
+    let saddle = species_value(0, XtbMethod::Gfn2Xtb);
+    path.segments.push(DiscoveredSegment {
+        reactant: 0,
+        product: 2,
+        ts: saddle.result,
+        frames: vec![saddle.frame],
+    });
+    path.gaps.retain(|gap| gap.reactant != 0);
+    value.discovered = Some(path);
+    let partial = Event {
+        serial: 14,
+        kind: EventKind::Step { index: 0, value },
+    };
+    let _ = app.update(scheme::send(Action::Cancel));
+    assert!(!app.xtb_scheme_running());
+    assert!(app.status.contains("canceled"));
+    let _ = app.update(scheme::send(Action::Event(Box::new(partial.clone()))));
+    let work = &app.tab.xtb.scheme.as_ref().unwrap().work;
+    let discovered = work.step(0).unwrap().discovered.as_ref().unwrap();
+    assert_eq!(discovered.minima.len(), 3);
+    assert_eq!(discovered.segments.len(), 1);
+    assert_eq!(discovered.gaps.len(), 1);
+    assert_eq!(work.steps, [StepStatus::Cancelled, StepStatus::Cancelled]);
+    assert!(!work.accepts(&Event {
+        serial: 14,
+        kind: EventKind::Progress(Progress {
+            step: 0,
+            species: None,
+            label: "late progress".into(),
+            completed_species: 0,
+            total_species: 0,
+            stage: None,
+        }),
+    }));
+    app.status = "The user's next action".into();
+    let _ = app.update(scheme::send(Action::Event(Box::new(Event {
+        serial: 14,
+        kind: EventKind::Finished(Err("Scheme calculation canceled".into())),
+    }))));
+    let work = &app.tab.xtb.scheme.as_ref().unwrap().work;
+    assert!(work.step(0).unwrap().discovered.is_some());
+    assert!(
+        work.error.is_none(),
+        "a user cancellation is not a failed run"
+    );
+    assert!(!work.accepts(&partial), "finishing closes the drain window");
+    assert_eq!(app.status, "The user's next action");
+}
+
+#[test]
+fn a_new_run_invalidates_the_canceled_runs_pending_results() {
+    let mut work = State::default();
+    work.serial = 14;
+    work.running = true;
+    work.steps = vec![StepStatus::Running];
+    work.report.steps = vec![None];
+    let stale = Event {
+        serial: 14,
+        kind: EventKind::Step {
+            index: 0,
+            value: StepValue::empty(10, XtbMethod::Gfn2Xtb),
+        },
+    };
+    work.stop();
+    assert!(work.accepts(&stale));
+    // start() invalidates the previous serial before installing its new run.
+    work.cancel();
+    work.running = true;
+    let current = Event {
+        serial: work.serial,
+        kind: EventKind::Step {
+            index: 0,
+            value: StepValue::empty(11, XtbMethod::Gfn2Xtb),
+        },
+    };
+    assert!(work.accept(current));
+    assert!(!work.accept(stale));
+    assert_eq!(work.step(0).unwrap().arrow, 11);
+}
+
+#[test]
+fn a_chemistry_edit_rejects_the_cancel_drain_without_replacing_the_users_status() {
+    use crate::app::xtb::ts::scheme::{self, Action};
+
+    let (mut app, plan) = running_scheme_app();
+    let mut value = StepValue::empty(plan.steps[0].arrow, XtbMethod::Gfn2Xtb);
+    value.discovered = Some(partial_discovered_path());
+    let partial = Event {
+        serial: 14,
+        kind: EventKind::Step { index: 0, value },
+    };
+    let _ = app.update(scheme::send(Action::Cancel));
+    app.tab.doc.atoms[0].charge += 1;
+    app.tab.revision += 1;
+    app.status = "The user's next action".into();
+    let _ = app.update(scheme::send(Action::Event(Box::new(partial.clone()))));
+    let work = &app.tab.xtb.scheme.as_ref().unwrap().work;
+    assert!(work.step(0).is_none());
+    assert!(!work.accepts(&partial));
+    assert_eq!(app.status, "The user's next action");
+}
