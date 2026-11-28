@@ -654,7 +654,9 @@ impl App {
     /// The palette is showing a result.
     pub(super) fn xtb_palette_visible(&self) -> bool {
         self.tab.xtb.palette.open
-            && (self.xtb_palette_live_ts().is_some() || self.xtb_shown_entry().is_some())
+            && (self.xtb_scheme_palette_visible()
+                || self.xtb_palette_live_ts().is_some()
+                || self.xtb_shown_entry().is_some())
     }
 
     /// The step preview, while the document has not changed since.
@@ -852,6 +854,11 @@ impl App {
                 }
             }
             Action::View(_) if self.xtb_palette_live_ts().is_some() => {}
+            Action::Show if self.xtb_scheme_selected() => {
+                self.tab.xtb.palette.open = true;
+                self.tab.xtb.palette.collapsed = false;
+                self.tab.xtb.palette.view = View::Path;
+            }
             Action::Show => {
                 self.tab.xtb.palette.previous = false;
                 let reaction = self.xtb_selected_reaction();

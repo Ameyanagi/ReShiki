@@ -68,8 +68,9 @@ impl Session {
         profile: &EnergyProfile,
         paths: Vec<Option<ProfileIrc>>,
         preference: Motion,
+        reduced_motion: bool,
     ) -> Self {
-        let motion = preference.available(paths.iter().any(Option::is_some));
+        let motion = preference.preferred(paths.iter().any(Option::is_some), reduced_motion);
         let timeline = Timeline::new(profile, &paths, motion);
         let mut position = Playback::default();
         position.seek(0, timeline.len());
@@ -123,6 +124,14 @@ impl Session {
 }
 
 impl App {
+    fn profile_animation_reduced_motion(&self) -> bool {
+        #[cfg(test)]
+        if let Some(preference) = self.profile_reduced_motion {
+            return preference;
+        }
+        crate::platform::reduced_motion()
+    }
+
     pub(super) fn selected_energy_profile(&self) -> Option<&Graphic> {
         let [id] = self.tab.selected.as_slice() else {
             return None;
@@ -165,6 +174,39 @@ impl App {
             && session.speed != self.appearance.playback_speed
         {
             session.start_hold(self.appearance.playback_speed, Instant::now());
+        }
+        if self
+            .profile_animation
+            .as_ref()
+            .is_some_and(|session| session.motion == Motion::Smooth)
+            && self.profile_animation_reduced_motion()
+        {
+            self.reduce_profile_animation();
+        }
+    }
+
+    fn reduce_profile_animation(&mut self) {
+        if let Some(session) = &mut self.profile_animation
+            && session.motion == Motion::Smooth
+            && let Some(graphic) = self
+                .tab
+                .doc
+                .graphics
+                .iter()
+                .find(|g| g.id == session.target.graphic)
+            && let Some(profile) = graphic.energy_profile.as_deref()
+        {
+            let state = session
+                .timeline
+                .frame(session.position.frame)
+                .map_or(0, |frame| frame.state);
+            let playing = session.position.playing;
+            session.motion = Motion::Steps;
+            session.timeline = Timeline::new(profile, &session.paths, Motion::Steps);
+            session.position.seek(state, session.timeline.len());
+            session.position.playing = playing && session.timeline.len() > 1;
+            session.start_hold(self.appearance.playback_speed, Instant::now());
+            session.show(&self.tab.doc, graphic);
         }
     }
 
@@ -300,6 +342,7 @@ impl App {
                 profile,
                 self.energy_profile_paths(profile),
                 self.appearance.profile_motion,
+                self.profile_animation_reduced_motion(),
             )
         });
         let len = session.timeline.len();
@@ -310,7 +353,10 @@ impl App {
                 restart_hold = session.position.playing;
             }
             Action::Motion(motion) => {
-                if motion == Motion::Steps || session.paths.iter().any(Option::is_some) {
+                if motion == Motion::Steps
+                    || !self.profile_animation_reduced_motion()
+                        && session.paths.iter().any(Option::is_some)
+                {
                     session.motion = motion;
                     session.timeline = Timeline::new(profile, &session.paths, motion);
                     let playing = session.position.playing;
@@ -381,21 +427,22 @@ impl App {
                 allowed.then_some(Message::GifExport(super::gif_export::Action::OpenProfile)),
             ),
         );
-        let smooth = active.map_or_else(
-            || {
-                self.energy_profile_paths(profile)
-                    .iter()
-                    .any(Option::is_some)
-            },
-            |s| s.paths.iter().any(Option::is_some),
-        );
+        let smooth = !self.profile_animation_reduced_motion()
+            && active.map_or_else(
+                || {
+                    self.energy_profile_paths(profile)
+                        .iter()
+                        .any(Option::is_some)
+                },
+                |s| s.paths.iter().any(Option::is_some),
+            );
         let motions = if smooth {
             &[Motion::Steps, Motion::Smooth][..]
         } else {
             &[Motion::Steps][..]
         };
         let motion = active.map_or(self.appearance.profile_motion.available(smooth), |s| {
-            s.motion
+            s.motion.available(smooth)
         });
         let repeat = self.appearance.playback_mode;
         let speed = self.appearance.playback_speed;
@@ -452,6 +499,7 @@ impl App {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn profile_export_source(&mut self) -> Option<super::gif_export::Source> {
         use super::gif_export::{Motion as ExportMotion, Source};
+        self.sync_profile_animation();
         if !self.profile_animation_allowed() {
             return None;
         }
@@ -463,10 +511,10 @@ impl App {
         let (timeline, motion, highlight) = self.current_profile_animation().map_or_else(
             || {
                 let paths = self.energy_profile_paths(profile);
-                let motion = self
-                    .appearance
-                    .profile_motion
-                    .available(paths.iter().any(Option::is_some));
+                let motion = self.appearance.profile_motion.preferred(
+                    paths.iter().any(Option::is_some),
+                    self.profile_animation_reduced_motion(),
+                );
                 (Timeline::new(profile, &paths, motion), motion, true)
             },
             |s| (s.timeline.clone(), s.motion, s.highlight),

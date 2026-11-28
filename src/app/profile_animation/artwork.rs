@@ -1,6 +1,6 @@
 //! One view-only overlay for the drawing and exported animation frames.
 
-use crate::app::xtb::ts::profile::source_key;
+use crate::app::xtb::ts::profile::source_reaction_prefix;
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{
     EnergyProfileGeometry, EnergyProfileSample, EnergyProfileStateKind as Kind, Graphic,
@@ -45,67 +45,49 @@ impl Artwork {
             selection: vec![graphic.id],
             ..Self::default()
         };
-        let mut reaction = profile
-            .source
-            .and_then(|id| reactions::preview(doc, id).ok());
-        let mut visited = BTreeSet::new();
-        for (index, step) in profile.steps.iter().enumerate() {
-            let Some(current) = reaction.take() else {
-                break;
-            };
-            visited.insert(current.arrow);
-            let key = if index == 0 {
-                Some(profile.source_key.as_str())
-            } else {
-                step.source_key.as_deref()
-            };
-            if key.is_some_and(|key| source_key(doc, &current) == key) {
-                artwork.matched_steps.insert(index);
-                artwork.selection.extend(current.ids());
-                for (state, participants) in [
-                    (step.from, &current.reactants),
-                    (step.to, &current.products),
-                ] {
-                    if let Some(species) = artwork.species.get_mut(state) {
-                        let atoms: Vec<_> = participants.iter().map(|p| p.atoms.clone()).collect();
-                        *species = scene::selections_ink_bounds(doc, &atoms)
-                            .into_iter()
-                            .zip(atoms)
-                            .filter_map(|(bounds, atoms)| {
-                                let (lo, hi) = bounds?;
-                                let &owner = atoms.first()?;
-                                atoms
-                                    .iter()
-                                    .any(|&id| doc.atom_drawn(id))
-                                    .then_some(SpeciesBox { owner, lo, hi })
-                            })
-                            .collect();
-                    }
+        let reactions = source_reaction_prefix(doc, profile);
+        for (index, (step, current)) in profile.steps.iter().zip(reactions).enumerate() {
+            artwork.matched_steps.insert(index);
+            artwork.selection.extend(current.ids());
+            // Implicit atoms can leave some or all of the saddle's changes off the drawing.
+            let boxed_transition = step.transition.filter(|&state| {
+                let (Some(transition), Some(changes)) =
+                    (profile.states.get(state), artwork.changes.get_mut(state))
+                else {
+                    return false;
+                };
+                let Some(geometry) = transition.geometry.as_ref() else {
+                    return true;
+                };
+                *changes = scheme_changes(doc, &current, geometry);
+                for pairs in [&mut changes.forming, &mut changes.breaking] {
+                    pairs.retain(|&[a, b]| doc.atom_drawn(a) && doc.atom_drawn(b));
                 }
-                if let Some(state) = step.transition
-                    && let Some(changes) = artwork.changes.get_mut(state)
-                    && let Some(geometry) =
-                        profile.states.get(state).and_then(|s| s.geometry.as_ref())
-                {
-                    *changes = scheme_changes(doc, &current, geometry);
-                    for pairs in [&mut changes.forming, &mut changes.breaking] {
-                        pairs.retain(|&[a, b]| doc.atom_drawn(a) && doc.atom_drawn(b));
+                let drawn = changes.forming.len() + changes.breaking.len();
+                drawn == 0 || drawn < geometry.forming.len() + geometry.breaking.len()
+            });
+            for (state, participants) in [
+                (step.from, &current.reactants),
+                (step.to, &current.products),
+            ] {
+                let atoms: Vec<_> = participants.iter().map(|p| p.atoms.clone()).collect();
+                let boxes = scene::selections_ink_bounds(doc, &atoms);
+                for (bounds, atoms) in boxes.into_iter().zip(atoms) {
+                    let (Some((lo, hi)), Some(&owner)) = (bounds, atoms.first()) else {
+                        continue;
+                    };
+                    if !atoms.iter().any(|&id| doc.atom_drawn(id)) {
+                        continue;
+                    }
+                    for state in std::iter::once(state).chain(boxed_transition) {
+                        if let Some(species) = artwork.species.get_mut(state)
+                            && !species.iter().any(|other| other.owner == owner)
+                        {
+                            species.push(SpeciesBox { owner, lo, hi });
+                        }
                     }
                 }
             }
-            if index + 1 == profile.steps.len() {
-                break;
-            }
-            // A later minimum can also be a drawn intermediate. Continue only
-            // through an unambiguous next arrow using those same drawing atoms.
-            let products = side_ids(&current, Role::Product);
-            let mut next = doc
-                .arrows
-                .iter()
-                .filter(|arrow| !visited.contains(&arrow.id))
-                .filter_map(|arrow| reactions::preview(doc, arrow.id).ok())
-                .filter(|candidate| side_ids(candidate, Role::Reactant) == products);
-            reaction = next.next().filter(|_| next.next().is_none());
         }
         artwork.selection.sort_unstable();
         artwork.selection.dedup();

@@ -170,7 +170,10 @@ pub struct EnergyProfileStep {
     pub from: usize,
     pub to: usize,
     pub transition: Option<usize>,
-    /// Saved chemistry key for a later arrow, resolved from the shared intermediate.
+    /// Source arrow for a later step. The first arrow belongs to the profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<u64>,
+    /// Chemistry fingerprint for the later arrow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_key: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -202,6 +205,8 @@ pub struct EnergyProfile {
     pub rotation: [f32; 4],
 }
 impl EnergyProfile {
+    pub const MAX_STATES: usize = 65;
+
     pub fn new(
         source: u64,
         source_key: String,
@@ -225,6 +230,19 @@ impl EnergyProfile {
     pub fn unlink(&mut self) {
         self.source = None;
         self.linked = false;
+        for step in &mut self.steps {
+            step.source = None;
+        }
+    }
+    pub(crate) fn source_ids(&self) -> impl Iterator<Item = u64> + '_ {
+        self.source
+            .into_iter()
+            .chain(self.steps.iter().filter_map(|s| s.source))
+    }
+    pub(crate) fn source_ids_mut(&mut self) -> impl Iterator<Item = &mut u64> {
+        self.source
+            .iter_mut()
+            .chain(self.steps.iter_mut().filter_map(|s| s.source.as_mut()))
     }
     /// Replace calculation data while retaining the user's molecular view and placement.
     /// The caller retains the Graphic frame and its line/text style.
@@ -241,21 +259,24 @@ impl EnergyProfile {
     pub fn states_with_labels(
         &self,
     ) -> impl Iterator<Item = (&EnergyProfileState, String, Option<&str>)> {
-        let single_ts = self
-            .states
-            .iter()
-            .filter(|s| s.kind == EnergyProfileStateKind::TransitionState)
-            .count()
-            == 1;
         self.states
             .iter()
-            .scan((0, 0), move |(transitions, intermediates), state| {
+            .enumerate()
+            .scan(0, move |intermediates, (index, state)| {
                 let (role, short) = match state.kind {
                     EnergyProfileStateKind::Reactant => ("R".into(), "R"),
-                    EnergyProfileStateKind::TransitionState if single_ts => ("TS‡".into(), "TS1‡"),
+                    EnergyProfileStateKind::TransitionState if self.steps.len() == 1 => {
+                        ("TS‡".into(), "TS1‡")
+                    }
                     EnergyProfileStateKind::TransitionState => {
-                        *transitions += 1;
-                        (format!("TS{transitions}‡"), "TS‡")
+                        let step = self
+                            .steps
+                            .iter()
+                            .position(|step| step.transition == Some(index));
+                        (
+                            step.map_or_else(|| "TS‡".into(), |step| format!("TS{}‡", step + 1)),
+                            "TS‡",
+                        )
                     }
                     EnergyProfileStateKind::Intermediate => {
                         *intermediates += 1;
@@ -297,7 +318,7 @@ impl EnergyProfile {
             || self.source.is_some_and(|id| id == 0 || id == u64::MAX)
             || self.method.len() > 128
             || self.method.chars().any(char::is_control)
-            || !(2..=65).contains(&self.states.len())
+            || !(2..=Self::MAX_STATES).contains(&self.states.len())
             || self
                 .states
                 .first()
@@ -334,6 +355,9 @@ impl EnergyProfile {
                 };
                 s.from != from
                     || s.to != to
+                    || s.source.is_some_and(|id| {
+                        id == 0 || id == u64::MAX || s.from == 0 || s.source_key.is_none()
+                    })
                     || s.source_key
                         .as_deref()
                         .is_some_and(|key| !valid_source_key(key))

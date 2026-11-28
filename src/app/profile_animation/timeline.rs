@@ -23,6 +23,10 @@ impl Motion {
     pub(super) fn available(self, smooth: bool) -> Self {
         if smooth { self } else { Self::Steps }
     }
+
+    pub(super) fn preferred(self, smooth: bool, reduced_motion: bool) -> Self {
+        self.available(smooth && !reduced_motion)
+    }
 }
 
 impl std::fmt::Display for Motion {

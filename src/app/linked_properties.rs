@@ -164,6 +164,7 @@ impl App {
         for (smiles, name) in known {
             self.write_caption_name(&smiles, &name);
         }
+        self.xtb_refresh_scheme_names();
         let state = &self.tab.naming;
         if state.caption_pending.is_some() {
             return Task::none();
@@ -175,6 +176,7 @@ impl App {
             .iter()
             .find(|link| link.needs_name() && !state.caption_failed.contains_key(&link.smiles))
             .map(|link| (link.smiles.clone(), link.atoms.clone()))
+            .or_else(|| self.xtb_scheme_name_request())
             .or_else(|| self.xtb_reaction_name_request());
         let Some((smiles, atoms)) = request else {
             return Task::none();
@@ -220,6 +222,7 @@ impl App {
                 if self.naming_can_edit() {
                     self.write_caption_name(smiles, &name);
                 }
+                self.xtb_schedule_scheme_name_refresh();
             }
             Err(error) => {
                 self.tab

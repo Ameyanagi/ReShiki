@@ -19,7 +19,11 @@ impl App {
         }
         let current = dialog.at == self.review_stamp();
         let mut content = column![
-            text(dialog.heading()).size(21),
+            text(match &dialog.scheme {
+                Some((index, _)) => format!("Step {} · {}", index + 1, dialog.heading()),
+                None => dialog.heading().to_owned(),
+            })
+            .size(21),
             line(dialog.subtitle(), Tone::Muted),
         ]
         .spacing(12);
@@ -114,12 +118,12 @@ impl App {
                     if dialog.edit_species { "Done" } else { "Edit" },
                 )
                 .checked(dialog.edit_species)
-                .on_press(send(Action::EditSpecies)),
+                .on_press_maybe(dialog.scheme.is_none().then(|| send(Action::EditSpecies))),
             ]
             .spacing(4)
             .align_y(Alignment::Center),
         );
-        if dialog.edit_species {
+        if dialog.edit_species && dialog.scheme.is_none() {
             for (index, input) in dialog.inputs.iter().enumerate() {
                 let field =
                     |label: &'static str, value: &'a str, action: fn(usize, String) -> Action| {
@@ -189,7 +193,9 @@ impl App {
         }
         if dialog.free_energy {
             content = content.push(line(
-                if dialog.mode == Mode::TransitionState {
+                if dialog.scheme.is_some() {
+                    "Calculate the barrier free energy at 298.15 K"
+                } else if dialog.mode == Mode::TransitionState {
                     "Report ΔG and ΔG‡ at 298.15 K"
                 } else {
                     "Report ΔG at 298.15 K"
@@ -231,13 +237,32 @@ impl App {
             ));
         }
         let run = dialog.run_label();
+        let edit = if dialog.detached_map {
+            accessible_command(
+                "ts.review.skip-barrier",
+                "Skip barrier for this step",
+                "Skip barrier for this step",
+            )
+            .on_press_maybe(current.then(|| send(Action::SkipBarrier)))
+        } else {
+            accessible_command(
+                "ts.review.edit",
+                "Edit map",
+                if dialog.scheme.is_some() {
+                    "Edit map in drawing"
+                } else {
+                    "Edit map"
+                },
+            )
+            .on_press_maybe(
+                (current && !matches!(dialog.mapping, Mapping::Finding))
+                    .then(|| send(Action::EditMap)),
+            )
+        };
         content = content
             .push(
                 row![
-                    accessible_command("ts.review.edit", "Edit map", "Edit map").on_press_maybe(
-                        (current && !matches!(dialog.mapping, Mapping::Finding))
-                            .then(|| send(Action::EditMap))
-                    ),
+                    edit,
                     Space::new().width(Length::Fill),
                     accessible_command("ts.review.cancel", "Cancel", "Cancel")
                         .on_press(send(Action::Cancel)),

@@ -225,7 +225,7 @@ fn point_group_symmetry(group: &str) -> Option<u32> {
 /// Match both Calculate symmetry policies. For natural abundances the engine
 /// reports the point group it detected. Isotope-labelled jobs request a
 /// geometry-based override because the engine's detection ignores isotopes.
-fn matching_thermo(result: &CalcResult, frame: &Frame) -> bool {
+pub(in crate::app::xtb) fn matching_thermo(result: &CalcResult, frame: &Frame) -> bool {
     let (Some(thermo), Some(vibrations)) = (&result.thermo, &result.vibrations) else {
         return false;
     };
@@ -280,6 +280,27 @@ fn matching(
     let qcdata::Settings::Xtb(settings) = &result.settings else {
         return false;
     };
+    optimized_at_method(result, frame, species, method)
+        && settings.convergence
+            == Some(if task == CalcTask::OptFreq {
+                qcdata::Convergence::Tight
+            } else {
+                qcdata::Convergence::Normal
+            })
+        && (task != CalcTask::OptFreq || matching_thermo(result, frame))
+}
+
+/// Common chemistry and Hamiltonian checks. A scheme may reuse a Tight
+/// electronic optimization even when no frequencies were requested with it.
+fn optimized_at_method(
+    result: &CalcResult,
+    frame: &Frame,
+    species: &Species,
+    method: qcdata::XtbMethod,
+) -> bool {
+    let qcdata::Settings::Xtb(settings) = &result.settings else {
+        return false;
+    };
     let optimized = result.task == qcdata::Task::Optimize
         && result.status == qcdata::Status::Converged
         && result.energy_hartree.is_some_and(f64::is_finite);
@@ -290,17 +311,9 @@ fn matching(
         && settings.accuracy.is_none()
         && settings.max_iterations.is_none()
         && settings.scf_retries.is_empty()
-        && settings.convergence
-            == Some(if task == CalcTask::OptFreq {
-                qcdata::Convergence::Tight
-            } else {
-                qcdata::Convergence::Normal
-            })
         && settings.fixed_atoms.is_empty();
-    let thermo_match = task != CalcTask::OptFreq || matching_thermo(result, frame);
     optimized
         && settings_match
-        && thermo_match
         && frame.charge == species.charge
         && frame.multiplicity == species.multiplicity
 }
@@ -332,6 +345,63 @@ fn reusable(
         .rev()
         .find(|view| eligible(view, species, task, method))
         .map(|view| Input::from_view(&view))
+}
+
+/// The scheme uses the same conservative eligibility rules as a single arrow.
+/// A Tight optimization with frequencies is also a valid electronic-energy
+/// input; asking for ΔE must not force a second optimization of that molecule.
+#[cfg_attr(
+    not(all(not(target_arch = "wasm32"), feature = "xtb")),
+    allow(dead_code)
+)]
+pub(in crate::app::xtb) fn scheme_reusable(
+    doc: &Document,
+    atoms: &[u64],
+    charge: i32,
+    multiplicity: u32,
+    method: qcdata::XtbMethod,
+    frequencies: bool,
+) -> Option<(Arc<Frame>, Arc<CalcResult>, science::Launch)> {
+    let species = Species {
+        atoms: atoms.to_vec(),
+        coefficient: 1,
+        product: false,
+        charge,
+        multiplicity,
+    };
+    science::results_for(doc, *atoms.first()?)
+        .into_iter()
+        .rev()
+        .find(|view| {
+            eligible(view, &species, CalcTask::OptFreq, method)
+                && view.stored.result.vibrations.as_ref().is_some_and(|v| {
+                    v.frequencies_cm1
+                        .iter()
+                        .all(|frequency| frequency.is_finite() && *frequency >= -20.)
+                })
+                || !frequencies && eligible(view, &species, CalcTask::Optimize, method)
+                || !frequencies
+                    && view.freshness == Freshness::Current
+                    && view.attachment.atoms.iter().flatten().count() == species.atoms.len()
+                    && species
+                        .atoms
+                        .iter()
+                        .all(|id| view.attachment.atoms.contains(&Some(*id)))
+                    && matches!(&view.stored.result.settings, qcdata::Settings::Xtb(settings)
+                        if settings.convergence == Some(qcdata::Convergence::Tight))
+                    && optimized_at_method(&view.stored.result, view.frame, &species, method)
+        })
+        .and_then(|view| {
+            Some((
+                Arc::clone(view.frame),
+                Arc::clone(&view.stored.result),
+                science::Launch {
+                    frame: Arc::clone(doc.science.frame(&view.attachment.frame)?),
+                    atoms: view.attachment.atoms.clone(),
+                    baseline: view.attachment.baseline.clone(),
+                },
+            ))
+        })
 }
 
 /// Called immediately after ordinary storage. Only that newly stored result

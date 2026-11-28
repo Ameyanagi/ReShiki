@@ -262,6 +262,14 @@ explains how the crates and modules fit together.
 - `src/app/xtb/ts/review.rs`: Review reaction participants, atom correspondence and electronic state before xTB.
 - `src/app/xtb/ts/review/species.rs`: Chemical composition and electronic settings from the species drawings.
 - `src/app/xtb/ts/review/view.rs`: Review both reaction sides while keeping uncommon calculation settings folded.
+- `src/app/xtb/ts/scheme.rs`: Calculate a selected reaction path.
+- `src/app/xtb/ts/scheme/plan.rs`: Read the selected, drawn reaction path without changing the drawing.
+- `src/app/xtb/ts/scheme/plan/chemistry.rs`: Exact atom/isotope/charge accounting and single-molecule inputs.
+- `src/app/xtb/ts/scheme/profile.rs`: The scheme's common-reference figure uses the same native graphic, model placement, link editing and undo path as a single-arrow energy profile.
+- `src/app/xtb/ts/scheme/run.rs`: A scheme owns a queue, while every calculation keeps the ordinary isolated molecule/TS worker boundary.
+- `src/app/xtb/ts/scheme/run/worker.rs`
+- `src/app/xtb/ts/scheme/store.rs`: Attach finished calculations to their drawn molecules.
+- `src/app/xtb/ts/scheme/view.rs`: A single setup sheet and the multistep reaction's progress and Path result.
 - `src/app/xtb/ts/thumbnails.rs`: Saved-geometry preparation for the reactant, TS and product profile models.
 - `src/app/xtb/ts/view.rs`: Transition-state path profile and the saved saddle's details.
 - `src/app/xtb/vibrations.rs`: The Vibrations tab

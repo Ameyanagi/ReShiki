@@ -152,6 +152,7 @@ pub(crate) struct State {
     pub(super) palette: palette::Palette,
     conformer_stereo: std::cell::RefCell<conformers::CardStereo>,
     ts_card: ts::card::State,
+    scheme: Option<ts::scheme::State>,
     ts_sessions: ts::Sessions,
     pub(in crate::app::xtb) ts_review: Option<ts::review::Dialog>,
     energy_state: ts::energy::State,
@@ -398,7 +399,9 @@ pub(super) fn is_progress(message: &Message) -> bool {
     #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
     if matches!(
         message,
-        Message::Xtb(Action::TsEvent(..)) | Message::Models3d(super::models3d::Action::Refined(..))
+        Message::Xtb(
+            Action::TsEvent(..) | Action::Ts(ts::Action::Scheme(ts::scheme::Action::Event(_)))
+        ) | Message::Models3d(super::models3d::Action::Refined(..))
     ) {
         return true;
     }
@@ -679,14 +682,14 @@ impl App {
     }
 
     pub(super) fn xtb_running(&self) -> bool {
-        self.tab.xtb.run.is_some()
+        self.tab.xtb.run.is_some() || self.xtb_scheme_running()
     }
 
     /// Whether a run can start now; if not, the status says why.
     fn xtb_can_start(&mut self) -> bool {
         // A build without the engine shows no Run button; its worker would
         // answer "not included" anyway.
-        if self.tab.xtb.run.is_some() {
+        if self.xtb_running() {
             return false;
         }
         if self.tab.xtb.energy_state.in_progress() {
@@ -1232,6 +1235,9 @@ impl App {
 
     /// Cancel stops the worker (or the model generation) and applies nothing.
     pub(super) fn xtb_cancel(&mut self) -> Task<Message> {
+        if self.xtb_scheme_running() {
+            return self.xtb_scheme_action(ts::scheme::Action::Cancel);
+        }
         if self.xtb_search_stop() {
             return Task::none();
         }
@@ -1481,11 +1487,7 @@ impl App {
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
     fn xtb_atom_name(&self, atoms: &[Option<u64>], id: u64) -> (String, Option<String>) {
-        let index = atoms.iter().position(|a| *a == Some(id));
-        let atom = self.tab.doc.atom(id);
-        let element = atom.map_or("?", |a| a.element.as_str());
-        let label = index.map_or_else(|| element.to_owned(), |i| format!("{element}{}", i + 1));
-        (label, atom.and_then(|a| a.cip_label.clone()))
+        state::stereo_atom_name(&self.tab.doc, atoms, id)
     }
 }
 

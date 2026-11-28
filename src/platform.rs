@@ -64,6 +64,30 @@ pub(crate) fn windows() -> bool {
     os() == Os::Windows
 }
 
+/// Prefer discrete state holds when the host requests less animation. Desktop
+/// platforms without a lightweight query retain the discrete playback default.
+pub(crate) fn reduced_motion() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        reshiki_macos::reduced_motion()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window()
+            .and_then(|window| {
+                window
+                    .match_media("(prefers-reduced-motion: reduce)")
+                    .ok()
+                    .flatten()
+            })
+            .is_some_and(|query| query.matches())
+    }
+    #[cfg(not(any(target_os = "macos", target_arch = "wasm32")))]
+    {
+        false
+    }
+}
+
 /// The Alt key as hints name it, as `shortcuts::keys` does: ⌥ on a Mac and
 /// Alt elsewhere.
 pub(crate) fn alt_key() -> &'static str {

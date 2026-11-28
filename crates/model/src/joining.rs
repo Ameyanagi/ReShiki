@@ -396,6 +396,10 @@ impl Prepared {
                 {
                     // Arrow identity is unchanged by atom attachment. The
                     // detached preparation may have temporarily lost the link.
+                    for (step, original) in profile.steps.iter_mut().zip(&old.steps) {
+                        step.source = original.source;
+                        step.source_key.clone_from(&original.source_key);
+                    }
                     profile.source = old.source;
                     profile.linked = old.linked;
                 }

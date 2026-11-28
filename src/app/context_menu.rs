@@ -839,6 +839,13 @@ impl App {
         }
         // Builds that cannot calculate hide it, as they hide Run.
         if super::xtb::available() {
+            if self.xtb_scheme_selection() {
+                entries.push(command(
+                    "Calculate scheme…",
+                    super::xtb::ts::scheme::open_message(),
+                    self.xtb_scheme_open_action().is_some(),
+                ));
+            }
             if let Some(arrow) = self.context_calculate_reaction_arrow() {
                 entries.push(command(
                     "Calculate (xTB)",

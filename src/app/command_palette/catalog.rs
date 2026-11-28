@@ -89,6 +89,7 @@ pub(crate) enum Need {
     ReactionPreview,
     EnergyProfile,
     XtbReaction,
+    XtbScheme,
     ReactionReady,
     ReactionColors,
     Arrow,
@@ -1685,6 +1686,16 @@ fn analysis(app: &App) -> Vec<Command> {
     );
     // Builds that cannot calculate hide it, as they hide Run.
     if xtb::available() {
+        list.push(
+            send(
+                "Calculate scheme…",
+                Analyze,
+                "Calculate reaction energies and barriers for the selected steps",
+                "xtb multi-step reaction scheme energy barrier transition states",
+                xtb::ts::scheme::open_message(),
+            )
+            .need(Need::XtbScheme),
+        );
         list.push(Command::new(
             "Calculate (xTB)…",
             Analyze,

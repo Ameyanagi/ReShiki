@@ -493,6 +493,11 @@ impl App {
                 })
             }))
             .then_some("Select one reaction arrow"),
+            Need::XtbScheme if !self.xtb_scheme_selection() => {
+                Some("Select two or more consecutive reaction arrows")
+            }
+            Need::XtbScheme => (!self.xtb_can_open_scheme())
+                .then_some("Wait for the current calculation to finish"),
             Need::XtbReaction => super::xtb::unavailable()
                 .or_else(|| {
                     (self.tab.busy || self.xtb_running())

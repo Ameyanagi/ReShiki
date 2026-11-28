@@ -29,6 +29,7 @@ mod job;
 pub(in crate::app) mod profile;
 mod refine;
 pub(in crate::app) mod review;
+pub(in crate::app) mod scheme;
 pub(in crate::app) mod thumbnails;
 pub(super) mod view;
 
@@ -38,6 +39,7 @@ pub(super) use job::Event;
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Card(card::Action),
+    Scheme(scheme::Action),
     PlaceEnergyProfile(Option<u64>),
     EditEnergyProfile(u64, profile::Edit),
     Calculate(u64),
@@ -611,6 +613,7 @@ impl App {
 
     pub(super) fn xtb_ts_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::Scheme(action) => self.xtb_scheme_action(action),
             Action::Card(action) => self.xtb_ts_card_action(action),
             Action::PlaceEnergyProfile(arrow) => {
                 self.xtb_place_energy_profile(arrow);

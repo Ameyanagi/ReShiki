@@ -1,5 +1,6 @@
 //! The Calculate card's settings, a run's progress and the finish decision,
 //! kept free of iced and the worker so they can be tested alone.
+use reshiki::document::Document;
 use reshiki::qcdata::{self, XtbMethod};
 use reshiki::science::StereoChange;
 use reshiki_xtb_jobs::method;
@@ -505,6 +506,19 @@ pub(crate) fn summary(
         }
     }
     line
+}
+
+/// "C3" for the third frame atom, and the drawing's CIP code there.
+pub(super) fn stereo_atom_name(
+    doc: &Document,
+    atoms: &[Option<u64>],
+    id: u64,
+) -> (String, Option<String>) {
+    let index = atoms.iter().position(|a| *a == Some(id));
+    let atom = doc.atom(id);
+    let element = atom.map_or("?", |a| a.element.as_str());
+    let label = index.map_or_else(|| element.to_owned(), |i| format!("{element}{}", i + 1));
+    (label, atom.and_then(|a| a.cip_label.clone()))
 }
 
 /// How a stereo change reads in the warning card. `name` gives an atom's

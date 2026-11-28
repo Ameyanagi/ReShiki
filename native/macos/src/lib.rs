@@ -14,6 +14,12 @@ pub mod mp4;
 pub mod printing;
 pub mod workers;
 
+/// Read AppKit's accessibility preference without a subprocess or user defaults.
+/// Call when starting playback so changes in System Settings apply to the next run.
+pub fn reduced_motion() -> bool {
+    objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceMotion()
+}
+
 use objc2::rc::Retained;
 use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{NSApplication, NSApplicationWillFinishLaunchingNotification};

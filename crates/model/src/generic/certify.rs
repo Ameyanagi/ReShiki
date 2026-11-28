@@ -299,12 +299,10 @@ fn restore_translation(
         if let Some(id) = actual.mo.as_deref_mut().and_then(|mo| mo.molecule.as_mut()) {
             undo(id)?;
         }
-        if let Some(id) = actual
-            .energy_profile
-            .as_deref_mut()
-            .and_then(|profile| profile.source.as_mut())
-        {
-            undo(id)?;
+        if let Some(profile) = actual.energy_profile.as_deref_mut() {
+            for id in profile.source_ids_mut() {
+                undo(id)?;
+            }
         }
         if let Some(leader) = actual.leader.as_mut() {
             for target in [&mut leader.start, &mut leader.end].into_iter().flatten() {
