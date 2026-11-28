@@ -1,4 +1,4 @@
-use super::*;
+use super::{super::plan::Step, *};
 use crate::app::xtb::ts::{self as transition, job};
 use crate::app::xtb::{self, CalcTask, state};
 use iced::futures::{StreamExt, channel::mpsc};
@@ -65,6 +65,26 @@ struct SpeciesComputed {
     value: SpeciesValue,
     warning: Option<String>,
 }
+
+enum SpeciesFailure {
+    Calculation(String),
+    Stereo(String),
+}
+
+impl From<String> for SpeciesFailure {
+    fn from(reason: String) -> Self {
+        Self::Calculation(reason)
+    }
+}
+
+impl SpeciesFailure {
+    fn reason(&self) -> &str {
+        match self {
+            Self::Calculation(reason) | Self::Stereo(reason) => reason,
+        }
+    }
+}
+
 struct TransitionComputed {
     result: Arc<CalcResult>,
     frames: Vec<Arc<Frame>>,
@@ -96,7 +116,7 @@ trait Backend {
         job: SpeciesJob<'_>,
         cancel: &Cancel,
         minimum: &mut dyn FnMut(&SpeciesValue),
-    ) -> Result<SpeciesComputed, String>;
+    ) -> Result<SpeciesComputed, SpeciesFailure>;
     fn transition(
         &mut self,
         job: TransitionJob<'_>,
@@ -162,13 +182,24 @@ fn optimized_start<'a>(
 #[derive(Default)]
 struct Minima {
     values: BTreeMap<usize, SpeciesValue>,
-    failures: BTreeMap<usize, String>,
+    failures: BTreeMap<usize, SpeciesFailure>,
     warnings: BTreeMap<usize, String>,
+}
+
+impl Minima {
+    fn stereo_failed(&self, step: &Step) -> bool {
+        step.reactants.iter().chain(&step.products).any(|term| {
+            matches!(
+                self.failures.get(&term.species),
+                Some(SpeciesFailure::Stereo(_))
+            )
+        })
+    }
 }
 
 fn endpoint_value(
     request: &Request,
-    step: &super::super::plan::Step,
+    step: &Step,
     options: StepOptions,
     minima: &Minima,
 ) -> StepValue {
@@ -198,9 +229,10 @@ fn endpoint_value(
             minima
                 .failures
                 .get(&term.species)
+                .map(SpeciesFailure::reason)
                 .or_else(|| {
                     needs_frequency
-                        .then(|| minima.warnings.get(&term.species))
+                        .then(|| minima.warnings.get(&term.species).map(String::as_str))
                         .flatten()
                 })
                 .map(|reason| {
@@ -304,7 +336,7 @@ fn calculate(
                 continue;
             }
             let value = endpoint_value(request, step, options, minima);
-            if options.transition_state() {
+            if options.transition_state() && !minima.stereo_failed(step) {
                 emit(EventKind::Endpoints {
                     index,
                     value: value.clone(),
@@ -394,7 +426,7 @@ fn calculate(
         publish(&minima, None, &mut emit);
     }
     for &(index, step, options, input) in &active {
-        if !options.transition_state() {
+        if !options.transition_state() || minima.stereo_failed(step) {
             continue;
         }
         checked(cancel)?;
@@ -649,23 +681,14 @@ impl Native {
         result.validate(&frame).map_err(|error| error.to_string())?;
         Ok((frame, Arc::new(result)))
     }
-}
 
-fn with_masses(frame: &Frame) -> Frame {
-    let mut frame = frame.clone();
-    if frame.masses_amu.is_empty() {
-        frame.masses_amu = science::isotope_masses(&frame).unwrap_or_default();
-    }
-    frame
-}
-
-impl Backend for Native {
-    fn species(
-        &mut self,
+    fn compute_species(
+        &self,
         job: SpeciesJob<'_>,
         cancel: &Cancel,
         minimum: &mut dyn FnMut(&SpeciesValue),
-    ) -> Result<SpeciesComputed, String> {
+        optimize: impl FnOnce(&Frame) -> Result<(Arc<Frame>, Arc<CalcResult>), String>,
+    ) -> Result<SpeciesComputed, SpeciesFailure> {
         let SpeciesJob {
             index,
             species,
@@ -689,7 +712,24 @@ impl Backend for Native {
                 species.multiplicity,
                 cancel,
             )?;
-            let (frame, result) = self.ordinary(&launch.frame, method, true, false, cancel)?;
+            let (frame, result) = optimize(&launch.frame)?;
+            let drawing = &species.calculation;
+            let changes =
+                science::stereo_changes(drawing, &launch.atoms, &frame).map_err(|error| {
+                    SpeciesFailure::Stereo(format!("The stereo check could not run: {error}."))
+                })?;
+            if !changes.is_empty() {
+                let reason = changes
+                    .iter()
+                    .map(|change| {
+                        state::describe(change, |id| {
+                            state::stereo_atom_name(drawing, &launch.atoms, id)
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                return Err(SpeciesFailure::Stereo(reason));
+            }
             SpeciesValue {
                 species: index,
                 method,
@@ -725,6 +765,28 @@ impl Backend for Native {
             }
         }
         Ok(SpeciesComputed { value, warning })
+    }
+}
+
+fn with_masses(frame: &Frame) -> Frame {
+    let mut frame = frame.clone();
+    if frame.masses_amu.is_empty() {
+        frame.masses_amu = science::isotope_masses(&frame).unwrap_or_default();
+    }
+    frame
+}
+
+impl Backend for Native {
+    fn species(
+        &mut self,
+        job: SpeciesJob<'_>,
+        cancel: &Cancel,
+        minimum: &mut dyn FnMut(&SpeciesValue),
+    ) -> Result<SpeciesComputed, SpeciesFailure> {
+        let method = job.method;
+        self.compute_species(job, cancel, minimum, |frame| {
+            self.ordinary(frame, method, true, false, cancel)
+        })
     }
 
     fn transition(

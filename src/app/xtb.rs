@@ -1487,11 +1487,7 @@ impl App {
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
     fn xtb_atom_name(&self, atoms: &[Option<u64>], id: u64) -> (String, Option<String>) {
-        let index = atoms.iter().position(|a| *a == Some(id));
-        let atom = self.tab.doc.atom(id);
-        let element = atom.map_or("?", |a| a.element.as_str());
-        let label = index.map_or_else(|| element.to_owned(), |i| format!("{element}{}", i + 1));
-        (label, atom.and_then(|a| a.cip_label.clone()))
+        state::stereo_atom_name(&self.tab.doc, atoms, id)
     }
 }
 

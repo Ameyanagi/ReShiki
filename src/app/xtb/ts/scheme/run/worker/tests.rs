@@ -1,5 +1,6 @@
 use super::*;
 use reshiki::document::{Arrow, Point};
+use reshiki::models3d::{self, Hydrogen, Model3d, Placed};
 use reshiki::reactions::{Participant, Reaction, ts_plan::Side};
 
 fn drawing() -> (Document, Vec<u64>) {
@@ -169,6 +170,12 @@ enum Job {
     Transition(u64),
 }
 
+#[derive(Clone, Copy)]
+enum MockOptimization {
+    InvertedCentre,
+    IncompleteFrame,
+}
+
 #[derive(Default)]
 struct Fake {
     species: Vec<(usize, bool)>,
@@ -181,6 +188,7 @@ struct Fake {
     optimized_starts: usize,
     order: Vec<Job>,
     thermo: bool,
+    mock_optimization: Option<(usize, MockOptimization)>,
 }
 
 impl Backend for Fake {
@@ -189,7 +197,37 @@ impl Backend for Fake {
         job: SpeciesJob<'_>,
         cancel: &Cancel,
         minimum: &mut dyn FnMut(&SpeciesValue),
-    ) -> Result<SpeciesComputed, String> {
+    ) -> Result<SpeciesComputed, SpeciesFailure> {
+        self.species.push((job.index, job.frequencies));
+        self.order.push(Job::Species(job.index));
+        if let Some((index, mock)) = self.mock_optimization
+            && job.index == index
+        {
+            let native = Native {
+                executable: PathBuf::from("/this/path/must/not/be/executed"),
+                threads: 1,
+            };
+            return native.compute_species(job, cancel, minimum, |input| {
+                let mut frame = input.clone();
+                if matches!(mock, MockOptimization::InvertedCentre) {
+                    for xyz in &mut frame.positions_angstrom {
+                        xyz[0] = -xyz[0];
+                    }
+                }
+                let result = xtb::run::example_computed(-1., 1.)
+                    .to_calc_result(
+                        &frame,
+                        qcdata::Task::Optimize,
+                        &xtb::run::example_engine(),
+                        None,
+                    )
+                    .unwrap();
+                if matches!(mock, MockOptimization::IncompleteFrame) {
+                    frame.positions_angstrom.pop();
+                }
+                Ok((Arc::new(frame), Arc::new(result)))
+            });
+        }
         let SpeciesJob {
             index,
             method,
@@ -197,16 +235,18 @@ impl Backend for Fake {
             cached,
             ..
         } = job;
-        self.species.push((index, frequencies));
-        self.order.push(Job::Species(index));
         if frequencies && self.cancel_hessian == Some(index) {
             minimum(&cached.unwrap_or_else(|| species_value(index, method)));
             cancel.cancel();
-            return Err("Scheme calculation canceled".into());
+            return Err(SpeciesFailure::Calculation(
+                "Scheme calculation canceled".into(),
+            ));
         }
         if self.cancel_after_species || self.cancel_species == Some(index) {
             cancel.cancel();
-            return Err("Scheme calculation canceled".into());
+            return Err(SpeciesFailure::Calculation(
+                "Scheme calculation canceled".into(),
+            ));
         }
         Ok(SpeciesComputed {
             value: cached.unwrap_or_else(|| {
@@ -433,6 +473,98 @@ fn failed_ts_keeps_its_endpoint_energy_and_the_next_step_runs() {
     );
     assert!(values[1].1.barrier.is_some());
     assert_eq!(fake.transitions.len(), 2);
+}
+
+fn chiral_drawing() -> Document {
+    let mut doc = Document::default();
+    let carbon = doc.add_atom("C", Point::default());
+    let fluorine = doc.add_atom("F", Point::new(0., -28.));
+    let chlorine = doc.add_atom("Cl", Point::new(-28., 14.));
+    let bromine = doc.add_atom("Br", Point::new(28., 14.));
+    doc.add_bond(carbon, fluorine, 1, "wedge");
+    doc.add_bond(carbon, chlorine, 1, "plain");
+    doc.add_bond(carbon, bromine, 1, "plain");
+    let atoms = [carbon, fluorine, chlorine, bromine]
+        .into_iter()
+        .zip([[0., 0., 0.], [0., 1., 0.8], [-1., -0.5, 0.], [1., -0.5, 0.]])
+        .map(|(id, xyz)| Placed { id, xyz })
+        .collect();
+    let hydrogens = vec![Hydrogen {
+        parent: carbon,
+        xyz: [0., 0., -1.],
+    }];
+    doc.models.push(Model3d::new(
+        &doc,
+        atoms,
+        hydrogens,
+        models3d::ForceField::Mmff94s,
+    ));
+    models3d::require_version(&mut doc);
+    doc
+}
+
+#[test]
+fn rejected_species_stereo_fails_all_dependent_steps_and_keeps_the_queue_running() {
+    let mut request = distinct_request();
+    request.plan.species[1].calculation = chiral_drawing();
+    request.plan.species[1].label = "2".into();
+    request.options[0].free_energy = true;
+    let mut independent = request.plan.steps[1].clone();
+    independent.arrow += 1;
+    independent.reactants[0].species = 0;
+    let independent_arrow = independent.arrow;
+    request.plan.steps.push(independent);
+    request.options.push(StepOptions::default());
+    request.inputs.push(Ok(Some(input())));
+
+    for (mock, expected) in [
+        (
+            MockOptimization::InvertedCentre,
+            "2: Optimization changed the configuration at C1 (inverted).",
+        ),
+        (
+            MockOptimization::IncompleteFrame,
+            "2: The stereo check could not run:",
+        ),
+    ] {
+        let mut fake = Fake {
+            mock_optimization: Some((1, mock)),
+            thermo: true,
+            ..Default::default()
+        };
+        let mut state = State::default();
+        state.serial = request.serial;
+        state.running = true;
+        state.steps = vec![StepStatus::Pending; 3];
+        state.report.steps = vec![None; 3];
+        calculate(&request, &mut fake, &Cancel::default(), |kind| {
+            assert!(state.accept(Event {
+                serial: request.serial,
+                kind,
+            }));
+        })
+        .unwrap();
+        assert_eq!(fake.species, [(0, true), (1, true), (2, false)]);
+        assert_eq!(fake.transitions, [independent_arrow]);
+        assert_eq!(state.cache.len(), 2);
+        assert!(state.report.species(1).is_none());
+        assert!(
+            state
+                .cache
+                .iter()
+                .all(|v| v.key != request.plan.species[1].key)
+        );
+        for index in 0..2 {
+            assert!(
+                matches!(&state.steps[index], StepStatus::Failed(reason) if reason.starts_with(expected))
+            );
+            let value = state.step(index).unwrap();
+            assert!(value.energy.is_none() && value.gibbs.is_none() && value.barrier.is_none());
+        }
+        assert_eq!(state.steps[2], StepStatus::Done);
+        assert_eq!(state.step(2).unwrap().energy, Some(0.));
+        assert!(state.step(2).unwrap().barrier.is_some());
+    }
 }
 
 #[test]
