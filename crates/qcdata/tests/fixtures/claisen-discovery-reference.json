@@ -2,7 +2,7 @@
   "description": "Real GFN2-xTB discovery from the existing 14-atom Claisen fixture; computed model evidence, not experimental activation barriers.",
   "source_fixture": "crates/qcdata/tests/fixtures/claisen-irc.json",
   "source_sha256": "646a9a3a2e5a09611762fa02f18051e335afa0c58c11c424421c97db8296cd9c",
-  "reproduction_test": "app::xtb::ts::job::discovery::evidence::captured_claisen_retains_the_unexpected_conformer_and_searches_its_gap",
+  "reproduction_test": "app::xtb::ts::job::discovery::evidence::manual_captured_claisen_retains_the_unexpected_conformer_and_searches_its_gap",
   "recorded_date": "2026-11-28",
   "platform": "macOS arm64",
   "engine": {
