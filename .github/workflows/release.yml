@@ -241,7 +241,10 @@ jobs:
     # So can macOS arm64 nightlies since the xTB release: a 74-minute build, the
     # package checks and the release-mode nightly tests (cut off at 100 minutes
     # while compiling those tests in nightly 46031717178).
-    timeout-minutes: ${{ (startsWith(matrix.artifact, 'macos') || matrix.artifact == 'windows-x64') && 150 || 100 }}
+    # Windows arm64 xTB package checks alone took 56 minutes in PR #1495, before
+    # the shipped-executable, pipe, renderer and nightly tests. Give it the same
+    # 150-minute budget as Windows x64, keeping every check enabled.
+    timeout-minutes: ${{ (startsWith(matrix.artifact, 'macos') || startsWith(matrix.artifact, 'windows')) && 150 || 100 }}
     strategy:
       fail-fast: false
       matrix:
