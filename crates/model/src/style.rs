@@ -128,6 +128,11 @@ impl DrawingStyle {
             ..Default::default()
         }
     }
+    /// Molecular projections use one fixed-length drawing bond per 1.54 Å,
+    /// the conventional length of an ordinary carbon–carbon single bond.
+    pub fn molecular_units_per_angstrom(&self) -> f32 {
+        self.bond_length_world / 1.54
+    }
     pub fn set_bond_length(&mut self, points: f32) {
         self.bond_length_pt = points;
         self.bond_length_world = self.world(points);

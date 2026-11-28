@@ -671,7 +671,35 @@ pub fn baseline_with_stereo_groups(
     ids: &[u64],
     mut label: impl FnMut(StereoGroup) -> StereoGroup,
 ) -> String {
-    let mut text = crate::models3d::fingerprint(doc, ids);
+    // Fixed haptic points belong to the drawing, never to an atomic frame.
+    // Include their topology in freshness without adding frame atoms.
+    let mut members = ids.to_vec();
+    let mut attachments = Vec::new();
+    for a in doc.atoms.iter().filter(|a| {
+        a.attachment == Some(crate::attachments::Kind::MultiCenter)
+            && a.centroid.iter().all(|id| ids.contains(id))
+    }) {
+        if !members.contains(&a.id) {
+            members.push(a.id);
+        }
+        attachments.push((a.id, &a.centroid));
+    }
+    let mut text = crate::models3d::fingerprint(doc, &members);
+    if !attachments.is_empty() {
+        let topology: Vec<_> = attachments
+            .into_iter()
+            .map(|(id, targets)| {
+                (
+                    members.iter().position(|member| *member == id),
+                    targets
+                        .iter()
+                        .map(|id| members.iter().position(|member| member == id))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        text.push_str(&serde_json::to_string(&topology).unwrap_or_default());
+    }
     text.push('/');
     let mut groups = String::new();
     for atom in ids.iter().filter_map(|id| doc.atom(*id)) {
@@ -730,7 +758,12 @@ fn closed(doc: &Document, ids: &[u64]) -> bool {
         doc.atom(id).is_some()
             && crate::molecule_names::component(doc, id)
                 .into_iter()
-                .all(|atom| set.contains(&atom))
+                .all(|atom| {
+                    set.contains(&atom)
+                        || doc.atom(atom).is_some_and(|a| {
+                            a.attachment == Some(crate::attachments::Kind::MultiCenter)
+                        })
+                })
     })
 }
 
@@ -742,6 +775,10 @@ fn model_baseline(
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
     let molecule: HashSet<u64> = crate::molecule_names::component(doc, atom)
         .into_iter()
+        .filter(|id| {
+            doc.atom(*id)
+                .is_some_and(|a| a.attachment != Some(crate::attachments::Kind::MultiCenter))
+        })
         .collect();
     if ids.iter().copied().collect::<HashSet<_>>() != molecule {
         return Err(if ids.iter().all(|id| doc.atom(*id).is_some()) {
@@ -869,9 +906,12 @@ fn frame_atom_indices(atoms: &[Option<u64>]) -> HashMap<u64, usize> {
 fn linked_bonds(doc: &Document, linked: &HashMap<u64, usize>) -> Vec<(usize, usize, u8)> {
     doc.bonds
         .iter()
-        .filter_map(|bond| {
-            let (&a, &b) = (linked.get(&bond.a)?, linked.get(&bond.b)?);
-            (a != b).then_some((a.min(b), a.max(b), bond.order))
+        .flat_map(|bond| {
+            crate::attachments::bond_pairs(doc, bond).map(move |(a, b)| (a, b, bond.order))
+        })
+        .filter_map(|(a, b, order)| {
+            let (&a, &b) = (linked.get(&a)?, linked.get(&b)?);
+            (a != b).then_some((a.min(b), a.max(b), order))
         })
         .collect()
 }

@@ -99,6 +99,31 @@ def test_water_optimization_and_frequencies(worker):
     assert modes.thermo.pressure == 101325.0
 
 
+@pytest.mark.parametrize("method, expected_bridges", [("gfn2", 2), ("gxtb", 4)])
+def test_diruthenium_optimization_checks_method_dependent_hydride_topology(
+    worker, method, expected_bridges
+):
+    # Start from the stored four-bridge g-xTB geometry to keep the installed-wheel
+    # regression cheap. Full asymmetric-seed optimization/Hessian validation is
+    # covered by the native --release regression and the fixture provenance notes.
+    cluster = geometry("diruthenium_tetrahydride_gxtb")
+    result = xtb.optimize(cluster, method=method, unpaired=0, threads=1, max_steps=200)
+    assert result.converged
+    assert np.isfinite(result.energy)
+    np.testing.assert_array_equal(result.geometry.numbers, cluster.numbers)
+    assert result.geometry.charge == 0
+    assert result.geometry.multiplicity == 1
+    assert result.unpaired == 0
+    # Atoms 1–2 are Ru and 53–56 are the initial bridging H. A 2 Å cutoff
+    # separates the ~1.7 Å bridges from the ~2.8 Å detached metal contacts.
+    contacts = np.linalg.norm(
+        result.geometry.positions[52:56, None, :] - result.geometry.positions[None, :2, :],
+        axis=2,
+    )
+    assert np.all(np.min(contacts, axis=1) < 1.9)
+    assert np.count_nonzero(np.all(contacts < 2.0, axis=1)) == expected_bridges
+
+
 def test_deuterated_water_lowers_frequencies(worker):
     water = xtb.optimize(geometry("water")).geometry
     heavy_water = qc.Geometry.from_symbols(water.symbols, water.positions, isotopes=[0, 2, 2])

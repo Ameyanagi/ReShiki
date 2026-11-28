@@ -14,8 +14,6 @@ const SAME_SITE: f64 = 0.25;
 /// Fractional coordinates within this of 1 wrap to 0, so atoms on a cell
 /// face are kept once, on the origin's side.
 const WRAP: f64 = 1e-4;
-/// Drawing units per ångström, as MOL import scales 3D coordinates.
-const UNITS: f32 = 28.;
 /// The closest two lattice planes of a cell may be, in ångström.
 const MIN_SPACING: f64 = 0.5;
 /// The farthest cell a bond may reach, as a model stores bonds that leave it.
@@ -340,7 +338,69 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         warnings,
     } = structure;
     let links = links(&atoms, lattice.as_ref())?;
-    let arranged = arrange(&atoms, &links, lattice.as_ref());
+    let mut arranged = arrange(&atoms, &links, lattice.as_ref());
+    // Periodic drawings retain their distance-derived contact graph. A
+    // molecular haptic ligand uses the existing semantic attachment format.
+    let haptic = if lattice.is_none() {
+        super::haptic::contacts(&atoms, &arranged.xyz, &arranged.bonds)
+    } else {
+        vec![]
+    };
+    if !haptic.is_empty() {
+        let mut hydrogen_contacts: HashMap<usize, Vec<usize>> = HashMap::new();
+        for &(a, b) in &arranged.bonds {
+            for (hydrogen, neighbour) in [(a, b), (b, a)] {
+                if atoms.get(hydrogen).is_some_and(|atom| atom.element == "H") {
+                    hydrogen_contacts
+                        .entry(hydrogen)
+                        .or_default()
+                        .push(neighbour);
+                }
+            }
+        }
+        let mut hydride_bridges: HashMap<(usize, usize), usize> = HashMap::new();
+        for contacts in hydrogen_contacts.values() {
+            if let &[a, b] = contacts.as_slice()
+                && [a, b].into_iter().all(|id| {
+                    atoms
+                        .get(id)
+                        .is_some_and(|atom| elements::metal(&atom.element))
+                })
+            {
+                *hydride_bridges.entry((a.min(b), a.max(b))).or_default() += 1;
+            }
+        }
+        let metals: Vec<_> = atoms
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| elements::metal(&a.element))
+            .collect();
+        let attached: HashSet<_> = haptic.iter().map(|h| h.metal).collect();
+        let mut seen: HashSet<_> = arranged.bonds.iter().copied().collect();
+        for &(a, pa) in metals.iter().filter(|(a, _)| attached.contains(a)) {
+            for &(b, pb) in &metals {
+                // The salt rule must not erase the metal core of a molecular
+                // sandwich/half-sandwich cluster merely because it contains C.
+                // Multiple explicit mu2 hydride contacts already establish a
+                // bridged core; proximity alone does not justify another edge.
+                let pair = (a.min(b), a.max(b));
+                if a == b
+                    || hydride_bridges.get(&pair).is_some_and(|&count| count >= 2)
+                    || !seen.insert(pair)
+                {
+                    continue;
+                }
+                let d = length(sub(pa.xyz, pb.xyz));
+                if d > 0.4
+                    && d < elements::covalent_radius(&pa.element)
+                        + elements::covalent_radius(&pb.element)
+                        + TOLERANCE
+                {
+                    arranged.bonds.push((a.min(b), a.max(b)));
+                }
+            }
+        }
+    }
     let mut doc = Document::default();
     let ids: Vec<u64> = atoms
         .iter()
@@ -364,6 +424,24 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         if a != b && bonded.insert((a.min(b), a.max(b))) {
             doc.add_bond(a, b, order, "plain");
         }
+    }
+    let mut anchors = Vec::new();
+    for contact in haptic {
+        let Some(metal) = id(contact.metal) else {
+            continue;
+        };
+        let members: Vec<_> = contact.ring.iter().filter_map(|&i| id(i)).collect();
+        doc.bonds.retain(|b| {
+            !((b.a == metal && members.contains(&b.b)) || (b.b == metal && members.contains(&b.a)))
+        });
+        let anchor = doc.add_atom("*", Point::default());
+        if let Some(atom) = doc.atom_mut(anchor) {
+            atom.no_implicit = true;
+            atom.centroid = members;
+            atom.attachment = Some(crate::attachments::Kind::MultiCenter);
+        }
+        doc.add_bond(anchor, metal, 1, "plain");
+        anchors.push(anchor);
     }
     let narrow = |v: i32| i8::try_from(v).unwrap_or(0);
     let mut crossing: Vec<Crossing> = arranged
@@ -414,8 +492,9 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
     });
     let mut model =
         Model3d::new(&doc, placed, vec![], ForceField::default()).with_cell(&doc, cell, sites);
+    model.linked_atoms.extend(anchors);
     model.notes = warnings;
-    lay_out(&mut doc, &model);
+    models3d::lay_out_flat(&mut doc, &model);
     doc.models.push(model);
     models3d::require_version(&mut doc);
     if doc.models.iter().any(|m| m.cell.is_some()) {
@@ -579,31 +658,4 @@ fn fill(
         }
     }
     false
-}
-
-/// Place each 2D atom where the opening view shows it, keeping its depth, as
-/// MOL import keeps 3D coordinates: for a crystal at its 2D scale (see
-/// [`models3d::lay_out_flat`]), else at [`UNITS`] per ångström.
-fn lay_out(doc: &mut Document, model: &Model3d) {
-    if model.cell.is_some() {
-        models3d::lay_out_flat(doc, model);
-        return;
-    }
-    let positions: HashMap<u64, [f32; 3]> = models3d::viewed(doc, model).into_iter().collect();
-    let linear: HashSet<u64> = model
-        .atoms
-        .iter()
-        .map(|a| a.id)
-        .filter(|id| models3d::linear_carbon(doc, model, *id))
-        .collect();
-    for atom in &mut doc.atoms {
-        if let Some([x, y, z]) = positions.get(&atom.id) {
-            atom.position = Point::new(x * UNITS, -y * UNITS);
-            atom.depth = z * UNITS;
-        }
-        // A linear carbon, as CO₂'s, shows its C in 2D too.
-        if linear.contains(&atom.id) {
-            atom.display.carbons = Some(crate::atom_labels::Carbons::All);
-        }
-    }
 }

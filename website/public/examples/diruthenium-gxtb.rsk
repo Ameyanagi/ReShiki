@@ -1,0 +1,2032 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 33,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "Ru",
+      "position": {
+        "x": -18.751757,
+        "y": -18.642012
+      },
+      "depth": 18.57871,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 2,
+      "element": "Ru",
+      "position": {
+        "x": 18.771776,
+        "y": 18.881521
+      },
+      "depth": -18.57871,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 3,
+      "element": "C",
+      "position": {
+        "x": -57.84963,
+        "y": -62.778175
+      },
+      "depth": 19.505089,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 4,
+      "element": "C",
+      "position": {
+        "x": -26.903994,
+        "y": -72.74689
+      },
+      "depth": 41.171593,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": -24.079288,
+        "y": -47.262444
+      },
+      "depth": 70.55845,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 6,
+      "element": "C",
+      "position": {
+        "x": -53.16305,
+        "y": -21.573952
+      },
+      "depth": 67.12674,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 7,
+      "element": "C",
+      "position": {
+        "x": -74.06621,
+        "y": -31.089483
+      },
+      "depth": 35.607162,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 8,
+      "element": "C",
+      "position": {
+        "x": -72.67439,
+        "y": -83.74837
+      },
+      "depth": -11.838945,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 9,
+      "element": "C",
+      "position": {
+        "x": -3.9689026,
+        "y": -105.76628
+      },
+      "depth": 36.115208,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 10,
+      "element": "C",
+      "position": {
+        "x": 2.4390373,
+        "y": -49.116646
+      },
+      "depth": 101.13535,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 11,
+      "element": "C",
+      "position": {
+        "x": -62.053596,
+        "y": 7.849478
+      },
+      "depth": 93.52419,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 12,
+      "element": "C",
+      "position": {
+        "x": -108.544235,
+        "y": -13.394081
+      },
+      "depth": 23.774807,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 28,
+      "element": "C",
+      "position": {
+        "x": 53.959015,
+        "y": 21.604322
+      },
+      "depth": -66.60606,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 29,
+      "element": "C",
+      "position": {
+        "x": 74.17551,
+        "y": 32.003113
+      },
+      "depth": -34.92633,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 30,
+      "element": "C",
+      "position": {
+        "x": 57.148407,
+        "y": 63.647152
+      },
+      "depth": -19.603086,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 31,
+      "element": "C",
+      "position": {
+        "x": 26.378244,
+        "y": 72.71112
+      },
+      "depth": -41.914257,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 32,
+      "element": "C",
+      "position": {
+        "x": 24.479153,
+        "y": 46.701805
+      },
+      "depth": -70.92242,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 33,
+      "element": "C",
+      "position": {
+        "x": 63.793106,
+        "y": -8.08633
+      },
+      "depth": -92.361534,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 34,
+      "element": "C",
+      "position": {
+        "x": 108.7552,
+        "y": 15.109131
+      },
+      "depth": -22.250315,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 35,
+      "element": "C",
+      "position": {
+        "x": 71.10103,
+        "y": 85.37692
+      },
+      "depth": 11.623676,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 36,
+      "element": "C",
+      "position": {
+        "x": 2.7985573,
+        "y": 105.40277
+      },
+      "depth": -37.77417,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 37,
+      "element": "C",
+      "position": {
+        "x": -1.5617905,
+        "y": 47.585262
+      },
+      "depth": -101.9501,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 3,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 53,
+      "element": "H",
+      "position": {
+        "x": 10.271211,
+        "y": -27.893417
+      },
+      "depth": -17.850483,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 54,
+      "element": "H",
+      "position": {
+        "x": 26.443562,
+        "y": -4.324173
+      },
+      "depth": 22.140718,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 55,
+      "element": "H",
+      "position": {
+        "x": -10.239103,
+        "y": 28.128397
+      },
+      "depth": 17.857813,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 56,
+      "element": "H",
+      "position": {
+        "x": -26.416872,
+        "y": 4.553005
+      },
+      "depth": -22.144613,
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 57,
+      "element": "*",
+      "position": {
+        "x": -47.212433,
+        "y": -47.09019
+      },
+      "depth": 46.793808,
+      "centroid": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 58,
+      "element": "*",
+      "position": {
+        "x": 47.22806,
+        "y": 47.333504
+      },
+      "depth": -46.794426,
+      "centroid": [
+        28,
+        29,
+        30,
+        31,
+        32
+      ],
+      "attachment": "multi_center",
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 53,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 1,
+      "a": 1,
+      "b": 54,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 1,
+      "a": 1,
+      "b": 55,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 56,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 53,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 1,
+      "a": 2,
+      "b": 54,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 1,
+      "a": 2,
+      "b": 55,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 56,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 3,
+      "b": 4,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 3,
+      "b": 7,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 3,
+      "b": 8,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 1,
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 4,
+      "b": 9,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 1,
+      "a": 5,
+      "b": 6,
+      "order": 1,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 5,
+      "b": 10,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 1,
+      "a": 6,
+      "b": 7,
+      "order": 1,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 6,
+      "b": 11,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 7,
+      "b": 12,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 28,
+      "b": 29,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 28,
+      "b": 32,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 28,
+      "b": 33,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 1,
+      "a": 29,
+      "b": 30,
+      "order": 1,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 29,
+      "b": 34,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 1,
+      "a": 30,
+      "b": 31,
+      "order": 1,
+      "display": "bold",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 30,
+      "b": 35,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "projection": true,
+      "z_order": 0,
+      "a": 31,
+      "b": 32,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 31,
+      "b": 36,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 32,
+      "b": 37,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 57,
+      "b": 1,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 58,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": [],
+  "models": [
+    {
+      "display": "two_d",
+      "atoms": [
+        {
+          "id": 1,
+          "xyz": [
+            0.0040232,
+            -0.01126906,
+            -1.1868776
+          ]
+        },
+        {
+          "id": 2,
+          "xyz": [
+            0.00850502,
+            -0.0099423,
+            1.1884568
+          ]
+        },
+        {
+          "id": 3,
+          "xyz": [
+            1.2175535,
+            -0.02762152,
+            -2.976399
+          ]
+        },
+        {
+          "id": 4,
+          "xyz": [
+            0.3889167,
+            1.1409229,
+            -2.9856436
+          ]
+        },
+        {
+          "id": 5,
+          "xyz": [
+            -0.97578084,
+            0.7139153,
+            -2.9996293
+          ]
+        },
+        {
+          "id": 6,
+          "xyz": [
+            -0.9935501,
+            -0.7143464,
+            -2.9987357
+          ]
+        },
+        {
+          "id": 7,
+          "xyz": [
+            0.36007217,
+            -1.1751677,
+            -2.9841824
+          ]
+        },
+        {
+          "id": 8,
+          "xyz": [
+            2.699585,
+            -0.04615421,
+            -3.0802102
+          ]
+        },
+        {
+          "id": 9,
+          "xyz": [
+            0.86227614,
+            2.5449655,
+            -3.0951538
+          ]
+        },
+        {
+          "id": 10,
+          "xyz": [
+            -2.1637387,
+            1.5982227,
+            -3.117124
+          ]
+        },
+        {
+          "id": 11,
+          "xyz": [
+            -2.2031434,
+            -1.5689809,
+            -3.1150596
+          ]
+        },
+        {
+          "id": 12,
+          "xyz": [
+            0.7983255,
+            -2.5907056,
+            -3.0918062
+          ]
+        },
+        {
+          "id": 28,
+          "xyz": [
+            0.9852477,
+            0.7213772,
+            3.0014253
+          ]
+        },
+        {
+          "id": 29,
+          "xyz": [
+            -0.38093033,
+            1.142715,
+            2.987725
+          ]
+        },
+        {
+          "id": 30,
+          "xyz": [
+            -1.2049459,
+            -0.02887372,
+            2.9781086
+          ]
+        },
+        {
+          "id": 31,
+          "xyz": [
+            -0.3429654,
+            -1.1732352,
+            2.985347
+          ]
+        },
+        {
+          "id": 32,
+          "xyz": [
+            1.0090322,
+            -0.70681375,
+            2.9998817
+          ]
+        },
+        {
+          "id": 33,
+          "xyz": [
+            2.1694765,
+            1.6106946,
+            3.1186402
+          ]
+        },
+        {
+          "id": 34,
+          "xyz": [
+            -0.8598459,
+            2.5448897,
+            3.0968704
+          ]
+        },
+        {
+          "id": 35,
+          "xyz": [
+            -2.6868896,
+            -0.05296506,
+            3.0820193
+          ]
+        },
+        {
+          "id": 36,
+          "xyz": [
+            -0.77563345,
+            -2.590467,
+            3.093408
+          ]
+        },
+        {
+          "id": 37,
+          "xyz": [
+            2.2222147,
+            -1.556349,
+            3.116311
+          ]
+        },
+        {
+          "id": 53,
+          "xyz": [
+            0.9195873,
+            0.87867224,
+            -0.0030371
+          ]
+        },
+        {
+          "id": 54,
+          "xyz": [
+            -0.8826364,
+            0.9031058,
+            0.00333536
+          ]
+        },
+        {
+          "id": 55,
+          "xyz": [
+            -0.90733767,
+            -0.89941585,
+            0.00462275
+          ]
+        },
+        {
+          "id": 56,
+          "xyz": [
+            0.895394,
+            -0.92389196,
+            -0.00176013
+          ]
+        }
+      ],
+      "hydrogens": [
+        {
+          "parent": 8,
+          "xyz": [
+            3.1242838,
+            0.83587253,
+            -2.600572
+          ]
+        },
+        {
+          "parent": 8,
+          "xyz": [
+            3.1022432,
+            -0.9375859,
+            -2.5989506
+          ]
+        },
+        {
+          "parent": 8,
+          "xyz": [
+            3.0056167,
+            -0.05091267,
+            -4.1284575
+          ]
+        },
+        {
+          "parent": 9,
+          "xyz": [
+            0.15972447,
+            3.22218,
+            -2.6090505
+          ]
+        },
+        {
+          "parent": 9,
+          "xyz": [
+            1.8397229,
+            2.6531985,
+            -2.625169
+          ]
+        },
+        {
+          "parent": 9,
+          "xyz": [
+            0.9495504,
+            2.8331287,
+            -4.1448507
+          ]
+        },
+        {
+          "parent": 10,
+          "xyz": [
+            -3.0287502,
+            1.1400055,
+            -2.6375892
+          ]
+        },
+        {
+          "parent": 10,
+          "xyz": [
+            -1.9681103,
+            2.5622048,
+            -2.647732
+          ]
+        },
+        {
+          "parent": 10,
+          "xyz": [
+            -2.4026284,
+            1.7686865,
+            -4.1689944
+          ]
+        },
+        {
+          "parent": 11,
+          "xyz": [
+            -2.0314538,
+            -2.5369928,
+            -2.6445944
+          ]
+        },
+        {
+          "parent": 11,
+          "xyz": [
+            -3.0564291,
+            -1.0888678,
+            -2.6359437
+          ]
+        },
+        {
+          "parent": 11,
+          "xyz": [
+            -2.4463487,
+            -1.7346623,
+            -4.166705
+          ]
+        },
+        {
+          "parent": 12,
+          "xyz": [
+            1.7729638,
+            -2.722516,
+            -2.6220117
+          ]
+        },
+        {
+          "parent": 12,
+          "xyz": [
+            0.07935228,
+            -3.2495534,
+            -2.6044767
+          ]
+        },
+        {
+          "parent": 12,
+          "xyz": [
+            0.87801427,
+            -2.8824604,
+            -4.141114
+          ]
+        },
+        {
+          "parent": 33,
+          "xyz": [
+            1.970422,
+            2.57325,
+            2.64775
+          ]
+        },
+        {
+          "parent": 33,
+          "xyz": [
+            2.4066663,
+            1.7836051,
+            4.1704974
+          ]
+        },
+        {
+          "parent": 33,
+          "xyz": [
+            3.0367682,
+            1.1552765,
+            2.6406026
+          ]
+        },
+        {
+          "parent": 34,
+          "xyz": [
+            -1.8379459,
+            2.649093,
+            2.6273696
+          ]
+        },
+        {
+          "parent": 34,
+          "xyz": [
+            -0.9477919,
+            2.8329322,
+            4.146546
+          ]
+        },
+        {
+          "parent": 34,
+          "xyz": [
+            -0.16021578,
+            3.2248209,
+            2.6103644
+          ]
+        },
+        {
+          "parent": 35,
+          "xyz": [
+            -3.0860014,
+            -0.9470288,
+            2.6027281
+          ]
+        },
+        {
+          "parent": 35,
+          "xyz": [
+            -2.9928558,
+            -0.05663287,
+            4.13029
+          ]
+        },
+        {
+          "parent": 35,
+          "xyz": [
+            -3.115132,
+            0.8263289,
+            2.6004858
+          ]
+        },
+        {
+          "parent": 36,
+          "xyz": [
+            -0.05378815,
+            -3.2465534,
+            2.6065855
+          ]
+        },
+        {
+          "parent": 36,
+          "xyz": [
+            -0.85471666,
+            -2.8822384,
+            4.142756
+          ]
+        },
+        {
+          "parent": 36,
+          "xyz": [
+            -1.7494751,
+            -2.726323,
+            2.6230767
+          ]
+        },
+        {
+          "parent": 37,
+          "xyz": [
+            3.0730891,
+            -1.0734614,
+            2.6356544
+          ]
+        },
+        {
+          "parent": 37,
+          "xyz": [
+            2.4671497,
+            -1.7196337,
+            4.1679287
+          ]
+        },
+        {
+          "parent": 37,
+          "xyz": [
+            2.0539484,
+            -2.5256443,
+            2.647262
+          ]
+        }
+      ],
+      "frame_atom_order": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        22,
+        23,
+        24,
+        25
+      ],
+      "linked_atoms": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58
+      ],
+      "file_geometry": true,
+      "rotation": [
+        0.08276301,
+        0.800472,
+        0.026284123,
+        0.59304637
+      ],
+      "offset": {
+        "x": 0.015556335,
+        "y": 0.3212967
+      },
+      "size": 332.5393,
+      "style": "ball_stick",
+      "look": "flat",
+      "depth_fade": 0.35,
+      "perspective": 0.2,
+      "show_hydrogens": "all",
+      "background": "none",
+      "force_field": "mmff94s",
+      "drawn": {
+        "atoms": [
+          [
+            1,
+            {
+              "x": -18.751757,
+              "y": -18.642012
+            },
+            18.57871,
+            null
+          ],
+          [
+            2,
+            {
+              "x": 18.771776,
+              "y": 18.881521
+            },
+            -18.57871,
+            null
+          ],
+          [
+            3,
+            {
+              "x": -57.84963,
+              "y": -62.778175
+            },
+            19.505089,
+            null
+          ],
+          [
+            4,
+            {
+              "x": -26.903994,
+              "y": -72.74689
+            },
+            41.171593,
+            null
+          ],
+          [
+            5,
+            {
+              "x": -24.079288,
+              "y": -47.262444
+            },
+            70.55845,
+            null
+          ],
+          [
+            6,
+            {
+              "x": -53.16305,
+              "y": -21.573952
+            },
+            67.12674,
+            null
+          ],
+          [
+            7,
+            {
+              "x": -74.06621,
+              "y": -31.089483
+            },
+            35.607162,
+            null
+          ],
+          [
+            8,
+            {
+              "x": -72.67439,
+              "y": -83.74837
+            },
+            -11.838945,
+            null
+          ],
+          [
+            9,
+            {
+              "x": -3.9689026,
+              "y": -105.76628
+            },
+            36.115208,
+            null
+          ],
+          [
+            10,
+            {
+              "x": 2.4390373,
+              "y": -49.116646
+            },
+            101.13535,
+            null
+          ],
+          [
+            11,
+            {
+              "x": -62.053596,
+              "y": 7.849478
+            },
+            93.52419,
+            null
+          ],
+          [
+            12,
+            {
+              "x": -108.544235,
+              "y": -13.394081
+            },
+            23.774807,
+            null
+          ],
+          [
+            28,
+            {
+              "x": 53.959015,
+              "y": 21.604322
+            },
+            -66.60606,
+            null
+          ],
+          [
+            29,
+            {
+              "x": 74.17551,
+              "y": 32.003113
+            },
+            -34.92633,
+            null
+          ],
+          [
+            30,
+            {
+              "x": 57.148407,
+              "y": 63.647152
+            },
+            -19.603086,
+            null
+          ],
+          [
+            31,
+            {
+              "x": 26.378244,
+              "y": 72.71112
+            },
+            -41.914257,
+            null
+          ],
+          [
+            32,
+            {
+              "x": 24.479153,
+              "y": 46.701805
+            },
+            -70.92242,
+            null
+          ],
+          [
+            33,
+            {
+              "x": 63.793106,
+              "y": -8.08633
+            },
+            -92.361534,
+            null
+          ],
+          [
+            34,
+            {
+              "x": 108.7552,
+              "y": 15.109131
+            },
+            -22.250315,
+            null
+          ],
+          [
+            35,
+            {
+              "x": 71.10103,
+              "y": 85.37692
+            },
+            11.623676,
+            null
+          ],
+          [
+            36,
+            {
+              "x": 2.7985573,
+              "y": 105.40277
+            },
+            -37.77417,
+            null
+          ],
+          [
+            37,
+            {
+              "x": -1.5617905,
+              "y": 47.585262
+            },
+            -101.9501,
+            null
+          ],
+          [
+            53,
+            {
+              "x": 10.271211,
+              "y": -27.893417
+            },
+            -17.850483,
+            null
+          ],
+          [
+            54,
+            {
+              "x": 26.443562,
+              "y": -4.324173
+            },
+            22.140718,
+            null
+          ],
+          [
+            55,
+            {
+              "x": -10.239103,
+              "y": 28.128397
+            },
+            17.857813,
+            null
+          ],
+          [
+            56,
+            {
+              "x": -26.416872,
+              "y": 4.553005
+            },
+            -22.144613,
+            null
+          ],
+          [
+            57,
+            {
+              "x": -47.212433,
+              "y": -47.09019
+            },
+            46.793808,
+            null
+          ],
+          [
+            58,
+            {
+              "x": 47.22806,
+              "y": 47.333504
+            },
+            -46.794426,
+            null
+          ]
+        ],
+        "bonds": [
+          [
+            1,
+            53,
+            null,
+            [],
+            false
+          ],
+          [
+            1,
+            54,
+            null,
+            [],
+            false
+          ],
+          [
+            1,
+            55,
+            null,
+            [],
+            false
+          ],
+          [
+            1,
+            56,
+            null,
+            [],
+            false
+          ],
+          [
+            2,
+            53,
+            null,
+            [],
+            false
+          ],
+          [
+            2,
+            54,
+            null,
+            [],
+            false
+          ],
+          [
+            2,
+            55,
+            null,
+            [],
+            false
+          ],
+          [
+            2,
+            56,
+            null,
+            [],
+            false
+          ],
+          [
+            3,
+            4,
+            null,
+            [],
+            false
+          ],
+          [
+            3,
+            7,
+            null,
+            [],
+            false
+          ],
+          [
+            3,
+            8,
+            null,
+            [],
+            false
+          ],
+          [
+            4,
+            5,
+            null,
+            [],
+            false
+          ],
+          [
+            4,
+            9,
+            null,
+            [],
+            false
+          ],
+          [
+            5,
+            6,
+            null,
+            [],
+            false
+          ],
+          [
+            5,
+            10,
+            null,
+            [],
+            false
+          ],
+          [
+            6,
+            7,
+            null,
+            [],
+            false
+          ],
+          [
+            6,
+            11,
+            null,
+            [],
+            false
+          ],
+          [
+            7,
+            12,
+            null,
+            [],
+            false
+          ],
+          [
+            28,
+            29,
+            null,
+            [],
+            false
+          ],
+          [
+            28,
+            32,
+            null,
+            [],
+            false
+          ],
+          [
+            28,
+            33,
+            null,
+            [],
+            false
+          ],
+          [
+            29,
+            30,
+            null,
+            [],
+            false
+          ],
+          [
+            29,
+            34,
+            null,
+            [],
+            false
+          ],
+          [
+            30,
+            31,
+            null,
+            [],
+            false
+          ],
+          [
+            30,
+            35,
+            null,
+            [],
+            false
+          ],
+          [
+            31,
+            32,
+            null,
+            [],
+            false
+          ],
+          [
+            31,
+            36,
+            null,
+            [],
+            false
+          ],
+          [
+            32,
+            37,
+            null,
+            [],
+            false
+          ],
+          [
+            57,
+            1,
+            null,
+            [],
+            false
+          ],
+          [
+            58,
+            2,
+            null,
+            [],
+            false
+          ]
+        ],
+        "at": {
+          "x": 0.10548401,
+          "y": -0.18175507
+        }
+      }
+    }
+  ]
+}

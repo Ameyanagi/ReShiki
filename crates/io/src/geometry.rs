@@ -523,7 +523,7 @@ impl Prepared {
             ));
         }
         let ids = molecule.ids.clone();
-        let units = f64::from(source.drawing_style.bond_length_world) / 1.5;
+        let units = f64::from(source.drawing_style.molecular_units_per_angstrom());
         if !units.is_finite() || units <= 0. {
             return Err(Error::Coordinates("Invalid drawing scale"));
         }

@@ -27,7 +27,7 @@ one closest to the cell as crystallographers draw it wins (_b_ to the right,
 _c_ up and _a_ toward you,
 seen a little from above); otherwise a slight tilt off looking down _c_ or
 down the body diagonal, as for a rhombohedral primitive cell. Rutile's Ti no
-longer sits behind O. The drawing is at the usual scale (1.5 Å per bond
+longer sits behind O. The drawing is at the theme’s molecular scale (1.54 Å per bond
 length) or larger, so the shortest cell edge is at least 8 label heights and
 a bond between two labels, as CO₂'s C=O, at least 2.4. A plain XYZ file
 without a cell opens as a 3D model. If atom labels still overlap in the best

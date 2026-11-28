@@ -327,6 +327,42 @@ fn poscar_reads_cartesian_scaled_positions_and_selective_dynamics() {
 }
 
 #[test]
+fn molecular_xyz_and_pdb_use_the_theme_carbon_bond_scale() {
+    let pdb = [0., 1.54]
+        .into_iter()
+        .enumerate()
+        .map(|(index, x)| {
+            let serial = index + 1;
+            format!(
+                "HETATM{serial:5}  C{serial}  LIG A   1    {x:8.3}{:8.3}{:8.3}  1.00 10.00           C\n",
+                0., 0.
+            )
+        })
+        .collect::<String>();
+    for (format, text) in [
+        ("xyz", "2\nethane carbons\nC 0 0 0\nC 1.54 0 0\n"),
+        ("pdb", pdb.as_str()),
+    ] {
+        let (mut doc, _) = open(format, text);
+        let model = model(&doc).clone();
+        assert!(model.cell.is_none());
+        assert_eq!(model.atoms.len(), 2);
+        assert!((distance(model.atoms[0].xyz, model.atoms[1].xyz) - 1.54).abs() < 1e-6);
+        let drawn_length = |doc: &Document| {
+            let [a, b] = [&doc.atoms[0], &doc.atoms[1]];
+            a.position.distance(b.position).hypot(a.depth - b.depth)
+        };
+        assert!((drawn_length(&doc) - doc.drawing_style.bond_length_world).abs() < 1e-4);
+        for points in [14.4, 19.2, 28.8] {
+            doc.drawing_style.set_bond_length(points);
+            crate::models3d::lay_out_flat(&mut doc, &model);
+            assert!((drawn_length(&doc) - doc.drawing_style.bond_length_world).abs() < 1e-4);
+            assert_eq!(doc.models[0].atoms, model.atoms);
+        }
+    }
+}
+
+#[test]
 fn plain_xyz_is_a_molecule_without_a_cell() {
     let (doc, _) = open("xyz", WATER);
     let m = model(&doc);
@@ -669,8 +705,9 @@ fn the_model_frame_holds_the_cell() {
     let (doc, _) = open("cif", NACL);
     let m = model(&doc);
     let (lo, hi) = crate::models3d::frame(&doc, m).unwrap();
-    // The cell's diagonal is 9.77 Å at 28 drawing units per ångström.
-    assert!(hi.x - lo.x > 9.77 * 28. * 0.99, "{lo:?} {hi:?}");
+    // The cell's 9.77 Å diagonal uses the same physical ruler as molecules.
+    let units = doc.drawing_style.molecular_units_per_angstrom();
+    assert!(hi.x - lo.x > 9.77 * units * 0.99, "{lo:?} {hi:?}");
 }
 
 #[test]

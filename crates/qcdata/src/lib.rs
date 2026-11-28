@@ -10,6 +10,7 @@ mod frame;
 mod irc;
 mod molden;
 mod result;
+mod structure;
 /// Thermochemistry, IR spectra, and normal-mode geometries.
 pub mod vibrational;
 
@@ -33,6 +34,7 @@ pub use result::{
     TransitionStateId, TransitionStateMapping, TransitionStateRun, Vibrations, XtbConventions,
     XtbSettings,
 };
+pub use structure::{HydrideBridgeChanges, hydride_bridge_changes};
 
 /// Ångströms per bohr, CODATA 2022.
 pub const ANGSTROM_PER_BOHR: f64 = 0.529177210544;

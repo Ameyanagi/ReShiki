@@ -139,9 +139,16 @@ pub fn component(doc: &Document, seed: u64) -> Vec<u64> {
         return vec![];
     }
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
-    for bond in &doc.bonds {
-        adjacent.entry(bond.a).or_default().push(bond.b);
-        adjacent.entry(bond.b).or_default().push(bond.a);
+    // Fixed haptic targets belong to one molecule. A variable target list
+    // denotes alternatives and does not join its possible target molecules.
+    let targets = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.attachment == Some(crate::attachments::Kind::MultiCenter))
+        .flat_map(|atom| atom.centroid.iter().map(move |&id| (atom.id, id)));
+    for (a, b) in doc.bonds.iter().map(|bond| (bond.a, bond.b)).chain(targets) {
+        adjacent.entry(a).or_default().push(b);
+        adjacent.entry(b).or_default().push(a);
     }
     let mut found = HashSet::from([seed]);
     let mut pending = vec![seed];

@@ -372,6 +372,87 @@ fn hydrogens_on_metals_bridges_and_isotopes_stay_explicit() {
 }
 
 #[test]
+fn haptic_cluster_folds_only_methyl_hydrogens_and_keeps_the_source_frame() {
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    let (mut frame, _) = qcread::read_xyz_geometry(xyz).unwrap();
+    frame.isotopes = vec![0; frame.numbers.len()];
+    frame.isotopes[52] = 2;
+    let (mut doc, _) = drawing(&frame).unwrap();
+    let sources = doc.models[0].frame_sources();
+    let ids: Vec<_> = sources.iter().flatten().copied().collect();
+    let baseline = reshiki::science::baseline(&doc, &ids);
+    doc.science.frames.push(std::sync::Arc::new(frame.clone()));
+    for (id, baseline) in [(1, baseline.clone()), (2, format!("{baseline}/stale"))] {
+        doc.science.attachments.push(reshiki::science::Attachment {
+            id,
+            frame: frame.hash(),
+            atoms: sources.clone(),
+            baseline,
+        });
+    }
+    fold_calculation_hydrogens(&mut doc, &frame);
+    assert_eq!(doc.atoms.len(), 28, "26 real atoms and two haptic anchors");
+    assert_eq!(doc.models[0].atoms.len(), 26);
+    assert_eq!(doc.models[0].hydrogens.len(), 30);
+    assert_eq!(
+        doc.science.attachments[0].freshness(&doc),
+        reshiki::science::Freshness::Current
+    );
+    assert_eq!(
+        doc.science.attachments[1].freshness(&doc),
+        reshiki::science::Freshness::Stale
+    );
+    assert_eq!(
+        doc.science.attachments[0].atoms,
+        doc.models[0].frame_sources()
+    );
+    assert_eq!(doc.science.frames[0].hash(), frame.hash());
+    for (index, source) in sources.iter().enumerate().skip(52).take(4) {
+        let id = source.unwrap();
+        assert_eq!(doc.models[0].frame_sources()[index], Some(id));
+        assert_eq!(
+            doc.bonds.iter().filter(|b| b.a == id || b.b == id).count(),
+            2
+        );
+    }
+    assert_eq!(doc.atom(sources[52].unwrap()).unwrap().isotope, 2);
+    assert_eq!(
+        doc.atoms.iter().filter(|a| a.attachment.is_some()).count(),
+        2
+    );
+    let launch = reshiki::science::launch(&doc, sources[0].unwrap(), 0, 1).unwrap();
+    assert_eq!(launch.frame.numbers, frame.numbers);
+    assert_eq!(launch.frame.isotopes, frame.isotopes);
+    assert!(
+        launch
+            .frame
+            .positions_angstrom
+            .iter()
+            .zip(&frame.positions_angstrom)
+            .all(|(a, b)| a.map(|x| x as f32) == b.map(|x| x as f32))
+    );
+    doc.validate().unwrap();
+}
+
+#[test]
+fn selected_model_hydrogen_folding_preserves_boundary_bonds_and_other_objects() {
+    let xyz = include_str!("../../../tests/fixtures/xtb/diruthenium_tetrahydride_gxtb.xyz");
+    let (frame, _) = qcread::read_xyz_geometry(xyz).unwrap();
+    let (mut doc, _) = drawing(&frame).unwrap();
+    let source = doc.models[0].frame_sources()[7].unwrap();
+    let outside = doc.add_atom("O", reshiki::document::Point::new(500., 0.));
+    doc.add_bond(source, outside, 1, "plain");
+    let boundary = doc.bonds.last().unwrap().clone();
+    let other = doc.atom(outside).unwrap().clone();
+    fold_model_hydrogens(&mut doc, 0, &frame);
+    assert_eq!(doc.models[0].hydrogens.len(), 30);
+    assert_eq!(doc.atom(outside), Some(&other));
+    assert_eq!(doc.bonds.last(), Some(&boundary));
+    assert!(doc.atom(source).is_some());
+    doc.validate().unwrap();
+}
+
+#[test]
 fn ensemble_uses_file_order_with_folded_hydrogens() {
     let text = "3\n -5.100000\nH 0.97 0 0\nO 0 0 0\nH -0.30 0.90 0\n\
                 3\n -5.000000\nH 0.96 0 0\nO 0 0 0\nH -0.24 0.93 0\n";
@@ -438,6 +519,58 @@ fn records_split_on_their_delimiters() {
     assert_eq!(record(text, 1).as_deref(), Some("\nb\nM  END\n$$$$\n"));
     assert_eq!(record(text, 2).as_deref(), Some("c\nM  END\n"));
     assert_eq!(record(text, 3), None);
+}
+
+#[test]
+fn a_3d_sdf_ensemble_uses_the_theme_scale_and_keeps_physical_coordinates() {
+    let record = |index: usize, z: f64, energy: f64| {
+        let atoms = [
+            ("C", [0., 0., 0.]),
+            ("C", [1.54, 0., z]),
+            ("H", [-0.36, 1.03, 0.]),
+            ("H", [-0.36, -0.51, 0.89]),
+            ("H", [-0.36, -0.51, -0.89]),
+            ("H", [1.90, -1.03, 0.]),
+            ("H", [1.90, 0.51, 0.89]),
+            ("H", [1.90, 0.51, -0.89]),
+        ]
+        .into_iter()
+        .map(|(element, [x, y, z])| {
+            format!("{x:10.4}{y:10.4}{z:10.4} {element:<3} 0  0  0  0  0  0  0  0  0  0  0  0\n")
+        })
+        .collect::<String>();
+        let bonds = [(1, 2), (1, 3), (1, 4), (1, 5), (2, 6), (2, 7), (2, 8)]
+            .into_iter()
+            .map(|(a, b)| format!("{a:3}{b:3}  1  0\n"))
+            .collect::<String>();
+        format!(
+            "ethane conformer {index}\n{:<20}3D\n\n  8  7  0  0  0  0  0  0  0  0999 V2000\n\
+             {atoms}{bonds}M  END\n> <ENERGY_HARTREE>\n{energy}\n\n$$$$\n",
+            "  ReShiki"
+        )
+    };
+    let conformers = record(1, 0., -2.) + &record(2, 0.1, -1.);
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    open(&mut app, "ethane.sdf", &conformers);
+    send(&mut app, Action::Choose(Choice::Lowest));
+    send(&mut app, Action::Keep(true));
+    send(&mut app, Action::Import);
+    assert!(!app.error, "{}", app.status);
+    assert!(app.frames_import.is_none());
+    assert_eq!(&model(&app)[..2], &[[0., 0., 0.], [1.54, 0., 0.]]);
+    let doc = &app.tab.doc;
+    let [a, b] = [&doc.atoms[0], &doc.atoms[1]];
+    let projected = a.position.distance(b.position).hypot(a.depth - b.depth);
+    assert!((projected - doc.drawing_style.bond_length_world).abs() < 1e-4);
+    let result = &doc.science.results[0].result;
+    assert_eq!(result.task, QcTask::Conformers);
+    let trajectory = result.trajectory.as_ref().unwrap();
+    assert_eq!(trajectory.energies_hartree, [-2., -1.]);
+    assert_eq!(
+        &trajectory.positions_angstrom[..6],
+        &[0., 0., 0., 1.54, 0., 0.]
+    );
 }
 
 #[test]

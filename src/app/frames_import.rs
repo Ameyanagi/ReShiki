@@ -1092,23 +1092,96 @@ pub(super) fn drawing(frame: &Frame) -> Result<(reshiki::document::Document, Vec
     for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
         xyz.push_str(&format!("{number} {x} {y} {z}\n"));
     }
-    reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())
+    let (mut doc, warnings) = reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())?;
+    if let Some(model) = doc
+        .models
+        .first()
+        .filter(|m| m.atoms.len() == frame.numbers.len())
+    {
+        let isotopes: Vec<_> = model
+            .atoms
+            .iter()
+            .zip(&frame.isotopes)
+            .map(|(atom, isotope)| (atom.id, *isotope))
+            .collect();
+        for (id, isotope) in isotopes {
+            if let Some(atom) = doc.atom_mut(id) {
+                atom.isotope = u32::from(isotope);
+            }
+        }
+    }
+    Ok((doc, warnings))
 }
 
 /// Keep the XYZ reader's perceived bonds, but fold ordinary bonded hydrogens
 /// into atom labels and keep their original 3D positions.
 pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, frame: &Frame) {
+    fold_model_hydrogens(doc, 0, frame);
+}
+
+/// Fold only this imported model, retaining every unrelated drawing object,
+/// model and calculation attachment in the containing document.
+pub(super) fn fold_model_hydrogens(
+    doc: &mut reshiki::document::Document,
+    index: usize,
+    frame: &Frame,
+) {
     use reshiki::chemistry::{document::drawing_graph, hydrogens};
     use std::collections::{HashMap, HashSet};
 
-    if doc.models.len() != 1 || doc.atoms.len() != frame.numbers.len() {
+    let Some(mut model) = doc
+        .models
+        .get(index)
+        .filter(|m| m.is_file_derived())
+        .cloned()
+    else {
+        return;
+    };
+    if model.atoms.len() != frame.numbers.len() {
         // The XYZ reader can leave overlapping sites out.
         return;
     }
-    for (atom, &isotope) in doc.atoms.iter_mut().zip(&frame.isotopes) {
-        atom.isotope = u32::from(isotope);
-    }
-    let Ok(graph) = drawing_graph(doc) else {
+    let sources = model.frame_sources();
+    let Some(order) = sources.iter().copied().collect::<Option<Vec<_>>>() else {
+        return;
+    };
+    let indices: HashMap<_, _> = order.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+    let linked: HashSet<_> = model.linked_atoms.iter().copied().collect();
+    let by_id: HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
+    let Some(atoms) = order
+        .iter()
+        .map(|id| by_id.get(id).map(|a| (*a).clone()))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return;
+    };
+    let mut part = reshiki::document::Document {
+        version: doc.version,
+        drawing_style: doc.drawing_style.clone(),
+        atom_labels: doc.atom_labels.clone(),
+        atoms,
+        bonds: doc
+            .bonds
+            .iter()
+            .filter(|b| linked.contains(&b.a) && linked.contains(&b.b))
+            .cloned()
+            .collect(),
+        ..Default::default()
+    };
+    part.atoms.extend(
+        doc.atoms
+            .iter()
+            .filter(|a| linked.contains(&a.id) && !indices.contains_key(&a.id))
+            .cloned(),
+    );
+    // Dummy attachment nodes are only a topology proxy for RemoveHs and
+    // stereo retention here; no identifier or valence claim is made from it.
+    let proxy = if reshiki::attachments::present(&part) {
+        reshiki::attachments::interchange_graph(&part).ok()
+    } else {
+        None
+    };
+    let Ok(graph) = drawing_graph(proxy.as_ref().unwrap_or(&part)) else {
         return;
     };
     let protected_atoms =
@@ -1130,7 +1203,26 @@ pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, 
                 }),
             )
             .collect();
-    let stereo = calculation_stereo::perceive(&graph, frame);
+    let mut positions = frame.positions_angstrom.clone();
+    for anchor in part.atoms.iter().skip(positions.len()) {
+        let Some(members) = anchor
+            .centroid
+            .iter()
+            .map(|id| frame.positions_angstrom.get(*indices.get(id)?).copied())
+            .collect::<Option<Vec<_>>>()
+        else {
+            return;
+        };
+        if members.is_empty() {
+            return;
+        }
+        let sum = members
+            .iter()
+            .copied()
+            .fold([0.; 3], |[a, b, c], [x, y, z]| [a + x, b + y, c + z]);
+        positions.push(sum.map(|value| value / members.len() as f64));
+    }
+    let stereo = calculation_stereo::perceive(&graph, &positions);
     let Ok(folded) = hydrogens::remove(&hydrogens::Input {
         metadata: stereo.metadata,
         directions: stereo.directions,
@@ -1144,16 +1236,16 @@ pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, 
         return;
     };
     let kept = folded.kept_atoms.len();
-    let removed = doc.atoms.len() - kept;
+    let removed = part.atoms.len() - kept;
     if removed > kept * 4 {
         return;
     }
     let kept_ids: HashSet<_> = folded
         .kept_atoms
         .iter()
-        .filter_map(|&i| doc.atoms.get(i).map(|atom| atom.id))
+        .filter_map(|&i| part.atoms.get(i).map(|atom| atom.id))
         .collect();
-    let parents: HashMap<_, _> = doc
+    let parents: HashMap<_, _> = part
         .bonds
         .iter()
         .filter_map(
@@ -1164,20 +1256,61 @@ pub(super) fn fold_calculation_hydrogens(doc: &mut reshiki::document::Document, 
             },
         )
         .collect();
-    doc.atoms.retain(|atom| kept_ids.contains(&atom.id));
-    for (atom, chemistry) in doc.atoms.iter_mut().zip(&folded.graph.atoms) {
+    let current_attachments: HashSet<_> = doc
+        .science
+        .attachments
+        .iter()
+        .filter(|a| a.atoms == sources && a.freshness(doc) == reshiki::science::Freshness::Current)
+        .map(|a| a.id)
+        .collect();
+    part.atoms.retain(|atom| kept_ids.contains(&atom.id));
+    for (atom, chemistry) in part.atoms.iter_mut().zip(&folded.graph.atoms) {
         atom.explicit_h = u32::from(chemistry.explicit_hydrogens);
         atom.label_h = atom.explicit_h;
     }
-    doc.bonds
+    part.bonds
         .retain(|b| kept_ids.contains(&b.a) && kept_ids.contains(&b.b));
-    if removed > 0
-        && let Some(mut model) = doc.models.pop()
-    {
-        model.fold_file_hydrogens(doc, &parents);
-        doc.models.push(model);
+    if removed > 0 {
+        model.fold_file_hydrogens(&part, &parents);
     }
-    calculation_stereo::draw(doc, &folded.graph, &folded.metadata);
+    calculation_stereo::draw(&mut part, &folded.graph, &folded.metadata);
+    let mut atoms: HashMap<_, _> = part.atoms.into_iter().map(|a| (a.id, a)).collect();
+    doc.atoms.retain_mut(|a| {
+        if !linked.contains(&a.id) {
+            return true;
+        }
+        if let Some(updated) = atoms.remove(&a.id) {
+            *a = updated;
+            true
+        } else {
+            false
+        }
+    });
+    let key = |a: u64, b: u64| (a.min(b), a.max(b));
+    let mut bonds: HashMap<_, _> = part.bonds.into_iter().map(|b| (key(b.a, b.b), b)).collect();
+    doc.bonds.retain_mut(|b| {
+        if let Some(updated) = bonds.remove(&key(b.a, b.b)) {
+            *b = updated;
+        }
+        !parents.contains_key(&b.a) && !parents.contains_key(&b.b)
+    });
+    let ids: Vec<_> = model.frame_sources().into_iter().flatten().collect();
+    if let Some(slot) = doc.models.get_mut(index) {
+        *slot = model;
+    }
+    if !current_attachments.is_empty() {
+        let baseline = reshiki::science::baseline(doc, &ids);
+        for attachment in &mut doc.science.attachments {
+            if current_attachments.contains(&attachment.id) {
+                for atom in &mut attachment.atoms {
+                    if atom.is_some_and(|id| parents.contains_key(&id)) {
+                        *atom = None;
+                    }
+                }
+                attachment.baseline.clone_from(&baseline);
+            }
+        }
+    }
 }
 
 /// Keep up to 32 frames of `file`, the lowest in energy first, as an

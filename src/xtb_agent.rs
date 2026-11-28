@@ -1,7 +1,10 @@
 //! The worker-backed calculation hook for the CLI and MCP hosts.
 use crate::{
     XTB_NEAR_DEGENERATE,
-    qcdata::{ANGSTROM_PER_BOHR, Convergence, DEBYE_PER_E_BOHR, Frame, XtbMethod},
+    qcdata::{
+        ANGSTROM_PER_BOHR, Convergence, DEBYE_PER_E_BOHR, Frame, HydrideBridgeChanges, XtbMethod,
+        hydride_bridge_changes,
+    },
     updates::CURRENT_VERSION,
 };
 use reshiki_agent::ops::{
@@ -302,7 +305,7 @@ fn optimization(
     frame: &Frame,
     method: XtbMethod,
     outcome: &Outcome,
-) -> Result<Optimization, String> {
+) -> Result<(Optimization, Option<HydrideBridgeChanges>), String> {
     let positions: Vec<_> = outcome
         .positions
         .as_chunks::<3>()
@@ -320,12 +323,20 @@ fn optimization(
         &positions,
     )
     .map_err(|error| error.to_string())?;
-    Ok(Optimization {
-        converged: outcome.status == Status::Converged,
-        steps: outcome.steps,
-        rmsd_angstrom,
-        xyz: xyz(&frame.numbers, &positions, method)?,
-    })
+    let output = Frame {
+        positions_angstrom: positions.clone(),
+        ..frame.clone()
+    };
+    let changes = hydride_bridge_changes(frame, &output);
+    Ok((
+        Optimization {
+            converged: outcome.status == Status::Converged,
+            steps: outcome.steps,
+            rmsd_angstrom,
+            xyz: xyz(&frame.numbers, &positions, method)?,
+        },
+        changes,
+    ))
 }
 
 fn xyz(numbers: &[u8], positions: &[[f64; 3]], method: XtbMethod) -> Result<String, String> {
@@ -349,17 +360,20 @@ fn build_value(
     frame: &Frame,
     computed: &Computed,
     engine: protocol::Engine,
-    optimization: Option<Optimization>,
+    optimization: Option<(Optimization, Option<HydrideBridgeChanges>)>,
     seconds: f64,
 ) -> Calculated {
     let mut warnings = Vec::new();
-    if let Some(optimization) = &optimization
+    if let Some((optimization, _)) = &optimization
         && !optimization.converged
     {
         warnings.push(format!(
             "The optimization did not converge in {} steps.",
             optimization.steps
         ));
+    }
+    if let Some((_, Some(changes))) = &optimization {
+        warnings.push(changes.warning());
     }
     if computed.near_degenerate {
         warnings.push(XTB_NEAR_DEGENERATE.into());
@@ -417,7 +431,7 @@ fn build_value(
                 .charges
                 .as_ref()
                 .map(|charges| charges.values.iter().map(|&q| round(q, 10_000.0)).collect()),
-            optimization,
+            optimization: optimization.map(|(value, _)| value),
             frequencies,
             seconds,
         },

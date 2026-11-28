@@ -134,7 +134,8 @@ impl Model3d {
             .collect();
         doc.bonds
             .iter()
-            .filter_map(|b| Some([*index.get(&b.a)?, *index.get(&b.b)?]))
+            .flat_map(|b| crate::attachments::bond_pairs(doc, b))
+            .filter_map(|(a, b)| Some([*index.get(&a)?, *index.get(&b)?]))
             .collect()
     }
 

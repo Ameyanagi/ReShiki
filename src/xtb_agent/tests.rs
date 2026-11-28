@@ -108,12 +108,15 @@ fn calculated_value_rounds_properties_and_adds_thermochemical_corrections() {
             source: engine.source,
             rev: engine.rev,
         },
-        Some(Optimization {
-            converged: false,
-            steps: 500,
-            rmsd_angstrom: 0.0,
-            xyz: String::new(),
-        }),
+        Some((
+            Optimization {
+                converged: false,
+                steps: 500,
+                rmsd_angstrom: 0.0,
+                xyz: String::new(),
+            },
+            None,
+        )),
         0.25,
     );
     assert_eq!(result.value.method, "gfn2");
@@ -143,6 +146,51 @@ fn calculated_value_rounds_properties_and_adds_thermochemical_corrections() {
             "1 imaginary frequencies: the geometry is not a minimum.",
         ]
     );
+}
+
+#[test]
+fn converged_cli_optimization_warns_when_metal_hydride_bridging_changes() {
+    let frame = crate::qc_input::parse_xyz(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/xtb/diruthenium_tetrahydride_seed.xyz"
+    )))
+    .unwrap();
+    let output = crate::qc_input::parse_xyz(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/xtb/diruthenium_tetrahydride_gfn2.xyz"
+    )))
+    .unwrap();
+    let outcome = Outcome {
+        status: Status::Converged,
+        positions: output
+            .positions_angstrom
+            .as_flattened()
+            .iter()
+            .map(|coordinate| coordinate / ANGSTROM_PER_BOHR)
+            .collect(),
+        energy: -10.,
+        gradient: vec![0.; frame.numbers.len() * 3],
+        steps: 25,
+        evaluations: 26,
+        hessian_evaluations: 0,
+        method: Default::default(),
+        methods: vec![],
+        energies: vec![-9., -10.],
+    };
+    let optimized = optimization(&frame, XtbMethod::Gfn2Xtb, &outcome).unwrap();
+    let computed = reshiki_xtb_jobs::run::example_computed(-10., 2.);
+    let calculated = build_value(
+        CalcTask::Optimize,
+        &frame,
+        &computed,
+        reshiki_xtb_jobs::run::example_engine(),
+        Some(optimized),
+        0.25,
+    );
+    assert!(calculated.value.optimization.unwrap().converged);
+    assert_eq!(calculated.value.energy_hartree, -10.);
+    assert_eq!(calculated.warnings.len(), 1);
+    assert!(calculated.warnings[0].contains("2 hydrogens lost a bridging metal contact"));
 }
 
 #[test]

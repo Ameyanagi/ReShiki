@@ -224,12 +224,31 @@ impl App {
                         return Task::none();
                     }
                     let before = self.tab.doc.clone();
+                    let was_projected = before
+                        .models
+                        .get(index)
+                        .is_some_and(|model| model.layout == Layout::View);
+                    let drawn = before
+                        .models
+                        .get(index)
+                        .filter(|model| {
+                            model.layout == Layout::Original
+                                && layout == Layout::View
+                                && model.drawn.is_some()
+                        })
+                        .map(|model| models3d::Drawn::of(&before, model));
                     if let Some(model) = self.tab.doc.models.get_mut(index) {
                         model.layout = layout;
+                        if let Some(drawn) = drawn {
+                            // Original is the editable drawing, so its cached
+                            // snapshot must include edits since conversion.
+                            model.drawn = Some(drawn);
+                        }
                     }
                     // Original drawing always means the drawn layout is in
                     // place, so a flattened drawing comes back in this step.
-                    let restored = layout == Layout::Original
+                    let restored = was_projected
+                        && layout == Layout::Original
                         && models3d::restore_drawing(&mut self.tab.doc, index);
                     if self.tab.doc != before {
                         self.commit_model(before, false);
@@ -574,12 +593,42 @@ impl App {
                 return Task::none();
             };
             let previous = model.display;
+            let native_file = self
+                .tab
+                .path
+                .as_deref()
+                .and_then(std::path::Path::extension)
+                .and_then(|extension| extension.to_str())
+                .is_some_and(reshiki::compatibility::is_native_extension);
+            if display == Display::TwoD
+                && previous == Display::ThreeD
+                && model.layout == Layout::Original
+                && model.drawn.is_none()
+                && model.is_file_derived()
+                && !native_file
+                && !self.model_stale(index)
+                && model.cell.is_none()
+            {
+                self.convert_imported_drawing(index);
+                return Task::none();
+            }
             // 2D is the drawn layout, brought back if it was flattened. The
             // current display again changes nothing, so a resized frame stays.
-            let restore = display == Display::TwoD && model.drawn.is_some();
+            let restore =
+                display == Display::TwoD && model.layout == Layout::View && model.drawn.is_some();
             if previous != display || restore {
+                if model.layout == Layout::Original
+                    && (model.drawn.is_some() || previous == Display::Both)
+                {
+                    let drawn = models3d::Drawn::of(&self.tab.doc, model);
+                    if let Some(model) = self.tab.doc.models.get_mut(index) {
+                        model.drawn = Some(drawn);
+                    }
+                }
                 if display == Display::TwoD {
-                    models3d::restore_drawing(&mut self.tab.doc, index);
+                    if restore {
+                        models3d::restore_drawing(&mut self.tab.doc, index);
+                    }
                     if let Some(model) = self.tab.doc.models.get_mut(index) {
                         model.layout = Layout::Original;
                     }
@@ -889,7 +938,7 @@ impl App {
         if !self.idle() {
             return;
         }
-        let Some((atoms, Some(index))) = self.selected_model() else {
+        let Some((mut atoms, Some(index))) = self.selected_model() else {
             self.status = "Select a molecule with a 3D model to flatten it".into();
             self.error = true;
             return;
@@ -904,26 +953,67 @@ impl App {
         }
         let origin = models3d::frame_origin(&self.tab.doc, model);
         // The drawn layout stays on the model, for Original drawing.
-        let drawn = model
-            .drawn
-            .clone()
-            .unwrap_or_else(|| models3d::Drawn::of(&self.tab.doc, model));
-        let flat = if model.cell.is_some() {
-            // A crystal's distances are drawing data, not chemical stereo.
-            // Flatten its retained coordinates directly, keeping the drawing
-            // centre instead of preparing a molecular identity.
-            let mut doc = self.tab.doc.clone();
-            let centre = reshiki::editing::center(&doc, &atoms);
-            models3d::lay_out_flat(&mut doc, model);
-            let projected = reshiki::editing::center(&doc, &atoms);
-            doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
-            Ok(doc)
+        let drawn = if model.layout == Layout::Original {
+            models3d::Drawn::of(&self.tab.doc, model)
         } else {
-            // Existing coordinates: radicals stay as drawn, no cap hydrogens.
-            Prepared::new(&self.tab.doc, &atoms)
-                .or_else(|_| Prepared::relaxed(&self.tab.doc, &atoms))
+            model
+                .drawn
+                .clone()
+                .unwrap_or_else(|| models3d::Drawn::of(&self.tab.doc, model))
+        };
+        let direct_projection = model.cell.is_some() || {
+            let linked: std::collections::HashSet<_> = model.linked_atoms.iter().copied().collect();
+            let mut metals = 0;
+            self.tab
+                .doc
+                .atoms
+                .iter()
+                .filter(|a| linked.contains(&a.id))
+                .any(|a| {
+                    metals += usize::from(reshiki::joining::coordination_metal(a));
+                    metals >= 2 || a.attachment == Some(reshiki::attachments::Kind::MultiCenter)
+                })
+        };
+        let prepared = if direct_projection {
+            None
+        } else {
+            match Prepared::new(&self.tab.doc, &atoms) {
+                // These are validated, nonempty source links. A selection
+                // failure means the imported frame spans separate molecules;
+                // relaxed preparation has the same one-component requirement.
+                Err(error @ geometry::Error::Selection(_)) => {
+                    if model.is_file_derived() {
+                        None
+                    } else {
+                        Some(Err(error))
+                    }
+                }
+                result => Some(result.or_else(|_| Prepared::relaxed(&self.tab.doc, &atoms))),
+            }
+        };
+        let flat = if let Some(prepared) = prepared {
+            // Connected molecules retain ordinary stereo preparation.
+            prepared
                 .and_then(|prepared| prepared.flattened(model))
                 .map_err(|error| error.to_string())
+        } else {
+            // Crystals, coordination complexes and imported assemblies retain
+            // their coordinate topology without an ordinary molecular identity.
+            let mut doc = self.tab.doc.clone();
+            fold_imported_model_hydrogens(&mut doc, index, model);
+            let model = doc
+                .models
+                .get(index)
+                .cloned()
+                .ok_or("Missing imported model".to_owned());
+            model.map(|model| {
+                atoms = model.linked_ids(&doc);
+                let centre = reshiki::editing::center(&doc, &atoms);
+                models3d::lay_out_flat(&mut doc, &model);
+                let projected = reshiki::editing::center(&doc, &atoms);
+                doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
+                doc
+            })
         }
         .and_then(|mut doc| {
             // The model keeps its place for showing it in 3D again.
@@ -957,6 +1047,48 @@ impl App {
                 self.status = format!("2D layout not flattened: {error}");
                 self.error = true;
             }
+        }
+    }
+
+    fn convert_imported_drawing(&mut self, index: usize) {
+        let before = self.tab.doc.clone();
+        let Some(model) = before.models.get(index) else {
+            return;
+        };
+        let origin = models3d::frame_origin(&before, model);
+        let mut doc = before.clone();
+        let coordination = models3d::can_draw_coordination_diagram(&before, model);
+        if coordination {
+            fold_imported_model_hydrogens(&mut doc, index, model);
+        }
+        let Some(model) = doc.models.get(index).cloned() else {
+            return;
+        };
+        let atoms = model.linked_ids(&doc);
+        let centre = reshiki::editing::center(&doc, &atoms);
+        if !coordination || !models3d::lay_out_coordination_diagram(&mut doc, &model) {
+            models3d::lay_out_flat(&mut doc, &model);
+        }
+        let arranged = reshiki::editing::center(&doc, &atoms);
+        doc.translate(&atoms, centre.x - arranged.x, centre.y - arranged.y);
+        if let Some(origin) = origin {
+            models3d::keep_place(&mut doc, index, origin);
+        }
+        models3d::set_display(&mut doc, index, Display::TwoD);
+        // Future display toggles restore this drawing, including native edits.
+        let drawn = doc
+            .models
+            .get(index)
+            .map(|model| models3d::Drawn::of(&doc, model));
+        if let Some(model) = doc.models.get_mut(index) {
+            model.layout = Layout::Original;
+            model.drawn = drawn;
+        }
+        self.tab.doc = doc;
+        self.commit_model(before, false);
+        if !self.error {
+            self.status = "Shown as 2D drawing".into();
+            self.reveal_model(&atoms, Display::TwoD);
         }
     }
 
@@ -1919,6 +2051,22 @@ fn align_conformer(model: &mut models3d::Model3d, old: &models3d::Model3d, live:
     }
     for hydrogen in &mut model.hydrogens {
         hydrogen.xyz = place(hydrogen.xyz);
+    }
+}
+
+fn fold_imported_model_hydrogens(doc: &mut Document, index: usize, model: &models3d::Model3d) {
+    if model.is_file_derived()
+        && model.cell.is_none()
+        && let Some(&atom) = model.linked_atoms.first()
+        && let Ok(launch) = reshiki::science::launch(doc, atom, 0, 1)
+    {
+        super::frames_import::fold_model_hydrogens(doc, index, &launch.frame);
+    }
+    if let Some(imported) = doc.models.get_mut(index) {
+        // Import-time folding refits the opening view. Drawing operations
+        // retain the view the user has already turned and resized.
+        imported.rotation = model.rotation;
+        imported.size = model.size;
     }
 }
 
